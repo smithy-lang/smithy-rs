@@ -15,13 +15,16 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
@@ -29,9 +32,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
-import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class ConstrainedMapGeneratorTest {
     data class TestCase(val model: Model, val validMap: ObjectNode, val invalidMap: ObjectNode)
@@ -195,11 +195,12 @@ class ConstrainedMapGeneratorTest {
             renderConstrainedString(codegenContext, this, constrainedKeyShape)
             renderConstrainedString(codegenContext, this, constrainedValueShape)
 
-            val mapsToVerify = listOf(
-                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKey"),
-                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKeyValue"),
-                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedValue"),
-            )
+            val mapsToVerify =
+                listOf(
+                    model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKey"),
+                    model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKeyValue"),
+                    model.lookup<MapShape>("test#ConstrainedMapWithConstrainedValue"),
+                )
 
             rustTemplate(
                 """
@@ -218,7 +219,7 @@ class ConstrainedMapGeneratorTest {
                     m.insert("1".to_string(),ConstrainedValue("Y".to_string()));
                     m
                 }
-                """
+                """,
             )
 
             mapsToVerify.forEach {
@@ -228,10 +229,10 @@ class ConstrainedMapGeneratorTest {
                 render(codegenContext, this, it)
 
                 unitTest(
-                    name = "try_from_fail_${rustShapeSnakeCaseName}",
+                    name = "try_from_fail_$rustShapeSnakeCaseName",
                     test = """
-                    let map = build_invalid_${rustShapeSnakeCaseName}();
-                    let constrained_res: Result<${rustShapeName}, ${rustShapeSnakeCaseName}::ConstraintViolation> = map.try_into();
+                    let map = build_invalid_$rustShapeSnakeCaseName();
+                    let constrained_res: Result<$rustShapeName, $rustShapeSnakeCaseName::ConstraintViolation> = map.try_into();
                     let error = constrained_res.unwrap_err();
                     let _error_trait : &dyn std::error::Error = &error;
                 """,

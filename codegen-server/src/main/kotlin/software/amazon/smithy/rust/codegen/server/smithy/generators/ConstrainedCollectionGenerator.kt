@@ -7,14 +7,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -323,16 +321,15 @@ sealed class CollectionTraitInfo {
                 },
             )
 
-        override fun shapeConstraintViolationDisplayMessage(
-            shape: Shape,
-        ) = writable {
-            rustTemplate(
-                """
+        override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+            writable {
+                rustTemplate(
+                    """
                 Self::UniqueItems { duplicate_indices, .. } =>
                     format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape)}", &duplicate_indices),
                 """,
-            )
-        }
+                )
+            }
     }
 
     data class Length(val lengthTrait: LengthTrait) : CollectionTraitInfo() {
@@ -373,17 +370,16 @@ sealed class CollectionTraitInfo {
                 },
             )
 
-        override fun shapeConstraintViolationDisplayMessage(
-            shape: Shape,
-        ) = writable {
-            rustTemplate(
-                """
+        override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+            writable {
+                rustTemplate(
+                    """
                 Self::Length(length) => {
                     format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
                 },
                 """,
-            )
-        }
+                )
+            }
     }
 
     companion object {
@@ -417,7 +413,5 @@ sealed class CollectionTraitInfo {
 
     abstract fun toTraitInfo(): TraitInfo
 
-    abstract fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ): Writable
+    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
 }

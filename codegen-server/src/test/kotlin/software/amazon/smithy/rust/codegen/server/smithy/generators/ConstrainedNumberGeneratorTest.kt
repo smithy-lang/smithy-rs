@@ -19,12 +19,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class ConstrainedNumberGeneratorTest {
     data class TestCaseInputs(val constraintAnnotation: String, val validValue: Int, val invalidValue: Int)

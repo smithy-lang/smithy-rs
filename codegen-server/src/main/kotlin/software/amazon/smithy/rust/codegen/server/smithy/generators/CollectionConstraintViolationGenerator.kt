@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -99,7 +98,7 @@ class CollectionConstraintViolationGenerator(
                 "Error" to RuntimeType.StdError,
                 "Display" to RuntimeType.Display,
                 "VariantDisplayMessages" to generateDisplayMessageForEachVariant(shape.isReachableFromOperationInput() && isMemberConstrained),
-                )
+            )
 
             if (shape.isReachableFromOperationInput()) {
                 rustTemplate(
@@ -125,7 +124,7 @@ class CollectionConstraintViolationGenerator(
                     """
                     Self::Member(index, failing_member) => format!("Value at index {index} failed to satisfy constraint. {}",
                        failing_member)
-                    """
+                    """,
                 )
             }
         }

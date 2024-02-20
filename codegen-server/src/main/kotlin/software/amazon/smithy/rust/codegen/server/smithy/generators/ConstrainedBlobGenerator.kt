@@ -172,9 +172,7 @@ class ConstrainedBlobGenerator(
 // Each type of constraint that can be put on a Blob must implement the BlobConstraintGenerator
 // interface. This allows the
 interface BlobConstraintGenerator {
-    fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ): Writable
+    fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
 }
 
 data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
@@ -186,7 +184,7 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
                 rust("Length(usize)")
             },
             {
-                rustTemplate(
+                rust(
                     """
                     Self::Length(length) => crate::model::ValidationExceptionField {
                         message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
@@ -222,15 +220,14 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
             )
         }
 
-    override fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ) = writable {
-        rustTemplate(
-            """
-            Self::Length(length) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
-            },
-            """,
-        )
-    }
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            rustTemplate(
+                """
+                Self::Length(length) => {
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
+                },
+                """,
+            )
+        }
 }
