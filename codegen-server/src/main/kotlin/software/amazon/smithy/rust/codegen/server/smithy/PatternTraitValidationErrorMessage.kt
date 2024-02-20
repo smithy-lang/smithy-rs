@@ -8,10 +8,7 @@ fun PatternTrait.validationErrorMessage() =
     "Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: ${this.patternDescription()}"
 
 fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
-    """
-    Value '{}' provided for `${shape.idWithHashEscaped()}` failed to satisfy the constraint: 
-    Member must match the regular expression pattern: ${this.patternDescription()}
-    """.trimIndent().replace("\n", "")
+    "Value provided for `${shape.idWithHashEscaped()}` failed to satisfy the constraint: Member must match the regular expression pattern: ${this.patternDescription()}"
 
 // A '#' character in the pattern must be replaced with "##" for the message to be usable
 // within `rustTemplate`, as it interpolates anything prefixed with '#'. Additionally,

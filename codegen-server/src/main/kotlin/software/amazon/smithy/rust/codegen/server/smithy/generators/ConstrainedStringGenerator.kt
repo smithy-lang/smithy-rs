@@ -269,8 +269,8 @@ data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : Stri
     ) = writable {
         rustTemplate(
             """
-            Self::Length(length}) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", "length")
+            Self::Length(length) => {
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
             },
             """,
         )
@@ -370,8 +370,8 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     ) = writable {
         rustTemplate(
             """
-            Self::Pattern(pattern}) => {
-                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}", pattern)
+            Self::Pattern(_) => {
+                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}")
             },
             """,
         )
