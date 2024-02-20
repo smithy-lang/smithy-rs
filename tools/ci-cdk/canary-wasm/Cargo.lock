@@ -31,7 +31,7 @@ checksum = "d468802bab17cbc0cc575e9b053f41e72aa36bfa6b7f55e3529ffa43161b97fa"
 
 [[package]]
 name = "aws-config"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -90,7 +90,6 @@ version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
- "aws-smithy-async",
  "aws-smithy-wasm",
  "tokio",
  "wit-bindgen",
@@ -146,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -168,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -239,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -258,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -272,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -291,13 +290,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-wasm"
-version = "0.60.5"
+version = "0.1.0"
 dependencies = [
+ "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
  "http 1.0.0",
+ "tokio",
  "tower",
  "tracing",
  "wasi",
@@ -312,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",

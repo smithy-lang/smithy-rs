@@ -5,23 +5,12 @@
 
 use aws_config::Region;
 use aws_sdk_s3 as s3;
-use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
+use aws_smithy_wasm::wasm::WasmSleep;
 
-// Needed for WASI-compliant environment as it expects specific functions
-// to be exported such as `cabi_realloc`, `_start`, etc.
+//Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
-    inline: "
-         package aws:component;
- 
-         interface canary-interface {
-             run-canary: func() -> result<string, string>;
-         }
- 
-         world canary-world {
-             export canary-interface;
-         }
-     ",
+    world: "canary-world",
     exports: {
         "aws:component/canary-interface": Component
     }
@@ -30,7 +19,7 @@ wit_bindgen::generate!({
 struct Component;
 
 impl exports::aws::component::canary_interface::Guest for Component {
-    fn run_canary() -> Result<String, String> {
+    fn run_canary() -> Result<Vec<String>, String> {
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_time()
             .build()
@@ -40,7 +29,7 @@ impl exports::aws::component::canary_interface::Guest for Component {
     }
 }
 
-async fn run_canary() -> Result<String, String> {
+async fn run_canary() -> Result<Vec<String>, String> {
     let http_client = WasiHttpClientBuilder::new().build();
     let config = aws_config::from_env()
         .region(Region::new("us-east-2"))
@@ -61,16 +50,14 @@ async fn run_canary() -> Result<String, String> {
         .await
         .expect("Failed to ListObjects");
 
-    println!("WASM CANARY RESULT: {result:#?}");
-    Ok(format!("{result:?}"))
-}
+    //For ease of modeling the return we just extract the keys from the objects
+    let object_names: Vec<String> = result
+        .contents
+        .expect("No S3 Objects")
+        .iter()
+        .map(|obj| obj.key().expect("Object has no name").to_string())
+        .collect();
 
-#[derive(Debug, Clone)]
-struct WasmSleep;
-impl AsyncSleep for WasmSleep {
-    fn sleep(&self, duration: std::time::Duration) -> Sleep {
-        Sleep::new(Box::pin(async move {
-            tokio::time::sleep(duration).await;
-        }))
-    }
+    println!("WASM CANARY RESULT: {object_names:#?}");
+    Ok(object_names)
 }
