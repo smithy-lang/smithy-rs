@@ -16,6 +16,7 @@ use aws_smithy_runtime::client::http::test_util::{
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use http::Uri;
 
+// TODO(S3Express): Convert this test to the S3 express section in canary
 #[tokio::test]
 async fn list_objects_v2() {
     let _logs = capture_test_logs();
