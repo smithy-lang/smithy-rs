@@ -224,6 +224,8 @@ class S3ExpressRequestChecksumCustomization(
                         ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
                             |original: #{Option}<#{ChecksumAlgorithm}>,
                             cfg: &#{ConfigBag}| {
+                                // S3 does not have the `ChecksumAlgorithm::Md5`, therefore customers cannot set it
+                                // from outside.
                                 if original != #{Some}(#{ChecksumAlgorithm}::Md5) {
                                     return original;
                                 }
