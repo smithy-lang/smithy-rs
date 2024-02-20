@@ -104,3 +104,9 @@ message = "Retain the SSO token cache between calls to `provide_credentials` whe
 references = ["smithy-rs#3387"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Implement std::error::Error for ConstraintViolation"
+references = ["smithy-rs#3430"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
