@@ -8,7 +8,7 @@
             "uri": "https://s3express-test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com/?session",
             "headers": {
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-create-session-mode;x-amz-date;x-amz-user-agent, Signature=4d44fb95628114b17a0676e2da758dee74f8a0337a3f0183e5b91e4fea6d9303"
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-create-session-mode;x-amz-date;x-amz-user-agent, Signature=38991fe77e65f7e9ffba9ddaeb0ba457d8673bb5c11068eaeb53a4f5fa7c4136"
               ],
               "x-amz-create-session-mode": [
                 "ReadWrite"
@@ -58,7 +58,7 @@
                   "AmazonS3"
                 ],
                 "content-length": [
-                  "1035"
+                  "333"
                 ],
                 "date": [
                   "Fri, 13 Feb 2009 23:31:30 GMT"
@@ -80,7 +80,7 @@
       "action": {
         "Data": {
           "data": {
-            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CreateSessionResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Credentials><SessionToken>AgAAAC4zxhfvZg/nsnQ+E5m+e2qfGfH8yDMk/595OyIEAAAAAAAAAILVdpnHAQAAAAAAAASwftXYM0Sz7TWEtmiOj3JZDHuvfme1Vb8RNXfiSKsRZoHc6F86O9pg4lgaffF4slyOwcUDv2PYnd9TSU+u40nqMCym+Joog46Q3YOTJXk0K18j9dWcNQaDrN5mZpfPtIFTtFM/Gm2PpGvFCzssffMFWMwWt5gHzHtlMHocG7uX16JsttVRiAe14iDiHcFy+ka6RcX8vgXoFnM8tVhE2jby/zYQ0GdbnzVqJoZ/DjFXoEEQ/Rp16Fq0x5dHAPB0AIPH49fYP0rHLn3I8KcTxu8NUNmWjt5HNCXCWrKIFowAtGQNFsuyUDOCDxbMsoKYgYdIRDclqgoSKdCy6E0TUUr+L+KgytQ+Br20imMRo5rFvxa6sXgynILnOGOISBOzNreKJ0JdfVLWv1F9SnauEVfBYfnn8k7aH2n/52EnD8e3gJ0AacMX4oEadZQrVfNyqhcnctQ1a+wFo0Orw8YOM4TGB3nUFwLfS7sUBOv5BXbHeKzl6pvMcFV+caquOE0jdzNPkVVhmS8OCKbicIul8KHmMYElmPy5+riXya+5cv/KymqzxZ4FuMGkEeYXHjntF2LmWVOkF8pGBIpcrt9BlLLxyTxlye9P</SessionToken><SecretAccessKey>LqL36OqPDlwPN6koQgVrhr7R0QEuFbzsH4Bvz4bt</SecretAccessKey><AccessKeyId>NZIQUUAEYD2XZOSJYC274XBMVU</AccessKeyId><Expiration>2024-02-01T03:57:15Z</Expiration></Credentials></CreateSessionResult>"
+            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CreateSessionResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Credentials><SessionToken>TESTSESSIONTOKEN</SessionToken><SecretAccessKey>TESTSECRETKEY</SecretAccessKey><AccessKeyId>ASIARTESTID</AccessKeyId><Expiration>2024-01-29T18:53:01Z</Expiration></Credentials></CreateSessionResult>"
           },
           "direction": "Response"
         }
@@ -106,10 +106,10 @@
                 "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
               ],
               "x-amz-s3session-token": [
-                "AgAAAC4zxhfvZg/nsnQ+E5m+e2qfGfH8yDMk/595OyIEAAAAAAAAAILVdpnHAQAAAAAAAASwftXYM0Sz7TWEtmiOj3JZDHuvfme1Vb8RNXfiSKsRZoHc6F86O9pg4lgaffF4slyOwcUDv2PYnd9TSU+u40nqMCym+Joog46Q3YOTJXk0K18j9dWcNQaDrN5mZpfPtIFTtFM/Gm2PpGvFCzssffMFWMwWt5gHzHtlMHocG7uX16JsttVRiAe14iDiHcFy+ka6RcX8vgXoFnM8tVhE2jby/zYQ0GdbnzVqJoZ/DjFXoEEQ/Rp16Fq0x5dHAPB0AIPH49fYP0rHLn3I8KcTxu8NUNmWjt5HNCXCWrKIFowAtGQNFsuyUDOCDxbMsoKYgYdIRDclqgoSKdCy6E0TUUr+L+KgytQ+Br20imMRo5rFvxa6sXgynILnOGOISBOzNreKJ0JdfVLWv1F9SnauEVfBYfnn8k7aH2n/52EnD8e3gJ0AacMX4oEadZQrVfNyqhcnctQ1a+wFo0Orw8YOM4TGB3nUFwLfS7sUBOv5BXbHeKzl6pvMcFV+caquOE0jdzNPkVVhmS8OCKbicIul8KHmMYElmPy5+riXya+5cv/KymqzxZ4FuMGkEeYXHjntF2LmWVOkF8pGBIpcrt9BlLLxyTxlye9P"
+                "TESTSESSIONTOKEN"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=NZIQUUAEYD2XZOSJYC274XBMVU/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=63ec8429a44ae20698b21a810030589d2369a13c352d32970931de7b2cede687"
+                "AWS4-HMAC-SHA256 Credential=ASIARTESTID/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=d1765aa7ec005607ba94fdda08c6739228d5ee14eb8316e80264c35649661a19"
               ],
               "amz-sdk-request": [
                 "attempt=1; max=3"
@@ -308,7 +308,7 @@
                 "20090213T233130Z"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-create-session-mode;x-amz-date;x-amz-user-agent, Signature=4147d1c9c1c54efea9729be3816ec31e25496b7b1a6f116c479e8391444daa7c"
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-create-session-mode;x-amz-date;x-amz-user-agent, Signature=9e664e775f458662091e9df58f1f37f66cb74e21ac19fd9a618a9189285ca152"
               ],
               "x-amz-content-sha256": [
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -349,7 +349,7 @@
                   "0033eada6b00018d62cbc0e3050ad61d5828bce1"
                 ],
                 "content-length": [
-                  "1043"
+                  "333"
                 ],
                 "date": [
                   "Fri, 13 Feb 2009 23:31:30 GMT"
@@ -368,7 +368,7 @@
       "action": {
         "Data": {
           "data": {
-            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CreateSessionResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Credentials><SessionToken>AgAAANCuNFCuOMGL3GiOJQLuVjgOSnFrPq+7P4foPPYEAAAAAAAAAA6gXF7NAQAAAAAAAL6C3/74KCW+AXc/l3wx7EZdxgJtYloTtkuUXCdptWfMT+fTaAkgNGIg2f7Iw+reIMDGN+CfwZGXbnL+rbL6rDf7WFJ5EVb+nIAdeJepa8ZWAYxY1eBq2PLmXcAd/QX8dKfJijmcFk4eDi40J1TPoiL7uao6pxUkj8lK9P9MUTl+IYtvLMcEGGa5/k+Xx+Fclrj+HNA/NoEDfOub9yQ4ei/rfX7efkVm/YWcexLwSmiZ32KaoQRxa2C1DIHozypgQmA+M2K1KTDzRd9Ks2YSTlqsmKzaHnqvxrbqpQec2Z6Tb7t9z1WimidZw9hh10v57kSdnNWGfAWtaOcsopHs0QqVIxTc2XiO32pojj6NtPgoGb3jSmbbDg9Q3905CsPt4KFhaLM3oIHBbQzVNAqewWuBm0Z3olpmHOBF3CBQ7HB2QQ4g8lYouUOyQQqJTlF8ls12VCI8rprnlqcS2iqn/neWwcFbc4/cdRvu0AeOmktCnq8izc6eXiaIBso6Tv7KO4vVfCjVeRG7UkzCyTd3SsnEULENOxWTToo8BpUyxtO6ULaoI7GSQz64jHUMAguZ82zO3gX2TA2qF0ALG0JnKaA+pnri5SyjObMeV9XH</SessionToken><SecretAccessKey>zs6gDjtqiCOafa7fd/Najg/Tz2531bSDoGsQX4OG</SecretAccessKey><AccessKeyId>YD3AZC32QIUZXYZQULJ6J7EPNU</AccessKeyId><Expiration>2024-02-01T03:57:16Z</Expiration></Credentials></CreateSessionResult>"
+            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CreateSessionResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Credentials><SessionToken>TESTSESSIONTOKEN</SessionToken><SecretAccessKey>TESTSECRETKEY</SecretAccessKey><AccessKeyId>ASIARTESTID</AccessKeyId><Expiration>2024-01-29T18:53:01Z</Expiration></Credentials></CreateSessionResult>"
           },
           "direction": "Response"
         }
@@ -391,7 +391,7 @@
             "uri": "https://s3express-test-bucket-2--usw2-az3--x-s3.s3express-usw2-az3.us-west-2.amazonaws.com/?list-type=2",
             "headers": {
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=YD3AZC32QIUZXYZQULJ6J7EPNU/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=7e6b04135e77aa126142365335cbeb14f98c031d6abc3ce9c281d528034c9874"
+                "AWS4-HMAC-SHA256 Credential=ASIARTESTID/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=53848e132e259d7dbc06eb3063d5a32a243525f4fbf2cd015d45ff03f354d6f1"
               ],
               "x-amz-content-sha256": [
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -409,7 +409,7 @@
                 "attempt=1; max=3"
               ],
               "x-amz-s3session-token": [
-                "AgAAANCuNFCuOMGL3GiOJQLuVjgOSnFrPq+7P4foPPYEAAAAAAAAAA6gXF7NAQAAAAAAAL6C3/74KCW+AXc/l3wx7EZdxgJtYloTtkuUXCdptWfMT+fTaAkgNGIg2f7Iw+reIMDGN+CfwZGXbnL+rbL6rDf7WFJ5EVb+nIAdeJepa8ZWAYxY1eBq2PLmXcAd/QX8dKfJijmcFk4eDi40J1TPoiL7uao6pxUkj8lK9P9MUTl+IYtvLMcEGGa5/k+Xx+Fclrj+HNA/NoEDfOub9yQ4ei/rfX7efkVm/YWcexLwSmiZ32KaoQRxa2C1DIHozypgQmA+M2K1KTDzRd9Ks2YSTlqsmKzaHnqvxrbqpQec2Z6Tb7t9z1WimidZw9hh10v57kSdnNWGfAWtaOcsopHs0QqVIxTc2XiO32pojj6NtPgoGb3jSmbbDg9Q3905CsPt4KFhaLM3oIHBbQzVNAqewWuBm0Z3olpmHOBF3CBQ7HB2QQ4g8lYouUOyQQqJTlF8ls12VCI8rprnlqcS2iqn/neWwcFbc4/cdRvu0AeOmktCnq8izc6eXiaIBso6Tv7KO4vVfCjVeRG7UkzCyTd3SsnEULENOxWTToo8BpUyxtO6ULaoI7GSQz64jHUMAguZ82zO3gX2TA2qF0ALG0JnKaA+pnri5SyjObMeV9XH"
+                "TESTSESSIONTOKEN"
               ]
             },
             "method": "GET"
@@ -501,13 +501,13 @@
                 "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
               ],
               "x-amz-s3session-token": [
-                "AgAAAC4zxhfvZg/nsnQ+E5m+e2qfGfH8yDMk/595OyIEAAAAAAAAAILVdpnHAQAAAAAAAASwftXYM0Sz7TWEtmiOj3JZDHuvfme1Vb8RNXfiSKsRZoHc6F86O9pg4lgaffF4slyOwcUDv2PYnd9TSU+u40nqMCym+Joog46Q3YOTJXk0K18j9dWcNQaDrN5mZpfPtIFTtFM/Gm2PpGvFCzssffMFWMwWt5gHzHtlMHocG7uX16JsttVRiAe14iDiHcFy+ka6RcX8vgXoFnM8tVhE2jby/zYQ0GdbnzVqJoZ/DjFXoEEQ/Rp16Fq0x5dHAPB0AIPH49fYP0rHLn3I8KcTxu8NUNmWjt5HNCXCWrKIFowAtGQNFsuyUDOCDxbMsoKYgYdIRDclqgoSKdCy6E0TUUr+L+KgytQ+Br20imMRo5rFvxa6sXgynILnOGOISBOzNreKJ0JdfVLWv1F9SnauEVfBYfnn8k7aH2n/52EnD8e3gJ0AacMX4oEadZQrVfNyqhcnctQ1a+wFo0Orw8YOM4TGB3nUFwLfS7sUBOv5BXbHeKzl6pvMcFV+caquOE0jdzNPkVVhmS8OCKbicIul8KHmMYElmPy5+riXya+5cv/KymqzxZ4FuMGkEeYXHjntF2LmWVOkF8pGBIpcrt9BlLLxyTxlye9P"
+                "TESTSESSIONTOKEN"
               ],
               "amz-sdk-request": [
                 "attempt=1; max=3"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=NZIQUUAEYD2XZOSJYC274XBMVU/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=63ec8429a44ae20698b21a810030589d2369a13c352d32970931de7b2cede687"
+                "AWS4-HMAC-SHA256 Credential=ASIARTESTID/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=d1765aa7ec005607ba94fdda08c6739228d5ee14eb8316e80264c35649661a19"
               ]
             },
             "method": "GET"
