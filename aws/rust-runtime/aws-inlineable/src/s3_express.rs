@@ -147,6 +147,9 @@ pub(crate) mod identity_cache {
             time_source: SharedTimeSource,
             buffer_time: Duration,
         ) -> Self {
+            // It'd be nice to use a cryptographically secure random generator but not necessary.
+            // The cache is memory only and randomization here is mostly to obfuscate the key and
+            // make it reasonable length.
             let mut rng = Rng::default();
             let mut random_bytes = [0u8; 64];
             rng.fill(&mut random_bytes);
