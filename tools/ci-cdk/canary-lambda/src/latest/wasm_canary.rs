@@ -7,8 +7,7 @@ use crate::{mk_canary, CanaryEnv};
 
 use wasmtime::component::{bindgen, Component, Linker};
 use wasmtime::{Engine, Store};
-use wasmtime_wasi::preview2::WasiCtxBuilder;
-use wasmtime_wasi::WasiCtx;
+use wasmtime_wasi::preview2::{WasiCtxBuilder, WasiView};
 
 // mk_canary!("wasm", |sdk_config: &SdkConfig, env: &CanaryEnv| {
 //     wasm_canary()
@@ -39,6 +38,7 @@ struct WasiHostCtx {
     preview2_ctx: wasmtime_wasi::preview2::WasiCtx,
     preview2_table: wasmtime::component::ResourceTable,
     preview1_adapter: wasmtime_wasi::preview2::preview1::WasiPreview1Adapter,
+    wasi_http_ctx: wasmtime_wasi_http::WasiHttpCtx,
 }
 
 impl wasmtime_wasi::preview2::WasiView for WasiHostCtx {
@@ -69,14 +69,46 @@ impl wasmtime_wasi::preview2::preview1::WasiPreview1View for WasiHostCtx {
     }
 }
 
-pub async fn wasm_canary() -> anyhow::Result<String> {
+impl wasmtime_wasi::preview2::bindings::sync_io::io::error::HostError for WasiHostCtx {
+    fn to_debug_string(
+        &mut self,
+        err: wasmtime::component::Resource<
+            wasmtime_wasi::preview2::bindings::sync_io::io::error::Error,
+        >,
+    ) -> wasmtime::Result<String> {
+        Ok(format!("{:?}", self.table().get(&err)?))
+    }
+
+    fn drop(
+        &mut self,
+        err: wasmtime::component::Resource<
+            wasmtime_wasi::preview2::bindings::sync_io::io::error::Error,
+        >,
+    ) -> wasmtime::Result<()> {
+        self.table_mut().delete(err)?;
+        Ok(())
+    }
+}
+
+impl wasmtime_wasi::preview2::bindings::sync_io::io::error::Host for WasiHostCtx {}
+
+impl wasmtime_wasi_http::types::WasiHttpView for WasiHostCtx {
+    fn ctx(&mut self) -> &mut wasmtime_wasi_http::WasiHttpCtx {
+        &mut self.wasi_http_ctx
+    }
+
+    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
+        &mut self.preview2_table
+    }
+}
+
+pub fn wasm_canary() -> anyhow::Result<String> {
     let cur_dir = std::env::current_dir().expect("Current dir");
     println!("CURRENT DIR: {cur_dir:#?}");
 
     // Create a Wasmtime Engine configured to run Components
-    let mut engine_config = wasmtime::Config::new();
-    engine_config.wasm_component_model(true);
-    let engine = Engine::new(&engine_config).expect("Failed to create wasm engine");
+    let engine = Engine::new(&wasmtime::Config::new().wasm_component_model(true))
+        .expect("Failed to create wasm engine");
 
     // Create our component from the wasm file
     let component = Component::from_file(
@@ -84,24 +116,87 @@ pub async fn wasm_canary() -> anyhow::Result<String> {
         cur_dir.join("aws_sdk_rust_lambda_canary_wasm.wasm"),
     )
     .expect("Failed to load wasm");
+
+    // Create the linker and link in the necessary WASI bindings
     let mut linker: Linker<WasiHostCtx> = Linker::new(&engine);
-    // wasmtime_wasi::preview2::preview1::add_to_linker_async(&mut linker);
-    // wasmtime_wasi::preview2::bindings::io::poll::add_to_linker(&mut linker, |cx| cx);
+    wasmtime_wasi::preview2::bindings::sync_io::io::poll::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Poll");
+    wasmtime_wasi::preview2::bindings::sync_io::io::error::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Error");
+    wasmtime_wasi::preview2::bindings::sync_io::io::streams::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Streams");
+    wasmtime_wasi::preview2::bindings::random::random::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Random");
+    wasmtime_wasi::preview2::bindings::wasi::clocks::monotonic_clock::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Clock");
+    wasmtime_wasi::preview2::bindings::sync_io::filesystem::types::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Filesystem Types");
+    wasmtime_wasi::preview2::bindings::filesystem::preopens::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Filesystem Preopen");
+    wasmtime_wasi::preview2::bindings::wasi::clocks::wall_clock::add_to_linker(&mut linker, |cx| {
+        cx
+    })
+    .expect("Failed to link Wall Clock");
+    wasmtime_wasi::preview2::bindings::wasi::cli::environment::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Environment");
+    wasmtime_wasi::preview2::bindings::wasi::cli::exit::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Environment");
+    wasmtime_wasi::preview2::bindings::wasi::cli::stdin::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Stdin");
+    wasmtime_wasi::preview2::bindings::wasi::cli::stdout::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Stdout");
+    wasmtime_wasi::preview2::bindings::wasi::cli::stderr::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link Stderr");
+    // wasmtime_wasi::preview2::command::add_to_linker(&mut linker);
+    wasmtime_wasi::preview2::bindings::wasi::cli::terminal_input::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Terminal Input");
+    wasmtime_wasi::preview2::bindings::wasi::cli::terminal_output::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Terminal Output");
+    wasmtime_wasi::preview2::bindings::wasi::cli::terminal_stdin::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Terminal Stdin");
+    wasmtime_wasi::preview2::bindings::wasi::cli::terminal_stdout::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Terminal Stdout");
+    wasmtime_wasi::preview2::bindings::wasi::cli::terminal_stderr::add_to_linker(
+        &mut linker,
+        |cx| cx,
+    )
+    .expect("Failed to link Terminal Stderr");
+    wasmtime_wasi_http::bindings::http::types::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link HTTP Types");
+    wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker(&mut linker, |cx| cx)
+        .expect("Failed to link HTTP Outgoing Handler");
 
     // Configure and create a `WasiCtx`, which WASI functions need access to
     // through the host state of the store (which in this case is the host state
     // of the store)
     let wasi_ctx = WasiCtxBuilder::new()
-        .inherit_stdio()
         .inherit_stderr()
         .inherit_stdout()
-        .inherit_network()
         .build();
 
     let host_ctx = WasiHostCtx {
         preview2_ctx: wasi_ctx,
         preview2_table: wasmtime_wasi::preview2::ResourceTable::new(),
         preview1_adapter: wasmtime_wasi::preview2::preview1::WasiPreview1Adapter::new(),
+        wasi_http_ctx: wasmtime_wasi_http::WasiHttpCtx {},
     };
 
     let mut store: Store<WasiHostCtx> = Store::new(&engine, host_ctx);
@@ -120,8 +215,9 @@ pub async fn wasm_canary() -> anyhow::Result<String> {
 
 // #[ignore]
 #[cfg(test)]
-#[tokio::test]
-async fn test_wasm_canary() {
-    let res = wasm_canary().await;
+// #[tokio::test]
+#[test]
+fn test_wasm_canary() {
+    let res = wasm_canary();
     println!("{res:#?}");
 }

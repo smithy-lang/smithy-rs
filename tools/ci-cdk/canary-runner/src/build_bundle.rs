@@ -58,6 +58,7 @@ edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
