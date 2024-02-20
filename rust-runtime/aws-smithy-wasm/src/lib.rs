@@ -18,3 +18,6 @@
 
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 pub mod wasi;
+
+#[cfg(all(target_family = "wasm"))]
+pub mod wasm;
