@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleC
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class ConstrainedNumberGeneratorTest {
     data class TestCaseInputs(val constraintAnnotation: String, val validValue: Int, val invalidValue: Int)
@@ -90,8 +91,10 @@ class ConstrainedNumberGeneratorTest {
             unitTest(
                 name = "try_from_fail",
                 test = """
-                    let constrained_res: Result<${testCase.shapeName}, _> = ${testCase.invalidValue}.try_into();
-                    constrained_res.unwrap_err();
+                    let constrained_res: Result<${testCase.shapeName}, ${testCase.shapeName.toSnakeCase()}::ConstraintViolation> = ${testCase.invalidValue}.try_into();
+                    let error = constrained_res.unwrap_err();
+                    // Ensure `ConstraintViolation` implements `std::error::Error`.
+                    let _error: &dyn std::error::Error = &error;
                 """,
             )
             unitTest(

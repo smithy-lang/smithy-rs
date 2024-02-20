@@ -29,6 +29,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class ConstrainedMapGeneratorTest {
     data class TestCase(val model: Model, val validMap: ObjectNode, val invalidMap: ObjectNode)
@@ -100,8 +103,9 @@ class ConstrainedMapGeneratorTest {
                 name = "try_from_fail",
                 test = """
                     let map = build_invalid_map();
-                    let constrained_res: Result<ConstrainedMap, _> = map.try_into();
-                    constrained_res.unwrap_err();
+                    let constrained_res: Result<ConstrainedMap, constrained_map::ConstraintViolation> = map.try_into();
+                    let error = constrained_res.unwrap_err();
+                    let _error_trait : &dyn std::error::Error = &error;
                 """,
             )
             unitTest(
@@ -150,6 +154,94 @@ class ConstrainedMapGeneratorTest {
         writer.toString() shouldContain "pub struct ConstrainedMap(pub(crate) ::std::collections::HashMap<::std::string::String, ::std::string::String>);"
     }
 
+    @Test
+    fun `error trait implemented for ConstraintViolation should work for constrained key and value`() {
+        val model =
+            """
+            namespace test
+
+            @length(min: 2, max: 69)
+            map ConstrainedMapWithConstrainedKey {
+                key: ConstrainedKey,
+                value: String
+            }
+
+            @length(min: 2, max: 69)
+            map ConstrainedMapWithConstrainedValue {
+                key: String,
+                value: ConstrainedValue
+            }
+
+            @length(min: 2, max: 69)
+            map ConstrainedMapWithConstrainedKeyValue {
+                key: ConstrainedKey,
+                value: ConstrainedValue,
+            }
+
+            @pattern("#\\d+")
+            string ConstrainedKey
+
+            @pattern("A-Z")
+            string ConstrainedValue
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+        val constrainedKeyShape = model.lookup<StringShape>("test#ConstrainedKey")
+        val constrainedValueShape = model.lookup<StringShape>("test#ConstrainedValue")
+
+        val codegenContext = serverTestCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val project = TestWorkspace.testProject(symbolProvider)
+
+        project.withModule(ServerRustModule.Model) {
+            renderConstrainedString(codegenContext, this, constrainedKeyShape)
+            renderConstrainedString(codegenContext, this, constrainedValueShape)
+
+            val mapsToVerify = listOf(
+                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKey"),
+                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKeyValue"),
+                model.lookup<MapShape>("test#ConstrainedMapWithConstrainedValue"),
+            )
+
+            rustTemplate(
+                """
+                fn build_invalid_constrained_map_with_constrained_key() -> std::collections::HashMap<ConstrainedKey, String> {
+                    let mut m = ::std::collections::HashMap::new();
+                    m.insert(ConstrainedKey("1".to_string()), "Y".to_string());
+                    m    
+                }
+                fn build_invalid_constrained_map_with_constrained_key_value() -> std::collections::HashMap<ConstrainedKey, ConstrainedValue> {
+                    let mut m = ::std::collections::HashMap::new();
+                    m.insert(ConstrainedKey("1".to_string()),ConstrainedValue("Y".to_string()));
+                    m
+                }
+                fn build_invalid_constrained_map_with_constrained_value() -> std::collections::HashMap<String, ConstrainedValue> {
+                    let mut m = ::std::collections::HashMap::new();
+                    m.insert("1".to_string(),ConstrainedValue("Y".to_string()));
+                    m
+                }
+                """
+            )
+
+            mapsToVerify.forEach {
+                val rustShapeName = it.toShapeId().name
+                val rustShapeSnakeCaseName = rustShapeName.toSnakeCase()
+
+                render(codegenContext, this, it)
+
+                unitTest(
+                    name = "try_from_fail_${rustShapeSnakeCaseName}",
+                    test = """
+                    let map = build_invalid_${rustShapeSnakeCaseName}();
+                    let constrained_res: Result<${rustShapeName}, ${rustShapeSnakeCaseName}::ConstraintViolation> = map.try_into();
+                    let error = constrained_res.unwrap_err();
+                    let _error_trait : &dyn std::error::Error = &error;
+                """,
+                )
+            }
+        }
+
+        project.compileAndTest()
+    }
+
     private fun render(
         codegenContext: ServerCodegenContext,
         writer: RustWriter,
@@ -161,6 +253,21 @@ class ConstrainedMapGeneratorTest {
             writer.createTestInlineModuleCreator(),
             constrainedMapShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
+    }
+
+    private fun renderConstrainedString(
+        codegenContext: ServerCodegenContext,
+        writer: RustWriter,
+        constrainedStringShape: StringShape,
+    ) {
+        val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
+        ConstrainedStringGenerator(
+            codegenContext,
+            writer.createTestInlineModuleCreator(),
+            writer,
+            constrainedStringShape,
+            validationExceptionConversionGenerator,
         ).render()
     }
 }

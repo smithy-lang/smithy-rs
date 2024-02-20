@@ -257,6 +257,7 @@ class ConstrainedCollectionGeneratorTest {
                                         rustTemplate("#{ExpectedError:W}", "ExpectedError" to expectedErrorWritable)
                                     }
                                     rust("assert_eq!(err, expected_err);")
+                                    rust("let _error_trait : &dyn std::error::Error = &err;")
                                 } ?: run {
                                     rust("constrained_res.unwrap_err();")
                                 }
