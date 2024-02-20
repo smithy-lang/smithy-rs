@@ -12,6 +12,13 @@ fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     Member must match the regular expression pattern: ${this.patternDescription()}
     """.trimIndent().replace("\n", "")
 
-// A '#' character in the pattern needs to be replaced with "##" for the message to be used
-// as part of `rustTemplate`.
-fun PatternTrait.patternDescription() = this.pattern.toString().replace("#", "##")
+// A '#' character in the pattern must be replaced with "##" for the message to be usable
+// within `rustTemplate`, as it interpolates anything prefixed with '#'. Additionally,
+// the `toString()` representation of a regular expression that includes two backslashes yields
+// only one backslash. For instance, the `toString()` of a `PatternTrait` that represents
+// `@pattern("\\d")` in Smithy, yields "\d". Writing this directly in generated code as-is leads
+// to an "unknown character escape" error in Rust.
+fun PatternTrait.patternDescription() =
+    this.pattern.toString()
+        .replace("#", "##")
+        .replace("\\", "\\\\")
