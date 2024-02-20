@@ -98,6 +98,7 @@ pub(crate) mod identity_cache {
     use aws_smithy_runtime::expiring_cache::ExpiringCache;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::identity::Identity;
+    use aws_smithy_types::DateTime;
     use fastrand::Rng;
     use hmac::{digest::FixedOutput, Hmac, Mac};
     use lru::LruCache;
@@ -203,12 +204,18 @@ pub(crate) mod identity_cache {
                 }
                 None => {
                     let start_time = self.time_source.now();
-                    let identity = expiring_cache.get_or_load(loader).await;
+                    let identity = expiring_cache.get_or_load(loader).await?;
+                    let expiration = identity
+                        .expiration()
+                        .ok_or("SessionCredentials` always has expiration")?;
+                    let printable = DateTime::from(expiration);
                     tracing::info!(
+                        new_expiration=%printable,
+                        valid_for=?expiration.duration_since(self.time_source.now()).unwrap_or_default(),
                         "identity cache miss occurred; added new identity (took {:?})",
-                        self.time_source.now().duration_since(start_time)
+                        self.time_source.now().duration_since(start_time).unwrap_or_default()
                     );
-                    identity
+                    Ok(identity)
                 }
             }
         }
