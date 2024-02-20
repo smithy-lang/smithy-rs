@@ -193,7 +193,7 @@ class ConstrainedStringGenerator(
     private fun generateDisplayMessageForEachVariant() =
         writable {
             stringConstraintsInfo.forEach {
-                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+                it.shapeConstraintViolationDisplayMessage(shape).invoke(this)
             }
         }
 
@@ -214,7 +214,7 @@ class ConstrainedStringGenerator(
     }
 }
 
-data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : StringTraitInfo() {
+data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo =
         TraitInfo(
             tryFromCheck = { rust("Self::check_length(&value)?;") },
@@ -265,7 +265,6 @@ data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : Stri
 
     override fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ) = writable {
         rustTemplate(
             """
@@ -314,8 +313,6 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     }
 
     fun errorMessage(): Writable {
-        val pattern = patternTrait.pattern
-
         return writable {
             rust(
                 """
@@ -366,7 +363,6 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
 
     override fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ) = writable {
         rustTemplate(
             """
@@ -390,7 +386,7 @@ sealed class StringTraitInfo {
             }
 
             is LengthTrait -> {
-                Length(trait, isSensitive)
+                Length(trait)
             }
 
             else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
@@ -401,6 +397,5 @@ sealed class StringTraitInfo {
 
     abstract fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ): Writable
 }

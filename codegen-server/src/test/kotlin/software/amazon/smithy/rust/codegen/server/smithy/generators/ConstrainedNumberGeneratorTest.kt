@@ -91,7 +91,7 @@ class ConstrainedNumberGeneratorTest {
             unitTest(
                 name = "try_from_fail",
                 test = """
-                    let constrained_res: Result<${testCase.shapeName}, ${testCase.shapeName.toSnakeCase()}::ConstraintViolation> = ${testCase.invalidValue}.try_into();
+                    let constrained_res: Result<${testCase.shapeName}, _> = ${testCase.invalidValue}.try_into();
                     let error = constrained_res.unwrap_err();
                     // Ensure `ConstraintViolation` implements `std::error::Error`.
                     let _error: &dyn std::error::Error = &error;

@@ -105,7 +105,7 @@ class ConstrainedStringGeneratorTest {
                 name = "try_from_fail",
                 test = """
                     let string = "${testCase.invalidString}".to_owned();
-                    let constrained_res: Result<ConstrainedString, constrained_string::ConstraintViolation> = string.try_into();
+                    let constrained_res: Result<ConstrainedString, _> = string.try_into();
                     let error = constrained_res.unwrap_err();
                     // Ensure `ConstraintViolation` implements `std::error::Error`.
                     let _error_trait : &dyn std::error::Error = &error;

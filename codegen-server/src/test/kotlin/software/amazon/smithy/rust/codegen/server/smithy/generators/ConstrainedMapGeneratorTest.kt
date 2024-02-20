@@ -103,7 +103,7 @@ class ConstrainedMapGeneratorTest {
                 name = "try_from_fail",
                 test = """
                     let map = build_invalid_map();
-                    let constrained_res: Result<ConstrainedMap, constrained_map::ConstraintViolation> = map.try_into();
+                    let constrained_res: Result<ConstrainedMap, _> = map.try_into();
                     let error = constrained_res.unwrap_err();
                     let _error_trait : &dyn std::error::Error = &error;
                 """,
@@ -211,12 +211,12 @@ class ConstrainedMapGeneratorTest {
                 }
                 fn build_invalid_constrained_map_with_constrained_key_value() -> std::collections::HashMap<ConstrainedKey, ConstrainedValue> {
                     let mut m = ::std::collections::HashMap::new();
-                    m.insert(ConstrainedKey("1".to_string()),ConstrainedValue("Y".to_string()));
+                    m.insert(ConstrainedKey("1".to_string()), ConstrainedValue("Y".to_string()));
                     m
                 }
                 fn build_invalid_constrained_map_with_constrained_value() -> std::collections::HashMap<String, ConstrainedValue> {
                     let mut m = ::std::collections::HashMap::new();
-                    m.insert("1".to_string(),ConstrainedValue("Y".to_string()));
+                    m.insert("1".to_string(), ConstrainedValue("Y".to_string()));
                     m
                 }
                 """,
@@ -231,11 +231,11 @@ class ConstrainedMapGeneratorTest {
                 unitTest(
                     name = "try_from_fail_$rustShapeSnakeCaseName",
                     test = """
-                    let map = build_invalid_$rustShapeSnakeCaseName();
-                    let constrained_res: Result<$rustShapeName, $rustShapeSnakeCaseName::ConstraintViolation> = map.try_into();
-                    let error = constrained_res.unwrap_err();
-                    let _error_trait : &dyn std::error::Error = &error;
-                """,
+                        let map = build_invalid_$rustShapeSnakeCaseName();
+                        let constrained_res: Result<$rustShapeName, $rustShapeSnakeCaseName::ConstraintViolation> = map.try_into();
+                        let error = constrained_res.unwrap_err();
+                        let _error_trait : &dyn std::error::Error = &error;
+                    """,
                 )
             }
         }
