@@ -16,8 +16,10 @@
 
 //! Smithy WebAssembly
 
+/// Tools for using Smithy SDKs in WASI environments
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 pub mod wasi;
 
-#[cfg(all(target_family = "wasm"))]
+/// Tools for using Smithy SDKs in WASM environments
+#[cfg(target_family = "wasm")]
 pub mod wasm;

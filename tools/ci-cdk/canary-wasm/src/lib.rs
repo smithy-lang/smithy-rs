@@ -58,6 +58,5 @@ async fn run_canary() -> Result<Vec<String>, String> {
         .map(|obj| obj.key().expect("Object has no name").to_string())
         .collect();
 
-    println!("WASM CANARY RESULT: {object_names:#?}");
     Ok(object_names)
 }

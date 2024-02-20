@@ -332,7 +332,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             zip::write::FileOptions::default().unix_permissions(0o755),
         )
         .context(here!())?;
-        zip.write_all(&fs::read(&wasm_bin_path).context(here!("read wasm bin"))?)
+        zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
             .context(here!())?;
         zip.finish().context(here!())?;
 
