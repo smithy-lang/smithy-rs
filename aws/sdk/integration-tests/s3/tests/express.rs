@@ -46,13 +46,10 @@ async fn list_objects_v2() {
 }
 
 #[tokio::test]
-async fn list_objects_v2_in_both_express_and_regular_buckets() {
+async fn mixed_auths() {
     let _logs = capture_test_logs();
 
-    let http_client = ReplayingClient::from_file(
-        "tests/data/express/list_objects_v2_in_both_express_and_regular_buckets.json",
-    )
-    .unwrap();
+    let http_client = ReplayingClient::from_file("tests/data/express/mixed-auths.json").unwrap();
     let config = aws_config::from_env()
         .http_client(http_client.clone())
         .no_credentials()

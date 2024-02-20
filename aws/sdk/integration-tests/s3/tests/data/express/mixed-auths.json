@@ -580,6 +580,6 @@
       }
     }
   ],
-  "docs": "todo docs",
+  "docs": "traffic recording of listing objects in both an S3 Express One Zone bucket and a regular S3 bucket",
   "version": "V0"
 }
