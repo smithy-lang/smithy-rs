@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.shapes.Shape
+
 /**
  * Functions shared amongst the constrained shape generators, to keep them DRY and consistent.
  */
@@ -26,3 +28,6 @@ fun rustDocsTryFromMethod(
 fun rustDocsInnerMethod(inner: String) = "Returns an immutable reference to the underlying [`$inner`]."
 
 fun rustDocsIntoInnerMethod(inner: String) = "Consumes the value, returning the underlying [`$inner`]."
+
+fun Shape.idWithHashEscaped() =
+    this.id.toString().replace("#", "##")

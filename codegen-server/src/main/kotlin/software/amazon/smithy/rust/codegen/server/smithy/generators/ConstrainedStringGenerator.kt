@@ -31,7 +31,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -39,6 +38,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.patternDescription
 import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -269,8 +269,8 @@ data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : Stri
     ) = writable {
         rustTemplate(
             """
-            Self::Length(${if (isSensitive) "_" else "length"}) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+            Self::Length(length}) => {
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", "length")
             },
             """,
         )
@@ -333,7 +333,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         constraintViolation: Symbol,
         unconstrainedTypeName: String,
     ): Writable {
-        val pattern = patternTrait.pattern.toString().replace("#", "##")
+        val pattern = patternTrait.patternDescription()
         val errorMessageForUnsupportedRegex =
             """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
@@ -370,8 +370,8 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     ) = writable {
         rustTemplate(
             """
-            Self::Pattern(${if (isSensitive) "_" else "pattern"}) => {
-                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "pattern"})
+            Self::Pattern(pattern}) => {
+                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}", pattern)
             },
             """,
         )

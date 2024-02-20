@@ -2,13 +2,14 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.PatternTrait
+import software.amazon.smithy.rust.codegen.server.smithy.generators.idWithHashEscaped
 
 fun PatternTrait.validationErrorMessage() =
     "Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: ${this.patternDescription()}"
 
 fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     """
-    Value '{}' provided for `${shape.id.toString().replace("#", "##")}` failed to satisfy the constraint: 
+    Value '{}' provided for `${shape.idWithHashEscaped()}` failed to satisfy the constraint: 
     Member must match the regular expression pattern: ${this.patternDescription()}
     """.trimIndent().replace("\n", "")
 

@@ -30,8 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.REDACTION
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -327,7 +325,6 @@ sealed class CollectionTraitInfo {
 
         override fun shapeConstraintViolationDisplayMessage(
             shape: Shape,
-            model: Model,
         ) = writable {
             rustTemplate(
                 """
@@ -378,13 +375,11 @@ sealed class CollectionTraitInfo {
 
         override fun shapeConstraintViolationDisplayMessage(
             shape: Shape,
-            model: Model,
         ) = writable {
-            val isSensitive = shape.hasTrait<SensitiveTrait>()
             rustTemplate(
                 """
-                Self::Length(${if (isSensitive) "_" else "length"}) => {
-                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+                Self::Length(length) => {
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
                 },
                 """,
             )
@@ -424,6 +419,5 @@ sealed class CollectionTraitInfo {
 
     abstract fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ): Writable
 }

@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -25,9 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
-import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -56,7 +53,7 @@ class ConstrainedBlobGenerator(
     private val blobConstraintsInfo: List<BlobLength> =
         listOf(LengthTrait::class.java)
             .mapNotNull { shape.getTrait(it).orNull() }
-            .map { BlobLength(it, shape.shouldRedact(model)) }
+            .map { BlobLength(it) }
     private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
@@ -167,7 +164,7 @@ class ConstrainedBlobGenerator(
     private fun generateDisplayMessageForEachVariant() =
         writable {
             blobConstraintsInfo.forEach {
-                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+                it.shapeConstraintViolationDisplayMessage(shape).invoke(this)
             }
         }
 }
@@ -177,11 +174,10 @@ class ConstrainedBlobGenerator(
 interface BlobConstraintGenerator {
     fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ): Writable
 }
 
-data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : BlobConstraintGenerator {
+data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
     fun toTraitInfo(): TraitInfo =
         TraitInfo(
             { rust("Self::check_length(&value)?;") },
@@ -192,8 +188,8 @@ data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : 
             {
                 rustTemplate(
                     """
-                    Self::Length(${if (isSensitive) "_" else "length"}) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", ${if (isSensitive) REDACTION else "length"}, &path),
+                    Self::Length(length) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
                         path,
                     },
                     """,
@@ -228,12 +224,11 @@ data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : 
 
     override fun shapeConstraintViolationDisplayMessage(
         shape: Shape,
-        model: Model,
     ) = writable {
         rustTemplate(
             """
-            Self::Length(${if (isSensitive) "_" else "length"}) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+            Self::Length(length) => {
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
             },
             """,
         )

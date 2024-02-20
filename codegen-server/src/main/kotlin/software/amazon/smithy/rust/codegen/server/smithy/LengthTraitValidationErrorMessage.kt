@@ -7,15 +7,13 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.rust.codegen.server.smithy.generators.idWithHashEscaped
 
 fun LengthTrait.validationErrorMessage() =
     "Value with length {} at '{}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
 
 fun LengthTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
-    """
-    Value with length {} provided for '${shape.id.toString().replace("#", "##")}' failed to 
-    satisfy constraint: Member must have length ${this.lengthDescription()}
-    """.trimIndent().replace("\n", "")
+    "Value with length {} provided for '${shape.idWithHashEscaped()}' failed to satisfy constraint: Member must have length ${this.lengthDescription()}"
 
 fun LengthTrait.lengthDescription() =
     if (this.min.isPresent && this.max.isPresent) {

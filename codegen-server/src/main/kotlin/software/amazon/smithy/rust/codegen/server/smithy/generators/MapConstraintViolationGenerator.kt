@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
-import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -131,13 +130,12 @@ class MapConstraintViolationGenerator(
     private fun lengthMatchingArm() =
         writable {
             shape.getTrait<LengthTrait>()?.let {
-                val isSensitive = shape.hasTrait<SensitiveTrait>()
                 rustTemplate(
                     """
-                Self::Length(${if (isSensitive) "_" else "length"}) => {
-                    write!(f, "${it.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
-                },
-                """,
+                    Self::Length(length) => {
+                        write!(f, "${it.shapeConstraintViolationDisplayMessage(shape)}", length)
+                    },
+                    """,
                 )
             }
         }

@@ -117,7 +117,7 @@ class CollectionConstraintViolationGenerator(
     private fun generateDisplayMessageForEachVariant(memberConstraintVariantPresent: Boolean) =
         writable {
             collectionConstraintsInfo.forEach {
-                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+                it.shapeConstraintViolationDisplayMessage(shape).invoke(this)
             }
 
             if (memberConstraintVariantPresent) {
