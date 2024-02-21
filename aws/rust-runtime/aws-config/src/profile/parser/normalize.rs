@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::profile::parser::section::new_properties_key;
 use crate::profile::parser::{
     parse::{RawProfileSet, WHITESPACE},
     Section, SsoSession,
@@ -16,53 +17,46 @@ const DEFAULT: &str = "default";
 const PROFILE_PREFIX: &str = "profile";
 const SSO_SESSION_PREFIX: &str = "sso-session";
 
+/// Any section like `[<prefix> <suffix>]` or `[<suffix-only>]`
 #[derive(Eq, PartialEq, Hash, Debug)]
-enum SectionKey<'a> {
-    /// `[default]` or `[profile default]`
-    Default {
-        /// True when it is `[profile default]`
-        prefixed: bool,
-    },
-    /// `[profile name]` or `[name]`
-    Profile {
-        /// True if prefixed with `profile`.
-        prefixed: bool,
-        suffix: Cow<'a, str>,
-    },
-    /// Any other section like `[<prefix> <suffix>]`
-    Other {
-        prefix: Cow<'a, str>,
-        suffix: Cow<'a, str>,
-    },
+struct SectionKey<'a> {
+    // /// `[default]` or `[profile default]`
+    // Default {
+    //     /// True when it is `[profile default]`
+    //     prefixed: bool,
+    // },
+    // /// `[profile name]` or `[name]`
+    // Profile {
+    //     /// True if prefixed with `profile`.
+    //     prefixed: bool,
+    //     suffix: Cow<'a, str>,
+    // },
+    prefix: Option<Cow<'a, str>>,
+    suffix: Cow<'a, str>,
 }
 
 impl<'a> SectionKey<'a> {
+    fn is_unprefixed_default(&self) -> bool {
+        self.prefix.is_none() && self.suffix == DEFAULT
+    }
+
+    fn is_prefixed_default(&self) -> bool {
+        self.prefix.as_deref() == Some(PROFILE_PREFIX) && self.suffix == DEFAULT
+    }
+
     fn parse(input: &str) -> SectionKey<'_> {
         let input = input.trim_matches(WHITESPACE);
-        if input == DEFAULT {
-            SectionKey::Default { prefixed: false }
-        } else if let Some((prefix, suffix)) = input.split_once(WHITESPACE) {
-            let suffix = suffix.trim().into();
-            if prefix == PROFILE_PREFIX {
-                if suffix == "default" {
-                    SectionKey::Default { prefixed: true }
-                } else {
-                    SectionKey::Profile {
-                        prefixed: true,
-                        suffix,
-                    }
-                }
-            } else {
-                SectionKey::Other {
-                    prefix: prefix.into(),
-                    suffix,
-                }
-            }
-        } else {
-            SectionKey::Profile {
-                prefixed: false,
-                suffix: input.into(),
-            }
+        match input.split_once(WHITESPACE) {
+            // Something like `[profile name]`
+            Some((prefix, suffix)) => SectionKey {
+                prefix: Some(prefix.trim().into()),
+                suffix: suffix.trim().into(),
+            },
+            // Either `[profile-name]` or `[default]`
+            None => SectionKey {
+                prefix: None,
+                suffix: input.trim().into(),
+            },
         }
     }
 
@@ -71,36 +65,43 @@ impl<'a> SectionKey<'a> {
     /// 1. `name` must ALWAYS be a valid identifier
     /// 2. For Config files, the profile must either be `default` or it must have a profile prefix
     /// 3. For credentials files, the profile name MUST NOT have a profile prefix
-    /// 4. Only config files can have sso-session sections
+    /// 4. Only config files can have sections other than `profile` sections
     fn valid_for(self, kind: ProfileFileKind) -> Result<Self, String> {
-        match &self {
-            SectionKey::Default { .. } => Ok(self),
-            SectionKey::Profile { prefixed, suffix } => {
-                if validate_identifier(suffix).is_err() {
-                    return Err(format!(
-                        "profile `{suffix}` ignored because `{suffix}` was not a valid identifier",
-                    ));
+        match kind {
+            ProfileFileKind::Config => match (&self.prefix, &self.suffix) {
+                (Some(prefix), suffix) => {
+                    if validate_identifier(suffix).is_ok() {
+                        Ok(self)
+                    } else {
+                        Err(format!("section [{prefix} {suffix}] ignored; `{suffix}` is not a valid identifier"))
+                    }
                 }
-                match (kind, prefixed) {
-                    (ProfileFileKind::Config, false) => Err(format!("profile `{suffix}` ignored because config profiles must be of the form `[profile <name>]`")),
-                    (ProfileFileKind::Credentials, true) => Err(format!("profile `{suffix}` ignored because credential profiles must NOT begin with `profile`")),
-                    _ => Ok(self)
+                (None, suffix) => {
+                    if self.is_unprefixed_default() {
+                        Ok(self)
+                    } else {
+                        Err(format!("profile [{suffix}] ignored; sections in the AWS config file (other than [default]) must have a prefix i.e. [profile my-profile]"))
+                    }
                 }
-            }
-            SectionKey::Other { prefix, suffix } => {
-                if validate_identifier(prefix).is_err() {
-                    return Err(format!(
-                        "section [{prefix} {suffix}] ignored because `{suffix}` is not a valid identifier",
-                    ));
+            },
+            ProfileFileKind::Credentials => match (&self.prefix, &self.suffix) {
+                (Some(prefix), suffix) => {
+                    if prefix == PROFILE_PREFIX {
+                        Err(format!("profile `{suffix}` ignored because credential profiles must NOT begin with `profile`"))
+                    } else {
+                        Err(format!("section [{prefix} {suffix}] ignored; config must be in the AWS config file rather than the credentials file"))
+                    }
                 }
-                if let ProfileFileKind::Config = kind {
-                    Ok(self)
-                } else {
-                    Err(format!(
-                        "section [{prefix} {suffix}] ignored; config must be in the AWS config file rather than the credentials file",
-                    ))
+                (None, suffix) => {
+                    if validate_identifier(suffix).is_ok() {
+                        Ok(self)
+                    } else {
+                        Err(format!(
+                            "profile [{suffix}] ignored because `{suffix}` is not a valid identifier",
+                        ))
+                    }
                 }
-            }
+            },
         }
     }
 }
@@ -131,7 +132,7 @@ pub(super) fn merge_in(
         .filter_map(|(section_key, properties)| match section_key {
             Ok(section_key) => Some((section_key, properties)),
             Err(err_str) => {
-                tracing::warn!("{}", err_str);
+                tracing::warn!("{err_str}");
                 None
             }
         })
@@ -139,45 +140,46 @@ pub(super) fn merge_in(
     // if a `[profile default]` exists then we should ignore `[default]`
     let ignore_unprefixed_default = valid_sections
         .iter()
-        .any(|(section_key, _)| matches!(section_key, SectionKey::Default { prefixed: true }));
+        .any(|(section_key, _)| section_key.is_prefixed_default());
 
     for (section_key, raw_profile) in valid_sections {
         // When normalizing profiles, profiles should be merged. However, `[profile default]` and
         // `[default]` are considered two separate profiles. Furthermore, `[profile default]` fully
         // replaces any contents of `[default]`!
-        if ignore_unprefixed_default
-            && matches!(section_key, SectionKey::Default { prefixed: false })
-        {
-            tracing::warn!("profile `default` ignored because `[profile default]` was found which takes priority");
+        if ignore_unprefixed_default && section_key.is_unprefixed_default() {
+            tracing::warn!("profile `[default]` ignored because `[profile default]` was found which takes priority");
             continue;
         }
-        let section: &mut dyn Section = match section_key {
-            SectionKey::Default { .. } => base
+        let section: &mut dyn Section = match (
+            section_key.prefix.as_deref(),
+            section_key.suffix.as_ref(),
+        ) {
+            (Some(PROFILE_PREFIX), DEFAULT) | (None, DEFAULT) => base
                 .profiles
-                .entry("default".to_string())
+                .entry(DEFAULT.to_string())
                 .or_insert_with(|| Profile::new("default", Default::default())),
-            SectionKey::Profile { suffix: name, .. } => base
+            (Some(PROFILE_PREFIX), name) | (None, name) => base
                 .profiles
                 .entry(name.to_string())
-                .or_insert_with(|| Profile::new(name, Default::default())),
-            SectionKey::Other { prefix, suffix } if prefix == SSO_SESSION_PREFIX => base
+                .or_insert_with(|| Profile::new(name.to_string(), Default::default())),
+            (Some(SSO_SESSION_PREFIX), name) => base
                 .sso_sessions
-                .entry(suffix.to_string())
-                .or_insert_with(|| SsoSession::new(suffix, Default::default())),
-            SectionKey::Other { prefix, suffix } => {
+                .entry(name.to_string())
+                .or_insert_with(|| SsoSession::new(name.to_string(), Default::default())),
+            (Some(prefix), suffix) => {
                 for (sub_properties_group_name, raw_sub_properties) in &raw_profile {
                     match validate_identifier(sub_properties_group_name.as_ref())
                         .map(ToOwned::to_owned)
                     {
                         Ok(sub_properties_group_name) => parse_sub_properties(raw_sub_properties)
                             .for_each(|(sub_property_name, sub_property_value)| {
-                                let path: &[&str] = &[
-                                    prefix.as_ref(),
-                                    suffix.as_ref(),
+                                let key = new_properties_key(
+                                    prefix,
+                                    suffix,
                                     &sub_properties_group_name,
-                                    &sub_property_name,
-                                ];
-                                base.other_sections.insert_at(path, sub_property_value);
+                                    Some(&sub_property_name),
+                                );
+                                base.other_sections.insert(&key, sub_property_value);
                             }),
                         Err(_) => {
                             tracing::warn!("`[{prefix} {suffix}].{sub_properties_group_name}` \
@@ -238,6 +240,7 @@ fn parse_sub_properties(sub_properties_str: &str) -> impl Iterator<Item = (Strin
             if let (Some(key), Some(value)) = (key, value) {
                 Some((key, value))
             } else {
+                tracing::warn!("`{line}` ignored because it is not a valid sub-property");
                 None
             }
         })
@@ -257,90 +260,102 @@ mod tests {
     #[test]
     fn section_key_parsing() {
         assert_eq!(
-            SectionKey::Default { prefixed: false },
+            SectionKey {
+                prefix: None,
+                suffix: "default".into()
+            },
             SectionKey::parse("default"),
         );
         assert_eq!(
-            SectionKey::Default { prefixed: false },
+            SectionKey {
+                prefix: None,
+                suffix: "default".into()
+            },
             SectionKey::parse("   default "),
         );
         assert_eq!(
-            SectionKey::Default { prefixed: true },
+            SectionKey {
+                prefix: Some("profile".into()),
+                suffix: "default".into()
+            },
             SectionKey::parse("profile default"),
         );
         assert_eq!(
-            SectionKey::Default { prefixed: true },
+            SectionKey {
+                prefix: Some("profile".into()),
+                suffix: "default".into()
+            },
             SectionKey::parse(" profile   default "),
         );
 
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "name".into(),
-                prefixed: true
+                prefix: Some("profile".into())
             },
             SectionKey::parse("profile name"),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "name".into(),
-                prefixed: false
+                prefix: None
             },
             SectionKey::parse("name"),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "name".into(),
-                prefixed: true
+                prefix: Some("profile".into())
             },
             SectionKey::parse("profile\tname"),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "name".into(),
-                prefixed: true
+                prefix: Some("profile".into())
             },
             SectionKey::parse("profile     name  "),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "profilename".into(),
-                prefixed: false
+                prefix: None
             },
             SectionKey::parse("profilename"),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "whitespace".into(),
-                prefixed: false
+                prefix: None
             },
             SectionKey::parse("   whitespace   "),
         );
 
         assert_eq!(
-            SectionKey::Other {
-                prefix: "sso-session".into(),
+            SectionKey {
+                prefix: Some("sso-session".into()),
                 suffix: "foo".into()
             },
             SectionKey::parse("sso-session foo"),
         );
         assert_eq!(
-            SectionKey::Other {
-                prefix: "sso-session".into(),
+            SectionKey {
+                prefix: Some("sso-session".into()),
                 suffix: "foo".into()
             },
             SectionKey::parse("sso-session\tfoo "),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "sso-sessionfoo".into(),
-                prefixed: false
+                prefix: None
             },
             SectionKey::parse("sso-sessionfoo"),
         );
         assert_eq!(
-            SectionKey::Profile {
+            SectionKey {
                 suffix: "sso-session".into(),
-                prefixed: false
+                prefix: None
             },
             SectionKey::parse("sso-session "),
         );
@@ -381,6 +396,6 @@ mod tests {
         let mut profile: RawProfileSet<'_> = HashMap::new();
         profile.insert("foo", HashMap::new());
         merge_in(&mut ProfileSet::empty(), profile, ProfileFileKind::Config);
-        assert!(logs_contain("profile `foo` ignored"));
+        assert!(logs_contain("profile [foo] ignored"));
     }
 }

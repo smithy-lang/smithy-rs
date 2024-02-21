@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use crate::profile::ProfileParseError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

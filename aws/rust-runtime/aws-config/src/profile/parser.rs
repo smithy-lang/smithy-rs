@@ -158,7 +158,8 @@ impl ProfileSet {
     }
 
     /// Returns a struct allowing access to other sections in the profile config
-    pub fn other_sections(&self) -> &Properties {
+    #[allow(dead_code)] // Leaving this hidden for now.
+    pub(crate) fn other_sections(&self) -> &Properties {
         &self.other_sections
     }
 
@@ -188,9 +189,7 @@ mod test {
     use super::source::{File, Source};
     use crate::profile::profile_file::ProfileFileKind;
     use crate::profile::ProfileSet;
-    use crate::provider_config::ProviderConfig;
     use arbitrary::{Arbitrary, Unstructured};
-    use aws_types::os_shim_internal::{Env, Fs};
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
