@@ -703,7 +703,7 @@ pub(crate) mod runtime_plugin {
                         )));
                     }
                     _ => {
-                        // TODO(S3Express depending on aws-sdk-rust#1060): Transfer a value of
+                        // TODO(aws-sdk-rust#1073): Transfer a value of
                         //  `s3_disable_express_session_auth` from a profile file to `layer`
                     }
                 }
