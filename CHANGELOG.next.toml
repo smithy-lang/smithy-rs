@@ -24,7 +24,7 @@ meta = { "bug" = false, "breaking" = false, tada = false }
 author = "rcoh"
 
 [[smithy-rs]]
-message = "Add Body http-body-1.0 implementation to SdkBody."
+message = "[`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/body/struct.SdkBody.html) now implements the 1.0 version of the `http_body` trait."
 references = ["smithy-rs#3365", "aws-sdk-rust#1046"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 author = "cayman-amzn"
