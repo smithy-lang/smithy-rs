@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViola
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.patternDescription
+import software.amazon.smithy.rust.codegen.server.smithy.patternWithEscapedHash
 import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -330,7 +331,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         constraintViolation: Symbol,
         unconstrainedTypeName: String,
     ): Writable {
-        val pattern = patternTrait.patternDescription()
+        val pattern = patternTrait.patternWithEscapedHash()
         val errorMessageForUnsupportedRegex =
             """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 

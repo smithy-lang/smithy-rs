@@ -21,8 +21,11 @@ fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
 // that interpolates (e.g., println!, format!) can cause an error if the string contains
 // interpolation characters. Therefore, these characters must be escaped.
 fun PatternTrait.patternDescription() =
-    this.pattern.toString()
-        .replace("#", "##")
+    this.patternWithEscapedHash()
         .replace("\\", "\\\\")
         .replace("{","{{")
         .replace("}","}}")
+
+fun PatternTrait.patternWithEscapedHash() =
+    this.pattern.toString()
+        .replace("#", "##")
