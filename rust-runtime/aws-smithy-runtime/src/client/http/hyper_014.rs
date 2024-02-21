@@ -25,12 +25,14 @@ use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use h2::Reason;
 use http::{Extensions, Uri};
+use hyper_0_14::client::connect::dns::Name;
 use hyper_0_14::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
 use hyper_0_14::service::Service;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::sync::RwLock;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -46,9 +48,9 @@ mod default_connector {
     // don't need to repeatedly incur that cost.
     pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
         hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(default_tls);
+    > = once_cell::sync::Lazy::new(|| default_tls(HttpConnector::new()));
 
-    fn default_tls() -> HttpsConnector<HttpConnector> {
+    fn default_tls<R>(connector: HttpConnector<R>) -> HttpsConnector<HttpConnector<R>> {
         use hyper_rustls::ConfigBuilderExt;
         hyper_rustls::HttpsConnectorBuilder::new()
                .with_tls_config(
@@ -73,7 +75,7 @@ mod default_connector {
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .build()
+            .wrap_connector(connector)
     }
 
     pub(super) fn base(
@@ -93,6 +95,14 @@ mod default_connector {
     /// It allows you to connect to both `http` and `https` URLs.
     pub(super) fn https() -> hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector> {
         HTTPS_NATIVE_ROOTS.clone()
+    }
+
+    pub(super) fn https_with_connector(connector: HttpConnector) -> HttpsConnector<HttpConnector> {
+        default_tls(connector)
+    }
+
+    pub(super) fn https_with_resolver<R>(resolver: R) -> HttpsConnector<HttpConnector<R>> {
+        default_tls(HttpConnector::new_with_resolver(resolver))
     }
 }
 
@@ -208,6 +218,18 @@ impl HyperConnectorBuilder {
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> HyperConnector {
         self.build(default_connector::https())
+    }
+
+    pub fn build_with_resolver<R>(self, resolver: R) -> HyperConnector
+    where
+        R: Clone + Send + Sync + 'static,
+        R: Service<Name>,
+        <R as Service<Name>>::Error: Send + Sync,
+        <R as Service<Name>>::Error: std::error::Error,
+        <R as Service<Name>>::Future: Send,
+        <R as Service<Name>>::Response: Iterator<Item = SocketAddr>,
+    {
+        self.build(default_connector::https_with_resolver(resolver))
     }
 
     /// Set the async sleep implementation used for timeouts
