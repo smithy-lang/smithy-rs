@@ -5,7 +5,6 @@
 
 use std::time::{Duration, SystemTime};
 
-use aws_config::Region;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::SdkBody;
@@ -132,12 +131,7 @@ async fn presigning() {
         create_session_response(),
     )]);
 
-    let config = aws_sdk_s3::Config::builder()
-        .http_client(http_client)
-        .region(Region::new("us-west-2"))
-        .with_test_defaults()
-        .build();
-    let client = Client::from_conf(config);
+    let client = test_client(|b| b.http_client(http_client.clone())).await;
 
     let presigning_config = PresigningConfig::builder()
         .start_time(SystemTime::UNIX_EPOCH + Duration::from_secs(1234567891))
@@ -205,14 +199,14 @@ fn response_ok() -> http::Response<SdkBody> {
 
 #[tokio::test]
 async fn user_specified_checksum_should_be_respected() {
-    async fn runner(checksum: &str, value: &str) {
+    async fn runner(checksum: ChecksumAlgorithm, value: &str) {
         let http_client = StaticReplayClient::new(vec![
             ReplayEvent::new(create_session_request(), create_session_response()),
             ReplayEvent::new(
                 operation_request_with_checksum(
                     "test?x-id=PutObject",
                     Some((
-                        &format!("x-amz-checksum-{}", checksum.to_lowercase()),
+                        &format!("x-amz-checksum-{}", checksum.as_str().to_lowercase()),
                         &format!("{value}"),
                     )),
                 ),
@@ -226,24 +220,24 @@ async fn user_specified_checksum_should_be_respected() {
             .bucket("s3express-test-bucket--usw2-az1--x-s3")
             .key("test")
             .body(SdkBody::empty().into())
-            .checksum_algorithm(ChecksumAlgorithm::from(checksum))
+            .checksum_algorithm(checksum)
             .send()
             .await;
 
         http_client.assert_requests_match(&[""]);
     }
 
-    let crc32_checksum = "AAAAAA==";
-    let crc32c_checksum = "AAAAAA==";
-    let sha1_checksum = "2jmj7l5rSw0yVb/vlWAYkK/YBwk=";
-    let sha256_checksum = "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=";
-    for (checksum, value) in ChecksumAlgorithm::values().iter().zip(&[
-        crc32_checksum,
-        crc32c_checksum,
-        sha1_checksum,
-        sha256_checksum,
-    ]) {
-        runner(*checksum, *value).await;
+    let checksum_value_pairs = &[
+        (ChecksumAlgorithm::Crc32, "AAAAAA=="),
+        (ChecksumAlgorithm::Crc32C, "AAAAAA=="),
+        (ChecksumAlgorithm::Sha1, "2jmj7l5rSw0yVb/vlWAYkK/YBwk="),
+        (
+            ChecksumAlgorithm::Sha256,
+            "47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
+        ),
+    ];
+    for (checksum, value) in checksum_value_pairs {
+        runner(checksum.clone(), *value).await;
     }
 }
 
