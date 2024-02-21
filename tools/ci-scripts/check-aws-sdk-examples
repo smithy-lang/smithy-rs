@@ -13,7 +13,8 @@ cd aws-sdk/examples
 for example in *; do
     echo -e "${C_YELLOW}Checking examples/${example}...${C_RESET}"
     pushd "${example}" &>/dev/null
-    RUSTFLAGS="" cargo check
+    # TODO(V1264782183): Switch back to stable
+    RUSTFLAGS="" cargo "+${RUST_NIGHTLY_VERSION:-nightly}" check
     cargo clean
     popd &>/dev/null
 done
