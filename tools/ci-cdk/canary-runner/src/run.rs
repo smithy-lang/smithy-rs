@@ -388,7 +388,7 @@ async fn create_lambda_fn(
         )
         .publish(true)
         .environment(env_builder.build())
-        .timeout(60)
+        .timeout(180)
         .send()
         .await
         .context(here!("failed to create canary Lambda function"))?;
