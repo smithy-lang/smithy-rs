@@ -105,7 +105,8 @@ class ConstrainedMapGeneratorTest {
                     let map = build_invalid_map();
                     let constrained_res: Result<ConstrainedMap, _> = map.try_into();
                     let error = constrained_res.unwrap_err();
-                    let _error_trait : &dyn std::error::Error = &error;
+                    let _ensure_display_works = format!("{error}");
+                    let _error_trait_is_implemented : &dyn std::error::Error = &error;
                 """,
             )
             unitTest(
@@ -158,8 +159,35 @@ class ConstrainedMapGeneratorTest {
     fun `error trait implemented for ConstraintViolation should work for constrained key and value`() {
         val model =
             """
+            ${'$'}version: "2"
+            
             namespace test
-
+            
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+            
+            // The `ConstraintViolation` code generated for a constrained map that is not reachable from an
+            // operation does not have the `Key`, or `Value` variants. Hence, we need to define a service
+            // and an operation that uses the constrained map.
+            @restJson1
+            service MyService {
+                version: "2023-04-01",
+                operations: [
+                    MyOperation,
+                ]
+            }
+            
+            @http(method: "POST", uri: "/echo")
+            operation MyOperation {
+                input:= {
+                    member1: ConstrainedMapWithConstrainedKey,
+                    member2: ConstrainedMapWithConstrainedKeyValue,
+                    member3: ConstrainedMapWithConstrainedValue,
+                },
+                output:= {},
+                errors : [ValidationException]
+            }
+            
             @length(min: 2, max: 69)
             map ConstrainedMapWithConstrainedKey {
                 key: ConstrainedKey,
@@ -219,6 +247,12 @@ class ConstrainedMapGeneratorTest {
                     m.insert("1".to_string(), ConstrainedValue("Y".to_string()));
                     m
                 }
+                
+                // Define `ValidationExceptionField` in the model as the `ConstraintViolation` code requires this.
+                pub struct ValidationExceptionField {
+                    pub message: String,
+                    pub path: String
+                }
                 """,
             )
 
@@ -234,10 +268,35 @@ class ConstrainedMapGeneratorTest {
                         let map = build_invalid_$rustShapeSnakeCaseName();
                         let constrained_res: Result<$rustShapeName, $rustShapeSnakeCaseName::ConstraintViolation> = map.try_into();
                         let error = constrained_res.unwrap_err();
-                        let _error_trait : &dyn std::error::Error = &error;
+                        let _error_display_works = format!("{error}");
+                        let _error_trait_is_implemented : &dyn std::error::Error = &error;
                     """,
                 )
             }
+
+            unitTest(
+                name = "try_constraint_enum_key",
+                test = """
+                    let error = constrained_map_with_constrained_key::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
+                    let _format_should_work = format!("{error}");
+                """.trimIndent()
+            )
+            unitTest(
+                name = "try_constraint_enum_value",
+                test = """
+                    let error = constrained_map_with_constrained_value::ConstraintViolation::Value("some_key".to_string(), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
+                    let _format_should_work = format!("{error}");
+                """.trimIndent()
+            )
+            unitTest(
+                name = "try_constraint_enum_keyvalue",
+                test = """
+                    let error = constrained_map_with_constrained_key_value::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
+                    let _format_should_work = format!("{error}");
+                    let error = constrained_map_with_constrained_key_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
+                    let _format_should_work = format!("{error}");
+                """.trimIndent()
+            )
         }
 
         project.compileAndTest()
