@@ -492,6 +492,9 @@ tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
@@ -559,6 +562,9 @@ tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
