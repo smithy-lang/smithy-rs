@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -105,8 +106,10 @@ class UnconstrainedMapGeneratorTest {
                         );
 
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
-
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
+                        
+                        let _actual_error_trait : &dyn std::error::Error = &actual_err;
+                        let _display_impl_works = format!("{actual_err}");
                         """,
                     )
                 }
@@ -162,5 +165,7 @@ class UnconstrainedMapGeneratorTest {
                 }
             }
         }
+
+        project.compileAndTest()
     }
 }

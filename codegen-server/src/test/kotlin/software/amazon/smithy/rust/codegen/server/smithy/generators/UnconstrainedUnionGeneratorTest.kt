@@ -71,11 +71,13 @@ class UnconstrainedUnionGeneratorTest {
                         let expected_err = crate::model::union::ConstraintViolation::Structure(
                             crate::model::structure::ConstraintViolation::MissingRequiredMember,
                         );
-
+                        let err = crate::model::Union::try_from(union_unconstrained).unwrap_err();
                         assert_eq!(
-                            expected_err,
-                            crate::model::Union::try_from(union_unconstrained).unwrap_err()
+                            expected_err, err
                         );
+                        
+                        let _error_trait : &dyn ::std::error::Error = &err;
+                        let _display_impl_works = format!("{err}");
                     """,
                 )
 

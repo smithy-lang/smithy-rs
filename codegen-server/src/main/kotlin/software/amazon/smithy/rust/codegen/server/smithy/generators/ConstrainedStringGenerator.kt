@@ -367,7 +367,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         rustTemplate(
             """
             Self::Pattern(_) => {
-                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}")
+                format!(r##"${patternTrait.shapeConstraintViolationDisplayMessage(shape)}"##)
             },
             """,
         )
