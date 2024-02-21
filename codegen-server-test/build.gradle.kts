@@ -30,6 +30,10 @@ dependencies {
     implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
+smithy {
+    format.set(false)
+}
+
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
@@ -95,7 +99,7 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["jar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
