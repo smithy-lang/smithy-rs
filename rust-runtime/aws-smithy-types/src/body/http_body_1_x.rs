@@ -28,8 +28,8 @@ impl SdkBody {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1_0::Frame<Bytes>, Error>>> {
-        // There has got to be a way to simplify this matching matchy match
         match ready!(self.as_mut().poll_next(cx)) {
+            // if there's no more data, try to return trailers
             None => match ready!(self.poll_next_trailers(cx)) {
                 Ok(Some(trailers)) => Poll::Ready(Some(Ok(http_body_1_0::Frame::trailers(
                     convert_headers_0x_1x(trailers),
@@ -38,8 +38,8 @@ impl SdkBody {
                 Err(e) => Poll::Ready(Some(Err(e))),
             },
             Some(result) => match result {
-                Err(err) => return Poll::Ready(Some(Err(err))),
-                Ok(bytes) => return Poll::Ready(Some(Ok(http_body_1_0::Frame::data(bytes)))),
+                Err(err) => Poll::Ready(Some(Err(err))),
+                Ok(bytes) => Poll::Ready(Some(Ok(http_body_1_0::Frame::data(bytes)))),
             },
         }
     }
