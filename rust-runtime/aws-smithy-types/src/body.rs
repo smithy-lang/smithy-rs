@@ -189,10 +189,10 @@ impl SdkBody {
         }
     }
 
-    #[cfg(feature = "http-body-0-4-x")]
+    #[cfg(any(feature = "http-body-0-4-x", feature = "http-body-1-x",))]
     pub(crate) fn poll_next_trailers(
         self: Pin<&mut Self>,
-        #[allow(unused)] cx: &mut Context<'_>,
+        cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
         let this = self.project();
         match this.inner.project() {
@@ -202,10 +202,6 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_trailers(cx)
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!(
-                    "Polling for trailers via this function is not supported with http-body-1-0-x, use poll_frame"
-                ),
             },
             InnerProj::Taken => Poll::Ready(Err(
                 "A `Taken` body should never be polled for trailers".into(),
