@@ -76,8 +76,8 @@ pub(crate) struct Properties {
     inner: HashMap<PropertiesKey, PropertyValue>,
 }
 
+#[allow(dead_code)]
 impl Properties {
-    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
         Default::default()
     }
@@ -151,7 +151,7 @@ impl Section for SectionInner {
 
 /// An individual configuration profile
 ///
-/// An AWS config may be composed of a multiple named profiles within a [`ProfileSet`].
+/// An AWS config may be composed of a multiple named profiles within a [`ProfileSet`](crate::profile::ProfileSet).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Profile(SectionInner);
 
