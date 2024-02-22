@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 22nd, 2024
+===================
+**New this release:**
+- (all, [smithy-rs#3410](https://github.com/smithy-lang/smithy-rs/issues/3410)) The MSRV has been increase to 1.74.1
+
+
 February 15th, 2024
 ===================
 **Breaking Changes:**
