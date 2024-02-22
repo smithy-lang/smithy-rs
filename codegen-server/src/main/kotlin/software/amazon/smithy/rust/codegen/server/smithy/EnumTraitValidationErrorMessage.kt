@@ -12,9 +12,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.idWithHashEs
 fun EnumTrait.validationErrorMessage() =
     "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [${enumValueSet()}]"
 
-
 fun EnumTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     "Value provided for '${shape.idWithHashEscaped()}' failed to satisfy constraint: Member must satisfy enum value set: [${enumValueSet()}]"
 
-fun EnumTrait.enumValueSet() =
-    this.enumDefinitionValues.joinToString(", ")
+fun EnumTrait.enumValueSet() = this.enumDefinitionValues.joinToString(", ")

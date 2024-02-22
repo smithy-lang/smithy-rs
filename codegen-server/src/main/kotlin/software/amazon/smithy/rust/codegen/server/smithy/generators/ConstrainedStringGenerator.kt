@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -38,7 +37,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.patternDescription
 import software.amazon.smithy.rust.codegen.server.smithy.patternWithEscapedHash
 import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
@@ -264,17 +262,16 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
             )
         }
 
-    override fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ) = writable {
-        rustTemplate(
-            """
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            rustTemplate(
+                """
             Self::Length(length) => {
                 format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
             },
             """,
-        )
-    }
+            )
+        }
 }
 
 data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
@@ -362,17 +359,16 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         }
     }
 
-    override fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ) = writable {
-        rustTemplate(
-            """
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            rustTemplate(
+                """
             Self::Pattern(_) => {
                 format!(r##"${patternTrait.shapeConstraintViolationDisplayMessage(shape)}"##)
             },
             """,
-        )
-    }
+            )
+        }
 }
 
 sealed class StringTraitInfo {
@@ -396,7 +392,5 @@ sealed class StringTraitInfo {
 
     abstract fun toTraitInfo(): TraitInfo
 
-    abstract fun shapeConstraintViolationDisplayMessage(
-        shape: Shape,
-    ): Writable
+    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
 }

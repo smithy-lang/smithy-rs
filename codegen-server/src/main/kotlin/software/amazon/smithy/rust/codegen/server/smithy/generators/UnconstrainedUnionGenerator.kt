@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViola
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
-import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -188,7 +187,7 @@ class UnconstrainedUnionGenerator(
                 rustTemplate(
                     """
                     Self::${it.name()}(inner) => write!(f, "{inner}"),
-                    """
+                    """,
                 )
             }
         }

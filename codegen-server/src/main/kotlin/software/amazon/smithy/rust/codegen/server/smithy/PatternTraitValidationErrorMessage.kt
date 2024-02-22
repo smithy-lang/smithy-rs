@@ -23,8 +23,8 @@ fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
 fun PatternTrait.patternDescription() =
     this.patternWithEscapedHash()
         .replace("\\", "\\\\")
-        .replace("{","{{")
-        .replace("}","}}")
+        .replace("{", "{{")
+        .replace("}", "}}")
 
 fun PatternTrait.patternWithEscapedHash() =
     this.pattern.toString()

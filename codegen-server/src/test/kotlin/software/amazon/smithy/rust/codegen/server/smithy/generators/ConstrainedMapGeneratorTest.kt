@@ -276,26 +276,29 @@ class ConstrainedMapGeneratorTest {
 
             unitTest(
                 name = "try_constraint_enum_key",
-                test = """
+                test =
+                    """
                     let error = constrained_map_with_constrained_key::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
                     let _format_should_work = format!("{error}");
-                """.trimIndent()
+                    """.trimIndent(),
             )
             unitTest(
                 name = "try_constraint_enum_value",
-                test = """
+                test =
+                    """
                     let error = constrained_map_with_constrained_value::ConstraintViolation::Value("some_key".to_string(), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
                     let _format_should_work = format!("{error}");
-                """.trimIndent()
+                    """.trimIndent(),
             )
             unitTest(
                 name = "try_constraint_enum_keyvalue",
-                test = """
+                test =
+                    """
                     let error = constrained_map_with_constrained_key_value::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
                     let _format_should_work = format!("{error}");
                     let error = constrained_map_with_constrained_key_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
                     let _format_should_work = format!("{error}");
-                """.trimIndent()
+                    """.trimIndent(),
             )
         }
 
