@@ -29,12 +29,12 @@
 //!     c) [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) addresses
 //!        ie 169.254.170.23 or fd00:ec2::23
 //!
-//! **Next**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN`. If this is set, the
-//! value will be passed in the `Authorization` header.
-//!
-//! **Finally**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`. If this is set,
+//! **Next**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`. If this is set,
 //! the filename specified will be read, and the value passed in the `Authorization` header. If the file
 //! cannot be read, an error is returned.
+//!
+//! **Finally**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN`. If this is set, the
+//! value will be passed in the `Authorization` header.
 //!
 //! ## Credentials Format
 //! Credentials MUST be returned in a JSON format:
@@ -104,17 +104,9 @@ impl EcsCredentialsProvider {
 
     /// Load credentials from this credentials provider
     pub async fn credentials(&self) -> provider::Result {
-        let env_token = self.env.get(ENV_AUTHORIZATION_TOKEN).ok();
         let env_token_file = self.env.get(ENV_AUTHORIZATION_TOKEN_FILE).ok();
-        let auth = if let Some(auth_token) = env_token {
-            Some(HeaderValue::from_str(&auth_token).map_err(|err| {
-                tracing::warn!(token = %auth_token, "invalid auth token");
-                CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
-                    err,
-                    value: auth_token,
-                })
-            })?)
-        } else if let Some(auth_token_file) = env_token_file {
+        let env_token = self.env.get(ENV_AUTHORIZATION_TOKEN).ok();
+        let auth = if let Some(auth_token_file) = env_token_file {
             let auth = self
                 .fs
                 .read_to_end(auth_token_file)
@@ -122,6 +114,14 @@ impl EcsCredentialsProvider {
                 .map_err(CredentialsError::provider_error)?;
             Some(HeaderValue::from_bytes(auth.as_slice()).map_err(|err| {
                 let auth_token = String::from_utf8_lossy(auth.as_slice()).to_string();
+                tracing::warn!(token = %auth_token, "invalid auth token");
+                CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
+                    err,
+                    value: auth_token,
+                })
+            })?)
+        } else if let Some(auth_token) = env_token {
+            Some(HeaderValue::from_str(&auth_token).map_err(|err| {
                 tracing::warn!(token = %auth_token, "invalid auth token");
                 CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
                     err,
@@ -768,6 +768,42 @@ mod test {
                 "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
+        ]);
+        let fs = Fs::from_raw_map(HashMap::from([(
+            OsString::from(
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+            "Basic password".into(),
+        )]));
+
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            creds_request(
+                "http://169.254.170.23/v1/credentials",
+                Some("Basic password"),
+            ),
+            ok_creds_response(),
+        )]);
+        let provider = provider(env, fs, http_client.clone());
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("valid credentials");
+        assert_correct(creds);
+        http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn auth_file_precedence_over_env() {
+        let env = Env::from_slice(&[
+            (
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "http://169.254.170.23/v1/credentials",
+            ),
+            (
+                "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+            ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "unused"),
         ]);
         let fs = Fs::from_raw_map(HashMap::from([(
             OsString::from(
