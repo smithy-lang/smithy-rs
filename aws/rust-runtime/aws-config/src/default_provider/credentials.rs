@@ -209,7 +209,7 @@ mod test {
     /// Test generation macro
     ///
     /// # Examples
-    /// **Run the test case in `test-data/default-provider-chain/test_name`
+    /// **Run the test case in `test-data/default-credential-provider-chain/test_name`
     /// ```no_run
     /// make_test!(test_name);
     /// ```
@@ -246,7 +246,7 @@ mod test {
             #[tokio::test]
             async fn $name() {
                 crate::test_case::TestEnvironment::from_dir(concat!(
-                    "./test-data/default-provider-chain/",
+                    "./test-data/default-credential-provider-chain/",
                     stringify!($name)
                 ))
                 .await
@@ -312,12 +312,13 @@ mod test {
 
     #[tokio::test]
     async fn profile_name_override() {
-        let conf =
-            TestEnvironment::from_dir("./test-data/default-provider-chain/profile_static_keys")
-                .await
-                .unwrap()
-                .provider_config()
-                .clone();
+        let conf = TestEnvironment::from_dir(
+            "./test-data/default-credential-provider-chain/profile_static_keys",
+        )
+        .await
+        .unwrap()
+        .provider_config()
+        .clone();
         let provider = DefaultCredentialsChain::builder()
             .profile_name("secondary")
             .configure(conf)
