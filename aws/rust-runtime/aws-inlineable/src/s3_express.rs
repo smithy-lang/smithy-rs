@@ -764,8 +764,13 @@ pub(crate) mod runtime_plugin {
             );
         }
 
-        // TODO(aws-sdk-rust#1073): Add a unit test that only sets `s3_disable_express_session_auth`
-        //  in a profile file
+        #[should_panic]
+        #[test]
+        fn disable_option_set_from_profile_file_should_take_the_lowest_precedence() {
+            // TODO(aws-sdk-rust#1073): Implement a test that mimics only setting
+            //  `s3_disable_express_session_auth` in a profile file
+            todo!()
+        }
 
         #[test]
         fn disable_option_should_be_unspecified_if_unset() {
