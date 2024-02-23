@@ -37,6 +37,7 @@ tracing = "0.1"
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
+proptest = "1"
 tempfile = "3.6.0"
 tokio = { version = "1.23.1", features = ["macros", "rt", "io-util"] }
 

@@ -690,18 +690,18 @@ pub(crate) mod runtime_plugin {
                 .is_none()
             {
                 match env.get(env::S3_DISABLE_EXPRESS_SESSION_AUTH) {
-                    Ok(value)
-                        if value.eq_ignore_ascii_case("true")
-                            || value.eq_ignore_ascii_case("false") =>
-                    {
+                    Ok(value) if valid_environment_variable_value(&value) => {
                         let value = value
-                            .to_lowercase()
                             .parse::<bool>()
-                            .expect("just checked to be a bool-valued string");
+                            .expect("just checked to be a valid bool-valued string");
                         layer.store_or_unset(Some(crate::config::DisableS3ExpressSessionAuth(
                             value,
                         )));
                     }
+                    Ok(value) => panic!(
+                        "Must provide either `true` or `false` for an environment variable `{}`, but got {}",
+                        env::S3_DISABLE_EXPRESS_SESSION_AUTH,
+                        value),
                     _ => {
                         // TODO(aws-sdk-rust#1073): Transfer a value of
                         //  `s3_disable_express_session_auth` from a profile file to `layer`
@@ -715,6 +715,10 @@ pub(crate) mod runtime_plugin {
         }
     }
 
+    fn valid_environment_variable_value(value: &str) -> bool {
+        value == "true" || value == "false"
+    }
+
     impl RuntimePlugin for S3ExpressRuntimePlugin {
         fn config(&self) -> Option<FrozenLayer> {
             Some(self.config.clone())
@@ -724,6 +728,8 @@ pub(crate) mod runtime_plugin {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use proptest::prelude::*;
+        use proptest::proptest;
 
         #[test]
         fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
@@ -764,8 +770,8 @@ pub(crate) mod runtime_plugin {
             );
         }
 
-        #[should_panic]
         #[test]
+        #[should_panic]
         fn disable_option_set_from_profile_file_should_take_the_lowest_precedence() {
             // TODO(aws-sdk-rust#1073): Implement a test that mimics only setting
             //  `s3_disable_express_session_auth` in a profile file
@@ -784,6 +790,21 @@ pub(crate) mod runtime_plugin {
             assert!(cfg
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
+        }
+
+        proptest! {
+            #[test]
+            #[should_panic]
+            fn env_value_other_than_case_sensitive_true_or_false_should_result_in_panic(
+                invalid_env_var_value in any::<String>()
+                    .prop_filter("Use only invalid values for panic test",
+                                |s| !valid_environment_variable_value(&s))
+            ) {
+                let _ = S3ExpressRuntimePlugin::new_with(
+                    Layer::new("test").freeze(),
+                    Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, &invalid_env_var_value)]),
+                );
+            }
         }
     }
 }

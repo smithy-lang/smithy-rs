@@ -130,6 +130,7 @@ class FluentClientGenerator(
                     /// - Retries or timeouts are enabled without a `sleep_impl` configured.
                     /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
                     /// - No `behavior_version` is provided.
+                    /// - Base client-level runtime plugins could not be created.
                     ///
                     /// The panic message for each of these will have instructions on how to resolve them.
                     ##[track_caller]
