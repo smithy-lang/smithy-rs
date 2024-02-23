@@ -69,12 +69,12 @@ pub(crate) mod auth {
             let mut settings = SigV4Signer::signing_settings(&operation_config);
             override_session_token_name(&mut settings)?;
 
-            SigV4Signer.sign_http_request(
+            SigV4Signer::sign_http_request(
                 request,
                 identity,
                 settings,
                 &operation_config,
-                runtime_components,
+                runtime_components.time_source(),
                 config_bag,
             )
         }

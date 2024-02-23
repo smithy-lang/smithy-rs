@@ -3,16 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::auth;
+use crate::auth::signing_application::SigningApplication;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
     SigV4OperationSigningConfig, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
-use aws_sigv4::http_request::{
-    sign, SignableBody, SignableRequest, SigningParams, SigningSettings,
-};
+use aws_sigv4::http_request::{SigningParams, SigningSettings};
 use aws_sigv4::sign::v4;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -146,76 +145,45 @@ impl SigV4Signer {
 
     /// Signs the given `request`.
     ///
-    /// This is a helper used by [`Sign::sign_http_request`] and will be useful if calling code
-    /// needs to pass a configured `settings`.
+    /// This is a helper used by `(SigV4Signer as Sign).sign_http_request(...)` and will be useful
+    /// if calling code needs to pass a configured [`SigningSettings`].
     ///
-    /// TODO(S3Express): Make this method more user friendly, possibly returning a builder
-    ///  instead of taking these input parameters. The builder will have a `sign` method that
-    ///  does what this method body currently does.
+    /// If you already have an [`HttpRequest`] and a [`SigningParams`] at hand, consider using
+    /// [`SigningApplication`] directly.
     pub fn sign_http_request(
-        &self,
         request: &mut HttpRequest,
         identity: &Identity,
         settings: SigningSettings,
         operation_config: &SigV4OperationSigningConfig,
-        runtime_components: &RuntimeComponents,
-        #[allow(unused_variables)] config_bag: &ConfigBag,
+        time_source: Option<SharedTimeSource>,
+        _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
-        let request_time = runtime_components.time_source().unwrap_or_default().now();
+        let request_time = time_source.clone().unwrap_or_default().now();
         let signing_params =
             Self::signing_params(settings, identity, operation_config, request_time)?;
 
-        let (signing_instructions, _signature) = {
-            // A body that is already in memory can be signed directly. A body that is not in memory
-            // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
-            let signable_body = operation_config
+        let signing_params = SigningParams::V4(signing_params);
+        let mut signing_application = SigningApplication::default()
+            .request(request)
+            .signing_params(&signing_params);
+        signing_application.set_payload_override(
+            operation_config
                 .signing_options
                 .payload_override
                 .as_ref()
-                // the payload_override is a cheap clone because it contains either a
-                // reference or a short checksum (we're not cloning the entire body)
-                .cloned()
-                .unwrap_or_else(|| {
-                    request
-                        .body()
-                        .bytes()
-                        .map(SignableBody::Bytes)
-                        .unwrap_or(SignableBody::UnsignedPayload)
-                });
+                .cloned(),
+        );
 
-            let signable_request = SignableRequest::new(
-                request.method(),
-                request.uri(),
-                request.headers().iter(),
-                signable_body,
-            )?;
-            sign(signable_request, &SigningParams::V4(signing_params))?
-        }
-        .into_parts();
-
-        // If this is an event stream operation, set up the event stream signer
         #[cfg(feature = "event-stream")]
         {
-            use aws_smithy_eventstream::frame::DeferredSignerSender;
-            use event_stream::SigV4MessageSigner;
-
-            if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
-                let time_source = runtime_components.time_source().unwrap_or_default();
-                let region = operation_config.region.clone().unwrap();
-                let name = operation_config.name.clone().unwrap();
-                signer_sender
-                    .send(Box::new(SigV4MessageSigner::new(
-                        _signature,
-                        identity.clone(),
-                        region,
-                        name,
-                        time_source,
-                    )) as _)
-                    .expect("failed to send deferred signer");
-            }
+            signing_application.set_signer_sender(
+                _config_bag.load::<aws_smithy_eventstream::frame::DeferredSignerSender>(),
+            );
+            signing_application.set_time_source(time_source);
+            signing_application.set_identity(Some(identity));
         }
-        auth::apply_signing_instructions(signing_instructions, request)?;
-        Ok(())
+
+        signing_application.finalize()
     }
 }
 
@@ -234,15 +202,13 @@ impl Sign for SigV4Signer {
 
         let operation_config =
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-
         let settings = Self::signing_settings(&operation_config);
-
-        self.sign_http_request(
+        Self::sign_http_request(
             request,
             identity,
             settings,
             &operation_config,
-            runtime_components,
+            runtime_components.time_source(),
             config_bag,
         )
     }
