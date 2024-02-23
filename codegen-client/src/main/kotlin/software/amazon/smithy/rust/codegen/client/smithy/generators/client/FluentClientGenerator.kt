@@ -505,8 +505,9 @@ private fun baseClientRuntimePluginsFn(
                         )
                         // codegen config
                         .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
-                        .with_client_plugin(#{NoAuthRuntimePlugin}::new())
-                        #{additional_client_plugins:W};
+                        .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+
+                    #{additional_client_plugins:W};
 
                     for plugin in configured_plugins {
                         plugins = plugins.with_client_plugin(plugin);
@@ -519,7 +520,7 @@ private fun baseClientRuntimePluginsFn(
                     writable {
                         writeCustomizations(
                             customizations,
-                            FluentClientSection.AdditionalBaseClientPlugins("config"),
+                            FluentClientSection.AdditionalBaseClientPlugins("plugins", "config"),
                         )
                     },
                 "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),

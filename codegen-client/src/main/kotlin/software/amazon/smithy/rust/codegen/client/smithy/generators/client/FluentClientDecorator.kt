@@ -77,14 +77,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
     /** Write custom code into the docs */
     data class FluentClientDocs(val serviceShape: ServiceShape) : FluentClientSection("FluentClientDocs")
 
-    /**
-     * Write custom code into base_client_runtime_plugins
-     *  e.g.
-     *  ```kotlin
-     *  rust(""".with_client_plugin(...)""")
-     *  ```
-     */
-    data class AdditionalBaseClientPlugins(val config: String) : FluentClientSection("AdditionalBaseClientPlugins")
+    /** Write custom code for adding additional client plugins to base_client_runtime_plugins */
+    data class AdditionalBaseClientPlugins(val plugins: String, val config: String) :
+        FluentClientSection("AdditionalBaseClientPlugins")
 }
 
 abstract class FluentClientCustomization : NamedCustomization<FluentClientSection>()

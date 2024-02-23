@@ -201,7 +201,7 @@ class S3ExpressFluentClientCustomization(
                 is FluentClientSection.AdditionalBaseClientPlugins -> {
                     rustTemplate(
                         """
-                        .with_client_plugin(#{S3ExpressRuntimePlugin}::new(${section.config}.config.clone()))
+                        ${section.plugins} = ${section.plugins}.with_client_plugin(#{S3ExpressRuntimePlugin}::new(${section.config}.config.clone()));
                         """,
                         *codegenScope,
                     )
