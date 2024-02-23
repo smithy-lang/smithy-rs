@@ -19,6 +19,9 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::time::Duration;
 
+/// Builder for producing a signature and applying signing headers to an HTTP request.
+pub mod signing_application;
+
 /// Auth implementations for SigV4.
 pub mod sigv4;
 

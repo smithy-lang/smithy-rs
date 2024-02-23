@@ -70,6 +70,12 @@ impl From<Region> for SigningRegion {
     }
 }
 
+impl From<String> for SigningRegion {
+    fn from(region: String) -> Self {
+        SigningRegion(Cow::Owned(region))
+    }
+}
+
 impl From<&'static str> for SigningRegion {
     fn from(region: &'static str) -> Self {
         Self::from_static(region)

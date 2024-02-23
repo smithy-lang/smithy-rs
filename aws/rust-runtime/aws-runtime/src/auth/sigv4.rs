@@ -249,7 +249,7 @@ impl Sign for SigV4Signer {
 }
 
 #[cfg(feature = "event-stream")]
-mod event_stream {
+pub(crate) mod event_stream {
     use aws_sigv4::event_stream::{sign_empty_message, sign_message};
     use aws_sigv4::sign::v4;
     use aws_smithy_async::time::SharedTimeSource;
@@ -261,7 +261,7 @@ mod event_stream {
 
     /// Event Stream SigV4 signing implementation.
     #[derive(Debug)]
-    pub(super) struct SigV4MessageSigner {
+    pub(crate) struct SigV4MessageSigner {
         last_signature: String,
         identity: Identity,
         signing_region: SigningRegion,
@@ -270,7 +270,7 @@ mod event_stream {
     }
 
     impl SigV4MessageSigner {
-        pub(super) fn new(
+        pub(crate) fn new(
             last_signature: String,
             identity: Identity,
             signing_region: SigningRegion,
