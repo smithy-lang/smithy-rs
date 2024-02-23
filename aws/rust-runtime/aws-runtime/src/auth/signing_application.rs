@@ -43,7 +43,7 @@ pub struct SigningApplication<'a> {
     signing_params: Option<&'a SigningParams<'a>>,
     payload_override: Option<SignableBody<'a>>,
     #[cfg(feature = "event-stream")]
-    signer_sender: Option<&'a aws_smithy_eventstream::frame::DeferredSignerSender>,
+    config_bag: Option<&'a aws_smithy_types::config_bag::ConfigBag>,
     #[cfg(feature = "event-stream")]
     identity: Option<&'a aws_smithy_runtime_api::client::identity::Identity>,
     #[cfg(feature = "event-stream")]
@@ -94,28 +94,25 @@ impl<'a> SigningApplication<'a> {
     }
 
     #[cfg(feature = "event-stream")]
-    /// Sets the sender for event the stream signer to defer signing (optional).
-    pub fn signer_sender(
-        mut self,
-        signer_sender: &'a aws_smithy_eventstream::frame::DeferredSignerSender,
-    ) -> Self {
-        self.set_signer_sender(Some(signer_sender));
+    /// Sets the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) storing for event stream signer sender to defer signing (optional).
+    pub fn config_bag(mut self, config_bag: &'a aws_smithy_types::config_bag::ConfigBag) -> Self {
+        self.set_config_bag(Some(config_bag));
         self
     }
 
     #[cfg(feature = "event-stream")]
-    /// Sets the sender for event the stream signer to defer signing (optional).
-    pub fn set_signer_sender(
+    /// Sets the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) storing for event stream signer sender to defer signing (optional).
+    pub fn set_config_bag(
         &mut self,
-        signer_sender: Option<&'a aws_smithy_eventstream::frame::DeferredSignerSender>,
+        config_bag: Option<&'a aws_smithy_types::config_bag::ConfigBag>,
     ) -> &mut Self {
-        self.signer_sender = signer_sender;
+        self.config_bag = config_bag;
         self
     }
 
     #[cfg(feature = "event-stream")]
     /// Sets the [`Identity`](aws_smithy_runtime_api::client::identity::Identity) used for the event
-    /// stream signer (required if `self.signer_sender` is present).
+    /// stream signer (required if `self.config_bag` is present).
     pub fn identity(
         mut self,
         identity: &'a aws_smithy_runtime_api::client::identity::Identity,
@@ -126,7 +123,7 @@ impl<'a> SigningApplication<'a> {
 
     #[cfg(feature = "event-stream")]
     /// Sets the [`Identity`](aws_smithy_runtime_api::client::identity::Identity) used for the event
-    /// stream signer (required if `self.signer_sender` is present).
+    /// stream signer (required if `self.config_bag` is present).
     pub fn set_identity(
         &mut self,
         identity: Option<&'a aws_smithy_runtime_api::client::identity::Identity>,
@@ -191,24 +188,28 @@ impl<'a> SigningApplication<'a> {
         // If this is an event stream operation, set up the event stream signer
         #[cfg(feature = "event-stream")]
         {
-            if let Some(signer_sender) = self.signer_sender {
-                let identity = self
-                    .identity
-                    .ok_or("missing required field for the event stream signer `identity`")?;
-                let region = signing_params.name().to_owned();
-                let name = signing_params.name().to_owned();
-                let time_source = self.time_source.unwrap_or_default();
-                signer_sender
-                    .send(
-                        Box::new(crate::auth::sigv4::event_stream::SigV4MessageSigner::new(
-                            _signature,
-                            identity.clone(),
-                            aws_types::region::SigningRegion::from(region),
-                            aws_types::SigningName::from(name),
-                            time_source,
-                        )) as _,
-                    )
-                    .expect("failed to send deferred signer");
+            if let Some(config_bag) = self.config_bag {
+                if let Some(signer_sender) =
+                    config_bag.load::<aws_smithy_eventstream::frame::DeferredSignerSender>()
+                {
+                    let identity = self
+                        .identity
+                        .ok_or("missing required field for the event stream signer `identity`")?;
+                    let region = signing_params.name().to_owned();
+                    let name = signing_params.name().to_owned();
+                    let time_source = self.time_source.unwrap_or_default();
+                    signer_sender
+                        .send(
+                            Box::new(crate::auth::sigv4::event_stream::SigV4MessageSigner::new(
+                                _signature,
+                                identity.clone(),
+                                aws_types::region::SigningRegion::from(region),
+                                aws_types::SigningName::from(name),
+                                time_source,
+                            )) as _,
+                        )
+                        .expect("failed to send deferred signer");
+                }
             }
         }
         auth::apply_signing_instructions(signing_instructions, request)?;

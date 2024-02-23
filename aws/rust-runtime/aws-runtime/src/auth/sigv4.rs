@@ -176,9 +176,7 @@ impl SigV4Signer {
 
         #[cfg(feature = "event-stream")]
         {
-            signing_application.set_signer_sender(
-                _config_bag.load::<aws_smithy_eventstream::frame::DeferredSignerSender>(),
-            );
+            signing_application.set_config_bag(Some(_config_bag));
             signing_application.set_time_source(time_source);
             signing_application.set_identity(Some(identity));
         }
