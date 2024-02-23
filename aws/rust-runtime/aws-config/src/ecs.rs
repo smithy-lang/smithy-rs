@@ -540,7 +540,7 @@ mod test {
             let uri = Provider::uri(env, Some(TestDns::default().into_shared()))
                 .await
                 .map(|uri| uri.to_string());
-            self.result.assert_matches(uri);
+            self.result.assert_matches(uri.as_ref());
         }
     }
 
