@@ -9,56 +9,65 @@
 //! an access token that can then be used to authenticate with services such as
 //! Code Catalyst.
 //!
-//! This module provides the [`ProvideAccessToken`] trait that is used to configure
+//! This module provides the [`ProvideToken`] trait that is used to configure
 //! token providers in the SDK config.
 
-use crate::{provider::error::AccessTokenError, provider::future, AccessToken};
+use crate::{provider::error::TokenError, provider::future, Token};
 use std::sync::Arc;
 
 /// Result type for token providers
-pub type Result = std::result::Result<AccessToken, AccessTokenError>;
+pub type Result = std::result::Result<Token, TokenError>;
 
 /// Access Token Provider
-pub trait ProvideAccessToken: Send + Sync + std::fmt::Debug {
+pub trait ProvideToken: Send + Sync + std::fmt::Debug {
     /// Returns a future that provides an access token.
-    fn provide_access_token<'a>(&'a self) -> future::ProvideAccessToken<'a>
+    fn provide_token<'a>(&'a self) -> future::ProvideToken<'a>
     where
         Self: 'a;
 }
 
+impl ProvideToken for Token {
+    fn provide_token<'a>(&'a self) -> future::ProvideToken<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideToken::ready(Ok(self.clone()))
+    }
+}
+
 /// Access token provider wrapper that may be shared.
 ///
-/// Newtype wrapper around [`ProvideAccessToken`] that implements `Clone` using an internal `Arc`.
+/// Newtype wrapper around [`ProvideToken`] that implements `Clone` using an internal `Arc`.
 #[derive(Clone, Debug)]
-pub struct SharedAccessTokenProvider(Arc<dyn ProvideAccessToken>);
+pub struct SharedTokenProvider(Arc<dyn ProvideToken>);
 
-impl SharedAccessTokenProvider {
-    /// Create a new [`SharedAccessTokenProvider`] from [`ProvideAccessToken`].
+impl SharedTokenProvider {
+    /// Create a new [`SharedTokenProvider`] from [`ProvideToken`].
     ///
     /// The given provider will be wrapped in an internal `Arc`. If your
-    /// provider is already in an `Arc`, use `SharedAccessTokenProvider::from(provider)` instead.
-    pub fn new(provider: impl ProvideAccessToken + 'static) -> Self {
+    /// provider is already in an `Arc`, use `SharedTokenProvider::from(provider)` instead.
+    pub fn new(provider: impl ProvideToken + 'static) -> Self {
         Self(Arc::new(provider))
     }
 }
 
-impl AsRef<dyn ProvideAccessToken> for SharedAccessTokenProvider {
-    fn as_ref(&self) -> &(dyn ProvideAccessToken + 'static) {
+impl AsRef<dyn ProvideToken> for SharedTokenProvider {
+    fn as_ref(&self) -> &(dyn ProvideToken + 'static) {
         self.0.as_ref()
     }
 }
 
-impl From<Arc<dyn ProvideAccessToken>> for SharedAccessTokenProvider {
-    fn from(provider: Arc<dyn ProvideAccessToken>) -> Self {
-        SharedAccessTokenProvider(provider)
+impl From<Arc<dyn ProvideToken>> for SharedTokenProvider {
+    fn from(provider: Arc<dyn ProvideToken>) -> Self {
+        SharedTokenProvider(provider)
     }
 }
 
-impl ProvideAccessToken for SharedAccessTokenProvider {
-    fn provide_access_token<'a>(&'a self) -> future::ProvideAccessToken<'a>
+impl ProvideToken for SharedTokenProvider {
+    fn provide_token<'a>(&'a self) -> future::ProvideToken<'a>
     where
         Self: 'a,
     {
-        self.0.provide_access_token()
+        self.0.provide_token()
     }
 }

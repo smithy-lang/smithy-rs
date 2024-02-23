@@ -23,7 +23,14 @@
 pub mod credential_fn;
 mod credentials_impl;
 pub mod provider;
-mod token_impl;
+pub mod token_fn;
 
 pub use credentials_impl::Credentials;
-pub use token_impl::AccessToken;
+
+/// AWS Access Token
+///
+/// This access token type is used to authenticate to AWS services that use HTTP Bearer
+/// Auth with an AWS Builder ID such as CodeCatalyst.
+///
+/// For more details on tokens, see: <https://oauth.net/2/access-tokens>
+pub type Token = aws_smithy_runtime_api::client::identity::http::Token;

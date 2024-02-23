@@ -47,6 +47,11 @@ impl Token {
     pub fn token(&self) -> &str {
         &self.0.token
     }
+
+    /// Returns the expiration time (if any) for this token.
+    pub fn expiration(&self) -> Option<SystemTime> {
+        self.0.expiration
+    }
 }
 
 impl From<&str> for Token {
