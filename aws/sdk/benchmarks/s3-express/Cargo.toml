@@ -1,0 +1,21 @@
+[package]
+name = "s3-express"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["behavior-version-latest"] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["behavior-version-latest"] }
+criterion = { version = "0.5", features = ["async_tokio"] }
+futures-util = { version = "0.3.29", default-features = false, features = ["alloc"] }
+tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
+
+[[bench]]
+name = "put_get_delete"
+harness = false
+
+[[bench]]
+name = "concurrent_put_get"
+harness = false
