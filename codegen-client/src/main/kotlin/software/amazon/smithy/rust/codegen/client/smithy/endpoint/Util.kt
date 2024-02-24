@@ -148,8 +148,13 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
 }
 
 /**
- * Returns a service's supported auth schemes
+ * SigV4a doesn't have a Smithy auth trait yet, so this is a hack to determine if a service supports it.
+ *
+ * In the future, Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
  */
-fun ServiceShape.supportedAuthSchemes(): Set<String> =
-    this.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typeCheck() }
-        ?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
+fun ServiceShape.usesSigV4a(): Boolean {
+    val endpointAuthSchemes =
+        getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typeCheck() }
+            ?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
+    return endpointAuthSchemes.contains("sigv4a")
+}
