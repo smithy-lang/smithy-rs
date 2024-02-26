@@ -20,17 +20,6 @@ const SSO_SESSION_PREFIX: &str = "sso-session";
 /// Any section like `[<prefix> <suffix>]` or `[<suffix-only>]`
 #[derive(Eq, PartialEq, Hash, Debug)]
 struct SectionKey<'a> {
-    // /// `[default]` or `[profile default]`
-    // Default {
-    //     /// True when it is `[profile default]`
-    //     prefixed: bool,
-    // },
-    // /// `[profile name]` or `[name]`
-    // Profile {
-    //     /// True if prefixed with `profile`.
-    //     prefixed: bool,
-    //     suffix: Cow<'a, str>,
-    // },
     prefix: Option<Cow<'a, str>>,
     suffix: Cow<'a, str>,
 }
