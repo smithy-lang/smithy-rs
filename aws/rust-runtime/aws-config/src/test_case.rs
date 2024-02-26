@@ -225,6 +225,7 @@ where
     })
 }
 
+#[cfg(feature = "sso")]
 pub(crate) fn test_token_provider<F, Fut, E>(
     run_provider_fn: F,
 ) -> impl RunTestProvider<Output = Token, Error = E>
