@@ -121,9 +121,9 @@ ARG wasm_pack_version=0.11.0
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG cargo_wasmtime_version=17.0.0
+ARG cargo_wasmtime_version=18.0.1
 ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
+RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_component
 ARG cargo_component_version=0.7.1

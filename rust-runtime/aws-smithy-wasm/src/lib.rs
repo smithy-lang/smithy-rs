@@ -17,5 +17,4 @@
 //! Smithy WebAssembly
 
 /// Tools for using Smithy SDKs in WASI environments
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
 pub mod wasi;

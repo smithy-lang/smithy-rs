@@ -5,8 +5,8 @@
 
 use aws_config::Region;
 use aws_sdk_s3 as s3;
-use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
 use aws_smithy_async::rt::sleep::TokioSleep;
+use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
 
 //Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
