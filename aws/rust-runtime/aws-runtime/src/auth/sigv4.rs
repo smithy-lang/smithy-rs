@@ -176,9 +176,13 @@ impl SigV4Signer {
 
         #[cfg(feature = "event-stream")]
         {
-            signing_application.set_config_bag(Some(_config_bag));
-            signing_application.set_time_source(time_source);
-            signing_application.set_identity(Some(identity));
+            use crate::auth::signing_application::event_stream;
+            let mut deferred_signing_settings = event_stream::DeferredSignerSettings::builder()
+                .config_bag(_config_bag)
+                .identity(identity);
+            deferred_signing_settings.set_time_source(time_source);
+            signing_application
+                .set_deferred_signer_settings(Some(deferred_signing_settings.build()?));
         }
 
         signing_application.finalize()

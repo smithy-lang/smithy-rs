@@ -43,11 +43,7 @@ pub struct SigningApplication<'a> {
     signing_params: Option<&'a SigningParams<'a>>,
     payload_override: Option<SignableBody<'a>>,
     #[cfg(feature = "event-stream")]
-    config_bag: Option<&'a aws_smithy_types::config_bag::ConfigBag>,
-    #[cfg(feature = "event-stream")]
-    identity: Option<&'a aws_smithy_runtime_api::client::identity::Identity>,
-    #[cfg(feature = "event-stream")]
-    time_source: Option<aws_smithy_async::time::SharedTimeSource>,
+    deferred_signer_settings: Option<event_stream::DeferredSignerSettings<'a>>,
 }
 
 impl<'a> SigningApplication<'a> {
@@ -94,60 +90,22 @@ impl<'a> SigningApplication<'a> {
     }
 
     #[cfg(feature = "event-stream")]
-    /// Sets the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) storing for event stream signer sender to defer signing (optional).
-    pub fn config_bag(mut self, config_bag: &'a aws_smithy_types::config_bag::ConfigBag) -> Self {
-        self.set_config_bag(Some(config_bag));
-        self
-    }
-
-    #[cfg(feature = "event-stream")]
-    /// Sets the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) storing for event stream signer sender to defer signing (optional).
-    pub fn set_config_bag(
-        &mut self,
-        config_bag: Option<&'a aws_smithy_types::config_bag::ConfigBag>,
-    ) -> &mut Self {
-        self.config_bag = config_bag;
-        self
-    }
-
-    #[cfg(feature = "event-stream")]
-    /// Sets the [`Identity`](aws_smithy_runtime_api::client::identity::Identity) used for the event
-    /// stream signer (required if `self.config_bag` is present).
-    pub fn identity(
+    /// Sets the [`DeferredSignerSettings`](event_stream::DeferredSignerSettings) for the event stream signer (optional).
+    pub fn deferred_signer_settings(
         mut self,
-        identity: &'a aws_smithy_runtime_api::client::identity::Identity,
+        deferred_signer_settings: event_stream::DeferredSignerSettings<'a>,
     ) -> Self {
-        self.set_identity(Some(identity));
+        self.set_deferred_signer_settings(Some(deferred_signer_settings));
         self
     }
 
     #[cfg(feature = "event-stream")]
-    /// Sets the [`Identity`](aws_smithy_runtime_api::client::identity::Identity) used for the event
-    /// stream signer (required if `self.config_bag` is present).
-    pub fn set_identity(
+    /// Sets the [`DeferredSignerSettings`](event_stream::DeferredSignerSettings) for the event stream signer (optional).
+    pub fn set_deferred_signer_settings(
         &mut self,
-        identity: Option<&'a aws_smithy_runtime_api::client::identity::Identity>,
+        deferred_signer_settings: Option<event_stream::DeferredSignerSettings<'a>>,
     ) -> &mut Self {
-        self.identity = identity;
-        self
-    }
-
-    #[cfg(feature = "event-stream")]
-    /// Sets the [`SharedTimeSource`](aws_smithy_async::time::SharedTimeSource) used for the event stream signer
-    /// (optional).
-    pub fn time_source(mut self, time_source: aws_smithy_async::time::SharedTimeSource) -> Self {
-        self.set_time_source(Some(time_source));
-        self
-    }
-
-    #[cfg(feature = "event-stream")]
-    /// Sets the [`SharedTimeSource`](aws_smithy_async::time::SharedTimeSource) used for the event stream signer
-    /// (optional).
-    pub fn set_time_source(
-        &mut self,
-        time_source: Option<aws_smithy_async::time::SharedTimeSource>,
-    ) -> &mut Self {
-        self.time_source = time_source;
+        self.deferred_signer_settings = deferred_signer_settings;
         self
     }
 
@@ -188,16 +146,15 @@ impl<'a> SigningApplication<'a> {
         // If this is an event stream operation, set up the event stream signer
         #[cfg(feature = "event-stream")]
         {
-            if let Some(config_bag) = self.config_bag {
-                if let Some(signer_sender) =
-                    config_bag.load::<aws_smithy_eventstream::frame::DeferredSignerSender>()
-                {
-                    let identity = self
-                        .identity
-                        .ok_or("missing required field for the event stream signer `identity`")?;
+            if let Some(deferred_signer_settings) = self.deferred_signer_settings {
+                if let Some(signer_sender) = deferred_signer_settings
+                    .config_bag()
+                    .load::<aws_smithy_eventstream::frame::DeferredSignerSender>(
+                ) {
+                    let identity = deferred_signer_settings.identity();
                     let region = signing_params.name().to_owned();
                     let name = signing_params.name().to_owned();
-                    let time_source = self.time_source.unwrap_or_default();
+                    let time_source = deferred_signer_settings.time_source();
                     signer_sender
                         .send(
                             Box::new(crate::auth::sigv4::event_stream::SigV4MessageSigner::new(
@@ -214,5 +171,107 @@ impl<'a> SigningApplication<'a> {
         }
         auth::apply_signing_instructions(signing_instructions, request)?;
         Ok(())
+    }
+}
+
+/// Event stream related settings for [`SigningApplication`]
+#[cfg(feature = "event-stream")]
+pub mod event_stream {
+    use aws_smithy_async::time::SharedTimeSource;
+    use aws_smithy_runtime_api::client::identity::Identity;
+    use aws_smithy_types::config_bag::ConfigBag;
+
+    /// Settings for the event stream signer to defer signing
+    #[derive(Debug)]
+    pub struct DeferredSignerSettings<'a> {
+        config_bag: &'a ConfigBag,
+        identity: &'a Identity,
+        time_source: SharedTimeSource,
+    }
+
+    impl<'a> DeferredSignerSettings<'a> {
+        /// Creates builder for [`DeferredSignerSettings`].
+        pub fn builder() -> deferred_signer::Builder<'a> {
+            deferred_signer::Builder::default()
+        }
+
+        pub(crate) fn config_bag(&self) -> &ConfigBag {
+            &self.config_bag
+        }
+
+        pub(crate) fn identity(&self) -> &Identity {
+            &self.identity
+        }
+
+        pub(crate) fn time_source(&self) -> SharedTimeSource {
+            self.time_source.clone()
+        }
+    }
+
+    /// Builder for creating [`DeferredSignerSettings`]
+    pub mod deferred_signer {
+        use crate::auth::signing_application::event_stream::DeferredSignerSettings;
+        use aws_smithy_async::time::SharedTimeSource;
+        use aws_smithy_runtime_api::box_error::BoxError;
+        use aws_smithy_runtime_api::client::identity::Identity;
+        use aws_smithy_types::config_bag::ConfigBag;
+
+        /// Builder for [`DeferredSignerSettings`]
+        #[derive(Debug, Default)]
+        pub struct Builder<'a> {
+            config_bag: Option<&'a ConfigBag>,
+            identity: Option<&'a Identity>,
+            time_source: Option<SharedTimeSource>,
+        }
+
+        impl<'a> Builder<'a> {
+            /// Sets the [`ConfigBag`] for this builder (required).
+            pub fn config_bag(mut self, config_bag: &'a ConfigBag) -> Self {
+                self.set_config_bag(Some(config_bag));
+                self
+            }
+
+            /// Sets the [`ConfigBag`] for this builder (required).
+            pub fn set_config_bag(&mut self, config_bag: Option<&'a ConfigBag>) -> &mut Self {
+                self.config_bag = config_bag;
+                self
+            }
+
+            /// Sets the [`Identity`] for this builder (required).
+            pub fn identity(mut self, identity: &'a Identity) -> Self {
+                self.set_identity(Some(identity));
+                self
+            }
+
+            /// Sets the [`Identity`] for this builder (required).
+            pub fn set_identity(&mut self, identity: Option<&'a Identity>) -> &mut Self {
+                self.identity = identity;
+                self
+            }
+
+            /// Sets the [`SharedTimeSource`] this builder (optional).
+            pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
+                self.set_time_source(Some(time_source));
+                self
+            }
+
+            /// Sets the [`SharedTimeSource`] this builder (optional).
+            pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
+                self.time_source = time_source;
+                self
+            }
+
+            /// Builds a [`DeferredSignerSettings`] if all required fields are provided, otherwise
+            /// returns a [`BoxError`].
+            pub fn build(self) -> Result<DeferredSignerSettings<'a>, BoxError> {
+                Ok(DeferredSignerSettings {
+                    config_bag: self
+                        .config_bag
+                        .ok_or("missing required field `config_bag`")?,
+                    identity: self.identity.ok_or("missing required field `identity`")?,
+                    time_source: self.time_source.unwrap_or_default(),
+                })
+            }
+        }
     }
 }
