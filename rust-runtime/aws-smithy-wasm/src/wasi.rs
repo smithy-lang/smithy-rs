@@ -28,6 +28,7 @@ use wasi::http::{
 /// Builder for [`WasiHttpClient`]. Currently empty, but allows for future
 /// config options to be added in a backwards compatible manner.
 #[derive(Default, Debug)]
+#[non_exhaustive]
 pub struct WasiHttpClientBuilder {}
 
 impl WasiHttpClientBuilder {
@@ -47,6 +48,7 @@ impl WasiHttpClientBuilder {
 /// order to route the HTTP requests through the WebAssembly host. The host must
 /// support the WASI HTTP proposal as defined in the Preview 2 specification.
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub struct WasiHttpClient {}
 
 impl HttpClient for WasiHttpClient {

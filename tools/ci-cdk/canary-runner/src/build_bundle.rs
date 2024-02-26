@@ -267,7 +267,6 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         .expect("Current dir")
         .join("../canary-wasm/Cargo.toml");
 
-    println!("MAINFEST PATH: {wasm_manifest_path:#?}");
     if !opt.manifest_only {
         // Compile the canary Lambda
         let mut command = Command::new("cargo");
@@ -289,7 +288,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             .arg("--release")
             .arg("--manifest-path")
             .arg(&wasm_manifest_path);
-        handle_failure("cargo build", &wasm_command.output()?)?;
+        handle_failure("cargo component build", &wasm_command.output()?)?;
 
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
@@ -329,7 +328,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         // Write the wasm bin to the zip
         zip.start_file(
             "aws_sdk_rust_lambda_canary_wasm.wasm",
-            zip::write::FileOptions::default().unix_permissions(0o755),
+            zip::write::FileOptions::default().unix_permissions(0o644),
         )
         .context(here!())?;
         zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
