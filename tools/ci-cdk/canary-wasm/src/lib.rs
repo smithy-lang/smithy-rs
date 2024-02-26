@@ -6,7 +6,7 @@
 use aws_config::Region;
 use aws_sdk_s3 as s3;
 use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
-use aws_smithy_wasm::wasm::WasmSleep;
+use aws_smithy_async::rt::sleep::TokioSleep;
 
 //Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
@@ -31,11 +31,12 @@ impl exports::aws::component::canary_interface::Guest for Component {
 
 async fn run_canary() -> Result<Vec<String>, String> {
     let http_client = WasiHttpClientBuilder::new().build();
+    let sleep = TokioSleep::new();
     let config = aws_config::from_env()
         .region(Region::new("us-east-2"))
         .no_credentials()
         .http_client(http_client)
-        .sleep_impl(WasmSleep)
+        .sleep_impl(sleep)
         .load()
         .await;
 

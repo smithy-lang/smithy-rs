@@ -15,6 +15,7 @@ wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 aws-config = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-config", default-features = false, features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "../../../aws/sdk/build/aws-sdk/sdk/s3", default-features = false }
 aws-smithy-wasm = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-wasm" }
+aws-smithy-async = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-async", default-features = false, features = ["rt-tokio"]}
 
 [lib]
 crate-type = ["cdylib"]

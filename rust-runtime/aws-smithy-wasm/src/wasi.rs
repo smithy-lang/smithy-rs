@@ -151,6 +151,8 @@ struct WasiRequestOptions(Option<outgoing_handler::RequestOptions>);
 impl From<&HttpConnectorSettings> for WasiRequestOptions {
     fn from(value: &HttpConnectorSettings) -> Self {
         //The WASI Duration is nanoseconds represented as u64
+        //Note: that the HttpConnectorSettings provides nanoseconds as u128
+        //so here we are clamping to u64::MAX if the value is above that
         let connect_timeout = value
             .connect_timeout()
             .map(|dur| u64::try_from(dur.as_nanos()).unwrap_or(u64::MAX));
@@ -158,8 +160,9 @@ impl From<&HttpConnectorSettings> for WasiRequestOptions {
             .read_timeout()
             .map(|dur| u64::try_from(dur.as_nanos()).unwrap_or(u64::MAX));
 
-        //Note: unable to find any documentation about what timeout values are not supported
-        //so not sure under what circumstances these set operations would actually fail
+        //Note: these only fail if setting this particular type of timeout is not
+        //supported. Spec compliant runtimes should always support these so it is
+        //unlikely to be an issue.
         let wasi_http_opts = wasi_http::RequestOptions::new();
         wasi_http_opts
             .set_connect_timeout(connect_timeout)
