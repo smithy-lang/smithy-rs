@@ -291,9 +291,8 @@ jobs:
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
       env:
-        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
-        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
         cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version

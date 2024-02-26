@@ -30,7 +30,7 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
   java_version: 11
   rust_toolchain_components: clippy,rustfmt
-  rust_nightly_version: nightly-2023-10-10
+  rust_nightly_version: nightly-2024-02-07
 
 jobs:
   generate-diff:
