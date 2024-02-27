@@ -94,6 +94,7 @@ impl StandardProperty {
         self
     }
 
+    #[allow(dead_code)]
     /// Set the service id to check for service config
     pub(crate) fn service_id(mut self, service_id: &'static str) -> Self {
         self.service_id = Some(Cow::Borrowed(service_id));
