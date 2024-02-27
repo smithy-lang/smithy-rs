@@ -702,6 +702,11 @@ pub(crate) mod runtime_plugin {
                             value,
                         )));
                     }
+                    Ok(value) => {
+                        tracing::warn!("environment variable `{}` ignored since it only accepts either `true` or `false` (case-insensitive), but got `{}`.",
+                            env::S3_DISABLE_EXPRESS_SESSION_AUTH,
+                            value)
+                    }
                     _ => {
                         // TODO(aws-sdk-rust#1073): Transfer a value of
                         //  `s3_disable_express_session_auth` from a profile file to `layer`
