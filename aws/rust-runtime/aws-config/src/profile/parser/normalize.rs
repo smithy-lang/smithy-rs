@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::parser::section::new_properties_key;
 use crate::profile::parser::{
     parse::{RawProfileSet, WHITESPACE},
     Section, SsoSession,
@@ -12,6 +11,8 @@ use crate::profile::profile_file::ProfileFileKind;
 use crate::profile::{Profile, ProfileSet, Property};
 use std::borrow::Cow;
 use std::collections::HashMap;
+
+use super::PropertiesKey;
 
 const DEFAULT: &str = "default";
 const PROFILE_PREFIX: &str = "profile";
@@ -162,13 +163,15 @@ pub(super) fn merge_in(
                     {
                         Ok(sub_properties_group_name) => parse_sub_properties(raw_sub_properties)
                             .for_each(|(sub_property_name, sub_property_value)| {
-                                let key = new_properties_key(
-                                    prefix,
-                                    suffix,
-                                    &sub_properties_group_name,
-                                    Some(&sub_property_name),
-                                );
-                                base.other_sections.insert(&key, sub_property_value);
+                                if let Ok(key) = PropertiesKey::builder()
+                                    .section_key(prefix)
+                                    .section_name(suffix)
+                                    .property_name(&sub_properties_group_name)
+                                    .sub_property_name(sub_property_name)
+                                    .build()
+                                {
+                                    base.other_sections.insert(key, sub_property_value);
+                                }
                             }),
                         Err(_) => {
                             tracing::warn!("`[{prefix} {suffix}].{sub_properties_group_name}` \

@@ -5,6 +5,7 @@
 
 use crate::profile::parser::parse::to_ascii_lowercase;
 use std::collections::HashMap;
+use std::fmt;
 
 /// Key-Value property pair
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -40,33 +41,84 @@ type PropertyValue = String;
 // property-name = property-value
 // property-name =
 //   sub-property-name = property-value
-pub(crate) type PropertiesKey = (
-    SectionKey,
-    SectionName,
-    PropertyName,
-    Option<SubPropertyName>,
-);
-pub(crate) fn new_properties_key(
-    section_key: &str,
-    section_name: &str,
-    property_name: &str,
-    sub_property_name: Option<&str>,
-) -> PropertiesKey {
-    (
-        section_key.to_owned(),
-        section_name.to_owned(),
-        property_name.to_owned(),
-        sub_property_name.map(ToOwned::to_owned),
-    )
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) struct PropertiesKey {
+    section_key: SectionKey,
+    section_name: SectionName,
+    property_name: PropertyName,
+    sub_property_name: Option<SubPropertyName>,
 }
 
-fn format_properties_key(properties_key: &PropertiesKey) -> String {
-    let (section_key, section_name, property_name, sub_property_name) = properties_key;
-    match sub_property_name {
-        Some(sub_property_name) => {
-            format!("[{section_key} {section_name}].{property_name}.{sub_property_name}")
+impl PropertiesKey {
+    pub(crate) fn builder() -> PropertiesKeyBuilder {
+        Default::default()
+    }
+}
+
+impl fmt::Display for PropertiesKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let PropertiesKey {
+            section_key,
+            section_name,
+            property_name,
+            sub_property_name,
+        } = self;
+        match sub_property_name {
+            Some(sub_property_name) => {
+                write!(
+                    f,
+                    "[{section_key} {section_name}].{property_name}.{sub_property_name}"
+                )
+            }
+            None => {
+                write!(f, "[{section_key} {section_name}].{property_name}")
+            }
         }
-        None => format!("[{section_key} {section_name}].{property_name}"),
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct PropertiesKeyBuilder {
+    section_key: Option<SectionKey>,
+    section_name: Option<SectionName>,
+    property_name: Option<PropertyName>,
+    sub_property_name: Option<SubPropertyName>,
+}
+
+impl PropertiesKeyBuilder {
+    pub(crate) fn section_key(mut self, section_key: impl Into<String>) -> Self {
+        self.section_key = Some(section_key.into());
+        self
+    }
+
+    pub(crate) fn section_name(mut self, section_name: impl Into<String>) -> Self {
+        self.section_name = Some(section_name.into());
+        self
+    }
+
+    pub(crate) fn property_name(mut self, property_name: impl Into<String>) -> Self {
+        self.property_name = Some(property_name.into());
+        self
+    }
+
+    pub(crate) fn sub_property_name(mut self, sub_property_name: impl Into<String>) -> Self {
+        self.sub_property_name = Some(sub_property_name.into());
+        self
+    }
+
+    pub(crate) fn build(self) -> Result<PropertiesKey, String> {
+        Ok(PropertiesKey {
+            section_key: self
+                .section_key
+                .ok_or("A section_key is required".to_owned())?,
+            section_name: self
+                .section_name
+                .ok_or("A section_name is required".to_owned())?,
+            property_name: self
+                .property_name
+                .ok_or("A property_name is required".to_owned())?,
+            sub_property_name: self.sub_property_name,
+        })
     }
 }
 
@@ -82,14 +134,13 @@ impl Properties {
         Default::default()
     }
 
-    pub(crate) fn insert(&mut self, properties_key: &PropertiesKey, value: PropertyValue) {
+    pub(crate) fn insert(&mut self, properties_key: PropertiesKey, value: PropertyValue) {
         let _ = self
             .inner
+            // If we don't clone then we don't get to log a useful warning for a value getting overwritten.
             .entry(properties_key.clone())
             .and_modify(|v| {
-                let formatted_key = format_properties_key(properties_key);
-                tracing::trace!("overwriting {formatted_key}: was {v}, now {value}");
-
+                tracing::trace!("overwriting {properties_key}: was {v}, now {value}");
                 *v = value.clone();
             })
             .or_insert(value);
@@ -240,7 +291,7 @@ impl Section for SsoSession {
 
 #[cfg(test)]
 mod test {
-    use crate::profile::parser::section::new_properties_key;
+    use super::PropertiesKey;
     use crate::provider_config::ProviderConfig;
     use aws_types::os_shim_internal::{Env, Fs};
 
@@ -276,80 +327,80 @@ ec2 =
         assert_eq!(
             "http://localhost:3000",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "foo",
-                    "s3",
-                    Some("endpoint_url")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "foo".to_owned(),
+                    property_name: "s3".to_owned(),
+                    sub_property_name: Some("endpoint_url".to_owned())
+                })
                 .expect("setting exists at path")
         );
         assert_eq!(
             "foo",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "foo",
-                    "s3",
-                    Some("setting_a")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "foo".to_owned(),
+                    property_name: "s3".to_owned(),
+                    sub_property_name: Some("setting_a".to_owned())
+                })
                 .expect("setting exists at path")
         );
         assert_eq!(
             "bar",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "foo",
-                    "s3",
-                    Some("setting_b")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "foo".to_owned(),
+                    property_name: "s3".to_owned(),
+                    sub_property_name: Some("setting_b".to_owned())
+                })
                 .expect("setting exists at path")
         );
 
         assert_eq!(
             "http://localhost:2000",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "foo",
-                    "ec2",
-                    Some("endpoint_url")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "foo".to_owned(),
+                    property_name: "ec2".to_owned(),
+                    sub_property_name: Some("endpoint_url".to_owned())
+                })
                 .expect("setting exists at path")
         );
         assert_eq!(
             "foo",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "foo",
-                    "ec2",
-                    Some("setting_a")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "foo".to_owned(),
+                    property_name: "ec2".to_owned(),
+                    sub_property_name: Some("setting_a".to_owned())
+                })
                 .expect("setting exists at path")
         );
 
         assert_eq!(
             "http://localhost:3000",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "bar",
-                    "ec2",
-                    Some("endpoint_url")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "bar".to_owned(),
+                    property_name: "ec2".to_owned(),
+                    sub_property_name: Some("endpoint_url".to_owned())
+                })
                 .expect("setting exists at path")
         );
         assert_eq!(
             "bar",
             other_sections
-                .get(&new_properties_key(
-                    "services",
-                    "bar",
-                    "ec2",
-                    Some("setting_b")
-                ))
+                .get(&PropertiesKey {
+                    section_key: "services".to_owned(),
+                    section_name: "bar".to_owned(),
+                    property_name: "ec2".to_owned(),
+                    sub_property_name: Some("setting_b".to_owned())
+                })
                 .expect("setting exists at path")
         );
     }

@@ -17,6 +17,8 @@ pub use self::parse::ProfileParseError;
 pub use self::section::Profile;
 pub use self::section::Property;
 
+pub(crate) use self::section::PropertiesKey;
+
 mod error;
 mod normalize;
 mod parse;
