@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
+internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "http_request_checksum", visibility = Visibility.PUBCRATE,
