@@ -16,3 +16,15 @@ message = "EKS Pod Identity is now supported as part of the default ECS credenti
 references = ["smithy-rs#3416"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "jackkleeman"
+
+[[aws-sdk-rust]]
+message = "Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments"
+references = ["smithy-rs#2087", "smithy-rs#2520", "smithy-rs#3409", "aws-sdk-rust#59"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments"
+references = ["smithy-rs#2087", "smithy-rs#2520", "smithy-rs#3409"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+author = "landonxjames"

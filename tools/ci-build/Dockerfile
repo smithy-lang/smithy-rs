@@ -15,9 +15,9 @@ RUN yum -y updateinfo
 FROM bare_base_image as musl_toolchain
 RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
-  && ls \
-  && tar xvzf musl-1.2.3.tar.gz \
-  && (cd musl-1.2.3 && ./configure && make install)
+    && ls \
+    && tar xvzf musl-1.2.3.tar.gz \
+    && (cd musl-1.2.3 && ./configure && make install)
 
 #
 # Rust & Tools Installation Stage
@@ -121,17 +121,14 @@ ARG wasm_pack_version=0.11.0
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v7.0.0/wasmtime-v7.0.0-x86_64-linux.tar.xz
-ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8a5f3dce84cffec99
-RUN set -eux; \
-    curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
-    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
-    tar xf wasmtime.xz; \
-    mv wasmtime-v*/wasmtime /opt;
+ARG cargo_wasmtime_version=18.0.1
+ARG rust_nightly_version
+RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
-FROM install_rust AS cargo_wasi
-ARG cargo_wasi_version=0.1.27
-RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
+FROM install_rust AS cargo_component
+ARG cargo_component_version=0.7.1
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.24.1
@@ -182,8 +179,8 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
+COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook

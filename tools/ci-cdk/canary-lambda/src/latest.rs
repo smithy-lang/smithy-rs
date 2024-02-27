@@ -6,3 +6,4 @@
 pub(crate) mod paginator_canary;
 pub(crate) mod s3_canary;
 pub(crate) mod transcribe_canary;
+pub(crate) mod wasm_canary;
