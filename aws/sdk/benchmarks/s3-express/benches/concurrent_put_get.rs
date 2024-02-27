@@ -6,24 +6,9 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::primitives::ByteStream;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use s3_express::{criterion_config, number_of_iterations};
 use tokio::runtime::Runtime;
 use tokio::task;
-
-const DEFAULT_CONFIDENCE_LEVEL: f64 = 0.99;
-const DEFAULT_NUMBER_OF_ITERATIONS: usize = 100;
-const DEFAULT_SAMPLE_SIZE: usize = 10;
-
-fn sample_size() -> usize {
-    let sample_size =
-        std::env::var("SAMPLE_SIZE").map_or(DEFAULT_SAMPLE_SIZE, |s| s.parse::<usize>().unwrap());
-    dbg!(sample_size)
-}
-
-fn confidence_level() -> f64 {
-    let confidence_level = std::env::var("CONFIDENCE_LEVEL")
-        .map_or(DEFAULT_CONFIDENCE_LEVEL, |s| s.parse::<f64>().unwrap());
-    dbg!(confidence_level)
-}
 
 pub fn concurrent_put_get(c: &mut Criterion) {
     let buckets = if let Ok(buckets) = std::env::var("BUCKETS") {
@@ -32,10 +17,7 @@ pub fn concurrent_put_get(c: &mut Criterion) {
         panic!("required environment variable `BUCKETS` should be set: e.g. `BUCKETS=\"bucket1,bucket2\"`")
     };
 
-    let number_of_iterations = std::env::var("NUMBER_OF_ITERATIONS")
-        .map_or(DEFAULT_NUMBER_OF_ITERATIONS, |n| {
-            n.parse::<usize>().unwrap()
-        });
+    let number_of_iterations = number_of_iterations();
 
     println!(
         "measuring {number_of_iterations} concurrent PutObject followed by \
@@ -109,7 +91,7 @@ pub fn concurrent_put_get(c: &mut Criterion) {
 
 criterion_group!(
     name = benches;
-    config = Criterion::default().sample_size(sample_size()).confidence_level(confidence_level());
+    config = criterion_config();
     targets = concurrent_put_get
 );
 criterion_main!(benches);

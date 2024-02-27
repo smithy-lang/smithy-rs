@@ -10,6 +10,7 @@ aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["behavio
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["behavior-version-latest"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
 futures-util = { version = "0.3.29", default-features = false, features = ["alloc"] }
+pprof = { version = "0.13.0", features = ["criterion", "flamegraph"] }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 
 [[bench]]
