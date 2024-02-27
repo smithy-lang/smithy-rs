@@ -162,7 +162,7 @@ class FluentClientGenerator(
                 """,
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext, customizations),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "client_docs" to
                     writable {
@@ -467,7 +467,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType =
+private fun baseClientRuntimePluginsFn(
+    codegenContext: ClientCodegenContext,
+    customizations: List<FluentClientCustomization>,
+): RuntimeType =
     codegenContext.runtimeConfig.let { rc ->
         RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
             val api = RuntimeType.smithyRuntimeApiClient(rc)
@@ -501,8 +504,10 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                                 .with_runtime_components(config.runtime_components.clone())
                         )
                         // codegen config
-                        .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
+                        .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
                         .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+
+                    #{additional_client_plugins:W};
 
                     for plugin in configured_plugins {
                         plugins = plugins.with_client_plugin(plugin);
@@ -511,6 +516,13 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                 }
                 """,
                 *preludeScope,
+                "additional_client_plugins" to
+                    writable {
+                        writeCustomizations(
+                            customizations,
+                            FluentClientSection.AdditionalBaseClientPlugins("plugins", "config"),
+                        )
+                    },
                 "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
                 "default_plugins" to rt.resolve("client::defaults::default_plugins"),
                 "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),

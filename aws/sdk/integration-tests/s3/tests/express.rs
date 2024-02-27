@@ -5,13 +5,16 @@
 
 use std::time::{Duration, SystemTime};
 
+use aws_config::Region;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::SdkBody;
 use aws_sdk_s3::types::ChecksumAlgorithm;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
-use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_runtime::client::http::test_util::{
+    capture_request, ReplayEvent, StaticReplayClient,
+};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use http::Uri;
 
@@ -28,6 +31,7 @@ where
     aws_sdk_s3::Client::from_conf(update_builder(config).build())
 }
 
+// TODO(S3Express): Convert this test to the S3 express section in canary
 #[tokio::test]
 async fn list_objects_v2() {
     let _logs = capture_test_logs();
@@ -293,4 +297,59 @@ async fn default_checksum_should_be_none() {
     assert!(!all_checksums.any(|checksum| http_client
         .actual_requests()
         .any(|req| req.headers().iter().any(|(key, _)| key == checksum))));
+}
+
+#[tokio::test]
+async fn disable_s3_express_session_auth_at_service_client_level() {
+    let (http_client, request) = capture_request(None);
+    let conf = Config::builder()
+        .http_client(http_client)
+        .region(Region::new("us-west-2"))
+        .with_test_defaults()
+        .disable_s3_express_session_auth(true)
+        .build();
+    let client = Client::from_conf(conf);
+
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await;
+
+    let req = request.expect_request();
+    assert!(
+        !req.headers()
+            .get("authorization")
+            .unwrap()
+            .contains("x-amz-create-session-mode"),
+        "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
+    );
+}
+
+#[tokio::test]
+async fn disable_s3_express_session_auth_at_operation_level() {
+    let (http_client, request) = capture_request(None);
+    let conf = Config::builder()
+        .http_client(http_client)
+        .region(Region::new("us-west-2"))
+        .with_test_defaults()
+        .build();
+    let client = Client::from_conf(conf);
+
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .customize()
+        .config_override(Config::builder().disable_s3_express_session_auth(true))
+        .send()
+        .await;
+
+    let req = request.expect_request();
+    assert!(
+        !req.headers()
+            .get("authorization")
+            .unwrap()
+            .contains("x-amz-create-session-mode"),
+        "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
+    );
 }

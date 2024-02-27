@@ -16,6 +16,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -138,7 +140,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
         }
 }
 
-class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+private class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
@@ -187,6 +189,33 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                             }
                             self
                         }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> emptySection
+            }
+        }
+}
+
+class S3ExpressFluentClientCustomization(
+    codegenContext: ClientCodegenContext,
+) : FluentClientCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "S3ExpressRuntimePlugin" to s3ExpressModule(runtimeConfig).resolve("runtime_plugin::S3ExpressRuntimePlugin"),
+        )
+
+    override fun section(section: FluentClientSection): Writable =
+        writable {
+            when (section) {
+                is FluentClientSection.AdditionalBaseClientPlugins -> {
+                    rustTemplate(
+                        """
+                        ${section.plugins} = ${section.plugins}.with_client_plugin(#{S3ExpressRuntimePlugin}::new(${section.config}.config.clone()));
                         """,
                         *codegenScope,
                     )
