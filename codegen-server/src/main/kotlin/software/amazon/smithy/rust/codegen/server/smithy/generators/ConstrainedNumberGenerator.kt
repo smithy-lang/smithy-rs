@@ -145,7 +145,7 @@ class ConstrainedNumberGenerator(
 
                 impl #{Display} for ${constraintViolation.name} {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(f, "${rangeInfo.rangeTrait.shapeConstraintViolationDisplayMessage(shape)}")
+                        write!(f, "${rangeInfo.rangeTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                     }
                 }
                     

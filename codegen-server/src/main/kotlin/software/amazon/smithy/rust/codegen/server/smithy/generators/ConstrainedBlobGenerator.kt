@@ -225,7 +225,7 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
             rustTemplate(
                 """
                 Self::Length(length) => {
-                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
                 },
                 """,
             )

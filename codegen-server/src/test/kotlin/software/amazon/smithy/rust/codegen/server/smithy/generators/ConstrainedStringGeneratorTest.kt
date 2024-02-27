@@ -86,6 +86,9 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             ConstrainedStringGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -107,8 +110,8 @@ class ConstrainedStringGeneratorTest {
                     let string = "${testCase.invalidString}".to_owned();
                     let constrained_res: Result<ConstrainedString, _> = string.try_into();
                     let error = constrained_res.unwrap_err();
-                    // Ensure `ConstraintViolation` implements `std::error::Error`.
-                    let _error_trait : &dyn std::error::Error = &error;
+                    is_error(&error);
+                    is_display(&error);
                 """,
             )
             unitTest(

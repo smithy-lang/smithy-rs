@@ -326,7 +326,7 @@ sealed class CollectionTraitInfo {
                 rustTemplate(
                     """
                     Self::UniqueItems { duplicate_indices, .. } =>
-                        format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape)}", &duplicate_indices),
+                        format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", &duplicate_indices),
                     """,
                 )
             }
@@ -375,7 +375,7 @@ sealed class CollectionTraitInfo {
                 rustTemplate(
                     """
                     Self::Length(length) => {
-                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
+                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
                     },
                     """,
                 )

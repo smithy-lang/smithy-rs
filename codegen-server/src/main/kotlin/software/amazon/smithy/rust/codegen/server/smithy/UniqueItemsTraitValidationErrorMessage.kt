@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.UniqueItemsTrait
-import software.amazon.smithy.rust.codegen.server.smithy.generators.idWithHashEscaped
 
 fun UniqueItemsTrait.validationErrorMessage() =
     // We're using the `Debug` representation of `Vec<usize>` here e.g. `[0, 2, 3]`, which is the exact format we need
@@ -16,6 +15,6 @@ fun UniqueItemsTrait.validationErrorMessage() =
 
 fun UniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     """
-    Value with repeated values at indices {:?} provided for '${shape.idWithHashEscaped()}' 
+    Value with repeated values at indices {:?} provided for '${shape.id}' 
     failed to satisfy constraint: Member must have unique values
     """.trimIndent().replace("\n", "")

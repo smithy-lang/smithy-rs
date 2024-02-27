@@ -7,13 +7,12 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.RangeTrait
-import software.amazon.smithy.rust.codegen.server.smithy.generators.idWithHashEscaped
 
 fun RangeTrait.validationErrorMessage() =
     "Value at '{}' failed to satisfy constraint: Member must be ${this.rangeDescription()}"
 
 fun RangeTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
-    "Value for `${shape.idWithHashEscaped()}`failed to satisfy constraint: Member must be ${this.rangeDescription()}"
+    "Value for `${shape.id}`failed to satisfy constraint: Member must be ${this.rangeDescription()}"
 
 fun RangeTrait.rangeDescription() =
     if (this.min.isPresent && this.max.isPresent) {

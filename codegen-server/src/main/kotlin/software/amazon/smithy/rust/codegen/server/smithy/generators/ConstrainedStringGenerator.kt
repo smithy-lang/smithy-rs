@@ -267,7 +267,7 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
             rustTemplate(
                 """
             Self::Length(length) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", length)
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
             },
             """,
             )
@@ -364,7 +364,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
             rustTemplate(
                 """
             Self::Pattern(_) => {
-                format!(r##"${patternTrait.shapeConstraintViolationDisplayMessage(shape)}"##)
+                format!(r##"${patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"##)
             },
             """,
             )

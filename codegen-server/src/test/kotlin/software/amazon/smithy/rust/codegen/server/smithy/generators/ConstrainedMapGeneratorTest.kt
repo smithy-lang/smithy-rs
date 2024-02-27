@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 class ConstrainedMapGeneratorTest {
     data class TestCase(val model: Model, val validMap: ObjectNode, val invalidMap: ObjectNode)
@@ -82,6 +83,9 @@ class ConstrainedMapGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             render(codegenContext, this, constrainedMapShape)
 
             val instantiator = ServerInstantiator(codegenContext)
@@ -105,8 +109,9 @@ class ConstrainedMapGeneratorTest {
                     let map = build_invalid_map();
                     let constrained_res: Result<ConstrainedMap, _> = map.try_into();
                     let error = constrained_res.unwrap_err();
-                    let _ensure_display_works = format!("{error}");
-                    let _error_trait_is_implemented : &dyn std::error::Error = &error;
+    
+                    is_display(&error);
+                    is_error(&error);
                 """,
             )
             unitTest(
@@ -181,7 +186,7 @@ class ConstrainedMapGeneratorTest {
             operation MyOperation {
                 input:= {
                     member1: ConstrainedMapWithConstrainedKey,
-                    member2: ConstrainedMapWithConstrainedKeyValue,
+                    member2: ConstrainedMapWithConstrainedKeyAndValue,
                     member3: ConstrainedMapWithConstrainedValue,
                 },
                 output:= {},
@@ -201,7 +206,7 @@ class ConstrainedMapGeneratorTest {
             }
 
             @length(min: 2, max: 69)
-            map ConstrainedMapWithConstrainedKeyValue {
+            map ConstrainedMapWithConstrainedKeyAndValue {
                 key: ConstrainedKey,
                 value: ConstrainedValue,
             }
@@ -220,24 +225,26 @@ class ConstrainedMapGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
-            renderConstrainedString(codegenContext, this, constrainedKeyShape)
-            renderConstrainedString(codegenContext, this, constrainedValueShape)
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+            TestUtility.renderConstrainedString(codegenContext, this, constrainedKeyShape)
+            TestUtility.renderConstrainedString(codegenContext, this, constrainedValueShape)
 
             val mapsToVerify =
                 listOf(
                     model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKey"),
-                    model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKeyValue"),
+                    model.lookup<MapShape>("test#ConstrainedMapWithConstrainedKeyAndValue"),
                     model.lookup<MapShape>("test#ConstrainedMapWithConstrainedValue"),
                 )
 
             rustTemplate(
                 """
-                fn build_invalid_constrained_map_with_constrained_key() -> std::collections::HashMap<ConstrainedKey, String> {
+                fn build_invalid_constrained_map_with_constrained_key() -> #{HashMap}<ConstrainedKey, String> {
                     let mut m = ::std::collections::HashMap::new();
                     m.insert(ConstrainedKey("1".to_string()), "Y".to_string());
                     m    
                 }
-                fn build_invalid_constrained_map_with_constrained_key_value() -> std::collections::HashMap<ConstrainedKey, ConstrainedValue> {
+                fn build_invalid_constrained_map_with_constrained_key_and_value() -> std::collections::HashMap<ConstrainedKey, ConstrainedValue> {
                     let mut m = ::std::collections::HashMap::new();
                     m.insert(ConstrainedKey("1".to_string()), ConstrainedValue("Y".to_string()));
                     m
@@ -248,19 +255,21 @@ class ConstrainedMapGeneratorTest {
                     m
                 }
                 
-                // Define `ValidationExceptionField` in the model as the `ConstraintViolation` code requires this.
+                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps, 
+                // and the complete SDK generation process, which would generate it, is not invoked as part of the test.
                 pub struct ValidationExceptionField {
                     pub message: String,
                     pub path: String
                 }
                 """,
+                "HashMap" to RuntimeType.HashMap
             )
 
-            mapsToVerify.forEach {
-                val rustShapeName = it.toShapeId().name
+            for (mapToVerify in mapsToVerify) {
+                val rustShapeName = mapToVerify.toShapeId().name
                 val rustShapeSnakeCaseName = rustShapeName.toSnakeCase()
 
-                render(codegenContext, this, it)
+                render(codegenContext, this, mapToVerify)
 
                 unitTest(
                     name = "try_from_fail_$rustShapeSnakeCaseName",
@@ -268,37 +277,38 @@ class ConstrainedMapGeneratorTest {
                         let map = build_invalid_$rustShapeSnakeCaseName();
                         let constrained_res: Result<$rustShapeName, $rustShapeSnakeCaseName::ConstraintViolation> = map.try_into();
                         let error = constrained_res.unwrap_err();
-                        let _error_display_works = format!("{error}");
-                        let _error_trait_is_implemented : &dyn std::error::Error = &error;
+                        is_error(&error);
+                        is_display(&error);
+                        assert_eq!("Value with length 1 provided for 'test#$rustShapeName' failed to satisfy constraint: Member must have length between 2 and 69, inclusive", error.to_string());
                     """,
                 )
             }
 
             unitTest(
-                name = "try_constraint_enum_key",
+                name = "try_constrained_key",
                 test =
                     """
                     let error = constrained_map_with_constrained_key::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
-                    let _format_should_work = format!("{error}");
-                    """.trimIndent(),
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
+                    """
             )
             unitTest(
-                name = "try_constraint_enum_value",
+                name = "try_constrained_value",
                 test =
                     """
                     let error = constrained_map_with_constrained_value::ConstraintViolation::Value("some_key".to_string(), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
-                    let _format_should_work = format!("{error}");
-                    """.trimIndent(),
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedValue` failed to satisfy the constraint: Member must match the regular expression pattern: A-Z");
+                    """
             )
             unitTest(
-                name = "try_constraint_enum_keyvalue",
+                name = "try_constrained_key_and_value",
                 test =
                     """
-                    let error = constrained_map_with_constrained_key_value::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
-                    let _format_should_work = format!("{error}");
-                    let error = constrained_map_with_constrained_key_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
-                    let _format_should_work = format!("{error}");
-                    """.trimIndent(),
+                    let error = constrained_map_with_constrained_key_and_value::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
+                    let error = constrained_map_with_constrained_key_and_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedValue` failed to satisfy the constraint: Member must match the regular expression pattern: A-Z");
+                    """
             )
         }
 
@@ -316,21 +326,6 @@ class ConstrainedMapGeneratorTest {
             writer.createTestInlineModuleCreator(),
             constrainedMapShape,
             SmithyValidationExceptionConversionGenerator(codegenContext),
-        ).render()
-    }
-
-    private fun renderConstrainedString(
-        codegenContext: ServerCodegenContext,
-        writer: RustWriter,
-        constrainedStringShape: StringShape,
-    ) {
-        val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
-        ConstrainedStringGenerator(
-            codegenContext,
-            writer.createTestInlineModuleCreator(),
-            writer,
-            constrainedStringShape,
-            validationExceptionConversionGenerator,
         ).render()
     }
 }

@@ -28,5 +28,3 @@ fun rustDocsTryFromMethod(
 fun rustDocsInnerMethod(inner: String) = "Returns an immutable reference to the underlying [`$inner`]."
 
 fun rustDocsIntoInnerMethod(inner: String) = "Consumes the value, returning the underlying [`$inner`]."
-
-fun Shape.idWithHashEscaped() = this.id.toString().replace("#", "##")

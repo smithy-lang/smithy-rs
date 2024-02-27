@@ -38,6 +38,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 @Suppress("DEPRECATION")
 class ConstrainedCollectionGeneratorTest {
@@ -177,6 +179,10 @@ class ConstrainedCollectionGeneratorTest {
         val codegenContext = serverTestCodegenContext(testCase.model)
 
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
+        project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+        }
 
         for (shape in listOf(constrainedListShape, constrainedSetShape)) {
             val shapeName =
@@ -256,8 +262,15 @@ class ConstrainedCollectionGeneratorTest {
                                     withBlock("let expected_err = ", ";") {
                                         rustTemplate("#{ExpectedError:W}", "ExpectedError" to expectedErrorWritable)
                                     }
-                                    rust("assert_eq!(err, expected_err);")
-                                    rust("let _error_trait : &dyn std::error::Error = &err;")
+                                    rust(
+                                        """
+                                        assert_eq!(err, expected_err);
+                                        is_error(&err);
+                                        is_display(&err);
+                                        // Ensure that the `std::fmt::Display` implementation for `ConstraintViolation` error works.
+                                        assert_eq!(err.to_string(), expected_err.to_string());
+                                        """.trimMargin()
+                                    )
                                 } ?: run {
                                     rust("constrained_res.unwrap_err();")
                                 }
@@ -290,6 +303,108 @@ class ConstrainedCollectionGeneratorTest {
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct ConstrainedList(pub(crate) ::std::vec::Vec<::std::string::String>);"
+    }
+
+    @Test
+    fun `error trait implemented for ConstraintViolation should work for constrained member`() {
+        val model =
+            """
+            ${'$'}version: "1.0"
+            
+            namespace test
+            
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+            
+            // The `ConstraintViolation` code generated for a constrained map that is not reachable from an
+            // operation does not have the `Key`, or `Value` variants. Hence, we need to define a service
+            // and an operation that uses the constrained map.
+            @restJson1
+            service MyService {
+                version: "2023-04-01",
+                operations: [
+                    MyOperation,
+                ]
+            }
+            
+            @http(method: "POST", uri: "/echo")
+            operation MyOperation {
+                input: MyOperationInput
+                errors : [ValidationException]
+            }
+            
+            @input
+            structure MyOperationInput {
+                    member1: ConstrainedList,
+                    member2: ConstrainedSet,
+            }            
+
+            @length(min: 2, max: 69)
+            list ConstrainedList {
+                member: ConstrainedString
+            }
+
+            @length(min: 2, max: 69)
+            set ConstrainedSet {
+                member: ConstrainedString
+            }
+
+            @pattern("#\\d+")
+            string ConstrainedString
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+
+        val codegenContext = serverTestCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val project = TestWorkspace.testProject(symbolProvider)
+
+        project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+            TestUtility.renderConstrainedString(codegenContext, this,
+                model.lookup<StringShape>("test#ConstrainedString"))
+
+            rustTemplate(
+                """
+                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps, 
+                // and the complete SDK generation process, which would generate it, is not invoked as part of the test.
+                pub struct ValidationExceptionField {
+                    pub message: String,
+                    pub path: String
+                }
+                """,
+                "Result" to RuntimeType.std.resolve("Result"),
+            )
+
+            val constrainedListShape = model.lookup<ListShape>("test#ConstrainedList")
+            val constrainedSetShape = model.lookup<ListShape>("test#ConstrainedSet")
+            render(codegenContext, this, constrainedListShape)
+            render(codegenContext, this, constrainedSetShape)
+
+            unitTest(
+                name = "try_from_fail_invalid_constrained_list",
+                test = """
+                    let constrained_error = ConstrainedString::try_from("one".to_string()).unwrap_err();
+                    let error = crate::model::constrained_list::ConstraintViolation::Member(0, constrained_error);
+                    is_error(&error);
+                    is_display(&error);
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\\\d+", 
+                        error.to_string());
+                """,
+            )
+            unitTest(
+                name = "try_from_fail_invalid_constrained_set",
+                test = """
+                    let constrained_error = ConstrainedString::try_from("one".to_string()).unwrap_err();
+                    let error = crate::model::constrained_set::ConstraintViolation::Member(0, constrained_error);
+                    is_error(&error);
+                    is_display(&error);
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\\\d+", 
+                        error.to_string());
+                """,
+            )
+        }
+
+        project.compileAndTest()
     }
 
     private fun render(

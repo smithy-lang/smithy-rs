@@ -72,6 +72,9 @@ class UnconstrainedMapGeneratorTest {
 
         serverIntegrationTest(model) { _, rustCrate ->
             rustCrate.testModule {
+                TestUtility.generateIsDisplay().invoke(this)
+                TestUtility.generateIsError().invoke(this)
+
                 unitTest("map_a_unconstrained_fail_to_constrain_with_some_error") {
                     rust(
                         """
@@ -108,8 +111,15 @@ class UnconstrainedMapGeneratorTest {
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
                         
-                        let _actual_error_trait : &dyn std::error::Error = &actual_err;
-                        let _display_impl_works = format!("{actual_err}");
+                        is_display(&actual_err);
+                        is_error(&actual_err);
+
+                        let error_str = actual_err.to_string();
+                        assert!(
+                            error_str == "`string` was not provided but it is required when building `StructureC`"
+                                || error_str
+                                    == "`int` was not provided but it is required when building `StructureC`"
+                        );
                         """,
                     )
                 }
