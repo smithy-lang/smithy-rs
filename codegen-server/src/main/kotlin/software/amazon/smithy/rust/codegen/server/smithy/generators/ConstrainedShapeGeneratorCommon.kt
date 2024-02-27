@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.model.shapes.Shape
-
 /**
  * Functions shared amongst the constrained shape generators, to keep them DRY and consistent.
  */

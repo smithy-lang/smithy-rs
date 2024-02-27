@@ -18,6 +18,7 @@ import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.SetShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -25,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -38,8 +40,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
-import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 @Suppress("DEPRECATION")
 class ConstrainedCollectionGeneratorTest {
@@ -269,7 +269,7 @@ class ConstrainedCollectionGeneratorTest {
                                         is_display(&err);
                                         // Ensure that the `std::fmt::Display` implementation for `ConstraintViolation` error works.
                                         assert_eq!(err.to_string(), expected_err.to_string());
-                                        """.trimMargin()
+                                        """.trimMargin(),
                                     )
                                 } ?: run {
                                     rust("constrained_res.unwrap_err();")
@@ -360,8 +360,10 @@ class ConstrainedCollectionGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             TestUtility.generateIsDisplay().invoke(this)
             TestUtility.generateIsError().invoke(this)
-            TestUtility.renderConstrainedString(codegenContext, this,
-                model.lookup<StringShape>("test#ConstrainedString"))
+            TestUtility.renderConstrainedString(
+                codegenContext, this,
+                model.lookup<StringShape>("test#ConstrainedString"),
+            )
 
             rustTemplate(
                 """

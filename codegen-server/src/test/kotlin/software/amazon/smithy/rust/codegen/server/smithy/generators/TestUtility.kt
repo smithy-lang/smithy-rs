@@ -15,22 +15,25 @@ import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleC
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 
 object TestUtility {
-    fun generateIsDisplay() = writable {
-        rustTemplate(
-            """
+    fun generateIsDisplay() =
+        writable {
+            rustTemplate(
+                """
             fn is_display<T : #{Display}>(_t: &T) { }
             """,
-        "Display" to RuntimeType.Display,)
-    }
+                "Display" to RuntimeType.Display,
+            )
+        }
 
-    fun generateIsError() = writable {
-        rustTemplate(
-            """
+    fun generateIsError() =
+        writable {
+            rustTemplate(
+                """
             fn is_error<T : #{Error}>(_t: &T) { }
             """,
-            "Error" to RuntimeType.StdError
-        )
-    }
+                "Error" to RuntimeType.StdError,
+            )
+        }
 
     fun renderConstrainedString(
         codegenContext: ServerCodegenContext,

@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -32,7 +33,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.stream.Stream
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 class ConstrainedMapGeneratorTest {
     data class TestCase(val model: Model, val validMap: ObjectNode, val invalidMap: ObjectNode)
@@ -262,7 +262,7 @@ class ConstrainedMapGeneratorTest {
                     pub path: String
                 }
                 """,
-                "HashMap" to RuntimeType.HashMap
+                "HashMap" to RuntimeType.HashMap,
             )
 
             for (mapToVerify in mapsToVerify) {
@@ -290,7 +290,7 @@ class ConstrainedMapGeneratorTest {
                     """
                     let error = constrained_map_with_constrained_key::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
                     assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
-                    """
+                    """,
             )
             unitTest(
                 name = "try_constrained_value",
@@ -298,7 +298,7 @@ class ConstrainedMapGeneratorTest {
                     """
                     let error = constrained_map_with_constrained_value::ConstraintViolation::Value("some_key".to_string(), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
                     assert_eq!(error.to_string(), "Value provided for `test#ConstrainedValue` failed to satisfy the constraint: Member must match the regular expression pattern: A-Z");
-                    """
+                    """,
             )
             unitTest(
                 name = "try_constrained_key_and_value",
@@ -308,7 +308,7 @@ class ConstrainedMapGeneratorTest {
                     assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
                     let error = constrained_map_with_constrained_key_and_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
                     assert_eq!(error.to_string(), "Value provided for `test#ConstrainedValue` failed to satisfy the constraint: Member must match the regular expression pattern: A-Z");
-                    """
+                    """,
             )
         }
 
