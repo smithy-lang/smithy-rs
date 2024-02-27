@@ -221,15 +221,9 @@ fn parse_sub_properties(sub_properties_str: &str) -> impl Iterator<Item = (Strin
         .split('\n')
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
-            let mut split = line.split('=');
-            let key = split
-                .next()
-                .map(|it| it.trim_matches(WHITESPACE).to_owned());
-            let value = split
-                .next()
-                .map(|it| it.trim_matches(WHITESPACE).to_owned());
-
-            if let (Some(key), Some(value)) = (key, value) {
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim_matches(WHITESPACE).to_owned();
+                let value = value.trim_matches(WHITESPACE).to_owned();
                 Some((key, value))
             } else {
                 tracing::warn!("`{line}` ignored because it is not a valid sub-property");
