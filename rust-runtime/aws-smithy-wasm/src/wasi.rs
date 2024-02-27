@@ -66,7 +66,7 @@ impl HttpClient for WasiHttpClient {
 
 /// HTTP connector used in WASI environment
 #[derive(Debug, Clone)]
-pub struct WasiHttpConnector {
+struct WasiHttpConnector {
     options: WasiRequestOptions,
 }
 
