@@ -38,23 +38,23 @@ impl Future for ProvideCredentials<'_> {
     }
 }
 
-/// Future new-type that `ProvideAccessToken::provide_access_token` must return.
+/// Future new-type that `ProvideToken::provide_token` must return.
 #[derive(Debug)]
-pub struct ProvideAccessToken<'a>(NowOrLater<TokenResult, BoxFuture<'a, TokenResult>>);
+pub struct ProvideToken<'a>(NowOrLater<TokenResult, BoxFuture<'a, TokenResult>>);
 
-impl<'a> ProvideAccessToken<'a> {
-    /// Creates a `ProvideAccessToken` struct from a future.
+impl<'a> ProvideToken<'a> {
+    /// Creates a `ProvideToken` struct from a future.
     pub fn new(future: impl Future<Output = TokenResult> + Send + 'a) -> Self {
-        ProvideAccessToken(NowOrLater::new(Box::pin(future)))
+        ProvideToken(NowOrLater::new(Box::pin(future)))
     }
 
-    /// Creates a `ProvideAccessToken` struct from a resolved credentials value.
+    /// Creates a `ProvideToken` struct from a resolved credentials value.
     pub fn ready(credentials: TokenResult) -> Self {
-        ProvideAccessToken(NowOrLater::ready(credentials))
+        ProvideToken(NowOrLater::ready(credentials))
     }
 }
 
-impl Future for ProvideAccessToken<'_> {
+impl Future for ProvideToken<'_> {
     type Output = TokenResult;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

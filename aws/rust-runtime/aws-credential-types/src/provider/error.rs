@@ -15,7 +15,7 @@ pub struct CredentialsNotLoaded {
     source: Option<Box<dyn Error + Send + Sync + 'static>>,
 }
 
-/// Details for [`CredentialsError::ProviderTimedOut`] or [`AccessTokenError::ProviderTimedOut`]
+/// Details for [`CredentialsError::ProviderTimedOut`] or [`TokenError::ProviderTimedOut`]
 #[derive(Debug)]
 pub struct ProviderTimedOut {
     timeout_duration: Duration,
@@ -28,19 +28,19 @@ impl ProviderTimedOut {
     }
 }
 
-/// Details for [`CredentialsError::InvalidConfiguration`] or [`AccessTokenError::InvalidConfiguration`]
+/// Details for [`CredentialsError::InvalidConfiguration`] or [`TokenError::InvalidConfiguration`]
 #[derive(Debug)]
 pub struct InvalidConfiguration {
     source: Box<dyn Error + Send + Sync + 'static>,
 }
 
-/// Details for [`CredentialsError::ProviderError`] or [`AccessTokenError::ProviderError`]
+/// Details for [`CredentialsError::ProviderError`] or [`TokenError::ProviderError`]
 #[derive(Debug)]
 pub struct ProviderError {
     source: Box<dyn Error + Send + Sync + 'static>,
 }
 
-/// Details for [`CredentialsError::Unhandled`] or [`AccessTokenError::Unhandled`]
+/// Details for [`CredentialsError::Unhandled`] or [`TokenError::Unhandled`]
 #[derive(Debug)]
 pub struct Unhandled {
     source: Box<dyn Error + Send + Sync + 'static>,
@@ -172,7 +172,7 @@ impl Error for CredentialsError {
     }
 }
 
-/// Details for [`AccessTokenError::TokenNotLoaded`]
+/// Details for [`TokenError::TokenNotLoaded`]
 #[derive(Debug)]
 pub struct TokenNotLoaded {
     source: Box<dyn Error + Send + Sync + 'static>,
@@ -180,7 +180,7 @@ pub struct TokenNotLoaded {
 
 /// Error returned when an access token provider fails to provide an access token.
 #[derive(Debug)]
-pub enum AccessTokenError {
+pub enum TokenError {
     /// This provider couldn't provide a token.
     TokenNotLoaded(TokenNotLoaded),
 
@@ -204,14 +204,14 @@ pub enum AccessTokenError {
     Unhandled(Unhandled),
 }
 
-impl AccessTokenError {
+impl TokenError {
     /// The access token provider couldn't provide a token.
     ///
     /// This error indicates the token provider was not enable or no configuration was set.
-    /// This contrasts with [`invalid_configuration`](AccessTokenError::InvalidConfiguration), indicating
+    /// This contrasts with [`invalid_configuration`](TokenError::InvalidConfiguration), indicating
     /// that the provider was configured in some way, but certain settings were invalid.
     pub fn not_loaded(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
-        AccessTokenError::TokenNotLoaded(TokenNotLoaded {
+        TokenError::TokenNotLoaded(TokenNotLoaded {
             source: source.into(),
         })
     }
@@ -248,38 +248,38 @@ impl AccessTokenError {
     }
 }
 
-impl fmt::Display for AccessTokenError {
+impl fmt::Display for TokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AccessTokenError::TokenNotLoaded(_) => {
+            TokenError::TokenNotLoaded(_) => {
                 write!(f, "the access token provider was not enabled")
             }
-            AccessTokenError::ProviderTimedOut(details) => write!(
+            TokenError::ProviderTimedOut(details) => write!(
                 f,
                 "access token provider timed out after {} seconds",
                 details.timeout_duration.as_secs()
             ),
-            AccessTokenError::InvalidConfiguration(_) => {
+            TokenError::InvalidConfiguration(_) => {
                 write!(f, "the access token provider was not properly configured")
             }
-            AccessTokenError::ProviderError(_) => {
+            TokenError::ProviderError(_) => {
                 write!(f, "an error occurred while loading an access token")
             }
-            AccessTokenError::Unhandled(_) => {
+            TokenError::Unhandled(_) => {
                 write!(f, "unexpected access token providererror")
             }
         }
     }
 }
 
-impl Error for AccessTokenError {
+impl Error for TokenError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            AccessTokenError::TokenNotLoaded(details) => Some(details.source.as_ref() as _),
-            AccessTokenError::ProviderTimedOut(_) => None,
-            AccessTokenError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
-            AccessTokenError::ProviderError(details) => Some(details.source.as_ref() as _),
-            AccessTokenError::Unhandled(details) => Some(details.source.as_ref() as _),
+            TokenError::TokenNotLoaded(details) => Some(details.source.as_ref() as _),
+            TokenError::ProviderTimedOut(_) => None,
+            TokenError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
+            TokenError::ProviderError(details) => Some(details.source.as_ref() as _),
+            TokenError::Unhandled(details) => Some(details.source.as_ref() as _),
         }
     }
 }
