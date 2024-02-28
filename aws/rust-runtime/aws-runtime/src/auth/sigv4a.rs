@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::auth::signing_application::SigningApplication;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, SigV4OperationSigningConfig, SigV4SigningError,
 };
+use crate::sign::{SignWith, SigningPackage};
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{SigningParams, SigningSettings};
 use aws_sigv4::sign::v4a;
@@ -178,17 +178,15 @@ impl Sign for SigV4aSigner {
             Self::signing_params(settings, identity, &operation_config, request_time)?;
 
         let signing_params = SigningParams::V4a(signing_params);
-        let mut signing_application = SigningApplication::default()
-            .request(request)
-            .signing_params(&signing_params);
-        signing_application.set_payload_override(
+        let mut signing_package = SigningPackage::builder().signing_params(&signing_params);
+        signing_package.set_payload_override(
             operation_config
                 .signing_options
                 .payload_override
                 .as_ref()
                 .cloned(),
         );
-        signing_application.finalize()
+        request.sign_with(&signing_package.build()?)
     }
 }
 

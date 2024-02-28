@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::auth::signing_application::SigningApplication;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
     SigV4OperationSigningConfig, SigV4SigningError,
 };
+use crate::sign::{SignWith, SigningPackage};
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{SigningParams, SigningSettings};
 use aws_sigv4::sign::v4;
-use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -76,12 +75,13 @@ impl SigV4Signer {
         super::settings(operation_config)
     }
 
-    fn signing_params<'a>(
+    /// Creates a [`v4::SigningParams`] from the given arguments.
+    pub fn signing_params<'a>(
         settings: SigningSettings,
         identity: &'a Identity,
         operation_config: &'a SigV4OperationSigningConfig,
         request_timestamp: SystemTime,
-    ) -> Result<v4::SigningParams<'a, SigningSettings>, SigV4SigningError> {
+    ) -> Result<v4::SigningParams<'a, SigningSettings>, BoxError> {
         let creds = identity
             .data::<Credentials>()
             .ok_or_else(|| SigV4SigningError::WrongIdentityType(identity.clone()))?;
@@ -142,51 +142,6 @@ impl SigV4Signer {
             }
         }
     }
-
-    /// Signs the given `request`.
-    ///
-    /// This is a helper used by `(SigV4Signer as Sign).sign_http_request(...)` and will be useful
-    /// if calling code needs to pass a configured [`SigningSettings`].
-    ///
-    /// If you already have an [`HttpRequest`] and a [`SigningParams`] at hand, consider using
-    /// [`SigningApplication`] directly.
-    pub fn sign_http_request(
-        request: &mut HttpRequest,
-        identity: &Identity,
-        settings: SigningSettings,
-        operation_config: &SigV4OperationSigningConfig,
-        time_source: Option<SharedTimeSource>,
-        _config_bag: &ConfigBag,
-    ) -> Result<(), BoxError> {
-        let request_time = time_source.clone().unwrap_or_default().now();
-        let signing_params =
-            Self::signing_params(settings, identity, operation_config, request_time)?;
-
-        let signing_params = SigningParams::V4(signing_params);
-        let mut signing_application = SigningApplication::default()
-            .request(request)
-            .signing_params(&signing_params);
-        signing_application.set_payload_override(
-            operation_config
-                .signing_options
-                .payload_override
-                .as_ref()
-                .cloned(),
-        );
-
-        #[cfg(feature = "event-stream")]
-        {
-            use crate::auth::signing_application::event_stream;
-            let mut deferred_signing_settings = event_stream::DeferredSignerSettings::builder()
-                .config_bag(_config_bag)
-                .identity(identity);
-            deferred_signing_settings.set_time_source(time_source);
-            signing_application
-                .set_deferred_signer_settings(Some(deferred_signing_settings.build()?));
-        }
-
-        signing_application.finalize()
-    }
 }
 
 impl Sign for SigV4Signer {
@@ -204,15 +159,34 @@ impl Sign for SigV4Signer {
 
         let operation_config =
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
+        let time_source = runtime_components.time_source().unwrap_or_default();
+
         let settings = Self::signing_settings(&operation_config);
-        Self::sign_http_request(
-            request,
-            identity,
-            settings,
-            &operation_config,
-            runtime_components.time_source(),
-            config_bag,
-        )
+        let signing_params =
+            Self::signing_params(settings, identity, &operation_config, time_source.now())?;
+
+        let signing_params = SigningParams::V4(signing_params);
+        let mut signing_package = SigningPackage::builder().signing_params(&signing_params);
+        signing_package.set_payload_override(
+            operation_config
+                .signing_options
+                .payload_override
+                .as_ref()
+                .cloned(),
+        );
+
+        #[cfg(feature = "event-stream")]
+        {
+            use crate::sign::event_stream::DeferredSignerSettings;
+
+            let deferred_signing_settings = DeferredSignerSettings::builder()
+                .config_bag(config_bag)
+                .identity(identity)
+                .time_source(time_source);
+            signing_package.set_deferred_signer_settings(Some(deferred_signing_settings.build()?));
+        }
+
+        request.sign_with(&signing_package.build()?)
     }
 }
 

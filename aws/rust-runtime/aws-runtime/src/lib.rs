@@ -40,3 +40,6 @@ pub mod request_info;
 
 /// Interceptor that determines the clock skew between the client and service.
 pub mod service_clock_skew;
+
+/// Supporting code for signing HTTP requests.
+pub mod sign;

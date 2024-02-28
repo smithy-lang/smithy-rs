@@ -6,7 +6,8 @@
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
     use aws_runtime::auth::sigv4::SigV4Signer;
-    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
+    use aws_runtime::sign::{SignWith, SigningPackage};
+    use aws_sigv4::http_request::{SignatureLocation, SigningParams, SigningSettings};
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -66,17 +67,24 @@ pub(crate) mod auth {
         ) -> Result<(), BoxError> {
             let operation_config =
                 SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
+            let request_time = runtime_components.time_source().unwrap_or_default().now();
+
             let mut settings = SigV4Signer::signing_settings(&operation_config);
             override_session_token_name(&mut settings)?;
+            let signing_params =
+                SigV4Signer::signing_params(settings, identity, &operation_config, request_time)?;
 
-            SigV4Signer::sign_http_request(
-                request,
-                identity,
-                settings,
-                &operation_config,
-                runtime_components.time_source(),
-                config_bag,
-            )
+            let signing_params = SigningParams::V4(signing_params);
+            let mut signing_package = SigningPackage::builder().signing_params(&signing_params);
+            signing_package.set_payload_override(
+                operation_config
+                    .signing_options
+                    .payload_override
+                    .as_ref()
+                    .cloned(),
+            );
+
+            request.sign_with(&signing_package.build()?)
         }
     }
 

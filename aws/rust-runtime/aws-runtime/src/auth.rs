@@ -19,9 +19,6 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::time::Duration;
 
-/// Builder for producing a signature and applying signing headers to an HTTP request.
-pub mod signing_application;
-
 /// Auth implementations for SigV4.
 pub mod sigv4;
 
@@ -202,7 +199,7 @@ fn extract_field_from_endpoint_config<'a>(
         .and_then(|config| config.get(field_name))
 }
 
-fn apply_signing_instructions(
+pub(crate) fn apply_signing_instructions(
     instructions: SigningInstructions,
     request: &mut HttpRequest,
 ) -> Result<(), BoxError> {
