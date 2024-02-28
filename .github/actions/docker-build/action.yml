@@ -1,11 +1,11 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# Use this action to execute the action scripts in tools/ci-build/scripts within the Docker build image.
+# Use this action to execute the action scripts in tools/ci-scripts.
 name: smithy-rs Docker Build
 description: Run Docker build command for smithy-rs
 inputs:
-  # The name of the script in tools/ci-build/scripts to run
+  # The name of the script in tools/ci-scripts to run
   action:
     description: What action to run in the Docker build
     required: true
@@ -43,7 +43,7 @@ runs:
       # from attempting to download an image from ECR since it will already exist,
       # which enables testing build image modifications as part of the pull request.
       if [[ -d smithy-rs-base-image ]]; then
-        IMAGE_TAG="$(./smithy-rs/tools/ci-build/tools-hash)"
+        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
         docker load -i smithy-rs-base-image/smithy-rs-base-image
         docker tag "smithy-rs-base-image:${IMAGE_TAG}" "smithy-rs-base-image:local"
       fi
@@ -52,7 +52,7 @@ runs:
       # or from ECR. We disable building the image from scratch so that any mistakes in the CI
       # configuration won't cause each individual action to build its own image, which would
       # drastically increase the total CI time. Fail fast!
-      ALLOW_LOCAL_BUILD=false ./smithy-rs/tools/ci-build/acquire-build-image
+      ALLOW_LOCAL_BUILD=false ./smithy-rs/.github/scripts/acquire-build-image
     # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash

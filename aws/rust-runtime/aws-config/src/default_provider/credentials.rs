@@ -4,17 +4,17 @@
  */
 
 use std::borrow::Cow;
-use std::time::Duration;
 
-use aws_types::credentials::{self, future, ProvideCredentials};
+use aws_credential_types::provider::{self, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
-use crate::meta::credentials::{CredentialsProviderChain, LazyCachingCredentialsProvider};
+use crate::meta::credentials::CredentialsProviderChain;
 use crate::meta::region::ProvideRegion;
 use crate::provider_config::ProviderConfig;
 
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[cfg(feature = "rustls")]
 /// Default Credentials Provider chain
 ///
 /// The region from the default region provider will be used
@@ -25,7 +25,7 @@ pub async fn default_provider() -> impl ProvideCredentials {
 /// Default AWS Credential Provider Chain
 ///
 /// Resolution order:
-/// 1. Environment variables: [`EnvironmentVariableCredentialsProvider`](crate::environment::EnvironmentVariableCredentialsProvider)
+/// 1. Environment variables: [`EnvironmentVariableCredentialsProvider`]
 /// 2. Shared config (`~/.aws/config`, `~/.aws/credentials`): [`SharedConfigCredentialsProvider`](crate::profile::ProfileFileCredentialsProvider)
 /// 3. [Web Identity Tokens](crate::web_identity_token)
 /// 4. ECS (IAM Roles for Tasks) & General HTTP credentials: [`ecs`](crate::ecs)
@@ -59,7 +59,9 @@ pub async fn default_provider() -> impl ProvideCredentials {
 ///     .build();
 /// ```
 #[derive(Debug)]
-pub struct DefaultCredentialsChain(LazyCachingCredentialsProvider);
+pub struct DefaultCredentialsChain {
+    provider_chain: CredentialsProviderChain,
+}
 
 impl DefaultCredentialsChain {
     /// Builder for `DefaultCredentialsChain`
@@ -67,8 +69,8 @@ impl DefaultCredentialsChain {
         Builder::default()
     }
 
-    async fn credentials(&self) -> credentials::Result {
-        self.0
+    async fn credentials(&self) -> provider::Result {
+        self.provider_chain
             .provide_credentials()
             .instrument(tracing::debug_span!("provide_credentials", provider = %"default_chain"))
             .await
@@ -82,16 +84,19 @@ impl ProvideCredentials for DefaultCredentialsChain {
     {
         future::ProvideCredentials::new(self.credentials())
     }
+
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        self.provider_chain.fallback_on_interrupt()
+    }
 }
 
-/// Builder for [`DefaultCredentialsChain`](DefaultCredentialsChain)
+/// Builder for [`DefaultCredentialsChain`].
 #[derive(Debug, Default)]
 pub struct Builder {
     profile_file_builder: crate::profile::credentials::Builder,
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
-    credential_cache: crate::meta::credentials::lazy_caching::Builder,
     region_override: Option<Box<dyn ProvideRegion>>,
     region_chain: crate::default_provider::region::Builder,
     conf: Option<ProviderConfig>,
@@ -111,71 +116,6 @@ impl Builder {
     /// When unset, the default region resolver chain will be used.
     pub fn set_region(&mut self, region: Option<impl ProvideRegion + 'static>) -> &mut Self {
         self.region_override = region.map(|provider| Box::new(provider) as _);
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn load_timeout(mut self, timeout: Duration) -> Self {
-        self.set_load_timeout(Some(timeout));
-        self
-    }
-
-    /// Timeout for the entire credential loading chain.
-    ///
-    /// Defaults to 5 seconds.
-    pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_load_timeout(timeout);
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
-        self.set_buffer_time(Some(buffer_time));
-        self
-    }
-
-    /// Amount of time before the actual credential expiration time
-    /// where credentials are considered expired.
-    ///
-    /// For example, if credentials are expiring in 15 minutes, and the buffer time is 10 seconds,
-    /// then any requests made after 14 minutes and 50 seconds will load new credentials.
-    ///
-    /// Defaults to 10 seconds.
-    pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
-        self.credential_cache.set_buffer_time(buffer_time);
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn default_credential_expiration(mut self, duration: Duration) -> Self {
-        self.set_default_credential_expiration(Some(duration));
-        self
-    }
-
-    /// Default expiration time to set on credentials if they don't have an expiration time.
-    ///
-    /// This is only used if the given [`ProvideCredentials`] returns
-    /// [`Credentials`](aws_types::Credentials) that don't have their `expiry` set.
-    /// This must be at least 15 minutes.
-    ///
-    /// Defaults to 15 minutes.
-    pub fn set_default_credential_expiration(&mut self, duration: Option<Duration>) -> &mut Self {
-        self.credential_cache
-            .set_default_credential_expiration(duration);
         self
     }
 
@@ -230,8 +170,8 @@ impl Builder {
     /// Creates a `DefaultCredentialsChain`
     ///
     /// ## Panics
-    /// This function will panic if no connector has been set and neither `rustls` and `native-tls`
-    /// features have both been disabled.
+    /// This function will panic if no connector has been set or the `rustls`
+    /// feature has been disabled.
     pub async fn build(self) -> DefaultCredentialsChain {
         let region = match self.region_override {
             Some(provider) => provider.region().await,
@@ -251,29 +191,25 @@ impl Builder {
             .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
-        let cached_provider = self.credential_cache.configure(&conf).load(provider_chain);
 
-        DefaultCredentialsChain(cached_provider.build())
+        DefaultCredentialsChain { provider_chain }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use tracing_test::traced_test;
-
-    use aws_smithy_types::retry::{RetryConfig, RetryMode};
-    use aws_types::credentials::ProvideCredentials;
-    use aws_types::os_shim_internal::{Env, Fs};
-
-    use crate::default_provider::credentials::DefaultCredentialsChain;
-    use crate::default_provider::retry_config;
-    use crate::provider_config::ProviderConfig;
     use crate::test_case::TestEnvironment;
+    use crate::{
+        default_provider::credentials::DefaultCredentialsChain, test_case::StaticTestProvider,
+    };
+    use aws_credential_types::provider::ProvideCredentials;
+    use aws_smithy_async::time::StaticTimeSource;
+    use std::time::UNIX_EPOCH;
 
     /// Test generation macro
     ///
     /// # Examples
-    /// **Run the test case in `test-data/default-provider-chain/test_name`
+    /// **Run the test case in `test-data/default-credential-provider-chain/test_name`
     /// ```no_run
     /// make_test!(test_name);
     /// ```
@@ -290,8 +226,8 @@ mod test {
     /// make_test!(live: test_name)
     /// ```
     macro_rules! make_test {
-        ($name: ident) => {
-            make_test!($name, execute);
+        ($name:ident $(#[$m:meta])*) => {
+            make_test!($name, execute, $(#[$m])*);
         };
         (update: $name:ident) => {
             make_test!($name, execute_and_update);
@@ -299,28 +235,41 @@ mod test {
         (live: $name:ident) => {
             make_test!($name, execute_from_live_traffic);
         };
-        ($name: ident, $func: ident) => {
-            #[traced_test]
+        ($name:ident, $func:ident, $(#[$m:meta])*) => {
+            make_test!($name, $func, std::convert::identity $(, #[$m])*);
+        };
+        ($name:ident, builder: $provider_config_builder:expr) => {
+            make_test!($name, execute, $provider_config_builder);
+        };
+        ($name:ident, $func:ident, $provider_config_builder:expr $(, #[$m:meta])*) => {
+            $(#[$m])*
             #[tokio::test]
             async fn $name() {
-                crate::test_case::TestEnvironment::from_dir(concat!(
-                    "./test-data/default-provider-chain/",
-                    stringify!($name)
-                ))
-                .unwrap()
-                .$func(|conf| async {
-                    crate::default_provider::credentials::Builder::default()
-                        .configure(conf)
-                        .build()
-                        .await
-                })
+                let _ = crate::test_case::TestEnvironment::from_dir(
+                    concat!("./test-data/default-credential-provider-chain/", stringify!($name)),
+                    crate::test_case::test_credentials_provider(|config| {
+                        async move {
+                            crate::default_provider::credentials::Builder::default()
+                                .configure(config)
+                                .build()
+                                .await
+                                .provide_credentials()
+                                .await
+                        }
+                    })
+                )
                 .await
+                .unwrap()
+                .map_provider_config($provider_config_builder)
+                .$func()
+                .await;
             }
         };
     }
 
     make_test!(prefer_environment);
     make_test!(profile_static_keys);
+    make_test!(profile_static_keys_case_insensitive);
     make_test!(web_identity_token_env);
     make_test!(web_identity_source_profile_no_env);
     make_test!(web_identity_token_invalid_jwt);
@@ -333,53 +282,79 @@ mod test {
 
     make_test!(imds_no_iam_role);
     make_test!(imds_default_chain_error);
-    make_test!(imds_default_chain_success);
+    make_test!(imds_default_chain_success, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(imds_assume_role);
-    make_test!(imds_config_with_no_creds);
+    make_test!(imds_config_with_no_creds, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(imds_disabled);
-    make_test!(imds_default_chain_retries);
-
+    make_test!(imds_default_chain_retries, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(ecs_assume_role);
     make_test!(ecs_credentials);
     make_test!(ecs_credentials_invalid_profile);
 
+    make_test!(eks_pod_identity_credentials);
+    make_test!(eks_pod_identity_no_token_file);
+
+    #[cfg(not(feature = "sso"))]
+    make_test!(sso_assume_role #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: sso")]);
+    #[cfg(not(feature = "sso"))]
+    make_test!(sso_no_token_file #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: sso")]);
+
+    #[cfg(feature = "sso")]
     make_test!(sso_assume_role);
+
+    #[cfg(feature = "sso")]
     make_test!(sso_no_token_file);
+
+    #[cfg(feature = "credentials-sso")]
+    make_test!(e2e_fips_and_dual_stack_sso);
 
     #[tokio::test]
     async fn profile_name_override() {
-        let (_, conf) =
-            TestEnvironment::from_dir("./test-data/default-provider-chain/profile_static_keys")
-                .unwrap()
-                .provider_config()
-                .await;
-        let provider = DefaultCredentialsChain::builder()
+        // Only use the TestEnvironment to create a ProviderConfig from the
+        // profile_static_keys test directory. We don't actually want to
+        // use the expected test output from that directory since we're
+        // overriding the profile name on the credentials chain in this test.
+        let provider_config = TestEnvironment::<crate::test_case::Credentials, ()>::from_dir(
+            "./test-data/default-credential-provider-chain/profile_static_keys",
+            StaticTestProvider::new(|_| unreachable!()),
+        )
+        .await
+        .unwrap()
+        .provider_config()
+        .clone();
+
+        let creds = DefaultCredentialsChain::builder()
             .profile_name("secondary")
-            .configure(conf)
+            .configure(provider_config)
             .build()
-            .await;
-        let creds = provider
+            .await
             .provide_credentials()
             .await
             .expect("creds should load");
+
         assert_eq!(creds.access_key_id(), "correct_key_secondary");
     }
 
     #[tokio::test]
-    #[traced_test]
     #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
+        use crate::provider_config::ProviderConfig;
+        use aws_credential_types::provider::error::CredentialsError;
         use aws_smithy_async::rt::sleep::TokioSleep;
-        use aws_smithy_client::erase::boxclone::BoxCloneService;
-        use aws_smithy_client::never::NeverConnected;
-        use aws_types::credentials::CredentialsError;
-        use aws_types::os_shim_internal::TimeSource;
+        use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+        use aws_smithy_runtime::client::http::test_util::NeverTcpConnector;
 
         tokio::time::pause();
         let conf = ProviderConfig::no_configuration()
-            .with_tcp_connector(BoxCloneService::new(NeverConnected::new()))
-            .with_time_source(TimeSource::real())
-            .with_sleep(TokioSleep::new());
+            .with_http_client(HyperClientBuilder::new().build(NeverTcpConnector::new()))
+            .with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+            .with_sleep_impl(TokioSleep::new());
         let provider = DefaultCredentialsChain::builder()
             .configure(conf)
             .build()
@@ -393,121 +368,5 @@ mod test {
             "should be NotLoaded: {:?}",
             creds
         )
-    }
-
-    #[tokio::test]
-    async fn test_returns_default_retry_config_from_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard();
-
-        assert_eq!(actual_retry_config, expected_retry_config);
-        // This is redundant but it's really important to make sure that
-        // we're setting these exact values by default so we check twice
-        assert_eq!(actual_retry_config.max_attempts(), 3);
-        assert_eq!(actual_retry_config.mode(), RetryMode::Standard);
-    }
-
-    #[tokio::test]
-    async fn test_no_retry_config_in_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard();
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    async fn test_creation_of_retry_config_from_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): standard is the default mode;
-        // this test would be better if it was setting it to adaptive mode
-        // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = 1
-retry_mode = standard
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard().with_max_attempts(1);
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    async fn test_env_retry_config_takes_precedence_over_profile_retry_config() {
-        let env = Env::from_slice(&[
-            ("AWS_CONFIG_FILE", "config"),
-            ("AWS_MAX_ATTEMPTS", "42"),
-            ("AWS_RETRY_MODE", "standard"),
-        ]);
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247) standard is the default mode;
-        // this test would be better if it was setting it to adaptive mode
-        // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = 88
-retry_mode = standard
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let actual_retry_config = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
-
-        let expected_retry_config = RetryConfig::standard().with_max_attempts(42);
-
-        assert_eq!(actual_retry_config, expected_retry_config)
-    }
-
-    #[tokio::test]
-    #[should_panic = "failed to parse max attempts set by aws profile: invalid digit found in string"]
-    async fn test_invalid_profile_retry_config_panics() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[(
-            "config",
-            // If the lines with the vars have preceding spaces, they don't get read
-            r#"[default]
-max_attempts = potato
-            "#,
-        )]);
-
-        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-
-        let _ = retry_config::default_provider()
-            .configure(&provider_config)
-            .retry_config()
-            .await;
     }
 }

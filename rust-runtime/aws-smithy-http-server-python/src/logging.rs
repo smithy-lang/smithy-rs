@@ -4,7 +4,8 @@
  */
 
 //! Rust `tracing` and Python `logging` setup and utilities.
-use std::path::PathBuf;
+
+use std::{path::PathBuf, str::FromStr};
 
 use pyo3::prelude::*;
 #[cfg(not(test))]
@@ -15,15 +16,49 @@ use tracing_subscriber::{
     fmt::{self, writer::MakeWriterExt},
     layer::SubscriberExt,
     util::SubscriberInitExt,
+    Layer,
 };
 
 use crate::error::PyException;
+
+#[derive(Debug, Default)]
+enum Format {
+    Json,
+    Pretty,
+    #[default]
+    Compact,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct InvalidFormatError;
+
+impl FromStr for Format {
+    type Err = InvalidFormatError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "pretty" => Ok(Self::Pretty),
+            "json" => Ok(Self::Json),
+            "compact" => Ok(Self::Compact),
+            _ => Err(InvalidFormatError),
+        }
+    }
+}
 
 /// Setup tracing-subscriber to log on console or to a hourly rolling file.
 fn setup_tracing_subscriber(
     level: Option<u8>,
     logfile: Option<PathBuf>,
+    format: Option<String>,
 ) -> PyResult<Option<WorkerGuard>> {
+    let format = match format {
+        Some(format) => Format::from_str(&format).unwrap_or_else(|_| {
+            tracing::error!("unknown format '{format}', falling back to default formatter");
+            Format::default()
+        }),
+        None => Format::default(),
+    };
+
     let appender = match logfile {
         Some(logfile) => {
             let parent = logfile.parent().ok_or_else(|| {
@@ -54,27 +89,27 @@ fn setup_tracing_subscriber(
         _ => Level::TRACE,
     };
 
+    let formatter = fmt::Layer::new().with_line_number(true).with_level(true);
+
     match appender {
         Some((appender, guard)) => {
-            let layer = Some(
-                fmt::Layer::new()
-                    .with_writer(appender.with_max_level(tracing_level))
-                    .with_ansi(true)
-                    .with_line_number(true)
-                    .with_level(true),
-            );
-            tracing_subscriber::registry().with(layer).init();
+            let formatter = formatter.with_writer(appender.with_max_level(tracing_level));
+            let formatter = match format {
+                Format::Json => formatter.json().boxed(),
+                Format::Compact => formatter.compact().boxed(),
+                Format::Pretty => formatter.pretty().boxed(),
+            };
+            tracing_subscriber::registry().with(formatter).init();
             Ok(Some(guard))
         }
         None => {
-            let layer = Some(
-                fmt::Layer::new()
-                    .with_writer(std::io::stdout.with_max_level(tracing_level))
-                    .with_ansi(true)
-                    .with_line_number(true)
-                    .with_level(true),
-            );
-            tracing_subscriber::registry().with(layer).init();
+            let formatter = formatter.with_writer(std::io::stdout.with_max_level(tracing_level));
+            let formatter = match format {
+                Format::Json => formatter.json().boxed(),
+                Format::Compact => formatter.compact().boxed(),
+                Format::Pretty => formatter.pretty().boxed(),
+            };
+            tracing_subscriber::registry().with(formatter).init();
             Ok(None)
         }
     }
@@ -86,7 +121,13 @@ fn setup_tracing_subscriber(
 /// - A new builtin function `logging.py_tracing_event` transcodes `logging.LogRecord`s to `tracing::Event`s. This function
 ///   is not exported in `logging.__all__`, as it is not intended to be called directly.
 /// - A new class `logging.TracingHandler` provides a `logging.Handler` that delivers all records to `python_tracing`.
+///
+/// :param level typing.Optional\[int\]:
+/// :param logfile typing.Optional\[pathlib.Path\]:
+/// :param format typing.Optional\[typing.Literal\['compact', 'pretty', 'json'\]\]:
+/// :rtype None:
 #[pyclass(name = "TracingHandler")]
+#[pyo3(text_signature = "($self, level=None, logfile=None, format=None)")]
 #[derive(Debug)]
 pub struct PyTracingHandler {
     _guard: Option<WorkerGuard>,
@@ -95,8 +136,13 @@ pub struct PyTracingHandler {
 #[pymethods]
 impl PyTracingHandler {
     #[new]
-    fn newpy(py: Python, level: Option<u8>, logfile: Option<PathBuf>) -> PyResult<Self> {
-        let _guard = setup_tracing_subscriber(level, logfile)?;
+    fn newpy(
+        py: Python,
+        level: Option<u8>,
+        logfile: Option<PathBuf>,
+        format: Option<String>,
+    ) -> PyResult<Self> {
+        let _guard = setup_tracing_subscriber(level, logfile, format)?;
         let logging = py.import("logging")?;
         let root = logging.getattr("root")?;
         root.setattr("level", level)?;
@@ -104,6 +150,7 @@ impl PyTracingHandler {
         Ok(Self { _guard })
     }
 
+    /// :rtype typing.Any:
     fn handler(&self, py: Python) -> PyResult<Py<PyAny>> {
         let logging = py.import("logging")?;
         logging.setattr(
@@ -184,7 +231,7 @@ mod tests {
     fn tracing_handler_is_injected_in_python() {
         crate::tests::initialize();
         Python::with_gil(|py| {
-            let handler = PyTracingHandler::newpy(py, Some(10), None).unwrap();
+            let handler = PyTracingHandler::newpy(py, Some(10), None, None).unwrap();
             let kwargs = PyDict::new(py);
             kwargs
                 .set_item("handlers", vec![handler.handler(py).unwrap()])

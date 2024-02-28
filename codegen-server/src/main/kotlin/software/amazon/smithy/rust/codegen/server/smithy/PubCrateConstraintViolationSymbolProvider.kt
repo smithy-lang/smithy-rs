@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.locatedIn
+import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 
 /**
@@ -28,10 +30,11 @@ class PubCrateConstraintViolationSymbolProvider(
             return baseSymbol
         }
         val baseRustType = baseSymbol.rustType()
-        val newNamespace = baseSymbol.namespace + "_internal"
+        val oldModule = baseSymbol.module()
+        val newModule = oldModule.copy(name = oldModule.name + "_internal")
         return baseSymbol.toBuilder()
-            .rustType(RustType.Opaque(baseRustType.name, newNamespace))
-            .namespace(newNamespace, baseSymbol.namespaceDelimiter)
+            .rustType(RustType.Opaque(baseRustType.name, newModule.fullyQualifiedPath()))
+            .locatedIn(newModule)
             .build()
     }
 }

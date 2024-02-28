@@ -118,14 +118,15 @@ class RustGenerics(vararg genericTypeArgs: GenericTypeArg) {
      * //     }
      * ```
      */
-    fun bounds() = writable {
-        // Only write bounds for generic type params with a bound
-        for ((typeArg, bound) in typeArgs) {
-            if (bound != null) {
-                rustTemplate("$typeArg: #{bound},\n", "bound" to bound)
+    fun bounds() =
+        writable {
+            // Only write bounds for generic type params with a bound
+            for ((typeArg, bound) in typeArgs) {
+                if (bound != null) {
+                    rustTemplate("$typeArg: #{bound},\n", "bound" to bound)
+                }
             }
         }
-    }
 
     /**
      * Combine two `GenericsGenerator`s into one. Type args for the first `GenericsGenerator` will appear before

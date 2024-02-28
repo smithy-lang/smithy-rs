@@ -1,0 +1,24 @@
+[package]
+name = "sdk-versioner"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "~3.1.18", features = ["derive"] }
+pathdiff = "0.2.1"
+smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
+toml_edit = { version = "0.19.6" }
+
+[dev-dependencies]
+pretty_assertions = "1.3"
+tempfile = "3"

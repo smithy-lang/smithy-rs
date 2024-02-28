@@ -3,73 +3,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_qldbsession as qldbsession;
-use aws_smithy_client::test_connection::TestConnection;
-use aws_smithy_client::Client as CoreClient;
-use aws_smithy_http::body::SdkBody;
+#![cfg(feature = "test-util")]
+
+use aws_sdk_qldbsession::config::{Config, Credentials, Region};
+use aws_sdk_qldbsession::types::StartSessionRequest;
+use aws_sdk_qldbsession::Client;
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_types::body::SdkBody;
 use http::Uri;
-use qldbsession::middleware::DefaultMiddleware;
-use qldbsession::model::StartSessionRequest;
-use qldbsession::operation::SendCommand;
-use qldbsession::Credentials;
-use qldbsession::{Config, Region};
-use std::time::{Duration, UNIX_EPOCH};
-pub type Client<C> = CoreClient<C, DefaultMiddleware>;
 
-// TODO(DVR): having the full HTTP requests right in the code is a bit gross, consider something
-// like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
-// the requests/responses externally
-
+#[cfg(feature = "test-util")]
 #[tokio::test]
 async fn signv4_use_correct_service_name() {
-    let creds = Credentials::new(
-        "ANOTREAL",
-        "notrealrnrELgWzOk3IfjzDKtFBhDby",
-        Some("notarealsessiontoken".to_string()),
-        None,
-        "test",
-    );
-    let conn = TestConnection::new(vec![(
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
             .header("content-type", "application/x-amz-json-1.0")
             .header("x-amz-target", "QLDBSession.SendCommand")
             .header("content-length", "49")
-            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210305/us-east-1/qldb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date;x-amz-security-token;x-amz-target;x-amz-user-agent, Signature=350f957e9b736ac3f636d16c59c0a3cee8c2780b0ffadc99bbca841b7f15bee4")
-            // qldbsession uses the service name 'qldb' in signature ____________________________________^^^^
-            .header("x-amz-date", "20210305T134922Z")
-            .header("x-amz-security-token", "notarealsessiontoken")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-east-1/qldb/aws4_request, SignedHeaders=content-length;content-type;host;x-amz-date;x-amz-target;x-amz-user-agent, Signature=9a07c60550504d015fb9a2b0f1b175a4d906651f9dd4ee44bebb32a802d03815")
+            // qldbsession uses the signing name 'qldb' in signature _________________________^^^^
+            .header("x-amz-date", "20090213T233130Z")
             .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
             .uri(Uri::from_static("https://session.qldb.us-east-1.amazonaws.com/"))
             .body(SdkBody::from(r#"{"StartSession":{"LedgerName":"not-real-ledger"}}"#)).unwrap(),
         http::Response::builder()
             .status(http::StatusCode::from_u16(200).unwrap())
-            .body(r#"{}"#).unwrap()),
+            .body(SdkBody::from(r#"{}"#)).unwrap()),
     ]);
-
-    let client = Client::new(conn.clone());
     let conf = Config::builder()
+        .http_client(http_client.clone())
         .region(Region::new("us-east-1"))
-        .credentials_provider(creds)
+        .credentials_provider(Credentials::for_tests_with_session_token())
+        .with_test_defaults()
         .build();
+    let client = Client::from_conf(conf);
 
-    let mut op = SendCommand::builder()
+    let _ = client
+        .send_command()
         .start_session(
             StartSessionRequest::builder()
                 .ledger_name("not-real-ledger")
-                .build(),
+                .build()
+                .unwrap(),
         )
-        .build()
-        .unwrap()
-        .make_operation(&conf)
+        .customize()
+        .mutate_request(|req| {
+            // Remove the invocation ID since the signed request above doesn't have it
+            req.headers_mut().remove("amz-sdk-invocation-id");
+        })
+        .send()
         .await
-        .expect("valid operation");
-    // Fix the request time and user agent so the headers are stable
-    op.properties_mut()
-        .insert(UNIX_EPOCH + Duration::from_secs(1614952162));
-    op.properties_mut().insert(AwsUserAgent::for_tests());
+        .expect("request should succeed");
 
-    let _ = client.call(op).await.expect("request should succeed");
-
-    conn.assert_requests_match(&[]);
+    http_client.assert_requests_match(&[]);
 }

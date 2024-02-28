@@ -21,6 +21,8 @@ service RestXmlExtras {
         StringHeader,
         CreateFoo,
         RequiredMember,
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3315)
+        ZeroAndFalseQueryParams,
     ]
 }
 
@@ -73,9 +75,6 @@ structure PrimitiveIntDocument {
     @default(0)
     defaultedValue: PrimitiveInt
 }
-
-@enum([{"value": "enumvalue", "name": "V"}])
-string StringEnum
 
 integer PrimitiveInt
 
@@ -256,4 +255,33 @@ operation RequiredMember {
 structure RequiredMemberInputOutput {
     @required
     requiredString: String
+}
+
+@httpRequestTests([
+    {
+        id: "RestXmlZeroAndFalseQueryParamsAreSerialized"
+        protocol: restXml
+        code: 200
+        method: "GET"
+        uri: "/ZeroAndFalseQueryParams"
+        body: ""
+        queryParams: [
+            "Zero=0",
+            "False=false"
+        ]
+        params: {
+            zeroValue: 0
+            falseValue: false
+        }
+    }
+])
+@http(uri: "/ZeroAndFalseQueryParams", method: "GET")
+operation ZeroAndFalseQueryParams {
+    input := {
+        @httpQuery("Zero")
+        zeroValue: Integer
+
+        @httpQuery("False")
+        falseValue: Boolean
+    }
 }

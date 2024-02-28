@@ -2,9 +2,8 @@
 
 Smithy Rust provides the ability to generate a server whose operations are provided by the customer.
 
-- [Generating Common Service Code](./code_generation.md)
-- [Generating the Pokémon Service](./pokemon_service.md)
-<!-- - [Middleware](./middleware.md) -->
+- [Middleware](./middleware.md)
 - [Instrumentation](./instrumentation.md)
-<!-- - [The Anatomy of a Service](./anatomy.md) -->
-<!-- - [Accessing Un-modelled Data](./from-parts.md) -->
+- [Accessing Un-modelled Data](./from_parts.md)
+- [The Anatomy of a Service](./anatomy.md)
+- [Generating Common Service Code](./code_generation.md)

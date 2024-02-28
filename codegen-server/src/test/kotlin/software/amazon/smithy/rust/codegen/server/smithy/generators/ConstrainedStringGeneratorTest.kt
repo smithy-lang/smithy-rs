@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
@@ -15,47 +16,60 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
 class ConstrainedStringGeneratorTest {
-
     data class TestCase(val model: Model, val validString: String, val invalidString: String)
 
     class ConstrainedStringGeneratorTestProvider : ArgumentsProvider {
-        private val testCases = listOf(
-            // Min and max.
-            Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
-            // Min equal to max.
-            Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
-            // Only min.
-            Triple("@length(min: 11)", "validString", ""),
-            // Only max.
-            Triple("@length(max: 11)", "", "invalidString"),
-            // Count Unicode scalar values, not `.len()`.
-            Triple(
-                "@length(min: 3, max: 3)",
-                "👍👍👍", // These three emojis are three Unicode scalar values.
-                "👍👍👍👍",
-            ),
-        ).map {
-            TestCase(
-                """
-                namespace test
-                
-                ${it.first}
-                string ConstrainedString
-                """.asSmithyModel(),
-                it.second,
-                it.third,
-            )
-        }
+        private val testCases =
+            listOf(
+                // Min and max.
+                Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
+                // Min equal to max.
+                Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
+                // Only min.
+                Triple("@length(min: 11)", "validString", ""),
+                // Only max.
+                Triple("@length(max: 11)", "", "invalidString"),
+                // Count Unicode scalar values, not `.len()`.
+                Triple(
+                    "@length(min: 3, max: 3)",
+                    // These three emojis are three Unicode scalar values.
+                    "👍👍👍",
+                    "👍👍👍👍",
+                ),
+                Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
+                Triple(
+                    """
+                    @length(min: 3, max: 10)
+                    @pattern("^a string$")
+                    """,
+                    "a string", "an invalid string",
+                ),
+                Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
+            ).map {
+                TestCase(
+                    """
+                    namespace test
+
+                    ${it.first}
+                    string ConstrainedString
+                    """.asSmithyModel(),
+                    it.second,
+                    it.third,
+                )
+            }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             testCases.map { Arguments.of(it) }.stream()
@@ -71,8 +85,14 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
+        project.withModule(ServerRustModule.Model) {
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
 
             unitTest(
                 name = "try_from_success",
@@ -113,10 +133,11 @@ class ConstrainedStringGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
-        val model = """
+    fun `type should not be constructable without using a constructor`() {
+        val model =
+            """
             namespace test
-            
+
             @length(min: 1, max: 69)
             string ConstrainedString
             """.asSmithyModel()
@@ -124,22 +145,29 @@ class ConstrainedStringGeneratorTest {
 
         val codegenContext = serverTestCodegenContext(model)
 
-        val writer = RustWriter.forModule(ModelsModule.name)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
 
-        ConstrainedStringGenerator(codegenContext, writer, constrainedStringShape).render()
+        ConstrainedStringGenerator(
+            codegenContext,
+            writer.createTestInlineModuleCreator(),
+            writer,
+            constrainedStringShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
+        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) ::std::string::String);"
     }
 
     @Test
     fun `Display implementation`() {
-        val model = """
+        val model =
+            """
             namespace test
-            
+
             @length(min: 1, max: 69)
             string ConstrainedString
-            
+
             @sensitive
             @length(min: 1, max: 78)
             string SensitiveConstrainedString
@@ -151,9 +179,22 @@ class ConstrainedStringGeneratorTest {
 
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
-        project.withModule(ModelsModule) {
-            ConstrainedStringGenerator(codegenContext, this, constrainedStringShape).render()
-            ConstrainedStringGenerator(codegenContext, this, sensitiveConstrainedStringShape).render()
+        project.withModule(ServerRustModule.Model) {
+            val validationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                sensitiveConstrainedStringShape,
+                validationExceptionConversionGenerator,
+            ).render()
 
             unitTest(
                 name = "non_sensitive_string_display_implementation",
@@ -175,5 +216,34 @@ class ConstrainedStringGeneratorTest {
         }
 
         project.compileAndTest()
+    }
+
+    @Test
+    fun `A regex that is accepted by Smithy but not by the regex crate causes tests to fail`() {
+        val model =
+            """
+            namespace test
+
+            @pattern("import (?!static).+")
+            string PatternStringWithLookahead
+            """.asSmithyModel()
+
+        val constrainedStringShape = model.lookup<StringShape>("test#PatternStringWithLookahead")
+        val codegenContext = serverTestCodegenContext(model)
+        val project = TestWorkspace.testProject(codegenContext.symbolProvider)
+
+        project.withModule(ServerRustModule.Model) {
+            ConstrainedStringGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                constrainedStringShape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
+        }
+
+        assertThrows<CommandError> {
+            project.compileAndTest()
+        }
     }
 }

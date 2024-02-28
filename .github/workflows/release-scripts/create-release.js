@@ -44,10 +44,13 @@ module.exports = async ({
     isDryRun,
     // Release manifest file path
     releaseManifestPath,
+    // The commit-like reference that we want to release (e.g. a commit SHA or a branch name)
+    releaseCommitish,
 }) => {
     assert(github !== undefined, "The `github` argument is required");
     assert(isDryRun !== undefined, "The `isDryRun` argument is required");
     assert(releaseManifestPath !== undefined, "The `releaseManifestPath` argument is required");
+    assert(releaseCommitish !== undefined, "The `releaseCommitish` argument is required");
 
     console.info(`Starting GitHub release creation with isDryRun: ${isDryRun}, and releaseManifestPath: '${releaseManifestPath}'`);
 
@@ -74,6 +77,7 @@ module.exports = async ({
                 name: releaseManifest.name,
                 body: releaseManifest.body,
                 prerelease: releaseManifest.prerelease,
+                target_commitish: releaseCommitish,
             });
             console.info(`SUCCESS: Created release with ID: ${response.data.id}, URL: ${response.data.html_url} `);
         } else {

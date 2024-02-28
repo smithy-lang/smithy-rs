@@ -8,14 +8,16 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -29,7 +31,7 @@ class UnconstrainedUnionGeneratorTest {
             union Union {
                 structure: Structure
             }
-            
+
             structure Structure {
                 @required
                 requiredMember: String
@@ -42,16 +44,23 @@ class UnconstrainedUnionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, this)
+        project.withModule(ServerRustModule.Model) {
+            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(
+                project,
+                model,
+                symbolProvider,
+                this,
+                ServerRestJsonProtocol(codegenContext),
+            )
         }
 
-        project.withModule(ModelsModule) {
+        project.withModule(ServerRustModule.Model) {
             UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
-        project.withModule(RustModule.private("unconstrained")) unconstrainedModuleWriter@{
-            project.withModule(ModelsModule) modelsModuleWriter@{
-                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter, this@modelsModuleWriter, unionShape).render()
+
+        project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+            project.withModule(ServerRustModule.Model) modelsModuleWriter@{
+                UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
                 this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",
@@ -67,7 +76,7 @@ class UnconstrainedUnionGeneratorTest {
                             expected_err,
                             crate::model::Union::try_from(union_unconstrained).unwrap_err()
                         );
-                        """,
+                    """,
                 )
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -82,7 +91,7 @@ class UnconstrainedUnionGeneratorTest {
                         let actual: crate::model::Union = crate::model::Union::try_from(union_unconstrained).unwrap();
 
                         assert_eq!(expected, actual);
-                        """,
+                    """,
                 )
 
                 this@unconstrainedModuleWriter.unitTest(
@@ -93,10 +102,11 @@ class UnconstrainedUnionGeneratorTest {
 
                         let _union: crate::constrained::MaybeConstrained<crate::model::Union> =
                             union_unconstrained.into();
-                        """,
+                    """,
                 )
-                project.compileAndTest()
             }
         }
+        project.renderInlineMemoryModules()
+        project.compileAndTest()
     }
 }

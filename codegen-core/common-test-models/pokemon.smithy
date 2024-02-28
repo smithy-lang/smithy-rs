@@ -1,6 +1,6 @@
 $version: "1.0"
 
-namespace com.aws.example.rust
+namespace com.aws.example
 
 use aws.protocols#restJson1
 use smithy.framework#ValidationException
@@ -20,7 +20,8 @@ service PokemonService {
         GetServerStatistics,
         DoNothing,
         CapturePokemon,
-        CheckHealth
+        CheckHealth,
+        StreamPokemonRadio
     ],
 }
 
@@ -38,13 +39,13 @@ resource Storage {
 operation GetStorage {
     input: GetStorageInput,
     output: GetStorageOutput,
-    errors: [ResourceNotFoundException, NotAuthorized, ValidationException],
+    errors: [ResourceNotFoundException, StorageAccessNotAuthorized, ValidationException],
 }
 
 /// Not authorized to access Pokémon storage.
 @error("client")
 @httpError(401)
-structure NotAuthorized {}
+structure StorageAccessNotAuthorized {}
 
 /// A request to access Pokémon storage.
 @input
@@ -146,3 +147,19 @@ structure MasterBallUnsuccessful {
 
 @error("client")
 structure ThrottlingError {}
+
+/// Fetch a radio song from the database and stream it back as a playable audio.
+@readonly
+@http(uri: "/radio", method: "GET")
+operation StreamPokemonRadio {
+    output: StreamPokemonRadioOutput
+}
+
+@output
+structure StreamPokemonRadioOutput {
+    @httpPayload
+    data: StreamingBlob
+}
+
+@streaming
+blob StreamingBlob

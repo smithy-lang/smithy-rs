@@ -5,7 +5,6 @@
 
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use http::Uri;
-use std::error::Error;
 use url::{Host, Url as ParsedUrl};
 
 #[derive(PartialEq, Debug)]
@@ -15,6 +14,9 @@ pub(crate) struct Url<'a> {
     raw: &'a str,
 }
 
+// individual methods on parse_url might not be used (although the [`parse_url`] itself _MUST_ be used
+// since stdlib functions are pulled into crate lazily)
+#[allow(unused)]
 impl<'a> Url<'a> {
     pub(crate) fn is_ip(&self) -> bool {
         matches!(self.url.host(), Some(Host::Ipv4(_) | Host::Ipv6(_)))
@@ -43,7 +45,7 @@ impl<'a> Url<'a> {
     }
 }
 
-pub(crate) fn parse_url<'a, 'b>(url: &'a str, e: &'b mut DiagnosticCollector) -> Option<Url<'a>> {
+pub(crate) fn parse_url<'a>(url: &'a str, e: &mut DiagnosticCollector) -> Option<Url<'a>> {
     let raw = url;
     let uri: Uri = e.capture(url.parse())?;
     let url: ParsedUrl = e.capture(url.parse())?;
@@ -69,6 +71,7 @@ mod test {
     use super::*;
     use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn parse_simple_url() {
         let url = "https://control.vpce-1a2b3c4d-5e6f.s3.us-west-2.vpce.amazonaws.com";
@@ -90,6 +93,7 @@ mod test {
         assert_eq!(url.scheme(), "https");
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn parse_url_with_port() {
         let url = "http://localhost:8000/path";

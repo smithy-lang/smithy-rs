@@ -10,21 +10,34 @@ use smithy.framework#ValidationException
 @title("ConstraintsService")
 service ConstraintsService {
     operations: [
-        // TODO Rename as {Verb}[{Qualifier}]{Noun}: https://github.com/awslabs/smithy-rs/pull/1342#discussion_r980936650
         ConstrainedShapesOperation,
+        // See https://github.com/smithy-lang/smithy-rs/issues/2760 for why testing operations reaching
+        // constrained shapes that only lie in the output is important.
+        ConstrainedShapesOnlyInOutputOperation,
         ConstrainedHttpBoundShapesOperation,
+        ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
+
         // `httpQueryParams` and `httpPrefixHeaders` are structurually
         // exclusive, so we need one operation per target shape type
         // combination.
         QueryParamsTargetingLengthMapOperation,
         QueryParamsTargetingMapOfLengthStringOperation,
-        QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfLengthStringOperation,
         QueryParamsTargetingMapOfSetOfLengthStringOperation,
+        QueryParamsTargetingMapOfLengthListOfPatternStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
+
+        QueryParamsTargetingMapOfPatternStringOperation,
+        QueryParamsTargetingMapOfListOfPatternStringOperation,
+        QueryParamsTargetingMapOfLengthPatternStringOperation,
+        QueryParamsTargetingMapOfListOfLengthPatternStringOperation,
+
         HttpPrefixHeadersTargetingLengthMapOperation,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+
+        QueryParamsTargetingMapOfEnumStringOperation,
+        QueryParamsTargetingMapOfListOfEnumStringOperation,
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
         NonStreamingBlobOperation,
@@ -41,10 +54,25 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/constrained-http-bound-shapes-operation/{lengthStringLabel}/{enumStringLabel}", method: "POST")
+@http(uri: "/constrained-shapes-only-in-output-operation", method: "POST")
+operation ConstrainedShapesOnlyInOutputOperation {
+    output: ConstrainedShapesOnlyInOutputOperationOutput,
+}
+
+@http(
+    uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{rangeShortLabel}/{rangeLongLabel}/{rangeByteLabel}/{lengthStringLabel}/{enumStringLabel}",
+    method: "POST"
+)
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/constrained-http-payload-bound-shape-operation", method: "POST")
+operation ConstrainedHttpPayloadBoundShapeOperation {
+    input: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
+    output: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -90,10 +118,45 @@ operation QueryParamsTargetingMapOfSetOfLengthStringOperation {
     errors: [ValidationException]
 }
 
+@http(uri: "/query-params-targeting-map-of-length-list-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfLengthListOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
 @http(uri: "/query-params-targeting-map-of-list-of-enum-string-operation", method: "POST")
 operation QueryParamsTargetingMapOfListOfEnumStringOperation {
     input: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
     output: QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfPatternStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-list-of-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfListOfPatternStringOperation {
+    input: QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/query-params-targeting-map-of-length-pattern-string", method: "POST")
+operation QueryParamsTargetingMapOfLengthPatternStringOperation {
+    input: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput,
+    errors: [ValidationException],
+}
+
+@http(uri: "/query-params-targeting-map-of-list-of-length-pattern-string-operation", method: "POST")
+operation QueryParamsTargetingMapOfListOfLengthPatternStringOperation {
+    input: QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput,
+    output: QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -141,15 +204,42 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
 
     @required
     @httpLabel
+    rangeIntegerLabel: RangeInteger,
+
+    @required
+    @httpLabel
+    rangeShortLabel: RangeShort,
+
+    @required
+    @httpLabel
+    rangeLongLabel: RangeLong,
+
+    @required
+    @httpLabel
+    rangeByteLabel: RangeByte,
+
+    @required
+    @httpLabel
     enumStringLabel: EnumString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1394) `@required` not working
-    // @required
-    @httpPrefixHeaders("X-Prefix-Headers-")
+    @required
+    @httpPrefixHeaders("X-Length-String-Prefix-Headers-")
     lengthStringHeaderMap: MapOfLengthString,
 
     @httpHeader("X-Length")
     lengthStringHeader: LengthString,
+
+    @httpHeader("X-Range-Integer")
+    rangeIntegerHeader: RangeInteger,
+
+    @httpHeader("X-Range-Short")
+    rangeShortHeader: RangeShort,
+
+    @httpHeader("X-Range-Long")
+    rangeLongHeader: RangeLong,
+
+    @httpHeader("X-Range-Byte")
+    rangeByteHeader: RangeByte,
 
     // @httpHeader("X-Length-MediaType")
     // lengthStringHeaderWithMediaType: MediaTypeLengthString,
@@ -157,10 +247,34 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Length-Set")
     lengthStringSetHeader: SetOfLengthString,
 
-    @httpHeader("X-Length-List")
-    lengthStringListHeader: ListOfLengthString,
+    @httpHeader("X-List-Length-String")
+    listLengthStringHeader: ListOfLengthString,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+    @httpHeader("X-Length-List-Pattern-String")
+    lengthListPatternStringHeader: LengthListOfPatternString,
+
+    @httpHeader("X-Length-Set-Pattern-String")
+    lengthSetPatternStringHeader: LengthSetOfPatternString,
+
+    @httpHeader("X-Range-Byte-Set")
+    rangeByteSetHeader: SetOfRangeByte,
+    @httpHeader("X-Range-Short-Set")
+    rangeShortSetHeader: SetOfRangeShort,
+    @httpHeader("X-Range-Integer-Set")
+    rangeIntegerSetHeader: SetOfRangeInteger,
+    @httpHeader("X-Range-Long-Set")
+    rangeLongSetHeader: SetOfRangeLong,
+
+    @httpHeader("X-Range-Byte-List")
+    rangeByteListHeader: ListOfRangeByte,
+    @httpHeader("X-Range-Short-List")
+    rangeShortListHeader: ListOfRangeShort,
+    @httpHeader("X-Range-Integer-List")
+    rangeIntegerListHeader: ListOfRangeInteger,
+    @httpHeader("X-Range-Long-List")
+    rangeLongListHeader: ListOfRangeLong,
+
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
     //enumStringHeader: EnumString,
 
@@ -170,17 +284,74 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpQuery("lengthString")
     lengthStringQuery: LengthString,
 
+    @httpQuery("rangeByte")
+    rangeByteQuery: RangeByte,
+    @httpQuery("rangeShort")
+    rangeShortQuery: RangeShort,
+    @httpQuery("rangeInteger")
+    rangeIntegerQuery: RangeInteger,
+    @httpQuery("rangeLong")
+    rangeLongQuery: RangeLong,
+
+
     @httpQuery("enumString")
     enumStringQuery: EnumString,
 
     @httpQuery("lengthStringList")
     lengthStringListQuery: ListOfLengthString,
 
+    @httpQuery("lengthListPatternString")
+    lengthListPatternStringQuery: LengthListOfPatternString,
+
     @httpQuery("lengthStringSet")
     lengthStringSetQuery: SetOfLengthString,
 
+    @httpQuery("rangeByteList")
+    rangeByteListQuery: ListOfRangeByte,
+    @httpQuery("rangeShortList")
+    rangeShortListQuery: ListOfRangeShort,
+    @httpQuery("rangeIntegerList")
+    rangeIntegerListQuery: ListOfRangeInteger,
+    @httpQuery("rangeLongList")
+    rangeLongListQuery: ListOfRangeLong,
+
+    @httpQuery("rangeByteSet")
+    rangeByteSetQuery: SetOfRangeByte,
+    @httpQuery("rangeShortSet")
+    rangeShortSetQuery: SetOfRangeShort,
+    @httpQuery("rangeIntegerSet")
+    rangeIntegerSetQuery: SetOfRangeInteger,
+    @httpQuery("rangeLongSet")
+    rangeLongSetQuery: SetOfRangeLong,
+
     @httpQuery("enumStringList")
     enumStringListQuery: ListOfEnumString,
+}
+
+structure ConstrainedHttpPayloadBoundShapeOperationInputOutput {
+    @required
+    @httpPayload
+    httpPayloadBoundConstrainedShape: ConA
+}
+
+structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfPatternString: MapOfPatternString
+}
+
+structure QueryParamsTargetingMapOfListOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfListOfPatternString: MapOfListOfPatternString
+}
+
+structure QueryParamsTargetingMapOfLengthPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthPatternString: MapOfLengthPatternString,
+}
+
+structure QueryParamsTargetingMapOfListOfLengthPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthPatternString: MapOfListOfLengthPatternString,
 }
 
 structure HttpPrefixHeadersTargetingLengthMapOperationInputOutput {
@@ -216,6 +387,11 @@ structure QueryParamsTargetingMapOfListOfLengthStringOperationInputOutput {
 structure QueryParamsTargetingMapOfSetOfLengthStringOperationInputOutput {
     @httpQueryParams
     mapOfSetOfLengthString: MapOfSetOfLengthString
+}
+
+structure QueryParamsTargetingMapOfLengthListOfPatternStringOperationInputOutput {
+    @httpQueryParams
+    mapOfLengthListOfPatternString: MapOfLengthListOfPatternString
 }
 
 structure QueryParamsTargetingMapOfListOfEnumStringOperationInputOutput {
@@ -274,14 +450,45 @@ structure ConA {
     maxLengthString: MaxLengthString,
     fixedLengthString: FixedLengthString,
 
+    lengthBlob: LengthBlob,
+    minLengthBlob: MinLengthBlob,
+    maxLengthBlob: MaxLengthBlob,
+    fixedLengthBlob: FixedLengthBlob,
+
+    rangeInteger: RangeInteger,
+    minRangeInteger: MinRangeInteger,
+    maxRangeInteger: MaxRangeInteger,
+    fixedValueInteger: FixedValueInteger,
+
+    rangeShort: RangeShort,
+    minRangeShort: MinRangeShort,
+    maxRangeShort: MaxRangeShort,
+    fixedValueShort: FixedValueShort,
+
+    rangeLong: RangeLong,
+    minRangeLong: MinRangeLong,
+    maxRangeLong: MaxRangeLong,
+    fixedValueLong: FixedValueLong,
+
+    rangeByte: RangeByte,
+    minRangeByte: MinRangeByte,
+    maxRangeByte: MaxRangeByte,
+    fixedValueByte: FixedValueByte,
+
     conBList: ConBList,
-    conBList2: ConBList2,
+    lengthList: LengthList,
+    sensitiveLengthList: SensitiveLengthList,
 
     conBSet: ConBSet,
 
     conBMap: ConBMap,
+    lengthMap: LengthMap,
 
     mapOfMapOfListOfListOfConB: MapOfMapOfListOfListOfConB,
+    sparseMap: SparseMap,
+    sparseList: SparseList,
+    sparseLengthMap: SparseLengthMap,
+    sparseLengthList: SparseLengthList,
 
     constrainedUnion: ConstrainedUnion,
     enumString: EnumString,
@@ -290,12 +497,101 @@ structure ConA {
     setOfLengthString: SetOfLengthString,
     mapOfLengthString: MapOfLengthString,
 
+    listOfLengthBlob: ListOfLengthBlob,
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): a `set` shape is
+    //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
+    // setOfLengthBlob: SetOfLengthBlob,
+    mapOfLengthBlob: MapOfLengthBlob,
+
+    listOfRangeInteger: ListOfRangeInteger,
+    setOfRangeInteger: SetOfRangeInteger,
+    mapOfRangeInteger: MapOfRangeInteger,
+
+    listOfRangeShort: ListOfRangeShort,
+    setOfRangeShort: SetOfRangeShort,
+    mapOfRangeShort: MapOfRangeShort,
+
+    listOfRangeLong: ListOfRangeLong,
+    setOfRangeLong: SetOfRangeLong,
+    mapOfRangeLong: MapOfRangeLong,
+
+    listOfRangeByte: ListOfRangeByte,
+    setOfRangeByte: SetOfRangeByte,
+    mapOfRangeByte: MapOfRangeByte,
+
     nonStreamingBlob: NonStreamingBlob
+
+    patternString: PatternString,
+    mapOfPatternString: MapOfPatternString,
+    listOfPatternString: ListOfPatternString,
+    setOfPatternString: SetOfPatternString,
+
+    lengthLengthPatternString: LengthPatternString,
+    mapOfLengthPatternString: MapOfLengthPatternString,
+    listOfLengthPatternString: ListOfLengthPatternString
+    setOfLengthPatternString: SetOfLengthPatternString,
+
+    lengthListOfPatternString: LengthListOfPatternString,
+    lengthSetOfPatternString: LengthSetOfPatternString,
+}
+
+@uniqueItems
+list UniqueItemsList {
+    member: String
+}
+
+@sparse
+map SparseMap {
+    key: String,
+    value: UniqueItemsList
+}
+
+@sparse
+list SparseList {
+    member: LengthString
+}
+
+@sparse
+@length(min: 69)
+map SparseLengthMap {
+    key: String,
+    value: String
+}
+
+@sparse
+@length(min: 69)
+list SparseLengthList {
+    member: String
+}
+
+map MapOfLengthBlob {
+    key: String,
+    value: LengthBlob,
 }
 
 map MapOfLengthString {
     key: LengthString,
     value: LengthString,
+}
+
+map MapOfRangeInteger {
+    key: String,
+    value: RangeInteger,
+}
+
+map MapOfRangeShort {
+    key: String,
+    value: RangeShort,
+}
+
+map MapOfRangeLong {
+    key: String,
+    value: RangeLong,
+}
+
+map MapOfRangeByte {
+    key: String,
+    value: RangeByte,
 }
 
 map MapOfEnumString {
@@ -313,9 +609,44 @@ map MapOfListOfEnumString {
     value: ListOfEnumString,
 }
 
+map MapOfListOfPatternString {
+    key: PatternString,
+    value: ListOfPatternString
+}
+
+map MapOfListOfLengthPatternString {
+    key: LengthPatternString,
+    value: ListOfLengthPatternString
+}
+
 map MapOfSetOfLengthString {
     key: LengthString,
     value: SetOfLengthString,
+}
+
+map MapOfLengthListOfPatternString {
+    key: PatternString,
+    value: LengthListOfPatternString
+}
+
+map MapOfSetOfRangeInteger {
+    key: String,
+    value: SetOfRangeInteger,
+}
+
+map MapOfSetOfRangeShort {
+    key: String,
+    value: SetOfRangeShort,
+}
+
+map MapOfSetOfRangeLong {
+    key: String,
+    value: SetOfRangeLong,
+}
+
+map MapOfSetOfRangeByte {
+    key: String,
+    value: SetOfRangeByte,
 }
 
 @length(min: 2, max: 8)
@@ -329,15 +660,87 @@ string LengthString
 @length(min: 2)
 string MinLengthString
 
-@length(min: 69)
+@length(max: 69)
 string MaxLengthString
 
 @length(min: 69, max: 69)
 string FixedLengthString
 
+@length(min: 2, max: 8)
+list LengthListOfLengthBlob {
+    member: LengthBlob
+}
+
+@length(min: 2, max: 70)
+blob LengthBlob
+
+@length(min: 2)
+blob MinLengthBlob
+
+@length(max: 70)
+blob MaxLengthBlob
+
+@length(min: 70, max: 70)
+blob FixedLengthBlob
+
+@pattern("[a-d]{5}")
+string PatternString
+
+@pattern("[a-f0-5]*")
+@length(min: 5, max: 10)
+string LengthPatternString
+
 @mediaType("video/quicktime")
 @length(min: 1, max: 69)
 string MediaTypeLengthString
+
+@range(min: -0, max: 69)
+integer RangeInteger
+
+@range(min: -10)
+integer MinRangeInteger
+
+@range(max: 69)
+integer MaxRangeInteger
+
+@range(min: 69, max: 69)
+integer FixedValueInteger
+
+@range(min: -0, max: 10)
+short RangeShort
+
+@range(min: -10)
+short MinRangeShort
+
+@range(max: 11)
+short MaxRangeShort
+
+@range(min: 10, max: 10)
+short FixedValueShort
+
+@range(min: -0, max: 10)
+long RangeLong
+
+@range(min: -10)
+long MinRangeLong
+
+@range(max: 11)
+long MaxRangeLong
+
+@range(min: 10, max: 10)
+long FixedValueLong
+
+@range(min: -0, max: 10)
+byte RangeByte
+
+@range(min: -10)
+byte MinRangeByte
+
+@range(max: 11)
+byte MaxRangeByte
+
+@range(min: 10, max: 10)
+byte FixedValueByte
 
 /// A union with constrained members.
 union ConstrainedUnion {
@@ -370,12 +773,78 @@ set SetOfLengthString {
     member: LengthString
 }
 
+set SetOfLengthBlob {
+    member: LengthBlob
+}
+
+set SetOfPatternString {
+    member: PatternString
+}
+
+set SetOfLengthPatternString {
+    member: LengthPatternString
+}
+
+@length(min: 5, max: 9)
+set LengthSetOfPatternString {
+    member: PatternString
+}
+
 list ListOfLengthString {
     member: LengthString
 }
 
+set SetOfRangeInteger {
+    member: RangeInteger
+}
+
+list ListOfLengthBlob {
+    member: LengthBlob
+}
+
+list ListOfRangeInteger {
+    member: RangeInteger
+}
+
+set SetOfRangeShort {
+    member: RangeShort
+}
+
+list ListOfRangeShort {
+    member: RangeShort
+}
+
+set SetOfRangeLong {
+    member: RangeLong
+}
+
+list ListOfRangeLong {
+    member: RangeLong
+}
+
+set SetOfRangeByte {
+    member: RangeByte
+}
+
+list ListOfRangeByte {
+    member: RangeByte
+}
+
 list ListOfEnumString {
     member: EnumString
+}
+
+list ListOfPatternString {
+    member: PatternString
+}
+
+list ListOfLengthPatternString {
+    member: LengthPatternString
+}
+
+@length(min: 12, max: 39)
+list LengthListOfPatternString {
+    member: PatternString
 }
 
 structure ConB {
@@ -409,23 +878,42 @@ list RecursiveList {
 }
 
 list ConBList {
-    member: NestedList
+    member: ConBListInner
 }
 
-list ConBList2 {
+list ConBListInner {
     member: ConB
 }
 
-list NestedList {
-    member: ConB
+@length(max: 69)
+list LengthList {
+    member: String
 }
+
+@length(max: 69)
+list SensitiveLengthList {
+    member: SensitiveStructure
+}
+
+@sensitive
+structure SensitiveStructure { }
 
 set ConBSet {
-    member: NestedSet
+    member: ConBSetInner
 }
 
-set NestedSet {
+set ConBSetInner {
     member: String
+}
+
+map MapOfPatternString {
+    key: PatternString,
+    value: PatternString,
+}
+
+map MapOfLengthPatternString {
+    key: LengthPatternString,
+    value: LengthPatternString,
 }
 
 @length(min: 1, max: 69)
@@ -434,12 +922,16 @@ map ConBMap {
     value: LengthString
 }
 
+@length(min: 1, max: 69)
+map LengthMap {
+    key: String,
+    value: String
+}
+
 @error("client")
 structure ErrorWithLengthStringMessage {
-    // TODO Doesn't work yet because constrained string types don't implement
-    // `AsRef<str>`.
-    // @required
-    // message: LengthString
+    @required
+    message: LengthString
 }
 
 map MapOfMapOfListOfListOfConB {
@@ -450,4 +942,32 @@ map MapOfMapOfListOfListOfConB {
 map MapOfListOfListOfConB {
     key: String,
     value: ConBList
+}
+
+structure ConstrainedShapesOnlyInOutputOperationOutput {
+    list: ConstrainedListInOutput
+    map: ConstrainedMapInOutput
+    // Unions were not affected by
+    // https://github.com/smithy-lang/smithy-rs/issues/2760, but testing anyway for
+    // good measure.
+    union: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+list ConstrainedListInOutput {
+    member: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+map ConstrainedMapInOutput {
+    key: String
+    value: TransitivelyConstrainedStructureInOutput
+}
+
+union ConstrainedUnionInOutput {
+    structure: TransitivelyConstrainedStructureInOutput
+}
+
+structure TransitivelyConstrainedStructureInOutput {
+    lengthString: LengthString
 }

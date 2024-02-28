@@ -12,15 +12,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerSymbolVisitor
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestSymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerTestRustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
 internal class PythonServerSymbolProviderTest {
-    private val pythonBlobType = RustType.Opaque("Blob", "aws_smithy_http_server_python::types")
-    private val pythonTimestampType = RustType.Opaque("DateTime", "aws_smithy_http_server_python::types")
+    private val pythonBlobType = RustType.Opaque("Blob", "::aws_smithy_http_server_python::types")
+    private val pythonTimestampType = RustType.Opaque("DateTime", "::aws_smithy_http_server_python::types")
 
     @Test
     fun `python symbol provider rewrites timestamp shape symbol`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure TimestampStruct {
@@ -44,8 +46,9 @@ internal class PythonServerSymbolProviderTest {
                 key: String,
                 value: Timestamp
             }
-        """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+            """.asSmithyModel()
+        val provider =
+            PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 
         // Struct test
         val timestamp = provider.toSymbol(model.expectShape(ShapeId.from("test#TimestampStruct\$inner"))).rustType()
@@ -70,7 +73,8 @@ internal class PythonServerSymbolProviderTest {
 
     @Test
     fun `python symbol provider rewrites blob shape symbol`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure BlobStruct {
@@ -94,8 +98,9 @@ internal class PythonServerSymbolProviderTest {
                 key: String,
                 value: Blob
             }
-        """.asSmithyModel()
-        val provider = PythonServerSymbolVisitor(model, null, ServerTestSymbolVisitorConfig)
+            """.asSmithyModel()
+        val provider =
+            PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 
         // Struct test
         val blob = provider.toSymbol(model.expectShape(ShapeId.from("test#BlobStruct\$inner"))).rustType()

@@ -5,38 +5,40 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.BooleanShape
-import software.amazon.smithy.model.shapes.DoubleShape
-import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ClientOptionalTrait
+import software.amazon.smithy.model.traits.InputTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-class SerializerUtil(private val model: Model) {
-    fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: Writable) {
-        val expr = when (model.expectShape(shape.target)) {
-            is FloatShape, is DoubleShape -> "${value.asValue()} != 0.0"
-            is NumberShape -> "${value.asValue()} != 0"
-            is BooleanShape -> value.asValue()
-            else -> null
-        }
-
-        if (expr == null ||
-            // Required shapes should always be serialized
-            // See https://github.com/awslabs/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
+class SerializerUtil(private val model: Model, private val symbolProvider: SymbolProvider) {
+    fun RustWriter.ignoreDefaultsForNumbersAndBools(
+        shape: MemberShape,
+        value: ValueExpression,
+        inner: Writable,
+    ) {
+        // @required shapes should always be serialized, and members with @clientOptional or part of @input structures
+        // should ignore default values. If we have an Option<T>, it won't have a default anyway, so we don't need to
+        // ignore it.
+        // See https://github.com/smithy-lang/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
+        val container = model.expectShape(shape.container)
+        if (
             shape.isRequired ||
+            shape.hasTrait<ClientOptionalTrait>() ||
             // Zero values are always serialized in lists and collections, this only applies to structures
-            model.expectShape(shape.container) !is StructureShape
+            container !is StructureShape ||
+            container.hasTrait<InputTrait>()
         ) {
             rustBlock("") {
                 inner(this)
             }
         } else {
-            rustBlock("if $expr") {
+            this.ifNotNumberOrBoolDefault(model.expectShape(shape.target), symbolProvider.toSymbol(shape), value) {
                 inner(this)
             }
         }

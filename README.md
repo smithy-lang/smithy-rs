@@ -1,10 +1,10 @@
-Smithy Rust [![CI on Branch `main`](https://github.com/awslabs/smithy-rs/actions/workflows/ci-main.yml/badge.svg)](https://github.com/awslabs/smithy-rs/actions/workflows/ci-main.yml)
+Smithy Rust [![CI on Branch `main`](https://github.com/smithy-lang/smithy-rs/actions/workflows/ci-main.yml/badge.svg)](https://github.com/smithy-lang/smithy-rs/actions/workflows/ci-main.yml)
 ==================================================================================
 
 Smithy code generators for Rust that generate clients, servers, and the entire AWS SDK.
 The latest unreleased SDK build can be found in [aws-sdk-rust/next](https://github.com/awslabs/aws-sdk-rust/tree/next).
 
-[Design documentation](https://awslabs.github.io/smithy-rs/design)
+[Design documentation](https://smithy-lang.github.io/smithy-rs/design/)
 
 **All internal and external interfaces are considered unstable and subject to change without notice.**
 
@@ -38,6 +38,7 @@ Project Layout
 * [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.
 * `codegen-server`: Whitelabel Smithy server code generation
 * `codegen-server-test`: Smithy protocol test generation & integration tests for Smithy server whitelabel code
+* `examples`: A collection of server implementation examples
 
 Testing
 -------

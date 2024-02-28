@@ -10,14 +10,19 @@ import { PullRequestCdnStack } from "../lib/smithy-rs/pull-request-cdn-stack";
 import { CanaryStack } from "../lib/aws-sdk-rust/canary-stack";
 import { OidcProviderStack } from "../lib/oidc-provider-stack";
 
-const app = new App();
+const app = new App({});
+const env = { region: "us-west-2" };
 
-const oidcProviderStack = new OidcProviderStack(app, "oidc-provider-stack", {});
+const oidcProviderStack = new OidcProviderStack(app, "oidc-provider-stack", {
+    env,
+});
 
 new PullRequestCdnStack(app, "smithy-rs-pull-request-cdn-stack", {
     githubActionsOidcProvider: oidcProviderStack.githubActionsOidcProvider,
+    env,
 });
 
 new CanaryStack(app, "aws-sdk-rust-canary-stack", {
     githubActionsOidcProvider: oidcProviderStack.githubActionsOidcProvider,
+    env,
 });

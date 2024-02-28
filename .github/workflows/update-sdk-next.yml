@@ -1,8 +1,21 @@
 # This workflow updates the `next` branch with freshly generated
 # code from the latest smithy-rs and models that reside in aws-sdk-rust.
+
+# Allow only one release to run at a time
+concurrency:
+  group: update-aws-sdk-next
+  cancel-in-progress: true
+
 name: Update `aws-sdk-rust/next`
 on:
   workflow_dispatch:
+    inputs:
+      generate_ref:
+        description: |
+          Which branch/commit/tag of smithy-rs to use to generate aws-sdk-rust/next. Defaults to `main`.
+        required: true
+        type: string
+        default: main
 
 jobs:
   update-next:
@@ -12,8 +25,8 @@ jobs:
     - name: Check out `smithy-rs`
       uses: actions/checkout@v3
       with:
-        repository: awslabs/smithy-rs
-        ref: main
+        repository: smithy-lang/smithy-rs
+        ref: ${{ inputs.generate_ref }}
         path: smithy-rs
     - name: Check out `aws-sdk-rust`
       uses: actions/checkout@v3
@@ -32,7 +45,7 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.62.1
+        toolchain: 1.74.1
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK
@@ -47,7 +60,7 @@ jobs:
         git checkout origin/main -b next
 
         # Delete the old SDK
-        rm -rf sdk examples
+        rm -rf sdk examples tests
         rm -f versions.toml Cargo.toml index.md
 
         # Copy in the new SDK

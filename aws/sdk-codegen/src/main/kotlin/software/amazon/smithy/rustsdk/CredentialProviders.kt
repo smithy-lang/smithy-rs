@@ -5,26 +5,25 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
-class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
     override val order: Byte = 0
 
@@ -32,118 +31,124 @@ class CredentialsProviderDecorator : RustCodegenDecorator<ClientProtocolGenerato
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + CredentialProviderConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + CredentialProviderConfig(codegenContext)
     }
 
-    override fun operationCustomizations(
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf(
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+            },
+        )
+
+    override fun extras(
         codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + CredentialsProviderFeature(codegenContext.runtimeConfig)
-    }
+        rustCrate: RustCrate,
+    ) {
+        rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> {
-        return baseCustomizations + PubUseCredentials(codegenContext.runtimeConfig)
+        rustCrate.withModule(ClientRustModule.config) {
+            rust(
+                "pub use #T::Credentials;",
+                AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
+            )
+        }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 /**
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
  */
-class CredentialProviderConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val defaultProvider = defaultProvider()
-    private val codegenScope = arrayOf(
-        "credentials" to awsTypes(runtimeConfig).asType().member("credentials"),
-        "DefaultProvider" to defaultProvider,
-    )
+class CredentialProviderConfig(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Credentials" to configReexport(AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials")),
+            "ProvideCredentials" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::ProvideCredentials"),
+                ),
+            "SharedCredentialsProvider" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::SharedCredentialsProvider"),
+                ),
+            "SIGV4A_SCHEME_ID" to
+                AwsRuntimeType.awsRuntime(runtimeConfig)
+                    .resolve("auth::sigv4a::SCHEME_ID"),
+            "SIGV4_SCHEME_ID" to
+                AwsRuntimeType.awsRuntime(runtimeConfig)
+                    .resolve("auth::sigv4::SCHEME_ID"),
+            "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
+        )
 
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            is ServiceConfig.ConfigStruct -> rustTemplate(
-                """pub(crate) credentials_provider: #{credentials}::SharedCredentialsProvider,""",
-                *codegenScope,
-            )
-            is ServiceConfig.ConfigImpl -> rustTemplate(
-                """
-                /// Returns the credentials provider.
-                pub fn credentials_provider(&self) -> #{credentials}::SharedCredentialsProvider {
-                    self.credentials_provider.clone()
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.
+                        ##[deprecated(note = "This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.")]
+                        pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
+                            #{None}
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
-                """,
-                *codegenScope,
-            )
-            is ServiceConfig.BuilderStruct ->
-                rustTemplate("credentials_provider: Option<#{credentials}::SharedCredentialsProvider>,", *codegenScope)
-            ServiceConfig.BuilderImpl -> {
-                rustTemplate(
-                    """
-                    /// Sets the credentials provider for this service
-                    pub fn credentials_provider(mut self, credentials_provider: impl #{credentials}::ProvideCredentials + 'static) -> Self {
-                        self.credentials_provider = Some(#{credentials}::SharedCredentialsProvider::new(credentials_provider));
-                        self
+
+                ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Sets the credentials provider for this service
+                        pub fn credentials_provider(mut self, credentials_provider: impl #{ProvideCredentials} + 'static) -> Self {
+                            self.set_credentials_provider(#{Some}(#{SharedCredentialsProvider}::new(credentials_provider)));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    rustBlockTemplate(
+                        """
+                        /// Sets the credentials provider for this service
+                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
+                        """,
+                        *codegenScope,
+                    ) {
+                        rustBlockTemplate(
+                            """
+                            if let Some(credentials_provider) = credentials_provider
+                            """,
+                            *codegenScope,
+                        ) {
+                            if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                                featureGateBlock("sigv4a") {
+                                    rustTemplate(
+                                        "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
+                                        *codegenScope,
+                                    )
+                                }
+                            }
+                            rustTemplate(
+                                "self.runtime_components.set_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                                *codegenScope,
+                            )
+                        }
+                        rust("self")
                     }
+                }
 
-                    /// Sets the credentials provider for this service
-                    pub fn set_credentials_provider(&mut self, credentials_provider: Option<#{credentials}::SharedCredentialsProvider>) -> &mut Self {
-                        self.credentials_provider = credentials_provider;
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
+                is ServiceConfig.DefaultForTests ->
+                    rustTemplate(
+                        "${section.configBuilderRef}.set_credentials_provider(Some(#{SharedCredentialsProvider}::new(#{TestCredentials}::for_tests())));",
+                        *codegenScope,
+                    )
+
+                else -> emptySection
             }
-
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                "credentials_provider: self.credentials_provider.unwrap_or_else(|| #{credentials}::SharedCredentialsProvider::new(#{DefaultProvider})),",
-                *codegenScope,
-            )
         }
-    }
 }
-
-class CredentialsProviderFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                rust(
-                    """
-                    #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_provider.clone());
-                    """,
-                    setProvider(runtimeConfig),
-                )
-            }
-
-            else -> emptySection
-        }
-    }
-}
-
-class PubUseCredentials(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable {
-        return when (section) {
-            is LibRsSection.Body -> writable {
-                rust(
-                    "pub use #T::Credentials;",
-                    awsTypes(runtimeConfig).asType(),
-                )
-            }
-
-            else -> emptySection
-        }
-    }
-}
-
-fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeDependency("aws-http")
-
-fun defaultProvider() =
-    RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).member("NoCredentials")
-
-fun setProvider(runtimeConfig: RuntimeConfig) =
-    RuntimeType("set_provider", awsHttp(runtimeConfig), "aws_http::auth")

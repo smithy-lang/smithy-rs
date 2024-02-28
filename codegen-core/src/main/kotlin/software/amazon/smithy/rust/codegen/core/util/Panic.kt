@@ -6,7 +6,9 @@
 package software.amazon.smithy.rust.codegen.core.util
 
 /** Something has gone horribly wrong due to a coding error */
-fun PANIC(reason: String): Nothing = throw RuntimeException(reason)
+@Suppress("ktlint:standard:function-naming")
+fun PANIC(reason: String = ""): Nothing = throw RuntimeException(reason)
 
 /** This code should never be executed (but Kotlin cannot prove that) */
+@Suppress("ktlint:standard:function-naming")
 fun UNREACHABLE(reason: String): Nothing = throw IllegalStateException("This should be unreachable: $reason")

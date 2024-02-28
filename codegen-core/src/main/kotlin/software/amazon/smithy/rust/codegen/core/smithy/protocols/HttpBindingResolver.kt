@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 typealias HttpLocation = HttpBinding.Location
@@ -63,24 +62,32 @@ interface HttpBindingResolver {
     /**
      * Returns a list of member shapes bound to a given request [location] for a given [operationShape]
      */
-    fun requestMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        requestBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun requestMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = requestBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Returns a list of member shapes bound to a given response [location] for a given [operationShape]
      */
-    fun responseMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        responseBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun responseMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = responseBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Determine the timestamp format based on the input parameters.
+     *
+     * By default, this uses the timestamp trait, either on the member or on the target.
      */
     fun timestampFormat(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
+        model: Model,
     ): TimestampFormatTrait.Format =
-        memberShape.getTrait<TimestampFormatTrait>()?.format ?: defaultTimestampFormat
+        memberShape.getMemberTrait(model, TimestampFormatTrait::class.java).map { it.format }
+            .orElse(defaultTimestampFormat)
 
     /**
      * Determines the request content type for given [operationShape].
@@ -134,14 +141,22 @@ open class HttpTraitHttpBindingResolver(
         memberShape: MemberShape,
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
-    ): TimestampFormatTrait.Format =
-        httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
+        model: Model,
+    ): TimestampFormatTrait.Format = httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String? =
-        httpIndex.determineRequestContentType(operationShape, contentTypes.requestDocument, contentTypes.eventStreamContentType).orNull()
+        httpIndex.determineRequestContentType(
+            operationShape,
+            contentTypes.requestDocument,
+            contentTypes.eventStreamContentType,
+        ).orNull()
 
     override fun responseContentType(operationShape: OperationShape): String? =
-        httpIndex.determineResponseContentType(operationShape, contentTypes.responseDocument, contentTypes.eventStreamContentType).orNull()
+        httpIndex.determineResponseContentType(
+            operationShape,
+            contentTypes.responseDocument,
+            contentTypes.eventStreamContentType,
+        ).orNull()
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
@@ -172,8 +187,7 @@ open class StaticHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
         bindings(operationShape.output.orNull())
 
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
 

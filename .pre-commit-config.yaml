@@ -1,31 +1,34 @@
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v2.3.0
+  rev: v4.4.0
   hooks:
   - id: check-yaml
   - id: end-of-file-fixer
-    exclude: ^aws/rust-runtime/aws-sigv4/aws-sig-v4-test-suite/
+    exclude: ^aws/rust-runtime/(aws-sigv4/aws-sig-v4-test-suite/|aws-config/test-data/default-provider-chain/eks_pod_identity_credentials/fs/token.jwt$)
   - id: trailing-whitespace
-- repo: local
-  hooks:
-  - id: kotlin-block-quotes
-    name: Kotlin Block Quotes
-    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
-    language: python
-    files: ^.*\.kt$
-  - id: license-header-check
-    name: License Header Check
-    entry: ./.pre-commit-hooks/license-header.sh
-    language: system
-    files: ^.*$
-    pass_filenames: false
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v1.6.1
+  rev: v2.11.0
   hooks:
-  - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 0.46.1]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
     entry: rustfmt --edition 2021
     files: ^.*\.rs$
+- repo: local
+  hooks:
+  - id: ktlint
+    name: Ktlint
+    entry: ./.pre-commit-hooks/ktlint.sh
+    language: system
+    files: ^.*\.kt$
+  - id: kotlin-block-quotes
+    name: Kotlin Block Quotes
+    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
+    language: python
+    files: ^.*\.kt$
+  - id: sdk-lints-check
+    name: sdk-lints
+    entry: ./.pre-commit-hooks/sdk-lints.sh
+    language: system
+    files: ^.*$
+    pass_filenames: false

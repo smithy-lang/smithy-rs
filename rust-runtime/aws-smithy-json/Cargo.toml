@@ -5,7 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisant
 description = "Token streaming JSON parser for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
@@ -17,5 +17,6 @@ serde_json = "1.0"
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata

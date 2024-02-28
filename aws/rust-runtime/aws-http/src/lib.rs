@@ -3,8 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Provides user agent and credentials middleware for the AWS SDK.
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
+//! AWS-specific middleware implementations and HTTP-related features.
 
+#![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
@@ -12,15 +16,6 @@
     rust_2018_idioms,
     unreachable_pub
 )]
-
-/// Credentials middleware
-pub mod auth;
-
-/// Recursion Detection middleware
-pub mod recursion_detection;
-
-/// AWS-specific retry logic
-pub mod retry;
 
 /// User agent middleware
 pub mod user_agent;

@@ -8,11 +8,11 @@ import java.util.Properties
 
 plugins {
     `kotlin-dsl`
-    jacoco
 }
 repositories {
     mavenCentral()
     google()
+    /* mavenLocal() */
 }
 
 // Load properties manually to avoid hard coding smithy version
@@ -32,6 +32,12 @@ dependencies {
     implementation(gradleApi())
     implementation("com.moandjiezana.toml:toml4j:0.7.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+
+    constraints {
+        implementation("com.google.code.gson:gson:2.8.9") {
+            because("transitive dependency of toml4j has vulnerabilities; this upgrades it to the patched version")
+        }
+    }
 }
 
 tasks.test {
@@ -45,15 +51,3 @@ tasks.test {
         showStandardStreams = true
     }
 }
-
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(false)
-        csv.required.set(false)
-        html.outputLocation.set(file("$buildDir/reports/jacoco"))
-    }
-}
-
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])

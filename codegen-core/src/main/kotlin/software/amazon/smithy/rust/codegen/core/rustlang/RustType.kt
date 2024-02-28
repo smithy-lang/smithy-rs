@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.serde
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
@@ -13,23 +15,22 @@ import software.amazon.smithy.rust.codegen.core.util.dq
  *
  * Clippy is upset about `*&`, so if [input] is already referenced, simply strip the leading '&'
  */
-fun autoDeref(input: String) = if (input.startsWith("&")) {
-    input.removePrefix("&")
-} else {
-    "*$input"
-}
+fun autoDeref(input: String) =
+    if (input.startsWith("&")) {
+        input.removePrefix("&")
+    } else {
+        "*$input"
+    }
 
 /**
  * A hierarchy of types handled by Smithy codegen
  */
 sealed class RustType {
-
-    // TODO(kotlin): when Kotlin supports, sealed interfaces, seal Container
     /**
      * A Rust type that contains [member], another RustType. Used to generically operate over
      * shapes that contain other shapes, e.g. [stripOuter] and [contains].
      */
-    interface Container {
+    sealed interface Container {
         val member: RustType
         val namespace: kotlin.String?
         val name: kotlin.String
@@ -56,29 +57,29 @@ sealed class RustType {
      *
      * When formatted, the converted type will appear as such:
      *
-     * | Type                                               | Formatted                                                           |
-     * | -------------------------------------------------- | ------------------------------------------------------------------- |
-     * | RustType.Unit                                      | ()                                                                  |
-     * | RustType.Bool                                      | bool                                                                |
-     * | RustType.Float(32)                                 | f32                                                                 |
-     * | RustType.Float(64)                                 | f64                                                                 |
-     * | RustType.Integer(8)                                | i8                                                                  |
-     * | RustType.Integer(16)                               | i16                                                                 |
-     * | RustType.Integer(32)                               | i32                                                                 |
-     * | RustType.Integer(64)                               | i64                                                                 |
-     * | RustType.String                                    | std::string::String                                                 |
-     * | RustType.Vec(RustType.String)                      | std::vec::Vec<std::string::String>                                  |
-     * | RustType.Slice(RustType.String)                    | [std::string::String]                                               |
-     * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap<std::string::String, std::string::String> |
-     * | RustType.HashSet(RustType.String)                  | std::vec::Vec<std::string::String>                                  |
-     * | RustType.Reference("&", RustType.String)           | &std::string::String                                                |
-     * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                            |
-     * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                        |
-     * | RustType.Option(RustType.String)                   | std::option::Option<std::string::String>                            |
-     * | RustType.Box(RustType.String)                      | std::boxed::Box<std::string::String>                                |
-     * | RustType.Opaque("SoCool", "zelda_is")              | zelda_is::SoCool                                                    |
-     * | RustType.Opaque("SoCool")                          | SoCool                                                              |
-     * | RustType.Dyn(RustType.Opaque("Foo", "foo"))        | dyn foo::Foo                                                        |
+     * | Type                                               | Formatted                                                            |
+     * | -------------------------------------------------- | -------------------------------------------------------------------  |
+     * | RustType.Unit                                      | ()                                                                   |
+     * | RustType.Bool                                      | bool                                                                 |
+     * | RustType.Float(32)                                 | f32                                                                  |
+     * | RustType.Float(64)                                 | f64                                                                  |
+     * | RustType.Integer(8)                                | i8                                                                   |
+     * | RustType.Integer(16)                               | i16                                                                  |
+     * | RustType.Integer(32)                               | i32                                                                  |
+     * | RustType.Integer(64)                               | i64                                                                  |
+     * | RustType.String                                    | std::string::String                                                  |
+     * | RustType.Vec(RustType.String)                      | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.Slice(RustType.String)                    | [std::string::String]                                                |
+     * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap::<std::string::String, std::string::String>|
+     * | RustType.HashSet(RustType.String)                  | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.Reference("&", RustType.String)           | &std::string::String                                                 |
+     * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                             |
+     * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                         |
+     * | RustType.Option(RustType.String)                   | std::option::Option<std::string::String>                             |
+     * | RustType.Box(RustType.String)                      | std::boxed::Box<std::string::String>                                 |
+     * | RustType.Opaque("SoCool", "zelda_is")              | zelda_is::SoCool                                                     |
+     * | RustType.Opaque("SoCool")                          | SoCool                                                               |
+     * | RustType.Dyn(RustType.Opaque("Foo", "foo"))        | dyn foo::Foo                                                         |
      */
     val writable = writable { rustInlineTemplate("#{this}", "this" to this@RustType) }
 
@@ -91,8 +92,9 @@ sealed class RustType {
     }
 
     object String : RustType() {
-        override val name: kotlin.String = "String"
-        override val namespace = "std::string"
+        private val runtimeType = RuntimeType.String
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Float(val precision: Int) : RustType() {
@@ -109,18 +111,18 @@ sealed class RustType {
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // validating that `key` is a string occurs in the constructor in SymbolVisitor
-
-        override val name: kotlin.String = "HashMap"
-        override val namespace = "std::collections"
+        override val name = RuntimeType.HashMap.name
+        override val namespace = RuntimeType.HashMap.namespace
 
         companion object {
-            val RuntimeType = RuntimeType("HashMap", dependency = null, namespace = "std::collections")
+            val Type = RuntimeType.HashMap.name
+            val Namespace = RuntimeType.HashMap.namespace
         }
     }
 
     data class HashSet(override val member: RustType) : RustType(), Container {
-        override val name = Type
-        override val namespace = Namespace
+        override val name = RuntimeType.Vec.name
+        override val namespace = RuntimeType.Vec.namespace
 
         companion object {
             // This is Vec intentionally. Note the following passage from the Smithy spec:
@@ -128,9 +130,8 @@ sealed class RustType {
             //    support ordered sets, requiring them may be overly burdensome for users, or conflict with language
             //    idioms. Such languages SHOULD store the values of sets in a list and rely on validation to ensure uniqueness.
             // It's possible that we could provide our own wrapper type in the future.
-            const val Type = "Vec"
-            const val Namespace = "std::vec"
-            val RuntimeType = RuntimeType(name = Type, namespace = Namespace, dependency = null)
+            val Type = RuntimeType.Vec.name
+            val Namespace = RuntimeType.Vec.namespace
         }
     }
 
@@ -139,8 +140,9 @@ sealed class RustType {
     }
 
     data class Option(override val member: RustType) : RustType(), Container {
-        override val name = "Option"
-        override val namespace = "std::option"
+        private val runtimeType = RuntimeType.Option
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
 
         /** Convert `Option<T>` to `Option<&T>` **/
         fun referenced(lifetime: kotlin.String?): Option {
@@ -149,14 +151,15 @@ sealed class RustType {
     }
 
     data class MaybeConstrained(override val member: RustType) : RustType(), Container {
-        val runtimeType: RuntimeType = RuntimeType.MaybeConstrained()
-        override val name = runtimeType.name!!
+        private val runtimeType = RuntimeType.MaybeConstrained
+        override val name = runtimeType.name
         override val namespace = runtimeType.namespace
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
-        override val name = "Box"
-        override val namespace = "std::boxed"
+        private val runtimeType = RuntimeType.Box
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Dyn(override val member: RustType) : RustType(), Container {
@@ -165,11 +168,24 @@ sealed class RustType {
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
-        override val name = "Vec"
-        override val namespace = "std::vec"
+        private val runtimeType: RuntimeType = RuntimeType.Vec
+        override val name = runtimeType.name
+        override val namespace = runtimeType.namespace
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
+
+    /**
+     * Represents application of a Rust type with the given arguments.
+     *
+     * For example, we can represent `HashMap<String, i64>` as
+     * `RustType.Application(RustType.Opaque("HashMap"), listOf(RustType.String, RustType.Integer(64)))`.
+     * This helps us to separate the type and the arguments which is useful in methods like [qualifiedName].
+     */
+    data class Application(val type: RustType, val args: List<RustType>) : RustType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
 }
 
 /**
@@ -185,7 +201,7 @@ fun RustType.qualifiedName(): String {
 
 /** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
-    return "impl Into<${this.render(fullyQualified)}>"
+    return "impl ${RuntimeType.Into.render(fullyQualified)}<${this.render(fullyQualified)}>"
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
@@ -207,11 +223,12 @@ fun RustType.asArgumentValue(name: String) =
  * For a given name, generate an `Argument` data class containing pre-formatted strings for using this type when
  * writing a Rust function.
  */
-fun RustType.asArgument(name: String) = Argument(
-    "$name: ${this.asArgumentType()}",
-    this.asArgumentValue(name),
-    this.render(),
-)
+fun RustType.asArgument(name: String) =
+    Argument(
+        "$name: ${this.asArgumentType()}",
+        this.asArgumentValue(name),
+        this.render(),
+    )
 
 /**
  * Render this type, including references and generic parameters.
@@ -219,32 +236,40 @@ fun RustType.asArgument(name: String) = Argument(
  * - To generate something like `std::collections::HashMap`, use [qualifiedName]
  */
 fun RustType.render(fullyQualified: Boolean = true): String {
-    val namespace = if (fullyQualified) {
-        this.namespace?.let { "$it::" } ?: ""
-    } else ""
-    val base = when (this) {
-        is RustType.Unit -> this.name
-        is RustType.Bool -> this.name
-        is RustType.Float -> this.name
-        is RustType.Integer -> this.name
-        is RustType.String -> this.name
-        is RustType.Vec -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
-        is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
-        is RustType.HashSet -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Reference -> {
-            if (this.lifetime == "&") {
-                "&${this.member.render(fullyQualified)}"
-            } else {
-                "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
-            }
+    val namespace =
+        if (fullyQualified) {
+            this.namespace?.let { "$it::" } ?: ""
+        } else {
+            ""
         }
-        is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
-        is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
-        is RustType.Opaque -> this.name
-        is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
-    }
+    val base =
+        when (this) {
+            is RustType.Unit -> this.name
+            is RustType.Bool -> this.name
+            is RustType.Float -> this.name
+            is RustType.Integer -> this.name
+            is RustType.String -> this.name
+            is RustType.Vec -> "${this.name}::<${this.member.render(fullyQualified)}>"
+            is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
+            is RustType.HashMap -> "${this.name}::<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
+            is RustType.HashSet -> "${this.name}::<${this.member.render(fullyQualified)}>"
+            is RustType.Reference -> {
+                if (this.lifetime == "&") {
+                    "&${this.member.render(fullyQualified)}"
+                } else {
+                    "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+                }
+            }
+            is RustType.Application -> {
+                val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+                "${this.name}<$args>"
+            }
+            is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
+            is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
+            is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
+            is RustType.Opaque -> this.name
+            is RustType.MaybeConstrained -> "${this.name}<${this.member.render(fullyQualified)}>"
+        }
     return "$namespace$base"
 }
 
@@ -253,22 +278,33 @@ fun RustType.render(fullyQualified: Boolean = true): String {
  * Option<DateTime>.contains(DateTime) would return true.
  * Option<DateTime>.contains(Blob) would return false.
  */
-fun <T : RustType> RustType.contains(t: T): Boolean = when (this) {
-    t -> true
-    is RustType.Container -> this.member.contains(t)
-    else -> false
-}
+fun <T : RustType> RustType.contains(t: T): Boolean =
+    when (this) {
+        t -> true
+        is RustType.Container -> this.member.contains(t)
+        else -> false
+    }
 
-inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = when (this) {
-    is T -> this.member
-    else -> this
-}
+inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType =
+    when (this) {
+        is T -> this.member
+        else -> this
+    }
+
+/** Extracts the inner Reference type */
+fun RustType.innerReference(): RustType? =
+    when (this) {
+        is RustType.Reference -> this
+        is RustType.Container -> this.member.innerReference()
+        else -> null
+    }
 
 /** Wraps a type in Option if it isn't already */
-fun RustType.asOptional(): RustType = when (this) {
-    is RustType.Option -> this
-    else -> RustType.Option(this)
-}
+fun RustType.asOptional(): RustType =
+    when (this) {
+        is RustType.Option -> this
+        else -> RustType.Option(this)
+    }
 
 /**
  * Converts type to a reference
@@ -277,11 +313,12 @@ fun RustType.asOptional(): RustType = when (this) {
  * - `String` -> `&String`
  * - `Option<T>` -> `Option<&T>`
  */
-fun RustType.asRef(): RustType = when (this) {
-    is RustType.Reference -> this
-    is RustType.Option -> RustType.Option(member.asRef())
-    else -> RustType.Reference(null, this)
-}
+fun RustType.asRef(): RustType =
+    when (this) {
+        is RustType.Reference -> this
+        is RustType.Option -> RustType.Option(member.asRef())
+        else -> RustType.Reference(null, this)
+    }
 
 /**
  * Converts type to its Deref target
@@ -291,61 +328,101 @@ fun RustType.asRef(): RustType = when (this) {
  * - `Option<String>` -> `Option<&str>`
  * - `Box<Something>` -> `&Something`
  */
-fun RustType.asDeref(): RustType = when (this) {
-    is RustType.Option -> if (member.isDeref()) {
-        RustType.Option(member.asDeref().asRef())
-    } else {
-        this
+fun RustType.asDeref(): RustType =
+    when (this) {
+        is RustType.Option ->
+            if (member.isDeref()) {
+                RustType.Option(member.asDeref().asRef())
+            } else {
+                this
+            }
+
+        is RustType.Box -> RustType.Reference(null, member)
+        is RustType.String -> RustType.Opaque("str")
+        is RustType.Vec -> RustType.Slice(member)
+        else -> this
     }
-    is RustType.Box -> RustType.Reference(null, member)
-    is RustType.String -> RustType.Opaque("str")
-    is RustType.Vec -> RustType.Slice(member)
-    else -> this
-}
 
 /** Returns true if the type implements Deref */
-fun RustType.isDeref(): Boolean = when (this) {
-    is RustType.Box -> true
-    is RustType.String -> true
-    is RustType.Vec -> true
-    else -> false
-}
+fun RustType.isDeref(): Boolean =
+    when (this) {
+        is RustType.Box -> true
+        is RustType.String -> true
+        is RustType.Vec -> true
+        else -> false
+    }
 
 /** Returns true if the type implements Copy */
-fun RustType.isCopy(): Boolean = when (this) {
-    is RustType.Float -> true
-    is RustType.Integer -> true
-    is RustType.Reference -> true
-    is RustType.Bool -> true
-    is RustType.Slice -> true
-    is RustType.Option -> this.member.isCopy()
-    else -> false
-}
+fun RustType.isCopy(): Boolean =
+    when (this) {
+        is RustType.Float -> true
+        is RustType.Integer -> true
+        is RustType.Reference -> true
+        is RustType.Bool -> true
+        is RustType.Slice -> true
+        is RustType.Option -> this.member.isCopy()
+        else -> false
+    }
+
+/** Returns true if the type implements Eq */
+fun RustType.isEq(): Boolean =
+    when (this) {
+        is RustType.Integer -> true
+        is RustType.Bool -> true
+        is RustType.String -> true
+        is RustType.Unit -> true
+        is RustType.Container -> this.member.isEq()
+        else -> false
+    }
 
 enum class Visibility {
     PRIVATE,
     PUBCRATE,
-    PUBLIC
+    PUBLIC,
+    ;
+
+    companion object {
+        fun publicIf(
+            condition: Boolean,
+            ifNot: Visibility,
+        ): Visibility =
+            if (condition) {
+                PUBLIC
+            } else {
+                ifNot
+            }
+    }
+
+    fun toRustQualifier(): String =
+        when (this) {
+            PRIVATE -> ""
+            PUBCRATE -> "pub(crate)"
+            PUBLIC -> "pub"
+        }
 }
 
 /**
  * Meta information about a Rust construction (field, struct, or enum).
  */
 data class RustMetadata(
-    val derives: Attribute.Derives = Attribute.Derives.Empty,
+    val derives: Set<RuntimeType> = setOf(),
     val additionalAttributes: List<Attribute> = listOf(),
     val visibility: Visibility = Visibility.PRIVATE,
 ) {
-    fun withDerives(vararg newDerive: RuntimeType): RustMetadata =
-        this.copy(derives = derives.copy(derives = derives.derives + newDerive))
+    fun withDerives(vararg newDerives: RuntimeType): RustMetadata = this.copy(derives = derives + newDerives)
 
-    fun withoutDerives(vararg withoutDerives: RuntimeType) =
-        this.copy(derives = derives.copy(derives = derives.derives - withoutDerives.toSet()))
-
-    private fun attributes(): List<Attribute> = additionalAttributes + derives
+    fun withoutDerives(vararg withoutDerives: RuntimeType) = this.copy(derives = derives - withoutDerives.toSet())
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
-        attributes().forEach {
+        val (deriveHelperAttrs, otherAttrs) = additionalAttributes.partition { it.isDeriveHelper }
+        otherAttrs.forEach {
+            it.render(writer)
+        }
+
+        Attribute(derive(derives)).render(writer)
+
+        // Derive helper attributes must come after derive, see https://github.com/rust-lang/rust/issues/79202
+        deriveHelperAttrs.forEach {
             it.render(writer)
         }
         return this
@@ -366,111 +443,231 @@ data class RustMetadata(
         renderAttributes(writer)
         renderVisibility(writer)
     }
+
+    /**
+     * If `true`, the Rust symbol that this metadata references derives a `Debug` implementation.
+     * If `false`, then it doesn't.
+     */
+    fun hasDebugDerive(): Boolean {
+        return derives.contains(RuntimeType.Debug)
+    }
+}
+
+data class Argument(val argument: String, val value: String, val type: String)
+
+/**
+ * AttributeKind differentiates between the two kinds of attribute macros: inner and outer.
+ * See the variant docs for more info, and the official Rust [Attribute Macro](https://doc.rust-lang.org/reference/attributes.html)
+ * for even MORE info.
+ */
+enum class AttributeKind {
+    /**
+     * Inner attributes, written with a bang (!) after the hash (#), apply to the item that the attribute is declared within.
+     */
+    Inner,
+
+    /**
+     * Outer attributes, written without the bang after the hash, apply to the thing that follows the attribute.
+     */
+    Outer,
 }
 
 /**
  * [Attributes](https://doc.rust-lang.org/reference/attributes.html) are general free form metadata
  * that are interpreted by the compiler.
  *
+ * If the attribute is a "derive helper", such as  `#[serde]`, set `isDeriveHelper` to `true` so it is sorted correctly after
+ * the derive attribute is rendered. (See https://github.com/rust-lang/rust/issues/79202 for why sorting matters.)
+ *
  * For example:
  * ```rust
- *
+ * #[allow(missing_docs)] // <-- this is an attribute, and it is not a derive helper
  * #[derive(Clone, PartialEq, Serialize)] // <-- this is an attribute
- * #[serde(serialize_with = "abc")] // <-- this is an attribute
+ * #[serde(serialize_with = "abc")] // <-- this attribute is a derive helper because the `Serialize` derive uses it
  * struct Abc {
  *   a: i64
  * }
+ * ```
  */
-sealed class Attribute {
-    abstract fun render(writer: RustWriter)
+class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
+    constructor(str: String) : this(writable(str))
+    constructor(str: String, isDeriveHelper: Boolean) : this(writable(str), isDeriveHelper)
+    constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
+
+    fun render(
+        writer: RustWriter,
+        attributeKind: AttributeKind = AttributeKind.Outer,
+    ) {
+        // Writing "#[]" with nothing inside it is meaningless
+        if (inner.isNotEmpty()) {
+            when (attributeKind) {
+                AttributeKind.Inner -> writer.rust("##![#W]", inner)
+                AttributeKind.Outer -> writer.rust("##[#W]", inner)
+            }
+        }
+    }
+
+    // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
+    // You can find the discussion here.
+    // https://github.com/smithy-lang/smithy-rs/discussions/2248
+    fun serdeSerialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+    }
+
+    fun serdeDeserialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+    }
+
+    fun serdeSkip(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
+    }
+
+    fun serdeSerializeOrDeserialize(): Attribute {
+        return Attribute(cfg(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize")))))
+    }
 
     companion object {
-        val AllowDeadCode = Custom("allow(dead_code)")
-        val AllowDeprecated = Custom("allow(deprecated)")
-        val AllowUnused = Custom("allow(unused)")
-        val AllowUnusedMut = Custom("allow(unused_mut)")
-        val DocHidden = Custom("doc(hidden)")
-        val DocInline = Custom("doc(inline)")
+        val AllowNeedlessQuestionMark = Attribute(allow("clippy::needless_question_mark"))
+        val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
+        val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
+        val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
+        val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
+        val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
+        val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
+        val AllowClippyUnnecessaryLazyEvaluations = Attribute(allow("clippy::unnecessary_lazy_evaluations"))
+        val AllowClippyTooManyArguments = Attribute(allow("clippy::too_many_arguments"))
+        val AllowDeadCode = Attribute(allow("dead_code"))
+        val AllowDeprecated = Attribute(allow("deprecated"))
+        val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
+        val AllowMissingDocs = Attribute(allow("missing_docs"))
+        val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
+        val AllowUnreachableCode = Attribute(allow("unreachable_code"))
+        val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
+        val AllowUnused = Attribute(allow("unused"))
+        val AllowUnusedImports = Attribute(allow("unused_imports"))
+        val AllowUnusedMut = Attribute(allow("unused_mut"))
+        val AllowUnusedVariables = Attribute(allow("unused_variables"))
+        val CfgTest = Attribute(cfg("test"))
+        val DenyMissingDocs = Attribute(deny("missing_docs"))
+        val DocHidden = Attribute(doc("hidden"))
+        val DocInline = Attribute(doc("inline"))
+        val NoImplicitPrelude = Attribute("no_implicit_prelude")
+
+        fun shouldPanic(expectedMessage: String) =
+            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+
+        val Test = Attribute("test")
+        val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
          * indicates that more fields may be added in the future
          */
-        val NonExhaustive = Custom("non_exhaustive")
-    }
+        val NonExhaustive = Attribute("non_exhaustive")
 
-    data class Derives(val derives: Set<RuntimeType>) : Attribute() {
-        override fun render(writer: RustWriter) {
-            if (derives.isEmpty()) {
-                return
-            }
-            writer.raw("#[derive(")
-            derives.sortedBy { it.name }.forEach { derive ->
-                writer.writeInline("#T, ", derive)
-            }
-            writer.write(")]")
-        }
+        /**
+         * Mark the following type as deprecated. If you know why and in what version something was deprecated, then
+         * using [deprecated] is preferred.
+         */
+        val Deprecated = Attribute("deprecated")
 
-        companion object {
-            val Empty = Derives(setOf())
-        }
-    }
-
-    /**
-     * A custom Attribute
-     *
-     * [annotation] represents the body of the attribute, e.g. `cfg(foo)` in `#[cfg(foo)]`
-     * If [container] is set, this attribute refers to its container rather than its successor. This generates `#![cfg(foo)]`
-     *
-     * Finally, any symbols listed will be imported when this attribute is rendered. This enables using attributes like
-     * `#[serde(Serialize)]` where `Serialize` is actually a symbol that must be imported.
-     */
-    data class Custom(
-        val annotation: String,
-        val symbols: List<RuntimeType> = listOf(),
-        val container: Boolean = false,
-    ) : Attribute() {
-        override fun render(writer: RustWriter) {
-            val bang = if (container) "!" else ""
-            writer.raw("#$bang[$annotation]")
-            symbols.forEach {
-                writer.addDependency(it.dependency)
-            }
-        }
-
-        companion object {
-            /**
-             * Renders a
-             * [`#[deprecated]`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-deprecated-attribute)
-             * attribute.
-             */
-            fun deprecated(note: String? = null, since: String? = null): Custom {
-                val builder = StringBuilder()
-                builder.append("deprecated")
-
-                if (note != null && since != null) {
-                    builder.append("(note = ${note.dq()}, since = ${since.dq()})")
-                } else if (note != null) {
-                    builder.append("(note = ${note.dq()})")
-                } else if (since != null) {
-                    builder.append("(since = ${since.dq()})")
-                } else {
-                    // No-op. Rustc would emit a default message.
+        private fun macroWithArgs(
+            name: String,
+            vararg args: RustWriter.() -> Unit,
+        ): Writable =
+            {
+                // Macros that require args can't be empty
+                if (args.isNotEmpty()) {
+                    rustInline("$name(#W)", args.toList().join(", "))
                 }
-                return Custom(builder.toString())
+            }
+
+        private fun macroWithArgs(
+            name: String,
+            vararg args: String,
+        ): Writable =
+            {
+                // Macros that require args can't be empty
+                if (args.isNotEmpty()) {
+                    rustInline("$name(${args.joinToString(", ")})")
+                }
+            }
+
+        fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
+
+        fun cfgAttr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
+
+        fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
+
+        fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)
+
+        fun deny(vararg lints: String): Writable = macroWithArgs("deny", *lints)
+
+        fun serde(vararg lints: String): Writable = macroWithArgs("serde", *lints)
+
+        fun any(vararg attrMacros: Writable): Writable = macroWithArgs("any", *attrMacros)
+
+        fun cfg(vararg attrMacros: Writable): Writable = macroWithArgs("cfg", *attrMacros)
+
+        fun cfg(vararg attrMacros: String): Writable = macroWithArgs("cfg", *attrMacros)
+
+        fun doc(vararg attrMacros: Writable): Writable = macroWithArgs("doc", *attrMacros)
+
+        fun doc(str: String): Writable = macroWithArgs("doc", writable(str))
+
+        fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
+
+        fun feature(feature: String) = writable("feature = ${feature.dq()}")
+
+        fun featureGate(featureName: String): Attribute {
+            return Attribute(cfg(feature(featureName)))
+        }
+
+        fun deprecated(
+            since: String? = null,
+            note: String? = null,
+        ): Writable {
+            val optionalFields = mutableListOf<Writable>()
+            if (!note.isNullOrEmpty()) {
+                optionalFields.add(pair("note" to note.dq()))
+            }
+
+            if (!since.isNullOrEmpty()) {
+                optionalFields.add(pair("since" to since.dq()))
+            }
+
+            return {
+                rustInline("deprecated")
+                if (optionalFields.isNotEmpty()) {
+                    rustInline("(#W)", optionalFields.join(", "))
+                }
             }
         }
-    }
 
-    data class Cfg(val cond: String) : Attribute() {
-        override fun render(writer: RustWriter) {
-            writer.raw("#[cfg($cond)]")
-        }
+        fun derive(vararg runtimeTypes: RuntimeType): Writable =
+            {
+                // Empty derives are meaningless
+                if (runtimeTypes.isNotEmpty()) {
+                    // Sorted derives look nicer than unsorted, and it makes test output easier to predict
+                    val writables = runtimeTypes.sortedBy { it.path }.map { it.writable }.join(", ")
+                    rustInline("derive(#W)", writables)
+                }
+            }
 
-        companion object {
-            fun feature(feature: String) = Cfg("feature = ${feature.dq()}")
-        }
+        fun derive(runtimeTypes: Collection<RuntimeType>): Writable = derive(*runtimeTypes.toTypedArray())
+
+        fun pair(pair: Pair<String, String>): Writable =
+            {
+                val (key, value) = pair
+                rustInline("$key = $value")
+            }
     }
 }
 
-data class Argument(val argument: String, val value: String, val type: String)
+/** Render all attributes in this list, one after another */
+fun Collection<Attribute>.render(writer: RustWriter) {
+    for (attr in this) {
+        attr.render(writer)
+    }
+}

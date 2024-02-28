@@ -15,4 +15,6 @@
 - [ ] I have updated `CHANGELOG.next.toml` if I made changes to the smithy-rs codegen or runtime crates
 - [ ] I have updated `CHANGELOG.next.toml` if I made changes to the AWS SDK, generated SDK code, or SDK runtime crates
 
-By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.
+----
+
+_By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice._

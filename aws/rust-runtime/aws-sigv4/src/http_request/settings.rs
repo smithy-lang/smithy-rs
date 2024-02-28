@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http::header::{HeaderName, USER_AGENT};
+use http0::header::{AUTHORIZATION, USER_AGENT};
+use std::borrow::Cow;
 use std::time::Duration;
 
-/// HTTP signing parameters
-pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
+const HEADER_NAME_X_RAY_TRACE_ID: &str = "x-amzn-trace-id";
 
 /// HTTP-specific signing settings
 #[derive(Debug, PartialEq)]
@@ -28,7 +28,15 @@ pub struct SigningSettings {
     pub expires_in: Option<Duration>,
 
     /// Headers that should be excluded from the signing process
-    pub excluded_headers: Option<Vec<HeaderName>>,
+    pub excluded_headers: Option<Vec<Cow<'static, str>>>,
+
+    /// Specifies whether the absolute path component of the URI should be normalized during signing.
+    pub uri_path_normalization_mode: UriPathNormalizationMode,
+
+    /// Some services require X-Amz-Security-Token to be included in the
+    /// canonical request. Other services require only it to be added after
+    /// calculating the signature.
+    pub session_token_mode: SessionTokenMode,
 }
 
 /// HTTP payload checksum type
@@ -61,17 +69,70 @@ pub enum PercentEncodingMode {
     Single,
 }
 
+/// Config value to specify whether the canonical request's URI path should be normalized.
+/// <https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html>
+///
+/// URI path normalization is performed based on <https://www.rfc-editor.org/rfc/rfc3986>.
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum UriPathNormalizationMode {
+    /// Normalize the URI path according to RFC3986
+    Enabled,
+
+    /// Don't normalize the URI path (S3, for example, rejects normalized paths in some instances)
+    Disabled,
+}
+
+impl From<bool> for UriPathNormalizationMode {
+    fn from(value: bool) -> Self {
+        if value {
+            UriPathNormalizationMode::Enabled
+        } else {
+            UriPathNormalizationMode::Disabled
+        }
+    }
+}
+
+/// Config value to specify whether X-Amz-Security-Token should be part of the canonical request.
+/// <http://docs.aws.amazon.com/general/latest/gr/sigv4-add-signature-to-request.html#temporary-security-credentials>
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum SessionTokenMode {
+    /// Include in the canonical request before calculating the signature.
+    Include,
+
+    /// Exclude in the canonical request.
+    Exclude,
+}
+
 impl Default for SigningSettings {
     fn default() -> Self {
-        // The user agent header should not be signed because it may be altered by proxies
-        const EXCLUDED_HEADERS: [HeaderName; 1] = [USER_AGENT];
-
+        // Headers that are potentially altered by proxies or as a part of standard service operations.
+        // Reference:
+        // Go SDK: <https://github.com/aws/aws-sdk-go/blob/v1.44.289/aws/signer/v4/v4.go#L92>
+        // Java SDK: <https://github.com/aws/aws-sdk-java-v2/blob/master/core/auth/src/main/java/software/amazon/awssdk/auth/signer/internal/AbstractAws4Signer.java#L70>
+        // JS SDK: <https://github.com/aws/aws-sdk-js/blob/master/lib/signers/v4.js#L191>
+        // There is no single source of truth for these available, so this uses the minimum common set of the excluded options.
+        // Instantiate this every time, because SigningSettings takes a Vec (which cannot be const);
+        let excluded_headers = Some(
+            [
+                // This header is calculated as part of the signing process, so if it's present, discard it
+                Cow::Borrowed(AUTHORIZATION.as_str()),
+                // Changes when sent by proxy
+                Cow::Borrowed(USER_AGENT.as_str()),
+                // Changes based on the request from the client
+                Cow::Borrowed(HEADER_NAME_X_RAY_TRACE_ID),
+            ]
+            .to_vec(),
+        );
         Self {
             percent_encoding_mode: PercentEncodingMode::Double,
             payload_checksum_kind: PayloadChecksumKind::NoHeader,
             signature_location: SignatureLocation::Headers,
             expires_in: None,
-            excluded_headers: Some(EXCLUDED_HEADERS.to_vec()),
+            excluded_headers,
+            uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
+            session_token_mode: SessionTokenMode::Include,
         }
     }
 }

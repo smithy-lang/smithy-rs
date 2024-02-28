@@ -7,8 +7,8 @@
 
 use crate::http::HttpChecksum;
 
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::header::append_merge_header_maps;
+use aws_smithy_types::body::SdkBody;
 
 use http::HeaderMap;
 use http_body::SizeHint;
@@ -38,7 +38,7 @@ impl ChecksumBody<SdkBody> {
 
 impl http_body::Body for ChecksumBody<SdkBody> {
     type Data = bytes::Bytes;
-    type Error = aws_smithy_http::body::Error;
+    type Error = aws_smithy_types::body::Error;
 
     fn poll_data(
         self: Pin<&mut Self>,
@@ -99,19 +99,22 @@ impl http_body::Body for ChecksumBody<SdkBody> {
 mod tests {
     use super::ChecksumBody;
     use crate::{http::CRC_32_HEADER_NAME, ChecksumAlgorithm, CRC_32_NAME};
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_types::base64;
+    use aws_smithy_types::body::SdkBody;
     use bytes::Buf;
     use bytes_utils::SegmentedBuf;
     use http_body::Body;
+    use std::fmt::Write;
     use std::io::Read;
 
     fn header_value_as_checksum_string(header_value: &http::HeaderValue) -> String {
         let decoded_checksum = base64::decode(header_value.to_str().unwrap()).unwrap();
         let decoded_checksum = decoded_checksum
             .into_iter()
-            .map(|byte| format!("{:02X?}", byte))
-            .collect::<String>();
+            .fold(String::new(), |mut acc, byte| {
+                write!(acc, "{byte:02X?}").expect("string will always be writeable");
+                acc
+            });
 
         format!("0x{}", decoded_checksum)
     }
@@ -145,7 +148,7 @@ mod tests {
             .expect("checksum generation was without error")
             .expect("trailers were set");
         let checksum_trailer = trailers
-            .get(&CRC_32_HEADER_NAME)
+            .get(CRC_32_HEADER_NAME)
             .expect("trailers contain crc32 checksum");
         let checksum_trailer = header_value_as_checksum_string(checksum_trailer);
 

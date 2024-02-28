@@ -1,6 +1,6 @@
 # Handwritten Integration Test Root
 
-This folder contains hand-written integration tests that are specific to
+This folder contains handwritten integration tests that are specific to
 individual services. In order for your test to be merged into the final artifact:
 
 - The crate name must match the generated crate name, e.g. `kms`, `dynamodb`
@@ -13,8 +13,8 @@ tests & inserted into the `tests` folder of the final generated service crate.
 
 Some integration test roots have a `benches/` directory. In these, `cargo bench` can be
 invoked to run the benchmarks against the current version of smithy-rs. To compare
-across smithy-rs versions, you can use git to checkout the version to compare against,
-run the benchmark, and then checkout the other version and run it again:
+across smithy-rs versions, you can `git checkout` the version to compare against,
+run the benchmark, and then `git checkout` the other version and run it again:
 
 ```bash
 # For example, this was the very first commit that had a benchmark
@@ -42,3 +42,11 @@ cargo bench
 
 # Compare!
 ```
+
+## Adding dependencies to tests
+
+When adding new dependencies or adding new features to old dependencies, don't forget to update the
+[`IntegrationTestDependencies` file][IntegrationTestDependencies]. Otherwise, after your tests have been copied into
+their respective SDK crates may fail when run due to a dependency resolution error.
+
+[IntegrationTestDependencies]: ../../sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/IntegrationTestDependencies.kt

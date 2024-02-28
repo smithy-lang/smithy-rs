@@ -5,8 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
-import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -16,9 +15,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
@@ -34,17 +33,15 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
-private fun allOperations(codegenContext: CodegenContext): List<OperationShape> {
-    val index = TopDownIndex.of(codegenContext.model)
-    return index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
-}
-
 interface ServerProtocol : Protocol {
+    /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
+    val protocolModulePath: String
+
     /** Returns the Rust marker struct enjoying `OperationShape`. */
     fun markerStruct(): RuntimeType
 
@@ -79,64 +76,83 @@ interface ServerProtocol : Protocol {
      */
     fun serverContentTypeCheckNoModeledInput(): Boolean = false
 
-    companion object {
-        /** Upgrades the core protocol to a `ServerProtocol`. */
-        fun fromCoreProtocol(protocol: Protocol): ServerProtocol = when (protocol) {
-            is AwsJson -> ServerAwsJsonProtocol.fromCoreProtocol(protocol)
-            is RestJson -> ServerRestJsonProtocol.fromCoreProtocol(protocol)
-            is RestXml -> ServerRestXmlProtocol.fromCoreProtocol(protocol)
-            else -> throw IllegalStateException("unsupported protocol")
-        }
-    }
+    /** The protocol-specific `RequestRejection` type. **/
+    fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::$protocolModulePath::rejection::RequestRejection")
+
+    /** The protocol-specific `ResponseRejection` type. **/
+    fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::$protocolModulePath::rejection::ResponseRejection")
+
+    /** The protocol-specific `RuntimeError` type. **/
+    fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
 }
+
+fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
+    fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
+        if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
+            ReturnSymbolToParse(codegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
+        } else {
+            ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
+        }
+    return ::returnSymbolToParse
+}
+
+fun jsonParserGenerator(
+    codegenContext: ServerCodegenContext,
+    httpBindingResolver: HttpBindingResolver,
+    jsonName: (MemberShape) -> String,
+    additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
+): JsonParserGenerator =
+    JsonParserGenerator(
+        codegenContext,
+        httpBindingResolver,
+        jsonName,
+        returnSymbolToParseFn(codegenContext),
+        listOf(
+            ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
+        ) + additionalParserCustomizations,
+    )
 
 class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.serverBuilderSymbol(serverCodegenContext)
-        fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
-            if (shape.canReachConstrainedShape(codegenContext.model, serverCodegenContext.symbolProvider)) {
-                ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
-            } else {
-                ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
+    override val protocolModulePath: String
+        get() =
+            when (version) {
+                is AwsJsonVersion.Json10 -> "aws_json_10"
+                is AwsJsonVersion.Json11 -> "aws_json_11"
             }
-        return JsonParserGenerator(
-            codegenContext,
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        jsonParserGenerator(
+            serverCodegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            ::builderSymbol,
-            ::returnSymbolToParse,
-            listOf(
-                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(serverCodegenContext),
-            ),
+            additionalParserCustomizations,
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
-
-    companion object {
-        fun fromCoreProtocol(awsJson: AwsJson): ServerAwsJsonProtocol =
-            ServerAwsJsonProtocol(awsJson.codegenContext as ServerCodegenContext, awsJson.version)
-    }
 
     override fun markerStruct(): RuntimeType {
         return when (version) {
-            is AwsJsonVersion.Json10 -> {
-                ServerRuntimeType.Protocol("AwsJson1_0", "aws_json_10", runtimeConfig)
-            }
-            is AwsJsonVersion.Json11 -> {
-                ServerRuntimeType.Protocol("AwsJson1_1", "aws_json_11", runtimeConfig)
-            }
+            is AwsJsonVersion.Json10 -> ServerRuntimeType.protocol("AwsJson1_0", protocolModulePath, runtimeConfig)
+            is AwsJsonVersion.Json11 -> ServerRuntimeType.protocol("AwsJson1_1", protocolModulePath, runtimeConfig)
         }
     }
 
-    override fun routerType() = RuntimeType("AwsJsonRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::aws_json::router")
+    override fun routerType() =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::aws_json::router::AwsJsonRouter")
 
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
@@ -150,55 +166,51 @@ class ServerAwsJsonProtocol(
         rust("""String::from("$serviceName.$operationName")""")
     }
 
-    override fun serverRouterRequestSpecType(
-        requestSpecModule: RuntimeType,
-    ): RuntimeType =
-        RuntimeType("String", null, "std::string")
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.String
 
-    override fun serverRouterRuntimeConstructor() = when (version) {
-        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
-        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
-    }
+    override fun serverRouterRuntimeConstructor() =
+        when (version) {
+            AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+            AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+        }
+
+    override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::aws_json::rejection::RequestRejection")
+
+    override fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
+
+    override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+            .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
 }
 
-private fun restRouterType(runtimeConfig: RuntimeConfig) = RuntimeType("RestRouter", ServerCargoDependency.SmithyHttpServer(runtimeConfig), "${runtimeConfig.crateSrcPrefix}_http_server::proto::rest::router")
+private fun restRouterType(runtimeConfig: RuntimeConfig) =
+    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        .resolve("protocol::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
+    private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.serverBuilderSymbol(serverCodegenContext)
-        fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
-            if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
-                ReturnSymbolToParse(serverCodegenContext.unconstrainedShapeSymbolProvider.toSymbol(shape), true)
-            } else {
-                ReturnSymbolToParse(serverCodegenContext.symbolProvider.toSymbol(shape), false)
-            }
-        return JsonParserGenerator(
-            codegenContext,
+    override val protocolModulePath: String = "rest_json_1"
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        jsonParserGenerator(
+            serverCodegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            ::builderSymbol,
-            ::returnSymbolToParse,
-            listOf(
-                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(
-                    serverCodegenContext,
-                ),
-            ),
+            additionalParserCustomizations,
         )
-    }
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    companion object {
-        fun fromCoreProtocol(restJson: RestJson): ServerRestJsonProtocol = ServerRestJsonProtocol(restJson.codegenContext as ServerCodegenContext)
-    }
-
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestJson1", "rest_json_1", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestJson1", protocolModulePath, runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -210,7 +222,7 @@ class ServerRestJsonProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 
@@ -221,14 +233,9 @@ class ServerRestXmlProtocol(
     codegenContext: CodegenContext,
 ) : RestXml(codegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+    override val protocolModulePath = "rest_xml"
 
-    companion object {
-        fun fromCoreProtocol(restXml: RestXml): ServerRestXmlProtocol {
-            return ServerRestXmlProtocol(restXml.codegenContext)
-        }
-    }
-
-    override fun markerStruct() = ServerRuntimeType.Protocol("RestXml", "rest_xml", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RestXml", protocolModulePath, runtimeConfig)
 
     override fun routerType() = restRouterType(runtimeConfig)
 
@@ -240,7 +247,7 @@ class ServerRestXmlProtocol(
     ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        requestSpecModule.member("RequestSpec")
+        requestSpecModule.resolve("RequestSpec")
 
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 
@@ -253,15 +260,19 @@ class ServerRestXmlProtocol(
  */
 class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(val codegenContext: ServerCodegenContext) :
     JsonParserCustomization() {
-    override fun section(section: JsonParserSection): Writable = when (section) {
-        is JsonParserSection.BeforeBoxingDeserializedMember -> writable {
-            // We're only interested in _structure_ member shapes that can reach constrained shapes.
-            if (
-                codegenContext.model.expectShape(section.shape.container) is StructureShape &&
-                section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
-            ) {
-                rust(".map(|x| x.into())")
-            }
+    override fun section(section: JsonParserSection): Writable =
+        when (section) {
+            is JsonParserSection.BeforeBoxingDeserializedMember ->
+                writable {
+                    // We're only interested in _structure_ member shapes that can reach constrained shapes.
+                    if (
+                        codegenContext.model.expectShape(section.shape.container) is StructureShape &&
+                        section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
+                    ) {
+                        rust(".map(|x| x.into())")
+                    }
+                }
+
+            else -> emptySection
         }
-    }
 }

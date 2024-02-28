@@ -8,28 +8,18 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.PaginatedIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.asType
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
-import software.amazon.smithy.rust.codegen.core.smithy.generators.error.errorSymbol
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -39,185 +29,190 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1013) Support pagination when the idempotency trait is present
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/1013) Support pagination when the idempotency trait is present
 fun OperationShape.isPaginated(model: Model) =
     hasTrait<PaginatedTrait>() && inputShape(model)
         .findMemberWithTrait<IdempotencyTokenTrait>(model) == null
 
 class PaginatorGenerator private constructor(
-    private val model: Model,
-    private val symbolProvider: RustSymbolProvider,
-    service: ServiceShape,
+    private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
-    private val generics: FluentClientGenerics,
-    retryClassifier: RuntimeType,
 ) {
     companion object {
         fun paginatorType(
-            codegenContext: CodegenContext,
-            generics: FluentClientGenerics,
+            codegenContext: ClientCodegenContext,
             operationShape: OperationShape,
-            retryClassifier: RuntimeType,
         ): RuntimeType? {
             return if (operationShape.isPaginated(codegenContext.model)) {
-                PaginatorGenerator(
-                    codegenContext.model,
-                    codegenContext.symbolProvider,
-                    codegenContext.serviceShape,
-                    operationShape,
-                    generics,
-                    retryClassifier,
-                ).paginatorType()
+                PaginatorGenerator(codegenContext, operationShape).paginatorType()
             } else {
                 null
             }
         }
     }
 
+    private val model = codegenContext.model
+    private val symbolProvider = codegenContext.symbolProvider
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val paginatorName = "${operation.id.name.toPascalCase()}Paginator"
-    private val runtimeConfig = symbolProvider.config().runtimeConfig
     private val idx = PaginatedIndex.of(model)
     private val paginationInfo =
-        idx.getPaginationInfo(service, operation).orNull() ?: PANIC("failed to load pagination info")
-    private val module = RustModule(
-        "paginator",
-        RustMetadata(visibility = Visibility.PUBLIC),
-        documentation = "Paginators for the service",
-    )
+        idx.getPaginationInfo(codegenContext.serviceShape, operation).orNull()
+            ?: PANIC("failed to load pagination info")
+    private val module =
+        RustModule.public(
+            "paginator",
+            parent = symbolProvider.moduleForShape(operation),
+            documentationOverride = "Paginator for this operation",
+        )
 
     private val inputType = symbolProvider.toSymbol(operation.inputShape(model))
     private val outputShape = operation.outputShape(model)
     private val outputType = symbolProvider.toSymbol(outputShape)
-    private val errorType = operation.errorSymbol(model, symbolProvider, CodegenTarget.CLIENT)
+    private val errorType = symbolProvider.symbolForOperationError(operation)
 
-    private fun paginatorType(): RuntimeType = RuntimeType.forInlineFun(
-        paginatorName,
-        module,
-        generate(),
-    )
+    private fun paginatorType(): RuntimeType =
+        RuntimeType.forInlineFun(
+            paginatorName,
+            module,
+            generate(),
+        )
 
-    private val codegenScope = arrayOf(
-        "generics" to generics.decl,
-        "bounds" to generics.bounds,
-        "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(symbolProvider.toSymbol(operation), outputType, errorType, retryClassifier),
-
-        // Operation Types
-        "operation" to symbolProvider.toSymbol(operation),
-        "Input" to inputType,
-        "Output" to outputType,
-        "Error" to errorType,
-        "Builder" to operation.inputShape(model).builderSymbol(symbolProvider),
-
-        // SDK Types
-        "SdkError" to CargoDependency.SmithyHttp(runtimeConfig).asType()
-            .copy(name = "result::SdkError"),
-        "client" to CargoDependency.SmithyClient(runtimeConfig).asType(),
-        "fn_stream" to CargoDependency.SmithyAsync(runtimeConfig).asType().member("future::fn_stream"),
-
-        // External Types
-        "Stream" to CargoDependency.TokioStream.asType().member("Stream"),
-
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "page_size_setter" to pageSizeSetter(),
+            // Operation Types
+            "operation" to symbolProvider.toSymbol(operation),
+            "Input" to inputType,
+            "Output" to outputType,
+            "Error" to errorType,
+            "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
+            // SDK Types
+            "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            "pagination_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::pagination_stream"),
+            // External Types
+            "Stream" to RuntimeType.TokioStream.resolve("Stream"),
+        )
 
     /** Generate the paginator struct & impl **/
-    private fun generate() = writable {
-        val outputTokenLens = NestedAccessorGenerator(symbolProvider).generateBorrowingAccessor(
-            outputShape,
-            paginationInfo.outputTokenMemberPath,
-        )
-        val inputTokenMember = symbolProvider.toMemberName(paginationInfo.inputTokenMember)
-        rustTemplate(
-            """
-            /// Paginator for #{operation:D}
-            pub struct $paginatorName#{generics:W} {
-                handle: std::sync::Arc<crate::client::Handle${generics.inst}>,
-                builder: #{Builder},
-                stop_on_duplicate_token: bool,
-            }
+    private fun generate() =
+        writable {
+            val outputTokenLens =
+                NestedAccessorGenerator(codegenContext).generateBorrowingAccessor(
+                    outputShape,
+                    paginationInfo.outputTokenMemberPath,
+                )
+            val inputTokenMember = symbolProvider.toMemberName(paginationInfo.inputTokenMember)
+            rustTemplate(
+                """
+                /// Paginator for #{operation:D}
+                pub struct $paginatorName {
+                    handle: std::sync::Arc<crate::client::Handle>,
+                    builder: #{Builder},
+                    stop_on_duplicate_token: bool,
+                }
 
-            impl${generics.inst} ${paginatorName}${generics.inst} #{bounds:W} {
-                /// Create a new paginator-wrapper
-                pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>, builder: #{Builder}) -> Self {
-                    Self {
-                        handle,
-                        builder,
-                        stop_on_duplicate_token: true,
+                impl $paginatorName {
+                    /// Create a new paginator-wrapper
+                    pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle>, builder: #{Builder}) -> Self {
+                        Self {
+                            handle,
+                            builder,
+                            stop_on_duplicate_token: true,
+                        }
+                    }
+
+                    #{page_size_setter:W}
+
+                    #{items_fn:W}
+
+                    /// Stop paginating when the service returns the same pagination token twice in a row.
+                    ///
+                    /// Defaults to true.
+                    ///
+                    /// For certain operations, it may be useful to continue on duplicate token. For example,
+                    /// if an operation is for tailing a log file in real-time, then continuing may be desired.
+                    /// This option can be set to `false` to accommodate these use cases.
+                    pub fn stop_on_duplicate_token(mut self, stop_on_duplicate_token: bool) -> Self {
+                        self.stop_on_duplicate_token = stop_on_duplicate_token;
+                        self
+                    }
+
+                    /// Create the pagination stream
+                    ///
+                    /// _Note:_ No requests will be dispatched until the stream is used
+                    /// (e.g. with the [`.next().await`](aws_smithy_async::future::pagination_stream::PaginationStream::next) method).
+                    pub fn send(self) -> #{pagination_stream}::PaginationStream<#{item_type}> {
+                        // Move individual fields out of self for the borrow checker
+                        let builder = self.builder;
+                        let handle = self.handle;
+                        #{runtime_plugin_init}
+                        #{pagination_stream}::PaginationStream::new(#{pagination_stream}::fn_stream::FnStream::new(move |tx| #{Box}::pin(async move {
+                            // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
+                            let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
+                                #{Ok}(input) => input,
+                                #{Err}(e) => { let _ = tx.send(#{Err}(e)).await; return; }
+                            };
+                            loop {
+                                let resp = #{orchestrate};
+                                // If the input member is None or it was an error
+                                let done = match resp {
+                                    #{Ok}(ref resp) => {
+                                        let new_token = #{output_token}(resp);
+                                        let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
+                                        if !is_empty && new_token == input.$inputTokenMember.as_ref() && self.stop_on_duplicate_token {
+                                            true
+                                        } else {
+                                            input.$inputTokenMember = new_token.cloned();
+                                            is_empty
+                                        }
+                                    },
+                                    #{Err}(_) => true,
+                                };
+                                if tx.send(resp).await.is_err() {
+                                    // receiving end was dropped
+                                    return
+                                }
+                                if done {
+                                    return
+                                }
+                            }
+                        })))
                     }
                 }
-
-                #{page_size_setter:W}
-
-                #{items_fn:W}
-
-                /// Stop paginating when the service returns the same pagination token twice in a row.
-                ///
-                /// Defaults to true.
-                ///
-                /// For certain operations, it may be useful to continue on duplicate token. For example,
-                /// if an operation is for tailing a log file in real-time, then continuing may be desired.
-                /// This option can be set to `false` to accommodate these use cases.
-                pub fn stop_on_duplicate_token(mut self, stop_on_duplicate_token: bool) -> Self {
-                    self.stop_on_duplicate_token = stop_on_duplicate_token;
-                    self
-                }
-
-                /// Create the pagination stream
-                ///
-                /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = std::result::Result<#{Output}, #{SdkError}<#{Error}>>> + Unpin
-                #{send_bounds:W} {
-                    // Move individual fields out of self for the borrow checker
-                    let builder = self.builder;
-                    let handle = self.handle;
-                    #{fn_stream}::FnStream::new(move |tx| Box::pin(async move {
-                        // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
-                        let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
-                            Ok(input) => input,
-                            Err(e) => { let _ = tx.send(Err(e)).await; return; }
-                        };
-                        loop {
-                            let op = match input.make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure) {
-                                Ok(op) => op,
-                                Err(e) => {
-                                    let _ = tx.send(Err(e)).await;
-                                    return;
-                                }
-                            };
-                            let resp = handle.client.call(op).await;
-                            // If the input member is None or it was an error
-                            let done = match resp {
-                                Ok(ref resp) => {
-                                    let new_token = #{output_token}(resp);
-                                    let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
-                                    if !is_empty && new_token == input.$inputTokenMember.as_ref() && self.stop_on_duplicate_token {
-                                        true
-                                    } else {
-                                        input.$inputTokenMember = new_token.cloned();
-                                        is_empty
-                                    }
-                                },
-                                Err(_) => true,
-                            };
-                            if tx.send(resp).await.is_err() {
-                                // receiving end was dropped
-                                return
-                            }
-                            if done {
-                                return
-                            }
-                        }
-                    }))
-                }
-            }
-            """,
-            *codegenScope,
-            "items_fn" to itemsFn(),
-            "output_token" to outputTokenLens,
-        )
-    }
+                """,
+                *codegenScope,
+                "items_fn" to itemsFn(),
+                "output_token" to outputTokenLens,
+                "item_type" to
+                    writable {
+                        rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                    },
+                "orchestrate" to
+                    writable {
+                        rustTemplate(
+                            "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
+                            *codegenScope,
+                        )
+                    },
+                "runtime_plugin_init" to
+                    writable {
+                        rustTemplate(
+                            """
+                            let runtime_plugins = #{operation}::operation_runtime_plugins(
+                                handle.runtime_plugins.clone(),
+                                &handle.conf,
+                                #{None},
+                            );
+                            """,
+                            *codegenScope,
+                            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                        )
+                    },
+            )
+        }
 
     /** Type of the inner item of the paginator */
     private fun itemType(): String {
@@ -243,7 +238,7 @@ class PaginatorGenerator private constructor(
                     ///
                     /// This paginator automatically flattens results using `$documentedPath`. Queries to the underlying service
                     /// are dispatched lazily.
-                    pub fn items(self) -> #{ItemPaginator}${generics.inst} {
+                    pub fn items(self) -> #{ItemPaginator} {
                         #{ItemPaginator}(self)
                     }
                     """,
@@ -253,54 +248,63 @@ class PaginatorGenerator private constructor(
         }
 
     /** Generate a struct with a `items()` method that flattens the paginator **/
-    private fun itemsPaginator(): RuntimeType? = if (paginationInfo.itemsMemberPath.isEmpty()) {
-        null
-    } else {
-        RuntimeType.forInlineFun("${paginatorName}Items", module) {
-            rustTemplate(
-                """
-                /// Flattened paginator for `$paginatorName`
-                ///
-                /// This is created with [`.items()`]($paginatorName::items)
-                pub struct ${paginatorName}Items#{generics:W}($paginatorName${generics.inst});
+    private fun itemsPaginator(): RuntimeType? =
+        if (paginationInfo.itemsMemberPath.isEmpty()) {
+            null
+        } else {
+            RuntimeType.forInlineFun("${paginatorName}Items", module) {
+                rustTemplate(
+                    """
+                    /// Flattened paginator for `$paginatorName`
+                    ///
+                    /// This is created with [`.items()`]($paginatorName::items)
+                    pub struct ${paginatorName}Items($paginatorName);
 
-                impl ${generics.inst} ${paginatorName}Items${generics.inst} #{bounds:W} {
-                    /// Create the pagination stream
-                    ///
-                    /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
-                    ///
-                    /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = std::result::Result<${itemType()}, #{SdkError}<#{Error}>>> + Unpin
-                    #{send_bounds:W} {
-                        #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
+                    impl ${paginatorName}Items {
+                        /// Create the pagination stream
+                        ///
+                        /// _Note_: No requests will be dispatched until the stream is used
+                        /// (e.g. with the [`.next().await`](aws_smithy_async::future::pagination_stream::PaginationStream::next) method).
+                        ///
+                        /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](aws_smithy_async::future::pagination_stream::PaginationStream::collect).
+                        pub fn send(self) -> #{pagination_stream}::PaginationStream<#{item_type}> {
+                            #{pagination_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
+                        }
                     }
-                }
 
-                """,
-                "extract_items" to NestedAccessorGenerator(symbolProvider).generateOwnedAccessor(
-                    outputShape,
-                    paginationInfo.itemsMemberPath,
-                ),
-                *codegenScope,
-            )
+                    """,
+                    "extract_items" to
+                        NestedAccessorGenerator(codegenContext).generateOwnedAccessor(
+                            outputShape,
+                            paginationInfo.itemsMemberPath,
+                        ),
+                    "item_type" to
+                        writable {
+                            rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                        },
+                    *codegenScope,
+                )
+            }
         }
-    }
 
-    private fun pageSizeSetter() = writable {
-        paginationInfo.pageSizeMember.orNull()?.also {
-            val memberName = symbolProvider.toMemberName(it)
-            val pageSizeT = symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
-            rust(
-                """
-                /// Set the page size
-                ///
-                /// _Note: this method will override any previously set value for `$memberName`_
-                pub fn page_size(mut self, limit: $pageSizeT) -> Self {
-                    self.builder.$memberName = Some(limit);
-                    self
-                }
-                """,
-            )
+    private fun pageSizeSetter() =
+        writable {
+            paginationInfo.pageSizeMember.orNull()?.also {
+                val memberName = symbolProvider.toMemberName(it)
+                val pageSizeT =
+                    symbolProvider.toSymbol(it).rustType().stripOuter<RustType.Option>().render(true)
+                rustTemplate(
+                    """
+                    /// Set the page size
+                    ///
+                    /// _Note: this method will override any previously set value for `$memberName`_
+                    pub fn page_size(mut self, limit: $pageSizeT) -> Self {
+                        self.builder.$memberName = #{Some}(limit);
+                        self
+                    }
+                    """,
+                    *preludeScope,
+                )
+            }
         }
-    }
 }

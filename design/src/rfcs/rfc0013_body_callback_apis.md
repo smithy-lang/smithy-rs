@@ -9,7 +9,7 @@ Adding a callback API to `ByteStream` and `SdkBody` will enable developers using
 
 *Note that comments starting with '//' are not necessarily going to be included in the actual implementation and are intended as clarifying comments for the purposes of this RFC.*
 
-```rust
+```rust,ignore
 // in aws_smithy_http::callbacks...
 
 /// A callback that, when inserted into a request body, will be called for corresponding lifecycle events.
@@ -41,7 +41,7 @@ The changes we need to make to `ByteStream`:
 
 *(The current version of `ByteStream` and `Inner` can be seen [here][ByteStream impls].)*
 
-```rust
+```rust,ignore
 // in `aws_smithy_http::byte_stream`...
 
 // We add a new method to `ByteStream` for inserting callbacks
@@ -68,7 +68,7 @@ The changes we need to make to `SdkBody`:
 
 *(The current version of `SdkBody` can be seen [here][SdkBody impls].)*
 
-```rust
+```rust,ignore
 // In aws_smithy_http::body...
 
 #[pin_project]
@@ -243,7 +243,7 @@ What follows is a simplified example of how this API could be used to introduce 
 the checksum of some data and then returns the checksum of that data when `trailers` is called. This is fine because it's
 being used to calculate the checksum of a streaming body for a request.
 
-```rust
+```rust,ignore
 #[derive(Default)]
 struct Crc32cChecksumCallback {
     state: Option<u32>,
@@ -292,5 +292,5 @@ In order to use this in a request, we'd modify codegen for that request's servic
    - (if streaming) we'd set the checksum callback on the request body object
    - (if non-streaming) we'd immediately read the body and call `BodyCallback::update` manually. Once all data was read, we'd get the checksum by calling `trailers` and insert that data as a request header.
 
-[ByteStream impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
-[SdkBody impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71
+[ByteStream impls]: https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
+[SdkBody impls]: https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71

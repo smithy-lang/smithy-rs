@@ -63,15 +63,13 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
-use aws_sdk_sts::middleware::DefaultMiddleware;
-use aws_sdk_sts::Region;
-use aws_smithy_client::erase::DynConnector;
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_sdk_sts::Client as StsClient;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials::{self, future, CredentialsError, ProvideCredentials};
 use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use tracing::Instrument;
 
 const ENV_VAR_TOKEN_FILE: &str = "AWS_WEB_IDENTITY_TOKEN_FILE";
 const ENV_VAR_ROLE_ARN: &str = "AWS_ROLE_ARN";
@@ -83,9 +81,9 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 #[derive(Debug)]
 pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
+    time_source: SharedTimeSource,
     fs: Fs,
-    client: aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
-    region: Option<Region>,
+    sts_client: StsClient,
 }
 
 impl WebIdentityTokenCredentialsProvider {
@@ -135,9 +133,9 @@ impl WebIdentityTokenCredentialsProvider {
                         "AWS_ROLE_ARN environment variable must be set",
                     )
                 })?;
-                let session_name = env
-                    .get(ENV_VAR_SESSION_NAME)
-                    .unwrap_or_else(|_| sts::util::default_session_name("web-identity-token"));
+                let session_name = env.get(ENV_VAR_SESSION_NAME).unwrap_or_else(|_| {
+                    sts::util::default_session_name("web-identity-token", self.time_source.now())
+                });
                 Ok(Cow::Owned(StaticConfiguration {
                     web_identity_token_file: token_file.into(),
                     role_arn,
@@ -147,29 +145,20 @@ impl WebIdentityTokenCredentialsProvider {
             Source::Static(conf) => Ok(Cow::Borrowed(conf)),
         }
     }
-    async fn credentials(&self) -> credentials::Result {
+    async fn credentials(&self) -> provider::Result {
         let conf = self.source()?;
         load_credentials(
             &self.fs,
-            &self.client,
-            &self.region.as_ref().cloned().ok_or_else(|| {
-                CredentialsError::invalid_configuration(
-                    "region is required for WebIdentityTokenProvider",
-                )
-            })?,
+            &self.sts_client,
             &conf.web_identity_token_file,
             &conf.role_arn,
             &conf.session_name,
         )
-        .instrument(tracing::debug_span!(
-            "load_credentials",
-            provider = "WebIdentityToken"
-        ))
         .await
     }
 }
 
-/// Builder for [`WebIdentityTokenCredentialsProvider`](WebIdentityTokenCredentialsProvider)
+/// Builder for [`WebIdentityTokenCredentialsProvider`].
 #[derive(Debug, Default)]
 pub struct Builder {
     source: Option<Source>,
@@ -194,7 +183,7 @@ impl Builder {
         self
     }
 
-    /// Configure this builder to use  [`StaticConfiguration`](StaticConfiguration)
+    /// Configure this builder to use  [`StaticConfiguration`].
     ///
     /// WebIdentityToken providers load credentials from the file system. The file system path used
     /// may either determine be loaded from environment variables (default), or via a statically
@@ -211,25 +200,23 @@ impl Builder {
     /// builder, this function will panic.
     pub fn build(self) -> WebIdentityTokenCredentialsProvider {
         let conf = self.config.unwrap_or_default();
-        let client = conf.sts_client();
         let source = self.source.unwrap_or_else(|| Source::Env(conf.env()));
         WebIdentityTokenCredentialsProvider {
             source,
             fs: conf.fs(),
-            client,
-            region: conf.region(),
+            sts_client: StsClient::new(&conf.client_config()),
+            time_source: conf.time_source(),
         }
     }
 }
 
 async fn load_credentials(
     fs: &Fs,
-    client: &aws_smithy_client::Client<DynConnector, DefaultMiddleware>,
-    region: &Region,
+    sts_client: &StsClient,
     token_file: impl AsRef<Path>,
     role_arn: &str,
     session_name: &str,
-) -> credentials::Result {
+) -> provider::Result {
     let token = fs
         .read_to_end(token_file)
         .await
@@ -237,47 +224,41 @@ async fn load_credentials(
     let token = String::from_utf8(token).map_err(|_utf_8_error| {
         CredentialsError::unhandled("WebIdentityToken was not valid UTF-8")
     })?;
-    let conf = aws_sdk_sts::Config::builder()
-        .region(region.clone())
-        .build();
 
-    let operation = aws_sdk_sts::operation::AssumeRoleWithWebIdentity::builder()
+    let resp = sts_client.assume_role_with_web_identity()
         .role_arn(role_arn)
         .role_session_name(session_name)
         .web_identity_token(token)
-        .build()
-        .expect("valid operation")
-        .make_operation(&conf)
+        .send()
         .await
-        .expect("valid operation");
-    let resp = client.call(operation).await.map_err(|sdk_error| {
-        tracing::warn!(error = %DisplayErrorContext(&sdk_error), "STS returned an error assuming web identity role");
-        CredentialsError::provider_error(sdk_error)
-    })?;
+        .map_err(|sdk_error| {
+            tracing::warn!(error = %DisplayErrorContext(&sdk_error), "STS returned an error assuming web identity role");
+            CredentialsError::provider_error(sdk_error)
+        })?;
     sts::util::into_credentials(resp.credentials, "WebIdentityToken")
 }
 
 #[cfg(test)]
 mod test {
     use crate::provider_config::ProviderConfig;
-    use crate::test_case::no_traffic_connector;
+    use crate::test_case::no_traffic_client;
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
-    use aws_sdk_sts::Region;
+    use aws_credential_types::provider::error::CredentialsError;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_types::credentials::CredentialsError;
     use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::region::Region;
     use std::collections::HashMap;
 
     #[tokio::test]
     async fn unloaded_provider() {
         // empty environment
         let conf = ProviderConfig::empty()
-            .with_sleep(TokioSleep::new())
+            .with_sleep_impl(TokioSleep::new())
             .with_env(Env::from_slice(&[]))
-            .with_http_connector(no_traffic_connector())
+            .with_http_client(no_traffic_client())
             .with_region(Some(Region::from_static("us-east-1")));
 
         let provider = Builder::default().configure(&conf).build();
@@ -298,10 +279,10 @@ mod test {
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()
-                    .with_sleep(TokioSleep::new())
+                    .with_sleep_impl(TokioSleep::new())
                     .with_region(region)
                     .with_env(env)
-                    .with_http_connector(no_traffic_connector()),
+                    .with_http_client(no_traffic_client()),
             )
             .build();
         let err = provider
@@ -330,8 +311,8 @@ mod test {
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()
-                    .with_sleep(TokioSleep::new())
-                    .with_http_connector(no_traffic_connector())
+                    .with_sleep_impl(TokioSleep::new())
+                    .with_http_client(no_traffic_client())
                     .with_region(Some(Region::new("us-east-1")))
                     .with_env(env)
                     .with_fs(fs),

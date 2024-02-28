@@ -27,14 +27,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  java_version: 11
-  rust_version: 1.62.1
-  rust_toolchain_components: clippy,rustfmt
   apt_dependencies: libssl-dev gnuplot jq
+  java_version: 11
+  rust_toolchain_components: clippy,rustfmt
+  rust_nightly_version: nightly-2024-02-07
 
 jobs:
   generate-diff:
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     name: Generate diff and upload to S3
     env:
       AWS_REGION: us-west-2
@@ -49,12 +49,13 @@ jobs:
     - uses: actions/checkout@v3
       with:
         path: smithy-rs
+        ref: ${{ inputs.head_revision }}
     - name: Generate diff
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-codegen-diff
         action-arguments: ${{ inputs.base_revision }}
-    - uses: aws-actions/configure-aws-credentials@v1-node16
+    - uses: aws-actions/configure-aws-credentials@v2.2.0
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
@@ -68,7 +69,7 @@ jobs:
         fi
 
   generate-doc-preview:
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     name: Generate rustdoc preview and upload to S3
     env:
       AWS_REGION: us-west-2
@@ -99,17 +100,17 @@ jobs:
         java-version: ${{ env.java_version }}
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ env.rust_version }}
+        toolchain: ${{ env.rust_nightly_version }}
     - name: Generate doc preview
       id: generate-preview
       # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be
       # included since aws-config depends on them. Transcribe Streaming and DynamoDB (paginators/waiters) were chosen
       # below to stay small while still representing most features. Combined, they are about ~20MB at time of writing.
       run: |
-        ./gradlew -Paws.services=+sts,+sso,+transcribestreaming,+dynamodb :aws:sdk:assemble
+        ./gradlew -Paws.services=+sts,+sso,+ssooidc,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
-        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python aws/sdk/build/aws-sdk/sdk
+        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python rust-runtime/aws-smithy-http-server-typescript aws/sdk/build/aws-sdk/sdk
 
         pushd aws/sdk/build/aws-sdk
 
@@ -117,14 +118,15 @@ jobs:
         sed -i '/examples/d' Cargo.toml
 
         # Add server runtime crates to the workspace
-        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python",/' Cargo.toml
+        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript",/' Cargo.toml
 
-        cargo doc --no-deps --all-features
+        RUSTDOCFLAGS="--cfg docsrs" cargo +${{ env.rust_nightly_version }} doc --all-features --no-deps
+
         popd
-        ./tools/generate-doc-preview-index.sh ${{ inputs.base_revision }}
+        ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
         echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
-    - uses: aws-actions/configure-aws-credentials@v1-node16
+    - uses: aws-actions/configure-aws-credentials@v2.2.0
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}

@@ -14,65 +14,64 @@ buildscript {
     }
 }
 
-plugins {
-    kotlin("jvm") version "1.3.72" apply false
-    id("org.jetbrains.dokka") version "1.7.10"
-}
-
 allprojects {
     repositories {
-        mavenLocal()
+        // mavenLocal()
         mavenCentral()
         google()
     }
 }
 
-allprojects.forEach {
-    it.apply(plugin = "jacoco")
-
-    it.the<JacocoPluginExtension>().apply {
-        toolVersion = "0.8.8"
-        reportsDirectory.set(file("${buildDir}/jacoco-reports"))
-    }
-}
-
-val ktlint by configurations.creating {
-    // https://github.com/pinterest/ktlint/issues/1114#issuecomment-805793163
-    attributes {
-        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
-    }
-}
+val ktlint by configurations.creating
 val ktlintVersion: String by project
 
 dependencies {
-    ktlint("com.pinterest:ktlint:$ktlintVersion")
-    ktlint("com.pinterest.ktlint:ktlint-ruleset-standard:$ktlintVersion")
+    ktlint("com.pinterest.ktlint:ktlint-cli:$ktlintVersion") {
+        attributes {
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
+        }
+    }
 }
 
-val lintPaths = listOf(
-    "**/*.kt",
-    // Exclude build output directories
-    "!**/build/**",
-    "!**/node_modules/**",
-    "!**/target/**",
-)
+val lintPaths =
+    listOf(
+        "**/*.kt",
+        // Exclude build output directories
+        "!**/build/**",
+        "!**/node_modules/**",
+        "!**/target/**",
+    )
 
 tasks.register<JavaExec>("ktlint") {
     description = "Check Kotlin code style."
-    group = "Verification"
-    classpath = configurations.getByName("ktlint")
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    classpath = ktlint
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--") + lintPaths
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
 
 tasks.register<JavaExec>("ktlintFormat") {
     description = "Auto fix Kotlin code style violations"
-    group = "formatting"
-    classpath = configurations.getByName("ktlint")
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    classpath = ktlint
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--verbose", "--relative", "--format", "--") + lintPaths
+    args = listOf("--log-level=info", "--relative", "--format", "--") + lintPaths
+    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+}
+
+tasks.register<JavaExec>("ktlintPreCommit") {
+    description = "Check Kotlin code style (for the pre-commit hooks)."
+    group = LifecycleBasePlugin.VERIFICATION_GROUP
+    classpath = ktlint
+    mainClass.set("com.pinterest.ktlint.Main")
+    args = listOf("--log-level=warn", "--color", "--relative", "--format", "--") +
+        System.getProperty("ktlintPreCommitArgs").let { args ->
+            check(args.isNotBlank()) { "need to pass in -DktlintPreCommitArgs=<some file paths to check>" }
+            args.split(" ")
+        }
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
