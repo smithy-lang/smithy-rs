@@ -2,21 +2,24 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use crate::package::PackageHandle;
-use crate::publish::{has_been_published_on_crates_io, publish};
+use crate::publish::publish;
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
 use crate::{fs::Fs, package::discover_manifests};
+use crate::{package::PackageHandle, publish::is_published};
 use anyhow::{Context, Result};
 use cargo_toml::Manifest;
 use clap::Parser;
 use dialoguer::Confirm;
 use semver::Version;
-use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::package::PackageCategory;
-use std::path::{Path, PathBuf};
+use smithy_rs_tool_common::{git, index::CratesIndex};
 use std::time::Duration;
 use std::{collections::HashSet, fs};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -33,11 +36,12 @@ pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> Result<
 
     let smithy_rs_repository_root =
         git::find_git_repository_root(SDK_REPO_NAME, std::env::current_dir()?)?;
+    let index = Arc::new(CratesIndex::real()?);
     let packages = discover_publishable_crate_names(&smithy_rs_repository_root).await?;
     let unpublished_package_names = {
         let mut s = HashSet::new();
         for package_name in packages {
-            if !has_been_published_on_crates_io(&package_name).await? {
+            if !is_published(index.clone(), &package_name).await? {
                 s.insert(package_name);
             }
         }
@@ -65,10 +69,12 @@ async fn claim_crate_name(name: &str) -> Result<()> {
     let category = PackageCategory::from_package_name(name);
     let package_handle = PackageHandle::new(name, Version::new(0, 0, 1));
     publish(&package_handle, crate_dir_path).await?;
+
     // Keep things slow to avoid getting throttled by crates.io
     tokio::time::sleep(Duration::from_secs(2)).await;
-    info!("Successfully published `{}`", package_handle);
     correct_owner(&package_handle, &category).await?;
+
+    info!("Successfully published `{}`", package_handle);
     Ok(())
 }
 
