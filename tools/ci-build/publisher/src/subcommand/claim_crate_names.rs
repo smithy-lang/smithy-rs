@@ -2,19 +2,24 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use crate::package::{discover_packages, PackageHandle, Publish};
 use crate::publish::publish;
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
-use crate::{fs::Fs, publish::is_published};
+use crate::{fs::Fs, package::discover_manifests};
+use crate::{package::PackageHandle, publish::is_published};
+use anyhow::{Context, Result};
+use cargo_toml::Manifest;
 use clap::Parser;
 use dialoguer::Confirm;
 use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::{git, index::CratesIndex};
-use std::path::{Path, PathBuf};
 use std::time::Duration;
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, fs};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tracing::info;
 
 #[derive(Parser, Debug)]
@@ -24,7 +29,7 @@ pub struct ClaimCrateNamesArgs {
     skip_confirmation: bool,
 }
 
-pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow::Result<()> {
+pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> Result<()> {
     let ClaimCrateNamesArgs { skip_confirmation } = args;
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
@@ -43,13 +48,12 @@ pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow:
         s
     };
 
-    confirm_user_intent(&unpublished_package_names, *skip_confirmation)?;
-
     if unpublished_package_names.is_empty() {
         info!("All publishable packages already exist on crates.io - nothing to do.");
         return Ok(());
     }
 
+    confirm_user_intent(&unpublished_package_names, *skip_confirmation)?;
     for name in unpublished_package_names {
         claim_crate_name(&name).await?;
     }
@@ -57,7 +61,7 @@ pub async fn subcommand_claim_crate_names(args: &ClaimCrateNamesArgs) -> anyhow:
     Ok(())
 }
 
-async fn claim_crate_name(name: &str) -> anyhow::Result<()> {
+async fn claim_crate_name(name: &str) -> Result<()> {
     let temporary_directory = tempfile::tempdir()?;
     let crate_dir_path = temporary_directory.path();
     create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
@@ -74,35 +78,32 @@ async fn claim_crate_name(name: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Return the list of publishable crate names in the `smithy-rs` git repository.
-async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Result<Vec<String>> {
-    async fn _discover_publishable_crate_names(
-        fs: Fs,
-        path: PathBuf,
-    ) -> anyhow::Result<HashSet<String>> {
-        let packages = discover_packages(fs, path).await?;
-        let mut publishable_package_names = HashSet::new();
-        for package in packages {
-            if let Publish::Allowed = package.publish {
-                publishable_package_names.insert(package.handle.name);
+async fn load_publishable_crate_names(path: &Path) -> Result<HashSet<String>> {
+    let manifest_paths = discover_manifests(path.into()).await?;
+    let mut result = HashSet::new();
+    for manifest_path in &manifest_paths {
+        let content =
+            fs::read(manifest_path).with_context(|| format!("failed to read {path:?}"))?;
+        let manifest = Manifest::from_slice(&content)
+            .with_context(|| format!("failed to load crate manifest for {:?}", path))?;
+        if let Some(package) = manifest.package {
+            let crate_name = package.name();
+            if matches!(package.publish(), cargo_toml::Publish::Flag(true)) {
+                result.insert(crate_name.to_string());
             }
         }
-        Ok(publishable_package_names)
     }
+    Ok(result)
+}
 
+/// Return the list of publishable crate names in the `smithy-rs` git repository.
+async fn discover_publishable_crate_names(repository_root: &Path) -> Result<Vec<String>> {
     let packages = {
         let mut p = vec![];
         info!("Discovering publishable crates...");
+        p.extend(load_publishable_crate_names(&repository_root.join("rust-runtime")).await?);
         p.extend(
-            _discover_publishable_crate_names(Fs::Real, repository_root.join("rust-runtime"))
-                .await?,
-        );
-        p.extend(
-            _discover_publishable_crate_names(
-                Fs::Real,
-                repository_root.join("aws").join("rust-runtime"),
-            )
-            .await?,
+            load_publishable_crate_names(&repository_root.join("aws").join("rust-runtime")).await?,
         );
         info!("Finished crate discovery.");
         p
@@ -110,11 +111,7 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Res
     Ok(packages)
 }
 
-async fn create_dummy_lib_crate(
-    fs: Fs,
-    package_name: &str,
-    directory_path: PathBuf,
-) -> anyhow::Result<()> {
+async fn create_dummy_lib_crate(fs: Fs, package_name: &str, directory_path: PathBuf) -> Result<()> {
     let cargo_toml = format!(
         r#"[package]
 name = "{}"
@@ -133,10 +130,7 @@ repository = "https://github.com/smithy-lang/smithy-rs""#,
     Ok(())
 }
 
-fn confirm_user_intent(
-    crate_names: &HashSet<String>,
-    skip_confirmation: bool,
-) -> anyhow::Result<()> {
+fn confirm_user_intent(crate_names: &HashSet<String>, skip_confirmation: bool) -> Result<()> {
     use std::fmt::Write;
 
     let prompt = {
