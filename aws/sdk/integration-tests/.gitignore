@@ -1,2 +1,3 @@
 Cargo.lock
 target/
+webassembly/src/bindings.rs

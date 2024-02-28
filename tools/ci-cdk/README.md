@@ -24,7 +24,7 @@ cd canary-runner
 cargo run -- run --sdk-release-tag <version> --musl --cdk-output ../cdk-outputs.json
 ```
 
-__NOTE:__ You may want to add a `--profile` to the `deploy` command to select a specific credential
+**NOTE:** You may want to add a `--profile` to the deploy command to select a specific credential
 profile to deploy to if you don't want to use the default.
 
 Also, if this is a new test AWS account, be sure it CDK bootstrap it before attempting to deploy.
