@@ -19,8 +19,8 @@ object TestUtility {
         writable {
             rustTemplate(
                 """
-            fn is_display<T : #{Display}>(_t: &T) { }
-            """,
+                pub fn is_display<T : #{Display}>(_t: &T) { }
+                """,
                 "Display" to RuntimeType.Display,
             )
         }
@@ -29,8 +29,8 @@ object TestUtility {
         writable {
             rustTemplate(
                 """
-            fn is_error<T : #{Error}>(_t: &T) { }
-            """,
+                pub fn is_error<T : #{Error}>(_t: &T) { }
+                """,
                 "Error" to RuntimeType.StdError,
             )
         }

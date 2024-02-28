@@ -59,6 +59,9 @@ class UnconstrainedUnionGeneratorTest {
         }
 
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             project.withModule(ServerRustModule.Model) modelsModuleWriter@{
                 UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
@@ -75,9 +78,9 @@ class UnconstrainedUnionGeneratorTest {
                         assert_eq!(
                             expected_err, err
                         );
-                        
-                        let _error_trait : &dyn ::std::error::Error = &err;
-                        let _display_impl_works = format!("{err}");
+                        is_display(&err);
+                        is_error(&err);
+                        assert_eq!(err.to_string(), "`required_member` was not provided but it is required when building `Structure`");
                     """,
                 )
 
