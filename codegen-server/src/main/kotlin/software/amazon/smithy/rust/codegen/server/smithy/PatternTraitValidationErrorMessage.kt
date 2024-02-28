@@ -9,22 +9,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.PatternTrait
 
 fun PatternTrait.validationErrorMessage() =
-    "Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: ${this.patternDescription()}"
+    "Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}"
 
 fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
-    "Value provided for `${shape.id}` failed to satisfy the constraint: Member must match the regular expression pattern: ${this.patternDescription()}"
-
-// A '#' character in the pattern must be replaced with "##" for the message to be usable
-// within `rustTemplate`, as it interpolates anything prefixed with '#'. Additionally,
-// passing the `toString()` representation of a regular expression directly to a function
-// that interpolates (e.g., `println!`, `format!`) can cause an error if the string contains
-// interpolation characters. Therefore, these characters must be escaped.
-fun PatternTrait.patternDescription() =
-    this.patternWithEscapedHash()
-        .replace("\\", "\\\\")
-        .replace("{", "{{")
-        .replace("}", "}}")
-
-fun PatternTrait.patternWithEscapedHash() =
-    this.pattern.toString()
-        .replace("#", "##")
+    "Value provided for `${shape.id}` failed to satisfy the constraint: Member must match the regular expression pattern: {}"

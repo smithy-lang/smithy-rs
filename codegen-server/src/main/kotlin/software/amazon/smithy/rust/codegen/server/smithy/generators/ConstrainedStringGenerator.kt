@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.patternWithEscapedHash
 import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
@@ -266,10 +265,10 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
         writable {
             rustTemplate(
                 """
-            Self::Length(length) => {
-                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
-            },
-            """,
+                Self::Length(length) => {
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                },
+                """,
             )
         }
 }
@@ -312,9 +311,10 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
 
     fun errorMessage(): Writable {
         return writable {
+            val pattern = patternTrait.pattern.toString().replace("#", "##")
             rust(
                 """
-                format!("${patternTrait.validationErrorMessage()}", &path)
+                format!("${patternTrait.validationErrorMessage()}", &path, r##"$pattern"##)
                 """,
             )
         }
@@ -328,7 +328,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         constraintViolation: Symbol,
         unconstrainedTypeName: String,
     ): Writable {
-        val pattern = patternTrait.patternWithEscapedHash()
+        val pattern = patternTrait.pattern.toString().replace("#", "##")
         val errorMessageForUnsupportedRegex =
             """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
@@ -361,12 +361,14 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
 
     override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
         writable {
+            val errorMessage = patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
+            val pattern = patternTrait.pattern.toString().replace("#", "##")
             rustTemplate(
                 """
-            Self::Pattern(_) => {
-                format!(r##"${patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"##)
-            },
-            """,
+                Self::Pattern(_) => {
+                    format!(r##"$errorMessage"##, r##"$pattern"##)
+                },
+                """,
             )
         }
 }

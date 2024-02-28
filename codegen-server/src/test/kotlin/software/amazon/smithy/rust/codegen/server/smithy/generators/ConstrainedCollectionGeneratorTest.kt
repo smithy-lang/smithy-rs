@@ -389,7 +389,7 @@ class ConstrainedCollectionGeneratorTest {
                     let error = crate::model::constrained_list::ConstraintViolation::Member(0, constrained_error);
                     is_error(&error);
                     is_display(&error);
-                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\\\d+", 
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+", 
                         error.to_string());
                 """,
             )
@@ -400,7 +400,7 @@ class ConstrainedCollectionGeneratorTest {
                     let error = crate::model::constrained_set::ConstraintViolation::Member(0, constrained_error);
                     is_error(&error);
                     is_display(&error);
-                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\\\d+", 
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+", 
                         error.to_string());
                 """,
             )

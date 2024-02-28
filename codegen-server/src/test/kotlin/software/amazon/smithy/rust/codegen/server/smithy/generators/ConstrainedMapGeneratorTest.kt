@@ -289,7 +289,7 @@ class ConstrainedMapGeneratorTest {
                 test =
                     """
                     let error = constrained_map_with_constrained_key::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
-                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+");
                     """,
             )
             unitTest(
@@ -305,7 +305,7 @@ class ConstrainedMapGeneratorTest {
                 test =
                     """
                     let error = constrained_map_with_constrained_key_and_value::ConstraintViolation::Key(constrained_key::ConstraintViolation::Pattern("some error".to_string()));
-                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: ##\\\\d+");
+                    assert_eq!(error.to_string(), "Value provided for `test#ConstrainedKey` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+");
                     let error = constrained_map_with_constrained_key_and_value::ConstraintViolation::Value(ConstrainedKey("1".to_string()), constrained_value::ConstraintViolation::Pattern("some error".to_string()));
                     assert_eq!(error.to_string(), "Value provided for `test#ConstrainedValue` failed to satisfy the constraint: Member must match the regular expression pattern: A-Z");
                     """,
