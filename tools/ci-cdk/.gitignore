@@ -8,3 +8,6 @@ build
 .cdk.staging
 cdk.out
 cdk-outputs.json
+
+# Generated Rust file
+canary-wasm/src/bindings.rs

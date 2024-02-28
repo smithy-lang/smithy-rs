@@ -1,0 +1,15 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package aws:component;
+ 
+interface canary-interface {
+    run-canary: func() -> result<list<string>, string>;
+}
+ 
+world canary-world {
+    export canary-interface;
+}
+     
