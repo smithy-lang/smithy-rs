@@ -6,97 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3300",
-        "aws-sdk-rust#977"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
-      "message": " Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).\n\nExample:\n\n```rust\nuse aws_smithy_types_convert::stream::PaginationStreamExt\nlet stream = s3_client.list_objects_v2().bucket(\"...\").into_paginator().send().into_stream_03x();\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "Ploppz",
-      "references": [
-        "smithy-rs#3299"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
-      "message": "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3252",
-        "smithy-rs#3312"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
-      "message": "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3333",
-        "aws-sdk-rust#998",
-        "aws-sdk-rust#1010"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
-      "message": "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3335",
-        "aws-sdk-rust#1021"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
-      "message": "~/.aws/config and ~/.aws/credentials now parse keys in a case-insensitive way. This means the `AWS_SECRET_ACCESS_KEY` is supported in addition to `aws_secret_access_key`.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "aws-sdk#574",
-        "aws-sdk-rust#1020",
-        "smithy-rs#3344"
-      ],
-      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 5
-    },
-    {
       "message": "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location.",
       "meta": {
         "bug": false,
@@ -108,7 +17,7 @@
         "smithy-rs#3318"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix bug where overriding the credentials at the operation level failed if credentials were already set.",
@@ -123,7 +32,7 @@
         "smithy-rs#3363"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add `apply_to_request_http1x` to `aws-sigv4` to enable signing http = 1.0 requests.",
@@ -138,7 +47,7 @@
         "smithy-rs#3366"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The types in the aws-http crate were moved into aws-runtime. Deprecated type aliases were put in place to point to the new locations.",
@@ -152,7 +61,7 @@
         "smithy-rs#3355"
       ],
       "since-commit": "a781be3cd8d22f4ebb5c06a758ddd5f1d6824ded",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add support for `[sso-session]` in AWS config file for AWS Identity Center SSO credentials. Note that this does not include support for AWS Builder ID SSO sessions for services such as Code Catalyst (these lack the `sso_account_id` and `sso_role_name` fields in the profile config). Support for AWS Builder IDs is still being tracked in https://github.com/awslabs/aws-sdk-rust/issues/703.",
@@ -167,7 +76,7 @@
         "smithy-rs#3379"
       ],
       "since-commit": "a781be3cd8d22f4ebb5c06a758ddd5f1d6824ded",
-      "age": 3
+      "age": 4
     },
     {
       "message": "The types in the aws-http crate were moved into aws-runtime. Deprecated type aliases were put in place to point to the new locations.",
@@ -181,7 +90,7 @@
         "smithy-rs#3355"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add `try_into_http1x` and `try_from_http1x` to Request and Response container types.",
@@ -197,7 +106,7 @@
         "smithy-rs#3373"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "It is now possible to send customized presigned requests. You can now call `.customize().<customizations>.presigned(...).await`. Previously, only normal requests supported customization.",
@@ -212,7 +121,7 @@
         "aws-sdk-rust#1031"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Added impl `Display` to Enums.",
@@ -227,7 +136,7 @@
         "smithy-rs#3391"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Retry classifiers will now be sorted by priority. This change only affects requests\nthat are retried. Some requests that were previously been classified as transient\nerrors may now be classified as throttling errors.\n\nIf you were\n\n- configuring multiple custom retry classifiers\n- that would disagree on how to classify a response\n- that have differing priorities\n\nyou may see a behavior change in that classification for the same response is now\ndependent on the classifier priority instead of the order in which the classifier\nwas added.\n",
@@ -241,7 +150,7 @@
         "smithy-rs#3322"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Cap the maximum jitter fraction for credentials cache refresh buffer time to 0.5. It was previously 1.0, and if the fraction was randomly set to 1.0, it was equivalent to disregarding the buffer time for cache refresh.",
@@ -255,7 +164,7 @@
         "smithy-rs#3402"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Retain the SSO token cache between calls to `provide_credentials` when using IAM Identity Center SSO via the AWS config file.",
@@ -269,7 +178,7 @@
         "smithy-rs#3387"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix bug where timeout settings where not merged properly. This will add a default connect timeout of 3.1s seconds for most clients.\n\n[**For more details see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3408).",
@@ -285,6 +194,20 @@
         "smithy-rs#3258"
       ],
       "since-commit": "403580262f6089c62747b20b6ed1cfc7a09e79bc",
+      "age": 2
+    },
+    {
+      "message": "The MSRV has been increase to 1.74.1",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3410"
+      ],
+      "since-commit": "bc1e019e9a9aba438d855e660d18b6ab7d8a903c",
       "age": 1
     }
   ],
