@@ -11,10 +11,12 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rulesengine.language.EndpointRuleSet
+import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.usesSigV4a
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -37,13 +39,24 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
+internal fun ClientCodegenContext.usesSigAuth(): Boolean =
+    ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
+        usesSigV4a()
+
+/**
+ * SigV4a doesn't have a Smithy auth trait yet, so this is a hack to determine if a service supports it.
+ *
+ * In the future, Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
+ */
+internal fun ClientCodegenContext.usesSigV4a(): Boolean {
+    val endpointAuthSchemes =
+        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
+            ?.also { it.typeCheck() }?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
+    return endpointAuthSchemes.contains("sigv4a")
+}
+
 class SigV4AuthDecorator : ConditionalDecorator(
-    predicate = { codegenContext, _ ->
-        codegenContext?.let {
-            ServiceIndex.of(it.model).getEffectiveAuthSchemes(it.serviceShape)
-                .containsKey(SigV4Trait.ID) || it.serviceShape.usesSigV4a()
-        } ?: false
-    },
+    predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
     delegateTo =
         object : ClientCodegenDecorator {
             override val name: String get() = "SigV4AuthDecorator"
@@ -71,8 +84,7 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 baseAuthSchemeOptions: List<AuthSchemeOption>,
             ): List<AuthSchemeOption> {
                 val supportsSigV4a =
-                    codegenContext.serviceShape.usesSigV4a()
-                        .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
+                    codegenContext.usesSigV4a().thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
                 return baseAuthSchemeOptions +
                     AuthSchemeOption.StaticAuthSchemeOption(
                         SigV4Trait.ID,
@@ -102,7 +114,7 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 codegenContext: ClientCodegenContext,
                 rustCrate: RustCrate,
             ) {
-                if (codegenContext.serviceShape.usesSigV4a()) {
+                if (codegenContext.usesSigV4a()) {
                     // Add optional feature for SigV4a support
                     rustCrate.mergeFeature(Feature("sigv4a", true, listOf("aws-runtime/sigv4a")))
                 }
@@ -198,7 +210,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                         rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
                     }
 
-                    if (codegenContext.serviceShape.usesSigV4a()) {
+                    if (codegenContext.usesSigV4a()) {
                         featureGateBlock("sigv4a") {
                             section.registerAuthScheme(this) {
                                 rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)

@@ -5,14 +5,11 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.aws.traits.auth.SigV4Trait
-import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.usesSigV4a
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
@@ -26,12 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
 class CredentialsProviderDecorator : ConditionalDecorator(
-    predicate = { codegenContext, _ ->
-        codegenContext?.let {
-            ServiceIndex.of(it.model).getEffectiveAuthSchemes(it.serviceShape)
-                .containsKey(SigV4Trait.ID) || it.serviceShape.usesSigV4a()
-        } ?: false
-    },
+    predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
     delegateTo =
         object : ClientCodegenDecorator {
             override val name: String = "CredentialsProviderDecorator"
@@ -134,7 +126,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                             """,
                             *codegenScope,
                         ) {
-                            if (codegenContext.serviceShape.usesSigV4a()) {
+                            if (codegenContext.usesSigV4a()) {
                                 featureGateBlock("sigv4a") {
                                     rustTemplate(
                                         "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",

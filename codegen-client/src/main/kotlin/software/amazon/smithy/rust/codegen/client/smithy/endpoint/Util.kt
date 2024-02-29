@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
@@ -17,7 +16,6 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterTy
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
-import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -31,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
@@ -145,16 +142,4 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
     override fun visitErrorRule(error: Expression?): Set<String> {
         return setOf()
     }
-}
-
-/**
- * SigV4a doesn't have a Smithy auth trait yet, so this is a hack to determine if a service supports it.
- *
- * In the future, Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
- */
-fun ServiceShape.usesSigV4a(): Boolean {
-    val endpointAuthSchemes =
-        getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typeCheck() }
-            ?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
-    return endpointAuthSchemes.contains("sigv4a")
 }
