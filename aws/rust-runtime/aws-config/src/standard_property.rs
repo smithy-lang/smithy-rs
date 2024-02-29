@@ -29,8 +29,9 @@ impl Display for PropertySource<'_> {
                 name,
                 service_specific,
             } => {
-                #[rustfmt::skip]
-                let service_specific = if *service_specific { "service-specific " } else { "" };
+                let service_specific = service_specific
+                    .then_some("service-specific ")
+                    .unwrap_or_default();
                 write!(f, "{service_specific}environment variable `{name}`")
             }
             PropertySource::Profile {
@@ -38,8 +39,9 @@ impl Display for PropertySource<'_> {
                 key,
                 service_specific,
             } => {
-                #[rustfmt::skip]
-                let service_specific = if *service_specific { "service-specific " } else { "" };
+                let service_specific = service_specific
+                    .then_some("service-specific ")
+                    .unwrap_or_default();
                 write!(f, "{service_specific}profile `{name}`, key: `{key}`")
             }
         }
