@@ -137,14 +137,23 @@ where
                             .take()
                             .expect("futures cannot be polled after completion")
                             .oneshot(ok),
-                        Err(err) => return Poll::Ready(Ok(err.into_response())),
+                        Err(err) => {
+                            // The error may arise either from a `FromRequest` failure for any user-defined
+                            // handler's additional input parameters, or from a de-serialization failure
+                            // of an input parameter specific to the operation.
+                            tracing::trace!(error = %err, "parameter for the handler cannot be constructed");
+                            return Poll::Ready(Ok(err.into_response()));
+                        }
                     }
                 }
                 InnerProj::Inner { call } => {
                     let result = ready!(call.poll(cx));
                     let output = match result {
                         Ok(ok) => ok.into_response(),
-                        Err(err) => err.into_response(),
+                        Err(err) => {
+                            // tracing::trace!(error = %err, "future could not be upgraded");
+                            err.into_response()
+                        }
                     };
                     return Poll::Ready(Ok(output));
                 }
