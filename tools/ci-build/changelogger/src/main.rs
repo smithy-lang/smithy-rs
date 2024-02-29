@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use changelogger::init::subcommand_init;
+use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
 use clap::Parser;
@@ -18,6 +19,9 @@ pub enum Args {
     Render(changelogger::render::RenderArgs),
     /// Print to stdout the empty "next" CHANGELOG template.
     Init(changelogger::init::InitArgs),
+
+    /// Add a new CHANGELOG entry
+    New(changelogger::new::NewArgs),
 }
 
 fn main() -> Result<()> {
@@ -25,6 +29,7 @@ fn main() -> Result<()> {
         Args::Split(split) => subcommand_split(&split),
         Args::Render(render) => subcommand_render(&render),
         Args::Init(init) => subcommand_init(&init),
+        Args::New(new) => subcommand_new(&new),
     }
 }
 
