@@ -4,12 +4,11 @@
  */
 
 use crate::auth::{
-    apply_signing_instructions, extract_endpoint_auth_scheme_signing_name,
-    SigV4OperationSigningConfig, SigV4SigningError,
+    extract_endpoint_auth_scheme_signing_name, SigV4OperationSigningConfig, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
-use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
-use aws_sigv4::sign::v4a;
+use aws_sigv4::http_request::{SigningParams, SigningSettings};
+use aws_sigv4::sign::{v4a, SignWith, SigningPackage};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -166,47 +165,28 @@ impl Sign for SigV4aSigner {
         runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
-        let operation_config =
-            Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-        let request_time = runtime_components.time_source().unwrap_or_default().now();
-
         if identity.data::<Credentials>().is_none() {
             return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
         }
 
+        let operation_config =
+            Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
+        let request_time = runtime_components.time_source().unwrap_or_default().now();
         let settings = Self::settings(&operation_config);
         let signing_params =
             Self::signing_params(settings, identity, &operation_config, request_time)?;
 
-        let (signing_instructions, _signature) = {
-            // A body that is already in memory can be signed directly. A body that is not in memory
-            // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
-            let signable_body = operation_config
+        let signing_params = SigningParams::V4a(signing_params);
+        let mut signing_package = SigningPackage::builder().signing_params(&signing_params);
+        signing_package.set_payload_override(
+            operation_config
                 .signing_options
                 .payload_override
                 .as_ref()
-                // the payload_override is a cheap clone because it contains either a
-                // reference or a short checksum (we're not cloning the entire body)
-                .cloned()
-                .unwrap_or_else(|| {
-                    request
-                        .body()
-                        .bytes()
-                        .map(SignableBody::Bytes)
-                        .unwrap_or(SignableBody::UnsignedPayload)
-                });
+                .cloned(),
+        );
+        request.sign_with(&signing_package.build()?)?;
 
-            let signable_request = SignableRequest::new(
-                request.method(),
-                request.uri().to_string(),
-                request.headers().iter(),
-                signable_body,
-            )?;
-            sign(signable_request, &signing_params.into())?
-        }
-        .into_parts();
-
-        apply_signing_instructions(signing_instructions, request)?;
         Ok(())
     }
 }
