@@ -24,48 +24,46 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class CredentialsProviderDecorator : ClientCodegenDecorator {
-    override val name: String = "CredentialsProvider"
-    override val order: Byte = 0
+class CredentialsProviderDecorator : ConditionalDecorator(
+    predicate = { codegenContext, _ ->
+        codegenContext?.let {
+            ServiceIndex.of(it.model).getEffectiveAuthSchemes(it.serviceShape)
+                .containsKey(SigV4Trait.ID) || it.serviceShape.usesSigV4a()
+        } ?: false
+    },
+    delegateTo =
+        object : ClientCodegenDecorator {
+            override val name: String = "CredentialsProviderDecorator"
+            override val order: Byte = 0
 
-    private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        ServiceIndex.of(codegenContext.model).getEffectiveAuthSchemes(codegenContext.serviceShape)
-            .containsKey(SigV4Trait.ID) || codegenContext.serviceShape.usesSigV4a()
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> = baseCustomizations + CredentialProviderConfig(codegenContext)
 
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        baseCustomizations.letIf(applies(codegenContext)) { it + CredentialProviderConfig(codegenContext) }
+            override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+                listOf(
+                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                        rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+                    },
+                )
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        emptyList<AdHocCustomization>().letIf(applies(codegenContext)) {
-            it +
-                adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                    rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+            override fun extras(
+                codegenContext: ClientCodegenContext,
+                rustCrate: RustCrate,
+            ) {
+                rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
+
+                rustCrate.withModule(ClientRustModule.config) {
+                    rust(
+                        "pub use #T::Credentials;",
+                        AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
+                    )
                 }
-        }
-
-    override fun extras(
-        codegenContext: ClientCodegenContext,
-        rustCrate: RustCrate,
-    ) {
-        if (!applies(codegenContext)) {
-            return
-        }
-
-        rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
-
-        rustCrate.withModule(ClientRustModule.config) {
-            rust(
-                "pub use #T::Credentials;",
-                AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
-            )
-        }
-    }
-}
+            }
+        },
+)
 
 /**
  * Add a `.credentials_provider` field and builder to the `Config` for a given service

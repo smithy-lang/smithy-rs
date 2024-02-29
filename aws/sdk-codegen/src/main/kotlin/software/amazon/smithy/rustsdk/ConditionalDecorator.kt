@@ -32,11 +32,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImp
 /**
  * Delegating decorator that only applies when a condition is true
  */
-class ConditionalDecorator(
+open class ConditionalDecorator(
     /** Decorator to delegate to */
     private val delegateTo: ClientCodegenDecorator,
-    /** Service ID this decorator is active for */
-    private val predicate: (ClientCodegenContext?, ShapeId?) -> Boolean,
+    private val predicate: (ClientCodegenContext?, ToShapeId?) -> Boolean,
 ) : ClientCodegenDecorator {
     override val name: String = delegateTo.name
     override val order: Byte = delegateTo.order
@@ -55,7 +54,7 @@ class ConditionalDecorator(
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
 
-    override fun authOptions(
+    final override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
@@ -64,7 +63,7 @@ class ConditionalDecorator(
             delegateTo.authOptions(codegenContext, operationShape, baseAuthSchemeOptions)
         }
 
-    override fun builderCustomizations(
+    final override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<BuilderCustomization>,
     ): List<BuilderCustomization> =
@@ -72,7 +71,7 @@ class ConditionalDecorator(
             delegateTo.builderCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun configCustomizations(
+    final override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
@@ -80,17 +79,17 @@ class ConditionalDecorator(
             delegateTo.configCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
+    final override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         emptyMap<String, Any?>().maybeApply(codegenContext) {
             delegateTo.crateManifestCustomizations(codegenContext)
         }
 
-    override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =
+    final override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =
         emptyList<EndpointCustomization>().maybeApply(codegenContext) {
             delegateTo.endpointCustomizations(codegenContext)
         }
 
-    override fun errorCustomizations(
+    final override fun errorCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ErrorCustomization>,
     ): List<ErrorCustomization> =
@@ -98,7 +97,7 @@ class ConditionalDecorator(
             delegateTo.errorCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun errorImplCustomizations(
+    final override fun errorImplCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ErrorImplCustomization>,
     ): List<ErrorImplCustomization> =
@@ -106,7 +105,7 @@ class ConditionalDecorator(
             delegateTo.errorImplCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun extras(
+    final override fun extras(
         codegenContext: ClientCodegenContext,
         rustCrate: RustCrate,
     ) {
@@ -115,7 +114,7 @@ class ConditionalDecorator(
         }
     }
 
-    override fun libRsCustomizations(
+    final override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> =
@@ -123,7 +122,7 @@ class ConditionalDecorator(
             delegateTo.libRsCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun operationCustomizations(
+    final override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
@@ -132,7 +131,7 @@ class ConditionalDecorator(
             delegateTo.operationCustomizations(codegenContext, operation, baseCustomizations)
         }
 
-    override fun protocols(
+    final override fun protocols(
         serviceId: ShapeId,
         currentProtocols: ClientProtocolMap,
     ): ClientProtocolMap =
@@ -140,7 +139,7 @@ class ConditionalDecorator(
             delegateTo.protocols(serviceId, currentProtocols)
         }
 
-    override fun structureCustomizations(
+    final override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
     ): List<StructureCustomization> =
@@ -148,7 +147,7 @@ class ConditionalDecorator(
             delegateTo.structureCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun transformModel(
+    final override fun transformModel(
         service: ServiceShape,
         model: Model,
         settings: ClientRustSettings,
@@ -157,7 +156,7 @@ class ConditionalDecorator(
             delegateTo.transformModel(service, model, settings)
         }
 
-    override fun serviceRuntimePluginCustomizations(
+    final override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
@@ -165,7 +164,7 @@ class ConditionalDecorator(
             delegateTo.serviceRuntimePluginCustomizations(codegenContext, baseCustomizations)
         }
 
-    override fun protocolTestGenerator(
+    final override fun protocolTestGenerator(
         codegenContext: ClientCodegenContext,
         baseGenerator: ProtocolTestGenerator,
     ): ProtocolTestGenerator =
@@ -173,7 +172,7 @@ class ConditionalDecorator(
             delegateTo.protocolTestGenerator(codegenContext, baseGenerator)
         }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+    final override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf<AdHocCustomization>().maybeApply(codegenContext) {
             delegateTo.extraSections(codegenContext)
         }

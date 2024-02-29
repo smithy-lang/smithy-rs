@@ -19,35 +19,31 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
-class TokenProvidersDecorator : ClientCodegenDecorator {
-    override val name: String get() = "TokenProvidersDecorator"
-    override val order: Byte = 0
+class TokenProvidersDecorator : ConditionalDecorator(
+    predicate = { codegenContext, _ ->
+        codegenContext?.let {
+            ServiceIndex.of(codegenContext.model).getEffectiveAuthSchemes(codegenContext.serviceShape)
+                .containsKey(HttpBearerAuthTrait.ID)
+        } ?: false
+    },
+    delegateTo =
+        object : ClientCodegenDecorator {
+            override val name: String get() = "TokenProvidersDecorator"
+            override val order: Byte = 0
 
-    private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        ServiceIndex.of(codegenContext.model).getEffectiveAuthSchemes(codegenContext.serviceShape)
-            .containsKey(HttpBearerAuthTrait.ID)
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> = baseCustomizations + TokenProviderConfig(codegenContext)
 
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        if (applies(codegenContext)) {
-            baseCustomizations + TokenProviderConfig(codegenContext)
-        } else {
-            baseCustomizations
-        }
-
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        if (applies(codegenContext)) {
-            listOf(
-                adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                    rust("${section.serviceConfigBuilder}.set_token_provider(${section.sdkConfig}.token_provider());")
-                },
-            )
-        } else {
-            emptyList()
-        }
-}
+            override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+                listOf(
+                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                        rust("${section.serviceConfigBuilder}.set_token_provider(${section.sdkConfig}.token_provider());")
+                    },
+                )
+        },
+)
 
 /**
  * Add a `.token_provider` field and builder to the `Config` for a given service
@@ -71,7 +67,8 @@ class TokenProviderConfig(private val codegenContext: ClientCodegenContext) : Co
             "TestToken" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Token"),
             "HTTP_BEARER_AUTH_SCHEME_ID" to
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig)
-                    .withFeature("http-auth").toType().resolve("client::auth::http").resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
+                    .withFeature("http-auth").toType().resolve("client::auth::http")
+                    .resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
         )
 
     override fun section(section: ServiceConfig) =
