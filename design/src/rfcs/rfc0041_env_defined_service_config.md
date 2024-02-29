@@ -110,9 +110,12 @@ pub struct PropertiesKey {
 impl PropertiesKey {
     /// Create a new builder for a `PropertiesKey`.
     pub fn builder() -> Builder {
-        Builder::default()
+        Default::default()
     }
 }
+
+// The builder code is omitted from this RFC. It allows users to set each field
+// individually and then build a PropertiesKey
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Properties {
@@ -125,12 +128,12 @@ impl Properties {
     }
 
     pub fn insert(&mut self, properties_key: PropertiesKey, value: PropertyValue) {
-        self
+        let _ = self
             .inner
-            .entry(properties_key)
+            // If we don't clone then we don't get to log a useful warning for a value getting overwritten.
+            .entry(properties_key.clone())
             .and_modify(|v| {
                 tracing::trace!("overwriting {properties_key}: was {v}, now {value}");
-
                 *v = value.clone();
             })
             .or_insert(value);
@@ -165,7 +168,7 @@ pub struct ServiceEnvConfigKey<'a> {
     env: &'a str,
 }
 
-impl ServiceEnvConfigKey<'a> {
+impl<'a> ServiceEnvConfigKey<'a> {
     pub fn builder() -> Builder { Builder::default() }
     pub fn service_id(&self) -> &'a str { self.service_id }
     pub fn profile(&self) -> &'a str { self.profile }
@@ -182,13 +185,16 @@ impl ServiceEnvConfig {
         Self { provider_config }
     }
 
-    pub async fn get<T, E>(
-        key: ServiceEnvConfigKey<a'>,
+    pub async fn get<'a, T, E>(
+        &self,
+        key: ServiceEnvConfigKey<'a>,
         validator: impl Fn(&str) -> Result<T, E>,
     ) -> Result<T, PropertyResolutionError<E>>
     where
         E: Error + Send + Sync + 'static
     {
+        // We take advantage of the already-existing `StandardProperty`
+        // accessor/validator which will ensure correct config precedence.
         StandardProperty::new()
             .env(key.env())
             .profile(key.profile())
