@@ -53,6 +53,7 @@ class TokenProviderConfig(private val codegenContext: ClientCodegenContext) : Co
     private val codegenScope =
         arrayOf(
             *RuntimeType.preludeScope,
+            "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
             "Token" to configReexport(AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Token")),
             "ProvideToken" to
                 configReexport(
@@ -79,7 +80,7 @@ class TokenProviderConfig(private val codegenContext: ClientCodegenContext) : Co
                         """
                         /// Sets the access token provider for this service
                         pub fn token_provider(mut self, token_provider: impl #{ProvideToken} + 'static) -> Self {
-                            self.set_token_provider(#{Some}(#{SharedTokenProvider}::new(token_provider)));
+                            self.set_token_provider(#{Some}(#{IntoShared}::<#{SharedTokenProvider}>::into_shared(token_provider)));
                             self
                         }
 
