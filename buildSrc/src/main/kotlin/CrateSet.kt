@@ -70,6 +70,7 @@ object CrateSet {
             "aws-smithy-runtime-api",
             "aws-smithy-types",
             "aws-smithy-types-convert",
+            "aws-smithy-wasm",
             "aws-smithy-xml",
         ).map { Crate(it, version(it)) }
 

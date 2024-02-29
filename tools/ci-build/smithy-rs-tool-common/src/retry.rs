@@ -130,6 +130,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "async")]
     async fn fail_max_attempts() {
         let attempt = Arc::new(AtomicU8::new(1));
         let result = {
@@ -156,6 +157,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "async")]
     async fn fail_then_succeed() {
         let attempt = Arc::new(AtomicU8::new(1));
         let result = {
@@ -185,6 +187,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(feature = "async")]
     async fn unretryable_error() {
         let attempt = Arc::new(AtomicU8::new(1));
         let result = {
