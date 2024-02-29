@@ -148,6 +148,10 @@ impl SigningInstructions {
         (self.headers, self.params)
     }
 
+    pub(crate) fn parts(&self) -> (&Vec<Header>, &Vec<(&'static str, Cow<'static, str>)>) {
+        (&self.headers, &self.params)
+    }
+
     /// Returns a reference to the headers that should be added to the request.
     pub fn headers(&self) -> impl Iterator<Item = (&str, &str)> {
         self.headers
