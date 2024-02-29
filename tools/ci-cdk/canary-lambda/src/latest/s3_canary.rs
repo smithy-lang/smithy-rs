@@ -16,17 +16,18 @@ use uuid::Uuid;
 
 const METADATA_TEST_VALUE: &str = "some   value";
 
-mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| s3_canary(
-    s3::Client::new(sdk_config),
-    env.s3_bucket_name.clone(),
-    env.s3_mrap_bucket_arn.clone()
-));
+mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| {
+    let sdk_config = sdk_config.clone();
+    let env = env.clone();
+    async move {
+        let client = s3::Client::new(&sdk_config);
+        s3_canary(client.clone(), env.s3_bucket_name.clone()).await?;
+        s3_mrap_canary(client.clone(), env.s3_mrap_bucket_arn.clone()).await
+    }
+});
 
-pub async fn s3_canary(
-    client: s3::Client,
-    s3_bucket_name: String,
-    s3_mrap_bucket_arn: String,
-) -> anyhow::Result<()> {
+/// Runs canary exercising S3 APIs against a regular bucket
+pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
     let test_key = Uuid::new_v4().as_u128().to_string();
 
     // Look for the test object and expect that it doesn't exist
@@ -126,8 +127,12 @@ pub async fn s3_canary(
         .await
         .context("s3::DeleteObject")?;
 
-    // Return early if the result is an error
-    result?;
+    result
+}
+
+/// Runs canary exercising S3 APIs against an MRAP bucket
+pub async fn s3_mrap_canary(client: s3::Client, s3_mrap_bucket_arn: String) -> anyhow::Result<()> {
+    let test_key = Uuid::new_v4().as_u128().to_string();
 
     // We deliberately use a region that doesn't exist here so that we can
     // ensure these requests are SigV4a requests. Because the current endpoint
@@ -188,7 +193,7 @@ pub async fn s3_canary(
         .config_override(config_override)
         .send()
         .await
-        .context("s3::DeleteObject")?;
+        .context("s3::DeleteObject[MRAP]")?;
 
     result
 }
@@ -207,8 +212,14 @@ async fn test_s3_canary() {
     let config = aws_config::load_from_env().await;
     let client = s3::Client::new(&config);
     s3_canary(
-        client,
+        client.clone(),
         std::env::var("TEST_S3_BUCKET").expect("TEST_S3_BUCKET must be set"),
+    )
+    .await
+    .expect("success");
+
+    s3_mrap_canary(
+        client,
         std::env::var("TEST_S3_MRAP_BUCKET_ARN").expect("TEST_S3_MRAP_BUCKET_ARN must be set"),
     )
     .await

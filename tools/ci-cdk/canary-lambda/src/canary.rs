@@ -49,6 +49,7 @@ pub fn get_canaries_to_run(
         .collect()
 }
 
+#[derive(Clone)]
 pub struct CanaryEnv {
     pub(crate) s3_bucket_name: String,
     pub(crate) s3_mrap_bucket_arn: String,
