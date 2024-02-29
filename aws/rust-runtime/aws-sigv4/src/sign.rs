@@ -5,27 +5,6 @@
 
 //! Types for creating signing keys, calculating signatures, and applying them to HTTP requests.
 
-// macro lifted from aws-smithy-runtime-api—eventually just inline these and delete macro.
-macro_rules! builder_methods {
-    ($fn_name:ident, $arg_name:ident, $ty:ty, $doc:literal, $($tail:tt)+) => {
-        builder_methods!($fn_name, $arg_name, $ty, $doc);
-        builder_methods!($($tail)+);
-    };
-    ($fn_name:ident, $arg_name:ident, $ty:ty, $doc:literal) => {
-        #[doc = $doc]
-        pub fn $fn_name(&mut self, $arg_name: Option<$ty>) -> &mut Self {
-            self.$arg_name = $arg_name;
-            self
-        }
-
-        #[doc = $doc]
-        pub fn $arg_name(mut self, $arg_name: $ty) -> Self {
-            self.$arg_name = Some($arg_name);
-            self
-        }
-    };
-}
-
 use crate::http_request::{
     sign, SignableBody, SignableRequest, SigningInstructions, SigningParams,
 };

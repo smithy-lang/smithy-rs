@@ -165,29 +165,56 @@ pub mod signing_params {
     }
 
     impl<'a, S> Builder<'a, S> {
-        builder_methods!(
-            set_identity,
-            identity,
-            &'a Identity,
-            "Sets the identity (required)",
-            set_region_set,
-            region_set,
-            &'a str,
-            "Sets the region set (required)",
-            set_name,
-            name,
-            &'a str,
-            "Sets the name (required)",
-            set_time,
-            time,
-            SystemTime,
-            "Sets the time to be used in the signature (required)",
-            set_settings,
-            settings,
-            S,
-            "Sets additional signing settings (required)"
-        );
-
+        /// Sets the identity (required)
+        pub fn identity(mut self, identity: &'a Identity) -> Self {
+            self.set_identity(Some(identity));
+            self
+        }
+        /// Sets the identity (required)
+        pub fn set_identity(&mut self, identity: Option<&'a Identity>) -> &mut Self {
+            self.identity = identity;
+            self
+        }
+        /// Sets the region set (required)
+        pub fn region_set(mut self, region_set: &'a str) -> Self {
+            self.set_region_set(Some(region_set));
+            self
+        }
+        /// Sets the region set (required)
+        pub fn set_region_set(&mut self, region_set: Option<&'a str>) -> &mut Self {
+            self.region_set = region_set;
+            self
+        }
+        ///Sets the name (required)
+        pub fn name(mut self, name: &'a str) -> Self {
+            self.set_name(Some(name));
+            self
+        }
+        ///Sets the name (required)
+        pub fn set_name(&mut self, name: Option<&'a str>) -> &mut Self {
+            self.name = name;
+            self
+        }
+        ///Sets the time to be used in the signature (required)
+        pub fn time(mut self, time: SystemTime) -> Self {
+            self.set_time(Some(time));
+            self
+        }
+        ///Sets the time to be used in the signature (required)
+        pub fn set_time(&mut self, time: Option<SystemTime>) -> &mut Self {
+            self.time = time;
+            self
+        }
+        ///Sets additional signing settings (required)
+        pub fn settings(mut self, settings: S) -> Self {
+            self.set_settings(Some(settings));
+            self
+        }
+        ///Sets additional signing settings (required)
+        pub fn set_settings(&mut self, settings: Option<S>) -> &mut Self {
+            self.settings = settings;
+            self
+        }
         /// Builds an instance of [`SigningParams`]. Will yield a [`BuildError`] if
         /// a required argument was not given.
         pub fn build(self) -> Result<SigningParams<'a, S>, BuildError> {
