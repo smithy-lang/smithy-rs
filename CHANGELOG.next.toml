@@ -34,3 +34,9 @@ message = "[`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/
 references = ["smithy-rs#3365", "aws-sdk-rust#1046"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 authors = ["cayman-amzn", "rcoh"]
+
+[[aws-sdk-rust]]
+message = "Added support for SSO bearer token authentication. The aws-sdk-codecatalyst crate can now send requests without erroring."
+references = ["aws-sdk-rust#703", "smithy-rs#3453"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "jdisanti"
