@@ -52,7 +52,11 @@ pub mod v4a;
 /// ```
 pub trait SignWith {
     /// Sign `self` with a [`SigningPackage`] and return the [`SigningOutput<SigningInstructions>`](SigningOutput)
-    /// as a result of signing
+    /// that was used during the signing process.
+    ///
+    /// Most of the time, the return value can be ignored since it has already been applied to the
+    /// given request, but there are cases where calling code needs to have access to it even after
+    /// signing is done (e.g. deferring signing for event stream).
     fn sign_with(
         &mut self,
         package: &SigningPackage<'_>,
