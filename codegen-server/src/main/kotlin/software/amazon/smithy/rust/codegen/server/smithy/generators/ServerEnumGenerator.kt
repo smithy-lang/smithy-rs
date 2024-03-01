@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
 open class ConstrainedEnum(
@@ -50,8 +51,18 @@ open class ConstrainedEnum(
                     """
                     ##[derive(Debug, PartialEq)]
                     pub struct $constraintViolationName(pub(crate) #{String});
+                    
+                    impl #{Display} for $constraintViolationName {
+                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            write!(f, r##"${context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"##)
+                        }
+                    }
+
+                    impl #{Error} for $constraintViolationName {}
                     """,
                     *codegenScope,
+                    "Error" to RuntimeType.StdError,
+                    "Display" to RuntimeType.Display,
                 )
 
                 if (shape.isReachableFromOperationInput()) {

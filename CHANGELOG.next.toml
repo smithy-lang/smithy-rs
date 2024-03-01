@@ -34,3 +34,9 @@ message = "[`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/
 references = ["smithy-rs#3365", "aws-sdk-rust#1046"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 authors = ["cayman-amzn", "rcoh"]
+
+[[smithy-rs]]
+message = "Implement `std::error::Error` for `ConstraintViolation`"
+references = ["smithy-rs#3430"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"

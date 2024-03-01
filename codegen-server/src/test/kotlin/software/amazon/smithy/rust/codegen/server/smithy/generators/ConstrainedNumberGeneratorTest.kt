@@ -73,6 +73,9 @@ class ConstrainedNumberGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             ConstrainedNumberGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -91,7 +94,9 @@ class ConstrainedNumberGeneratorTest {
                 name = "try_from_fail",
                 test = """
                     let constrained_res: Result<${testCase.shapeName}, _> = ${testCase.invalidValue}.try_into();
-                    constrained_res.unwrap_err();
+                    let error = constrained_res.unwrap_err();
+                    is_error(&error);
+                    is_display(&error);
                 """,
             )
             unitTest(

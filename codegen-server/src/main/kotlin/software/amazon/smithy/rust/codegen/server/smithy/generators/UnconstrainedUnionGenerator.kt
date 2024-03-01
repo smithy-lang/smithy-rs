@@ -147,6 +147,23 @@ class UnconstrainedUnionGenerator(
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
 
+            rustTemplate(
+                """
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            #{ConstraintVariants:W}
+                        }
+                    }
+                }
+
+                impl #{Error} for $constraintViolationName {}
+                """,
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
+                "ConstraintVariants" to generateDisplayMessageForEachVariant(),
+            )
+
             if (shape.isReachableFromOperationInput()) {
                 rustBlock("impl $constraintViolationName") {
                     rustBlockTemplate(
@@ -163,6 +180,17 @@ class UnconstrainedUnionGenerator(
             }
         }
     }
+
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            constraintViolations().forEach {
+                rustTemplate(
+                    """
+                    Self::${it.name()}(inner) => write!(f, "{inner}"),
+                    """,
+                )
+            }
+        }
 
     data class ConstraintViolation(val forMember: MemberShape) {
         fun name() = forMember.memberName.toPascalCase()

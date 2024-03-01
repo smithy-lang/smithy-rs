@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -126,7 +127,6 @@ class ConstrainedStringGenerator(
                 }
             }
 
-
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()
@@ -158,8 +158,22 @@ class ConstrainedStringGenerator(
             pub enum ${constraintViolation.name} {
                 #{Variants:W}
             }
+
+            impl #{Display} for ${constraintViolation.name} {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let message = match self {
+                        #{VariantDisplayMessages:W}
+                    };
+                    write!(f, "{message}")
+                }
+            }
+
+            impl #{Error} for ${constraintViolation.name} {}
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+            "Error" to RuntimeType.StdError,
+            "Display" to RuntimeType.Display,
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant(),
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -173,6 +187,13 @@ class ConstrainedStringGenerator(
             )
         }
     }
+
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            stringConstraintsInfo.forEach {
+                it.shapeConstraintViolationDisplayMessage(shape).invoke(this)
+            }
+        }
 
     private fun renderTests(shape: Shape) {
         val testCases = TraitInfo.testCases(constraintsInfo)
@@ -239,6 +260,17 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 """,
             )
         }
+
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            rustTemplate(
+                """
+                Self::Length(length) => {
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                },
+                """,
+            )
+        }
 }
 
 data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
@@ -278,12 +310,11 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     }
 
     fun errorMessage(): Writable {
-        val pattern = patternTrait.pattern
-
         return writable {
+            val pattern = patternTrait.pattern.toString().replace("#", "##")
             rust(
                 """
-                format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
+                format!("${patternTrait.validationErrorMessage()}", &path, r##"$pattern"##)
                 """,
             )
         }
@@ -297,7 +328,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         constraintViolation: Symbol,
         unconstrainedTypeName: String,
     ): Writable {
-        val pattern = patternTrait.pattern
+        val pattern = patternTrait.pattern.toString().replace("#", "##")
         val errorMessageForUnsupportedRegex =
             """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
@@ -327,6 +358,19 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
             )
         }
     }
+
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            val errorMessage = patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
+            val pattern = patternTrait.pattern.toString().replace("#", "##")
+            rustTemplate(
+                """
+                Self::Pattern(_) => {
+                    format!(r##"$errorMessage"##, r##"$pattern"##)
+                },
+                """,
+            )
+        }
 }
 
 sealed class StringTraitInfo {
@@ -349,4 +393,6 @@ sealed class StringTraitInfo {
     }
 
     abstract fun toTraitInfo(): TraitInfo
+
+    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
 }

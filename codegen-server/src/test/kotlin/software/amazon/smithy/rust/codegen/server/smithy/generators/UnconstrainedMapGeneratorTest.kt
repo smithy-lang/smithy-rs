@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -71,6 +72,9 @@ class UnconstrainedMapGeneratorTest {
 
         serverIntegrationTest(model) { _, rustCrate ->
             rustCrate.testModule {
+                TestUtility.generateIsDisplay().invoke(this)
+                TestUtility.generateIsError().invoke(this)
+
                 unitTest("map_a_unconstrained_fail_to_constrain_with_some_error") {
                     rust(
                         """
@@ -105,8 +109,17 @@ class UnconstrainedMapGeneratorTest {
                         );
 
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
-
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
+                        
+                        is_display(&actual_err);
+                        is_error(&actual_err);
+
+                        let error_str = actual_err.to_string();
+                        assert!(
+                            error_str == "`string` was not provided but it is required when building `StructureC`"
+                                || error_str
+                                    == "`int` was not provided but it is required when building `StructureC`"
+                        );
                         """,
                     )
                 }
@@ -162,5 +175,7 @@ class UnconstrainedMapGeneratorTest {
                 }
             }
         }
+
+        project.compileAndTest()
     }
 }

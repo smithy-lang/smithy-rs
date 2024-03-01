@@ -53,9 +53,9 @@ class ConstrainedStringGeneratorTest {
                 Triple(
                     """
                     @length(min: 3, max: 10)
-                    @pattern("^a string$")
+                    @pattern("^a # string$")
                     """,
-                    "a string", "an invalid string",
+                    "a # string", "an invalid string",
                 ),
                 Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
             ).map {
@@ -86,6 +86,9 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             ConstrainedStringGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -106,7 +109,9 @@ class ConstrainedStringGeneratorTest {
                 test = """
                     let string = "${testCase.invalidString}".to_owned();
                     let constrained_res: Result<ConstrainedString, _> = string.try_into();
-                    constrained_res.unwrap_err();
+                    let error = constrained_res.unwrap_err();
+                    is_error(&error);
+                    is_display(&error);
                 """,
             )
             unitTest(

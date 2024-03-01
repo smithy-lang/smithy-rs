@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -135,13 +136,23 @@ class ConstrainedNumberGenerator(
         writer.renderTryFrom(unconstrainedTypeName, name, constraintViolation, constraintsInfo)
 
         inlineModuleCreator(constraintViolation) {
-            rust(
+            rustTemplate(
                 """
                 ##[derive(Debug, PartialEq)]
                 pub enum ${constraintViolation.name} {
                     Range($unconstrainedTypeName),
                 }
+
+                impl #{Display} for ${constraintViolation.name} {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "${rangeInfo.rangeTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
+                    }
+                }
+                    
+                impl #{Error} for ${constraintViolation.name} {}
                 """,
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
             )
 
             if (shape.isReachableFromOperationInput()) {
