@@ -80,12 +80,26 @@ class TokenProviderConfig(private val codegenContext: ClientCodegenContext) : Co
                     rustTemplate(
                         """
                         /// Sets the access token provider for this service
+                        ///
+                        /// Note: the [`Self::bearer_token`] and [`Self::bearer_token_resolver`] methods are
+                        /// equivalent to this method, but take the [`Token`] and [`ResolveIdentity`] types
+                        /// respectively.
+                        ///
+                        /// [`Token`]: crate::config::Token
+                        /// [`ResolveIdentity`]: crate::config::ResolveIdentity
                         pub fn token_provider(mut self, token_provider: impl #{ProvideToken} + 'static) -> Self {
                             self.set_token_provider(#{Some}(#{IntoShared}::<#{SharedTokenProvider}>::into_shared(token_provider)));
                             self
                         }
 
                         /// Sets the access token provider for this service
+                        ///
+                        /// Note: the [`Self::bearer_token`] and [`Self::bearer_token_resolver`] methods are
+                        /// equivalent to this method, but take the [`Token`] and [`ResolveIdentity`] types
+                        /// respectively.
+                        ///
+                        /// [`Token`]: crate::config::Token
+                        /// [`ResolveIdentity`]: crate::config::ResolveIdentity
                         pub fn set_token_provider(&mut self, token_provider: #{Option}<#{SharedTokenProvider}>) -> &mut Self {
                             if let Some(token_provider) = token_provider {
                                 self.runtime_components.set_identity_resolver(#{HTTP_BEARER_AUTH_SCHEME_ID}, token_provider);
