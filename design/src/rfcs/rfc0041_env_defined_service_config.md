@@ -223,7 +223,7 @@ We **only** have this information once we get to the service level. Because of t
 A new section will be added to `AdHocCustomization`'s `SdkConfigSection` called `ServiceEnvConfigLayer`. This new section will contain code that
 inspects the `ServiceEnvConfig` returned by `SdkConfig::service_env_config` for config variables and assigns validators for each one.
 
-The config variables extraced at this stage are then used to construct a config [`Layer`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/config_bag/struct.Layer.html).
+The config variables extracted at this stage are then used to construct a config [`Layer`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/config_bag/struct.Layer.html).
 A new `ServiceEnvConfigRuntimePlugin` will provide this layer when `<service>::Config` is being constructed. `Layer`s already support merging configuration.
 
 ### Disabling all config `endpoint_url`s
