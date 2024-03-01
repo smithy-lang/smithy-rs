@@ -7,7 +7,7 @@ package software.amazon.smithy.rustsdk.customize
 
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rustsdk.ConditionalDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 
 /** Only apply this decorator to the given service ID */
 fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): List<ClientCodegenDecorator> =
