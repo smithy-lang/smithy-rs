@@ -237,7 +237,7 @@ fn fetch_smithy_rs_tags(repo: &Repo) -> Result<()> {
         "https://github.com/smithy-lang/smithy-rs.git",
     ]
     .iter()
-    .any(|url| *url == &origin_url)
+    .any(|url| *url == origin_url)
     {
         bail!(
             "smithy-rs origin must be either 'git@github.com:smithy-lang/smithy-rs.git' or \

@@ -172,7 +172,7 @@ fn apply_signing_instructions(
     if !new_query.is_empty() {
         let mut query = aws_smithy_http::query_writer::QueryWriter::new_from_string(request.uri())?;
         for (name, value) in new_query {
-            query.insert(name, &value);
+            query.insert(name, value);
         }
         request.set_uri(query.build_uri())?;
     }
