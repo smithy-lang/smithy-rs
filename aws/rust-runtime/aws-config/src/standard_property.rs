@@ -401,6 +401,12 @@ s3 =
 some_key = 4
 services = dev
 
+[services dev-wrong]
+s3 =
+  some_key = 998
+ec2 =
+  some_key = 999
+
 [services dev]
 s3 =
   some_key = 5
