@@ -4,7 +4,8 @@
  */
 
 use crate::auth::{
-    extract_endpoint_auth_scheme_signing_name, SigV4OperationSigningConfig, SigV4SigningError,
+    extract_endpoint_auth_scheme_signing_name, ErrorKind, SigV4OperationSigningConfig,
+    SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{SigningParams, SigningSettings};
@@ -94,14 +95,18 @@ impl SigV4aSigner {
                 operation_config
                     .region_set
                     .as_ref()
-                    .ok_or(SigV4SigningError::MissingSigningRegionSet)?
+                    .ok_or(SigV4SigningError {
+                        kind: ErrorKind::MissingSigningRegionSet,
+                    })?
                     .as_ref(),
             )
             .name(
                 operation_config
                     .name
                     .as_ref()
-                    .ok_or(SigV4SigningError::MissingSigningName)?
+                    .ok_or(SigV4SigningError {
+                        kind: ErrorKind::MissingSigningName,
+                    })?
                     .as_ref(),
             )
             .time(request_timestamp)
@@ -114,9 +119,12 @@ impl SigV4aSigner {
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'a>,
         config_bag: &'a ConfigBag,
     ) -> Result<Cow<'a, SigV4OperationSigningConfig>, SigV4SigningError> {
-        let operation_config = config_bag
-            .load::<SigV4OperationSigningConfig>()
-            .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
+        let operation_config =
+            config_bag
+                .load::<SigV4OperationSigningConfig>()
+                .ok_or(SigV4SigningError {
+                    kind: ErrorKind::MissingOperationSigningConfig,
+                })?;
 
         let name = extract_endpoint_auth_scheme_signing_name(&auth_scheme_endpoint_config)?
             .or(config_bag.load::<SigningName>().cloned());
@@ -141,7 +149,7 @@ fn extract_endpoint_auth_scheme_signing_region_set(
     endpoint_config: &AuthSchemeEndpointConfig<'_>,
 ) -> Result<Option<SigningRegionSet>, SigV4SigningError> {
     use aws_smithy_types::Document::Array;
-    use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
+    use ErrorKind::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
 
     match super::extract_field_from_endpoint_config("signingRegionSet", endpoint_config) {
         Some(Array(docs)) => {
@@ -152,7 +160,9 @@ fn extract_endpoint_auth_scheme_signing_region_set(
             Ok(Some(region_set))
         }
         None => Ok(None),
-        _it => Err(UnexpectedType("signingRegionSet")),
+        _it => Err(SigV4SigningError {
+            kind: UnexpectedType("signingRegionSet"),
+        }),
     }
 }
 
@@ -166,7 +176,10 @@ impl Sign for SigV4aSigner {
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         if identity.data::<Credentials>().is_none() {
-            return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
+            return Err(SigV4SigningError {
+                kind: ErrorKind::WrongIdentityType(identity.clone()),
+            }
+            .into());
         }
 
         let operation_config =
