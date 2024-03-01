@@ -3,5 +3,6 @@ allowed_external_types = [
     "http::request::Request",
     # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_types::event_stream::Message",
+    "aws_smithy_runtime_api::box_error::BoxError",
     "aws_smithy_runtime_api::client::identity::Identity"
 ]
