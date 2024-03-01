@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::retry::{run_with_retry_sync, ErrorClass};
 use anyhow::{anyhow, Context, Error, Result};
-use camino::Utf8Path;
 use crates_index::Crate;
 use reqwest::StatusCode;
-use smithy_rs_tool_common::retry::{run_with_retry_sync, ErrorClass};
-use std::fs;
 use std::{collections::HashMap, time::Duration};
+use std::{fs, path::Path};
 
 pub struct CratesIndex(Inner);
 
@@ -28,7 +27,7 @@ impl CratesIndex {
     }
 
     /// Returns a fake crates.io index from file, panicking if loading fails.
-    pub fn fake(path: impl AsRef<Utf8Path>) -> Self {
+    pub fn fake(path: impl AsRef<Path>) -> Self {
         Self(Inner::Fake(FakeIndex::from_file(path)))
     }
 
@@ -86,7 +85,7 @@ pub struct FakeIndex {
 }
 
 impl FakeIndex {
-    fn from_file(path: impl AsRef<Utf8Path>) -> FakeIndex {
+    fn from_file(path: impl AsRef<Path>) -> FakeIndex {
         let bytes = fs::read(path.as_ref()).unwrap();
         let toml: toml::Value = toml::from_slice(&bytes).unwrap();
         let crates: HashMap<String, Vec<_>> = toml["crates"]
