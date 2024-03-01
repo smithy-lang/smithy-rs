@@ -51,7 +51,7 @@ pub mod v4a;
 /// # }
 /// ```
 pub trait SignWith {
-    /// Sign `self` with a [`SigningPackage`] and return the [`SigningOutput(SigningInstructions)`](SigningOutput)
+    /// Sign `self` with a [`SigningPackage`] and return the [`SigningOutput<SigningInstructions>`](SigningOutput)
     /// as a result of signing
     fn sign_with(
         &mut self,
