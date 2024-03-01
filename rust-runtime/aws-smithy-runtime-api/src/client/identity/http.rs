@@ -52,6 +52,12 @@ impl Token {
     pub fn expiration(&self) -> Option<SystemTime> {
         self.0.expiration
     }
+
+    /// Creates a `Token` for tests.
+    #[cfg(feature = "test-util")]
+    pub fn for_tests() -> Self {
+        Self::new("test-token", None)
+    }
 }
 
 impl From<&str> for Token {
@@ -75,7 +81,19 @@ impl ResolveIdentity for Token {
         _runtime_components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
+        IdentityFuture::ready(Ok(self.into()))
+    }
+}
+
+impl From<&Token> for Identity {
+    fn from(value: &Token) -> Self {
+        Identity::new(value.clone(), value.0.expiration)
+    }
+}
+impl From<Token> for Identity {
+    fn from(value: Token) -> Self {
+        let expiration = value.0.expiration;
+        Identity::new(value, expiration)
     }
 }
 

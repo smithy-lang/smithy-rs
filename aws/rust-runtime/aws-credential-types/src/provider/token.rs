@@ -13,6 +13,12 @@
 //! token providers in the SDK config.
 
 use crate::{provider::error::TokenError, provider::future, Token};
+use aws_smithy_runtime_api::client::{
+    identity::{IdentityFuture, ResolveIdentity},
+    runtime_components::RuntimeComponents,
+};
+use aws_smithy_runtime_api::impl_shared_conversions;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::sync::Arc;
 
 /// Result type for token providers
@@ -71,3 +77,15 @@ impl ProvideToken for SharedTokenProvider {
         self.0.provide_token()
     }
 }
+
+impl ResolveIdentity for SharedTokenProvider {
+    fn resolve_identity<'a>(
+        &'a self,
+        _runtime_components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::new(async move { Ok(self.provide_token().await?.into()) })
+    }
+}
+
+impl_shared_conversions!(convert SharedTokenProvider from ProvideToken using SharedTokenProvider::new);
