@@ -11,7 +11,7 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[smithy-rs]]
+[[aws-sdk-rust]]
 message = "EKS Pod Identity is now supported as part of the default ECS credential provider."
 references = ["smithy-rs#3416"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
