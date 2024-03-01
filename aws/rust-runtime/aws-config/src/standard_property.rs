@@ -386,4 +386,77 @@ s3 =
             .expect("config resolution succeeds");
         assert_eq!(Some(4), service_from_profile);
     }
+
+    #[tokio::test]
+    async fn test_multiple_services() {
+        let env = Env::from_slice(&[
+            ("AWS_CONFIG_FILE", "config"),
+            ("AWS_SOME_KEY", "1"),
+            ("AWS_SOME_KEY_S3", "2"),
+            ("AWS_SOME_KEY_EC2", "3"),
+        ]);
+        let fs = Fs::from_slice(&[(
+            "config",
+            r#"[default]
+some_key = 4
+services = dev
+
+[services dev]
+s3 =
+  some_key = 5
+ec2 =
+  some_key = 6
+"#,
+        )]);
+
+        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+        let global_from_env = StandardProperty::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(1), global_from_env);
+
+        let service_from_env = StandardProperty::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(2), service_from_env);
+
+        let service_from_env = StandardProperty::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("ec2")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(3), service_from_env);
+
+        let global_from_profile = StandardProperty::new()
+            .profile("some_key")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(4), global_from_profile);
+
+        let service_from_profile = StandardProperty::new()
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(5), service_from_profile);
+
+        let service_from_profile = StandardProperty::new()
+            .profile("some_key")
+            .service_id("ec2")
+            .validate(&provider_config, validate_some_key)
+            .await
+            .expect("config resolution succeeds");
+        assert_eq!(Some(6), service_from_profile);
+    }
 }
