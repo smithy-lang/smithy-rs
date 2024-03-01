@@ -250,9 +250,9 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 
 [[package]]
 name = "crates-index"
-version = "2.3.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1f3e3ef6d547bbf1213b3dabbf0b01a500fbd0924abf818b563a4bc2c85296c"
+checksum = "1d9efa03a974d583ad530bbfe00e3d0021de7f26217120437b128dc4c331aa4f"
 dependencies = [
  "hex",
  "home",
@@ -1078,6 +1078,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "crates-index",
  "lazy_static",
  "regex",
  "reqwest",
