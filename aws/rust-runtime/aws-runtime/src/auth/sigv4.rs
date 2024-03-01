@@ -185,6 +185,7 @@ impl Sign for SigV4Signer {
 
         let (_, _signature) = request.sign_with(&signing_package.build()?)?.into_parts();
 
+        // If this is an event stream operation, set up the event stream signer
         #[cfg(feature = "event-stream")]
         {
             use aws_smithy_eventstream::frame::DeferredSignerSender;
