@@ -8,9 +8,13 @@
 use crate::http_request::{
     sign, SignableBody, SignableRequest, SigningInstructions, SigningParams,
 };
+use crate::sign::error::SignWithError;
 use crate::SigningOutput;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+
+/// Error related to producing a signature and applying it to request
+pub mod error;
 
 /// Support for Sigv4 signing
 pub mod v4;
@@ -25,8 +29,8 @@ pub mod v4a;
 /// ```rust,no_run
 /// use aws_sigv4::http_request::{SigningInstructions, SigningParams};
 /// use aws_sigv4::sign::{SigningPackage, SignWith};
-/// use aws_sigv4::SigningOutput;
-/// # use aws_smithy_runtime_api::box_error::BoxError;
+/// # use aws_sigv4::sign::error::SignWithError;
+/// # use aws_sigv4::SigningOutput;
 /// use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 ///
 /// fn signing_params<'a>() -> SigningParams<'a> {
@@ -39,7 +43,7 @@ pub mod v4a;
 /// #   HttpRequest::empty()
 /// }
 ///
-/// # fn example() -> Result<SigningOutput<SigningInstructions>, BoxError> {
+/// # fn example() -> Result<SigningOutput<SigningInstructions>, SignWithError> {
 /// let signing_params = signing_params();
 /// let signing_package = SigningPackage::builder()
 ///     .signing_params(&signing_params)
@@ -60,14 +64,14 @@ pub trait SignWith {
     fn sign_with(
         &mut self,
         package: &SigningPackage<'_>,
-    ) -> Result<SigningOutput<SigningInstructions>, BoxError>;
+    ) -> Result<SigningOutput<SigningInstructions>, SignWithError>;
 }
 
 impl SignWith for HttpRequest {
     fn sign_with(
         &mut self,
         package: &SigningPackage<'_>,
-    ) -> Result<SigningOutput<SigningInstructions>, BoxError> {
+    ) -> Result<SigningOutput<SigningInstructions>, SignWithError> {
         let signing_output = {
             // A body that is already in memory can be signed directly. A body that is not in memory
             // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
@@ -89,11 +93,15 @@ impl SignWith for HttpRequest {
                 self.uri(),
                 self.headers().iter(),
                 signable_body,
-            )?;
-            sign(signable_request, package.signing_params)?
+            )
+            .map_err(SignWithError::failed_to_produce_signature)?;
+
+            sign(signable_request, package.signing_params)
+                .map_err(SignWithError::failed_to_produce_signature)?
         };
 
-        apply_signing_instructions(&signing_output.output, self)?;
+        apply_signing_instructions(&signing_output.output, self)
+            .map_err(SignWithError::failed_to_apply_signature_to_request)?;
 
         Ok(signing_output)
     }
