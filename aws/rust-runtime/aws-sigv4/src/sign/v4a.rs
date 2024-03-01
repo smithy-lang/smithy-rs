@@ -185,32 +185,32 @@ pub mod signing_params {
             self.region_set = region_set;
             self
         }
-        ///Sets the name (required)
+        /// Sets the name (required)
         pub fn name(mut self, name: &'a str) -> Self {
             self.set_name(Some(name));
             self
         }
-        ///Sets the name (required)
+        /// Sets the name (required)
         pub fn set_name(&mut self, name: Option<&'a str>) -> &mut Self {
             self.name = name;
             self
         }
-        ///Sets the time to be used in the signature (required)
+        /// Sets the time to be used in the signature (required)
         pub fn time(mut self, time: SystemTime) -> Self {
             self.set_time(Some(time));
             self
         }
-        ///Sets the time to be used in the signature (required)
+        /// Sets the time to be used in the signature (required)
         pub fn set_time(&mut self, time: Option<SystemTime>) -> &mut Self {
             self.time = time;
             self
         }
-        ///Sets additional signing settings (required)
+        /// Sets additional signing settings (required)
         pub fn settings(mut self, settings: S) -> Self {
             self.set_settings(Some(settings));
             self
         }
-        ///Sets additional signing settings (required)
+        /// Sets additional signing settings (required)
         pub fn set_settings(&mut self, settings: Option<S>) -> &mut Self {
             self.settings = settings;
             self
