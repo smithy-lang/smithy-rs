@@ -34,3 +34,21 @@ message = "[`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/
 references = ["smithy-rs#3365", "aws-sdk-rust#1046"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 authors = ["cayman-amzn", "rcoh"]
+
+[[aws-sdk-rust]]
+message = """
+HTTP requests can now be signed using a method `sign_with` in a `SignWith` trait. As documented in [aws-sigv4](https://docs.rs/aws-sigv4/latest/aws_sigv4/http_request/index.html#example-signing-an-http-request), customers previously needed to go through additional steps after creating a `SigningParams`. With the new method, an HTTP request in the above example can be signed as follows:
+```
+use aws_sigv4::sign::{SigningPackage, SignWith};
+// ... same as the example
+let signing_params = ... // same as the example
+let mut my_req = http::Request::new("...");
+let signing_package = SigningPackage::builder()
+    .signing_params(&signing_params)
+    .build()
+    .expect("required fields have been set");
+my_req.sign_with(&signing_package).expect("should be signed");
+"""
+references = ["smithy-rs#3455"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "ysaito1001"
