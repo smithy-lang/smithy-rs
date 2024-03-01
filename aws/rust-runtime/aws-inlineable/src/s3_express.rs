@@ -5,8 +5,11 @@
 
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
+    use aws_runtime::auth::apply_signing_instructions;
     use aws_runtime::auth::sigv4::SigV4Signer;
-    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
+    use aws_sigv4::http_request::{
+        sign, SignableBody, SignableRequest, SignatureLocation, SigningParams, SigningSettings,
+    };
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -66,17 +69,43 @@ pub(crate) mod auth {
         ) -> Result<(), BoxError> {
             let operation_config =
                 SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
+            let request_time = runtime_components.time_source().unwrap_or_default().now();
             let mut settings = SigV4Signer::signing_settings(&operation_config);
             override_session_token_name(&mut settings)?;
 
-            SigV4Signer.sign_http_request(
-                request,
-                identity,
-                settings,
-                &operation_config,
-                runtime_components,
-                config_bag,
-            )
+            let signing_params =
+                SigV4Signer::signing_params(settings, identity, &operation_config, request_time)?;
+
+            let (signing_instructions, _signature) = {
+                // A body that is already in memory can be signed directly. A body that is not in memory
+                // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
+                let signable_body = operation_config
+                    .signing_options
+                    .payload_override
+                    .as_ref()
+                    // the payload_override is a cheap clone because it contains either a
+                    // reference or a short checksum (we're not cloning the entire body)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        request
+                            .body()
+                            .bytes()
+                            .map(SignableBody::Bytes)
+                            .unwrap_or(SignableBody::UnsignedPayload)
+                    });
+
+                let signable_request = SignableRequest::new(
+                    request.method(),
+                    request.uri(),
+                    request.headers().iter(),
+                    signable_body,
+                )?;
+                sign(signable_request, &SigningParams::V4(signing_params))?
+            }
+            .into_parts();
+
+            apply_signing_instructions(signing_instructions, request)?;
+            Ok(())
         }
     }
 

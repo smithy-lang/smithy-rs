@@ -77,7 +77,8 @@ impl SigV4Signer {
         super::settings(operation_config)
     }
 
-    fn signing_params<'a>(
+    /// Creates a [`SigningParams`] from the given arguments.
+    pub fn signing_params<'a>(
         settings: SigningSettings,
         identity: &'a Identity,
         operation_config: &'a SigV4OperationSigningConfig,
@@ -152,27 +153,31 @@ impl SigV4Signer {
             }
         }
     }
+}
 
-    /// Signs the given `request`.
-    ///
-    /// This is a helper used by [`Sign::sign_http_request`] and will be useful if calling code
-    /// needs to pass a configured `settings`.
-    ///
-    /// TODO(S3Express): Make this method more user friendly, possibly returning a builder
-    ///  instead of taking these input parameters. The builder will have a `sign` method that
-    ///  does what this method body currently does.
-    pub fn sign_http_request(
+impl Sign for SigV4Signer {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
-        settings: SigningSettings,
-        operation_config: &SigV4OperationSigningConfig,
+        auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         runtime_components: &RuntimeComponents,
-        #[allow(unused_variables)] config_bag: &ConfigBag,
+        config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
+        let operation_config =
+            Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
         let request_time = runtime_components.time_source().unwrap_or_default().now();
+
+        if identity.data::<Credentials>().is_none() {
+            return Err(SigV4SigningError {
+                kind: ErrorKind::WrongIdentityType(identity.clone()),
+            }
+            .into());
+        };
+
+        let settings = Self::signing_settings(&operation_config);
         let signing_params =
-            Self::signing_params(settings, identity, operation_config, request_time)?;
+            Self::signing_params(settings, identity, &operation_config, request_time)?;
 
         let (signing_instructions, _signature) = {
             // A body that is already in memory can be signed directly. A body that is not in memory
@@ -225,38 +230,6 @@ impl SigV4Signer {
         }
         auth::apply_signing_instructions(signing_instructions, request)?;
         Ok(())
-    }
-}
-
-impl Sign for SigV4Signer {
-    fn sign_http_request(
-        &self,
-        request: &mut HttpRequest,
-        identity: &Identity,
-        auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
-        runtime_components: &RuntimeComponents,
-        config_bag: &ConfigBag,
-    ) -> Result<(), BoxError> {
-        if identity.data::<Credentials>().is_none() {
-            return Err(SigV4SigningError {
-                kind: ErrorKind::WrongIdentityType(identity.clone()),
-            }
-            .into());
-        };
-
-        let operation_config =
-            Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-
-        let settings = Self::signing_settings(&operation_config);
-
-        self.sign_http_request(
-            request,
-            identity,
-            settings,
-            &operation_config,
-            runtime_components,
-            config_bag,
-        )
     }
 }
 

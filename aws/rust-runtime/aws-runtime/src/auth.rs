@@ -209,7 +209,8 @@ fn extract_field_from_endpoint_config<'a>(
         .and_then(|config| config.get(field_name))
 }
 
-fn apply_signing_instructions(
+/// Applies the instructions to the given `request`.
+pub fn apply_signing_instructions(
     instructions: SigningInstructions,
     request: &mut HttpRequest,
 ) -> Result<(), BoxError> {
