@@ -7,44 +7,86 @@ use crate::profile::{ProfileSet, PropertiesKey};
 use crate::provider_config::ProviderConfig;
 use std::borrow::Cow;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt;
 
 #[derive(Debug)]
-pub(crate) enum PropertySource<'a> {
-    Environment {
-        name: &'a str,
-        service_specific: bool,
-    },
-    Profile {
-        name: &'a str,
-        key: &'a str,
-        service_specific: bool,
-    },
+enum Location<'a> {
+    Environment,
+    Profile { name: Cow<'a, str> },
 }
 
-impl Display for PropertySource<'_> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl<'a> fmt::Display for Location<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PropertySource::Environment {
-                name,
-                service_specific,
-            } => {
-                let service_specific = service_specific
-                    .then_some("service-specific ")
-                    .unwrap_or_default();
-                write!(f, "{service_specific}environment variable `{name}`")
-            }
-            PropertySource::Profile {
-                name,
-                key,
-                service_specific,
-            } => {
-                let service_specific = service_specific
-                    .then_some("service-specific ")
-                    .unwrap_or_default();
-                write!(f, "{service_specific}profile `{name}`, key: `{key}`")
-            }
+            Location::Environment => write!(f, "environment variable"),
+            Location::Profile { name } => write!(f, "profile (`{name}`)"),
         }
+    }
+}
+
+#[derive(Debug)]
+enum Scope<'a> {
+    Global,
+    Service { service_id: Cow<'a, str> },
+}
+
+impl<'a> fmt::Display for Scope<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Scope::Global => write!(f, "global"),
+            Scope::Service { service_id } => write!(f, "service-specific (`{service_id}`)"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PropertySource<'a> {
+    key: Cow<'a, str>,
+    location: Location<'a>,
+    source: Scope<'a>,
+}
+
+impl<'a> PropertySource<'a> {
+    pub(crate) fn global_from_env(key: Cow<'a, str>) -> Self {
+        Self {
+            key,
+            location: Location::Environment,
+            source: Scope::Global,
+        }
+    }
+
+    pub(crate) fn global_from_profile(key: Cow<'a, str>, profile_name: Cow<'a, str>) -> Self {
+        Self {
+            key,
+            location: Location::Profile { name: profile_name },
+            source: Scope::Global,
+        }
+    }
+
+    pub(crate) fn service_from_env(key: Cow<'a, str>, service_id: Cow<'a, str>) -> Self {
+        Self {
+            key,
+            location: Location::Environment,
+            source: Scope::Service { service_id },
+        }
+    }
+
+    pub(crate) fn service_from_profile(
+        key: Cow<'a, str>,
+        profile_name: Cow<'a, str>,
+        service_id: Cow<'a, str>,
+    ) -> Self {
+        Self {
+            key,
+            location: Location::Profile { name: profile_name },
+            source: Scope::Service { service_id },
+        }
+    }
+}
+
+impl<'a> fmt::Display for PropertySource<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {} key: `{}`", self.source, self.location, self.key)
     }
 }
 
@@ -54,8 +96,8 @@ pub(crate) struct PropertyResolutionError<E = Box<dyn Error>> {
     pub(crate) err: E,
 }
 
-impl<E: Display> Display for PropertyResolutionError<E> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl<E: fmt::Display> fmt::Display for PropertyResolutionError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}. source: {}", self.err, self.property_source)
     }
 }
@@ -73,13 +115,13 @@ impl<E: Error> Error for PropertyResolutionError<E> {
 ///
 /// For a usage example, see [`crate::default_provider::retry_config`]
 #[derive(Default)]
-pub(crate) struct StandardProperty {
-    environment_variable: Option<Cow<'static, str>>,
-    profile_key: Option<Cow<'static, str>>,
-    service_id: Option<Cow<'static, str>>,
+pub(crate) struct StandardProperty<'a> {
+    environment_variable: Option<Cow<'a, str>>,
+    profile_key: Option<Cow<'a, str>>,
+    service_id: Option<Cow<'a, str>>,
 }
 
-impl StandardProperty {
+impl<'a> StandardProperty<'a> {
     pub(crate) fn new() -> Self {
         Self::default()
     }
@@ -121,22 +163,19 @@ impl StandardProperty {
     }
 
     /// Load the value from `provider_config`
-    pub(crate) async fn load<'a>(
-        &'a self,
+    pub(crate) async fn load(
+        &self,
         provider_config: &'a ProviderConfig,
     ) -> Option<(Cow<'a, str>, PropertySource<'a>)> {
         let env_value = self.environment_variable.as_ref().and_then(|env_var| {
             // Check for a service-specific env var first
-            get_service_config_from_env(provider_config, self.service_id.as_ref(), env_var)
+            get_service_config_from_env(provider_config, self.service_id.clone(), env_var.clone())
                 // Then check for a global env var
                 .or_else(|| {
                     provider_config.env().get(env_var).ok().map(|value| {
                         (
                             Cow::Owned(value),
-                            PropertySource::Environment {
-                                name: env_var,
-                                service_specific: false,
-                            },
+                            PropertySource::global_from_env(env_var.clone()),
                         )
                     })
                 })
@@ -145,17 +184,16 @@ impl StandardProperty {
         let profile = provider_config.profile().await?;
         let profile_value = self.profile_key.as_ref().and_then(|profile_key| {
             // Check for a service-specific profile key first
-            get_service_config_from_profile(profile, self.service_id.as_ref(), profile_key)
+            get_service_config_from_profile(profile, self.service_id.clone(), profile_key.clone())
                 // Then check for a global profile key
                 .or_else(|| {
-                    profile.get(profile_key).map(|value| {
+                    profile.get(profile_key.as_ref()).map(|value| {
                         (
                             Cow::Borrowed(value),
-                            PropertySource::Profile {
-                                name: profile.selected_profile(),
-                                key: profile_key,
-                                service_specific: false,
-                            },
+                            PropertySource::global_from_profile(
+                                profile_key.clone(),
+                                Cow::Owned(profile.selected_profile().to_owned()),
+                            ),
                         )
                     })
                 })
@@ -164,55 +202,44 @@ impl StandardProperty {
         env_value.or(profile_value)
     }
 }
+
 fn get_service_config_from_env<'a>(
     provider_config: &'a ProviderConfig,
-    service_id: Option<impl AsRef<str>>,
-    env_var: &'a str,
+    service_id: Option<Cow<'a, str>>,
+    env_var: Cow<'a, str>,
 ) -> Option<(Cow<'a, str>, PropertySource<'a>)> {
-    let service_specific_env_key = service_id
-        .as_ref()
-        .map(format_service_id_for_env)
-        .map(|service_id| format!("{env_var}_{service_id}"))?;
+    let service_id = service_id?;
+    let env_case_service_id = format_service_id_for_env(service_id.clone());
+    let service_specific_env_key = format!("{env_var}_{env_case_service_id}");
+    let env_var = provider_config.env().get(&service_specific_env_key).ok()?;
+    let env_var: Cow<'_, str> = Cow::Owned(env_var);
+    let source = PropertySource::service_from_env(env_var.clone(), service_id);
 
-    provider_config
-        .env()
-        .get(&service_specific_env_key)
-        .ok()
-        .map(|value| {
-            (
-                Cow::Owned(value),
-                PropertySource::Environment {
-                    name: env_var,
-                    service_specific: true,
-                },
-            )
-        })
+    Some((env_var, source))
 }
 
 fn get_service_config_from_profile<'a>(
-    profile: &'a ProfileSet,
-    service_id: Option<impl AsRef<str>>,
-    profile_key: &'a str,
+    profile: &ProfileSet,
+    service_id: Option<Cow<'a, str>>,
+    profile_key: Cow<'a, str>,
 ) -> Option<(Cow<'a, str>, PropertySource<'a>)> {
-    let service_id = service_id.map(format_service_id_for_profile)?;
+    let service_id = service_id?.clone();
+    let profile_case_service_id = format_service_id_for_profile(service_id.clone());
+
     let services_section_name = profile.get("services")?;
     let properties_key = PropertiesKey::builder()
         .section_key("services")
         .section_name(services_section_name)
-        .property_name(service_id)
-        .sub_property_name(profile_key)
+        .property_name(profile_case_service_id)
+        .sub_property_name(profile_key.clone())
         .build()
         .ok()?;
     let value = profile.other_sections().get(&properties_key)?;
+    let profile_name = Cow::Owned(profile.selected_profile().to_owned());
 
-    Some((
-        Cow::Borrowed(value),
-        PropertySource::Profile {
-            name: profile.selected_profile(),
-            key: profile_key,
-            service_specific: true,
-        },
-    ))
+    let source = PropertySource::service_from_profile(profile_key, profile_name, service_id);
+
+    Some((Cow::Owned(value.clone()), source))
 }
 
 fn format_service_id_for_env(service_id: impl AsRef<str>) -> String {
