@@ -494,7 +494,14 @@ mod loader {
 
         /// Set test credentials for use when signing requests
         pub fn test_credentials(self) -> Self {
-            self.credentials_provider(Credentials::for_tests())
+            #[allow(unused_mut)]
+            let mut ret = self.credentials_provider(Credentials::for_tests());
+            #[cfg(all(feature = "sso", feature = "test-util"))]
+            {
+                use aws_smithy_runtime_api::client::identity::http::Token;
+                ret = ret.token_provider(Token::for_tests());
+            }
+            ret
         }
 
         /// Override the access token provider used to build [`SdkConfig`].
