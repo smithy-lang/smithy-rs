@@ -6,7 +6,7 @@
 use std::time::{Duration, SystemTime};
 
 use aws_config::Region;
-use aws_sdk_s3::config::Builder;
+use aws_sdk_s3::config::{Builder, Credentials};
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::SdkBody;
 use aws_sdk_s3::types::ChecksumAlgorithm;
@@ -352,4 +352,35 @@ async fn disable_s3_express_session_auth_at_operation_level() {
             .contains("x-amz-create-session-mode"),
         "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
     );
+}
+
+#[tokio::test]
+async fn support_customer_overriding_express_credentials_provider() {
+    let (http_client, rx) = capture_request(None);
+    let expected_session_token = "testsessiontoken";
+    let client = test_client(|b| {
+        b.http_client(http_client.clone())
+            // Pass a credential with a session token so that
+            // `x-amz-s3session-token` should appear in the request header.
+            .express_credentials_provider(Credentials::new(
+                "testaccess",
+                "testsecret",
+                Some(expected_session_token.to_owned()),
+                None,
+                "test",
+            ))
+    })
+    .await;
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await;
+
+    let req = rx.expect_request();
+    let actual_session_token = req
+        .headers()
+        .get("x-amz-s3session-token")
+        .expect("x-amz-s3session-token should be present");
+    assert_eq!(expected_session_token, actual_session_token);
 }
