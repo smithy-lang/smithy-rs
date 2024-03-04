@@ -5,11 +5,11 @@
 
 use std::time::{Duration, SystemTime};
 
-use aws_config::Region;
+use aws_config::{BehaviorVersion, Region};
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::SdkBody;
-use aws_sdk_s3::types::ChecksumAlgorithm;
+use aws_sdk_s3::types::{ChecksumAlgorithm, ObjectIdentifier};
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
 use aws_smithy_runtime::client::http::test_util::{
@@ -29,28 +29,6 @@ where
         .await;
     let config = Config::from(&sdk_config).to_builder().with_test_defaults();
     aws_sdk_s3::Client::from_conf(update_builder(config).build())
-}
-
-// TODO(S3Express): Convert this test to the S3 express section in canary
-#[tokio::test]
-async fn list_objects_v2() {
-    let _logs = capture_test_logs();
-
-    let http_client =
-        ReplayingClient::from_file("tests/data/express/list-objects-v2.json").unwrap();
-    let client = test_client(|b| b.http_client(http_client.clone())).await;
-
-    let result = client
-        .list_objects_v2()
-        .bucket("s3express-test-bucket--usw2-az1--x-s3")
-        .send()
-        .await;
-    dbg!(result).expect("success");
-
-    http_client
-        .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
-        .await
-        .unwrap();
 }
 
 #[tokio::test]

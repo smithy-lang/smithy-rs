@@ -56,6 +56,7 @@ class S3Decorator : ClientCodegenDecorator {
             ShapeId.from("com.amazonaws.s3#CreateSessionOutput"),
             // API returns GetObjectAttributes_Response_ instead of Output
             ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
+            ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
         )
 
     override fun protocols(
