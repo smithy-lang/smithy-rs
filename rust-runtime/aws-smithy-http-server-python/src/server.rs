@@ -255,10 +255,10 @@ event_loop.add_signal_handler(signal.SIGINT,
                 .build()
                 .expect("unable to start a new tokio runtime for this process");
             rt.block_on(async move {
-                let addr = addr_incoming_from_socket(raw_socket);
+                let listener = tcp_listener_from_socket(raw_socket);
 
                 if let Some(config) = tls {
-                    let listener = TlsListener::new(config, addr);
+                    let listener = TlsListener::new(config, listener);
                     let server =
                         hyper::Server::builder(listener).serve(IntoMakeService::new(service));
 
@@ -268,7 +268,8 @@ event_loop.add_signal_handler(signal.SIGINT,
                         tracing::error!(error = ?err, "server error");
                     }
                 } else {
-
+                    let addr = AddrIncoming::from_listener(listener)
+                        .expect("unable to create `AddrIncoming` from `TcpListener`");
                     let server = hyper::Server::builder(addr).serve(IntoMakeService::new(service));
 
                     tracing::trace!("started hyper server from shared socket");
@@ -496,14 +497,12 @@ event_loop.add_signal_handler(signal.SIGINT,
     }
 }
 
-fn addr_incoming_from_socket(socket: Socket) -> AddrIncoming {
+fn tcp_listener_from_socket(socket: Socket) -> TcpListener {
     let std_listener: StdTcpListener = socket.into();
     // StdTcpListener::from_std doesn't set O_NONBLOCK
     std_listener
         .set_nonblocking(true)
         .expect("unable to set `O_NONBLOCK=true` on `std::net::TcpListener`");
-    let listener = TcpListener::from_std(std_listener)
-        .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`");
-    AddrIncoming::from_listener(listener)
-        .expect("unable to create `AddrIncoming` from `TcpListener`")
+    TcpListener::from_std(std_listener)
+        .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`")
 }

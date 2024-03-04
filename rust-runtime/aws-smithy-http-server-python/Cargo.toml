@@ -22,19 +22,19 @@ bytes = "1.2"
 futures = "0.3"
 http = "0.2"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
-tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
-rustls-pemfile = "1.0.1"
-tokio-rustls = "0.24.0"
 lambda_http = { version = "0.8.0" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2"
 pyo3 = "0.18.2"
 pyo3-asyncio = { version = "0.18.0", features = ["tokio-runtime"] }
+rustls-pemfile = "2"
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.2", features = ["all"] }
 thiserror = "1.0.32"
+tls-listener = { version = "0.9", features = ["rustls"] }
 tokio = { version = "1.20.1", features = ["full"] }
+tokio-rustls = "0.25"
 tokio-stream = "0.1"
 tower = { version = "0.4.13", features = ["util"] }
 tracing = "0.1.36"
@@ -48,7 +48,7 @@ tower-test = "0.4"
 tokio-test = "0.4"
 pyo3-asyncio = { version = "0.18.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
 rcgen = "0.10.0"
-hyper-rustls = { version = "0.24", features = ["http2"] }
+hyper-rustls = { version = "0.25", features = ["http2"] }
 
 # PyO3 Asyncio tests cannot use Cargo's default testing harness because `asyncio`
 # wants to control the main thread. So we need to use testing harness provided by `pyo3_asyncio`

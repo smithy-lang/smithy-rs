@@ -15,7 +15,8 @@ use std::time::Duration;
 
 use pyo3::{pyclass, pymethods};
 use thiserror::Error;
-use tokio_rustls::rustls::{Certificate, Error as RustTlsError, PrivateKey, ServerConfig};
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use tokio_rustls::rustls::{Error as RustTlsError, ServerConfig};
 
 pub mod listener;
 
@@ -53,7 +54,6 @@ impl PyTlsConfig {
         let cert_chain = self.cert_chain()?;
         let key_der = self.key_der()?;
         let mut config = ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(cert_chain, key_der)?;
         config.alpn_protocols = vec!["h2".into(), "http/1.1".into()];
@@ -66,18 +66,16 @@ impl PyTlsConfig {
     }
 
     /// Reads certificates from `cert_path`.
-    fn cert_chain(&self) -> Result<Vec<Certificate>, PyTlsConfigError> {
+    fn cert_chain(&self) -> Result<Vec<CertificateDer<'static>>, PyTlsConfigError> {
         let file = File::open(&self.cert_path).map_err(PyTlsConfigError::CertParse)?;
         let mut cert_rdr = BufReader::new(file);
-        Ok(rustls_pemfile::certs(&mut cert_rdr)
-            .map_err(PyTlsConfigError::CertParse)?
-            .into_iter()
-            .map(Certificate)
-            .collect())
+        rustls_pemfile::certs(&mut cert_rdr)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(PyTlsConfigError::CertParse)
     }
 
     /// Parses RSA or PKCS private key from `key_path`.
-    fn key_der(&self) -> Result<PrivateKey, PyTlsConfigError> {
+    fn key_der(&self) -> Result<PrivateKeyDer<'static>, PyTlsConfigError> {
         let mut key_vec = Vec::new();
         File::open(&self.key_path)
             .and_then(|mut f| f.read_to_end(&mut key_vec))
@@ -86,16 +84,26 @@ impl PyTlsConfig {
             return Err(PyTlsConfigError::EmptyKey);
         }
 
-        let mut pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut key_vec.as_slice())
-            .map_err(PyTlsConfigError::Pkcs8Parse)?;
-        if !pkcs8.is_empty() {
-            return Ok(PrivateKey(pkcs8.remove(0)));
+        let mut key_slice = key_vec.as_slice();
+        let mut pkcs8 = rustls_pemfile::pkcs8_private_keys(&mut key_slice);
+        match pkcs8.next() {
+            Some(Ok(key)) if !key.secret_pkcs8_der().is_empty() => {
+                return Ok(PrivateKeyDer::from(key).clone_key())
+            }
+            Some(Ok(_)) => return Err(PyTlsConfigError::EmptyKey),
+            Some(Err(e)) => return Err(PyTlsConfigError::Pkcs8Parse(e)),
+            None => {}
         }
 
-        let mut rsa = rustls_pemfile::rsa_private_keys(&mut key_vec.as_slice())
-            .map_err(PyTlsConfigError::RsaParse)?;
-        if !rsa.is_empty() {
-            return Ok(PrivateKey(rsa.remove(0)));
+        let mut key_slice = key_vec.as_slice();
+        let mut rsa = rustls_pemfile::rsa_private_keys(&mut key_slice);
+        match rsa.next() {
+            Some(Ok(key)) if !key.secret_pkcs1_der().is_empty() => {
+                return Ok(PrivateKeyDer::from(key))
+            }
+            Some(Ok(_)) => return Err(PyTlsConfigError::EmptyKey),
+            Some(Err(e)) => return Err(PyTlsConfigError::Pkcs8Parse(e)),
+            None => {}
         }
 
         Err(PyTlsConfigError::EmptyKey)
@@ -129,7 +137,7 @@ pub enum PyTlsConfigError {
     Pkcs8Parse(io::Error),
     #[error("could not parse rsa keys")]
     RsaParse(io::Error),
-    #[error("rusttls protocol error")]
+    #[error("rustls protocol error")]
     RustTlsError(#[from] RustTlsError),
 }
 

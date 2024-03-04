@@ -10,9 +10,9 @@ use std::task::{Context, Poll};
 
 use futures::{ready, Stream};
 use hyper::server::accept::Accept;
-use hyper::server::conn::{AddrIncoming, AddrStream};
 use pin_project_lite::pin_project;
 use tls_listener::{Error as TlsListenerError, TlsListener};
+use tokio::net::{TcpListener, TcpStream};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::TlsAcceptor;
 
@@ -23,23 +23,23 @@ pin_project! {
     /// and ignores incorrect connections (they cause Hyper server to shutdown otherwise).
     pub struct Listener {
         #[pin]
-        inner: TlsListener<AddrIncoming, TlsAcceptor>,
+        inner: TlsListener<TcpListener, TlsAcceptor>,
         new_acceptor_rx: mpsc::Receiver<TlsAcceptor>,
     }
 }
 
 impl Listener {
-    pub fn new(config: PyTlsConfig, addr: AddrIncoming) -> Self {
+    pub fn new(config: PyTlsConfig, listener: TcpListener) -> Self {
         let (acceptor, new_acceptor_rx) = tls_config_reloader(config);
         Self {
-            inner: TlsListener::new(acceptor, addr),
+            inner: TlsListener::new(acceptor, listener),
             new_acceptor_rx,
         }
     }
 }
 
 impl Accept for Listener {
-    type Conn = TlsStream<AddrStream>;
+    type Conn = TlsStream<TcpStream>;
     type Error = io::Error;
 
     fn poll_accept(
@@ -53,13 +53,22 @@ impl Accept for Listener {
 
         loop {
             match ready!(self.as_mut().project().inner.poll_next(cx)) {
-                Some(Ok(conn)) => return Poll::Ready(Some(Ok(conn))),
+                Some(Ok((conn, _))) => return Poll::Ready(Some(Ok(conn))),
                 Some(Err(TlsListenerError::ListenerError(err))) => {
                     return Poll::Ready(Some(Err(err)))
                 }
-                Some(Err(TlsListenerError::TlsAcceptError(err))) => {
+                Some(Err(TlsListenerError::TlsAcceptError {
+                    error, peer_addr, ..
+                })) => {
                     // Don't propogate TLS handshake errors to Hyper because it causes server to shutdown
-                    tracing::debug!(error = ?err, "tls handshake error");
+                    tracing::debug!(?error, ?peer_addr, "tls accept error");
+                }
+                Some(Err(TlsListenerError::HandshakeTimeout { peer_addr, .. })) => {
+                    // Don't propogate TLS handshake errors to Hyper because it causes server to shutdown
+                    tracing::debug!(?peer_addr, "tls handshake timeout");
+                }
+                Some(_) => {
+                    tracing::debug!("unexpected tls listener error");
                 }
                 None => return Poll::Ready(None),
             }
@@ -106,14 +115,19 @@ mod tests {
     use std::thread;
 
     use futures::ready;
-    use hyper::server::conn::{AddrIncoming, AddrStream};
+    use hyper::server::accept::Accept;
+    use hyper::server::conn::AddrIncoming;
     use hyper::service::{make_service_fn, service_fn};
     use hyper::{Body, Client, Error, Response, Server, Uri};
     use hyper_rustls::HttpsConnectorBuilder;
     use pin_project_lite::pin_project;
     use tls_listener::AsyncAccept;
+    use tokio::net::TcpStream;
     use tokio_rustls::{
-        rustls::{Certificate, ClientConfig, PrivateKey, RootCertStore, ServerConfig},
+        rustls::{
+            pki_types::{CertificateDer, PrivatePkcs8KeyDer},
+            ClientConfig, RootCertStore, ServerConfig,
+        },
         TlsAcceptor,
     };
 
@@ -137,24 +151,26 @@ mod tests {
     }
 
     impl AsyncAccept for DummyListener {
-        type Connection = AddrStream;
+        type Address = SocketAddr;
+        type Connection = TcpStream;
         type Error = io::Error;
 
         fn poll_accept(
             self: Pin<&mut Self>,
             cx: &mut Context<'_>,
-        ) -> Poll<Option<Result<Self::Connection, Self::Error>>> {
+        ) -> Poll<Result<(Self::Connection, Self::Address), Self::Error>> {
             let this = self.project();
             let conn = match ready!(this.inner.poll_accept(cx)) {
                 Some(Ok(conn)) => conn,
-                Some(Err(err)) => return Poll::Ready(Some(Err(err))),
-                None => return Poll::Ready(None),
+                Some(Err(err)) => return Poll::Ready(Err(err)),
+                None => return Poll::Pending,
             };
 
+            let remote_addr = conn.remote_addr();
             match &this.mode {
-                DummyListenerMode::Identity => Poll::Ready(Some(Ok(conn))),
+                DummyListenerMode::Identity => Poll::Ready(Ok((conn.into_inner(), remote_addr))),
                 DummyListenerMode::Fail => {
-                    Poll::Ready(Some(Err(io::ErrorKind::ConnectionAborted.into())))
+                    Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()))
                 }
             }
         }
@@ -245,9 +261,9 @@ mod tests {
 
     fn client_config_with_cert(cert: &rcgen::Certificate) -> ClientConfig {
         let mut roots = RootCertStore::empty();
-        roots.add_parsable_certificates(&[cert.serialize_der().unwrap()]);
+        let cert = CertificateDer::from(cert.serialize_der().unwrap());
+        roots.add_parsable_certificates([cert]);
         ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(roots)
             .with_no_client_auth()
     }
@@ -266,11 +282,10 @@ mod tests {
     fn acceptor_from_cert(cert: &rcgen::Certificate) -> TlsAcceptor {
         TlsAcceptor::from(Arc::new(
             ServerConfig::builder()
-                .with_safe_defaults()
                 .with_no_client_auth()
                 .with_single_cert(
-                    vec![Certificate(cert.serialize_der().unwrap())],
-                    PrivateKey(cert.serialize_private_key_der()),
+                    vec![CertificateDer::from(cert.serialize_der().unwrap())],
+                    PrivatePkcs8KeyDer::from(cert.serialize_private_key_der()).into(),
                 )
                 .unwrap(),
         ))
