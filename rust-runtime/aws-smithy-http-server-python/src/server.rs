@@ -8,7 +8,6 @@ use std::convert::Infallible;
 use std::net::TcpListener as StdTcpListener;
 use std::ops::Deref;
 use std::process;
-use std::sync::{mpsc, Arc};
 use std::thread;
 
 use aws_smithy_http_server::{
@@ -22,7 +21,6 @@ use pyo3::{prelude::*, types::IntoPyDict};
 use signal_hook::{consts::*, iterator::Signals};
 use socket2::Socket;
 use tokio::{net::TcpListener, runtime};
-use tokio_rustls::TlsAcceptor;
 use tower::{util::BoxCloneService, ServiceBuilder};
 
 use crate::{
@@ -260,8 +258,7 @@ event_loop.add_signal_handler(signal.SIGINT,
                 let addr = addr_incoming_from_socket(raw_socket);
 
                 if let Some(config) = tls {
-                    let (acceptor, acceptor_rx) = tls_config_reloader(config);
-                    let listener = TlsListener::new(acceptor, addr, acceptor_rx);
+                    let listener = TlsListener::new(config, addr);
                     let server =
                         hyper::Server::builder(listener).serve(IntoMakeService::new(service));
 
@@ -271,6 +268,7 @@ event_loop.add_signal_handler(signal.SIGINT,
                         tracing::error!(error = ?err, "server error");
                     }
                 } else {
+
                     let server = hyper::Server::builder(addr).serve(IntoMakeService::new(service));
 
                     tracing::trace!("started hyper server from shared socket");
@@ -508,33 +506,4 @@ fn addr_incoming_from_socket(socket: Socket) -> AddrIncoming {
         .expect("unable to create `tokio::net::TcpListener` from `std::net::TcpListener`");
     AddrIncoming::from_listener(listener)
         .expect("unable to create `AddrIncoming` from `TcpListener`")
-}
-
-// Builds `TlsAcceptor` from given `config` and also creates a background task
-// to reload certificates and returns a channel to receive new `TlsAcceptor`s.
-fn tls_config_reloader(config: PyTlsConfig) -> (TlsAcceptor, mpsc::Receiver<TlsAcceptor>) {
-    let reload_dur = config.reload_duration();
-    let (tx, rx) = mpsc::channel();
-    let acceptor = TlsAcceptor::from(Arc::new(config.build().expect("invalid tls config")));
-
-    tokio::spawn(async move {
-        tracing::trace!(dur = ?reload_dur, "starting timer to reload tls config");
-        loop {
-            tokio::time::sleep(reload_dur).await;
-            tracing::trace!("reloading tls config");
-            match config.build() {
-                Ok(config) => {
-                    let new_config = TlsAcceptor::from(Arc::new(config));
-                    // Note on expect: `tx.send` can only fail if the receiver is dropped,
-                    // it probably a bug if that happens
-                    tx.send(new_config).expect("could not send new tls config")
-                }
-                Err(err) => {
-                    tracing::error!(error = ?err, "could not reload tls config because it is invalid");
-                }
-            }
-        }
-    });
-
-    (acceptor, rx)
 }

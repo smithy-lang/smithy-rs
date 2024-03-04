@@ -3,42 +3,44 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::io;
 use std::pin::Pin;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::task::{Context, Poll};
 
 use futures::{ready, Stream};
 use hyper::server::accept::Accept;
+use hyper::server::conn::{AddrIncoming, AddrStream};
 use pin_project_lite::pin_project;
-use tls_listener::{AsyncAccept, AsyncTls, Error as TlsListenerError, TlsListener};
+use tls_listener::{Error as TlsListenerError, TlsListener};
+use tokio_rustls::server::TlsStream;
+use tokio_rustls::TlsAcceptor;
+
+use super::PyTlsConfig;
 
 pin_project! {
     /// A wrapper around [TlsListener] that allows changing TLS config via a channel
     /// and ignores incorrect connections (they cause Hyper server to shutdown otherwise).
-    pub struct Listener<A: AsyncAccept, T: AsyncTls<A::Connection>> {
+    pub struct Listener {
         #[pin]
-        inner: TlsListener<A, T>,
-        new_acceptor_rx: mpsc::Receiver<T>,
+        inner: TlsListener<AddrIncoming, TlsAcceptor>,
+        new_acceptor_rx: mpsc::Receiver<TlsAcceptor>,
     }
 }
 
-impl<A: AsyncAccept, T: AsyncTls<A::Connection>> Listener<A, T> {
-    pub fn new(tls: T, listener: A, new_acceptor_rx: mpsc::Receiver<T>) -> Self {
+impl Listener {
+    pub fn new(config: PyTlsConfig, addr: AddrIncoming) -> Self {
+        let (acceptor, new_acceptor_rx) = tls_config_reloader(config);
         Self {
-            inner: TlsListener::new(tls, listener),
+            inner: TlsListener::new(acceptor, addr),
             new_acceptor_rx,
         }
     }
 }
 
-impl<A, T> Accept for Listener<A, T>
-where
-    A: AsyncAccept,
-    A::Error: std::error::Error,
-    T: AsyncTls<A::Connection>,
-{
-    type Conn = T::Stream;
-    type Error = A::Error;
+impl Accept for Listener {
+    type Conn = TlsStream<AddrStream>;
+    type Error = io::Error;
 
     fn poll_accept(
         mut self: Pin<&mut Self>,
@@ -63,6 +65,35 @@ where
             }
         }
     }
+}
+
+// Builds `TlsAcceptor` from given `config` and also creates a background task
+// to reload certificates and returns a channel to receive new `TlsAcceptor`s.
+fn tls_config_reloader(config: PyTlsConfig) -> (TlsAcceptor, mpsc::Receiver<TlsAcceptor>) {
+    let reload_dur = config.reload_duration();
+    let (tx, rx) = mpsc::channel();
+    let acceptor = TlsAcceptor::from(Arc::new(config.build().expect("invalid tls config")));
+
+    tokio::spawn(async move {
+        tracing::trace!(dur = ?reload_dur, "starting timer to reload tls config");
+        loop {
+            tokio::time::sleep(reload_dur).await;
+            tracing::trace!("reloading tls config");
+            match config.build() {
+                Ok(config) => {
+                    let new_config = TlsAcceptor::from(Arc::new(config));
+                    // Note on expect: `tx.send` can only fail if the receiver is dropped,
+                    // it probably a bug if that happens
+                    tx.send(new_config).expect("could not send new tls config")
+                }
+                Err(err) => {
+                    tracing::error!(error = ?err, "could not reload tls config because it is invalid");
+                }
+            }
+        }
+    });
+
+    (acceptor, rx)
 }
 
 #[cfg(test)]
