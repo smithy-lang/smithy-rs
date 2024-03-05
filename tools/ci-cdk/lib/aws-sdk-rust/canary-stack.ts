@@ -192,6 +192,15 @@ export class CanaryStack extends Stack {
             resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
         }));
 
+        // Allow canaries to perform operations on test express bucket
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ['s3express:*'],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+            })
+        );
+
         // Allow canaries to call Transcribe's StartStreamTranscription
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
