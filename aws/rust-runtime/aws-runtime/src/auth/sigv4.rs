@@ -6,7 +6,7 @@
 use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
-    ErrorKind, SigV4OperationSigningConfig, SigV4SigningError,
+    SigV4OperationSigningConfig, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
@@ -85,9 +85,7 @@ impl SigV4Signer {
     ) -> Result<v4::SigningParams<'a, SigningSettings>, SigV4SigningError> {
         let creds = identity
             .data::<Credentials>()
-            .ok_or_else(|| SigV4SigningError {
-                kind: ErrorKind::WrongIdentityType(identity.clone()),
-            })?;
+            .ok_or_else(|| SigV4SigningError::WrongIdentityType(identity.clone()))?;
 
         if let Some(expires_in) = settings.expires_in {
             if let Some(creds_expires_time) = creds.expiry() {
@@ -104,18 +102,14 @@ impl SigV4Signer {
                 operation_config
                     .region
                     .as_ref()
-                    .ok_or(SigV4SigningError {
-                        kind: ErrorKind::MissingSigningRegion,
-                    })?
+                    .ok_or(SigV4SigningError::MissingSigningRegion)?
                     .as_ref(),
             )
             .name(
                 operation_config
                     .name
                     .as_ref()
-                    .ok_or(SigV4SigningError {
-                        kind: ErrorKind::MissingSigningName,
-                    })?
+                    .ok_or(SigV4SigningError::MissingSigningName)?
                     .as_ref(),
             )
             .time(request_timestamp)
@@ -128,13 +122,10 @@ impl SigV4Signer {
     pub fn extract_operation_config<'a>(
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'a>,
         config_bag: &'a ConfigBag,
-    ) -> Result<Cow<'a, SigV4OperationSigningConfig>, SigV4SigningError> {
-        let operation_config =
-            config_bag
-                .load::<SigV4OperationSigningConfig>()
-                .ok_or(SigV4SigningError {
-                    kind: ErrorKind::MissingOperationSigningConfig,
-                })?;
+    ) -> Result<Cow<'a, SigV4OperationSigningConfig>, BoxError> {
+        let operation_config = config_bag
+            .load::<SigV4OperationSigningConfig>()
+            .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
 
         let name = extract_endpoint_auth_scheme_signing_name(&auth_scheme_endpoint_config)?
             .or(config_bag.load::<SigningName>().cloned());
@@ -238,10 +229,7 @@ impl Sign for SigV4Signer {
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         if identity.data::<Credentials>().is_none() {
-            return Err(SigV4SigningError {
-                kind: ErrorKind::WrongIdentityType(identity.clone()),
-            }
-            .into());
+            return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
         };
 
         let operation_config =

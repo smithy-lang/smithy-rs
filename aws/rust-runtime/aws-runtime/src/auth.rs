@@ -129,14 +129,8 @@ fn settings(operation_config: &SigV4OperationSigningConfig) -> SigningSettings {
     settings
 }
 
-/// Errors that can occur while signing with SigV4.
 #[derive(Debug)]
-pub struct SigV4SigningError {
-    kind: ErrorKind,
-}
-
-#[derive(Debug)]
-pub(crate) enum ErrorKind {
+enum SigV4SigningError {
     MissingOperationSigningConfig,
     MissingSigningRegion,
     #[cfg(feature = "sigv4a")]
@@ -148,9 +142,9 @@ pub(crate) enum ErrorKind {
 
 impl fmt::Display for SigV4SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ErrorKind::*;
+        use SigV4SigningError::*;
         let mut w = |s| f.write_str(s);
-        match &self.kind {
+        match self {
             MissingOperationSigningConfig => w("missing operation signing config"),
             MissingSigningRegion => w("missing signing region"),
             #[cfg(feature = "sigv4a")]
@@ -174,28 +168,24 @@ impl StdError for SigV4SigningError {}
 fn extract_endpoint_auth_scheme_signing_name(
     endpoint_config: &AuthSchemeEndpointConfig<'_>,
 ) -> Result<Option<SigningName>, SigV4SigningError> {
-    use ErrorKind::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
+    use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
 
     match extract_field_from_endpoint_config("signingName", endpoint_config) {
         Some(Document::String(s)) => Ok(Some(SigningName::from(s.to_string()))),
         None => Ok(None),
-        _ => Err(SigV4SigningError {
-            kind: UnexpectedType("signingName"),
-        }),
+        _ => Err(UnexpectedType("signingName")),
     }
 }
 
 fn extract_endpoint_auth_scheme_signing_region(
     endpoint_config: &AuthSchemeEndpointConfig<'_>,
 ) -> Result<Option<SigningRegion>, SigV4SigningError> {
-    use ErrorKind::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
+    use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
 
     match extract_field_from_endpoint_config("signingRegion", endpoint_config) {
         Some(Document::String(s)) => Ok(Some(SigningRegion::from(Region::new(s.clone())))),
         None => Ok(None),
-        _ => Err(SigV4SigningError {
-            kind: UnexpectedType("signingRegion"),
-        }),
+        _ => Err(UnexpectedType("signingRegion")),
     }
 }
 
