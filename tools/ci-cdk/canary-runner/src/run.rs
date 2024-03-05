@@ -370,7 +370,7 @@ async fn create_lambda_fn(
 ) -> Result<()> {
     use lambda::types::*;
 
-    let env_builder = match expected_speech_text_by_transcribe {
+    let mut env_builder = match expected_speech_text_by_transcribe {
         Some(expected_speech_text_by_transcribe) => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
@@ -388,6 +388,11 @@ async fn create_lambda_fn(
             .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn)
             .variables("CANARY_S3_EXPRESS_BUCKET_NAME", test_s3_express_bucket),
     };
+
+    // TODO(Post S3Express release): Delete this once S3 Express has been released and its canary is on by default
+    if let Ok(value) = env::var("ENABLE_S3_EXPRESS_CANARY") {
+        env_builder = env_builder.variables("ENABLE_S3_EXPRESS_CANARY", value);
+    }
 
     lambda_client
         .create_function()
