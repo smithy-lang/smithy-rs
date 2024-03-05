@@ -22,11 +22,7 @@ async fn test_client<F>(update_builder: F) -> Client
 where
     F: Fn(Builder) -> Builder,
 {
-    let sdk_config = aws_config::from_env()
-        .no_credentials()
-        .region("us-west-2")
-        .load()
-        .await;
+    let sdk_config = aws_config::from_env().region("us-west-2").load().await;
     let config = Config::from(&sdk_config).to_builder().with_test_defaults();
     aws_sdk_s3::Client::from_conf(update_builder(config).build())
 }
@@ -356,21 +352,33 @@ async fn disable_s3_express_session_auth_at_operation_level() {
 
 #[tokio::test]
 async fn support_customer_overriding_express_credentials_provider() {
-    let (http_client, rx) = capture_request(None);
     let expected_session_token = "testsessiontoken";
-    let client = test_client(|b| {
-        b.http_client(http_client.clone())
-            // Pass a credential with a session token so that
-            // `x-amz-s3session-token` should appear in the request header.
-            .express_credentials_provider(Credentials::new(
+    let client_overriding_express_credentials_provider = || async move {
+        let (http_client, rx) = capture_request(None);
+        let client = test_client(|b| {
+            let credentials = Credentials::new(
                 "testaccess",
                 "testsecret",
                 Some(expected_session_token.to_owned()),
                 None,
                 "test",
-            ))
-    })
-    .await;
+            );
+            b.http_client(http_client.clone())
+                // Pass a credential with a session token so that
+                // `x-amz-s3session-token` should appear in the request header
+                // when s3 session auth is enabled.
+                .express_credentials_provider(credentials.clone())
+                // Pass a credential with a session token so that
+                // `x-amz-security-token` should appear in the request header
+                // when s3 session auth is disabled.
+                .credentials_provider(credentials)
+        })
+        .await;
+        (client, rx)
+    };
+
+    // Test `x-amz-s3session-token` should be present with `expected_session_token`.
+    let (client, rx) = client_overriding_express_credentials_provider().await;
     let _ = client
         .list_objects_v2()
         .bucket("s3express-test-bucket--usw2-az1--x-s3")
@@ -383,4 +391,22 @@ async fn support_customer_overriding_express_credentials_provider() {
         .get("x-amz-s3session-token")
         .expect("x-amz-s3session-token should be present");
     assert_eq!(expected_session_token, actual_session_token);
+    assert!(req.headers().get("x-amz-security-token").is_none());
+
+    // With a regular S3 bucket, test `x-amz-security-token` should be present with `expected_session_token`,
+    // instead of `x-amz-s3session-token`.
+    let (client, rx) = client_overriding_express_credentials_provider().await;
+    let _ = client
+        .list_objects_v2()
+        .bucket("regular-test-bucket")
+        .send()
+        .await;
+
+    let req = rx.expect_request();
+    let actual_session_token = req
+        .headers()
+        .get("x-amz-security-token")
+        .expect("x-amz-security-token should be present");
+    assert_eq!(expected_session_token, actual_session_token);
+    assert!(req.headers().get("x-amz-s3session-token").is_none());
 }
