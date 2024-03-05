@@ -227,11 +227,10 @@ class S3ExpressFluentClientCustomization(
 }
 
 class S3ExpressRequestChecksumCustomization(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
 
     private val codegenScope =
         arrayOf(
@@ -242,6 +241,7 @@ class S3ExpressRequestChecksumCustomization(
                 runtimeConfig.awsInlineableHttpRequestChecksum()
                     .resolve("DefaultRequestChecksumOverride"),
             "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+            "for_s3_express" to s3ExpressModule(runtimeConfig).resolve("utils::for_s3_express"),
         )
 
     override fun section(section: OperationSection): Writable =
@@ -259,15 +259,10 @@ class S3ExpressRequestChecksumCustomization(
                                     return original;
                                 }
 
-                                let endpoint = cfg
-                                    .load::<crate::config::endpoint::Endpoint>()
-                                    .expect("endpoint added to config bag by endpoint orchestrator");
-
-                                match endpoint.properties().get("backend") {
-                                    Some(#{Document}::String(backend)) if backend.as_str() == "S3Express" => {
-                                       #{customDefault:W}
-                                    }
-                                    _ => original
+                                if #{for_s3_express}(cfg) {
+                                    #{customDefault:W}
+                                } else {
+                                    original
                                 }
                             }
                         ));
