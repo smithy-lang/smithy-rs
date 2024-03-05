@@ -124,7 +124,7 @@ class StalledStreamProtectionOperationCustomization(
                         // we can't count on hyper to poll a request body on wake.
                         rustTemplate(
                             """
-                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::ResponseBody)
+                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::RequestAndResponseBody)
                             """,
                             *preludeScope,
                             "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),

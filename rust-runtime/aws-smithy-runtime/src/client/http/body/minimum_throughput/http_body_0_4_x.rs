@@ -4,6 +4,7 @@
  */
 
 use super::{BoxError, Error, MinimumThroughputBody};
+use crate::client::http::body::minimum_throughput::ThroughputReadingBody;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use http_body_0_4::Body;
 use std::future::Future;
@@ -103,6 +104,48 @@ where
         }
 
         poll_res
+    }
+
+    fn poll_trailers(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+        let this = self.as_mut().project();
+        this.inner.poll_trailers(cx)
+    }
+}
+
+impl<B> Body for ThroughputReadingBody<B>
+where
+    B: Body<Data = bytes::Bytes, Error = BoxError>,
+{
+    type Data = bytes::Bytes;
+    type Error = BoxError;
+
+    fn poll_data(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        // this code is called quite frequently in production—one every millisecond or so when downloading
+        // a stream. However, SystemTime::now is on the order of nanoseconds
+        let now = self.time_source.now();
+        // Attempt to read the data from the inner body, then update the
+        // throughput logs.
+        let this = self.as_mut().project();
+        match this.inner.poll_data(cx) {
+            Poll::Ready(Some(Ok(bytes))) => {
+                tracing::trace!("received data: {}", bytes.len());
+                this.throughput.push(now, bytes.len() as u64);
+                Poll::Ready(Some(Ok(bytes)))
+            }
+            Poll::Pending => {
+                tracing::trace!("received poll pending");
+                this.throughput.push(now, 0);
+                Poll::Pending
+            }
+            // If we've read all the data or an error occurred, then return that result.
+            res => res,
+        }
     }
 
     fn poll_trailers(

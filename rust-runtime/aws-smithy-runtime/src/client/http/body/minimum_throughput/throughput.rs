@@ -97,7 +97,7 @@ impl From<(u64, Duration)> for Throughput {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct ThroughputLogs {
     max_length: usize,
     inner: VecDeque<(SystemTime, u64)>,
@@ -118,14 +118,9 @@ impl ThroughputLogs {
         if self.inner.len() == self.max_length {
             self.bytes_processed -= self.inner.pop_front().map(|(_, sz)| sz).unwrap_or_default();
         }
-
         debug_assert!(self.inner.capacity() > self.inner.len());
         self.bytes_processed += throughput.1;
         self.inner.push_back(throughput);
-    }
-
-    fn buffer_full(&self) -> bool {
-        self.inner.len() == self.max_length
     }
 
     pub(super) fn calculate_throughput(
@@ -133,30 +128,28 @@ impl ThroughputLogs {
         now: SystemTime,
         time_window: Duration,
     ) -> Option<Throughput> {
-        // There are a lot of pathological cases that are 0 throughput. These cases largely shouldn't
-        // happen, because the check interval MUST be less than the check window
-        let total_length = self
-            .inner
-            .iter()
-            .last()?
-            .0
-            .duration_since(self.inner.front()?.0)
-            .ok()?;
-        // during a "healthy" request we'll only have a few milliseconds of logs (shorter than the check window)
-        if total_length < time_window {
-            // if we haven't hit our requested time window & the buffer still isn't full, then
-            // return `None` — this is the "startup grace period"
-            return if !self.buffer_full() {
-                None
-            } else {
-                // Otherwise, if the entire buffer fits in the timewindow, we can the shortcut to
-                // avoid recomputing all the data
-                Some(Throughput {
-                    bytes_read: self.bytes_processed,
-                    per_time_elapsed: total_length,
-                })
-            };
+        if self.inner.is_empty() {
+            return None;
         }
+        if let Some(first_time) = self.inner.front().map(|e| e.0) {
+            if first_time + time_window >= now && first_time < now {
+                // If the first logged time fits within the time window, then short-circuit
+                return Some(Throughput {
+                    bytes_read: self.bytes_processed,
+                    per_time_elapsed: now.duration_since(first_time).expect("checked above"),
+                });
+            }
+        }
+        if let Some(last_time) = self.inner.back().map(|e| e.0) {
+            if last_time + time_window < now {
+                // If we have no log entries at all within the time window, then short-circuit to 0
+                return Some(Throughput {
+                    bytes_read: 0,
+                    per_time_elapsed: time_window,
+                });
+            }
+        }
+
         let minimum_ts = now - time_window;
         let first_item = self.inner.iter().find(|(ts, _)| *ts >= minimum_ts)?.0;
 
@@ -166,7 +159,7 @@ impl ThroughputLogs {
             .inner
             .iter()
             .rev()
-            .take_while(|(ts, _)| *ts > minimum_ts)
+            .take_while(|(ts, _)| *ts >= minimum_ts)
             .map(|t| t.1)
             .sum::<u64>();
 
@@ -279,5 +272,45 @@ mod test {
             .calculate_throughput(now + tick, Duration::from_secs(1))
             .unwrap();
         assert_eq!(108.0, throughput.bytes_per_second());
+    }
+
+    // If the time since the last log entry is greater than the window, then the throughput should be zero
+    #[test]
+    fn test_throughput_log_calculate_throughput_long_after_last_log() {
+        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(100), 12);
+
+        let throughput = throughput_logs
+            .calculate_throughput(now + Duration::from_secs(5), Duration::from_secs(1))
+            .unwrap();
+        let expected_throughput = 0.0;
+
+        assert_eq!(expected_throughput, throughput.bytes_per_second());
+    }
+
+    // If the throughput log is empty, it should return None for the calculated throughput
+    #[test]
+    fn test_throughput_log_calculate_throughput_empty_log() {
+        let throughput_logs = ThroughputLogs::new(1000);
+        assert!(throughput_logs
+            .calculate_throughput(UNIX_EPOCH, Duration::from_secs(1))
+            .is_none());
+    }
+
+    // Verify things work as expected when everything occurs exactly on the time window boundary
+    #[test]
+    fn test_boundary_conditions() {
+        let mut logs = ThroughputLogs::new(1000);
+        logs.bytes_processed = 2000;
+        logs.inner.push_back((SystemTime::UNIX_EPOCH, 1000));
+        logs.inner
+            .push_back((SystemTime::UNIX_EPOCH + Duration::from_secs(1), 1000));
+
+        let throughput = logs
+            .calculate_throughput(
+                SystemTime::UNIX_EPOCH + Duration::from_secs(2),
+                Duration::from_secs(1),
+            )
+            .unwrap();
+        assert_eq!(Throughput::new_bytes_per_second(1000), throughput);
     }
 }
