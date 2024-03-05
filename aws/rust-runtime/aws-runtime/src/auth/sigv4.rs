@@ -6,7 +6,7 @@
 use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
-    SessionTokenNameOverride, SigV4OperationSigningConfig, SigV4SigningError,
+    SigV4OperationSigningConfig, SigV4SessionTokenNameOverride, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
@@ -162,7 +162,7 @@ impl Sign for SigV4Signer {
         let request_time = runtime_components.time_source().unwrap_or_default().now();
 
         let settings = if let Some(session_token_name_override) =
-            config_bag.load::<SessionTokenNameOverride>()
+            config_bag.load::<SigV4SessionTokenNameOverride>()
         {
             let mut settings = Self::settings(&operation_config);
             let name_override = session_token_name_override.name_override(&settings, config_bag)?;

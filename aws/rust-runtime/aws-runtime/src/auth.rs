@@ -83,12 +83,12 @@ pub(crate) type SessionTokenNameOverrideFn = Box<
 >;
 
 /// Custom config that provides the alternative session token name for [`SigningSettings`]
-pub struct SessionTokenNameOverride {
+pub struct SigV4SessionTokenNameOverride {
     name_override: SessionTokenNameOverrideFn,
 }
 
-impl SessionTokenNameOverride {
-    /// Creates a new `SessionTokenNameOverride`
+impl SigV4SessionTokenNameOverride {
+    /// Creates a new `SigV4SessionTokenNameOverride`
     pub fn new<F>(name_override: F) -> Self
     where
         F: Fn(&SigningSettings, &ConfigBag) -> Result<Option<&'static str>, BoxError>
@@ -111,13 +111,13 @@ impl SessionTokenNameOverride {
     }
 }
 
-impl fmt::Debug for SessionTokenNameOverride {
+impl fmt::Debug for SigV4SessionTokenNameOverride {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SessionTokenNameOverride").finish()
     }
 }
 
-impl Storable for SessionTokenNameOverride {
+impl Storable for SigV4SessionTokenNameOverride {
     type Storer = StoreReplace<Self>;
 }
 

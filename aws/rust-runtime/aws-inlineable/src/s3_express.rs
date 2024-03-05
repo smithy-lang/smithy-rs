@@ -617,7 +617,7 @@ pub(crate) mod identity_provider {
 
 /// Supporting code for S3 Express runtime plugin
 pub(crate) mod runtime_plugin {
-    use aws_runtime::auth::SessionTokenNameOverride;
+    use aws_runtime::auth::SigV4SessionTokenNameOverride;
     use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
     use aws_smithy_runtime_api::{box_error::BoxError, client::runtime_plugin::RuntimePlugin};
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
@@ -669,7 +669,7 @@ pub(crate) mod runtime_plugin {
                 }
             }
 
-            let session_token_name_override = SessionTokenNameOverride::new(
+            let session_token_name_override = SigV4SessionTokenNameOverride::new(
                 |settings: &SigningSettings, cfg: &ConfigBag| {
                     // Not configured for S3 express, use the original session token name override
                     if !crate::s3_express::utils::for_s3_express(cfg) {
