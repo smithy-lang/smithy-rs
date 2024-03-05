@@ -172,7 +172,6 @@ mod build_connector {
         hyper_rustls::HttpsConnectorBuilder::new()
                .with_tls_config(
                 rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_provider)))
-                    //.with_safe_default_kx_groups()
                     .with_safe_default_protocol_versions()
                     .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
                     .with_native_roots().expect("error with TLS configuration.")
@@ -512,7 +511,9 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
     None
 }
 
-// TODO(https://github.com/awslabs/aws-sdk-rust/issues/1090): CacheKey must also include ptr equality to RuntimeComponents
+// TODO(https://github.com/awslabs/aws-sdk-rust/issues/1090): CacheKey must also include ptr equality to any
+// runtime components that are used—sleep_impl as a base (unless we prohibit overridding sleep impl)
+// If we decide to put a DnsResolver in RuntimeComponents, then we'll need to handle that as well.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 struct CacheKey {
     connect_timeout: Option<Duration>,
@@ -913,7 +914,6 @@ mod timeout_middleware {
         use aws_smithy_types::error::display::DisplayErrorContext;
 
         use super::super::*;
-        use super::*;
 
         #[allow(unused)]
         fn connect_timeout_is_correct<T: Send + Sync + Clone + 'static>() {
@@ -954,7 +954,7 @@ mod timeout_middleware {
             type Error = BoxError;
             type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
 
-            fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
                 Poll::Ready(Ok(()))
             }
 

@@ -200,10 +200,11 @@ jobs:
           # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
           # which is not really yet fully supported on the platform.
           # aws-smithy-http-server-typescript cannot be compiled right now on Windows.
-          cargo test --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          cargo test --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
           cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
           popd &>/dev/null
         done
+        (cd rust-runtime && cargo test -p aws-smithy-experimental --features crypto-ring) # only ring works on windows
 
   # We make sure that smithy-rs can be compiled on platforms that are not
   # natively supported by GitHub actions. We run as many tests as we can on
