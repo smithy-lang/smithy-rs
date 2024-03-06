@@ -8,21 +8,24 @@
 //! AWS profiles are typically stored in `~/.aws/config` and `~/.aws/credentials`. For more details
 //! see the [`load`] function.
 
-pub mod parser;
+mod parser;
 
 pub mod credentials;
 pub mod profile_file;
 pub mod region;
 
-pub use parser::load;
-
+#[doc(inline)]
+pub use aws_runtime::profile::error::ProfileParseError;
+#[doc(inline)]
+pub use aws_runtime::profile::profile_set::ProfileSet;
+#[doc(inline)]
+pub use aws_runtime::profile::section::{Profile, Property};
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;
 #[doc(inline)]
+pub use parser::{load, ProfileFileLoadError};
+#[doc(inline)]
 pub use region::ProfileFileRegionProvider;
-
-pub use aws_runtime::profile::profile_set::ProfileSet;
-pub use aws_runtime::profile::section::{Profile, Property};
 
 mod cell {
     use std::future::Future;

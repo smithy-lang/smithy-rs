@@ -10,14 +10,11 @@ use aws_runtime::profile::source;
 use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
 
-pub type ProfileFileLoadError = aws_runtime::profile::error::ProfileFileLoadError;
+pub use aws_runtime::profile::error::ProfileFileLoadError;
+pub use aws_runtime::profile::parse::ProfileParseError;
 pub use aws_runtime::profile::profile_set::ProfileSet;
 pub use aws_runtime::profile::section::Profile;
 pub use aws_runtime::profile::section::Property;
-
-pub mod parse {
-    pub type ProfileParseError = aws_runtime::profile::parse::ProfileParseError;
-}
 
 /// Read & parse AWS config files
 ///
