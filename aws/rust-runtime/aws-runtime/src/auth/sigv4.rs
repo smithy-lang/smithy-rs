@@ -117,11 +117,10 @@ impl SigV4Signer {
             .expect("all required fields set"))
     }
 
-    /// Extracts a [`SigV4OperationSigningConfig`].
-    pub fn extract_operation_config<'a>(
+    fn extract_operation_config<'a>(
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'a>,
         config_bag: &'a ConfigBag,
-    ) -> Result<Cow<'a, SigV4OperationSigningConfig>, BoxError> {
+    ) -> Result<Cow<'a, SigV4OperationSigningConfig>, SigV4SigningError> {
         let operation_config = config_bag
             .load::<SigV4OperationSigningConfig>()
             .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
