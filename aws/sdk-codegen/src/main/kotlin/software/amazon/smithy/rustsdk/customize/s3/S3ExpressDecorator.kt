@@ -294,6 +294,7 @@ private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
 
 private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
     arrayOf(
+        CargoDependency.AHash,
         AwsCargoDependency.awsCredentialTypes(runtimeConfig),
         AwsCargoDependency.awsRuntime(runtimeConfig),
         AwsCargoDependency.awsSigv4(runtimeConfig),
