@@ -344,7 +344,7 @@ impl<Any> HyperConnectorBuilder<Any> {
         self
     }
 
-    /// Override the Hyper client [`Builder`](hyper_util::client::legacy::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_util::client::legacy::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
     pub(crate) fn hyper_builder(
@@ -355,7 +355,7 @@ impl<Any> HyperConnectorBuilder<Any> {
         self
     }
 
-    /// Override the Hyper client [`Builder`](hyper_util::client::legacy::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_util::client::legacy::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
     pub(crate) fn set_hyper_builder(
@@ -750,7 +750,7 @@ mod timeout_middleware {
     impl<I> ConnectTimeout<I> {
         /// Create a new `ConnectTimeout` around `inner`.
         ///
-        /// Typically, `I` will implement [`hyper_0_14::client::connect::Connect`].
+        /// Typically, `I` will implement [`hyper_util::client::legacy::connect::Connect`].
         pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
             Self {
                 inner,
@@ -775,7 +775,7 @@ mod timeout_middleware {
     impl<I> HttpReadTimeout<I> {
         /// Create a new `HttpReadTimeout` around `inner`.
         ///
-        /// Typically, `I` will implement [`hyper_0_14::service::Service<http::Request<SdkBody>>`].
+        /// Typically, `I` will implement [`tower::Service<http::Request<SdkBody>>`].
         pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
             Self {
                 inner,
