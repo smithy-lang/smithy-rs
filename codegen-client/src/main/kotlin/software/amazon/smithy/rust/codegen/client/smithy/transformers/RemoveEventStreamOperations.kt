@@ -5,12 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.transformers
 
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Logger
 
@@ -24,6 +27,12 @@ object RemoveEventStreamOperations {
         model: Model,
         settings: ClientRustSettings,
     ): Model {
+        // Only allow event stream operations in AWS REST protocols for now.
+        val service = settings.getService(model)
+        if (service.hasTrait<RestJson1Trait>() || service.hasTrait<RestXmlTrait>()) {
+            return model
+        }
+
         // If Event Stream is allowed in build config, then don't remove the operations
         val allowList = settings.codegenConfig.eventStreamAllowList
         if (allowList.isEmpty() || allowList.contains(settings.moduleName)) {

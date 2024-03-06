@@ -12,7 +12,7 @@ use aws_config::SdkConfig;
 use tracing::{info_span, Instrument};
 
 use crate::current_canary::paginator_canary;
-use crate::current_canary::{s3_canary, transcribe_canary};
+use crate::current_canary::{s3_canary, transcribe_canary, wasm_canary};
 
 #[macro_export]
 macro_rules! mk_canary {
@@ -35,6 +35,7 @@ pub fn get_canaries_to_run(
         paginator_canary::mk_canary(&sdk_config, &env),
         s3_canary::mk_canary(&sdk_config, &env),
         transcribe_canary::mk_canary(&sdk_config, &env),
+        wasm_canary::mk_canary(&sdk_config, &env),
     ];
 
     canaries
