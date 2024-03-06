@@ -6,17 +6,9 @@
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
     use aws_runtime::auth::sigv4::SigV4Signer;
-    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
-    use aws_smithy_runtime_api::box_error::BoxError;
-    use aws_smithy_runtime_api::client::auth::{
-        AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
-    };
-    use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
-    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-    use aws_smithy_runtime_api::client::runtime_components::{
-        GetIdentityResolver, RuntimeComponents,
-    };
-    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_runtime_api::client::auth::{AuthScheme, AuthSchemeId, Sign};
+    use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
+    use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
 
     /// Auth scheme ID for S3 Express.
     pub(crate) const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4-s3express");
@@ -24,7 +16,7 @@ pub(crate) mod auth {
     /// S3 Express auth scheme.
     #[derive(Debug, Default)]
     pub(crate) struct S3ExpressAuthScheme {
-        signer: S3ExpressSigner,
+        signer: SigV4Signer,
     }
 
     impl S3ExpressAuthScheme {
@@ -49,45 +41,6 @@ pub(crate) mod auth {
         fn signer(&self) -> &dyn Sign {
             &self.signer
         }
-    }
-
-    /// S3 Express signer.
-    #[derive(Debug, Default)]
-    pub(crate) struct S3ExpressSigner;
-
-    impl Sign for S3ExpressSigner {
-        fn sign_http_request(
-            &self,
-            request: &mut HttpRequest,
-            identity: &Identity,
-            auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
-            runtime_components: &RuntimeComponents,
-            config_bag: &ConfigBag,
-        ) -> Result<(), BoxError> {
-            let operation_config =
-                SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-            let mut settings = SigV4Signer::signing_settings(&operation_config);
-            override_session_token_name(&mut settings)?;
-
-            SigV4Signer.sign_http_request(
-                request,
-                identity,
-                settings,
-                &operation_config,
-                runtime_components,
-                config_bag,
-            )
-        }
-    }
-
-    fn override_session_token_name(settings: &mut SigningSettings) -> Result<(), BoxError> {
-        let session_token_name_override = match settings.signature_location {
-            SignatureLocation::Headers => Some("x-amz-s3session-token"),
-            SignatureLocation::QueryParams => Some("X-Amz-S3session-Token"),
-            _ => { return Err(BoxError::from("`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm")) },
-        };
-        settings.session_token_name_override = session_token_name_override;
-        Ok(())
     }
 }
 
@@ -666,8 +619,10 @@ pub(crate) mod identity_provider {
 
 /// Supporting code for S3 Express runtime plugin
 pub(crate) mod runtime_plugin {
-    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-    use aws_smithy_types::config_bag::{FrozenLayer, Layer};
+    use aws_runtime::auth::SigV4SessionTokenNameOverride;
+    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
+    use aws_smithy_runtime_api::{box_error::BoxError, client::runtime_plugin::RuntimePlugin};
+    use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
     use aws_types::os_shim_internal::Env;
 
     mod env {
@@ -715,6 +670,27 @@ pub(crate) mod runtime_plugin {
                     }
                 }
             }
+
+            let session_token_name_override = SigV4SessionTokenNameOverride::new(
+                |settings: &SigningSettings, cfg: &ConfigBag| {
+                    // Not configured for S3 express, use the original session token name override
+                    if !crate::s3_express::utils::for_s3_express(cfg) {
+                        return Ok(settings.session_token_name_override);
+                    }
+
+                    let session_token_name_override = Some(match settings.signature_location {
+                    SignatureLocation::Headers => "x-amz-s3session-token",
+                    SignatureLocation::QueryParams => "X-Amz-S3session-Token",
+                    _ => {
+                        return Err(BoxError::from(
+                            "`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm",
+                        ))
+                    }
+                });
+                    Ok(session_token_name_override)
+                },
+            );
+            layer.store_or_unset(Some(session_token_name_override));
 
             Self {
                 config: layer.freeze(),
@@ -791,6 +767,22 @@ pub(crate) mod runtime_plugin {
             assert!(cfg
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
+        }
+    }
+}
+
+pub(crate) mod utils {
+    use aws_smithy_types::{config_bag::ConfigBag, Document};
+
+    pub(crate) fn for_s3_express(cfg: &ConfigBag) -> bool {
+        let endpoint = cfg
+            .load::<crate::config::endpoint::Endpoint>()
+            .expect("endpoint added to config bag by endpoint orchestrator");
+
+        if let Some(Document::String(backend)) = endpoint.properties().get("backend") {
+            backend.as_str() == "S3Express"
+        } else {
+            false
         }
     }
 }
