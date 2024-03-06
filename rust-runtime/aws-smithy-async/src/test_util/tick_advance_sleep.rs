@@ -55,6 +55,7 @@ use tokio::sync::oneshot::Sender;
 
 #[derive(Debug)]
 struct QueuedSleep {
+    /// Duration since `UNIX_EPOCH` at which point the sleep is finished.
     presents_at: Duration,
     notify: Option<Sender<()>>,
 }
@@ -62,7 +63,26 @@ struct QueuedSleep {
 #[derive(Default, Debug)]
 struct Inner {
     sleeps: Vec<QueuedSleep>,
+    /// Duration since `UNIX_EPOCH` that represents "now".
     now: Duration,
+}
+
+impl Inner {
+    fn take_presenting_before(&mut self, time: Duration) -> Vec<QueuedSleep> {
+        self.sleeps.sort_by_key(|s| s.presents_at);
+        let partition_index = self
+            .sleeps
+            .iter()
+            .enumerate()
+            .find(|(_, s)| s.presents_at > time)
+            .map(|(i, _)| i);
+        let sleep_count = self.sleeps.len();
+        let presenting: Vec<_> = self
+            .sleeps
+            .drain(0..partition_index.unwrap_or(sleep_count))
+            .collect();
+        presenting
+    }
 }
 
 #[derive(Clone, Default, Debug)]
@@ -76,27 +96,6 @@ impl SharedInner {
     fn get_mut(&self) -> impl DerefMut<Target = Inner> + '_ {
         self.inner.lock().unwrap()
     }
-
-    fn take_presenting_before(&self, time: Duration) -> Vec<QueuedSleep> {
-        let mut inner = self.get_mut();
-
-        // Tick to each individual sleep time and yield the runtime
-        // so that any futures waiting on a sleep run before futures
-        // waiting on a later sleep.
-        inner.sleeps.sort_by_key(|s| s.presents_at);
-        let partition_index = inner
-            .sleeps
-            .iter()
-            .enumerate()
-            .find(|(_, s)| s.presents_at > time)
-            .map(|(i, _)| i);
-        let sleep_count = inner.sleeps.len();
-        let presenting: Vec<_> = inner
-            .sleeps
-            .drain(0..partition_index.unwrap_or(sleep_count))
-            .collect();
-        presenting
-    }
 }
 
 /// Tick-advancing test sleep implementation.
@@ -109,13 +108,19 @@ pub struct TickAdvanceSleep {
 
 impl AsyncSleep for TickAdvanceSleep {
     fn sleep(&self, duration: Duration) -> Sleep {
+        // Use a one-shot channel to block the sleep future until `TickAdvanceTime::tick`
+        // chooses to complete it by sending with the receiver.
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
         let mut inner = self.inner.get_mut();
         let now = inner.now;
+
+        // Add the sleep to the queue, which `TickAdvanceTime` will examine when ticking.
         inner.sleeps.push(QueuedSleep {
             presents_at: now + duration,
             notify: Some(tx),
         });
+
         Sleep::new(async move {
             let _ = rx.into_future().await;
         })
@@ -141,18 +146,25 @@ impl TickAdvanceTime {
     pub async fn tick(&self, duration: Duration) {
         let time = self.inner.get().now + duration;
 
-        let mut presenting = self.inner.take_presenting_before(time);
+        let mut presenting = self.inner.get_mut().take_presenting_before(time);
         while !presenting.is_empty() {
+            // Tick to each individual sleep time and yield the runtime so that any
+            // futures waiting on a sleep run before futures waiting on a later sleep.
             for mut sleep in presenting {
+                // Make sure the time is always accurate for async code that runs
+                // after completing the sleep.
                 self.inner.get_mut().now = sleep.presents_at;
+
                 let _ = sleep.notify.take().unwrap().send(());
                 tokio::task::yield_now().await;
             }
 
-            // Unblocked tasks could have queued some more sleeps within the duration
-            presenting = self.inner.take_presenting_before(time);
+            // Unblocked tasks could have queued some more sleeps within the duration,
+            // so we need to check those as well.
+            presenting = self.inner.get_mut().take_presenting_before(time);
         }
 
+        // Set the final time.
         self.inner.get_mut().now = time;
     }
 }
