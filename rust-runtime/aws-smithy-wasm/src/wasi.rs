@@ -160,16 +160,12 @@ impl From<&HttpConnectorSettings> for WasiRequestOptions {
             .read_timeout()
             .map(|dur| u64::try_from(dur.as_nanos()).unwrap_or(u64::MAX));
 
-        //Note: these only fail if setting this particular type of timeout is not
-        //supported. Spec compliant runtimes should always support these so it is
-        //unlikely to be an issue.
+        //Note: setting these timeouts fails if the particular type of timeout is not
+        //supported by the WASI environment. If the timeout is not supported we are
+        //stuck with the default timeout set by that env and so we just move on.
         let wasi_http_opts = wasi_http::RequestOptions::new();
-        wasi_http_opts
-            .set_connect_timeout(connect_timeout)
-            .expect("Connect timeout not supported");
-        wasi_http_opts
-            .set_first_byte_timeout(read_timeout)
-            .expect("Read timeout not supported");
+        let _ = wasi_http_opts.set_connect_timeout(connect_timeout);
+        let _ = wasi_http_opts.set_first_byte_timeout(read_timeout);
 
         WasiRequestOptions(Some(wasi_http_opts))
     }

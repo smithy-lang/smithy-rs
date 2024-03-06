@@ -40,3 +40,9 @@ message = "Add support for Lambda's `InvokeWithResponseStreaming` and Bedrock Ag
 references = ["aws-sdk-rust#1075", "aws-sdk-rust#1080", "smithy-rs#3451"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Updating timeout logic in the WASI HTTP client"
+references = ["smithy-rs#3463"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+authors = ["landonxjames"]
