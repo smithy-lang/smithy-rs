@@ -6,7 +6,7 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::primitives::ByteStream;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use s3_express::{criterion_config, number_of_iterations};
+use s3_express::{confidence_level, number_of_iterations, sample_size};
 use tokio::runtime::Runtime;
 use tokio::task;
 
@@ -91,7 +91,7 @@ pub fn concurrent_put_get(c: &mut Criterion) {
 
 criterion_group!(
     name = benches;
-    config = criterion_config();
+    config = Criterion::default().sample_size(sample_size()).confidence_level(confidence_level());
     targets = concurrent_put_get
 );
 criterion_main!(benches);
