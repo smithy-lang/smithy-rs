@@ -64,20 +64,44 @@ impl Throughput {
 
 impl PartialEq for Throughput {
     fn eq(&self, other: &Self) -> bool {
-        self.bytes_per_second() == other.bytes_per_second()
+        if self.per_time_elapsed.is_zero() {
+            other.per_time_elapsed.is_zero() && self.bytes_read == other.bytes_read
+        } else {
+            self.bytes_per_second() == other.bytes_per_second()
+        }
     }
 }
 
 impl PartialOrd for Throughput {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.bytes_per_second()
-            .partial_cmp(&other.bytes_per_second())
+        if self.bytes_read == 0 {
+            if other.bytes_read == 0 {
+                Some(std::cmp::Ordering::Equal)
+            } else {
+                Some(std::cmp::Ordering::Less)
+            }
+        } else if other.bytes_read == 0 {
+            Some(std::cmp::Ordering::Greater)
+        } else if self.per_time_elapsed.is_zero() {
+            if other.per_time_elapsed.is_zero() {
+                self.bytes_read.partial_cmp(&other.bytes_read)
+            } else {
+                // Zero duration of self is faster/greater than any non-zero duration throughput
+                Some(std::cmp::Ordering::Greater)
+            }
+        } else if other.per_time_elapsed.is_zero() {
+            // Zero duration of other is faster/greater than any non-zero duration throughput
+            Some(std::cmp::Ordering::Less)
+        } else {
+            self.bytes_per_second()
+                .partial_cmp(&other.bytes_per_second())
+        }
     }
 }
 
 impl fmt::Display for Throughput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // The default float formatting behavior will ensure the a number like 2.000 is rendered as 2
+        // The default float formatting behavior will ensure a number like 2.000 is rendered as 2
         // while a number like 0.9982107441748642 will be rendered as 0.9982107441748642. This
         // multiplication and division will truncate a float to have a precision of no greater than 3.
         // For example, 0.9982107441748642 would become 0.999. This will fail for very large floats
@@ -182,6 +206,13 @@ mod test {
     use super::{Throughput, ThroughputLogs};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    fn zero_duration_throughput(bytes_read: u64) -> Throughput {
+        Throughput {
+            bytes_read,
+            per_time_elapsed: Duration::ZERO,
+        }
+    }
+
     #[test]
     fn test_throughput_eq() {
         let t1 = Throughput::new(1, Duration::from_secs(1));
@@ -190,6 +221,58 @@ mod test {
 
         assert_eq!(t1, t2);
         assert_eq!(t2, t3);
+    }
+
+    #[test]
+    fn test_throughput_ne_when_different_bytes_at_zero_duration() {
+        let t1 = zero_duration_throughput(3);
+        let t2 = zero_duration_throughput(7);
+
+        assert_ne!(t1, t2);
+    }
+
+    #[test]
+    fn test_throughput_cmp_both_with_time() {
+        let lesser = Throughput::new(25, Duration::from_secs(25));
+
+        // Fewer bytes, but greater rate
+        let greater = Throughput::new(10, Duration::from_secs(1));
+
+        assert_ne!(lesser, greater);
+        assert!(lesser < greater);
+        assert!(greater > lesser);
+    }
+
+    #[test]
+    fn test_throughput_cmp_when_one_has_zero_bytes_over_zero_time() {
+        let lesser = zero_duration_throughput(0);
+        let greater = Throughput::new(1, Duration::from_secs(1000));
+
+        assert_ne!(lesser, greater);
+        assert!(lesser < greater);
+        assert!(greater > lesser);
+    }
+
+    #[test]
+    fn test_throughput_cmp_when_one_has_zero_duration() {
+        // This happens to be the default threshold for stalled stream checking
+        let lesser = Throughput::new(1, Duration::from_secs(1));
+
+        // Zero nanoseconds. Clearly not stalled
+        let greater = zero_duration_throughput(456789);
+
+        assert_ne!(lesser, greater);
+        assert!(lesser < greater);
+        assert!(greater > lesser);
+    }
+
+    #[test]
+    fn test_throughput_cmp_when_both_have_zero_duration() {
+        let lesser = zero_duration_throughput(1234);
+        let greater = zero_duration_throughput(2345);
+
+        assert!(lesser < greater);
+        assert!(greater > lesser);
     }
 
     fn build_throughput_log(
