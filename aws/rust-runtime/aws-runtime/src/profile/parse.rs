@@ -12,7 +12,7 @@
 //! - profiles with invalid names
 //! - profile name normalization (`profile foo` => `foo`)
 
-use crate::profile::parser::source::File;
+use crate::profile::source::File;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
@@ -254,15 +254,7 @@ fn parse_property_line(line: &str) -> Result<(Cow<'_, str>, &str), PropertyError
     if k.is_empty() {
         return Err(PropertyError::NoName);
     }
-    Ok((to_ascii_lowercase(k), v))
-}
-
-pub(crate) fn to_ascii_lowercase(s: &str) -> Cow<'_, str> {
-    if s.bytes().any(|b| b.is_ascii_uppercase()) {
-        Cow::Owned(s.to_ascii_lowercase())
-    } else {
-        Cow::Borrowed(s)
-    }
+    Ok((k.to_ascii_lowercase().into(), v))
 }
 
 /// Prepare a line for parsing
@@ -296,9 +288,9 @@ fn prepare_line(line: &str, comments_need_whitespace: bool) -> &str {
 #[cfg(test)]
 mod test {
     use super::{parse_profile_file, prepare_line, Location};
-    use crate::profile::parser::parse::{parse_property_line, PropertyError};
-    use crate::profile::parser::source::File;
+    use crate::profile::parse::{parse_property_line, PropertyError};
     use crate::profile::profile_file::ProfileFileKind;
+    use crate::profile::source::File;
     use std::borrow::Cow;
 
     // most test cases covered by the JSON test suite

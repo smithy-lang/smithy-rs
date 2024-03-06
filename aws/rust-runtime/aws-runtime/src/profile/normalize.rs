@@ -3,16 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::parser::{
-    parse::{RawProfileSet, WHITESPACE},
-    Section, SsoSession,
-};
+use crate::profile::parse::{RawProfileSet, WHITESPACE};
 use crate::profile::profile_file::ProfileFileKind;
-use crate::profile::{Profile, ProfileSet, Property};
+use crate::profile::profile_set::ProfileSet;
+use crate::profile::section::{Profile, PropertiesKey, Property, Section, SsoSession};
 use std::borrow::Cow;
 use std::collections::HashMap;
-
-use super::PropertiesKey;
 
 const DEFAULT: &str = "default";
 const PROFILE_PREFIX: &str = "profile";
@@ -20,12 +16,12 @@ const SSO_SESSION_PREFIX: &str = "sso-session";
 
 /// Any section like `[<prefix> <suffix>]` or `[<suffix-only>]`
 #[derive(Eq, PartialEq, Hash, Debug)]
-struct SectionKey<'a> {
+struct SectionPair<'a> {
     prefix: Option<Cow<'a, str>>,
     suffix: Cow<'a, str>,
 }
 
-impl<'a> SectionKey<'a> {
+impl<'a> SectionPair<'a> {
     fn is_unprefixed_default(&self) -> bool {
         self.prefix.is_none() && self.suffix == DEFAULT
     }
@@ -34,16 +30,16 @@ impl<'a> SectionKey<'a> {
         self.prefix.as_deref() == Some(PROFILE_PREFIX) && self.suffix == DEFAULT
     }
 
-    fn parse(input: &str) -> SectionKey<'_> {
+    fn parse(input: &str) -> SectionPair<'_> {
         let input = input.trim_matches(WHITESPACE);
         match input.split_once(WHITESPACE) {
             // Something like `[profile name]`
-            Some((prefix, suffix)) => SectionKey {
+            Some((prefix, suffix)) => SectionPair {
                 prefix: Some(prefix.trim().into()),
                 suffix: suffix.trim().into(),
             },
             // Either `[profile-name]` or `[default]`
-            None => SectionKey {
+            None => SectionPair {
                 prefix: None,
                 suffix: input.trim().into(),
             },
@@ -112,7 +108,7 @@ pub(super) fn merge_in(
     let validated_sections = raw_profile_set
         .into_iter()
         .map(|(section_key, properties)| {
-            (SectionKey::parse(section_key).valid_for(kind), properties)
+            (SectionPair::parse(section_key).valid_for(kind), properties)
         });
 
     // remove invalid profiles & emit a warning
@@ -235,10 +231,11 @@ fn parse_sub_properties(sub_properties_str: &str) -> impl Iterator<Item = (Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::parser::{normalize::validate_identifier, Section};
-    use crate::profile::parser::{normalize::SectionKey, parse::RawProfileSet};
+    use crate::profile::normalize::SectionPair;
+    use crate::profile::normalize::{validate_identifier, Section};
+    use crate::profile::parse::RawProfileSet;
     use crate::profile::profile_file::ProfileFileKind;
-    use crate::profile::ProfileSet;
+    use crate::profile::profile_set::ProfileSet;
     use std::borrow::Cow;
     use std::collections::HashMap;
     use tracing_test::traced_test;
@@ -246,104 +243,104 @@ mod tests {
     #[test]
     fn section_key_parsing() {
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: None,
                 suffix: "default".into()
             },
-            SectionKey::parse("default"),
+            SectionPair::parse("default"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: None,
                 suffix: "default".into()
             },
-            SectionKey::parse("   default "),
+            SectionPair::parse("   default "),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: Some("profile".into()),
                 suffix: "default".into()
             },
-            SectionKey::parse("profile default"),
+            SectionPair::parse("profile default"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: Some("profile".into()),
                 suffix: "default".into()
             },
-            SectionKey::parse(" profile   default "),
+            SectionPair::parse(" profile   default "),
         );
 
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "name".into(),
                 prefix: Some("profile".into())
             },
-            SectionKey::parse("profile name"),
+            SectionPair::parse("profile name"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "name".into(),
                 prefix: None
             },
-            SectionKey::parse("name"),
+            SectionPair::parse("name"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "name".into(),
                 prefix: Some("profile".into())
             },
-            SectionKey::parse("profile\tname"),
+            SectionPair::parse("profile\tname"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "name".into(),
                 prefix: Some("profile".into())
             },
-            SectionKey::parse("profile     name  "),
+            SectionPair::parse("profile     name  "),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "profilename".into(),
                 prefix: None
             },
-            SectionKey::parse("profilename"),
+            SectionPair::parse("profilename"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "whitespace".into(),
                 prefix: None
             },
-            SectionKey::parse("   whitespace   "),
+            SectionPair::parse("   whitespace   "),
         );
 
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: Some("sso-session".into()),
                 suffix: "foo".into()
             },
-            SectionKey::parse("sso-session foo"),
+            SectionPair::parse("sso-session foo"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 prefix: Some("sso-session".into()),
                 suffix: "foo".into()
             },
-            SectionKey::parse("sso-session\tfoo "),
+            SectionPair::parse("sso-session\tfoo "),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "sso-sessionfoo".into(),
                 prefix: None
             },
-            SectionKey::parse("sso-sessionfoo"),
+            SectionPair::parse("sso-sessionfoo"),
         );
         assert_eq!(
-            SectionKey {
+            SectionPair {
                 suffix: "sso-session".into(),
                 prefix: None
             },
-            SectionKey::parse("sso-session "),
+            SectionPair::parse("sso-session "),
         );
     }
 

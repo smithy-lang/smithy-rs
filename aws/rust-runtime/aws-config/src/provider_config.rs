@@ -6,8 +6,9 @@
 //! Configuration Options for Credential Providers
 
 use crate::profile;
-use crate::profile::profile_file::ProfileFiles;
-use crate::profile::{ProfileFileLoadError, ProfileSet};
+use aws_runtime::profile::error::ProfileFileLoadError;
+use aws_runtime::profile::profile_file::ProfileFiles;
+use aws_runtime::profile::profile_set::ProfileSet;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::client::http::HttpClient;

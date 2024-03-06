@@ -6,9 +6,9 @@
 //! Load a region from an AWS profile
 
 use crate::meta::region::{future, ProvideRegion};
-use crate::profile::profile_file::ProfileFiles;
-use crate::profile::ProfileSet;
 use crate::provider_config::ProviderConfig;
+use aws_runtime::profile::profile_file::ProfileFiles;
+use aws_runtime::profile::profile_set::ProfileSet;
 use aws_types::region::Region;
 
 /// Load a region from a profile file

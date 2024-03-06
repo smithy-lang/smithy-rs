@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::{ProfileSet, PropertiesKey};
 use crate::provider_config::ProviderConfig;
+use aws_runtime::profile::profile_set::ProfileSet;
+use aws_runtime::profile::section::PropertiesKey;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;

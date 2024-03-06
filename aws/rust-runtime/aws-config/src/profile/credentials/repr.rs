@@ -13,9 +13,10 @@
 //! multiple actions into the same profile).
 
 use crate::profile::credentials::ProfileFileError;
-use crate::profile::{Profile, ProfileSet};
 use crate::sensitive_command::CommandWithSensitiveArgs;
 use aws_credential_types::Credentials;
+use aws_runtime::profile::profile_set::ProfileSet;
+use aws_runtime::profile::section::Profile;
 
 /// Chain of Profile Providers
 ///
@@ -470,8 +471,8 @@ fn credential_process_from_profile(
 #[cfg(test)]
 mod tests {
     use crate::profile::credentials::repr::{resolve_chain, BaseProvider, ProfileChain};
-    use crate::profile::ProfileSet;
     use crate::sensitive_command::CommandWithSensitiveArgs;
+    use aws_runtime::profile::profile_set::ProfileSet;
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;

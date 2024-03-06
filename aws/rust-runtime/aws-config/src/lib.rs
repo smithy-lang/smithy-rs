@@ -212,10 +212,10 @@ mod loader {
     use crate::default_provider::use_fips::use_fips_provider;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
-    use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_credential_types::Credentials;
+    use aws_runtime::profile::profile_file::ProfileFiles;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;

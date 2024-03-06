@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::parser::parse::to_ascii_lowercase;
+//! Sections within an AWS config profile.
+
 use std::collections::HashMap;
 use std::fmt;
 
@@ -37,12 +38,17 @@ type PropertyName = String;
 type SubPropertyName = String;
 type PropertyValue = String;
 
-// [section-key section-name]
-// property-name = property-value
-// property-name =
-//   sub-property-name = property-value
+/// A key for to a property value.
+///
+/// ```txt
+/// # An example AWS profile config section with properties and sub-properties
+/// [section-key section-name]
+/// property-name = property-value
+/// property-name =
+///   sub-property-name = property-value
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct PropertiesKey {
+pub struct PropertiesKey {
     section_key: SectionKey,
     section_name: SectionName,
     property_name: PropertyName,
@@ -50,7 +56,8 @@ pub(crate) struct PropertiesKey {
 }
 
 impl PropertiesKey {
-    pub(crate) fn builder() -> PropertiesKeyBuilder {
+    /// Create a new [`PropertiseKeyBuilder`].
+    pub fn builder() -> PropertiesKeyBuilder {
         Default::default()
     }
 }
@@ -77,8 +84,9 @@ impl fmt::Display for PropertiesKey {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct PropertiesKeyBuilder {
+/// Builder for [`PropertiesKey`]s.
+#[derive(Debug, Default)]
+pub struct PropertiesKeyBuilder {
     section_key: Option<SectionKey>,
     section_name: Option<SectionName>,
     property_name: Option<PropertyName>,
@@ -86,27 +94,33 @@ pub(crate) struct PropertiesKeyBuilder {
 }
 
 impl PropertiesKeyBuilder {
-    pub(crate) fn section_key(mut self, section_key: impl Into<String>) -> Self {
+    /// Set the section key for this builder.
+    pub fn section_key(mut self, section_key: impl Into<String>) -> Self {
         self.section_key = Some(section_key.into());
         self
     }
 
-    pub(crate) fn section_name(mut self, section_name: impl Into<String>) -> Self {
+    /// Set the section name for this builder.
+    pub fn section_name(mut self, section_name: impl Into<String>) -> Self {
         self.section_name = Some(section_name.into());
         self
     }
 
-    pub(crate) fn property_name(mut self, property_name: impl Into<String>) -> Self {
+    /// Set the property name for this builder.
+    pub fn property_name(mut self, property_name: impl Into<String>) -> Self {
         self.property_name = Some(property_name.into());
         self
     }
 
-    pub(crate) fn sub_property_name(mut self, sub_property_name: impl Into<String>) -> Self {
+    /// Set the sub-property name for this builder.
+    pub fn sub_property_name(mut self, sub_property_name: impl Into<String>) -> Self {
         self.sub_property_name = Some(sub_property_name.into());
         self
     }
 
-    pub(crate) fn build(self) -> Result<PropertiesKey, String> {
+    /// Build this builder. If all required fields are set,
+    /// `Ok(PropertiesKey)` is returned. Otherwise, an error is returned.
+    pub fn build(self) -> Result<PropertiesKey, String> {
         Ok(PropertiesKey {
             section_key: self
                 .section_key
@@ -122,19 +136,21 @@ impl PropertiesKeyBuilder {
     }
 }
 
-#[allow(clippy::type_complexity)]
+/// A map of [`PropertiesKey`]s to property values.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct Properties {
+pub struct Properties {
     inner: HashMap<PropertiesKey, PropertyValue>,
 }
 
 #[allow(dead_code)]
 impl Properties {
-    pub(crate) fn new() -> Self {
+    /// Create a new empty [`Properties`].
+    pub fn new() -> Self {
         Default::default()
     }
 
-    pub(crate) fn insert(&mut self, properties_key: PropertiesKey, value: PropertyValue) {
+    /// Insert a new key/value pair into this map.
+    pub fn insert(&mut self, properties_key: PropertiesKey, value: PropertyValue) {
         let _ = self
             .inner
             // If we don't clone then we don't get to log a useful warning for a value getting overwritten.
@@ -146,7 +162,8 @@ impl Properties {
             .or_insert(value);
     }
 
-    pub(crate) fn get(&self, properties_key: &PropertiesKey) -> Option<&PropertyValue> {
+    /// Given a [`PropertiesKey`], return the corresponding value, if any.
+    pub fn get(&self, properties_key: &PropertiesKey) -> Option<&PropertyValue> {
         self.inner.get(properties_key)
     }
 }
@@ -186,7 +203,7 @@ impl Section for SectionInner {
 
     fn get(&self, name: &str) -> Option<&str> {
         self.properties
-            .get(to_ascii_lowercase(name).as_ref())
+            .get(name.to_ascii_lowercase().as_str())
             .map(|prop| prop.value())
     }
 
@@ -195,8 +212,7 @@ impl Section for SectionInner {
     }
 
     fn insert(&mut self, name: String, value: Property) {
-        self.properties
-            .insert(to_ascii_lowercase(&name).into(), value);
+        self.properties.insert(name.to_ascii_lowercase(), value);
     }
 }
 
@@ -250,7 +266,7 @@ impl Section for Profile {
 
 /// A `[sso-session name]` section in the config.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(crate) struct SsoSession(SectionInner);
+pub struct SsoSession(SectionInner);
 
 impl SsoSession {
     /// Create a new SSO session section.
@@ -262,7 +278,7 @@ impl SsoSession {
     }
 
     /// Returns a reference to the property named `name`
-    pub(crate) fn get(&self, name: &str) -> Option<&str> {
+    pub fn get(&self, name: &str) -> Option<&str> {
         self.0.get(name)
     }
 }

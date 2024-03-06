@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::ProfileParseError;
+//! Errors related to AWS profile config files
+
+use crate::profile::parse::ProfileParseError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
