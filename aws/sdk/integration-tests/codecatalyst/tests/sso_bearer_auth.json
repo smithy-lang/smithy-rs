@@ -121,6 +121,6 @@
             }
         }
     ],
-    "docs": "todo docs",
+    "docs": "traffic for codecatalyst sso_bearer_auth integration test",
     "version": "V0"
 }

@@ -128,19 +128,7 @@ pub struct Builder {
 
 impl Builder {
     /// Override the configuration for the [`ProfileFileTokenProvider`]
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # async fn test() {
-    /// use aws_config::profile::ProfileFileTokenProvider;
-    /// use aws_config::provider_config::ProviderConfig;
-    /// let provider = ProfileFileTokenProvider::builder()
-    ///     .configure(&ProviderConfig::with_default_region().await)
-    ///     .build();
-    /// # }
-    /// ```
-    pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
+    pub(crate) fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.provider_config = Some(provider_config.clone());
         self
     }

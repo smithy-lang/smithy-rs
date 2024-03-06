@@ -106,7 +106,7 @@ impl Builder {
     }
 
     /// Override the configuration used for this provider
-    pub fn configure(mut self, config: ProviderConfig) -> Self {
+    pub(crate) fn configure(mut self, config: ProviderConfig) -> Self {
         self.region_chain = self.region_chain.configure(&config);
         self.conf = Some(config);
         self
