@@ -36,6 +36,12 @@ meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 authors = ["cayman-amzn", "rcoh"]
 
 [[aws-sdk-rust]]
+message = "Add support for Lambda's `InvokeWithResponseStreaming` and Bedrock Agent Runtime's `InvokeAgent` operations."
+references = ["aws-sdk-rust#1075", "aws-sdk-rust#1080", "smithy-rs#3451"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "Added support for SSO bearer token authentication. The aws-sdk-codecatalyst crate can now send requests without erroring."
 references = ["aws-sdk-rust#703", "smithy-rs#3453"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
