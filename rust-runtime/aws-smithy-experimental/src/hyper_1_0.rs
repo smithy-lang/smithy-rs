@@ -485,7 +485,7 @@ fn to_connector_error(err: &hyper::Error) -> fn(BoxError) -> ConnectorError {
     }
     // We sometimes receive this from S3: hyper::Error(IncompleteMessage)
     if err.is_incomplete_message() {
-        return |err: BoxError| ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
+        return |err: BoxError| ConnectorError::other(err, Some(ErrorKind::TransientError));
     }
 
     if let Some(h2_err) = find_source::<h2::Error>(err) {
@@ -497,7 +497,7 @@ fn to_connector_error(err: &hyper::Error) -> fn(BoxError) -> ConnectorError {
     }
 
     tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
-    |err: BoxError| ConnectorError::other(err.into(), None)
+    |err: BoxError| ConnectorError::other(err, None)
 }
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {

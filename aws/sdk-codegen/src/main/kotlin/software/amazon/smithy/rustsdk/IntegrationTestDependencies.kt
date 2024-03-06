@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyExperimental
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
@@ -145,6 +146,7 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(awsConfig(codegenContext.runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
+            addDependency(smithyExperimental(codegenContext.runtimeConfig).toDevDependency())
             addDependency(AsyncStd)
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())

@@ -10,7 +10,7 @@ use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 #[ignore]
 async fn hyper_10_end_to_end() {
     let http_client = aws_smithy_experimental::hyper_1_0::HyperClientBuilder::default()
-        .crypto_mode(CryptoMode::AwsLcRs)
+        .crypto_mode(CryptoMode::AwsLc)
         .build_https();
     let conf = aws_config::defaults(BehaviorVersion::latest())
         .http_client(http_client)
