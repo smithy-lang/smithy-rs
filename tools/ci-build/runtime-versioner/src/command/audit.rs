@@ -4,7 +4,6 @@
  */
 
 use crate::{
-    index::CratesIndex,
     repo::Repo,
     tag::{previous_release_tag, release_tags},
     util::utf8_path_buf,
@@ -12,7 +11,9 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use smithy_rs_tool_common::{command::sync::CommandExt, release_tag::ReleaseTag};
+use smithy_rs_tool_common::{
+    command::sync::CommandExt, index::CratesIndex, release_tag::ReleaseTag,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -231,8 +232,17 @@ fn fetch_smithy_rs_tags(repo: &Repo) -> Result<()> {
         .expect("valid utf-8")
         .trim()
         .to_string();
-    if origin_url != "git@github.com:smithy-lang/smithy-rs.git" {
-        bail!("smithy-rs origin must be 'git@github.com:smithy-lang/smithy-rs.git' in order to get the latest release tags");
+    if ![
+        "git@github.com:smithy-lang/smithy-rs.git",
+        "https://github.com/smithy-lang/smithy-rs.git",
+    ]
+    .iter()
+    .any(|url| *url == origin_url)
+    {
+        bail!(
+            "smithy-rs origin must be either 'git@github.com:smithy-lang/smithy-rs.git' or \
+        'https://github.com/smithy-lang/smithy-rs.git' in order to get the latest release tags"
+        );
     }
 
     repo.git(["fetch", "--tags", "origin"])

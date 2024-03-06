@@ -313,6 +313,7 @@ tasks.register<Copy>("relocateChangelog") {
 fun generateCargoWorkspace(services: AwsServices): String {
     return """
     |[workspace]
+    |resolver = "2"
     |exclude = [${"\n"}${services.excludedFromWorkspace().joinToString(",\n") { "|    \"$it\"" }}
     |]
     |members = [${"\n"}${services.includedInWorkspace().joinToString(",\n") { "|    \"$it\"" }}
