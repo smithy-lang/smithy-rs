@@ -13,7 +13,8 @@ pushd aws-sdk-smoketest &>/dev/null
 RUSTDOCFLAGS="--cfg docsrs" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --document-private-items --all-features
 
 cargo clippy --all-features
-cargo +"${RUST_NIGHTLY_VERSION}" udeps
+# running `cargo hack` runs this in the prod workspace and ensures that each crate is run individually
+cargo +"${RUST_NIGHTLY_VERSION}" hack udeps --all-features
 popd &>/dev/null
 
 # Move the smoketest artifacts into smithy-rs and check the integration tests
