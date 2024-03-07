@@ -407,24 +407,23 @@ pub async fn s3_express_canary(
 async fn test_s3_canary() {
     let config = aws_config::load_from_env().await;
     let client = s3::Client::new(&config);
-    s3_canary(
+
+    let mut futures = Vec::new();
+
+    futures.push(tokio::spawn(s3_canary(
         client.clone(),
         std::env::var("TEST_S3_BUCKET").expect("TEST_S3_BUCKET must be set"),
-    )
-    .await
-    .expect("success");
-
-    s3_mrap_canary(
+    )));
+    futures.push(tokio::spawn(s3_mrap_canary(
         client.clone(),
         std::env::var("TEST_S3_MRAP_BUCKET_ARN").expect("TEST_S3_MRAP_BUCKET_ARN must be set"),
-    )
-    .await
-    .expect("success");
-
-    s3_express_canary(
+    )));
+    futures.push(tokio::spawn(s3_express_canary(
         client,
         std::env::var("TEST_S3_EXPRESS_BUCKET").expect("TEST_S3_EXPRESS_BUCKET must be set"),
-    )
-    .await
-    .expect("success");
+    )));
+
+    for fut in futures {
+        fut.await.expect("joined").expect("success");
+    }
 }
