@@ -89,6 +89,7 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
+        QueryPrecedence,
         // TODO(https://github.com/smithy-lang/smithy/pull/2167): Remove this test once it's fixed in Smithy
         AllQueryStringTypes,
     ],
