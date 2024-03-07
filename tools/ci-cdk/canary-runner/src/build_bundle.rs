@@ -449,6 +449,18 @@ mod tests {
 
     use super::*;
 
+    fn crate_version(name: &str, version: &str) -> (String, CrateVersion) {
+        (
+            name.to_string(),
+            CrateVersion {
+                category: PackageCategory::AwsRuntime, // doesn't matter for this test
+                version: version.into(),
+                source_hash: "some-hash".into(),
+                model_hash: None,
+            },
+        )
+    }
+
     #[test]
     fn test_arg_parsing() {
         assert!(Args::try_parse_from(["./canary-runner", "build-bundle"]).is_err());
@@ -604,18 +616,6 @@ default = ["latest"]
 
     #[test]
     fn test_generate_crate_manifest_with_release_tag() {
-        fn crate_version(name: &str, version: &str) -> (String, CrateVersion) {
-            (
-                name.to_string(),
-                CrateVersion {
-                    category: PackageCategory::AwsRuntime, // doesn't matter for this test
-                    version: version.into(),
-                    source_hash: "some-hash".into(),
-                    model_hash: None,
-                },
-            )
-        }
-
         pretty_assertions::assert_str_eq!(
             r#"
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -687,6 +687,96 @@ default = ["latest"]
                 release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
             })
             .expect("success")
+        );
+    }
+
+    #[test]
+    fn test_generate_canary_wasm_crate_manifest_with_paths() {
+        let mut output = WASM_BASE_MANIFEST.to_string();
+        let crate_source = CrateSource::Path("some/sdk/path".into());
+        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
+
+        pretty_assertions::assert_str_eq!(
+            r#"
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
+[package]
+name = "aws-sdk-rust-lambda-canary-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+# metadata used by cargo-component to identify which wit world to embed in the binary
+[package.metadata.component]
+package = "aws:component"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
+aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
+aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", features = ["rt-tokio"], default-features = false }
+aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
+"#,
+            output,
+        );
+    }
+
+    #[test]
+    fn test_generate_canary_wasm_crate_manifest_with_release_tag() {
+        let mut output = WASM_BASE_MANIFEST.to_string();
+        let crate_source = CrateSource::VersionsManifest {
+            versions: VersionsManifest {
+                smithy_rs_revision: "some-revision-smithy-rs".into(),
+                aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+                manual_interventions: Default::default(),
+                crates: [
+                    crate_version("aws-config", "0.46.0"),
+                    crate_version("aws-sdk-s3", "0.20.0"),
+                    crate_version("aws-smithy-async", "0.46.0"),
+                    crate_version("aws-smithy-wasm", "0.1.0"),
+                ]
+                .into_iter()
+                .collect(),
+                release: None,
+            },
+            release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
+        };
+        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
+
+        pretty_assertions::assert_str_eq!(
+            r#"
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
+[package]
+name = "aws-sdk-rust-lambda-canary-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+# metadata used by cargo-component to identify which wit world to embed in the binary
+[package.metadata.component]
+package = "aws:component"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+aws-config = { version = "0.46.0", features = ["behavior-version-latest"], default-features = false }
+aws-sdk-s3 = { version = "0.20.0", default-features = false }
+aws-smithy-async = { version = "0.46.0", features = ["rt-tokio"], default-features = false }
+aws-smithy-wasm = { version = "0.1.0" }
+"#,
+            output
         );
     }
 
