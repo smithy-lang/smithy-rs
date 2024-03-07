@@ -9,8 +9,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
@@ -23,38 +23,40 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
-class CredentialsProviderDecorator : ClientCodegenDecorator {
-    override val name: String = "CredentialsProvider"
-    override val order: Byte = 0
+class CredentialsProviderDecorator : ConditionalDecorator(
+    predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
+    delegateTo =
+        object : ClientCodegenDecorator {
+            override val name: String = "CredentialsProviderDecorator"
+            override val order: Byte = 0
 
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-        return baseCustomizations + CredentialProviderConfig(codegenContext)
-    }
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> = baseCustomizations + CredentialProviderConfig(codegenContext)
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        listOf(
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
-            },
-        )
+            override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+                listOf(
+                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                        rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+                    },
+                )
 
-    override fun extras(
-        codegenContext: ClientCodegenContext,
-        rustCrate: RustCrate,
-    ) {
-        rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
+            override fun extras(
+                codegenContext: ClientCodegenContext,
+                rustCrate: RustCrate,
+            ) {
+                rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
-        rustCrate.withModule(ClientRustModule.config) {
-            rust(
-                "pub use #T::Credentials;",
-                AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
-            )
-        }
-    }
-}
+                rustCrate.withModule(ClientRustModule.config) {
+                    rust(
+                        "pub use #T::Credentials;",
+                        AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
+                    )
+                }
+            }
+        },
+)
 
 /**
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
@@ -125,7 +127,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                             """,
                             *codegenScope,
                         ) {
-                            if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                            if (codegenContext.usesSigV4a()) {
                                 featureGateBlock("sigv4a") {
                                     rustTemplate(
                                         "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",

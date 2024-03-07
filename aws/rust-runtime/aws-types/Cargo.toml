@@ -45,3 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 #  Crate("aws-types", STABLE_VERSION_PROP_NAME),
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+[package.metadata.cargo-udeps.ignore]
+# used only in doc strings
+normal = ["aws-smithy-runtime", "hyper-rustls"]
