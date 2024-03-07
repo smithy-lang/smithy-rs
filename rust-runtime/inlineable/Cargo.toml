@@ -18,9 +18,7 @@ default = ["gated-tests"]
 
 
 [dependencies]
-async-trait = "0.1.74"
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
-aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
@@ -34,7 +32,6 @@ once_cell = "1.16.0"
 percent-encoding = "2.2.0"
 pin-project-lite = "0.2"
 regex-lite = "0.1.5"
-tower = { version = "0.4.11", default-features = false }
 url = "2.2.2"
 
 [dev-dependencies]

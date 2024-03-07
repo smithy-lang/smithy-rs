@@ -42,6 +42,12 @@ meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = "Added support for SSO bearer token authentication. The aws-sdk-codecatalyst crate can now send requests without erroring."
+references = ["aws-sdk-rust#703", "smithy-rs#3453"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "Add support for S3 Express One Zone. See [the user guide](https://github.com/awslabs/aws-sdk-rust/discussions/1091) for more details."
 references = ["aws-sdk-rust#992", "smithy-rs#3465"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
