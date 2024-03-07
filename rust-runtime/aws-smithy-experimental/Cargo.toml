@@ -9,7 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 crypto-ring = ["rustls/ring"]
-crypto-aws-lc = ["rustls/aws_lc_rs", "fs_extra"]
+crypto-aws-lc = ["rustls/aws_lc_rs", "dep:fs_extra"]
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
@@ -54,3 +54,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[package.metadata.cargo-udeps.ignore]
+# used only in doc strings
+normal = ["fs_extra"]
