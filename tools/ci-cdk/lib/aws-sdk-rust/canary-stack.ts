@@ -197,7 +197,7 @@ export class CanaryStack extends Stack {
             new PolicyStatement({
                 actions: ['s3express:*'],
                 effect: Effect.ALLOW,
-                resources: ["*"],
+                resources: [`${this.canaryTestExpressBucket.attrArn}`],
             })
         );
 
