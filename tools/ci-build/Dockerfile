@@ -165,6 +165,7 @@ RUN set -eux; \
         python3-devel \
         python3-pip \
         shadow-utils \
+        cmake \
         tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \
