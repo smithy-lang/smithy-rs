@@ -350,6 +350,28 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         }
     }
 
+    /// Configures the a deserializer implementation for the builder.
+    pub fn deserializer_impl<O2, E2>(
+        mut self,
+        deserializer: impl DeserializeResponse + Send + Sync + 'static,
+    ) -> OperationBuilder<I, O2, E2>
+    where
+        O2: fmt::Debug + Send + Sync + 'static,
+        E2: std::error::Error + fmt::Debug + Send + Sync + 'static,
+    {
+        let deserializer: SharedResponseDeserializer = deserializer.into_shared();
+        self.config.store_put(deserializer);
+
+        OperationBuilder {
+            service_name: self.service_name,
+            operation_name: self.operation_name,
+            config: self.config,
+            runtime_components: self.runtime_components,
+            runtime_plugins: self.runtime_plugins,
+            _phantom: Default::default(),
+        }
+    }
+
     /// Creates an `Operation` from the builder.
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
