@@ -60,7 +60,7 @@ impl Storable for RequestChecksumInterceptorState {
     type Storer = StoreReplace<Self>;
 }
 
-pub(crate) type CustomDefaultFn = Box<
+type CustomDefaultFn = Box<
     dyn Fn(Option<ChecksumAlgorithm>, &ConfigBag) -> Option<ChecksumAlgorithm>
         + Send
         + Sync

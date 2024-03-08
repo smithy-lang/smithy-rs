@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
-import software.amazon.smithy.rustsdk.awsInlineableHttpRequestChecksum
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -245,9 +244,6 @@ class S3ExpressRequestChecksumCustomization(
             *preludeScope,
             "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
             "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-            "DefaultRequestChecksumOverride" to
-                runtimeConfig.awsInlineableHttpRequestChecksum()
-                    .resolve("DefaultRequestChecksumOverride"),
             "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
             "for_s3_express" to s3ExpressModule(runtimeConfig).resolve("utils::for_s3_express"),
             "provide_default_checksum_algorithm" to s3ExpressModule(runtimeConfig).resolve("checksum::provide_default_checksum_algorithm"),
@@ -262,9 +258,7 @@ class S3ExpressRequestChecksumCustomization(
                     if (checksumTrait.isRequestChecksumRequired) {
                         rustTemplate(
                             """
-                            ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
-                                #{provide_default_checksum_algorithm}
-                            ));
+                            ${section.newLayerName}.store_put(#{provide_default_checksum_algorithm}());
                             """,
                             *codegenScope,
                             "customDefault" to
