@@ -636,16 +636,18 @@ pub(crate) mod runtime_plugin {
     }
 
     impl S3ExpressRuntimePlugin {
-        pub(crate) fn new(config: FrozenLayer) -> Self {
-            Self::new_with(config, Env::real())
+        pub(crate) fn new(
+            disable_s3_express_session_token: Option<crate::config::DisableS3ExpressSessionAuth>,
+        ) -> Self {
+            Self::new_with(disable_s3_express_session_token, Env::real())
         }
 
-        fn new_with(config: FrozenLayer, env: Env) -> Self {
+        fn new_with(
+            disable_s3_express_session_token: Option<crate::config::DisableS3ExpressSessionAuth>,
+            env: Env,
+        ) -> Self {
             let mut layer = Layer::new("S3ExpressRuntimePlugin");
-            if config
-                .load::<crate::config::DisableS3ExpressSessionAuth>()
-                .is_none()
-            {
+            if disable_s3_express_session_token.is_none() {
                 match env.get(env::S3_DISABLE_EXPRESS_SESSION_AUTH) {
                     Ok(value)
                         if value.eq_ignore_ascii_case("true")
@@ -711,13 +713,12 @@ pub(crate) mod runtime_plugin {
         #[test]
         fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
             // Disable option is set from service client.
-            let mut layer = Layer::new("test");
-            layer.store_put(crate::config::DisableS3ExpressSessionAuth(true));
+            let disable_s3_express_session_token = crate::config::DisableS3ExpressSessionAuth(true);
 
             // An environment variable says the session auth is _not_ disabled, but it will be
             // overruled by what is in `layer`.
             let sut = S3ExpressRuntimePlugin::new_with(
-                layer.freeze(),
+                Some(disable_s3_express_session_token),
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
             );
 
@@ -730,12 +731,9 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
-            // No disable option is set from service client.
-            let layer = Layer::new("test");
-
             // An environment variable says session auth is disabled
             let sut = S3ExpressRuntimePlugin::new_with(
-                layer.freeze(),
+                None,
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
             );
 
@@ -757,11 +755,8 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_should_be_unspecified_if_unset() {
-            // No disable option is set from service client.
-            let layer = Layer::new("test");
-
             // An environment variable says session auth is disabled
-            let sut = S3ExpressRuntimePlugin::new_with(layer.freeze(), Env::from_slice(&[]));
+            let sut = S3ExpressRuntimePlugin::new_with(None, Env::from_slice(&[]));
 
             let cfg = sut.config().unwrap();
             assert!(cfg

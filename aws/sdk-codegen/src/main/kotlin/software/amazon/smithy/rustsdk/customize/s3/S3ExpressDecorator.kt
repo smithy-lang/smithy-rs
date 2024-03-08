@@ -215,7 +215,14 @@ class S3ExpressFluentClientCustomization(
                 is FluentClientSection.AdditionalBaseClientPlugins -> {
                     rustTemplate(
                         """
-                        ${section.plugins} = ${section.plugins}.with_client_plugin(#{S3ExpressRuntimePlugin}::new(${section.config}.config.clone()));
+                        ${section.plugins} = ${section.plugins}.with_client_plugin(
+                            #{S3ExpressRuntimePlugin}::new(
+                                ${section.config}
+                                    .config
+                                    .load::<crate::config::DisableS3ExpressSessionAuth>()
+                                    .cloned()
+                            )
+                        );
                         """,
                         *codegenScope,
                     )
