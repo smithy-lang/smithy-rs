@@ -46,3 +46,9 @@ message = "Added support for SSO bearer token authentication. The aws-sdk-codeca
 references = ["aws-sdk-rust#703", "smithy-rs#3453"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Upgrade Smithy to 1.45."
+references = ["smithy-rs#3470"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+authors = ["jdisanti"]
