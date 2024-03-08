@@ -12,7 +12,6 @@ use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_async::time::TimeSource;
-use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
@@ -35,6 +34,9 @@ use aws_smithy_runtime_api::client::ser_de::{
     DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_runtime_api::{
+    box_error::BoxError, client::stalled_stream_protection::StalledStreamProtectionConfig,
+};
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
@@ -290,6 +292,15 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     /// Configures the runtime plugin for the builder.
     pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
         self.runtime_plugins.push(runtime_plugin.into_shared());
+        self
+    }
+
+    /// Configures stalled stream protection with the given config.
+    pub fn stalled_stream_protection(
+        mut self,
+        stalled_stream_protection: StalledStreamProtectionConfig,
+    ) -> Self {
+        self.config.store_put(stalled_stream_protection);
         self
     }
 
