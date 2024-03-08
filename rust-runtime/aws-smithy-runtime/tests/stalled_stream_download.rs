@@ -3,27 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
-use aws_smithy_async::time::TimeSource;
-use aws_smithy_runtime::{assert_str_contains, test_util::capture_test_logs::capture_test_logs};
-use aws_smithy_types::error::display::DisplayErrorContext;
-use bytes::Bytes;
 use std::time::Duration;
 
-/// No really, it's 42 bytes long... super neat
-const NEAT_DATA: Bytes = Bytes::from_static(b"some really neat data");
-
-/// Ticks time forward by the given duration, and logs the current time for debugging.
-macro_rules! tick {
-    ($ticker:ident, $duration:expr) => {
-        $ticker.tick($duration).await;
-        let now = $ticker
-            .now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap();
-        tracing::info!("ticked {:?}, now at {:?}", $duration, now);
-    };
-}
+#[macro_use]
+mod stalled_stream_common;
+use stalled_stream_common::*;
 
 /// Scenario: Successfully download at a rate above the minimum throughput.
 /// Expected: MUST NOT timeout.
@@ -198,87 +182,9 @@ async fn user_downloads_data_too_slowly() {
     result.ok().expect("response MUST NOT timeout");
 }
 
-use test_tools::*;
-mod test_tools {
-    use aws_smithy_async::test_util::tick_advance_sleep::{TickAdvanceSleep, TickAdvanceTime};
-    use aws_smithy_async::time::TimeSource;
-    use aws_smithy_runtime::client::{
-        orchestrator::operation::Operation,
-        stalled_stream_protection::{
-            StalledStreamProtectionInterceptor, StalledStreamProtectionInterceptorKind,
-        },
-    };
-    use aws_smithy_runtime_api::{
-        box_error::BoxError,
-        client::{
-            http::{
-                HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
-                SharedHttpConnector,
-            },
-            interceptors::context::{Error, Output},
-            orchestrator::{HttpRequest, HttpResponse, OrchestratorError},
-            runtime_components::RuntimeComponents,
-            ser_de::DeserializeResponse,
-            stalled_stream_protection::StalledStreamProtectionConfig,
-        },
-        shared::IntoShared,
-    };
-    use aws_smithy_types::{body::SdkBody, timeout::TimeoutConfig};
-    use bytes::Bytes;
-    use http_body_0_4::Body;
-    use pin_utils::pin_mut;
-    use std::{
-        convert::Infallible,
-        future::poll_fn,
-        mem,
-        pin::Pin,
-        sync::{Arc, Mutex},
-        task::{Context, Poll},
-        time::Duration,
-    };
-
-    #[derive(Debug)]
-    struct FakeServer(SharedHttpConnector);
-
-    impl HttpClient for FakeServer {
-        fn http_connector(
-            &self,
-            _settings: &HttpConnectorSettings,
-            _components: &RuntimeComponents,
-        ) -> SharedHttpConnector {
-            self.0.clone()
-        }
-    }
-
-    struct ChannelBody {
-        receiver: tokio::sync::mpsc::Receiver<Bytes>,
-    }
-    impl http_body_0_4::Body for ChannelBody {
-        type Data = Bytes;
-        type Error = Infallible;
-
-        fn poll_data(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-            match self.receiver.poll_recv(cx) {
-                Poll::Ready(value) => Poll::Ready(value.map(|v| Ok(v))),
-                Poll::Pending => Poll::Pending,
-            }
-        }
-
-        fn poll_trailers(
-            self: Pin<&mut Self>,
-            _cx: &mut Context<'_>,
-        ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
-            unreachable!()
-        }
-    }
-
-    pub fn channel_body() -> (SdkBody, tokio::sync::mpsc::Sender<Bytes>) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1000);
-        (SdkBody::from_body_0_4(ChannelBody { receiver }), sender)
-    }
+use download_test_tools::*;
+mod download_test_tools {
+    use crate::stalled_stream_common::*;
 
     fn response(body: SdkBody) -> HttpResponse {
         HttpResponse::try_from(http::Response::builder().status(200).body(body).unwrap()).unwrap()
