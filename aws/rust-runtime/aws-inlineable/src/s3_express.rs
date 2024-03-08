@@ -766,6 +766,29 @@ pub(crate) mod runtime_plugin {
     }
 }
 
+pub(crate) mod checksum {
+    use aws_smithy_checksums::ChecksumAlgorithm;
+    use aws_smithy_types::config_bag::ConfigBag;
+
+    pub(crate) fn provide_default_checksum_algorithm(
+        original_checksum: Option<ChecksumAlgorithm>,
+        cfg: &ConfigBag,
+    ) -> Option<ChecksumAlgorithm> {
+        // S3 does not have the `ChecksumAlgorithm::Md5`, therefore customers cannot set it
+        // from outside.
+        if original_checksum != Some(ChecksumAlgorithm::Md5) {
+            return original_checksum;
+        }
+
+        if crate::s3_express::utils::for_s3_express(cfg) {
+            // S3 Express requires setting the default checksum algorithm to CRC-32
+            Some(ChecksumAlgorithm::Crc32)
+        } else {
+            original_checksum
+        }
+    }
+}
+
 pub(crate) mod utils {
     use aws_smithy_types::{config_bag::ConfigBag, Document};
 

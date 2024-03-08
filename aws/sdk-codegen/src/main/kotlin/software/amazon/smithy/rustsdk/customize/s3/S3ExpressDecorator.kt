@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rustsdk.customize.s3
 
+import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
@@ -249,41 +250,29 @@ class S3ExpressRequestChecksumCustomization(
                     .resolve("DefaultRequestChecksumOverride"),
             "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
             "for_s3_express" to s3ExpressModule(runtimeConfig).resolve("utils::for_s3_express"),
+            "provide_default_checksum_algorithm" to s3ExpressModule(runtimeConfig).resolve("checksum::provide_default_checksum_algorithm"),
         )
 
     override fun section(section: OperationSection): Writable =
         writable {
+            // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
+            val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
             when (section) {
                 is OperationSection.AdditionalRuntimePluginConfig -> {
-                    rustTemplate(
-                        """
-                        ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
-                            |original: #{Option}<#{ChecksumAlgorithm}>,
-                            cfg: &#{ConfigBag}| {
-                                // S3 does not have the `ChecksumAlgorithm::Md5`, therefore customers cannot set it
-                                // from outside.
-                                if original != #{Some}(#{ChecksumAlgorithm}::Md5) {
-                                    return original;
-                                }
-
-                                if #{for_s3_express}(cfg) {
-                                    #{customDefault:W}
-                                } else {
-                                    original
-                                }
-                            }
-                        ));
-                        """,
-                        *codegenScope,
-                        "customDefault" to
-                            writable {
-                                if (operationShape.id == ShapeId.from("com.amazonaws.s3#UploadPart")) {
-                                    rustTemplate("#{None}", *codegenScope)
-                                } else {
+                    if (checksumTrait.isRequestChecksumRequired) {
+                        rustTemplate(
+                            """
+                            ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
+                                #{provide_default_checksum_algorithm}
+                            ));
+                            """,
+                            *codegenScope,
+                            "customDefault" to
+                                writable {
                                     rustTemplate("#{Some}(#{ChecksumAlgorithm}::Crc32)", *codegenScope)
-                                }
-                            },
-                    )
+                                },
+                        )
+                    }
                 }
 
                 else -> { }
