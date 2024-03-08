@@ -12,6 +12,10 @@ publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
+# Used by lru, and this forces it to be a later version that avoids
+# https://github.com/tkaitchuck/aHash/issues/200
+# when built with `cargo update -Z minimal-versions`
+ahash = "0.8.11"
 aws-credential-types = { path = "../aws-credential-types" }
 aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 aws-sigv4 = { path = "../aws-sigv4" }

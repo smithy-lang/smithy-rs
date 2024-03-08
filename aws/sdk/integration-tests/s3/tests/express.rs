@@ -27,28 +27,6 @@ where
     aws_sdk_s3::Client::from_conf(update_builder(config).build())
 }
 
-// TODO(S3Express): Convert this test to the S3 express section in canary
-#[tokio::test]
-async fn list_objects_v2() {
-    let _logs = capture_test_logs();
-
-    let http_client =
-        ReplayingClient::from_file("tests/data/express/list-objects-v2.json").unwrap();
-    let client = test_client(|b| b.http_client(http_client.clone())).await;
-
-    let result = client
-        .list_objects_v2()
-        .bucket("s3express-test-bucket--usw2-az1--x-s3")
-        .send()
-        .await;
-    dbg!(result).expect("success");
-
-    http_client
-        .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
-        .await
-        .unwrap();
-}
-
 #[tokio::test]
 async fn mixed_auths() {
     let _logs = capture_test_logs();

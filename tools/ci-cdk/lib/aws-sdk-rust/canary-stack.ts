@@ -16,6 +16,10 @@ import {
     BucketEncryption,
     CfnMultiRegionAccessPoint,
 } from "aws-cdk-lib/aws-s3";
+import { aws_s3express as s3express } from 'aws-cdk-lib';
+import {
+    CfnDirectoryBucket
+} from "aws-cdk-lib/aws-s3express";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
@@ -30,11 +34,13 @@ export class CanaryStack extends Stack {
     public readonly canaryCodeBucket: Bucket;
     public readonly canaryTestBucket: Bucket;
     public readonly canaryTestMrap: CfnMultiRegionAccessPoint;
+    public readonly canaryTestExpressBucket: CfnDirectoryBucket;
 
     public readonly lambdaExecutionRoleArn: CfnOutput;
     public readonly canaryCodeBucketName: CfnOutput;
     public readonly canaryTestBucketName: CfnOutput;
     public readonly canaryTestMrapBucketArn: CfnOutput;
+    public readonly canaryTestExpressBucketName: CfnOutput;
 
     constructor(scope: Construct, id: string, props: Properties) {
         super(scope, id, props);
@@ -143,6 +149,18 @@ export class CanaryStack extends Stack {
             });
         }
 
+        this.canaryTestExpressBucket = new CfnDirectoryBucket(this, 'canary-test-express-bucket', {
+              dataRedundancy: 'SingleAvailabilityZone',
+              locationName: "usw2-az1",
+            });
+
+        // Output the bucket name to make it easier to invoke the canary runner
+        this.canaryTestExpressBucketName = new CfnOutput(this, "canary-test-express-bucket-name", {
+            value: this.canaryTestExpressBucket.ref,
+            description: "Name of the canary express test bucket",
+            exportName: "canaryExpressTestBucket",
+        });
+
         // Create a role for the canary Lambdas to assume
         this.lambdaExecutionRole = new Role(this, "lambda-execution-role", {
             roleName: "aws-sdk-rust-canary-lambda-exec-role",
@@ -173,6 +191,15 @@ export class CanaryStack extends Stack {
             effect: Effect.ALLOW,
             resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
         }));
+
+        // Allow canaries to perform operations on test express bucket
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ['s3express:*'],
+                effect: Effect.ALLOW,
+                resources: [`${this.canaryTestExpressBucket.attrArn}`],
+            })
+        );
 
         // Allow canaries to call Transcribe's StartStreamTranscription
         this.lambdaExecutionRole.addToPolicy(
