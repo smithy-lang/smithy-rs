@@ -807,15 +807,12 @@ pub(crate) mod utils {
             Some(Document::Array(schemes)) => schemes,
             _ => return false,
         };
-        auth_schemes
-            .iter()
-            .find(|doc| {
-                let config_scheme_id = doc
-                    .as_object()
-                    .and_then(|object| object.get("name"))
-                    .and_then(Document::as_string);
-                config_scheme_id == Some(crate::s3_express::auth::SCHEME_ID.as_str())
-            })
-            .is_some()
+        auth_schemes.iter().any(|doc| {
+            let config_scheme_id = doc
+                .as_object()
+                .and_then(|object| object.get("name"))
+                .and_then(Document::as_string);
+            config_scheme_id == Some(crate::s3_express::auth::SCHEME_ID.as_str())
+        })
     }
 }
