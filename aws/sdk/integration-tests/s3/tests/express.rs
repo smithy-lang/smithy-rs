@@ -28,6 +28,30 @@ where
 }
 
 #[tokio::test]
+async fn create_session_request_should_not_include_x_amz_s3session_token() {
+    let (http_client, request) = capture_request(None);
+    // There was a bug where a regular SigV4 session token was overwritten by an express session token
+    // even for CreateSession API request.
+    // To exercise that code path, it is important to include credentials with a session token below.
+    let conf = Config::builder()
+        .http_client(http_client)
+        .region(Region::new("us-west-2"))
+        .credentials_provider(::aws_credential_types::Credentials::for_tests_with_session_token())
+        .build();
+    let client = Client::from_conf(conf);
+
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await;
+
+    let req = request.expect_request();
+    assert!(req.headers().get("x-amz-security-token").is_some());
+    assert!(req.headers().get("x-amz-s3session-token").is_none());
+}
+
+#[tokio::test]
 async fn mixed_auths() {
     let _logs = capture_test_logs();
 
