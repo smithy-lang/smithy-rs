@@ -193,11 +193,23 @@ export class CanaryStack extends Stack {
         }));
 
         // Allow canaries to perform operations on test express bucket
+        // Unlike S3, no need to grant separate permissions for GetObject, PutObject, and so on because
+        // the session token enables access instead:
+        // https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-express-security-iam.html#s3-express-security-iam-actions
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ['s3express:*'],
+                actions: ['s3express:CreateSession'],
                 effect: Effect.ALLOW,
                 resources: [`${this.canaryTestExpressBucket.attrArn}`],
+            })
+        );
+
+        // Allow canaries to list directory buckets
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ['s3express:ListAllMyDirectoryBuckets'],
+                effect: Effect.ALLOW,
+                resources: ["*"],
             })
         );
 
