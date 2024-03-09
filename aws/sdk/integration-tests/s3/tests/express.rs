@@ -47,6 +47,10 @@ async fn create_session_request_should_not_include_x_amz_s3session_token() {
         .await;
 
     let req = request.expect_request();
+    assert!(
+        req.headers().get("x-amz-create-session-mode").is_some(),
+        "`x-amz-create-session-mode` should appear in headers of the first request when an express bucket is specified"
+    );
     assert!(req.headers().get("x-amz-security-token").is_some());
     assert!(req.headers().get("x-amz-s3session-token").is_none());
 }
