@@ -6,7 +6,8 @@
 use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
-    SigV4OperationSigningConfig, SigV4SessionTokenNameOverride, SigV4SigningError,
+    SessionTokenNameOverrideFn, SigV4OperationSigningConfig, SigV4SessionTokenNameOverride,
+    SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
@@ -24,6 +25,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::region::SigningRegion;
 use aws_types::SigningName;
 use std::borrow::Cow;
+use std::fmt;
 use std::time::SystemTime;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
@@ -63,13 +65,26 @@ impl AuthScheme for SigV4AuthScheme {
 }
 
 /// SigV4 signer.
-#[derive(Debug, Default)]
-pub struct SigV4Signer;
+#[derive(Default)]
+pub struct SigV4Signer {
+    session_token_name_override: Option<SessionTokenNameOverrideFn>,
+}
+
+impl fmt::Debug for SigV4Signer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SigV4Signer").finish()
+    }
+}
 
 impl SigV4Signer {
     /// Creates a new signer instance.
     pub fn new() -> Self {
-        Self
+        Self::builder().build()
+    }
+
+    /// Creates builder for [`SigV4Signer`].
+    pub fn builder() -> Builder {
+        Builder::default()
     }
 
     fn settings(operation_config: &SigV4OperationSigningConfig) -> SigningSettings {
@@ -225,6 +240,57 @@ impl Sign for SigV4Signer {
         }
         auth::apply_signing_instructions(signing_instructions, request)?;
         Ok(())
+    }
+}
+
+/// Builder for [`SigV4Signer`]
+#[derive(Default)]
+pub struct Builder {
+    session_token_name_override: Option<SessionTokenNameOverrideFn>,
+}
+
+impl fmt::Debug for Builder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("auth::sigv4::Builder").finish()
+    }
+}
+
+impl Builder {
+    /// Sets a provider for the alternative SigV4 session token name
+    pub fn session_token_name_override<F>(mut self, token_name_override: F) -> Self
+    where
+        F: Fn(&SigningSettings, &ConfigBag) -> Result<Option<&'static str>, BoxError>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.set_session_token_name_override(Some(token_name_override));
+        self
+    }
+
+    /// Sets a provider for the alternative SigV4 session token name
+    pub fn set_session_token_name_override<F>(
+        &mut self,
+        token_name_override: Option<F>,
+    ) -> &mut Self
+    where
+        F: Fn(&SigningSettings, &ConfigBag) -> Result<Option<&'static str>, BoxError>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.session_token_name_override = match token_name_override {
+            Some(f) => Some(Box::new(f)),
+            _ => None,
+        };
+        self
+    }
+
+    /// Builds a [`SigV4Signer`]
+    pub fn build(self) -> SigV4Signer {
+        SigV4Signer {
+            session_token_name_override: self.session_token_name_override,
+        }
     }
 }
 
