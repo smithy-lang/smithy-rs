@@ -83,6 +83,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         arrayOf(
+            "express_session_token_name" to s3ExpressModule(runtimeConfig).resolve("auth::express_session_token_name"),
             "DefaultS3ExpressIdentityProvider" to
                 s3ExpressModule(runtimeConfig).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
             "IdentityCacheLocation" to
@@ -103,6 +104,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
             "SharedIdentityResolver" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
+            "SigV4Signer" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth::sigv4::SigV4Signer"),
         )
     }
 
@@ -112,7 +114,15 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     section.registerAuthScheme(this) {
                         rustTemplate(
-                            "#{SharedAuthScheme}::new(#{S3ExpressAuthScheme}::new())",
+                            """
+                            #{SharedAuthScheme}::new(
+                                #{S3ExpressAuthScheme}::new(
+                                    #{SigV4Signer}::builder()
+                                        .session_token_name_override(#{express_session_token_name})
+                                        .build(),
+                                )
+                            )
+                            """,
                             *codegenScope,
                         )
                     }

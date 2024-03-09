@@ -6,8 +6,7 @@
 use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
-    SessionTokenNameOverrideFn, SigV4OperationSigningConfig, SigV4SessionTokenNameOverride,
-    SigV4SigningError,
+    SigV4OperationSigningConfig, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
@@ -63,6 +62,9 @@ impl AuthScheme for SigV4AuthScheme {
         &self.signer
     }
 }
+
+type SessionTokenNameOverrideFn =
+    Box<dyn Fn(&SigningSettings) -> Result<Option<&'static str>, BoxError> + Send + Sync + 'static>;
 
 /// SigV4 signer.
 #[derive(Default)]
@@ -175,11 +177,10 @@ impl Sign for SigV4Signer {
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
         let request_time = runtime_components.time_source().unwrap_or_default().now();
 
-        let settings = if let Some(session_token_name_override) =
-            config_bag.load::<SigV4SessionTokenNameOverride>()
+        let settings = if let Some(session_token_name_override) = &self.session_token_name_override
         {
             let mut settings = Self::settings(&operation_config);
-            let name_override = session_token_name_override.name_override(&settings, config_bag)?;
+            let name_override = session_token_name_override(&settings)?;
             settings.session_token_name_override = name_override;
             settings
         } else {
@@ -259,10 +260,7 @@ impl Builder {
     /// Sets a provider for the alternative SigV4 session token name
     pub fn session_token_name_override<F>(mut self, token_name_override: F) -> Self
     where
-        F: Fn(&SigningSettings, &ConfigBag) -> Result<Option<&'static str>, BoxError>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(&SigningSettings) -> Result<Option<&'static str>, BoxError> + Send + Sync + 'static,
     {
         self.set_session_token_name_override(Some(token_name_override));
         self
@@ -274,10 +272,7 @@ impl Builder {
         token_name_override: Option<F>,
     ) -> &mut Self
     where
-        F: Fn(&SigningSettings, &ConfigBag) -> Result<Option<&'static str>, BoxError>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(&SigningSettings) -> Result<Option<&'static str>, BoxError> + Send + Sync + 'static,
     {
         self.session_token_name_override = match token_name_override {
             Some(f) => Some(Box::new(f)),

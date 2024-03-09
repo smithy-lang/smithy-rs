@@ -6,6 +6,8 @@
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
     use aws_runtime::auth::sigv4::SigV4Signer;
+    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
+    use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{AuthScheme, AuthSchemeId, Sign};
     use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
     use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
@@ -21,8 +23,8 @@ pub(crate) mod auth {
 
     impl S3ExpressAuthScheme {
         /// Creates a new `S3ExpressAuthScheme`.
-        pub(crate) fn new() -> Self {
-            Default::default()
+        pub(crate) fn new(signer: SigV4Signer) -> Self {
+            Self { signer }
         }
     }
 
@@ -41,6 +43,22 @@ pub(crate) mod auth {
         fn signer(&self) -> &dyn Sign {
             &self.signer
         }
+    }
+
+    pub(crate) fn express_session_token_name(
+        settings: &SigningSettings,
+    ) -> Result<Option<&'static str>, BoxError> {
+        let session_token_name_override = Some(match settings.signature_location {
+            SignatureLocation::Headers => "x-amz-s3session-token",
+            SignatureLocation::QueryParams => "X-Amz-S3session-Token",
+            _ => {
+                return Err(BoxError::from(
+                    "`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm",
+                ))
+            }
+        });
+
+        Ok(session_token_name_override)
     }
 }
 
@@ -619,10 +637,8 @@ pub(crate) mod identity_provider {
 
 /// Supporting code for S3 Express runtime plugin
 pub(crate) mod runtime_plugin {
-    use aws_runtime::auth::SigV4SessionTokenNameOverride;
-    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
-    use aws_smithy_runtime_api::{box_error::BoxError, client::runtime_plugin::RuntimePlugin};
-    use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+    use aws_smithy_types::config_bag::{FrozenLayer, Layer};
     use aws_types::os_shim_internal::Env;
 
     mod env {
@@ -672,27 +688,6 @@ pub(crate) mod runtime_plugin {
                     }
                 }
             }
-
-            let session_token_name_override = SigV4SessionTokenNameOverride::new(
-                |settings: &SigningSettings, cfg: &ConfigBag| {
-                    // Not configured for S3 express, use the original session token name override
-                    if !crate::s3_express::utils::for_s3_express(cfg) {
-                        return Ok(settings.session_token_name_override);
-                    }
-
-                    let session_token_name_override = Some(match settings.signature_location {
-                    SignatureLocation::Headers => "x-amz-s3session-token",
-                    SignatureLocation::QueryParams => "X-Amz-S3session-Token",
-                    _ => {
-                        return Err(BoxError::from(
-                            "`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm",
-                        ))
-                    }
-                });
-                    Ok(session_token_name_override)
-                },
-            );
-            layer.store_or_unset(Some(session_token_name_override));
 
             Self {
                 config: layer.freeze(),
