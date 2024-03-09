@@ -320,10 +320,7 @@ async fn disable_s3_express_session_auth_at_service_client_level() {
 
     let req = request.expect_request();
     assert!(
-        !req.headers()
-            .get("authorization")
-            .unwrap()
-            .contains("x-amz-create-session-mode"),
+        req.headers().get("x-amz-create-session-mode").is_none(),
         "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
     );
 }
@@ -348,10 +345,7 @@ async fn disable_s3_express_session_auth_at_operation_level() {
 
     let req = request.expect_request();
     assert!(
-        !req.headers()
-            .get("authorization")
-            .unwrap()
-            .contains("x-amz-create-session-mode"),
+        req.headers().get("x-amz-create-session-mode").is_none(),
         "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
     );
 }
