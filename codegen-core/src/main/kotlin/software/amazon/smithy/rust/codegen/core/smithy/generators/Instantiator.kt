@@ -66,6 +66,8 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.math.BigDecimal
+import software.amazon.smithy.model.traits.DefaultTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -448,12 +450,10 @@ open class Instantiator(
 
     /**
      * Returns a default value for a shape.
-     *
-     * Warning: this method does not take into account any constraint traits attached to the shape.
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {
-            is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+            is MemberShape -> shape.getTrait<DefaultTrait>()?.toNode() ?: fillDefaultValue(model.expectShape(shape.target))
 
             // Aggregate shapes.
             is StructureShape -> Node.objectNode()
