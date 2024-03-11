@@ -148,11 +148,10 @@ fn crate_version_has_changed(
         .join(crate_name)
         .join("Cargo.toml");
     let to_patch_cargo_toml = runtime_crate_path.join(crate_name).join("Cargo.toml");
-    assert!(
-        sdk_cargo_toml.exists(),
-        "{:?} did not exist!",
-        sdk_cargo_toml
-    );
+    if !sdk_cargo_toml.exists() {
+        // This is a new runtime crate, so there is nothing to patch.
+        return Ok(false);
+    }
     assert!(
         to_patch_cargo_toml.exists(),
         "{:?} did not exist!",
