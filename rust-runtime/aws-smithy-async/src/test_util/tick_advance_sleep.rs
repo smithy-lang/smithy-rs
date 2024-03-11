@@ -62,26 +62,31 @@ struct QueuedSleep {
 
 #[derive(Default, Debug)]
 struct Inner {
+    // Need to use a Vec since VecDeque doesn't have sort functions,
+    // and BTreeSet doesn't fit since we could have more than one sleep presenting
+    // at the same time (and there's no way to compare the notify channels).
     sleeps: Vec<QueuedSleep>,
     /// Duration since `UNIX_EPOCH` that represents "now".
     now: Duration,
 }
 
 impl Inner {
-    fn take_presenting_before(&mut self, time: Duration) -> Vec<QueuedSleep> {
+    fn push(&mut self, sleep: QueuedSleep) {
+        self.sleeps.push(sleep);
         self.sleeps.sort_by_key(|s| s.presents_at);
-        let partition_index = self
+    }
+
+    fn next_presenting(&mut self, time: Duration) -> Option<QueuedSleep> {
+        if self
             .sleeps
-            .iter()
-            .enumerate()
-            .find(|(_, s)| s.presents_at > time)
-            .map(|(i, _)| i);
-        let sleep_count = self.sleeps.len();
-        let presenting: Vec<_> = self
-            .sleeps
-            .drain(0..partition_index.unwrap_or(sleep_count))
-            .collect();
-        presenting
+            .first()
+            .map(|f| f.presents_at <= time)
+            .unwrap_or(false)
+        {
+            Some(self.sleeps.remove(0))
+        } else {
+            None
+        }
     }
 }
 
@@ -116,7 +121,7 @@ impl AsyncSleep for TickAdvanceSleep {
         let now = inner.now;
 
         // Add the sleep to the queue, which `TickAdvanceTime` will examine when ticking.
-        inner.sleeps.push(QueuedSleep {
+        inner.push(QueuedSleep {
             presents_at: now + duration,
             notify: Some(tx),
         });
@@ -146,22 +151,25 @@ impl TickAdvanceTime {
     pub async fn tick(&self, duration: Duration) {
         let time = self.inner.get().now + duration;
 
-        let mut presenting = self.inner.get_mut().take_presenting_before(time);
-        while !presenting.is_empty() {
-            // Tick to each individual sleep time and yield the runtime so that any
-            // futures waiting on a sleep run before futures waiting on a later sleep.
-            for mut sleep in presenting {
-                // Make sure the time is always accurate for async code that runs
-                // after completing the sleep.
-                self.inner.get_mut().now = sleep.presents_at;
+        // Tick to each individual sleep time and yield the runtime so that any
+        // futures waiting on a sleep run before futures waiting on a later sleep.
+        //
+        // We also need to recheck the list of queued sleeps every iteration since
+        // unblocked tasks could have queued up more sleeps, and these sleeps may also
+        // need to present before ones that were previously queued.
+        loop {
+            // Can't do `while let` since that holds the lock open
+            let Some(mut presenting) = self.inner.get_mut().next_presenting(time) else {
+                break;
+            };
 
-                let _ = sleep.notify.take().unwrap().send(());
-                tokio::task::yield_now().await;
-            }
+            // Make sure the time is always accurate for async code that runs
+            // after completing the sleep.
+            self.inner.get_mut().now = presenting.presents_at;
 
-            // Unblocked tasks could have queued some more sleeps within the duration,
-            // so we need to check those as well.
-            presenting = self.inner.get_mut().take_presenting_before(time);
+            // Notify the sleep, and then yield to let work blocked on that sleep to proceed
+            let _ = presenting.notify.take().unwrap().send(());
+            tokio::task::yield_now().await;
         }
 
         // Set the final time.
@@ -193,6 +201,7 @@ pub fn tick_advance_time_and_sleep() -> (TickAdvanceTime, TickAdvanceSleep) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures_util::FutureExt;
 
     #[tokio::test]
     async fn tick_advances() {
@@ -242,6 +251,32 @@ mod tests {
             sleep.sleep(Duration::from_secs(1)).await;
             sleep.sleep(Duration::from_secs(2)).await;
             sleep.sleep(Duration::from_secs(3)).await;
+        });
+        tokio::task::yield_now().await;
+        assert!(!task.is_finished());
+        assert_eq!(SystemTime::UNIX_EPOCH, time.now());
+
+        time.tick(Duration::from_secs(6)).await;
+        assert_eq!(SystemTime::UNIX_EPOCH + Duration::from_secs(6), time.now());
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn racing_sleeps() {
+        let (time, sleep) = tick_advance_time_and_sleep();
+
+        let task = tokio::spawn(async move {
+            let sleep1 = sleep.sleep(Duration::from_secs(1)).then({
+                let sleep = sleep.clone();
+                move |_| async move {
+                    sleep.sleep(Duration::from_secs(1)).await;
+                }
+            });
+            let sleep2 = sleep.sleep(Duration::from_secs(3));
+            tokio::select! {
+                _ = sleep1 => { /* good */}
+                _ = sleep2 => { panic!("sleep2 should not complete before sleep1") }
+            }
         });
         tokio::task::yield_now().await;
         assert!(!task.is_finished());
