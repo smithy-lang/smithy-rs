@@ -211,6 +211,10 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     )
                 }
 
+                is ServiceConfig.BuilderFromConfigBag -> {
+                    rustTemplate("${section.builder}.set_region(${section.config_bag}.load::<#{Region}>().cloned());", *codegenScope)
+                }
+
                 else -> emptySection
             }
         }

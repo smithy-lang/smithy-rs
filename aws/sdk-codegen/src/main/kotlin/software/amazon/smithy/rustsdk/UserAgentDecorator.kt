@@ -145,6 +145,11 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         )
                     }
 
+                is ServiceConfig.BuilderFromConfigBag ->
+                    writable {
+                        rustTemplate("${section.builder}.set_app_name(${section.config_bag}.load::<#{AppName}>().cloned());", *codegenScope)
+                    }
+
                 is ServiceConfig.BuilderBuild ->
                     writable {
                         rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))

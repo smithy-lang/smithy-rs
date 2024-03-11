@@ -96,6 +96,14 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                     )
                 }
 
+            is ServiceConfig.BuilderFromConfigBag ->
+                writable {
+                    rustTemplate(
+                        "${section.builder}.set_stalled_stream_protection(${section.config_bag}.load::<#{StalledStreamProtectionConfig}>().cloned());",
+                        *codegenScope,
+                    )
+                }
+
             else -> emptySection
         }
     }
