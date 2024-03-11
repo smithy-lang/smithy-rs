@@ -798,14 +798,21 @@ pub(crate) mod utils {
     use aws_smithy_types::{config_bag::ConfigBag, Document};
 
     pub(crate) fn for_s3_express(cfg: &ConfigBag) -> bool {
+        // logic borrowed from aws_smithy_runtime::client::orchestrator::auth::extract_endpoint_auth_scheme_config
         let endpoint = cfg
             .load::<crate::config::endpoint::Endpoint>()
             .expect("endpoint added to config bag by endpoint orchestrator");
 
-        if let Some(Document::String(backend)) = endpoint.properties().get("backend") {
-            backend.as_str() == "S3Express"
-        } else {
-            false
-        }
+        let auth_schemes = match endpoint.properties().get("authSchemes") {
+            Some(Document::Array(schemes)) => schemes,
+            _ => return false,
+        };
+        auth_schemes.iter().any(|doc| {
+            let config_scheme_id = doc
+                .as_object()
+                .and_then(|object| object.get("name"))
+                .and_then(Document::as_string);
+            config_scheme_id == Some(crate::s3_express::auth::SCHEME_ID.as_str())
+        })
     }
 }
