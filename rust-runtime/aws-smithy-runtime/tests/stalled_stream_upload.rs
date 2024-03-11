@@ -105,6 +105,29 @@ async fn upload_stalls() {
     expect_timeout(result.await.expect("no panics"));
 }
 
+/// Scenario: All the request data is either uploaded to the server or buffered in the
+///           HTTP client, but the response doesn't start coming through within the grace period.
+/// Expected: MUST timeout after the grace period completes.
+#[tokio::test]
+async fn complete_upload_no_response() {
+    let _logs = capture_test_logs();
+
+    let (server, time, sleep) = stalling_server();
+    let op = operation(server, time.clone(), sleep);
+
+    let (body, body_sender) = channel_body();
+    let result = tokio::spawn(async move { op.invoke(body).await });
+
+    let _streamer = tokio::spawn(async move {
+        body_sender.send(NEAT_DATA).await.unwrap();
+        tick!(time, Duration::from_secs(1));
+        drop(body_sender);
+        time.tick(Duration::from_secs(6)).await;
+    });
+
+    expect_timeout(result.await.expect("no panics"));
+}
+
 // Scenario: The server stops asking for data, the client maxes out its send buffer,
 //           and the request stream stops being polled. However, before the grace period
 //           is over, the server recovers and starts asking for data again.
@@ -271,14 +294,12 @@ mod upload_test_tools {
             _: (),
         ) -> HttpResponse {
             let mut times = 5;
-            while poll_fn(|cx| body.as_mut().poll_data(cx)).await.is_some() {
+            while times > 0 && poll_fn(|cx| body.as_mut().poll_data(cx)).await.is_some() {
                 times -= 1;
-                if times <= 0 {
-                    // never awake after this
-                    tracing::info!("stalling indefinitely");
-                    std::future::pending().await
-                }
             }
+            // never awake after this
+            tracing::info!("stalling indefinitely");
+            std::future::pending::<()>().await;
             unreachable!()
         }
         fake_server!(FakeServerConnector, fake_server)

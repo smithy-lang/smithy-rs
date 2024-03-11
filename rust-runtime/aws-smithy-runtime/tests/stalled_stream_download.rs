@@ -113,10 +113,13 @@ async fn download_stalls() {
     });
 
     let response_body = op.invoke(()).await.expect("initial success");
-    let result = eagerly_consume(response_body).await;
+    let result = tokio::spawn(eagerly_consume(response_body));
     server.await.unwrap();
 
-    let err = result.expect_err("should have timed out");
+    let err = result
+        .await
+        .expect("no panics")
+        .expect_err("should have timed out");
     assert_str_contains!(
         DisplayErrorContext(err.as_ref()).to_string(),
         "minimum throughput was specified at 1 B/s, but throughput of 0 B/s was observed"

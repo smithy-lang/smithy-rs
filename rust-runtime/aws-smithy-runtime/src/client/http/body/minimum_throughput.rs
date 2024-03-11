@@ -15,6 +15,7 @@ pub mod options;
 pub use throughput::Throughput;
 mod throughput;
 
+use crate::client::http::body::minimum_throughput::throughput::ThroughputReport;
 use aws_smithy_async::rt::sleep::Sleep;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
@@ -40,15 +41,20 @@ use std::{
 };
 use throughput::ThroughputLogs;
 
+/// Use [`MinimumThroughputDownloadBody`] instead.
+#[deprecated(note = "Renamed to MinimumThroughputDownloadBody since it doesn't work for uploads")]
+pub type MinimumThroughputBody<B> = MinimumThroughputDownloadBody<B>;
+
 pin_project_lite::pin_project! {
     /// A body-wrapping type that ensures data is being streamed faster than some lower limit.
     ///
     /// If data is being streamed too slowly, this body type will emit an error next time it's polled.
-    pub struct MinimumThroughputBody<B> {
+    pub struct MinimumThroughputDownloadBody<B> {
         async_sleep: SharedAsyncSleep,
         time_source: SharedTimeSource,
         options: MinimumThroughputBodyOptions,
         throughput_logs: ThroughputLogs,
+        resolution: Duration,
         #[pin]
         sleep_fut: Option<Sleep>,
         #[pin]
@@ -58,10 +64,7 @@ pin_project_lite::pin_project! {
     }
 }
 
-const SIZE_OF_ONE_LOG: usize = std::mem::size_of::<(SystemTime, u64)>(); // 24 bytes per log
-const NUMBER_OF_LOGS_IN_ONE_KB: f64 = 1024.0 / SIZE_OF_ONE_LOG as f64;
-
-impl<B> MinimumThroughputBody<B> {
+impl<B> MinimumThroughputDownloadBody<B> {
     /// Create a new minimum throughput body.
     pub fn new(
         time_source: impl TimeSource + 'static,
@@ -69,14 +72,15 @@ impl<B> MinimumThroughputBody<B> {
         body: B,
         options: MinimumThroughputBodyOptions,
     ) -> Self {
+        let time_source: SharedTimeSource = time_source.into_shared();
+        let now = time_source.now();
+        let throughput_logs = ThroughputLogs::new(options.check_window(), now);
+        let resolution = throughput_logs.resolution();
         Self {
-            throughput_logs: ThroughputLogs::new(
-                // Never keep more than 10KB of logs in memory. This currently
-                // equates to 426 logs.
-                (NUMBER_OF_LOGS_IN_ONE_KB * 10.0) as usize,
-            ),
+            throughput_logs,
+            resolution,
             async_sleep: async_sleep.into_shared(),
-            time_source: time_source.into_shared(),
+            time_source,
             inner: body,
             sleep_fut: None,
             grace_period_fut: None,
@@ -111,33 +115,29 @@ impl std::error::Error for Error {}
 /// Used to store the upload throughput in the interceptor context.
 #[derive(Clone, Debug)]
 pub(crate) struct UploadThroughput {
-    log: Arc<Mutex<ThroughputLogs>>,
+    logs: Arc<Mutex<ThroughputLogs>>,
 }
 
 impl UploadThroughput {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(time_window: Duration, now: SystemTime) -> Self {
         Self {
-            log: Arc::new(Mutex::new(ThroughputLogs::new(
-                // Never keep more than 10KB of logs in memory. This currently
-                // equates to 426 logs.
-                (NUMBER_OF_LOGS_IN_ONE_KB * 10.0) as usize,
-            ))),
+            logs: Arc::new(Mutex::new(ThroughputLogs::new(time_window, now))),
         }
     }
 
-    pub(crate) fn push(&self, now: SystemTime, bytes: u64) {
-        self.log.lock().unwrap().push((now, bytes));
+    pub(crate) fn resolution(&self) -> Duration {
+        self.logs.lock().unwrap().resolution()
     }
 
-    pub(crate) fn calculate_throughput(
-        &self,
-        now: SystemTime,
-        time_window: Duration,
-    ) -> Option<Throughput> {
-        self.log
-            .lock()
-            .unwrap()
-            .calculate_throughput(now, time_window)
+    pub(crate) fn push_pending(&self, now: SystemTime) {
+        self.logs.lock().unwrap().push_pending(now);
+    }
+    pub(crate) fn push_bytes_transferred(&self, now: SystemTime, bytes: u64) {
+        self.logs.lock().unwrap().push_bytes_transferred(now, bytes);
+    }
+
+    pub(crate) fn report(&self, now: SystemTime) -> ThroughputReport {
+        self.logs.lock().unwrap().report(now)
     }
 }
 
@@ -168,7 +168,51 @@ impl<B> ThroughputReadingBody<B> {
     }
 }
 
+const ZERO_THROUGHPUT: Throughput = Throughput::new_bytes_per_second(0);
+
+// Helper trait for interpretting the throughput report.
+trait UploadReport {
+    fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput);
+}
+impl UploadReport for ThroughputReport {
+    fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput) {
+        let throughput = match self {
+            // If the report is incomplete, then we don't have enough data yet to
+            // decide if minimum throughput was violated.
+            ThroughputReport::Incomplete => {
+                tracing::trace!(
+                    "not enough data to decide if minimum throughput has been violated"
+                );
+                return (false, ZERO_THROUGHPUT);
+            }
+            // If most of the datapoints are Poll::Pending, then the user has stalled.
+            // In this case, we don't want to say minimum throughput was violated.
+            ThroughputReport::Pending => {
+                tracing::debug!(
+                    "the user has stalled; this will not become a minimum throughput violation"
+                );
+                return (false, ZERO_THROUGHPUT);
+            }
+            // If there has been no polling, then the server has stalled. Alternatively,
+            // if we're transferring data, but it's too slow, then we also want to say
+            // that the minimum throughput has been violated.
+            ThroughputReport::NoPolling => ZERO_THROUGHPUT,
+            ThroughputReport::Transferred(tp) => tp,
+        };
+        if throughput < minimum_throughput {
+            tracing::debug!(
+                "current throughput: {throughput} is below minimum: {minimum_throughput}"
+            );
+            (true, throughput)
+        } else {
+            (false, throughput)
+        }
+    }
+}
+
 pin_project_lite::pin_project! {
+    /// Future that pairs with [`UploadThroughput`] to add a minimum throughput
+    /// requirement to a request upload stream.
     struct ThroughputCheckFuture {
         #[pin]
         response: HttpConnectorFuture,
@@ -180,9 +224,8 @@ pin_project_lite::pin_project! {
         time_source: SharedTimeSource,
         sleep_impl: SharedAsyncSleep,
         upload_throughput: UploadThroughput,
-        minimum_throughput: Throughput,
-        time_window: Duration,
-        grace_time: Duration,
+        resolution: Duration,
+        options: MinimumThroughputBodyOptions,
 
         failing_throughput: Option<Throughput>,
     }
@@ -194,20 +237,18 @@ impl ThroughputCheckFuture {
         time_source: SharedTimeSource,
         sleep_impl: SharedAsyncSleep,
         upload_throughput: UploadThroughput,
-        minimum_throughput: Throughput,
-        time_window: Duration,
-        grace_time: Duration,
+        options: MinimumThroughputBodyOptions,
     ) -> Self {
+        let resolution = upload_throughput.resolution();
         Self {
             response,
-            check_interval: Some(sleep_impl.sleep(time_window)),
+            check_interval: Some(sleep_impl.sleep(resolution)),
             grace_period: None,
             time_source,
             sleep_impl,
             upload_throughput,
-            minimum_throughput,
-            time_window,
-            grace_time,
+            resolution,
+            options,
             failing_throughput: None,
         }
     }
@@ -232,7 +273,7 @@ impl Future for ThroughputCheckFuture {
                 .is_ready();
             if check_interval_expired {
                 // Set up the next check interval
-                *this.check_interval = Some(this.sleep_impl.sleep(*this.time_window));
+                *this.check_interval = Some(this.sleep_impl.sleep(*this.resolution));
 
                 // Wake so that the check interval future gets polled
                 // next time this poll method is called. If it never gets polled,
@@ -243,16 +284,12 @@ impl Future for ThroughputCheckFuture {
             let should_check = check_interval_expired || this.grace_period.is_some();
             if should_check {
                 let now = this.time_source.now();
-                let current_throughput = this
-                    .upload_throughput
-                    .calculate_throughput(now, *this.time_window);
-                below_minimum_throughput = current_throughput
-                    .as_ref()
-                    .map(|tp| tp < this.minimum_throughput)
-                    .unwrap_or_default();
-                tracing::debug!("current throughput: {current_throughput:?}, below minimum: {below_minimum_throughput}");
+                let report = this.upload_throughput.report(now);
+                let (violated, current_throughput) =
+                    report.minimum_throughput_violated(this.options.minimum_throughput());
+                below_minimum_throughput = violated;
                 if below_minimum_throughput && !this.failing_throughput.is_some() {
-                    *this.failing_throughput = current_throughput;
+                    *this.failing_throughput = Some(current_throughput);
                 } else if !below_minimum_throughput {
                     *this.failing_throughput = None;
                 }
@@ -267,10 +304,10 @@ impl Future for ThroughputCheckFuture {
                 // Start a grace period if below minimum throughput
                 if this.grace_period.is_none() {
                     tracing::debug!(
-                        grace_period=?*this.grace_time,
+                        grace_period=?this.options.grace_period(),
                         "upload minimum throughput below configured minimum; starting grace period"
                     );
-                    *this.grace_period = Some(this.sleep_impl.sleep(*this.grace_time));
+                    *this.grace_period = Some(this.sleep_impl.sleep(this.options.grace_period()));
                 }
                 // Check the grace period if one is already set and we're not satisfied
                 if let Some(grace_period) = this.grace_period.as_pin_mut() {
@@ -278,7 +315,7 @@ impl Future for ThroughputCheckFuture {
                         tracing::debug!("grace period ended; timing out request");
                         return Poll::Ready(Err(ConnectorError::timeout(
                             Error::ThroughputBelowMinimum {
-                                expected: *this.minimum_throughput,
+                                expected: this.options.minimum_throughput(),
                                 actual: this
                                     .failing_throughput
                                     .expect("always set if there's a grace period"),
@@ -339,9 +376,7 @@ impl MaybeThroughputCheckFuture {
                         time_source,
                         sleep_impl,
                         upload_throughput,
-                        options.minimum_throughput(),
-                        options.check_window(),
-                        options.grace_period(),
+                        options,
                     ),
                 }
             }
@@ -358,102 +393,5 @@ impl Future for MaybeThroughputCheckFuture {
             EnumProj::Direct { future } => future.poll(cx),
             EnumProj::Checked { future } => future.poll(cx),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{assert_str_contains, test_util::capture_test_logs::capture_test_logs};
-    use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
-    use aws_smithy_types::{body::SdkBody, error::display::DisplayErrorContext};
-    use std::future::IntoFuture;
-
-    const TEST_TIME_WINDOW: Duration = Duration::from_secs(1);
-
-    #[tokio::test]
-    async fn throughput_check_constant_rate_success() {
-        let minimum_throughput = Throughput::new_bytes_per_second(990);
-        let grace_time = Duration::from_secs(1);
-        let actual_throughput_bps = 1000.0;
-        let transfer_fn = |_| actual_throughput_bps * TEST_TIME_WINDOW.as_secs_f64();
-        let result = throughput_check_test(minimum_throughput, grace_time, transfer_fn).await;
-        let response = result.expect("no timeout");
-        assert_eq!(200, response.status().as_u16());
-    }
-
-    #[tokio::test]
-    async fn throughput_check_constant_rate_timeout() {
-        let minimum_throughput = Throughput::new_bytes_per_second(1100);
-        let grace_time = Duration::from_secs(1);
-        let actual_throughput_bps = 1000.0;
-        let transfer_fn = |_| actual_throughput_bps * TEST_TIME_WINDOW.as_secs_f64();
-        let result = throughput_check_test(minimum_throughput, grace_time, transfer_fn).await;
-        let error = result.err().expect("times out");
-        assert_str_contains!(
-            DisplayErrorContext(&error).to_string(),
-            "minimum throughput was specified at 1100 B/s, but throughput of 1000 B/s was observed"
-        );
-    }
-
-    #[tokio::test]
-    async fn throughput_check_grace_time_recovery() {
-        let minimum_throughput = Throughput::new_bytes_per_second(1000);
-        let grace_time = Duration::from_secs(3);
-        let actual_throughput_bps = 1000.0;
-        let transfer_fn = |window| {
-            if window <= 5 || window > 7 {
-                actual_throughput_bps * TEST_TIME_WINDOW.as_secs_f64()
-            } else {
-                0.0
-            }
-        };
-        let result = throughput_check_test(minimum_throughput, grace_time, transfer_fn).await;
-        let response = result.expect("no timeout");
-        assert_eq!(200, response.status().as_u16());
-    }
-
-    async fn throughput_check_test<F>(
-        minimum_throughput: Throughput,
-        grace_time: Duration,
-        transfer_fn: F,
-    ) -> Result<HttpResponse, ConnectorError>
-    where
-        F: Fn(u64) -> f64,
-    {
-        let _logs = capture_test_logs();
-        let (time_source, sleep_impl) = tick_advance_time_and_sleep();
-
-        let response = HttpResponse::try_from(
-            http::Response::builder()
-                .status(200)
-                .body(SdkBody::empty())
-                .unwrap(),
-        )
-        .unwrap();
-        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
-
-        let upload_throughput = UploadThroughput::new();
-        let check_task = tokio::spawn(ThroughputCheckFuture::new(
-            HttpConnectorFuture::new(async move { Ok(response_rx.into_future().await.unwrap()) }),
-            time_source.clone().into_shared(),
-            sleep_impl.into_shared(),
-            upload_throughput.clone(),
-            minimum_throughput,
-            TEST_TIME_WINDOW,
-            grace_time,
-        ));
-
-        // simulate 20 check time windows at `actual_throughput` bytes/sec
-        for window in 0..20 {
-            let bytes = (transfer_fn)(window);
-            upload_throughput.push(time_source.now(), (bytes + 0.5) as u64);
-            time_source.tick(TEST_TIME_WINDOW).await;
-            println!("window {window}");
-        }
-        let _ = response_tx.send(response);
-        println!("upload finished");
-
-        check_task.await.expect("no panic")
     }
 }

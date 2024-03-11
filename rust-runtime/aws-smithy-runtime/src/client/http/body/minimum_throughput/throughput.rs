@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::collections::VecDeque;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
 /// Throughput representation for use when configuring [`super::MinimumThroughputBody`]
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(test, derive(Eq))]
 pub struct Throughput {
     pub(super) bytes_read: u64,
     pub(super) per_time_elapsed: Duration,
@@ -29,7 +29,7 @@ impl Throughput {
     }
 
     /// Create a new throughput in bytes per second.
-    pub fn new_bytes_per_second(bytes: u64) -> Self {
+    pub const fn new_bytes_per_second(bytes: u64) -> Self {
         Self {
             bytes_read: bytes,
             per_time_elapsed: Duration::from_secs(1),
@@ -37,7 +37,7 @@ impl Throughput {
     }
 
     /// Create a new throughput in kilobytes per second.
-    pub fn new_kilobytes_per_second(kilobytes: u64) -> Self {
+    pub const fn new_kilobytes_per_second(kilobytes: u64) -> Self {
         Self {
             bytes_read: kilobytes * 1000,
             per_time_elapsed: Duration::from_secs(1),
@@ -45,7 +45,7 @@ impl Throughput {
     }
 
     /// Create a new throughput in megabytes per second.
-    pub fn new_megabytes_per_second(megabytes: u64) -> Self {
+    pub const fn new_megabytes_per_second(megabytes: u64) -> Self {
         Self {
             bytes_read: megabytes * 1000 * 1000,
             per_time_elapsed: Duration::from_secs(1),
@@ -97,83 +97,264 @@ impl From<(u64, Duration)> for Throughput {
     }
 }
 
+/// Cell in a linear grid that represents a small chunk of time.
+#[derive(Copy, Clone, Debug)]
+enum Cell {
+    /// There is no data in this cell.
+    Empty,
+
+    /// No polling took place during this cell.
+    NoPolling,
+
+    /// This many bytes were transferred during this cell.
+    TransferredBytes(u64),
+
+    /// The user/remote was not providing/consuming data fast enough during this cell.
+    ///
+    /// The number is the number of bytes transferred, if this replaced TransferredBytes.
+    Pending(u64),
+}
+impl Cell {
+    fn merge(&mut self, other: Cell) {
+        use Cell::*;
+        // Assign values based on this priority order (highest priority higher up):
+        //   1. Pending
+        //   2. TransferredBytes
+        //   3. NoPolling
+        //   4. Empty
+        *self = match (other, *self) {
+            (Pending(other), this) => Pending(other + this.bytes()),
+            (TransferredBytes(other), this) => TransferredBytes(other + this.bytes()),
+            (other, NoPolling) => other,
+            (NoPolling, _) => panic!("can't merge NoPolling into cell"),
+            (other, Empty) => other,
+            (Empty, _) => panic!("can't merge Empty into cell"),
+        };
+    }
+
+    /// Number of bytes transferred during this cell
+    fn bytes(&self) -> u64 {
+        match *self {
+            Cell::Empty | Cell::NoPolling => 0,
+            Cell::TransferredBytes(bytes) | Cell::Pending(bytes) => bytes,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct CellCounts {
+    /// Number of cells with no data.
+    empty: usize,
+    /// Number of "no polling" cells.
+    no_polling: usize,
+    /// Number of "bytes transferred" cells.
+    transferred: usize,
+    /// Number of "pending" cells.
+    pending: usize,
+}
+
+/// Underlying stack-allocated linear grid buffer for tracking
+/// throughput events for [`ThroughputLogs`].
+#[derive(Copy, Clone, Debug)]
+struct LogBuffer<const N: usize> {
+    entries: [Cell; N],
+    // The length only needs to exist so that the `fill_gaps` function
+    // can differentiate between `Empty` due to there not having been enough
+    // time to establish a full buffer worth of data vs. `Empty` due to a
+    // polling gap. Once the length reaches N, it will never change again.
+    length: usize,
+}
+impl<const N: usize> LogBuffer<N> {
+    fn new() -> Self {
+        Self {
+            entries: [Cell::Empty; N],
+            length: 0,
+        }
+    }
+
+    /// Mutably returns the tail of the buffer.
+    ///
+    /// The buffer MUST have at least one cell it it before this is called.
+    fn tail_mut(&mut self) -> &mut Cell {
+        debug_assert!(self.length > 0);
+        &mut self.entries[self.length - 1]
+    }
+
+    /// Pushes a cell into the buffer. If the buffer is already full,
+    /// then this will rotate the entire buffer to the left.
+    fn push(&mut self, cell: Cell) {
+        if self.filled() {
+            self.entries.rotate_left(1);
+            self.entries[N - 1] = cell;
+        } else {
+            self.entries[self.length] = cell;
+            self.length += 1;
+        }
+    }
+
+    /// Returns the total number of bytes transferred within the time window.
+    fn bytes_transferred(&self) -> u64 {
+        self.entries.iter().take(self.length).map(Cell::bytes).sum()
+    }
+
+    #[inline]
+    fn filled(&self) -> bool {
+        self.length == N
+    }
+
+    /// Fills in missing NoData entries.
+    ///
+    /// We want NoData entries to represent when a future hasn't been polled.
+    /// Since the future is in charge of logging in the first place, the only
+    /// way we can know about these is by examining gaps in time.
+    fn fill_gaps(&mut self) {
+        for entry in self.entries.iter_mut().take(self.length) {
+            if matches!(entry, Cell::Empty) {
+                *entry = Cell::NoPolling;
+            }
+        }
+    }
+
+    /// Returns the counts of each cell type in the buffer.
+    fn counts(&self) -> CellCounts {
+        let mut counts = CellCounts::default();
+        for entry in &self.entries {
+            match entry {
+                Cell::Empty => counts.empty += 1,
+                Cell::NoPolling => counts.no_polling += 1,
+                Cell::TransferredBytes(_) => counts.transferred += 1,
+                Cell::Pending(_) => counts.pending += 1,
+            }
+        }
+        counts
+    }
+}
+
+/// Report/summary of all the events in a time window.
+#[cfg_attr(test, derive(Debug, Eq, PartialEq))]
+pub(crate) enum ThroughputReport {
+    /// Not enough data to draw any conclusions. This happens early in a request/response.
+    Incomplete,
+    /// The stream hasn't been polled for most of this time window.
+    NoPolling,
+    /// The stream has been waiting for most of the time window.
+    Pending,
+    /// The stream transferred this amount of throughput during the time window.
+    Transferred(Throughput),
+}
+
+const BUFFER_SIZE: usize = 10;
+
+/// Log of throughput in a request or response stream.
+///
+/// Used to determine if a configured minimum throughput is being met or not
+/// so that a request or response stream can be timed out in the event of a
+/// stall.
+///
+/// Request/response streams push data transfer or pending events to this log
+/// based on what's going on in their poll functions. The log tracks three kinds
+/// of events despite only receiving two: the third is "no polling". The poll
+/// functions cannot know when they're not being polled, so the log examines gaps
+/// in the event history to know when no polling took place.
+///
+/// The event logging is simplified down to a linear 10-cell grid, which each
+/// cell representing 1/10th the total time window. When an event is pushed,
+/// it is either merged into the current tail cell, or all the cells are rotated
+/// left to create a new empty tail cell, and then it is merged into that one.
 #[derive(Clone, Debug)]
 pub(super) struct ThroughputLogs {
-    max_length: usize,
-    inner: VecDeque<(SystemTime, u64)>,
-    bytes_processed: u64,
+    resolution: Duration,
+    current_tail: SystemTime,
+    buffer: LogBuffer<BUFFER_SIZE>,
 }
 
 impl ThroughputLogs {
-    pub(super) fn new(max_length: usize) -> Self {
+    /// Creates a new log starting at `now` with the given `time_window`.
+    ///
+    /// Note: the `time_window` gets divided by 10 to create smaller sub-windows
+    /// to track throughput. The time window should configured to be large enough
+    /// so that these sub-windows aren't too small for network-based events.
+    /// A time window of 10ms probably won't work, but 500ms might. The default
+    /// is one second.
+    pub(super) fn new(time_window: Duration, now: SystemTime) -> Self {
+        assert!(!time_window.is_zero());
+        let resolution = time_window.div_f64(BUFFER_SIZE as f64);
         Self {
-            inner: VecDeque::with_capacity(max_length),
-            max_length,
-            bytes_processed: 0,
+            resolution,
+            current_tail: now,
+            buffer: LogBuffer::new(),
         }
     }
 
-    pub(super) fn push(&mut self, throughput: (SystemTime, u64)) {
-        // When the number of logs exceeds the max length, toss the oldest log.
-        if self.inner.len() == self.max_length {
-            self.bytes_processed -= self.inner.pop_front().map(|(_, sz)| sz).unwrap_or_default();
-        }
-        debug_assert!(self.inner.capacity() > self.inner.len());
-        self.bytes_processed += throughput.1;
-        self.inner.push_back(throughput);
+    /// Returns the resolution at which events are logged at.
+    pub(super) fn resolution(&self) -> Duration {
+        self.resolution
     }
 
-    pub(super) fn calculate_throughput(
-        &self,
-        now: SystemTime,
-        time_window: Duration,
-    ) -> Option<Throughput> {
-        if self.inner.is_empty() {
-            return None;
+    /// Pushes a "pending" event.
+    ///
+    /// Pending indicates the streaming future is waiting for something.
+    /// In an upload, it is waiting for data from the user, and in a download,
+    /// it is waiting for data from the server.
+    pub(super) fn push_pending(&mut self, time: SystemTime) {
+        self.push(time, Cell::Pending(0));
+    }
+
+    /// Pushes a data transferred event.
+    ///
+    /// Indicates that this number of bytes were transferred at this time.
+    pub(super) fn push_bytes_transferred(&mut self, time: SystemTime, bytes: u64) {
+        self.push(time, Cell::TransferredBytes(bytes));
+    }
+
+    fn push(&mut self, now: SystemTime, value: Cell) {
+        self.catch_up(now);
+        self.buffer.tail_mut().merge(value);
+        self.buffer.fill_gaps();
+    }
+
+    /// Pushes empty cells until `current_tail` is caught up to `now`.
+    fn catch_up(&mut self, now: SystemTime) {
+        while now >= self.current_tail {
+            self.current_tail += self.resolution;
+            self.buffer.push(Cell::Empty);
         }
-        if let Some(first_time) = self.inner.front().map(|e| e.0) {
-            if first_time + time_window >= now && first_time < now {
-                // If the first logged time fits within the time window, then short-circuit
-                return Some(Throughput {
-                    bytes_read: self.bytes_processed,
-                    per_time_elapsed: now.duration_since(first_time).expect("checked above"),
-                });
-            }
+        assert!(self.current_tail >= now);
+    }
+
+    /// Generates an overall report of the time window.
+    pub(super) fn report(&mut self, now: SystemTime) -> ThroughputReport {
+        self.catch_up(now);
+        self.buffer.fill_gaps();
+
+        let CellCounts {
+            empty,
+            no_polling,
+            transferred,
+            pending,
+        } = self.buffer.counts();
+
+        let bytes = self.buffer.bytes_transferred();
+        let time = self.resolution * (BUFFER_SIZE - empty) as u32;
+        let throughput = Throughput::new(bytes, time);
+
+        let half = BUFFER_SIZE / 2;
+        if empty >= half {
+            return ThroughputReport::Incomplete;
         }
-        if let Some(last_time) = self.inner.back().map(|e| e.0) {
-            if last_time + time_window < now {
-                // If we have no log entries at all within the time window, then short-circuit to 0
-                return Some(Throughput {
-                    bytes_read: 0,
-                    per_time_elapsed: time_window,
-                });
-            }
+        match (transferred > 0, no_polling >= half, pending >= half) {
+            (true, _, _) => ThroughputReport::Transferred(throughput),
+            (_, true, _) => ThroughputReport::NoPolling,
+            (_, _, true) => ThroughputReport::Pending,
+            _ => ThroughputReport::Incomplete,
         }
-
-        let minimum_ts = now - time_window;
-        let first_item = self.inner.iter().find(|(ts, _)| *ts >= minimum_ts)?.0;
-
-        let time_elapsed = now.duration_since(first_item).unwrap_or_default();
-
-        let total_bytes_logged = self
-            .inner
-            .iter()
-            .rev()
-            .take_while(|(ts, _)| *ts >= minimum_ts)
-            .map(|t| t.1)
-            .sum::<u64>();
-
-        Some(Throughput {
-            bytes_read: total_bytes_logged,
-            per_time_elapsed: time_elapsed,
-        })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{Throughput, ThroughputLogs};
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_throughput_eq() {
@@ -185,132 +366,143 @@ mod test {
         assert_eq!(t2, t3);
     }
 
-    fn build_throughput_log(
-        length: u32,
-        tick_duration: Duration,
-        rate: u64,
-    ) -> (ThroughputLogs, SystemTime) {
-        let mut throughput_logs = ThroughputLogs::new(length as usize);
-        for i in 1..=length {
-            throughput_logs.push((UNIX_EPOCH + (tick_duration * i), rate));
-        }
-
-        assert_eq!(length as usize, throughput_logs.inner.len());
-        (throughput_logs, UNIX_EPOCH + (tick_duration * length))
+    #[test]
+    fn incomplete_no_entries() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+        let report = logs.report(start);
+        assert_eq!(ThroughputReport::Incomplete, report);
     }
 
-    const EPSILON: f64 = 0.001;
-    macro_rules! assert_delta {
-        ($x:expr, $y:expr, $d:expr) => {
-            if !(($x as f64) - $y < $d || $y - ($x as f64) < $d) {
-                panic!();
+    #[test]
+    fn incomplete_with_entries() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+        logs.push_pending(start);
+
+        let report = logs.report(start + Duration::from_millis(300));
+        assert_eq!(ThroughputReport::Incomplete, report);
+    }
+
+    #[test]
+    fn incomplete_with_transferred() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+        logs.push_pending(start);
+        logs.push_bytes_transferred(start + Duration::from_millis(100), 10);
+
+        let report = logs.report(start + Duration::from_millis(300));
+        assert_eq!(ThroughputReport::Incomplete, report);
+    }
+
+    #[test]
+    fn push_pending_at_the_beginning_of_each_tick() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+
+        let mut now = start;
+        for i in 1..=BUFFER_SIZE {
+            logs.push_pending(now);
+            now += logs.resolution();
+
+            assert_eq!(i, logs.buffer.counts().pending);
+        }
+
+        let report = dbg!(&mut logs).report(now);
+        assert_eq!(ThroughputReport::Pending, report);
+    }
+
+    #[test]
+    fn push_pending_at_the_end_of_each_tick() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+
+        let mut now = start;
+        for i in 1..BUFFER_SIZE {
+            now += logs.resolution();
+            logs.push_pending(now);
+
+            assert_eq!(i, dbg!(&logs).buffer.counts().pending);
+            assert_eq!(0, logs.buffer.counts().transferred);
+            assert_eq!(1, logs.buffer.counts().no_polling);
+        }
+        // This should replace the initial "no polling" cell
+        now += logs.resolution();
+        logs.push_pending(now);
+        assert_eq!(0, logs.buffer.counts().no_polling);
+
+        let report = dbg!(&mut logs).report(now);
+        assert_eq!(ThroughputReport::Pending, report);
+    }
+
+    #[test]
+    fn push_transferred_at_the_beginning_of_each_tick() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+
+        let mut now = start;
+        for i in 1..=BUFFER_SIZE {
+            logs.push_bytes_transferred(now, 10);
+            if i != BUFFER_SIZE {
+                now += logs.resolution();
             }
-        };
-    }
 
-    #[test]
-    fn test_throughput_log_calculate_throughput_1() {
-        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_secs(1), 1);
-
-        for dur in [10, 100, 100] {
-            let throughput = throughput_logs
-                .calculate_throughput(now, Duration::from_secs(dur))
-                .unwrap();
-            assert_eq!(1.0, throughput.bytes_per_second());
+            assert_eq!(i, logs.buffer.counts().transferred);
+            assert_eq!(0, logs.buffer.counts().pending);
+            assert_eq!(0, logs.buffer.counts().no_polling);
         }
-        let throughput = throughput_logs
-            .calculate_throughput(now, Duration::from_secs_f64(101.5))
-            .unwrap();
-        assert_delta!(1, throughput.bytes_per_second(), EPSILON);
+
+        let report = dbg!(&mut logs).report(now);
+        assert_eq!(
+            ThroughputReport::Transferred(Throughput::new(100, Duration::from_secs(1))),
+            report
+        );
     }
 
     #[test]
-    fn test_throughput_log_calculate_throughput_2() {
-        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_secs(5), 5);
+    fn no_polling() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+        let report = logs.report(start + Duration::from_secs(2));
+        assert_eq!(ThroughputReport::NoPolling, report);
+    }
 
-        let throughput = throughput_logs
-            .calculate_throughput(now, Duration::from_secs(1000))
-            .unwrap();
-        assert_eq!(1.0, throughput.bytes_per_second());
+    // Transferred bytes MUST take priority over pending
+    #[test]
+    fn mixed_bag_mostly_pending() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+
+        logs.push_bytes_transferred(start + Duration::from_millis(50), 10);
+        logs.push_pending(start + Duration::from_millis(150));
+        logs.push_pending(start + Duration::from_millis(250));
+        logs.push_bytes_transferred(start + Duration::from_millis(350), 10);
+        logs.push_pending(start + Duration::from_millis(450));
+        logs.push_pending(start + Duration::from_millis(650));
+        logs.push_pending(start + Duration::from_millis(750));
+        logs.push_pending(start + Duration::from_millis(850));
+
+        let report = logs.report(start + Duration::from_millis(999));
+        assert_eq!(
+            ThroughputReport::Transferred(Throughput::new_bytes_per_second(20)),
+            report
+        );
     }
 
     #[test]
-    fn test_throughput_log_calculate_throughput_3() {
-        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(200), 1024);
+    fn mixed_bag_mostly_pending_no_transferred() {
+        let start = SystemTime::UNIX_EPOCH;
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
 
-        let throughput = throughput_logs
-            .calculate_throughput(now, Duration::from_secs(5))
-            .unwrap();
-        let expected_throughput = 1024.0 * 5.0;
-        assert_eq!(expected_throughput, throughput.bytes_per_second());
-    }
+        logs.push_pending(start + Duration::from_millis(50));
+        logs.push_pending(start + Duration::from_millis(150));
+        logs.push_pending(start + Duration::from_millis(250));
+        logs.push_pending(start + Duration::from_millis(450));
+        logs.push_pending(start + Duration::from_millis(650));
+        logs.push_pending(start + Duration::from_millis(750));
+        logs.push_pending(start + Duration::from_millis(850));
 
-    #[test]
-    fn test_throughput_log_calculate_throughput_4() {
-        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(100), 12);
-
-        let throughput = throughput_logs
-            .calculate_throughput(now, Duration::from_secs(1))
-            .unwrap();
-        let expected_throughput = 12.0 * 10.0;
-
-        assert_eq!(expected_throughput, throughput.bytes_per_second());
-    }
-
-    #[test]
-    fn test_throughput_followed_by_0() {
-        let tick = Duration::from_millis(100);
-        let (mut throughput_logs, now) = build_throughput_log(1000, tick, 12);
-        let throughput = throughput_logs
-            .calculate_throughput(now, Duration::from_secs(1))
-            .unwrap();
-        let expected_throughput = 12.0 * 10.0;
-
-        assert_eq!(expected_throughput, throughput.bytes_per_second());
-        throughput_logs.push((now + tick, 0));
-        let throughput = throughput_logs
-            .calculate_throughput(now + tick, Duration::from_secs(1))
-            .unwrap();
-        assert_eq!(108.0, throughput.bytes_per_second());
-    }
-
-    // If the time since the last log entry is greater than the window, then the throughput should be zero
-    #[test]
-    fn test_throughput_log_calculate_throughput_long_after_last_log() {
-        let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(100), 12);
-
-        let throughput = throughput_logs
-            .calculate_throughput(now + Duration::from_secs(5), Duration::from_secs(1))
-            .unwrap();
-        let expected_throughput = 0.0;
-
-        assert_eq!(expected_throughput, throughput.bytes_per_second());
-    }
-
-    // If the throughput log is empty, it should return None for the calculated throughput
-    #[test]
-    fn test_throughput_log_calculate_throughput_empty_log() {
-        let throughput_logs = ThroughputLogs::new(1000);
-        assert!(throughput_logs
-            .calculate_throughput(UNIX_EPOCH, Duration::from_secs(1))
-            .is_none());
-    }
-
-    // Verify things work as expected when everything occurs exactly on the time window boundary
-    #[test]
-    fn test_boundary_conditions() {
-        let mut logs = ThroughputLogs::new(1000);
-        logs.bytes_processed = 2000;
-        logs.inner.push_back((SystemTime::UNIX_EPOCH, 1000));
-        logs.inner
-            .push_back((SystemTime::UNIX_EPOCH + Duration::from_secs(1), 1000));
-
-        let throughput = logs
-            .calculate_throughput(
-                SystemTime::UNIX_EPOCH + Duration::from_secs(2),
-                Duration::from_secs(1),
-            )
-            .unwrap();
-        assert_eq!(Throughput::new_bytes_per_second(1000), throughput);
+        let report = logs.report(start + Duration::from_millis(999));
+        assert_eq!(ThroughputReport::Pending, report);
     }
 }
