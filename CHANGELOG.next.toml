@@ -76,3 +76,9 @@ message = "`aws_sigv4::http_request::settigns::SigningSettings` adds a new setti
 references = ["smithy-rs#3465", "smithy-rs#3477"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
+references = ["smithy-rs#3478"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "ysaito1001"
