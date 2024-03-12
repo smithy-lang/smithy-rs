@@ -109,10 +109,12 @@ pub fn resolve_publish_location(location: &Path) -> PathBuf {
 }
 
 async fn is_published(index: Arc<CratesIndex>, handle: &PackageHandle) -> Result<bool> {
-    let crate_name = handle.name.clone();
-    let versions =
-        tokio::task::spawn_blocking(move || index.published_versions(&crate_name)).await??;
-    Ok(!versions.is_empty())
+    let name = handle.name.clone();
+    let version = handle.version.clone();
+    tokio::task::spawn_blocking(move || {
+        smithy_rs_tool_common::index::is_published(index.as_ref(), &name, &version)
+    })
+    .await?
 }
 
 /// Waits for the given package to show up on crates.io
