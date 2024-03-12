@@ -58,3 +58,21 @@ message = "Add support for S3 Express One Zone. See [the user guide](https://git
 references = ["aws-sdk-rust#992", "smithy-rs#3465"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `ResolveIdentity` trait is now aware of its `IdentityCache` location."
+references = ["smithy-rs#3465", "smithy-rs#3477"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`RuntimeComponents` can now be converted back to a `RuntimeComponentsBuilder`, using `.to_builder()`."
+references = ["smithy-rs#3465", "smithy-rs#3477"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+authors = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`aws_sigv4::http_request::settigns::SigningSettings` adds a new setting `session_token_name_override` to allow for an alternative session token name for SigV4 signing."
+references = ["smithy-rs#3465", "smithy-rs#3477"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "ysaito1001"
