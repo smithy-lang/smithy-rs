@@ -242,6 +242,9 @@ data class CargoDependency(
     }
 
     companion object {
+        // Forces AHash to be a later version that avoids
+        // https://github.com/tkaitchuck/aHash/issues/200
+        val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"))
         val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
@@ -326,6 +329,10 @@ data class CargoDependency(
         fun smithyRuntime(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-runtime")
                 .withFeature("client")
+
+        fun smithyExperimental(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-experimental")
+                .withFeature("crypto-ring")
 
         fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")

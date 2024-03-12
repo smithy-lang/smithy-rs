@@ -69,9 +69,8 @@ jobs:
     - name: Publish to crates.io
       shell: bash
       env:
-        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+         CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
-        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
         cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully
         publisher --version

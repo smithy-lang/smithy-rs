@@ -6,17 +6,9 @@
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
     use aws_runtime::auth::sigv4::SigV4Signer;
-    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
-    use aws_smithy_runtime_api::box_error::BoxError;
-    use aws_smithy_runtime_api::client::auth::{
-        AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
-    };
-    use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
-    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-    use aws_smithy_runtime_api::client::runtime_components::{
-        GetIdentityResolver, RuntimeComponents,
-    };
-    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_runtime_api::client::auth::{AuthScheme, AuthSchemeId, Sign};
+    use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
+    use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
 
     /// Auth scheme ID for S3 Express.
     pub(crate) const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4-s3express");
@@ -24,7 +16,7 @@ pub(crate) mod auth {
     /// S3 Express auth scheme.
     #[derive(Debug, Default)]
     pub(crate) struct S3ExpressAuthScheme {
-        signer: S3ExpressSigner,
+        signer: SigV4Signer,
     }
 
     impl S3ExpressAuthScheme {
@@ -49,45 +41,6 @@ pub(crate) mod auth {
         fn signer(&self) -> &dyn Sign {
             &self.signer
         }
-    }
-
-    /// S3 Express signer.
-    #[derive(Debug, Default)]
-    pub(crate) struct S3ExpressSigner;
-
-    impl Sign for S3ExpressSigner {
-        fn sign_http_request(
-            &self,
-            request: &mut HttpRequest,
-            identity: &Identity,
-            auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
-            runtime_components: &RuntimeComponents,
-            config_bag: &ConfigBag,
-        ) -> Result<(), BoxError> {
-            let operation_config =
-                SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-            let mut settings = SigV4Signer::signing_settings(&operation_config);
-            override_session_token_name(&mut settings)?;
-
-            SigV4Signer.sign_http_request(
-                request,
-                identity,
-                settings,
-                &operation_config,
-                runtime_components,
-                config_bag,
-            )
-        }
-    }
-
-    fn override_session_token_name(settings: &mut SigningSettings) -> Result<(), BoxError> {
-        let session_token_name_override = match settings.signature_location {
-            SignatureLocation::Headers => Some("x-amz-s3session-token"),
-            SignatureLocation::QueryParams => Some("X-Amz-S3session-Token"),
-            _ => { return Err(BoxError::from("`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm")) },
-        };
-        settings.session_token_name_override = session_token_name_override;
-        Ok(())
     }
 }
 
@@ -589,7 +542,9 @@ pub(crate) mod identity_provider {
             runtime_components: &'a RuntimeComponents,
             config_bag: &'a ConfigBag,
         ) -> Result<SessionCredentials, BoxError> {
-            let mut config_builder = crate::config::Builder::from_config_bag(config_bag);
+            // TODO(Post S3Express release): Thread through `BehaviorVersion` from the outer S3 client
+            let mut config_builder = crate::config::Builder::from_config_bag(config_bag)
+                .behavior_version(crate::config::BehaviorVersion::latest());
 
             // inherits all runtime components from a current S3 operation but clears out
             // out interceptors configured for that operation
@@ -664,8 +619,10 @@ pub(crate) mod identity_provider {
 
 /// Supporting code for S3 Express runtime plugin
 pub(crate) mod runtime_plugin {
-    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-    use aws_smithy_types::config_bag::{FrozenLayer, Layer};
+    use aws_runtime::auth::SigV4SessionTokenNameOverride;
+    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
+    use aws_smithy_runtime_api::{box_error::BoxError, client::runtime_plugin::RuntimePlugin};
+    use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
     use aws_types::os_shim_internal::Env;
 
     mod env {
@@ -679,16 +636,18 @@ pub(crate) mod runtime_plugin {
     }
 
     impl S3ExpressRuntimePlugin {
-        pub(crate) fn new(config: FrozenLayer) -> Self {
-            Self::new_with(config, Env::real())
+        pub(crate) fn new(
+            disable_s3_express_session_token: Option<crate::config::DisableS3ExpressSessionAuth>,
+        ) -> Self {
+            Self::new_with(disable_s3_express_session_token, Env::real())
         }
 
-        fn new_with(config: FrozenLayer, env: Env) -> Self {
+        fn new_with(
+            disable_s3_express_session_token: Option<crate::config::DisableS3ExpressSessionAuth>,
+            env: Env,
+        ) -> Self {
             let mut layer = Layer::new("S3ExpressRuntimePlugin");
-            if config
-                .load::<crate::config::DisableS3ExpressSessionAuth>()
-                .is_none()
-            {
+            if disable_s3_express_session_token.is_none() {
                 match env.get(env::S3_DISABLE_EXPRESS_SESSION_AUTH) {
                     Ok(value)
                         if value.eq_ignore_ascii_case("true")
@@ -714,6 +673,27 @@ pub(crate) mod runtime_plugin {
                 }
             }
 
+            let session_token_name_override = SigV4SessionTokenNameOverride::new(
+                |settings: &SigningSettings, cfg: &ConfigBag| {
+                    // Not configured for S3 express, use the original session token name override
+                    if !crate::s3_express::utils::for_s3_express(cfg) {
+                        return Ok(settings.session_token_name_override);
+                    }
+
+                    let session_token_name_override = Some(match settings.signature_location {
+                    SignatureLocation::Headers => "x-amz-s3session-token",
+                    SignatureLocation::QueryParams => "X-Amz-S3session-Token",
+                    _ => {
+                        return Err(BoxError::from(
+                            "`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm",
+                        ))
+                    }
+                });
+                    Ok(session_token_name_override)
+                },
+            );
+            layer.store_or_unset(Some(session_token_name_override));
+
             Self {
                 config: layer.freeze(),
             }
@@ -733,13 +713,12 @@ pub(crate) mod runtime_plugin {
         #[test]
         fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
             // Disable option is set from service client.
-            let mut layer = Layer::new("test");
-            layer.store_put(crate::config::DisableS3ExpressSessionAuth(true));
+            let disable_s3_express_session_token = crate::config::DisableS3ExpressSessionAuth(true);
 
             // An environment variable says the session auth is _not_ disabled, but it will be
             // overruled by what is in `layer`.
             let sut = S3ExpressRuntimePlugin::new_with(
-                layer.freeze(),
+                Some(disable_s3_express_session_token),
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
             );
 
@@ -752,12 +731,9 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
-            // No disable option is set from service client.
-            let layer = Layer::new("test");
-
             // An environment variable says session auth is disabled
             let sut = S3ExpressRuntimePlugin::new_with(
-                layer.freeze(),
+                None,
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
             );
 
@@ -779,16 +755,64 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_should_be_unspecified_if_unset() {
-            // No disable option is set from service client.
-            let layer = Layer::new("test");
-
             // An environment variable says session auth is disabled
-            let sut = S3ExpressRuntimePlugin::new_with(layer.freeze(), Env::from_slice(&[]));
+            let sut = S3ExpressRuntimePlugin::new_with(None, Env::from_slice(&[]));
 
             let cfg = sut.config().unwrap();
             assert!(cfg
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
         }
+    }
+}
+
+pub(crate) mod checksum {
+    use crate::http_request_checksum::DefaultRequestChecksumOverride;
+    use aws_smithy_checksums::ChecksumAlgorithm;
+    use aws_smithy_types::config_bag::ConfigBag;
+
+    pub(crate) fn provide_default_checksum_algorithm(
+    ) -> crate::http_request_checksum::DefaultRequestChecksumOverride {
+        fn _provide_default_checksum_algorithm(
+            original_checksum: Option<ChecksumAlgorithm>,
+            cfg: &ConfigBag,
+        ) -> Option<ChecksumAlgorithm> {
+            // S3 does not have the `ChecksumAlgorithm::Md5`, therefore customers cannot set it
+            // from outside.
+            if original_checksum != Some(ChecksumAlgorithm::Md5) {
+                return original_checksum;
+            }
+
+            if crate::s3_express::utils::for_s3_express(cfg) {
+                // S3 Express requires setting the default checksum algorithm to CRC-32
+                Some(ChecksumAlgorithm::Crc32)
+            } else {
+                original_checksum
+            }
+        }
+        DefaultRequestChecksumOverride::new(_provide_default_checksum_algorithm)
+    }
+}
+
+pub(crate) mod utils {
+    use aws_smithy_types::{config_bag::ConfigBag, Document};
+
+    pub(crate) fn for_s3_express(cfg: &ConfigBag) -> bool {
+        // logic borrowed from aws_smithy_runtime::client::orchestrator::auth::extract_endpoint_auth_scheme_config
+        let endpoint = cfg
+            .load::<crate::config::endpoint::Endpoint>()
+            .expect("endpoint added to config bag by endpoint orchestrator");
+
+        let auth_schemes = match endpoint.properties().get("authSchemes") {
+            Some(Document::Array(schemes)) => schemes,
+            _ => return false,
+        };
+        auth_schemes.iter().any(|doc| {
+            let config_scheme_id = doc
+                .as_object()
+                .and_then(|object| object.get("name"))
+                .and_then(Document::as_string);
+            config_scheme_id == Some(crate::s3_express::auth::SCHEME_ID.as_str())
+        })
     }
 }

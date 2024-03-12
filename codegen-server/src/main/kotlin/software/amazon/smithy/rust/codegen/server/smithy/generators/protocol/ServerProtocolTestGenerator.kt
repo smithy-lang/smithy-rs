@@ -805,6 +805,7 @@ class ServerProtocolTestGenerator(
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private const val AwsJson10 = "aws.protocoltests.json10#JsonRpc10"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestJsonExtras = "aws.protocoltests.restjson#RestJsonExtras"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -812,8 +813,10 @@ class ServerProtocolTestGenerator(
                 FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
                 FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
                 FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2132): Remove this failing test once it's fixed in Smithy
+                // TODO(https://github.com/smithy-lang/smithy/pull/2167): BEGIN Remove this failing test once it's fixed in Smithy
                 FailingTest(RestJson, "RestJsonZeroAndFalseQueryValues", TestType.Request),
+                FailingTest(RestJsonExtras, "RestJsonZeroAndFalseQueryValues", TestType.Request),
+                // TODO(https://github.com/smithy-lang/smithy/pull/2167): END Remove this failing test once it's fixed in Smithy
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),

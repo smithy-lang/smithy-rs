@@ -11,10 +11,13 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rulesengine.language.EndpointRuleSet
+import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -37,69 +40,88 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
-class SigV4AuthDecorator : ClientCodegenDecorator {
-    override val name: String get() = "SigV4AuthDecorator"
-    override val order: Byte = 0
+internal fun ClientCodegenContext.usesSigAuth(): Boolean =
+    ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
+        usesSigV4a()
 
-    private val sigv4a = "sigv4a"
-
-    private fun sigv4(runtimeConfig: RuntimeConfig) =
-        writable {
-            val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-            rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
-        }
-
-    private fun sigv4a(runtimeConfig: RuntimeConfig) =
-        writable {
-            val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-            featureGateBlock(sigv4a) {
-                rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
-            }
-        }
-
-    override fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
-        baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> {
-        val supportsSigV4a =
-            codegenContext.serviceShape.supportedAuthSchemes().contains(sigv4a)
-                .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
-        return baseAuthSchemeOptions +
-            AuthSchemeOption.StaticAuthSchemeOption(
-                SigV4Trait.ID,
-                listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
-            )
-    }
-
-    override fun serviceRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations + AuthOperationCustomization(codegenContext)
-
-    override fun configCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
-
-    override fun extras(
-        codegenContext: ClientCodegenContext,
-        rustCrate: RustCrate,
-    ) {
-        if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-            // Add optional feature for SigV4a support
-            rustCrate.mergeFeature(Feature("sigv4a", true, listOf("aws-runtime/sigv4a")))
-        }
-    }
+/**
+ * SigV4a doesn't have a Smithy auth trait yet, so this is a hack to determine if a service supports it.
+ *
+ * In the future, Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
+ */
+internal fun ClientCodegenContext.usesSigV4a(): Boolean {
+    val endpointAuthSchemes =
+        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
+            ?.also { it.typeCheck() }?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
+    return endpointAuthSchemes.contains("sigv4a")
 }
+
+class SigV4AuthDecorator : ConditionalDecorator(
+    predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
+    delegateTo =
+        object : ClientCodegenDecorator {
+            override val name: String get() = "SigV4AuthDecorator"
+            override val order: Byte = 0
+
+            private val sigv4a = "sigv4a"
+
+            private fun sigv4(runtimeConfig: RuntimeConfig) =
+                writable {
+                    val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+                    rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
+                }
+
+            private fun sigv4a(runtimeConfig: RuntimeConfig) =
+                writable {
+                    val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+                    featureGateBlock(sigv4a) {
+                        rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+                    }
+                }
+
+            override fun authOptions(
+                codegenContext: ClientCodegenContext,
+                operationShape: OperationShape,
+                baseAuthSchemeOptions: List<AuthSchemeOption>,
+            ): List<AuthSchemeOption> {
+                val supportsSigV4a =
+                    codegenContext.usesSigV4a().thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
+                return baseAuthSchemeOptions +
+                    AuthSchemeOption.StaticAuthSchemeOption(
+                        SigV4Trait.ID,
+                        listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
+                    )
+            }
+
+            override fun serviceRuntimePluginCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ServiceRuntimePluginCustomization>,
+            ): List<ServiceRuntimePluginCustomization> =
+                baseCustomizations + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
+
+            override fun operationCustomizations(
+                codegenContext: ClientCodegenContext,
+                operation: OperationShape,
+                baseCustomizations: List<OperationCustomization>,
+            ): List<OperationCustomization> = baseCustomizations + AuthOperationCustomization(codegenContext)
+
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> =
+                baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
+
+            override fun extras(
+                codegenContext: ClientCodegenContext,
+                rustCrate: RustCrate,
+            ) {
+                if (codegenContext.usesSigV4a()) {
+                    // Add optional feature for SigV4a support
+                    rustCrate.mergeFeature(Feature("sigv4a", true, listOf("aws-runtime/sigv4a")))
+                }
+            }
+        },
+)
 
 private class SigV4SigningConfig(
     runtimeConfig: RuntimeConfig,
@@ -166,7 +188,9 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         arrayOf(
             "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
             "SigV4aAuthScheme" to awsRuntime.resolve("auth::sigv4a::SigV4aAuthScheme"),
-            "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
+            "SharedAuthScheme" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::auth::SharedAuthScheme"),
         )
     }
 
@@ -174,18 +198,20 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         writable {
             when (section) {
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                    val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
+                    val serviceHasEventStream =
+                        codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
                     if (serviceHasEventStream) {
                         // enable the aws-runtime `sign-eventstream` feature
                         addDependency(
-                            AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol(),
+                            AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType()
+                                .toSymbol(),
                         )
                     }
                     section.registerAuthScheme(this) {
                         rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
                     }
 
-                    if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                    if (codegenContext.usesSigV4a()) {
                         featureGateBlock("sigv4a") {
                             section.registerAuthScheme(this) {
                                 rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)

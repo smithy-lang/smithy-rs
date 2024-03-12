@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rustsdk.customize.s3
 
+import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
@@ -28,10 +28,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
-import software.amazon.smithy.rustsdk.awsInlineableHttpRequestChecksum
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -215,7 +215,14 @@ class S3ExpressFluentClientCustomization(
                 is FluentClientSection.AdditionalBaseClientPlugins -> {
                     rustTemplate(
                         """
-                        ${section.plugins} = ${section.plugins}.with_client_plugin(#{S3ExpressRuntimePlugin}::new(${section.config}.config.clone()));
+                        ${section.plugins} = ${section.plugins}.with_client_plugin(
+                            #{S3ExpressRuntimePlugin}::new(
+                                ${section.config}
+                                    .config
+                                    .load::<crate::config::DisableS3ExpressSessionAuth>()
+                                    .cloned()
+                            )
+                        );
                         """,
                         *codegenScope,
                     )
@@ -227,61 +234,39 @@ class S3ExpressFluentClientCustomization(
 }
 
 class S3ExpressRequestChecksumCustomization(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
 
     private val codegenScope =
         arrayOf(
             *preludeScope,
             "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
             "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-            "DefaultRequestChecksumOverride" to
-                runtimeConfig.awsInlineableHttpRequestChecksum()
-                    .resolve("DefaultRequestChecksumOverride"),
             "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+            "for_s3_express" to s3ExpressModule(runtimeConfig).resolve("utils::for_s3_express"),
+            "provide_default_checksum_algorithm" to s3ExpressModule(runtimeConfig).resolve("checksum::provide_default_checksum_algorithm"),
         )
 
     override fun section(section: OperationSection): Writable =
         writable {
+            // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
+            val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
             when (section) {
                 is OperationSection.AdditionalRuntimePluginConfig -> {
-                    rustTemplate(
-                        """
-                        ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
-                            |original: #{Option}<#{ChecksumAlgorithm}>,
-                            cfg: &#{ConfigBag}| {
-                                // S3 does not have the `ChecksumAlgorithm::Md5`, therefore customers cannot set it
-                                // from outside.
-                                if original != #{Some}(#{ChecksumAlgorithm}::Md5) {
-                                    return original;
-                                }
-
-                                let endpoint = cfg
-                                    .load::<crate::config::endpoint::Endpoint>()
-                                    .expect("endpoint added to config bag by endpoint orchestrator");
-
-                                match endpoint.properties().get("backend") {
-                                    Some(#{Document}::String(backend)) if backend.as_str() == "S3Express" => {
-                                       #{customDefault:W}
-                                    }
-                                    _ => original
-                                }
-                            }
-                        ));
-                        """,
-                        *codegenScope,
-                        "customDefault" to
-                            writable {
-                                if (operationShape.id == ShapeId.from("com.amazonaws.s3#UploadPart")) {
-                                    rustTemplate("#{None}", *codegenScope)
-                                } else {
+                    if (checksumTrait.isRequestChecksumRequired) {
+                        rustTemplate(
+                            """
+                            ${section.newLayerName}.store_put(#{provide_default_checksum_algorithm}());
+                            """,
+                            *codegenScope,
+                            "customDefault" to
+                                writable {
                                     rustTemplate("#{Some}(#{ChecksumAlgorithm}::Crc32)", *codegenScope)
-                                }
-                            },
-                    )
+                                },
+                        )
+                    }
                 }
 
                 else -> { }
@@ -299,6 +284,10 @@ private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
 
 private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
     arrayOf(
+        // Used by lru, and this forces it to be a later version that avoids
+        // https://github.com/tkaitchuck/aHash/issues/200
+        // when built with `cargo update -Z minimal-versions`
+        CargoDependency.AHash,
         AwsCargoDependency.awsCredentialTypes(runtimeConfig),
         AwsCargoDependency.awsRuntime(runtimeConfig),
         AwsCargoDependency.awsSigv4(runtimeConfig),
