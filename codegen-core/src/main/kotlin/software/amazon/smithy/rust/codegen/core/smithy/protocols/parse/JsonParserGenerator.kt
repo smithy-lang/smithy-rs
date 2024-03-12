@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -121,6 +122,7 @@ class JsonParserGenerator(
             "skip_to_end" to smithyJson.resolve("deserialize::token::skip_to_end"),
             "Token" to smithyJson.resolve("deserialize::Token"),
             "or_empty" to orEmptyJson(),
+            *preludeScope,
         )
 
     /**
@@ -560,6 +562,15 @@ class JsonParserGenerator(
                             *codegenScope,
                         ) {
                             objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
+                                rustTemplate(
+                                    """
+                                    if let #{Some}(#{Ok}(#{Token}::ValueNull { .. })) = tokens.peek() {
+                                        #{skip_value}(tokens)?;
+                                        continue;
+                                    }
+                                    """,
+                                    *codegenScope,
+                                )
                                 rustTemplate(
                                     """
                                     let key = key.to_unescaped()?;

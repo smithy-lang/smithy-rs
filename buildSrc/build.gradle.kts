@@ -12,7 +12,7 @@ plugins {
 repositories {
     mavenCentral()
     google()
-    /* mavenLocal() */
+    mavenLocal()
 }
 
 // Load properties manually to avoid hard coding smithy version
