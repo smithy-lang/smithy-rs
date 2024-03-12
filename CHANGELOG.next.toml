@@ -12,7 +12,7 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Bumping version of wasi crate dependency in aws-smithy-wasm."
+message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1."
 references = ["smithy-rs#3476"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 authors = ["landonxjames"]
