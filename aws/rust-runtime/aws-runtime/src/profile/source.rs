@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::fs_util::{home_dir, Os};
+//! Code for handling in-memory sources of profile data
 
 use super::error::{CouldNotReadProfileFile, ProfileFileLoadError};
+use crate::fs_util::{home_dir, Os};
 use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
-
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal;
 use std::borrow::Cow;
@@ -20,26 +20,28 @@ const HOME_EXPANSION_FAILURE_WARNING: &str =
     "home directory expansion was requested (via `~` character) for the profile \
      config file path, but no home directory could be determined";
 
+#[derive(Debug)]
 /// In-memory source of profile data
-pub(super) struct Source {
+pub struct Source {
     /// Profile file sources
-    pub(super) files: Vec<File>,
+    pub(crate) files: Vec<File>,
 
     /// Profile to use
     ///
     /// Overridden via `$AWS_PROFILE`, defaults to `default`
-    pub(super) profile: Cow<'static, str>,
+    pub profile: Cow<'static, str>,
 }
 
+#[derive(Debug)]
 /// In-memory configuration file
-pub(super) struct File {
-    pub(super) kind: ProfileFileKind,
-    pub(super) path: Option<String>,
-    pub(super) contents: String,
+pub struct File {
+    pub(crate) kind: ProfileFileKind,
+    pub(crate) path: Option<String>,
+    pub(crate) contents: String,
 }
 
 /// Load a [`Source`] from a given environment and filesystem.
-pub(super) async fn load(
+pub async fn load(
     proc_env: &os_shim_internal::Env,
     fs: &os_shim_internal::Fs,
     profile_files: &ProfileFiles,
@@ -198,13 +200,13 @@ fn expand_home(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::parser::source::{
+    use crate::profile::error::ProfileFileLoadError;
+    use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
+    use crate::profile::source::{
         expand_home, load, load_config_file, HOME_EXPANSION_FAILURE_WARNING,
     };
-    use crate::profile::parser::ProfileFileLoadError;
-    use crate::profile::profile_file::{ProfileFile, ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
-    use futures_util::FutureExt;
+    use futures_util::future::FutureExt;
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;

@@ -128,6 +128,7 @@ mod json_credentials;
 pub mod credential_process;
 pub mod default_provider;
 pub mod ecs;
+mod env_service_config;
 pub mod environment;
 pub mod imds;
 pub mod meta;
@@ -138,7 +139,6 @@ mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
 pub mod stalled_stream_protection;
-pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
@@ -211,14 +211,15 @@ mod loader {
     use crate::default_provider::use_dual_stack::use_dual_stack_provider;
     use crate::default_provider::use_fips::use_fips_provider;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
+    use crate::env_service_config::EnvServiceConfig;
     use crate::meta::region::ProvideRegion;
-    use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::{
         token::{ProvideToken, SharedTokenProvider},
         ProvideCredentials, SharedCredentialsProvider,
     };
     use aws_credential_types::Credentials;
+    use aws_runtime::profile::profile_file::ProfileFiles;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
@@ -805,11 +806,17 @@ mod loader {
                 }
             };
 
+            let profiles = conf.profile().await;
+            let service_config = EnvServiceConfig {
+                env: conf.env(),
+                profiles: profiles.cloned().unwrap_or_default(),
+            };
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .time_source(time_source);
+                .time_source(time_source)
+                .service_config(service_config);
 
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);

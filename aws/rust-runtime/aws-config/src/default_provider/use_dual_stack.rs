@@ -5,7 +5,7 @@
 
 use crate::environment::parse_bool;
 use crate::provider_config::ProviderConfig;
-use crate::standard_property::StandardProperty;
+use aws_runtime::env_config::EnvConfigValue;
 use aws_smithy_types::error::display::DisplayErrorContext;
 
 mod env {
@@ -17,11 +17,13 @@ mod profile_key {
 }
 
 pub(crate) async fn use_dual_stack_provider(provider_config: &ProviderConfig) -> Option<bool> {
-    StandardProperty::new()
+    let env = provider_config.env();
+    let profiles = provider_config.profile().await;
+
+    EnvConfigValue::new()
         .env(env::USE_DUAL_STACK)
         .profile(profile_key::USE_DUAL_STACK)
-        .validate(provider_config, parse_bool)
-        .await
+        .validate(&env, profiles, parse_bool)
         .map_err(
             |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for dual-stack setting"),
         )

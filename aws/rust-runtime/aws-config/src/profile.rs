@@ -10,15 +10,6 @@
 
 mod parser;
 
-// This can't be included in the other `pub use` statement until
-// https://github.com/rust-lang/rust/pull/87487 is fixed by upgrading
-// to Rust 1.60
-#[doc(inline)]
-pub use parser::ProfileParseError;
-pub(crate) use parser::PropertiesKey;
-#[doc(inline)]
-pub use parser::{load, Profile, ProfileFileLoadError, ProfileSet, Property};
-
 pub mod credentials;
 pub mod profile_file;
 pub mod region;
@@ -30,7 +21,15 @@ pub mod token;
 pub use token::ProfileFileTokenProvider;
 
 #[doc(inline)]
+pub use aws_runtime::profile::parse::ProfileParseError;
+#[doc(inline)]
+pub use aws_runtime::profile::profile_set::ProfileSet;
+#[doc(inline)]
+pub use aws_runtime::profile::section::{Profile, Property};
+#[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;
+#[doc(inline)]
+pub use parser::{load, ProfileFileLoadError};
 #[doc(inline)]
 pub use region::ProfileFileRegionProvider;
 

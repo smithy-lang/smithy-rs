@@ -13,9 +13,10 @@
 //! multiple actions into the same profile).
 
 use crate::profile::credentials::ProfileFileError;
-use crate::profile::{Profile, ProfileSet};
 use crate::sensitive_command::CommandWithSensitiveArgs;
 use aws_credential_types::Credentials;
+use aws_runtime::profile::profile_set::ProfileSet;
+use aws_runtime::profile::section::Profile;
 
 /// Chain of Profile Providers
 ///
@@ -469,18 +470,17 @@ fn credential_process_from_profile(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::credentials::repr::{resolve_chain, BaseProvider, ProfileChain};
-    use crate::profile::ProfileSet;
+    use crate::profile::credentials::repr::{BaseProvider, ProfileChain};
     use crate::sensitive_command::CommandWithSensitiveArgs;
     use serde::Deserialize;
     use std::collections::HashMap;
-    use std::error::Error;
-    use std::fs;
 
+    #[cfg(feature = "test-utils")]
     #[test]
-    fn run_test_cases() -> Result<(), Box<dyn Error>> {
-        let test_cases: Vec<TestCase> =
-            serde_json::from_str(&fs::read_to_string("./test-data/assume-role-tests.json")?)?;
+    fn run_test_cases() -> Result<(), Box<dyn std::error::Error>> {
+        let test_cases: Vec<TestCase> = serde_json::from_str(&std::fs::read_to_string(
+            "./test-data/assume-role-tests.json",
+        )?)?;
         for test_case in test_cases {
             print!("checking: {}...", test_case.docs);
             check(test_case);
@@ -489,7 +489,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "test-utils")]
     fn check(test_case: TestCase) {
+        use aws_runtime::profile::profile_set::ProfileSet;
+        crate::profile::credentials::repr::resolve_chain;
         let source = ProfileSet::new(
             test_case.input.profiles,
             test_case.input.selected_profile,

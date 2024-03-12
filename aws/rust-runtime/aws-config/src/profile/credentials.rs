@@ -22,14 +22,15 @@
 //! - `exec` which contains a chain representation of providers to implement passing bootstrapped credentials
 //! through a series of providers.
 
-use crate::profile::profile_file::ProfileFiles;
-use crate::profile::Profile;
-use crate::profile::{cell::ErrorTakingOnceCell, parser::ProfileFileLoadError};
+use crate::profile::cell::ErrorTakingOnceCell;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::{
     provider::{self, error::CredentialsError, future, ProvideCredentials},
     Credentials,
 };
+use aws_runtime::profile::error::ProfileFileLoadError;
+use aws_runtime::profile::profile_file::ProfileFiles;
+use aws_runtime::profile::section::Profile;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::SdkConfig;
 use std::borrow::Cow;
