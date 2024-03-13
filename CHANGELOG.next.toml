@@ -11,71 +11,11 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "EKS Pod Identity is now supported as part of the default ECS credential provider."
-references = ["smithy-rs#3416"]
-meta = { "breaking" = false, "bug" = false, "tada" = true }
-author = "jackkleeman"
-
 [[smithy-rs]]
-message = "Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments"
-references = ["smithy-rs#2087", "smithy-rs#2520", "smithy-rs#3409", "aws-sdk-rust#59"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-authors = ["landonxjames", "eduardomourar"]
-
-[[smithy-rs]]
-message = "Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments"
-references = ["smithy-rs#2087", "smithy-rs#2520", "smithy-rs#3409"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
-authors = ["landonxjames", "eduardomourar"]
-
-[[smithy-rs]]
-message = "[`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/body/struct.SdkBody.html) now implements the 1.0 version of the `http_body::Body` trait."
-references = ["smithy-rs#3365", "aws-sdk-rust#1046"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
-authors = ["cayman-amzn", "rcoh"]
-
-[[aws-sdk-rust]]
-message = "Add support for Lambda's `InvokeWithResponseStreaming` and Bedrock Agent Runtime's `InvokeAgent` operations."
-references = ["aws-sdk-rust#1075", "aws-sdk-rust#1080", "smithy-rs#3451"]
-meta = { "breaking" = false, "bug" = false, "tada" = true }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Added support for SSO bearer token authentication. The aws-sdk-codecatalyst crate can now send requests without erroring."
-references = ["aws-sdk-rust#703", "smithy-rs#3453"]
-meta = { "breaking" = false, "bug" = false, "tada" = true }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Upgrade Smithy to 1.45."
-references = ["smithy-rs#3470"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-authors = ["jdisanti"]
-
-[[aws-sdk-rust]]
-message = "Add support for S3 Express One Zone. See [the user guide](https://github.com/awslabs/aws-sdk-rust/discussions/1091) for more details."
-references = ["aws-sdk-rust#992", "smithy-rs#3465"]
-meta = { "breaking" = false, "bug" = false, "tada" = true }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "The `ResolveIdentity` trait is now aware of its `IdentityCache` location."
-references = ["smithy-rs#3465", "smithy-rs#3477"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "`RuntimeComponents` can now be converted back to a `RuntimeComponentsBuilder`, using `.to_builder()`."
-references = ["smithy-rs#3465", "smithy-rs#3477"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-authors = "ysaito1001"
-
-[[aws-sdk-rust]]
-message = "`aws_sigv4::http_request::settigns::SigningSettings` adds a new setting `session_token_name_override` to allow for an alternative session token name for SigV4 signing."
-references = ["smithy-rs#3465", "smithy-rs#3477"]
-meta = { "breaking" = false, "bug" = false, "tada" = false }
-author = "ysaito1001"
+message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1."
+references = ["smithy-rs#3476"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+authors = ["landonxjames"]
 
 [[aws-sdk-rust]]
 message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
