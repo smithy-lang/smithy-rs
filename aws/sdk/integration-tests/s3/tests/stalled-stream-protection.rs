@@ -83,12 +83,6 @@ impl Body for SlowBody {
     }
 }
 
-// This test doesn't work because we can't count on `hyper` to poll the body,
-// regardless of whether we schedule a wake. To make this functionality work,
-// we'd have to integrate more closely with the orchestrator.
-//
-// I'll leave this test here because we do eventually want to support stalled
-// stream protection for uploads.
 #[tokio::test]
 async fn test_stalled_stream_protection_defaults_for_upload() {
     let _logs = capture_test_logs();
@@ -180,7 +174,6 @@ async fn start_faulty_upload_server() -> (impl Future<Output = ()>, SocketAddr) 
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_explicitly_configured_stalled_stream_protection_for_downloads() {
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
@@ -221,7 +214,6 @@ async fn test_explicitly_configured_stalled_stream_protection_for_downloads() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
@@ -254,7 +246,6 @@ async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
 
 // This test will always take as long as whatever grace period is set by default.
 #[tokio::test]
-#[ignore]
 async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
@@ -289,14 +280,11 @@ async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
         err.to_string(),
         "minimum throughput was specified at 1 B/s, but throughput of 0 B/s was observed"
     );
-    // 1s check interval + 5s grace period
-    assert_eq!(start.elapsed().as_secs(), 6);
+    // the 1s check interval is included in the 5s grace period
+    assert_eq!(start.elapsed().as_secs(), 5);
 }
 
 async fn start_faulty_download_server() -> (impl Future<Output = ()>, SocketAddr) {
-    use tokio::net::{TcpListener, TcpStream};
-    use tokio::time::sleep;
-
     let listener = TcpListener::bind("0.0.0.0:0")
         .await
         .expect("socket is free");
