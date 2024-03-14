@@ -18,6 +18,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = false }
 authors = ["landonxjames"]
 
 [[aws-sdk-rust]]
+message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
+references = ["smithy-rs#3478"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
 message = """
 Users may now set an endpoint URL from the env or profile file:
 
