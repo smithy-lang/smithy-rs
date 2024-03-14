@@ -174,6 +174,8 @@ impl<const N: usize> LogBuffer<N> {
 
     /// Mutably returns the tail of the buffer.
     ///
+    /// ## Panics
+    ///
     /// The buffer MUST have at least one bin it it before this is called.
     fn tail_mut(&mut self) -> &mut Bin {
         debug_assert!(self.length > 0);
@@ -334,14 +336,17 @@ impl ThroughputLogs {
             pending,
         } = self.buffer.counts();
 
+        // If there are any empty cells at all, then we haven't been tracking
+        // long enough to make any judgements about the stream's progress.
+        if empty > 0 {
+            return ThroughputReport::Incomplete;
+        }
+
         let bytes = self.buffer.bytes_transferred();
         let time = self.resolution * (BUFFER_SIZE - empty) as u32;
         let throughput = Throughput::new(bytes, time);
 
         let half = BUFFER_SIZE / 2;
-        if empty >= half {
-            return ThroughputReport::Incomplete;
-        }
         match (transferred > 0, no_polling >= half, pending >= half) {
             (true, _, _) => ThroughputReport::Transferred(throughput),
             (_, true, _) => ThroughputReport::NoPolling,
@@ -478,6 +483,7 @@ mod test {
         logs.push_pending(start + Duration::from_millis(250));
         logs.push_bytes_transferred(start + Duration::from_millis(350), 10);
         logs.push_pending(start + Duration::from_millis(450));
+        // skip 550
         logs.push_pending(start + Duration::from_millis(650));
         logs.push_pending(start + Duration::from_millis(750));
         logs.push_pending(start + Duration::from_millis(850));
@@ -497,7 +503,9 @@ mod test {
         logs.push_pending(start + Duration::from_millis(50));
         logs.push_pending(start + Duration::from_millis(150));
         logs.push_pending(start + Duration::from_millis(250));
+        // skip 350
         logs.push_pending(start + Duration::from_millis(450));
+        // skip 550
         logs.push_pending(start + Duration::from_millis(650));
         logs.push_pending(start + Duration::from_millis(750));
         logs.push_pending(start + Duration::from_millis(850));
