@@ -22,3 +22,15 @@ message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threade
 references = ["smithy-rs#3478"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Stalled stream protection now supports request upload streams, and existing download stream protection no longer triggers when user-code is doing something other than downloading in the middle of the stream (for example, making a HTTP request to another service for each row in CSV file download from S3)."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection now supports request upload streams, and existing download stream protection no longer triggers when user-code is doing something other than downloading in the middle of the stream (for example, making a HTTP request to another service for each row in CSV file download from S3)."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = true, "bug" = true }
+author = "jdisanti"
