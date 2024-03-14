@@ -22,3 +22,9 @@ message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threade
 references = ["smithy-rs#3478"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix invalid XML root response parsing error in S3 GetObjectRetention."
+references = ["smithy-rs#3492", "aws-sdk-rust#1065"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "jdisanti"
