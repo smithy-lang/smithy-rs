@@ -16,3 +16,9 @@ message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm
 references = ["smithy-rs#3476"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 authors = ["landonxjames"]
+
+[[aws-sdk-rust]]
+message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
+references = ["smithy-rs#3478"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "ysaito1001"

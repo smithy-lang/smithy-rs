@@ -114,14 +114,23 @@ impl RuntimeCrate {
     /// True if this runtime crate changed since the given release tag.
     fn changed_since_release(&self, repo: &Repo, release_tag: &ReleaseTag) -> Result<bool> {
         let status = repo
-            .git(["diff", "--quiet", release_tag.as_str(), self.path.as_str()])
-            .status()
+            .git([
+                "diff",
+                "--name-only",
+                release_tag.as_str(),
+                self.path.as_str(),
+            ])
+            .output()
             .with_context(|| format!("failed to git diff {}", self.name))?;
-        match status.code() {
-            Some(0) => Ok(false),
-            Some(1) => Ok(true),
-            code => bail!("unknown git diff result: {code:?}"),
-        }
+        let output = String::from_utf8(status.stdout)?;
+        let changed_files = output
+            .lines()
+            // When run during a release, this file is replaced with it's actual contents.
+            // This breaks this git-based comparison and incorrectly requires a version bump.
+            // Temporary fix to allow the build to succeed.
+            .filter(|line| !line.contains("aws-config/clippy.toml"))
+            .collect::<Vec<_>>();
+        Ok(!changed_files.is_empty())
     }
 }
 
