@@ -486,8 +486,6 @@ private fun baseClientRuntimePluginsFn(
                 ) -> #{RuntimePlugins} {
                     let mut configured_plugins = #{Vec}::new();
                     ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
-                    ##[allow(unused_mut)]
-                    let mut behavior_version = config.behavior_version.clone();
                     #{update_bmv}
 
                     let mut plugins = #{RuntimePlugins}::new()
@@ -495,7 +493,7 @@ private fun baseClientRuntimePluginsFn(
                         .with_client_plugins(#{default_plugins}(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
-                                .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
+                                .with_behavior_version(config.behavior_version.clone().expect(${behaviorVersionError.dq()}))
                         ))
                         // user config
                         .with_client_plugin(
@@ -532,8 +530,8 @@ private fun baseClientRuntimePluginsFn(
                     featureGatedBlock(BehaviorVersionLatest) {
                         rustTemplate(
                             """
-                            if behavior_version.is_none() {
-                                behavior_version = Some(#{BehaviorVersion}::latest());
+                            if config.behavior_version.is_none() {
+                                config.behavior_version = Some(#{BehaviorVersion}::latest());
                             }
 
                             """,
