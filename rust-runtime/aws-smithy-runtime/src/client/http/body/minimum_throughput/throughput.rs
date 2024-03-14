@@ -97,26 +97,26 @@ impl From<(u64, Duration)> for Throughput {
     }
 }
 
-/// Cell in a linear grid that represents a small chunk of time.
+/// Represents a bin (or a cell) in a linear grid that represents a small chunk of time.
 #[derive(Copy, Clone, Debug)]
-enum Cell {
-    /// There is no data in this cell.
+enum Bin {
+    /// There is no data in this bin.
     Empty,
 
-    /// No polling took place during this cell.
+    /// No polling took place during this bin.
     NoPolling,
 
-    /// This many bytes were transferred during this cell.
+    /// This many bytes were transferred during this bin.
     TransferredBytes(u64),
 
-    /// The user/remote was not providing/consuming data fast enough during this cell.
+    /// The user/remote was not providing/consuming data fast enough during this bin.
     ///
     /// The number is the number of bytes transferred, if this replaced TransferredBytes.
     Pending(u64),
 }
-impl Cell {
-    fn merge(&mut self, other: Cell) {
-        use Cell::*;
+impl Bin {
+    fn merge(&mut self, other: Bin) {
+        use Bin::*;
         // Assign values based on this priority order (highest priority higher up):
         //   1. Pending
         //   2. TransferredBytes
@@ -126,30 +126,30 @@ impl Cell {
             (Pending(other), this) => Pending(other + this.bytes()),
             (TransferredBytes(other), this) => TransferredBytes(other + this.bytes()),
             (other, NoPolling) => other,
-            (NoPolling, _) => panic!("can't merge NoPolling into cell"),
+            (NoPolling, _) => panic!("can't merge NoPolling into bin"),
             (other, Empty) => other,
-            (Empty, _) => panic!("can't merge Empty into cell"),
+            (Empty, _) => panic!("can't merge Empty into bin"),
         };
     }
 
-    /// Number of bytes transferred during this cell
+    /// Number of bytes transferred during this bin
     fn bytes(&self) -> u64 {
         match *self {
-            Cell::Empty | Cell::NoPolling => 0,
-            Cell::TransferredBytes(bytes) | Cell::Pending(bytes) => bytes,
+            Bin::Empty | Bin::NoPolling => 0,
+            Bin::TransferredBytes(bytes) | Bin::Pending(bytes) => bytes,
         }
     }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
-struct CellCounts {
-    /// Number of cells with no data.
+struct BinCounts {
+    /// Number of bins with no data.
     empty: usize,
-    /// Number of "no polling" cells.
+    /// Number of "no polling" bins.
     no_polling: usize,
-    /// Number of "bytes transferred" cells.
+    /// Number of "bytes transferred" bins.
     transferred: usize,
-    /// Number of "pending" cells.
+    /// Number of "pending" bins.
     pending: usize,
 }
 
@@ -157,7 +157,7 @@ struct CellCounts {
 /// throughput events for [`ThroughputLogs`].
 #[derive(Copy, Clone, Debug)]
 struct LogBuffer<const N: usize> {
-    entries: [Cell; N],
+    entries: [Bin; N],
     // The length only needs to exist so that the `fill_gaps` function
     // can differentiate between `Empty` due to there not having been enough
     // time to establish a full buffer worth of data vs. `Empty` due to a
@@ -167,34 +167,34 @@ struct LogBuffer<const N: usize> {
 impl<const N: usize> LogBuffer<N> {
     fn new() -> Self {
         Self {
-            entries: [Cell::Empty; N],
+            entries: [Bin::Empty; N],
             length: 0,
         }
     }
 
     /// Mutably returns the tail of the buffer.
     ///
-    /// The buffer MUST have at least one cell it it before this is called.
-    fn tail_mut(&mut self) -> &mut Cell {
+    /// The buffer MUST have at least one bin it it before this is called.
+    fn tail_mut(&mut self) -> &mut Bin {
         debug_assert!(self.length > 0);
         &mut self.entries[self.length - 1]
     }
 
-    /// Pushes a cell into the buffer. If the buffer is already full,
+    /// Pushes a bin into the buffer. If the buffer is already full,
     /// then this will rotate the entire buffer to the left.
-    fn push(&mut self, cell: Cell) {
+    fn push(&mut self, bin: Bin) {
         if self.filled() {
             self.entries.rotate_left(1);
-            self.entries[N - 1] = cell;
+            self.entries[N - 1] = bin;
         } else {
-            self.entries[self.length] = cell;
+            self.entries[self.length] = bin;
             self.length += 1;
         }
     }
 
     /// Returns the total number of bytes transferred within the time window.
     fn bytes_transferred(&self) -> u64 {
-        self.entries.iter().take(self.length).map(Cell::bytes).sum()
+        self.entries.iter().take(self.length).map(Bin::bytes).sum()
     }
 
     #[inline]
@@ -209,21 +209,21 @@ impl<const N: usize> LogBuffer<N> {
     /// way we can know about these is by examining gaps in time.
     fn fill_gaps(&mut self) {
         for entry in self.entries.iter_mut().take(self.length) {
-            if matches!(entry, Cell::Empty) {
-                *entry = Cell::NoPolling;
+            if matches!(entry, Bin::Empty) {
+                *entry = Bin::NoPolling;
             }
         }
     }
 
-    /// Returns the counts of each cell type in the buffer.
-    fn counts(&self) -> CellCounts {
-        let mut counts = CellCounts::default();
+    /// Returns the counts of each bin type in the buffer.
+    fn counts(&self) -> BinCounts {
+        let mut counts = BinCounts::default();
         for entry in &self.entries {
             match entry {
-                Cell::Empty => counts.empty += 1,
-                Cell::NoPolling => counts.no_polling += 1,
-                Cell::TransferredBytes(_) => counts.transferred += 1,
-                Cell::Pending(_) => counts.pending += 1,
+                Bin::Empty => counts.empty += 1,
+                Bin::NoPolling => counts.no_polling += 1,
+                Bin::TransferredBytes(_) => counts.transferred += 1,
+                Bin::Pending(_) => counts.pending += 1,
             }
         }
         counts
@@ -257,10 +257,10 @@ const BUFFER_SIZE: usize = 10;
 /// functions cannot know when they're not being polled, so the log examines gaps
 /// in the event history to know when no polling took place.
 ///
-/// The event logging is simplified down to a linear 10-cell grid, which each
-/// cell representing 1/10th the total time window. When an event is pushed,
-/// it is either merged into the current tail cell, or all the cells are rotated
-/// left to create a new empty tail cell, and then it is merged into that one.
+/// The event logging is simplified down to a linear grid consisting of 10 "bins",
+/// with each bin representing 1/10th the total time window. When an event is pushed,
+/// it is either merged into the current tail bin, or all the bins are rotated
+/// left to create a new empty tail bin, and then it is merged into that one.
 #[derive(Clone, Debug)]
 pub(super) struct ThroughputLogs {
     resolution: Duration,
@@ -297,27 +297,27 @@ impl ThroughputLogs {
     /// In an upload, it is waiting for data from the user, and in a download,
     /// it is waiting for data from the server.
     pub(super) fn push_pending(&mut self, time: SystemTime) {
-        self.push(time, Cell::Pending(0));
+        self.push(time, Bin::Pending(0));
     }
 
     /// Pushes a data transferred event.
     ///
     /// Indicates that this number of bytes were transferred at this time.
     pub(super) fn push_bytes_transferred(&mut self, time: SystemTime, bytes: u64) {
-        self.push(time, Cell::TransferredBytes(bytes));
+        self.push(time, Bin::TransferredBytes(bytes));
     }
 
-    fn push(&mut self, now: SystemTime, value: Cell) {
+    fn push(&mut self, now: SystemTime, value: Bin) {
         self.catch_up(now);
         self.buffer.tail_mut().merge(value);
         self.buffer.fill_gaps();
     }
 
-    /// Pushes empty cells until `current_tail` is caught up to `now`.
+    /// Pushes empty bins until `current_tail` is caught up to `now`.
     fn catch_up(&mut self, now: SystemTime) {
         while now >= self.current_tail {
             self.current_tail += self.resolution;
-            self.buffer.push(Cell::Empty);
+            self.buffer.push(Bin::Empty);
         }
         assert!(self.current_tail >= now);
     }
@@ -327,7 +327,7 @@ impl ThroughputLogs {
         self.catch_up(now);
         self.buffer.fill_gaps();
 
-        let CellCounts {
+        let BinCounts {
             empty,
             no_polling,
             transferred,
@@ -426,7 +426,7 @@ mod test {
             assert_eq!(0, logs.buffer.counts().transferred);
             assert_eq!(1, logs.buffer.counts().no_polling);
         }
-        // This should replace the initial "no polling" cell
+        // This should replace the initial "no polling" bin
         now += logs.resolution();
         logs.push_pending(now);
         assert_eq!(0, logs.buffer.counts().no_polling);
