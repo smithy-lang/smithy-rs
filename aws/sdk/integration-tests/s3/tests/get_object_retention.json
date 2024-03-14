@@ -1,0 +1,83 @@
+{
+  "events": [
+    {
+      "connection_id": 0,
+      "action": {
+        "Request": {
+          "request": {
+            "uri": "https://test-bucket.s3.us-west-2.amazonaws.com/mathematics-bacon.png?retention",
+            "headers": {
+              "x-amz-date": [
+                "20090213T233130Z"
+              ],
+              "authorization": [
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-user-agent, Signature=5893afca42a80e68a85dba55a09d961176624750d9a0f59b2fd7eece2005412f"
+              ]
+            },
+            "method": "GET"
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Request"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Response": {
+          "response": {
+            "Ok": {
+              "status": 200,
+              "headers": {
+                "x-amz-id-2": [
+                  "some-extended-request-id"
+                ],
+                "date": [
+                  "Thu, 14 Mar 2024 23:16:30 GMT"
+                ],
+                "transfer-encoding": [
+                  "chunked"
+                ],
+                "server": [
+                  "AmazonS3"
+                ],
+                "x-amz-request-id": [
+                  "some-request-id"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Data": {
+          "data": {
+            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Retention xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Mode>GOVERNANCE</Mode><RetainUntilDate>2024-03-28T07:00:00.000Z</RetainUntilDate></Retention>"
+          },
+          "direction": "Response"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Response"
+        }
+      }
+    }
+  ],
+  "docs": "test data for get_object_retention.rs",
+  "version": "V0"
+}

@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlNameIndex
+import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
@@ -147,13 +148,20 @@ class XmlBindingTraitParserGenerator(
                     let mut doc = #{Document}::try_from(inp)?;
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
-                    let start_el = decoder.start_el();
-                    if !(${shapeName.matchExpression("start_el")}) {
-                        return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
-                    }
                     """,
                     *codegenScope,
                 )
+                if (!shape.hasTrait<AllowInvalidXmlRoot>()) {
+                    rustTemplate(
+                        """
+                        let start_el = decoder.start_el();
+                        if !(${shapeName.matchExpression("start_el")}) {
+                            return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
                 val ctx = Ctx("decoder", accum = null)
                 when (shape) {
                     is StructureShape -> {

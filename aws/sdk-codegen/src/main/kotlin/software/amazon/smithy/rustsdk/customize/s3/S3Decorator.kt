@@ -58,6 +58,13 @@ class S3Decorator : ClientCodegenDecorator {
             ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
             // API returns ListAllMyDirectoryBucketsResult instead of ListDirectoryBucketsOutput
             ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
+            // API returns Retention instead of ObjectLockRetention
+            //
+            // This one is slightly weirder than the others in that it is not the output struct that is wrong,
+            // but rather, the @httpPayload member inside the output struct.
+            //
+            // https://github.com/awslabs/aws-sdk-rust/issues/1065
+            ShapeId.from("com.amazonaws.s3#ObjectLockRetention"),
         )
 
     override fun protocols(
