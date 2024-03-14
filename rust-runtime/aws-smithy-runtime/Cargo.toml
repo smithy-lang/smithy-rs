@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.1.8"
+version = "1.2.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -10,7 +10,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-client = ["aws-smithy-runtime-api/client"]
+client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
 connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream", "dep:h2"]
 tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
@@ -31,6 +31,7 @@ fastrand = "2.0.0"
 h2 = { version = "0.3", default-features = false, optional = true }
 http = { version = "0.2.8" }
 http-body-0-4 = { package = "http-body", version = "0.4.4" }
+http-body-1 = { package = "http-body", version = "1" }
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 once_cell = "1.18.0"
