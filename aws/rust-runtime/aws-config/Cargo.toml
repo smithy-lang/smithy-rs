@@ -39,7 +39,7 @@ hyper = { version = "0.14.26", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
-url = "2.5.0"
+url = "2.3.1"
 
 # implementation detail of IMDS credentials provider
 fastrand = "2.0.0"
