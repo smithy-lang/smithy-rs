@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(all(feature = "client", feature = "test-util"))]
+
 #[macro_use]
 mod stalled_stream_common;
 use stalled_stream_common::*;

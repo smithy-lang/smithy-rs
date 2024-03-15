@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(all(feature = "client", feature = "test-util"))]
+
 use std::time::Duration;
 
 #[macro_use]

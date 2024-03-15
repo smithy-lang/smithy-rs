@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(all(feature = "client", feature = "test-util"))]
+
 pub use aws_smithy_async::{
     test_util::tick_advance_sleep::{
         tick_advance_time_and_sleep, TickAdvanceSleep, TickAdvanceTime,
