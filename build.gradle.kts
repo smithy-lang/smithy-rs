@@ -15,8 +15,11 @@ buildscript {
 }
 
 allprojects {
+    val allowLocalDeps: String by project
     repositories {
-        mavenLocal()
+        if (allowLocalDeps.toBoolean()) {
+         mavenLocal()
+        }
         mavenCentral()
         google()
     }

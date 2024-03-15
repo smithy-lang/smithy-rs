@@ -565,7 +565,7 @@ class JsonParserGenerator(
                                 rustTemplate(
                                     """
                                     if let #{Some}(#{Ok}(#{Token}::ValueNull { .. })) = tokens.peek() {
-                                        #{skip_value}(tokens)?;
+                                        let _ = tokens.next().expect("peek returned a token")?;
                                         continue;
                                     }
                                     """,
@@ -633,6 +633,16 @@ class JsonParserGenerator(
                             *codegenScope,
                         )
                     }
+                    // If we've gotten to the point where the union had a `{ ... }` section, we can't return None
+                    // anymore. If we didn't parse a union at this point, this is an error.
+                    rustTemplate(
+                        """
+                        if variant.is_none() {
+                            return Err(#{Error}::custom("Union did not contain a valid variant."))
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     rust("Ok(variant)")
                 }
             }
