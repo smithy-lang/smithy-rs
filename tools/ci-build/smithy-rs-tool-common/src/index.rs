@@ -7,6 +7,7 @@ use crate::retry::{run_with_retry_sync, ErrorClass};
 use anyhow::{anyhow, Context, Error, Result};
 use crates_index::Crate;
 use reqwest::StatusCode;
+use semver::Version;
 use std::{collections::HashMap, time::Duration};
 use std::{fs, path::Path};
 
@@ -31,6 +32,11 @@ impl CratesIndex {
         Self(Inner::Fake(FakeIndex::from_file(path)))
     }
 
+    /// Returns a fake crates.io index from a hashmap
+    pub fn fake_from_map(versions: HashMap<String, Vec<String>>) -> Self {
+        Self(Inner::Fake(FakeIndex { crates: versions }))
+    }
+
     /// Retrieves the published versions for the given crate name.
     pub fn published_versions(&self, crate_name: &str) -> Result<Vec<String>> {
         match &self.0 {
@@ -44,6 +50,12 @@ impl CratesIndex {
             )?),
         }
     }
+}
+
+pub fn is_published(index: &CratesIndex, crate_name: &str, version: &Version) -> Result<bool> {
+    let crate_name = crate_name.to_string();
+    let versions = index.published_versions(&crate_name)?;
+    Ok(versions.contains(&version.to_string()))
 }
 
 fn published_versions(index: &crates_index::SparseIndex, crate_name: &str) -> Result<Vec<String>> {
@@ -104,5 +116,53 @@ impl FakeIndex {
             })
             .collect();
         FakeIndex { crates }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::index::{is_published, CratesIndex};
+    use semver::Version;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    /// Ignored test against the real index
+    #[ignore]
+    #[test]
+    fn test_known_published_versions() {
+        let index = Arc::new(CratesIndex::real().unwrap());
+        let known_published = Version::new(1, 1, 7);
+        let known_never_published = Version::new(999, 999, 999);
+        assert_eq!(
+            is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap(),
+            true
+        );
+
+        assert_eq!(
+            is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap(),
+            false
+        );
+    }
+
+    /// Ignored test against the real index
+    #[test]
+    fn test_against_fake_index() {
+        let mut crates = HashMap::new();
+        crates.insert(
+            "aws-smithy-runtime-api".to_string(),
+            vec!["1.1.7".to_string()],
+        );
+        let index = Arc::new(CratesIndex::fake_from_map(crates));
+        let known_published = Version::new(1, 1, 7);
+        let known_never_published = Version::new(999, 999, 999);
+        assert_eq!(
+            is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap(),
+            true
+        );
+
+        assert_eq!(
+            is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap(),
+            false
+        );
     }
 }
