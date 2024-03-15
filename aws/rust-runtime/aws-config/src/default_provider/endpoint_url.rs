@@ -22,7 +22,7 @@ mod profile_key {
 /// 1. The environment variable `AWS_ENDPOINT_URL=http://localhost`
 /// 2. The profile key `endpoint_url=http://localhost`
 ///
-/// If invalid values are found, the provider will return None and an error will be logcged.
+/// If invalid values are found, the provider will return None and an error will be logged.
 pub async fn endpoint_url_provider(provider_config: &ProviderConfig) -> Option<String> {
     StandardProperty::new()
         .env(env::ENDPOINT_URL)
