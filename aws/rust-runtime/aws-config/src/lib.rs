@@ -813,20 +813,29 @@ mod loader {
                 .timeout_config(timeout_config)
                 .time_source(time_source);
 
-            let ignore_configured_endpoint_urls =
-                ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
-                    .await
-                    .unwrap_or_default();
-            if ignore_configured_endpoint_urls {
-                tracing::trace!(
-                    "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
-                    NOTE: Endpoint URLs set programmatically WILL still be respected"
-                );
-                builder.set_endpoint_url(self.endpoint_url);
-            } else if self.endpoint_url.is_none() {
-                let endpoint_url = endpoint_url::endpoint_url_provider(&conf).await;
-                builder.set_endpoint_url(endpoint_url);
-            }
+            // If an endpoint URL is set programmatically, then our work is done.
+            let endpoint_url = if self.endpoint_url.is_some() {
+                self.endpoint_url
+            } else {
+                // Otherwise, check to see if we should ignore EP URLs set in the environment.
+                let ignore_configured_endpoint_urls =
+                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                        .await
+                        .unwrap_or_default();
+
+                if ignore_configured_endpoint_urls {
+                    // If yes, log a trace and return `None`.
+                    tracing::trace!(
+                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                        NOTE: Endpoint URLs set programmatically WILL still be respected"
+                    );
+                    None
+                } else {
+                    // Otherwise, attempt to resolve one.
+                    endpoint_url::endpoint_url_provider(&conf).await
+                }
+            };
+            builder.set_endpoint_url(endpoint_url);
 
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
