@@ -125,29 +125,42 @@ impl<'b> Decoder<'b> {
         Ok(decoded_string)
     }
 
+    // pub fn blob_alt(&mut self) -> Result<Blob, DeserializeError> {
+    //     let mut iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
+    //     let head = iter.next();
+
+    //     let head = match head {
+    //         None => return Ok(Blob::new([])),
+    //         Some(Err(e)) => return Err(DeserializeError::new(e)),
+    //         Some(Ok(head)) => head,
+    //     };
+
+    //     match iter.next() {
+    //         None => Ok(Blob::new(head)),
+    //         Some(Err(e)) => Err(DeserializeError::new(e)),
+    //         Some(Ok(next)) => {
+    //             let mut combined_blob: Vec<u8> = Vec::with_capacity(head.len() + next.len());
+    //             combined_blob.extend(head);
+    //             combined_blob.extend(next);
+    //             for i in iter {
+    //                 combined_blob.extend(i.map_err(DeserializeError::new)?);
+    //             }
+    //             Ok(Blob::new(combined_blob))
+    //         }
+    //     }
+    // }
+
     pub fn blob(&mut self) -> Result<Blob, DeserializeError> {
-        let mut iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
-        let head = iter.next();
+        let iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
+        let parts: Vec<&[u8]> = iter
+            .collect::<Result<_, _>>()
+            .map_err(DeserializeError::new)?;
 
-        let head = match head {
-            None => return Ok(Blob::new([])),
-            Some(Err(e)) => return Err(DeserializeError::new(e)),
-            Some(Ok(head)) => head,
-        };
-
-        match iter.next() {
-            None => Ok(Blob::new(head)),
-            Some(Err(e)) => Err(DeserializeError::new(e)),
-            Some(Ok(next)) => {
-                let mut combined_blob: Vec<u8> = Vec::with_capacity(head.len() + next.len());
-                combined_blob.extend(head);
-                combined_blob.extend(next);
-                for i in iter {
-                    combined_blob.extend(i.map_err(DeserializeError::new)?);
-                }
-                Ok(Blob::new(combined_blob))
-            }
-        }
+        Ok(if parts.len() == 1 {
+            Blob::new(parts[0]) // Directly convert &[u8] to Blob if there's only one part.
+        } else {
+            Blob::new(parts.concat()) // Concatenate all parts into a single Blob.
+        })
     }
 
     pub fn boolean(&mut self) -> Result<bool, DeserializeError> {
@@ -298,13 +311,13 @@ mod tests {
     fn test_indefinite_length_blob() {
         // Indefinite length blob containing bytes corresponding to `indefinite-byte, chunked, on each comma`.
         // https://cbor.nemo157.com/#type=hex&value=bf69626c6f6256616c75655f50696e646566696e6974652d627974652c49206368756e6b65642c4e206f6e206561636820636f6d6d61ffff
-        let definite_bytes = [
+        let indefinite_bytes = [
             0x5f, 0x50, 0x69, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x65, 0x2d, 0x62,
             0x79, 0x74, 0x65, 0x2c, 0x49, 0x20, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x65, 0x64, 0x2c,
             0x4e, 0x20, 0x6f, 0x6e, 0x20, 0x65, 0x61, 0x63, 0x68, 0x20, 0x63, 0x6f, 0x6d, 0x6d,
             0x61, 0xff,
         ];
-        let mut decoder = Decoder::new(&definite_bytes);
+        let mut decoder = Decoder::new(&indefinite_bytes);
         let member = decoder.blob().expect(
             "
             could not decode str",
