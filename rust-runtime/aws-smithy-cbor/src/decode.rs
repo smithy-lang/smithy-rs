@@ -1,4 +1,4 @@
-use aws_smithy_types::{Blob, DateTime};
+use aws_smithy_types::{byte_stream::error, Blob, DateTime};
 use minicbor::decode::Error;
 
 use crate::data::Type;
@@ -82,16 +82,47 @@ impl<'b> Decoder<'b> {
     }
 
     pub fn string(&mut self) -> Result<String, DeserializeError> {
-        let iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
-        let parts: Vec<&str> = iter
-            .collect::<Result<_, _>>()
-            .map_err(DeserializeError::new)?;
+        let mut iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let head = iter.next();
 
-        Ok(if parts.len() == 1 {
-            parts[0].into() // Directly convert &str to String if there's only one part.
-        } else {
-            parts.concat() // Concatenate all parts into a single String.
-        })
+        let decoded_string = match head {
+            None => String::from(""),
+            Some(head) => {
+                let mut head = String::from(head.map_err(DeserializeError::new)?);
+                if let Some(next) = iter.next() {
+                    let next = next.map_err(DeserializeError::new)?;
+                    head.push_str(next);
+                    for i in iter {
+                        head.push_str(i.map_err(DeserializeError::new)?);
+                    }
+                }
+                head
+            }
+        };
+
+        Ok(decoded_string)
+    }
+
+    pub fn string_alternate(&mut self) -> Result<String, DeserializeError> {
+        let mut iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let head = iter.next();
+
+        let decoded_string = match head {
+            None => String::from(""),
+            Some(head) => {
+                let mut head = String::from(head.map_err(DeserializeError::new)?);
+                if let Some(next) = iter.next() {
+                    let next = next.map_err(DeserializeError::new)?;
+                    head.push_str(next);
+                    for i in iter {
+                        head.push_str(i.map_err(DeserializeError::new)?);
+                    }
+                }
+                head
+            }
+        };
+
+        Ok(decoded_string)
     }
 
     pub fn blob(&mut self) -> Result<Blob, DeserializeError> {
@@ -199,11 +230,36 @@ mod tests {
     use crate::Decoder;
 
     #[test]
-    fn test_str_with_direct_indirect() {
+    fn test_definite_str_is_cow_borrowed() {
         let bytes = [
             0x7f, 0x66, 0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65,
             0xff,
         ];
+        let mut decoder = Decoder::new(&bytes);
+        let member = decoder.str().expect(
+            "
+            could not decode str",
+        );
+        assert_eq!(member, "doubleValue");
+    }
+
+    #[test]
+    fn test_indefinite_str_is_cow_owned() {
+        let bytes = [
+            0x7f, 0x66, 0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65,
+            0xff,
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let member = decoder.str().expect(
+            "
+            could not decode str",
+        );
+        assert_eq!(member, "doubleValue");
+    }
+
+    #[test]
+    fn test_empty_str_works() {
+        let bytes = [0x60];
         let mut decoder = Decoder::new(&bytes);
         let member = decoder.str().expect(
             "
