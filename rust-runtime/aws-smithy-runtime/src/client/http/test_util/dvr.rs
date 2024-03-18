@@ -38,6 +38,42 @@ impl NetworkTraffic {
     pub fn events(&self) -> &Vec<Event> {
         &self.events
     }
+
+    /// Update the network traffic with all `content-length` fields fixed to match the contents
+    pub fn correct_content_lengths(&mut self) {
+        let mut content_lengths: HashMap<(ConnectionId, Direction), usize> = HashMap::new();
+        for event in &self.events {
+            match &event.action {
+                Action::Data { data, direction } => {
+                    let entry = content_lengths.entry((event.connection_id, *direction));
+                    *entry.or_default() += data.copy_to_vec().len();
+                }
+                _ => {}
+            }
+        }
+        for event in &mut self.events {
+            let (headers, direction) = match &mut event.action {
+                Action::Request {
+                    request: Request { headers, .. },
+                } => (headers, Direction::Request),
+                Action::Response {
+                    response: Ok(Response { headers, .. }),
+                } => (headers, Direction::Response),
+                _ => continue,
+            };
+            let Some(computed_content_length) =
+                content_lengths.get(&(event.connection_id, direction))
+            else {
+                continue;
+            };
+            if headers.contains_key("content-length") {
+                headers.insert(
+                    "content-length".to_string(),
+                    vec![computed_content_length.to_string()],
+                );
+            }
+        }
+    }
 }
 
 /// Serialization version of DVR data
@@ -199,7 +235,7 @@ pub enum Action {
 /// Event direction
 ///
 /// During replay, this is used to replay data in the right direction
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Direction {
     /// Request phase
     Request,
@@ -270,11 +306,41 @@ mod tests {
     use std::fs;
 
     #[tokio::test]
+    async fn correctly_fixes_content_lengths() -> Result<(), Box<dyn Error>> {
+        let network_traffic = fs::read_to_string("test-data/example.com.json")?;
+        let mut network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
+        network_traffic.correct_content_lengths();
+        let Action::Request {
+            request: Request { headers, .. },
+        } = &network_traffic.events[0].action
+        else {
+            panic!("unexpected event")
+        };
+        // content length is not added when it wasn't initially present
+        assert_eq!(headers.get("content-length"), None);
+
+        let Action::Response {
+            response: Ok(Response { headers, .. }),
+        } = &network_traffic.events[3].action
+        else {
+            panic!("unexpected event: {:?}", network_traffic.events[3].action);
+        };
+        // content length is not added when it wasn't initially present
+        let expected_length = "hello from example.com".len();
+        assert_eq!(
+            headers.get("content-length"),
+            Some(&vec![expected_length.to_string()])
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn turtles_all_the_way_down() -> Result<(), Box<dyn Error>> {
         // create a replaying connection from a recording, wrap a recording connection around it,
         // make a request, then verify that the same traffic was recorded.
         let network_traffic = fs::read_to_string("test-data/example.com.json")?;
-        let network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
+        let mut network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
+        network_traffic.correct_content_lengths();
         let inner = ReplayingClient::new(network_traffic.events.clone());
         let connection = RecordingClient::new(SharedHttpConnector::new(inner.clone()));
         let req = http::Request::post("https://www.example.com")
