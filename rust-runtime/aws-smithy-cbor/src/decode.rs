@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use aws_smithy_types::{byte_stream::error, Blob, DateTime};
 use minicbor::decode::Error;
 
@@ -75,10 +77,37 @@ impl<'b> Decoder<'b> {
         self.decoder.skip().map_err(DeserializeError::new)
     }
 
-    // Only definite length strings can be converted using `str` because indefinite
-    // length strings have an identifier in between each chunk.
-    pub fn str(&mut self) -> Result<&'b str, DeserializeError> {
-        self.decoder.str().map_err(DeserializeError::new)
+    pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        let mut iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let head = iter.next();
+
+        let decoded_string = match head {
+            None => Cow::Borrowed(""),
+            Some(head) => {
+                let head = head.map_err(DeserializeError::new)?;
+                if let Some(next) = iter.next() {
+                    let next = next.map_err(DeserializeError::new)?;
+                    let mut concatenated_string = String::from(head);
+                    concatenated_string.push_str(next);
+                    for i in iter {
+                        concatenated_string.push_str(i.map_err(DeserializeError::new)?);
+                    }
+                    Cow::Owned(concatenated_string)
+                } else {
+                    Cow::Borrowed(head)
+                }
+            }
+        };
+
+        Ok(decoded_string)
+    }
+
+    pub fn str_alt(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        match self.decoder.str() {
+            Ok(str_value) => Ok(Cow::Borrowed(str_value)),
+            Err(e) if e.is_type_mismatch() => Ok(Cow::Owned(self.string()?)),
+            Err(e) => Err(DeserializeError::new(e)),
+        }
     }
 
     pub fn string(&mut self) -> Result<String, DeserializeError> {
@@ -89,34 +118,8 @@ impl<'b> Decoder<'b> {
             None => String::from(""),
             Some(head) => {
                 let mut head = String::from(head.map_err(DeserializeError::new)?);
-                if let Some(next) = iter.next() {
-                    let next = next.map_err(DeserializeError::new)?;
-                    head.push_str(next);
-                    for i in iter {
-                        head.push_str(i.map_err(DeserializeError::new)?);
-                    }
-                }
-                head
-            }
-        };
-
-        Ok(decoded_string)
-    }
-
-    pub fn string_alternate(&mut self) -> Result<String, DeserializeError> {
-        let mut iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
-        let head = iter.next();
-
-        let decoded_string = match head {
-            None => String::from(""),
-            Some(head) => {
-                let mut head = String::from(head.map_err(DeserializeError::new)?);
-                if let Some(next) = iter.next() {
-                    let next = next.map_err(DeserializeError::new)?;
-                    head.push_str(next);
-                    for i in iter {
-                        head.push_str(i.map_err(DeserializeError::new)?);
-                    }
+                for i in iter {
+                    head.push_str(i.map_err(DeserializeError::new)?);
                 }
                 head
             }
@@ -231,30 +234,33 @@ mod tests {
 
     #[test]
     fn test_definite_str_is_cow_borrowed() {
-        let bytes = [
-            0x7f, 0x66, 0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65,
-            0xff,
+        // Definite length key `thisIsAKey`.
+        let definite_bytes = [
+            0x6a, 0x74, 0x68, 0x69, 0x73, 0x49, 0x73, 0x41, 0x4b, 0x65, 0x79,
         ];
-        let mut decoder = Decoder::new(&bytes);
+        let mut decoder = Decoder::new(&definite_bytes);
         let member = decoder.str().expect(
             "
             could not decode str",
         );
-        assert_eq!(member, "doubleValue");
+        assert_eq!(member, "thisIsAKey");
+        assert!(matches!(member, std::borrow::Cow::Borrowed(_)));
     }
 
     #[test]
     fn test_indefinite_str_is_cow_owned() {
-        let bytes = [
-            0x7f, 0x66, 0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65,
-            0xff,
+        // Indefinite length key `this`, `Is`, `A` and `Key`.
+        let indefinite_bytes = [
+            0x7f, 0x64, 0x74, 0x68, 0x69, 0x73, 0x62, 0x49, 0x73, 0x61, 0x41, 0x63, 0x4b, 0x65,
+            0x79, 0xff,
         ];
-        let mut decoder = Decoder::new(&bytes);
+        let mut decoder = Decoder::new(&indefinite_bytes);
         let member = decoder.str().expect(
             "
             could not decode str",
         );
-        assert_eq!(member, "doubleValue");
+        assert_eq!(member, "thisIsAKey");
+        assert!(matches!(member, std::borrow::Cow::Owned(_)));
     }
 
     #[test]
@@ -265,6 +271,6 @@ mod tests {
             "
             could not decode str",
         );
-        assert_eq!(member, "doubleValue");
+        assert_eq!(member, "");
     }
 }
