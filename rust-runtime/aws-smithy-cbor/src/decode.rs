@@ -75,28 +75,36 @@ impl<'b> Decoder<'b> {
         self.decoder.skip().map_err(DeserializeError::new)
     }
 
-    // TODO An API to support both definite and indefinite strings could be:
-    //
-    //     pub fn str(&mut self, cap: u64) -> Result<&'b str, DeserializeError> {
-    //
+    // Only definite length strings can be converted using `str` because indefinite
+    // length strings have an identifier in between each chunk.
     pub fn str(&mut self) -> Result<&'b str, DeserializeError> {
         self.decoder.str().map_err(DeserializeError::new)
     }
 
-    // TODO Support indefinite text strings.
     pub fn string(&mut self) -> Result<String, DeserializeError> {
-        self.decoder
-            .str()
-            .map(String::from) // This allocates.
-            .map_err(DeserializeError::new)
+        let iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let parts: Vec<&str> = iter
+            .collect::<Result<_, _>>()
+            .map_err(DeserializeError::new)?;
+
+        Ok(if parts.len() == 1 {
+            parts[0].into() // Directly convert &str to String if there's only one part.
+        } else {
+            parts.concat() // Concatenate all parts into a single String.
+        })
     }
 
-    // TODO Support indefinite byte strings.
     pub fn blob(&mut self) -> Result<Blob, DeserializeError> {
-        self.decoder
-            .bytes()
-            .map(Blob::new) // This allocates.
-            .map_err(DeserializeError::new)
+        let iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
+        let parts: Vec<&[u8]> = iter
+            .collect::<Result<_, _>>()
+            .map_err(DeserializeError::new)?;
+
+        Ok(if parts.len() == 1 {
+            Blob::new(parts[0]) // Directly convert &[u8] to Blob if there's only one part.
+        } else {
+            Blob::new(parts.concat()) // Concatenate all parts into a single Blob.
+        })
     }
 
     pub fn boolean(&mut self) -> Result<bool, DeserializeError> {
@@ -183,5 +191,24 @@ where
         self.inner
             .next()
             .map(|opt| opt.map_err(DeserializeError::new))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Decoder;
+
+    #[test]
+    fn test_str_with_direct_indirect() {
+        let bytes = [
+            0x7f, 0x66, 0x64, 0x6f, 0x75, 0x62, 0x6c, 0x65, 0x65, 0x56, 0x61, 0x6c, 0x75, 0x65,
+            0xff,
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let member = decoder.str().expect(
+            "
+            could not decode str",
+        );
+        assert_eq!(member, "doubleValue");
     }
 }
