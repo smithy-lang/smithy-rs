@@ -279,7 +279,7 @@ jobs:
         fi
         echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
     - name: Tag release
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
         script: |

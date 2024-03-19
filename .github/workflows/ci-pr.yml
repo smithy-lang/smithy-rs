@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Attempt to load a docker login password
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -69,7 +69,7 @@ jobs:
         DOCKER_BUILDKIT: 1
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Acquire credentials
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -127,7 +127,7 @@ jobs:
         ref: ${{ inputs.git_ref }}
     - name: Get PR info
       id: check-breaking-label
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const response = await github.rest.pulls.get({

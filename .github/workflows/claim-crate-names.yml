@@ -27,7 +27,7 @@ jobs:
     steps:
     - name: Main branch check
       if: ${{ github.ref_name != 'main' }}
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
