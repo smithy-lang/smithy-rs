@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.SigV4AuthDecorator
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -41,7 +42,8 @@ class S3ExpressDecorator : ClientCodegenDecorator {
         const val ORDER: Byte = 0
     }
 
-    override val order: Byte = ORDER
+    // This decorator must decorate after SigV4AuthDecorator so that sigv4 appears before sigv4-s3express within auth_scheme_options
+    override val order: Byte = (SigV4AuthDecorator.ORDER - 1).toByte()
 
     private fun sigv4S3Express(runtimeConfig: RuntimeConfig) =
         writable {
