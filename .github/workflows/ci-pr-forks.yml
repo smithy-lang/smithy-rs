@@ -21,7 +21,7 @@ jobs:
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
     - name: Acquire base image
@@ -30,7 +30,7 @@ jobs:
         DOCKER_BUILDKIT: 1
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image

@@ -46,7 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.head_revision }}
@@ -81,8 +81,8 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v3
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
       name: Gradle Cache
       with:
         path: |
@@ -147,7 +147,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
     - name: Download all artifacts

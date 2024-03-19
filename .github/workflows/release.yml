@@ -74,7 +74,7 @@ jobs:
       (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
     runs-on: smithy_ubuntu-latest_16-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
@@ -83,7 +83,7 @@ jobs:
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image
@@ -108,12 +108,12 @@ jobs:
     if: always()
     runs-on: smithy_ubuntu-latest_8-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
@@ -141,7 +141,7 @@ jobs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
@@ -173,7 +173,7 @@ jobs:
       release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
       commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
@@ -240,7 +240,7 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
         path: smithy-rs
@@ -321,7 +321,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
