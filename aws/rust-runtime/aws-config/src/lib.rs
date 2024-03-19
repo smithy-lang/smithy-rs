@@ -118,12 +118,10 @@ pub mod identity {
 #[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg(test)]
-mod test_case;
-
-mod fs_util;
 mod http_credential_provider;
 mod json_credentials;
+#[cfg(test)]
+mod test_case;
 
 pub mod credential_process;
 pub mod default_provider;
