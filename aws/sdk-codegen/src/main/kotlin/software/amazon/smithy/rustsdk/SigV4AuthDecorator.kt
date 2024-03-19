@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
+import software.amazon.smithy.rustsdk.customize.s3.S3ExpressDecorator
 
 internal fun ClientCodegenContext.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
@@ -61,7 +62,9 @@ class SigV4AuthDecorator : ConditionalDecorator(
     delegateTo =
         object : ClientCodegenDecorator {
             override val name: String get() = "SigV4AuthDecorator"
-            override val order: Byte = 0
+
+            // This decorator must decorate before S3ExpressDecorator so that sigv4 appears before sigv4-s3express within auth_scheme_options
+            override val order: Byte = (S3ExpressDecorator.ORDER + 1).toByte()
 
             private val sigv4a = "sigv4a"
 

@@ -36,7 +36,12 @@ import software.amazon.smithy.rustsdk.InlineAwsDependency
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
-    override val order: Byte = 0
+
+    companion object {
+        const val ORDER: Byte = 0
+    }
+
+    override val order: Byte = ORDER
 
     private fun sigv4S3Express(runtimeConfig: RuntimeConfig) =
         writable {
