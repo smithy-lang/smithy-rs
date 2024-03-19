@@ -38,10 +38,6 @@ import software.amazon.smithy.rustsdk.SigV4AuthDecorator
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
 
-    companion object {
-        const val ORDER: Byte = 0
-    }
-
     // This decorator must decorate after SigV4AuthDecorator so that sigv4 appears before sigv4-s3express within auth_scheme_options
     override val order: Byte = (SigV4AuthDecorator.ORDER - 1).toByte()
 
