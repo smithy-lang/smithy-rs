@@ -45,8 +45,10 @@ impl ProfileSet {
     ) -> Self {
         use crate::profile::section::Property;
 
-        let mut base = ProfileSet::default();
-        base.selected_profile = selected_profile.into();
+        let mut base = ProfileSet {
+            selected_profile: selected_profile.into(),
+            ..Default::default()
+        };
         for (name, profile) in profiles {
             base.profiles.insert(
                 name.clone(),
@@ -119,8 +121,10 @@ impl ProfileSet {
 
     /// Given a [`Source`] of profile config, parse and merge them into a `ProfileSet`.
     pub fn parse(source: Source) -> Result<Self, ProfileParseError> {
-        let mut base = ProfileSet::default();
-        base.selected_profile = source.profile;
+        let mut base = ProfileSet {
+            selected_profile: source.profile,
+            ..Default::default()
+        };
 
         for file in source.files {
             normalize::merge_in(&mut base, parse_profile_file(&file)?, file.kind);

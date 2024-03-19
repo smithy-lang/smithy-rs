@@ -27,6 +27,7 @@ class ServiceEnvConfigDecorator : ClientCodegenDecorator {
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
                 """
+                #[allow(dead_code)]
                 fn service_config_key<'a>(
                     env: &'a str,
                     profile: &'a str,
