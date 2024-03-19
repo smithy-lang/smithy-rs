@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2"
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2215)
 // This is a temporary model to test AwsJson 1.0 with @streaming.
@@ -17,80 +17,78 @@ use com.aws.example#CheckHealth
 @title("Pokémon Service")
 @awsJson1_0
 service PokemonService {
-    version: "2021-12-01",
+    version: "2024-03-18"
     operations: [
-        GetServerStatistics,
-        DoNothing,
-        CapturePokemon,
+        GetServerStatistics
+        DoNothing
+        CapturePokemon
         CheckHealth
-    ],
+    ]
 }
 
 /// Capture Pokémons via event streams.
 operation CapturePokemon {
-    input: CapturePokemonEventsInput,
-    output: CapturePokemonEventsOutput,
-    errors: [UnsupportedRegionError, ThrottlingError, ValidationException]
-}
-
-@input
-structure CapturePokemonEventsInput {
-    events: AttemptCapturingPokemonEvent,
-}
-
-@output
-structure CapturePokemonEventsOutput {
-    events: CapturePokemonEvents,
+    input := {
+        events: AttemptCapturingPokemonEvent
+    }
+    output := {
+        events: CapturePokemonEvents
+    }
+    errors: [
+        UnsupportedRegionError
+        ThrottlingError
+        ValidationException
+    ]
 }
 
 @streaming
 union AttemptCapturingPokemonEvent {
-    event: CapturingEvent,
-    masterball_unsuccessful: MasterBallUnsuccessful,
+    event: CapturingEvent
+    masterball_unsuccessful: MasterBallUnsuccessful
 }
 
 structure CapturingEvent {
     @eventPayload
-    payload: CapturingPayload,
+    payload: CapturingPayload
 }
 
 structure CapturingPayload {
-    name: String,
-    pokeball: String,
+    name: String
+    pokeball: String
 }
 
 @streaming
 union CapturePokemonEvents {
-    event: CaptureEvent,
-    invalid_pokeball: InvalidPokeballError,
-    throttlingError: ThrottlingError,
+    event: CaptureEvent
+    invalid_pokeball: InvalidPokeballError
+    throttlingError: ThrottlingError
 }
 
 structure CaptureEvent {
     @eventHeader
-    name: String,
+    name: String
     @eventHeader
-    captured: Boolean,
+    captured: Boolean
     @eventHeader
-    shiny: Boolean,
+    shiny: Boolean
     @eventPayload
-    pokedex_update: Blob,
+    pokedex_update: Blob
 }
 
 @error("server")
 structure UnsupportedRegionError {
     @required
-    region: String,
+    region: String
 }
 
 @error("client")
 structure InvalidPokeballError {
     @required
-    pokeball: String,
+    pokeball: String
 }
 @error("server")
 structure MasterBallUnsuccessful {
-    message: String,
+    message: String
 }
 
 @error("client")
