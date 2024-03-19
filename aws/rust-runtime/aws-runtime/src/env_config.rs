@@ -456,19 +456,19 @@ mod test {
             Properties::new_from_slice(&[
                 (
                     new_prop_key("services", "dev-wrong", "s3", Some("some_key")),
-                    "998".to_string(),
+                    "998".into(),
                 ),
                 (
                     new_prop_key("services", "dev-wrong", "ec2", Some("some_key")),
-                    "999".to_string(),
+                    "999".into(),
                 ),
                 (
                     new_prop_key("services", "dev", "s3", Some("some_key")),
-                    "5".to_string(),
+                    "5".into(),
                 ),
                 (
                     new_prop_key("services", "dev", "ec2", Some("some_key")),
-                    "6".to_string(),
+                    "6".into(),
                 ),
             ]),
         );
