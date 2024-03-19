@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::profile::profile_file::{ProfileFileKind, ProfileFiles};
+use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
 use aws_sdk_dynamodb::config::{
     BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
 };
