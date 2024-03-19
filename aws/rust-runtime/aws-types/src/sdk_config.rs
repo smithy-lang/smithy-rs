@@ -840,8 +840,7 @@ impl SdkConfig {
             use_dual_stack: self.use_dual_stack,
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
-            // TODO
-            service_config: None,
+            service_config: self.service_config.and_then(Arc::into_inner),
         }
     }
 }

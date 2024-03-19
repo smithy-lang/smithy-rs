@@ -470,10 +470,9 @@ fn credential_process_from_profile(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::credentials::repr::{BaseProvider, ProfileChain};
+    use crate::profile::credentials::repr::BaseProvider;
     use crate::sensitive_command::CommandWithSensitiveArgs;
     use serde::Deserialize;
-    use std::collections::HashMap;
 
     #[cfg(feature = "test-utils")]
     #[test]
@@ -517,6 +516,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "test-utils")]
     #[derive(Deserialize)]
     struct TestCase {
         docs: String,
@@ -524,6 +524,7 @@ mod tests {
         output: TestOutput,
     }
 
+    #[cfg(feature = "test-utils")]
     #[derive(Deserialize)]
     struct TestInput {
         profiles: HashMap<String, HashMap<String, String>>,
@@ -532,6 +533,7 @@ mod tests {
         sso_sessions: HashMap<String, HashMap<String, String>>,
     }
 
+    #[cfg(feature = "test-utils")]
     fn to_test_output(profile_chain: ProfileChain<'_>) -> Vec<Provider> {
         let mut output = vec![];
         match profile_chain.base {

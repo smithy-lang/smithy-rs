@@ -85,6 +85,7 @@ pub mod builder {
         }
     }
 
+    #[allow(clippy::enum_variant_names)]
     #[derive(Debug)]
     enum ErrorKind {
         MissingServiceId,

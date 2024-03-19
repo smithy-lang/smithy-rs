@@ -41,6 +41,7 @@ impl ProfileSet {
         profiles: HashMap<String, HashMap<String, String>>,
         selected_profile: impl Into<Cow<'static, str>>,
         sso_sessions: HashMap<String, HashMap<String, String>>,
+        other_sections: Properties,
     ) -> Self {
         use crate::profile::section::Property;
 
@@ -70,6 +71,7 @@ impl ProfileSet {
                 ),
             );
         }
+        base.other_sections = other_sections;
         base
     }
 

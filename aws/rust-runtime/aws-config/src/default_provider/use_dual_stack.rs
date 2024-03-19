@@ -33,8 +33,8 @@ pub(crate) async fn use_dual_stack_provider(provider_config: &ProviderConfig) ->
 #[cfg(test)]
 mod test {
     use crate::default_provider::use_dual_stack::use_dual_stack_provider;
-    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
+    use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
     use tracing_test::traced_test;
 

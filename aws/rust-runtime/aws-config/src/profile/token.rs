@@ -5,14 +5,14 @@
 
 //! Profile File Based Token Providers
 
-use crate::{
-    profile::{cell::ErrorTakingOnceCell, profile_file::ProfileFiles, ProfileSet},
-    provider_config::ProviderConfig,
-    sso::SsoTokenProvider,
-};
+use crate::profile::cell::ErrorTakingOnceCell;
+use crate::provider_config::ProviderConfig;
+use crate::sso::SsoTokenProvider;
 use aws_credential_types::provider::{
     error::TokenError, future, token::ProvideToken, token::Result as TokenResult,
 };
+use aws_runtime::profile::profile_file::ProfileFiles;
+use aws_runtime::profile::profile_set::ProfileSet;
 use aws_types::{region::Region, SdkConfig};
 
 async fn load_profile_set(provider_config: &ProviderConfig) -> Result<&ProfileSet, TokenError> {

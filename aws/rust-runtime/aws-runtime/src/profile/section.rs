@@ -56,7 +56,7 @@ pub struct PropertiesKey {
 }
 
 impl PropertiesKey {
-    /// Create a new [`PropertiseKeyBuilder`].
+    /// Create a new [`PropertiesKeyBuilder`].
     pub fn builder() -> PropertiesKeyBuilder {
         Default::default()
     }
@@ -147,6 +147,15 @@ impl Properties {
     /// Create a new empty [`Properties`].
     pub fn new() -> Self {
         Default::default()
+    }
+
+    #[cfg(test)]
+    pub fn new_from_slice(slice: &[(PropertiesKey, PropertyValue)]) -> Self {
+        let mut properties = Self::new();
+        for (key, value) in slice {
+            properties.insert(key.clone(), value.clone());
+        }
+        properties
     }
 
     /// Insert a new key/value pair into this map.
@@ -304,120 +313,3 @@ impl Section for SsoSession {
         self.0.insert(name, value)
     }
 }
-
-// TODO
-// #[cfg(test)]
-// mod test {
-//     use super::PropertiesKey;
-//     use aws_types::os_shim_internal::{Env, Fs};
-//
-//     #[tokio::test]
-//     async fn test_other_properties_path_get() {
-//         let _ = tracing_subscriber::fmt::try_init();
-//         const CFG: &str = r#"[default]
-// services = foo
-//
-// [services foo]
-// s3 =
-//   endpoint_url = http://localhost:3000
-//   setting_a = foo
-//   setting_b = bar
-//
-// ec2 =
-//   endpoint_url = http://localhost:2000
-//   setting_a = foo
-//
-// [services bar]
-// ec2 =
-//   endpoint_url = http://localhost:3000
-//   setting_b = bar
-// "#;
-//         let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-//         let fs = Fs::from_slice(&[("config", CFG)]);
-//
-//         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-//
-//         let p = provider_config.try_profile().await.unwrap();
-//         let other_sections = p.other_sections();
-//
-//         assert_eq!(
-//             "http://localhost:3000",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "foo".to_owned(),
-//                     property_name: "s3".to_owned(),
-//                     sub_property_name: Some("endpoint_url".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//         assert_eq!(
-//             "foo",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "foo".to_owned(),
-//                     property_name: "s3".to_owned(),
-//                     sub_property_name: Some("setting_a".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//         assert_eq!(
-//             "bar",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "foo".to_owned(),
-//                     property_name: "s3".to_owned(),
-//                     sub_property_name: Some("setting_b".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//
-//         assert_eq!(
-//             "http://localhost:2000",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "foo".to_owned(),
-//                     property_name: "ec2".to_owned(),
-//                     sub_property_name: Some("endpoint_url".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//         assert_eq!(
-//             "foo",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "foo".to_owned(),
-//                     property_name: "ec2".to_owned(),
-//                     sub_property_name: Some("setting_a".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//
-//         assert_eq!(
-//             "http://localhost:3000",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "bar".to_owned(),
-//                     property_name: "ec2".to_owned(),
-//                     sub_property_name: Some("endpoint_url".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//         assert_eq!(
-//             "bar",
-//             other_sections
-//                 .get(&PropertiesKey {
-//                     section_key: "services".to_owned(),
-//                     section_name: "bar".to_owned(),
-//                     property_name: "ec2".to_owned(),
-//                     sub_property_name: Some("setting_b".to_owned())
-//                 })
-//                 .expect("setting exists at path")
-//         );
-//     }
-// }

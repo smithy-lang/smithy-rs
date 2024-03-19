@@ -124,8 +124,6 @@ impl<E: Error> Error for EnvConfigError<E> {
 ///
 /// `EnvConfigValue` will first look in the environment, then the AWS profile. They track the
 /// provenance of properties so that unified validation errors can be created.
-///
-/// For a usage example, see [`crate::default_provider::retry_config`]
 #[derive(Default, Debug)]
 pub struct EnvConfigValue<'a> {
     environment_variable: Option<Cow<'a, str>>,
@@ -274,220 +272,248 @@ fn format_service_id_for_profile(service_id: impl AsRef<str>) -> String {
     service_id.as_ref().to_lowercase().replace(' ', "-")
 }
 
-// TODO
-// #[cfg(test)]
-// mod test {
-//     use super::EnvConfigValue;
-//     use crate::provider_config::ProviderConfig;
-//     use aws_types::os_shim_internal::{Env, Fs};
-//     use std::num::ParseIntError;
-//
-//     fn validate_some_key(s: &str) -> Result<i32, ParseIntError> {
-//         s.parse()
-//     }
-//
-//     #[tokio::test]
-//     async fn test_service_config_multiple_services() {
-//         let env = Env::from_slice(&[
-//             ("AWS_CONFIG_FILE", "config"),
-//             ("AWS_SOME_KEY", "1"),
-//             ("AWS_SOME_KEY_SERVICE", "2"),
-//             ("AWS_SOME_KEY_ANOTHER_SERVICE", "3"),
-//         ]);
-//         let fs = Fs::from_slice(&[(
-//             "config",
-//             r#"[default]
-// some_key = 4
-// services = dev
-//
-// [services dev]
-// service =
-//   some_key = 5
-// another_service =
-//   some_key = 6
-// "#,
-//         )]);
-//
-//         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-//         let global_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(1), global_from_env);
-//
-//         let service_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .service_id("service")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(2), service_from_env);
-//
-//         let other_service_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .service_id("another_service")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(3), other_service_from_env);
-//
-//         let global_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(4), global_from_profile);
-//
-//         let service_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .service_id("service")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(5), service_from_profile);
-//
-//         let service_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .service_id("another_service")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(6), service_from_profile);
-//     }
-//
-//     #[tokio::test]
-//     async fn test_service_config_precedence() {
-//         let env = Env::from_slice(&[
-//             ("AWS_CONFIG_FILE", "config"),
-//             ("AWS_SOME_KEY", "1"),
-//             ("AWS_SOME_KEY_S3", "2"),
-//         ]);
-//         let fs = Fs::from_slice(&[(
-//             "config",
-//             r#"[default]
-// some_key = 3
-// services = dev
-//
-// [services dev]
-// s3 =
-//   some_key = 4
-// "#,
-//         )]);
-//
-//         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-//         let global_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(1), global_from_env);
-//
-//         let service_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .service_id("s3")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(2), service_from_env);
-//
-//         let global_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(3), global_from_profile);
-//
-//         let service_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .service_id("s3")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(4), service_from_profile);
-//     }
-//
-//     #[tokio::test]
-//     async fn test_multiple_services() {
-//         let env = Env::from_slice(&[
-//             ("AWS_CONFIG_FILE", "config"),
-//             ("AWS_SOME_KEY", "1"),
-//             ("AWS_SOME_KEY_S3", "2"),
-//             ("AWS_SOME_KEY_EC2", "3"),
-//         ]);
-//         let fs = Fs::from_slice(&[(
-//             "config",
-//             r#"[default]
-// some_key = 4
-// services = dev
-//
-// [services dev-wrong]
-// s3 =
-//   some_key = 998
-// ec2 =
-//   some_key = 999
-//
-// [services dev]
-// s3 =
-//   some_key = 5
-// ec2 =
-//   some_key = 6
-// "#,
-//         )]);
-//
-//         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
-//         let global_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(1), global_from_env);
-//
-//         let service_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .service_id("s3")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(2), service_from_env);
-//
-//         let service_from_env = EnvConfigValue::new()
-//             .env("AWS_SOME_KEY")
-//             .profile("some_key")
-//             .service_id("ec2")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(3), service_from_env);
-//
-//         let global_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(4), global_from_profile);
-//
-//         let service_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .service_id("s3")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(5), service_from_profile);
-//
-//         let service_from_profile = EnvConfigValue::new()
-//             .profile("some_key")
-//             .service_id("ec2")
-//             .validate(&provider_config, validate_some_key)
-//             .await
-//             .expect("config resolution succeeds");
-//         assert_eq!(Some(6), service_from_profile);
-//     }
-// }
+#[cfg(test)]
+mod test {
+    use std::borrow::Cow;
+    use std::collections::HashMap;
+    use std::num::ParseIntError;
+
+    use aws_types::os_shim_internal::Env;
+
+    use crate::profile::profile_set::ProfileSet;
+    use crate::profile::section::{Properties, PropertiesKey};
+
+    use super::EnvConfigValue;
+
+    fn validate_some_key(s: &str) -> Result<i32, ParseIntError> {
+        s.parse()
+    }
+
+    fn new_prop_key(
+        section_key: impl Into<String>,
+        section_name: impl Into<String>,
+        property_name: impl Into<String>,
+        sub_property_name: Option<impl Into<String>>,
+    ) -> PropertiesKey {
+        let mut builder = PropertiesKey::builder()
+            .section_key(section_key)
+            .section_name(section_name)
+            .property_name(property_name);
+
+        if let Some(sub_property_name) = sub_property_name {
+            builder = builder.sub_property_name(sub_property_name);
+        }
+
+        builder.build().unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_service_config_multiple_services() {
+        let env = Env::from_slice(&[
+            ("AWS_CONFIG_FILE", "config"),
+            ("AWS_SOME_KEY", "1"),
+            ("AWS_SOME_KEY_SERVICE", "2"),
+            ("AWS_SOME_KEY_ANOTHER_SERVICE", "3"),
+        ]);
+        let profiles = ProfileSet::new(
+            HashMap::from([(
+                "default".to_owned(),
+                HashMap::from([
+                    ("some_key".to_owned(), "4".to_owned()),
+                    ("services".to_owned(), "dev".to_owned()),
+                ]),
+            )]),
+            Cow::Borrowed("default"),
+            HashMap::new(),
+            Properties::new_from_slice(&[
+                (
+                    new_prop_key("services", "dev", "service", Some("some_key")),
+                    "5".to_string(),
+                ),
+                (
+                    new_prop_key("services", "dev", "another_service", Some("some_key")),
+                    "6".to_string(),
+                ),
+            ]),
+        );
+        let profiles = Some(&profiles);
+        let global_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(1), global_from_env);
+
+        let service_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("service")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(2), service_from_env);
+
+        let other_service_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("another_service")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(3), other_service_from_env);
+
+        let global_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(4), global_from_profile);
+
+        let service_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .service_id("service")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(5), service_from_profile);
+
+        let service_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .service_id("another_service")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(6), service_from_profile);
+    }
+
+    #[tokio::test]
+    async fn test_service_config_precedence() {
+        let env = Env::from_slice(&[
+            ("AWS_CONFIG_FILE", "config"),
+            ("AWS_SOME_KEY", "1"),
+            ("AWS_SOME_KEY_S3", "2"),
+        ]);
+
+        let profiles = ProfileSet::new(
+            HashMap::from([(
+                "default".to_owned(),
+                HashMap::from([
+                    ("some_key".to_owned(), "3".to_owned()),
+                    ("services".to_owned(), "dev".to_owned()),
+                ]),
+            )]),
+            Cow::Borrowed("default"),
+            HashMap::new(),
+            Properties::new_from_slice(&[(
+                new_prop_key("services", "dev", "s3", Some("some_key")),
+                "4".to_string(),
+            )]),
+        );
+        let profiles = Some(&profiles);
+        let global_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(1), global_from_env);
+
+        let service_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(2), service_from_env);
+
+        let global_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(3), global_from_profile);
+
+        let service_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(4), service_from_profile);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_services() {
+        let env = Env::from_slice(&[
+            ("AWS_CONFIG_FILE", "config"),
+            ("AWS_SOME_KEY", "1"),
+            ("AWS_SOME_KEY_S3", "2"),
+            ("AWS_SOME_KEY_EC2", "3"),
+        ]);
+
+        let profiles = ProfileSet::new(
+            HashMap::from([(
+                "default".to_owned(),
+                HashMap::from([
+                    ("some_key".to_owned(), "4".to_owned()),
+                    ("services".to_owned(), "dev".to_owned()),
+                ]),
+            )]),
+            Cow::Borrowed("default"),
+            HashMap::new(),
+            Properties::new_from_slice(&[
+                (
+                    new_prop_key("services", "dev-wrong", "s3", Some("some_key")),
+                    "998".to_string(),
+                ),
+                (
+                    new_prop_key("services", "dev-wrong", "ec2", Some("some_key")),
+                    "999".to_string(),
+                ),
+                (
+                    new_prop_key("services", "dev", "s3", Some("some_key")),
+                    "5".to_string(),
+                ),
+                (
+                    new_prop_key("services", "dev", "ec2", Some("some_key")),
+                    "6".to_string(),
+                ),
+            ]),
+        );
+        let profiles = Some(&profiles);
+        let global_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(1), global_from_env);
+
+        let service_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(2), service_from_env);
+
+        let service_from_env = EnvConfigValue::new()
+            .env("AWS_SOME_KEY")
+            .profile("some_key")
+            .service_id("ec2")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(3), service_from_env);
+
+        let global_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(4), global_from_profile);
+
+        let service_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .service_id("s3")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(5), service_from_profile);
+
+        let service_from_profile = EnvConfigValue::new()
+            .profile("some_key")
+            .service_id("ec2")
+            .validate(&env, profiles, validate_some_key)
+            .expect("config resolution succeeds");
+        assert_eq!(Some(6), service_from_profile);
+    }
+}

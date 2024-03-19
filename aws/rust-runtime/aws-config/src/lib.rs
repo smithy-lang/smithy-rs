@@ -873,11 +873,11 @@ mod loader {
 
     #[cfg(test)]
     mod test {
-        use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
         use crate::BehaviorVersion;
         use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
+        use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
         use aws_types::app_name::AppName;
@@ -886,8 +886,8 @@ mod loader {
         use std::sync::Arc;
         use tracing_test::traced_test;
 
-        #[tokio::test]
         #[traced_test]
+        #[tokio::test]
         async fn provider_config_used() {
             let env = Env::from_slice(&[
                 ("AWS_MAX_ATTEMPTS", "10"),

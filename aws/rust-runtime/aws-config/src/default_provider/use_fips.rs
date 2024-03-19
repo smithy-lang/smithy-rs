@@ -40,8 +40,8 @@ pub async fn use_fips_provider(provider_config: &ProviderConfig) -> Option<bool>
 #[cfg(test)]
 mod test {
     use crate::default_provider::use_fips::use_fips_provider;
-    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
+    use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
     use tracing_test::traced_test;
 

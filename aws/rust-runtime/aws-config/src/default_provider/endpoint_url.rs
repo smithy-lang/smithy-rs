@@ -41,8 +41,8 @@ pub async fn endpoint_url_provider(provider_config: &ProviderConfig) -> Option<S
 mod test {
     use super::endpoint_url_provider;
     use super::env;
-    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
+    use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
     use tracing_test::traced_test;
 
