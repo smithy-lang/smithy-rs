@@ -27,7 +27,7 @@ jobs:
     steps:
     - name: Main branch check
       if: ${{ github.ref_name != 'main' }}
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
@@ -39,7 +39,7 @@ jobs:
     - main-branch-check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         fetch-depth: 0
@@ -47,7 +47,7 @@ jobs:
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image
@@ -65,11 +65,11 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Publish to crates.io
       shell: bash
       env:
-         CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
         cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully

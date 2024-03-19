@@ -46,7 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.head_revision }}
@@ -55,7 +55,7 @@ jobs:
       with:
         action: generate-codegen-diff
         action-arguments: ${{ inputs.base_revision }}
-    - uses: aws-actions/configure-aws-credentials@v2.2.0
+    - uses: aws-actions/configure-aws-credentials@v4
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
@@ -81,8 +81,8 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/cache@v3
+    - uses: actions/checkout@v4
+    - uses: actions/cache@v4
       name: Gradle Cache
       with:
         path: |
@@ -93,7 +93,7 @@ jobs:
           ${{ runner.os }}-gradle-
       # JDK is needed to generate code
     - name: Set up JDK
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         distribution: corretto
         java-package: jdk
@@ -126,7 +126,7 @@ jobs:
         ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
         echo 'bot-message=A [new doc preview](https://d2luzm2xt3nokh.cloudfront.net/docs/'${{ inputs.head_revision }}'/index.html) is ready to view.' >> "${GITHUB_OUTPUT}"
-    - uses: aws-actions/configure-aws-credentials@v2.2.0
+    - uses: aws-actions/configure-aws-credentials@v4
       name: Acquire credentials for uploading to S3
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
@@ -147,7 +147,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
     - name: Download all artifacts
@@ -158,7 +158,7 @@ jobs:
         set -eux
         echo "codegen-diff=$(cat ./bot-message-codegen-diff)" >> "${GITHUB_OUTPUT}"
     - name: Post bot comment
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           await github.rest.issues.createComment({
