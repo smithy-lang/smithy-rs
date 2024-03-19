@@ -28,11 +28,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.SdkConfigSection
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -66,7 +69,54 @@ class S3ExpressDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
+    ): List<ConfigCustomization> {
+//        val runtimeConfig = codegenContext.runtimeConfig
+//        val boolSymbol = RuntimeType.Bool.toSymbol()
+
+        return baseCustomizations +
+            listOf(
+                S3ExpressIdentityProviderConfig(codegenContext),
+//            standardConfigParam(
+//                ConfigParam.Builder()
+//                    .name("disable_express_session_auth")
+//                    .type(boolSymbol)
+//                    .newtype(
+//                        configParamNewtype(
+//                            "DisableExpressSessionAuth",
+//                            boolSymbol,
+//                            runtimeConfig,
+//                        ),
+//                    )
+//                    .setterDocs(writable { docs("A") })
+//                    .getterDocs(writable { docs("B") })
+//                    .build(),
+//            ),
+//            standardConfigParam(
+//                ConfigParam.Builder()
+//                    .name("disable_multi_region_access_points")
+//                    .type(boolSymbol)
+//                    .newtype(
+//                        configParamNewtype(
+//                            "DisableMultiRegionAccessPoints",
+//                            boolSymbol,
+//                            runtimeConfig,
+//                        ),
+//                    )
+//                    .setterDocs(writable { docs("C") })
+//                    .getterDocs(writable { docs("D") })
+//                    .build(),
+//            ),
+//            standardConfigParam(
+//                ConfigParam.Builder()
+//                    .name("use_arn_region")
+//                    .type(boolSymbol)
+//                    .newtype(configParamNewtype("UseArnRegion", boolSymbol, runtimeConfig))
+//                    .setterDocs(writable { docs("E") })
+//                    .getterDocs(writable { docs("F") })
+//                    .build(),
+//            ),
+            )
+    }
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -77,6 +127,41 @@ class S3ExpressDecorator : ClientCodegenDecorator {
             S3ExpressRequestChecksumCustomization(
                 codegenContext, operation,
             )
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        return listOf(
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_disable_s3_express_session_auth(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_EXPRESS_SESSION_AUTH", "s3_disable_express_session_auth"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    ${section.serviceConfigBuilder}.set_disable_multi_region_access_points(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS", "s3_disable_multi_region_access_points"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    ${section.serviceConfigBuilder}.set_use_arn_region(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_USE_ARN_REGION", "s3_use_arn_region"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    """,
+                )
+            },
+        )
+    }
 }
 
 private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
