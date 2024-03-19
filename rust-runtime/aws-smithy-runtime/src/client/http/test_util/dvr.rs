@@ -43,12 +43,9 @@ impl NetworkTraffic {
     pub fn correct_content_lengths(&mut self) {
         let mut content_lengths: HashMap<(ConnectionId, Direction), usize> = HashMap::new();
         for event in &self.events {
-            match &event.action {
-                Action::Data { data, direction } => {
-                    let entry = content_lengths.entry((event.connection_id, *direction));
-                    *entry.or_default() += data.copy_to_vec().len();
-                }
-                _ => {}
+            if let Action::Data { data, direction } = &event.action {
+                let entry = content_lengths.entry((event.connection_id, *direction));
+                *entry.or_default() += data.copy_to_vec().len();
             }
         }
         for event in &mut self.events {
