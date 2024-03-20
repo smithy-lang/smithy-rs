@@ -77,7 +77,7 @@ macro_rules! mock {
 
 // This could be obviated by a reasonable trait, since you can express it with SdkConfig if clients implement From<&SdkConfig>.
 
-/// `make_client!` macro produces a Client configured with a number of Rules and appropriate test default configuration.
+/// `mock_client!` macro produces a Client configured with a number of Rules and appropriate test default configuration.
 ///
 /// # Examples
 /// **Create a client that uses a mock failure and then a success**:
@@ -86,29 +86,29 @@ macro_rules! mock {
 /// use aws_sdk_s3::types::error::NoSuchKey;
 /// use aws_sdk_s3::Client;
 /// use aws_smithy_types::byte_stream::ByteStream;
-/// use aws_smithy_mocks_experimental::{make_client, mock, RuleMode};
+/// use aws_smithy_mocks_experimental::{mock_client, mock, RuleMode};
 /// let get_object_happy_path = mock!(Client::get_object)
 ///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
 ///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build());
 /// let get_object_error_path = mock!(Client::get_object)
 ///   .then_error(||GetObjectError::NoSuchKey(NoSuchKey::builder().build()));
-/// let client = make_client!(aws_sdk_s3, RuleMode::Sequential, &[&get_object_error_path, &get_object_happy_path]);
+/// let client = mock_client!(aws_sdk_s3, RuleMode::Sequential, &[&get_object_error_path, &get_object_happy_path]);
 /// ```
 #[macro_export]
-macro_rules! make_client {
-    ($aws_crate: ident, $rules: expr) => {
-        make_client!($aws_crate, $crate::RuleMode::Sequential, $rules)
+macro_rules! mock_client {
+    ($client_crate: ident, $rules: expr) => {
+        mock_client!($client_crate, $crate::RuleMode::Sequential, $rules)
     };
-    ($aws_crate: ident, $rule_mode: expr, $rules: expr) => {{
+    ($client_crate: ident, $rule_mode: expr, $rules: expr) => {{
         let mut mock_response_interceptor =
             $crate::MockResponseInterceptor::new().rule_mode($rule_mode);
         for rule in $rules {
             mock_response_interceptor = mock_response_interceptor.with_rule(rule)
         }
-        $aws_crate::client::Client::from_conf(
-            $aws_crate::config::Config::builder()
+        $client_crate::client::Client::from_conf(
+            $client_crate::config::Config::builder()
                 .with_test_defaults()
-                .region($aws_crate::config::Region::from_static("us-east-1"))
+                .region($client_crate::config::Region::from_static("us-east-1"))
                 .interceptor(mock_response_interceptor)
                 .build(),
         )
@@ -133,7 +133,6 @@ enum MockOutput {
 /// RuleMode describes how rules will be interpreted.
 /// - In RuleMode::MatchAny, the first matching rule will be applied, and the rules will remain unchanged.
 /// - In RuleMode::Sequential, the first matching rule will be applied, and that rule will be removed from the list of rules.
-#[derive()]
 pub enum RuleMode {
     MatchAny,
     Sequential,
