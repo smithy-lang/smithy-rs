@@ -14,7 +14,7 @@ use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::error::ErrorMetadata;
 
-use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor};
+use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, RuleMode};
 
 const S3_NO_SUCH_KEY: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
 <Error>
@@ -52,10 +52,10 @@ async fn create_mock_s3_get_object() {
     });
 
     let get_object_mocks = MockResponseInterceptor::new()
+        .rule_mode(RuleMode::Sequential)
         .with_rule(&s3_404)
         .with_rule(&s3_real_object)
-        .with_rule(&modeled_error)
-        .enforce_order();
+        .with_rule(&modeled_error);
 
     let s3 = aws_sdk_s3::Client::from_conf(
         Config::builder()
