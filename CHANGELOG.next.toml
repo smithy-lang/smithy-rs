@@ -38,3 +38,9 @@ Users may also ignore endpoint URLs sourced from the env and profile files:
 references = ["smithy-rs#3488"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 authors = ["Velfi"]
+
+[[aws-sdk-rust]]
+message = "Fix a bug where a `sigv4-s3express` auth scheme was incorrectly positioned at the front of `auth_scheme_options` and was used when no auth schemes were available for an endpoint."
+references = ["smithy-rs#3498"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "ysaito1001"
