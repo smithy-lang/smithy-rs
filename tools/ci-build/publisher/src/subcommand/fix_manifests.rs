@@ -156,10 +156,10 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
 
 fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Result<usize> {
     let mut changed = 0;
-    if let Some(dependencies) = metadata.as_table_mut().unwrap().get_mut(key) {
-        if let Some(dependencies) = dependencies.as_table_mut() {
+    if let Some(dependencies) = metadata.as_table_like_mut().unwrap().get_mut(key) {
+        if let Some(dependencies) = dependencies.as_table_like_mut() {
             for (dep_name, dep) in dependencies.iter_mut() {
-                changed += match dep.as_table_mut() {
+                changed += match dep.as_table_like_mut() {
                     None => {
                         if !dep.is_str() {
                             bail!("unexpected dependency (must be table or string): {:?}", dep)
@@ -239,14 +239,14 @@ fn conditionally_disallow_publish(
 }
 
 fn set_publish_false(manifest_path: &Path, metadata: &mut Value, is_example: bool) -> Option<bool> {
-    if let Some(package) = metadata.as_table_mut().unwrap().get_mut("package") {
+    if let Some(package) = metadata.as_table_like_mut().unwrap().get_mut("package") {
         info!(
             "Detected {}. Disallowing publish for {:?}.",
             if is_example { "example" } else { "local build" },
             manifest_path,
         );
         package
-            .as_table_mut()
+            .as_table_like_mut()
             .unwrap()
             .insert("publish".into(), toml::Value::Boolean(false));
         return Some(true);

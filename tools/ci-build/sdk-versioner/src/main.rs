@@ -152,7 +152,7 @@ fn update_manifest(
                 );
             }
             changed = update_dependencies(
-                dependencies.as_table_mut().unwrap(),
+                dependencies.as_table_like_mut().unwrap(),
                 dependency_context,
                 crate_path,
             )? || changed;
