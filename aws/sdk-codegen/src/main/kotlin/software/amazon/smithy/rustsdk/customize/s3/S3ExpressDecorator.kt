@@ -69,54 +69,7 @@ class S3ExpressDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> {
-//        val runtimeConfig = codegenContext.runtimeConfig
-//        val boolSymbol = RuntimeType.Bool.toSymbol()
-
-        return baseCustomizations +
-            listOf(
-                S3ExpressIdentityProviderConfig(codegenContext),
-//            standardConfigParam(
-//                ConfigParam.Builder()
-//                    .name("disable_express_session_auth")
-//                    .type(boolSymbol)
-//                    .newtype(
-//                        configParamNewtype(
-//                            "DisableExpressSessionAuth",
-//                            boolSymbol,
-//                            runtimeConfig,
-//                        ),
-//                    )
-//                    .setterDocs(writable { docs("A") })
-//                    .getterDocs(writable { docs("B") })
-//                    .build(),
-//            ),
-//            standardConfigParam(
-//                ConfigParam.Builder()
-//                    .name("disable_multi_region_access_points")
-//                    .type(boolSymbol)
-//                    .newtype(
-//                        configParamNewtype(
-//                            "DisableMultiRegionAccessPoints",
-//                            boolSymbol,
-//                            runtimeConfig,
-//                        ),
-//                    )
-//                    .setterDocs(writable { docs("C") })
-//                    .getterDocs(writable { docs("D") })
-//                    .build(),
-//            ),
-//            standardConfigParam(
-//                ConfigParam.Builder()
-//                    .name("use_arn_region")
-//                    .type(boolSymbol)
-//                    .newtype(configParamNewtype("UseArnRegion", boolSymbol, runtimeConfig))
-//                    .setterDocs(writable { docs("E") })
-//                    .getterDocs(writable { docs("F") })
-//                    .build(),
-//            ),
-            )
-    }
+    ): List<ConfigCustomization> = baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
