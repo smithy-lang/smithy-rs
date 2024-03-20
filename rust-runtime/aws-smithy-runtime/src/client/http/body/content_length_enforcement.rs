@@ -12,6 +12,7 @@ use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::http::Response;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Buf;
@@ -20,11 +21,12 @@ use pin_project_lite::pin_project;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::num::ParseIntError;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit it as a trailer.
-    pub struct ContentLengthEnforcingBody<InnerBody> {
+    struct ContentLengthEnforcingBody<InnerBody> {
             #[pin]
             body: InnerBody,
             expected_length: u64,
@@ -53,7 +55,7 @@ impl Display for ContentLengthError {
 
 impl ContentLengthEnforcingBody<SdkBody> {
     /// Wraps an existing [`SdkBody`] in a content-length enforcement layer
-    pub fn wrap(body: SdkBody, content_length: u64) -> SdkBody {
+    fn wrap(body: SdkBody, content_length: u64) -> SdkBody {
         body.map_preserve_contents(move |b| {
             SdkBody::from_body_1_x(ContentLengthEnforcingBody {
                 body: b,
@@ -123,18 +125,19 @@ impl Intercept for EnforceContentLengthInterceptor {
         _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let Some(content_length) = context.response().headers().get("content-length") else {
-            tracing::trace!("No content length header was set. Will not validate content length");
-            return Ok(());
+        let content_length = match extract_content_length(context.response()) {
+            Err(err) => {
+                tracing::warn!(err = ?err, "could not parse content length from content-length header. This header will be ignored");
+                return Ok(());
+            }
+            Ok(Some(content_length)) => content_length,
+            Ok(None) => return Ok(()),
         };
 
-        let Ok(content_length) = content_length.parse::<u64>() else {
-            tracing::warn!(
-                "Content length was not a valid integer: {:?}",
-                content_length
-            );
-            return Ok(());
-        };
+        tracing::trace!(
+            expected_length = content_length,
+            "Wrapping response body in content-length enforcement."
+        );
 
         let body = context.response_mut().take_body();
         let wrapped = body.map_preserve_contents(move |body| {
@@ -143,6 +146,15 @@ impl Intercept for EnforceContentLengthInterceptor {
         *context.response_mut().body_mut() = wrapped;
         Ok(())
     }
+}
+
+fn extract_content_length<B>(response: &Response<B>) -> Result<Option<u64>, ParseIntError> {
+    let Some(content_length) = response.headers().get("content-length") else {
+        tracing::trace!("No content length header was set. Will not validate content length");
+        return Ok(None);
+    };
+
+    Ok(Some(content_length.parse::<u64>()?))
 }
 
 /// Runtime plugin that enforces response bodies match their expected content length
@@ -171,11 +183,15 @@ impl RuntimePlugin for EnforceContentLengthRuntimePlugin {
 #[cfg(test)]
 mod test {
     use crate::assert_str_contains;
-    use crate::client::http::body::content_length_enforcement::ContentLengthEnforcingBody;
+    use crate::client::http::body::content_length_enforcement::{
+        extract_content_length, ContentLengthEnforcingBody,
+    };
+    use aws_smithy_runtime_api::http::Response;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
+    use http::header::CONTENT_LENGTH;
     use http_body_0_4::Body;
     use http_body_1::Frame;
     use std::error::Error;
@@ -245,5 +261,12 @@ mod test {
             .collect()
             .await
             .expect_err("body should have failed")
+    }
+
+    #[test]
+    fn extract_header() {
+        let mut resp1 = Response::new(200.try_into().unwrap(), ());
+        resp1.headers_mut().insert(CONTENT_LENGTH, "123");
+        assert_eq!(extract_content_length(&resp1), Some(123));
     }
 }
