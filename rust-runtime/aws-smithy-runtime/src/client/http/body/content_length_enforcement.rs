@@ -21,7 +21,6 @@ use pin_project_lite::pin_project;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::num::ParseIntError;
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 pin_project! {
@@ -30,7 +29,7 @@ pin_project! {
             #[pin]
             body: InnerBody,
             expected_length: u64,
-            remaining_length: i64,
+            bytes_received: u64,
     }
 }
 
@@ -60,7 +59,7 @@ impl ContentLengthEnforcingBody<SdkBody> {
             SdkBody::from_body_1_x(ContentLengthEnforcingBody {
                 body: b,
                 expected_length: content_length,
-                remaining_length: content_length as i64,
+                bytes_received: 0,
             })
         })
     }
@@ -82,12 +81,12 @@ impl<
         let this = self.as_mut().project();
         match ready!(this.body.poll_frame(cx)) {
             None => {
-                if *this.remaining_length == 0 {
+                if *this.expected_length == *this.bytes_received {
                     Poll::Ready(None)
                 } else {
                     Poll::Ready(Some(Err(ContentLengthError {
                         expected: *this.expected_length,
-                        received: (*this.expected_length as i64 - *this.remaining_length) as u64,
+                        received: *this.bytes_received,
                     }
                     .into())))
                 }
@@ -95,7 +94,7 @@ impl<
             Some(Err(e)) => Poll::Ready(Some(Err(e.into()))),
             Some(Ok(frame)) => {
                 if let Some(data) = frame.data_ref() {
-                    *this.remaining_length -= data.remaining() as i64;
+                    *this.bytes_received += data.remaining() as u64;
                 }
                 Poll::Ready(Some(Ok(frame)))
             }
@@ -148,11 +147,14 @@ impl Intercept for EnforceContentLengthInterceptor {
     }
 }
 
-fn extract_content_length<B>(response: &Response<B>) -> Result<Option<u64>, ParseIntError> {
+fn extract_content_length<B>(response: &Response<B>) -> Result<Option<u64>, BoxError> {
     let Some(content_length) = response.headers().get("content-length") else {
         tracing::trace!("No content length header was set. Will not validate content length");
         return Ok(None);
     };
+    if response.headers().get_all("content-length").count() != 1 {
+        return Err("Found multiple content length headers. This is invalid".into());
+    }
 
     Ok(Some(content_length.parse::<u64>()?))
 }
@@ -267,6 +269,20 @@ mod test {
     fn extract_header() {
         let mut resp1 = Response::new(200.try_into().unwrap(), ());
         resp1.headers_mut().insert(CONTENT_LENGTH, "123");
-        assert_eq!(extract_content_length(&resp1), Some(123));
+        assert_eq!(extract_content_length(&resp1).unwrap(), Some(123));
+        resp1.headers_mut().append(CONTENT_LENGTH, "124");
+        // duplicate content length header
+        extract_content_length(&resp1).expect_err("duplicate headers");
+
+        // not an integer
+        resp1.headers_mut().insert(CONTENT_LENGTH, "-123.5");
+        extract_content_length(&resp1).expect_err("not an integer");
+
+        // not an integer
+        resp1.headers_mut().insert(CONTENT_LENGTH, "");
+        extract_content_length(&resp1).expect_err("empty");
+
+        resp1.headers_mut().remove(CONTENT_LENGTH);
+        assert_eq!(extract_content_length(&resp1).unwrap(), None);
     }
 }
