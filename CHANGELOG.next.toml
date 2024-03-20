@@ -11,6 +11,11 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-smithy-mocks-experimental]]
+message = "Replace `enforce_order(bool)` with `enum RuleMode`"
+references = ["smithy-rs#3502", "awsdocs/aws-doc-sdk-examples#6264"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
 [[smithy-rs]]
 message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1."
 references = ["smithy-rs#3476"]
