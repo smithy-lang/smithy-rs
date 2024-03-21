@@ -149,6 +149,7 @@ fn crate_version_has_changed(
         .join("Cargo.toml");
     let to_patch_cargo_toml = runtime_crate_path.join(crate_name).join("Cargo.toml");
     if !sdk_cargo_toml.exists() {
+        tracing::trace!("`{crate_name}` is a new crate, so there is nothing to patch.");
         // This is a new runtime crate, so there is nothing to patch.
         return Ok(false);
     }
@@ -183,6 +184,7 @@ fn patch_workspace_cargo_toml(
     let patch_section = format!("\n[patch.crates-io]\n{patch_sections}");
 
     let manifest_path = aws_sdk_rust.root.join("Cargo.toml");
+    tracing::trace!(patch_section, "patching {manifest_path}");
     let mut manifest_content =
         fs::read_to_string(&manifest_path).context("failed to read aws-sdk-rust/Cargo.toml")?;
     manifest_content.push_str(&patch_section);
@@ -212,6 +214,7 @@ fn remove_unchanged_dependencies(
         });
 
     for patched_crate in &all_crates {
+        tracing::trace!("removing unchanged path dependencies for {patched_crate}");
         remove_unchanged_path_dependencies(runtime_crate_path, &unchanged_crates, patched_crate)?;
     }
     Ok(crates_to_patch
