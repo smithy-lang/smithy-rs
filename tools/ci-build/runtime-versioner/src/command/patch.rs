@@ -184,7 +184,7 @@ fn patch_workspace_cargo_toml(
     let patch_section = format!("\n[patch.crates-io]\n{patch_sections}");
 
     let manifest_path = aws_sdk_rust.root.join("Cargo.toml");
-    tracing::trace!(patch_section, "patching {manifest_path}");
+    tracing::trace!("patching {manifest_path}");
     let mut manifest_content =
         fs::read_to_string(&manifest_path).context("failed to read aws-sdk-rust/Cargo.toml")?;
     manifest_content.push_str(&patch_section);
@@ -254,7 +254,9 @@ fn remove_unchanged_path_dependencies(
                 let it = &mut mutable_manifest[key][dependency_name];
                 match it.as_table_like_mut() {
                     Some(table_like) => table_like.remove("path"),
-                    None => panic!("expected `{it:?}` to be TableLike"),
+                    None => {
+                        panic!("crate `{patched_crate}` depends on crate `{dependency_name}` crate by version instead of by path. Please update it to use path dependencies for all runtime crates.");
+                    }
                 };
                 updates = true
             }
