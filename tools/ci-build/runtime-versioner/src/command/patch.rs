@@ -248,9 +248,9 @@ fn remove_unchanged_path_dependencies(
                         .package()
                         .unwrap_or(dependency_name.as_str())
             }) {
-                mutable_manifest[key][dependency_name]
-                    .as_table_like_mut()
-                    .expect("this item is table-like")
+                let it = &mut mutable_manifest[key][dependency_name];
+                it.as_table_like_mut()
+                    .expect("expected {it:?} to be TableLike")
                     .remove("path");
                 updates = true
             }
