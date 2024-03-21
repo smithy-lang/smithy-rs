@@ -113,11 +113,15 @@ enum Command {
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_env_filter(
-            EnvFilter::builder()
+        .with_env_filter({
+            let it = EnvFilter::builder()
                 .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
+                .from_env_lossy();
+
+            eprintln!("logging at the {} level", it.to_string());
+
+            it
+        })
         .init();
 
     let command = Command::parse();
