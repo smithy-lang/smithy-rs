@@ -252,7 +252,7 @@ fn remove_unchanged_path_dependencies(
                 match it.as_table_like_mut() {
                     Some(table_like) => table_like.remove("path"),
                     None => panic!("expected `{it:?}` to be TableLike"),
-                }
+                };
                 updates = true
             }
         }
