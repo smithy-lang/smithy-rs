@@ -14,7 +14,7 @@ use cargo_toml::Manifest;
 use indicatif::{ProgressBar, ProgressStyle};
 use smithy_rs_tool_common::command::sync::CommandExt;
 use std::{fs, time::Duration};
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 pub fn patch(args: PatchRuntime) -> Result<()> {
     let smithy_rs = step("Resolving smithy-rs", || {
@@ -233,7 +233,7 @@ fn remove_unchanged_path_dependencies(
     let mut mutable_manifest = fs::read_to_string(&path)
         .context("failed to read file")
         .context(path.clone())?
-        .parse::<Document>()
+        .parse::<DocumentMut>()
         .context("invalid toml in manifest!")?;
     let mut updates = false;
     let sections = [
