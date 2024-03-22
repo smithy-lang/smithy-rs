@@ -182,7 +182,7 @@ impl RuntimePlugin for EnforceContentLengthRuntimePlugin {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "test-util", test))]
 mod test {
     use crate::assert_str_contains;
     use crate::client::http::body::content_length_enforcement::{
