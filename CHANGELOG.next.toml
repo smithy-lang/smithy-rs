@@ -49,3 +49,9 @@ message = "Fix a bug where a `sigv4-s3express` auth scheme was incorrectly posit
 references = ["smithy-rs#3498"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Ability to add an inline policy or a list of policy ARNs to the `AssumeRoleProvider` builder."
+references = []
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "mokhaled2992"
