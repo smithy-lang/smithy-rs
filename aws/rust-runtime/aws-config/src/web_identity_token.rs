@@ -84,6 +84,8 @@ pub struct WebIdentityTokenCredentialsProvider {
     time_source: SharedTimeSource,
     fs: Fs,
     sts_client: StsClient,
+    policy: Option<String>,
+    policy_arns: Option<Vec<PolicyDescriptorType>>,
 }
 
 impl WebIdentityTokenCredentialsProvider {
@@ -150,6 +152,8 @@ impl WebIdentityTokenCredentialsProvider {
         load_credentials(
             &self.fs,
             &self.sts_client,
+            self.policy.clone(),
+            self.policy_arns.clone(),
             &conf.web_identity_token_file,
             &conf.role_arn,
             &conf.session_name,
@@ -163,6 +167,8 @@ impl WebIdentityTokenCredentialsProvider {
 pub struct Builder {
     source: Option<Source>,
     config: Option<ProviderConfig>,
+    policy: Option<String>,
+    policy_arns: Option<Vec<PolicyDescriptorType>>,
 }
 
 impl Builder {
@@ -193,6 +199,32 @@ impl Builder {
         self
     }
 
+
+    /// Set an IAM policy in JSON format that you want to use as an inline session policy.
+    ///
+    /// This parameter is optional
+    /// For more information, see
+    /// [policy](aws_sdk_sts::input::assume_role_input::Builder::policy_arns)
+    pub fn policy(mut self, policy: impl Into<String>) -> Self {
+        self.policy = Some(policy.into());
+        self
+    }
+
+    /// Set the Amazon Resource Names (ARNs) of the IAM managed policies that you want to use as managed session policies.
+    ///
+    /// This parameter is optional.
+    /// For more information, see
+    /// [policy_arns](aws_sdk_sts::input::assume_role_input::Builder::policy_arns)
+    pub fn policy_arns(mut self, policy_arns:  Vec<String>) -> Self {
+        self.policy_arns = Some(
+            policy_arns
+                .into_iter()
+                .map(|arn| PolicyDescriptorType::builder().arn(arn).build())
+                .collect::<Vec<_>>(),
+        );
+        self
+    }
+
     /// Build a [`WebIdentityTokenCredentialsProvider`]
     ///
     /// ## Panics
@@ -206,6 +238,8 @@ impl Builder {
             fs: conf.fs(),
             sts_client: StsClient::new(&conf.client_config()),
             time_source: conf.time_source(),
+            policy,
+            policy_arns
         }
     }
 }
@@ -213,6 +247,8 @@ impl Builder {
 async fn load_credentials(
     fs: &Fs,
     sts_client: &StsClient,
+    policy: Option<String>,
+    policy_arns: Option<Vec<PolicyDescriptorType>>,
     token_file: impl AsRef<Path>,
     role_arn: &str,
     session_name: &str,
@@ -228,6 +264,8 @@ async fn load_credentials(
     let resp = sts_client.assume_role_with_web_identity()
         .role_arn(role_arn)
         .role_session_name(session_name)
+        .set_policy(self.policy)
+        .set_policy_arns(self.policy_arns)
         .web_identity_token(token)
         .send()
         .await
