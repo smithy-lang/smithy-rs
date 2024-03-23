@@ -77,12 +77,14 @@ impl<'b> Decoder<'b> {
         self.decoder.skip().map_err(DeserializeError::new)
     }
 
-    pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+    // TODO: confirm benchmarks and keep either `str_alt` or `str`.
+    // The following seems to be a bit slower than the one we have kept.
+    pub fn str_alt(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
         let mut chunks_iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
         let head = match chunks_iter.next() {
             Some(Ok(head)) => head,
-            Some(Err(e)) => return Err(DeserializeError::new(e)),
             None => return Ok(Cow::Borrowed("")),
+            Some(Err(e)) => return Err(DeserializeError::new(e)),
         };
 
         match chunks_iter.next() {
@@ -91,20 +93,35 @@ impl<'b> Decoder<'b> {
             Some(Ok(next)) => {
                 let mut concatenated_string = String::from(head);
                 concatenated_string.push_str(next);
-                for i in chunks_iter {
-                    concatenated_string.push_str(i.map_err(DeserializeError::new)?);
+                for chunk in chunks_iter {
+                    concatenated_string.push_str(chunk.map_err(DeserializeError::new)?);
                 }
                 Ok(Cow::Owned(concatenated_string))
             }
         }
     }
 
-    pub fn str_alt(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+    pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
         match self.decoder.str() {
             Ok(str_value) => Ok(Cow::Borrowed(str_value)),
-            Err(e) if e.is_type_mismatch() => Ok(Cow::Owned(self.string()?)),
+            Err(e) if e.is_type_mismatch() => {
+                // Move the position back by one element to the indefinite string marker.
+                self.decoder.set_position(self.decoder.position() - 1);
+                Ok(Cow::Owned(self.string()?))
+            }
             Err(e) => Err(DeserializeError::new(e)),
         }
+    }
+
+    // TODO: confirm benchmarks and keep either `string_alt` or `string` implementation.
+    // The following seems to be a bit slower than the one we have kept.
+    pub fn string_alt(&mut self) -> Result<String, DeserializeError> {
+        let s: Result<String, _> = self
+            .decoder
+            .str_iter()
+            .map_err(DeserializeError::new)?
+            .collect();
+        s.map_err(DeserializeError::new)
     }
 
     pub fn string(&mut self) -> Result<String, DeserializeError> {
@@ -112,11 +129,12 @@ impl<'b> Decoder<'b> {
         let head = iter.next();
 
         let decoded_string = match head {
-            None => String::from(""),
+            None => String::new(),
             Some(head) => {
+                // The following is faster in benchmarks than using `Collect()` on a `String`.
                 let mut head = String::from(head.map_err(DeserializeError::new)?);
-                for i in iter {
-                    head.push_str(i.map_err(DeserializeError::new)?);
+                for chunk in iter {
+                    head.push_str(chunk.map_err(DeserializeError::new)?);
                 }
                 head
             }
@@ -124,31 +142,6 @@ impl<'b> Decoder<'b> {
 
         Ok(decoded_string)
     }
-
-    // pub fn blob_alt(&mut self) -> Result<Blob, DeserializeError> {
-    //     let mut iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
-    //     let head = iter.next();
-
-    //     let head = match head {
-    //         None => return Ok(Blob::new([])),
-    //         Some(Err(e)) => return Err(DeserializeError::new(e)),
-    //         Some(Ok(head)) => head,
-    //     };
-
-    //     match iter.next() {
-    //         None => Ok(Blob::new(head)),
-    //         Some(Err(e)) => Err(DeserializeError::new(e)),
-    //         Some(Ok(next)) => {
-    //             let mut combined_blob: Vec<u8> = Vec::with_capacity(head.len() + next.len());
-    //             combined_blob.extend(head);
-    //             combined_blob.extend(next);
-    //             for i in iter {
-    //                 combined_blob.extend(i.map_err(DeserializeError::new)?);
-    //             }
-    //             Ok(Blob::new(combined_blob))
-    //         }
-    //     }
-    // }
 
     pub fn blob(&mut self) -> Result<Blob, DeserializeError> {
         let iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
@@ -250,6 +243,19 @@ where
     }
 }
 
+pub fn set_optional<B, F>(builder: B, decoder: &mut Decoder, f: F) -> Result<B, DeserializeError>
+where
+    F: Fn(B, &mut Decoder) -> Result<B, DeserializeError>,
+{
+    match decoder.datatype()? {
+        crate::data::Type::Null => {
+            decoder.null()?;
+            Ok(builder)
+        }
+        _ => f(builder, decoder),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Decoder;
@@ -261,10 +267,7 @@ mod tests {
             0x6a, 0x74, 0x68, 0x69, 0x73, 0x49, 0x73, 0x41, 0x4b, 0x65, 0x79,
         ];
         let mut decoder = Decoder::new(&definite_bytes);
-        let member = decoder.str().expect(
-            "
-            could not decode str",
-        );
+        let member = decoder.str().expect("could not decode str");
         assert_eq!(member, "thisIsAKey");
         assert!(matches!(member, std::borrow::Cow::Borrowed(_)));
     }
@@ -277,10 +280,7 @@ mod tests {
             0x79, 0xff,
         ];
         let mut decoder = Decoder::new(&indefinite_bytes);
-        let member = decoder.str().expect(
-            "
-            could not decode str",
-        );
+        let member = decoder.str().expect("could not decode str");
         assert_eq!(member, "thisIsAKey");
         assert!(matches!(member, std::borrow::Cow::Owned(_)));
     }
@@ -289,10 +289,7 @@ mod tests {
     fn test_empty_str_works() {
         let bytes = [0x60];
         let mut decoder = Decoder::new(&bytes);
-        let member = decoder.str().expect(
-            "
-            could not decode str",
-        );
+        let member = decoder.str().expect("could not decode empty str");
         assert_eq!(member, "");
     }
 
@@ -300,10 +297,7 @@ mod tests {
     fn test_empty_blob_works() {
         let bytes = [0x40];
         let mut decoder = Decoder::new(&bytes);
-        let member = decoder.blob().expect(
-            "
-            could not decode str",
-        );
+        let member = decoder.blob().expect("could not decode an empty blob");
         assert_eq!(member, aws_smithy_types::Blob::new(&[]));
     }
 
@@ -318,10 +312,7 @@ mod tests {
             0x61, 0xff,
         ];
         let mut decoder = Decoder::new(&indefinite_bytes);
-        let member = decoder.blob().expect(
-            "
-            could not decode str",
-        );
+        let member = decoder.blob().expect("could not decode blob");
         assert_eq!(
             member,
             aws_smithy_types::Blob::new("indefinite-byte, chunked, on each comma".as_bytes())
