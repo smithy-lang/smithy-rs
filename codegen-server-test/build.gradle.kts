@@ -45,8 +45,10 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        CodegenTest("aws.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2_cbor"),
-        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2", imports = listOf("$commonModels/rpcv2.smithy")),
+        // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
+        CodegenTest("aws.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcV2"),
+        // Todo: change this to rpcv2extra
+        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2Extra", imports = listOf("$commonModels/rpcv2.smithy")),
         CodegenTest(
             "aws.protocoltests.rpcv2#RpcV2Protocol",
             "adwait-main",
