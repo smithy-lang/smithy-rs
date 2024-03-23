@@ -103,13 +103,13 @@ class CborParserGenerator(
             *codegenScope,
             "ListSymbol" to listSymbol,
         ) {
-            val deserializeMemberWritable = writable { deserializeMember(memberShape) }
+            val deserializeMemberWritable = deserializeMember(memberShape)
             if (isSparseList) {
                 rustTemplate(
                     """
                     let value = match decoder.datatype()? {
                         #{SmithyCbor}::data::Type::Null => {
-                            let _v = decoder.null()?;
+                            decoder.null()?;
                             None
                         }
                         _ => Some(#{DeserializeMember:W}?),
@@ -154,20 +154,20 @@ class CborParserGenerator(
             *codegenScope,
             "MapSymbol" to mapSymbol,
         ) {
-            val deserializeKeyWritable = writable { deserializeString(keyTarget) }
+            val deserializeKeyWritable = deserializeString(keyTarget)
             rustTemplate(
                 """
                 let key = #{DeserializeKey:W}?;
                 """,
                 "DeserializeKey" to deserializeKeyWritable,
             )
-            val deserializeValueWritable = writable { deserializeMember(valueShape) }
+            val deserializeValueWritable = deserializeMember(valueShape)
             if (isSparseMap) {
                 rustTemplate(
                     """
                     let value = match decoder.datatype()? {
                         #{SmithyCbor}::data::Type::Null => {
-                            let _v = decoder.null()?;
+                            decoder.null()?;
                             None
                         }
                         _ => Some(#{DeserializeValue:W}?),
@@ -206,27 +206,48 @@ class CborParserGenerator(
             *codegenScope,
             "Builder" to builderSymbol,
         ) {
-            withBlock("builder = match decoder.str()? {", "};") {
+            withBlock("builder = match decoder.str()?.as_ref() {", "};") {
                 for (member in includedMembers) {
                     rustBlock("${member.memberName.dq()} =>") {
-                        withBlock("builder.${member.setterName()}(", ")") {
-                            conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
-                                val symbol = symbolProvider.toSymbol(member)
-                                if (symbol.isRustBoxed()) {
-                                    rustBlock("") {
-                                        withBlock("let v = ", "?;") {
-                                            deserializeMember(member)
+                        val callBuilderSetMemberFieldWritable = writable {
+                            withBlock("builder.${member.setterName()}(", ")") {
+                                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
+                                    val symbol = symbolProvider.toSymbol(member)
+                                    if (symbol.isRustBoxed()) {
+                                        rustBlock("") {
+                                            rustTemplate("let v = #{DeserializeMember:W}?;",
+                                                "DeserializeMember" to deserializeMember(member))
+
+                                            for (customization in customizations) {
+                                                customization.section(
+                                                    CborParserSection.BeforeBoxingDeserializedMember(
+                                                        member
+                                                    )
+                                                )(this)
+                                            }
+                                            rust("Box::new(v)")
                                         }
-                                        for (customization in customizations) {
-                                            customization.section(CborParserSection.BeforeBoxingDeserializedMember(member))(this)
-                                        }
-                                        rust("Box::new(v)")
+                                    } else {
+                                        rustTemplate("#{DeserializeMember:W}?",
+                                            "DeserializeMember" to deserializeMember(member))
                                     }
-                                } else {
-                                    deserializeMember(member)
-                                    rust("?")
                                 }
                             }
+                        }
+
+                        if (member.isOptional) {
+                            // Call `builder.set_member()` only if the value for the field on the wire is not null.
+                            rustTemplate(
+                                """
+                                ::aws_smithy_cbor::decode::set_optional(builder, decoder, |builder, decoder| {
+                                    Ok(#{MemberSettingWritable:W})
+                                })?
+                                """,
+                                "MemberSettingWritable" to callBuilderSetMemberFieldWritable
+                            )
+                        }
+                        else {
+                            callBuilderSetMemberFieldWritable.invoke(this)
                         }
                     }
                 }
@@ -256,7 +277,7 @@ class CborParserGenerator(
                     val variantName = symbolProvider.toMemberName(member)
 
                     withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
-                        deserializeMember(member)
+                        deserializeMember(member).invoke(this)
                     }
                 }
                 // TODO Test client mode (parse unknown variant) and server mode (reject unknown variant).
@@ -423,13 +444,13 @@ class CborParserGenerator(
         return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
-    private fun RustWriter.deserializeMember(memberShape: MemberShape) {
+    private fun RustWriter.deserializeMember(memberShape: MemberShape) = writable {
         when (val target = model.expectShape(memberShape.target)) {
             // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
             is BlobShape -> rust("decoder.blob()")
             is BooleanShape -> rust("decoder.boolean()")
 
-            is StringShape -> deserializeString(target)
+            is StringShape -> deserializeString(target).invoke(this)
 
             is ByteShape -> rust("decoder.byte()")
             is ShortShape -> rust("decoder.short()")
@@ -461,7 +482,7 @@ class CborParserGenerator(
 //        }
     }
 
-    private fun RustWriter.deserializeString(target: StringShape, bubbleUp: Boolean = true) {
+    private fun RustWriter.deserializeString(target: StringShape, bubbleUp: Boolean = true) = writable {
         // TODO Handle enum shapes
         rust("decoder.string()")
     }
