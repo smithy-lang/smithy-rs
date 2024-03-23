@@ -7,10 +7,8 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
-import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -21,7 +19,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -65,10 +65,14 @@ class RpcV2HttpBindingResolver(
     /**
      * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
      * > The `Content-Type` for the serialization format MUST NOT be set.
-     *
-     * TODO But the problem is we _always_ add input/output types in OperationNormalizer! This makes the `no_output_response` test fail.
      */
-    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
+    override fun responseContentType(operationShape: OperationShape): String? {
+        val syntheticOutputTrait = operationShape.outputShape(model).expectTrait<SyntheticOutputTrait>()
+        if (syntheticOutputTrait.originalId == null) {
+            return null
+        }
+        return requestContentType(operationShape)
+    }
 }
 
 /**
