@@ -402,7 +402,7 @@ class CborSerializerGenerator(
         rust(
             """
             encoder.array(
-                (${context.valueExpression.asRef()}).len().try_into().expect("`usize` to `u64` conversion failed")
+                (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
             """
         )
@@ -421,7 +421,7 @@ class CborSerializerGenerator(
         rust(
             """
             encoder.map(
-                (${context.valueExpression.asRef()}).len().try_into().expect("`usize` to `u64` conversion failed")
+                (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
             """
         )
