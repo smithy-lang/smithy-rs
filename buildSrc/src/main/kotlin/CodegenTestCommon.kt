@@ -48,7 +48,7 @@ private fun generateSmithyBuild(
                             ${it.extraCodegenConfig ?: ""}
                         },
                         "service": "${it.service}",
-                        "module": "${it.module}",
+                        "module": "${it.module.lowercase()}",
                         "moduleVersion": "0.0.1",
                         "moduleDescription": "test",
                         "moduleAuthors": ["protocoltest@example.com"]
