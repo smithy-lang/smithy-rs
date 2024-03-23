@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 
@@ -81,7 +81,7 @@ internal class CborSerializerGeneratorTest {
                 "SerdeCbor" to CargoDependency.SerdeCbor.toType(),
             )
 
-            val instantiator = serverInstantiator(codegenContext)
+            val instantiator = ServerInstantiator(codegenContext)
             val rpcV2 = RpcV2(codegenContext)
 
             for (operationShape in codegenContext.model.operationShapes) {
