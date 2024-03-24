@@ -298,7 +298,7 @@ mod tests {
         for uri in [
             "/service/Service/operation/Operation",
             "prefix/69/service/Service/operation/Operation",
-            // Here the prefix is up to the last occurence of the string `/service`.
+            // Here the prefix is up to the last occurrence of the string `/service`.
             "prefix/69/service/Service/operation/Operation/service/Service/operation/Operation",
             // Service implementations SHOULD accept an absolute shape ID as the content of this
             // segment with the `#` character replaced with a `.` character, routing it the same as
