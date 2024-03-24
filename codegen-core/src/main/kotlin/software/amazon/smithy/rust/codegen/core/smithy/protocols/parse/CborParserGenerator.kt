@@ -252,8 +252,13 @@ class CborParserGenerator(
                     }
                 }
 
-                // TODO Skip like in JSON or reject? I think we should reject in JSON too. Cut issue.
-                rust("_ => { todo!() }")
+                rust(
+                    """
+                    _ => { 
+                        decoder.skip()?;
+                        builder
+                    }
+                    """)
             }
             rust("Ok(builder)")
         }
