@@ -12,13 +12,25 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Stalled stream protection now supports request upload streams, and existing download stream protection no longer triggers when user-code is doing something other than downloading in the middle of the stream (for example, making a HTTP request to another service for each row in CSV file download from S3)."
+message = "Stalled stream protection now supports request upload streams."
 references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = true, "bug" = true }
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
-message = "Stalled stream protection now supports request upload streams, and existing download stream protection no longer triggers when user-code is doing something other than downloading in the middle of the stream (for example, making a HTTP request to another service for each row in CSV file download from S3)."
+message = "Stalled stream protection now supports request upload streams."
 references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = true, "bug" = true }
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Stalled stream protection for download streams no longer triggers when user-code is taking a significant amount of time doing something other than downloading in the middle of the stream. As an example, previously, making a HTTP request to another service for each row in CSV file download from S3 would result in a stalled stream timeout."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection for download streams no longer triggers when user-code is taking a significant amount of time doing something other than downloading in the middle of the stream."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
