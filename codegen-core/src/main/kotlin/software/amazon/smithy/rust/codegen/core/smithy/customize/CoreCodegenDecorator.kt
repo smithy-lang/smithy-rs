@@ -30,7 +30,10 @@ interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
     val name: String
 
     /**
-     * Enable a deterministic ordering to be applied, with the lowest numbered integrations being applied first
+     * Enable a deterministic ordering to be applied
+     *
+     * Lowest numbered integrations are applied last since they are applied in reverse order of their positions
+     * in the list of decorators.
      */
     val order: Byte
 
