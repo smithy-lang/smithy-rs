@@ -97,9 +97,12 @@ impl From<(u64, Duration)> for Throughput {
     }
 }
 
-/// Represents a bin (or a cell) in a linear grid that represents a small chunk of time.
-#[derive(Copy, Clone, Debug)]
-enum Bin {
+/// Overall label for a given bin.
+#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+enum BinLabel {
+    // IMPORTANT: The order of these enums matters since it represents their priority:
+    // Pending > TransferredBytes > NoPolling > Empty
+    //
     /// There is no data in this bin.
     Empty,
 
@@ -107,37 +110,51 @@ enum Bin {
     NoPolling,
 
     /// This many bytes were transferred during this bin.
-    TransferredBytes(u64),
+    TransferredBytes,
 
     /// The user/remote was not providing/consuming data fast enough during this bin.
     ///
     /// The number is the number of bytes transferred, if this replaced TransferredBytes.
-    Pending(u64),
+    Pending,
 }
+
+/// Represents a bin (or a cell) in a linear grid that represents a small chunk of time.
+#[derive(Copy, Clone, Debug)]
+struct Bin {
+    label: BinLabel,
+    bytes: u64,
+}
+
 impl Bin {
-    fn merge(&mut self, other: Bin) {
-        use Bin::*;
+    const fn new(label: BinLabel, bytes: u64) -> Self {
+        Self { label, bytes }
+    }
+    const fn empty() -> Self {
+        Self::new(BinLabel::Empty, 0)
+    }
+
+    fn is_empty(&self) -> bool {
+        matches!(self.label, BinLabel::Empty)
+    }
+
+    fn merge(&mut self, other: Bin) -> &mut Self {
         // Assign values based on this priority order (highest priority higher up):
         //   1. Pending
         //   2. TransferredBytes
         //   3. NoPolling
         //   4. Empty
-        *self = match (other, *self) {
-            (Pending(other), this) => Pending(other + this.bytes()),
-            (TransferredBytes(other), this) => TransferredBytes(other + this.bytes()),
-            (other, NoPolling) => other,
-            (NoPolling, _) => panic!("can't merge NoPolling into bin"),
-            (other, Empty) => other,
-            (Empty, _) => panic!("can't merge Empty into bin"),
+        self.label = if other.label > self.label {
+            other.label
+        } else {
+            self.label
         };
+        self.bytes += other.bytes;
+        self
     }
 
     /// Number of bytes transferred during this bin
     fn bytes(&self) -> u64 {
-        match *self {
-            Bin::Empty | Bin::NoPolling => 0,
-            Bin::TransferredBytes(bytes) | Bin::Pending(bytes) => bytes,
-        }
+        self.bytes
     }
 }
 
@@ -167,7 +184,7 @@ struct LogBuffer<const N: usize> {
 impl<const N: usize> LogBuffer<N> {
     fn new() -> Self {
         Self {
-            entries: [Bin::Empty; N],
+            entries: [Bin::empty(); N],
             length: 0,
         }
     }
@@ -176,7 +193,7 @@ impl<const N: usize> LogBuffer<N> {
     ///
     /// ## Panics
     ///
-    /// The buffer MUST have at least one bin it it before this is called.
+    /// The buffer MUST have at least one bin in it before this is called.
     fn tail_mut(&mut self) -> &mut Bin {
         debug_assert!(self.length > 0);
         &mut self.entries[self.length - 1]
@@ -211,8 +228,8 @@ impl<const N: usize> LogBuffer<N> {
     /// way we can know about these is by examining gaps in time.
     fn fill_gaps(&mut self) {
         for entry in self.entries.iter_mut().take(self.length) {
-            if matches!(entry, Bin::Empty) {
-                *entry = Bin::NoPolling;
+            if entry.is_empty() {
+                *entry = Bin::new(BinLabel::NoPolling, 0);
             }
         }
     }
@@ -221,11 +238,11 @@ impl<const N: usize> LogBuffer<N> {
     fn counts(&self) -> BinCounts {
         let mut counts = BinCounts::default();
         for entry in &self.entries {
-            match entry {
-                Bin::Empty => counts.empty += 1,
-                Bin::NoPolling => counts.no_polling += 1,
-                Bin::TransferredBytes(_) => counts.transferred += 1,
-                Bin::Pending(_) => counts.pending += 1,
+            match entry.label {
+                BinLabel::Empty => counts.empty += 1,
+                BinLabel::NoPolling => counts.no_polling += 1,
+                BinLabel::TransferredBytes => counts.transferred += 1,
+                BinLabel::Pending => counts.pending += 1,
             }
         }
         counts
@@ -245,7 +262,7 @@ pub(crate) enum ThroughputReport {
     Transferred(Throughput),
 }
 
-const BUFFER_SIZE: usize = 10;
+const BIN_COUNT: usize = 10;
 
 /// Log of throughput in a request or response stream.
 ///
@@ -267,20 +284,20 @@ const BUFFER_SIZE: usize = 10;
 pub(super) struct ThroughputLogs {
     resolution: Duration,
     current_tail: SystemTime,
-    buffer: LogBuffer<BUFFER_SIZE>,
+    buffer: LogBuffer<BIN_COUNT>,
 }
 
 impl ThroughputLogs {
     /// Creates a new log starting at `now` with the given `time_window`.
     ///
     /// Note: the `time_window` gets divided by 10 to create smaller sub-windows
-    /// to track throughput. The time window should configured to be large enough
+    /// to track throughput. The time window should be configured to be large enough
     /// so that these sub-windows aren't too small for network-based events.
     /// A time window of 10ms probably won't work, but 500ms might. The default
     /// is one second.
     pub(super) fn new(time_window: Duration, now: SystemTime) -> Self {
         assert!(!time_window.is_zero());
-        let resolution = time_window.div_f64(BUFFER_SIZE as f64);
+        let resolution = time_window.div_f64(BIN_COUNT as f64);
         Self {
             resolution,
             current_tail: now,
@@ -289,6 +306,8 @@ impl ThroughputLogs {
     }
 
     /// Returns the resolution at which events are logged at.
+    ///
+    /// The resolution is the number of bins in the time window.
     pub(super) fn resolution(&self) -> Duration {
         self.resolution
     }
@@ -299,14 +318,14 @@ impl ThroughputLogs {
     /// In an upload, it is waiting for data from the user, and in a download,
     /// it is waiting for data from the server.
     pub(super) fn push_pending(&mut self, time: SystemTime) {
-        self.push(time, Bin::Pending(0));
+        self.push(time, Bin::new(BinLabel::Pending, 0));
     }
 
     /// Pushes a data transferred event.
     ///
     /// Indicates that this number of bytes were transferred at this time.
     pub(super) fn push_bytes_transferred(&mut self, time: SystemTime, bytes: u64) {
-        self.push(time, Bin::TransferredBytes(bytes));
+        self.push(time, Bin::new(BinLabel::TransferredBytes, bytes));
     }
 
     fn push(&mut self, now: SystemTime, value: Bin) {
@@ -319,7 +338,7 @@ impl ThroughputLogs {
     fn catch_up(&mut self, now: SystemTime) {
         while now >= self.current_tail {
             self.current_tail += self.resolution;
-            self.buffer.push(Bin::Empty);
+            self.buffer.push(Bin::empty());
         }
         assert!(self.current_tail >= now);
     }
@@ -343,10 +362,10 @@ impl ThroughputLogs {
         }
 
         let bytes = self.buffer.bytes_transferred();
-        let time = self.resolution * (BUFFER_SIZE - empty) as u32;
+        let time = self.resolution * (BIN_COUNT - empty) as u32;
         let throughput = Throughput::new(bytes, time);
 
-        let half = BUFFER_SIZE / 2;
+        let half = BIN_COUNT / 2;
         match (transferred > 0, no_polling >= half, pending >= half) {
             (true, _, _) => ThroughputReport::Transferred(throughput),
             (_, true, _) => ThroughputReport::NoPolling,
@@ -406,7 +425,7 @@ mod test {
         let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
 
         let mut now = start;
-        for i in 1..=BUFFER_SIZE {
+        for i in 1..=BIN_COUNT {
             logs.push_pending(now);
             now += logs.resolution();
 
@@ -423,7 +442,7 @@ mod test {
         let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
 
         let mut now = start;
-        for i in 1..BUFFER_SIZE {
+        for i in 1..BIN_COUNT {
             now += logs.resolution();
             logs.push_pending(now);
 
@@ -446,9 +465,9 @@ mod test {
         let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
 
         let mut now = start;
-        for i in 1..=BUFFER_SIZE {
+        for i in 1..=BIN_COUNT {
             logs.push_bytes_transferred(now, 10);
-            if i != BUFFER_SIZE {
+            if i != BIN_COUNT {
                 now += logs.resolution();
             }
 

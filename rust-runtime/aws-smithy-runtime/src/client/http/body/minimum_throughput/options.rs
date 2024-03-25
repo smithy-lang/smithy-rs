@@ -129,14 +129,18 @@ impl MinimumThroughputBodyOptionsBuilder {
         self
     }
 
-    /// No longer used.
-    #[deprecated(note = "No longer used.")]
+    /// No longer used. The check interval is now based on the check window (not currently configurable).
+    #[deprecated(
+        note = "No longer used. The check interval is now based on the check window (not currently configurable). Open an issue if you need to configure the check window."
+    )]
     pub fn check_interval(self, _check_interval: Duration) -> Self {
         self
     }
 
-    /// No longer used.
-    #[deprecated(note = "No longer used.")]
+    /// No longer used. The check interval is now based on the check window (not currently configurable).
+    #[deprecated(
+        note = "No longer used. The check interval is now based on the check window (not currently configurable). Open an issue if you need to configure the check window."
+    )]
     pub fn set_check_interval(&mut self, _check_interval: Option<Duration>) -> &mut Self {
         self
     }
