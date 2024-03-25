@@ -35,6 +35,7 @@ export class CanaryStack extends Stack {
     public readonly canaryTestBucket: Bucket;
     public readonly canaryTestMrap: CfnMultiRegionAccessPoint;
     public readonly canaryTestExpressBucket: CfnDirectoryBucket;
+    public readonly canaryCdkOutputsBucket: Bucket;
 
     public readonly lambdaExecutionRoleArn: CfnOutput;
     public readonly canaryCodeBucketName: CfnOutput;
@@ -107,6 +108,18 @@ export class CanaryStack extends Stack {
         if (this.awsSdkRustOidcRole) {
             this.canaryCodeBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
             this.canaryCodeBucket.grantWrite(this.awsSdkRustOidcRole.oidcRole);
+        }
+
+        this.canaryCdkOutputsBucket = new Bucket(this, "canary-cdk-outputs-bucket", {
+            blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+            encryption: BucketEncryption.S3_MANAGED,
+            versioned: false,
+            removalPolicy: RemovalPolicy.DESTROY,
+        });
+
+        // Allow the OIDC role to GetObject from the cdk outputs bucket
+        if (this.awsSdkRustOidcRole) {
+            this.canaryCdkOutputsBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
         }
 
         // Create S3 bucket for the canaries to talk to
