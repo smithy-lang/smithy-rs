@@ -70,7 +70,7 @@ pub struct SdkConfig {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
-    service_config: Option<Arc<Box<dyn LoadServiceConfig>>>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
 }
 
 /// Builder for AWS Shared Configuration
