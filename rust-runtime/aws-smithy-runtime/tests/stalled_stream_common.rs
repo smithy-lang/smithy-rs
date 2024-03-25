@@ -15,9 +15,7 @@ pub use aws_smithy_runtime::{
     assert_str_contains,
     client::{
         orchestrator::operation::Operation,
-        stalled_stream_protection::{
-            StalledStreamProtectionInterceptor, StalledStreamProtectionInterceptorKind,
-        },
+        stalled_stream_protection::StalledStreamProtectionInterceptor,
     },
     test_util::capture_test_logs::capture_test_logs,
 };

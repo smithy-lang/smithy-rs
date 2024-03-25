@@ -95,6 +95,7 @@ async fn test_stalled_stream_protection_defaults_for_upload() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3510): make stalled stream protection enabled by default with BMV and remove this line
         .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
         .build();
     let client = Client::from_conf(conf);

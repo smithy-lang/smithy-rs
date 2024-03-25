@@ -221,9 +221,7 @@ mod upload_test_tools {
                     .grace_period(Duration::from_secs(5))
                     .build(),
             )
-            .interceptor(StalledStreamProtectionInterceptor::new(
-                StalledStreamProtectionInterceptorKind::RequestAndResponseBody,
-            ))
+            .interceptor(StalledStreamProtectionInterceptor::default())
             .sleep_impl(sleep)
             .time_source(time)
             .build();
