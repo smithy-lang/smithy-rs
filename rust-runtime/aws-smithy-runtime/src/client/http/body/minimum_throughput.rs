@@ -213,7 +213,7 @@ impl UploadReport for ThroughputReport {
 pin_project_lite::pin_project! {
     /// Future that pairs with [`UploadThroughput`] to add a minimum throughput
     /// requirement to a request upload stream.
-    struct ThroughputCheckFuture {
+    struct UploadThroughputCheckFuture {
         #[pin]
         response: HttpConnectorFuture,
         #[pin]
@@ -231,7 +231,7 @@ pin_project_lite::pin_project! {
     }
 }
 
-impl ThroughputCheckFuture {
+impl UploadThroughputCheckFuture {
     fn new(
         response: HttpConnectorFuture,
         time_source: SharedTimeSource,
@@ -254,7 +254,7 @@ impl ThroughputCheckFuture {
     }
 }
 
-impl Future for ThroughputCheckFuture {
+impl Future for UploadThroughputCheckFuture {
     type Output = Result<HttpResponse, ConnectorError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -332,13 +332,13 @@ impl Future for ThroughputCheckFuture {
 
 pin_project_lite::pin_project! {
     #[project = EnumProj]
-    pub(crate) enum MaybeThroughputCheckFuture {
+    pub(crate) enum MaybeUploadThroughputCheckFuture {
         Direct { #[pin] future: HttpConnectorFuture },
-        Checked { #[pin] future: ThroughputCheckFuture },
+        Checked { #[pin] future: UploadThroughputCheckFuture },
     }
 }
 
-impl MaybeThroughputCheckFuture {
+impl MaybeUploadThroughputCheckFuture {
     pub(crate) fn new(
         cfg: &mut ConfigBag,
         components: &RuntimeComponents,
@@ -371,7 +371,7 @@ impl MaybeThroughputCheckFuture {
             (Some(time_source), Some(sleep_impl), Some(upload_throughput), Some(options)) => {
                 tracing::debug!(options=?options, "applying minimum upload throughput check future");
                 Self::Checked {
-                    future: ThroughputCheckFuture::new(
+                    future: UploadThroughputCheckFuture::new(
                         response,
                         time_source,
                         sleep_impl,
@@ -385,7 +385,7 @@ impl MaybeThroughputCheckFuture {
     }
 }
 
-impl Future for MaybeThroughputCheckFuture {
+impl Future for MaybeUploadThroughputCheckFuture {
     type Output = Result<HttpResponse, ConnectorError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
