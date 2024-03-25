@@ -66,7 +66,14 @@ impl<'a> fmt::Display for Scope<'a> {
     }
 }
 
+/// The source that env config was derived from.
 ///
+/// Includes:
+///
+/// - Whether some config came from a config file or an env var.
+/// - The key used to identify the config value.
+///
+/// Only used when displaying config-extraction errors.
 #[derive(Debug)]
 pub struct EnvConfigSource<'a> {
     key: Cow<'a, str>,
