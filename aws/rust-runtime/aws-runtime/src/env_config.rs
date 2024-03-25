@@ -20,7 +20,7 @@ pub mod section;
 pub mod source;
 
 /// Given a key, access to the environment, and a validator, return a config value if one was set.
-pub async fn get_service_env_config<'a, T, E>(
+pub fn get_service_env_config<'a, T, E>(
     key: ServiceConfigKey<'a>,
     env: &'a Env,
     shared_config_sections: Option<&'a EnvConfigSections>,
