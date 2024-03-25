@@ -150,7 +150,7 @@ impl Properties {
     }
 
     #[cfg(test)]
-    pub fn new_from_slice(slice: &[(PropertiesKey, PropertyValue)]) -> Self {
+    pub(crate) fn new_from_slice(slice: &[(PropertiesKey, PropertyValue)]) -> Self {
         let mut properties = Self::new();
         for (key, value) in slice {
             properties.insert(key.clone(), value.clone());
