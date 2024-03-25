@@ -12,7 +12,37 @@ use tracing_subscriber::fmt::TestWriter;
 
 /// A guard that resets log capturing upon being dropped.
 #[derive(Debug)]
-pub struct LogCaptureGuard(#[allow(dead_code)] DefaultGuard);
+pub struct LogCaptureGuard(#[allow(dead_code)] Option<DefaultGuard>);
+
+/// Enables output of test logs to stdout.
+///
+/// The `VERBOSE_TEST_LOGS` environment variable acts as a
+/// tracing_subscriber fmt env filter. You can give it full env filter
+/// expressions, or just simply give it a log level (e.g., tracing, debug, info, etc).
+/// Setting it to "1" or "true" will enable trace logging.
+#[must_use]
+pub fn show_test_logs() -> LogCaptureGuard {
+    let (mut writer, _rx) = Tee::stdout();
+    let env_var = env::var("VERBOSE_TEST_LOGS").ok();
+    let env_filter = match env_var.as_deref() {
+        Some("true") | Some("1") => Some("trace"),
+        Some(filter) => Some(filter),
+        None => None,
+    };
+    if let Some(env_filter) = env_filter {
+        eprintln!("Enabled verbose test logging with env filter {env_filter:?}.");
+        writer.loud();
+
+        let subscriber = tracing_subscriber::fmt()
+            .with_env_filter(env_filter)
+            .with_writer(Mutex::new(writer))
+            .finish();
+        let guard = tracing::subscriber::set_default(subscriber);
+        LogCaptureGuard(Some(guard))
+    } else {
+        LogCaptureGuard(None)
+    }
+}
 
 /// Capture logs from this test.
 ///
@@ -24,29 +54,18 @@ pub struct LogCaptureGuard(#[allow(dead_code)] DefaultGuard);
 pub fn capture_test_logs() -> (LogCaptureGuard, Rx) {
     // it may be helpful to upstream this at some point
     let (mut writer, rx) = Tee::stdout();
-    let (enabled, level) = match env::var("VERBOSE_TEST_LOGS").ok().as_deref() {
-        Some("debug") => (true, Level::DEBUG),
-        Some("error") => (true, Level::ERROR),
-        Some("info") => (true, Level::INFO),
-        Some("warn") => (true, Level::WARN),
-        Some("trace") | Some(_) => (true, Level::TRACE),
-        None => (false, Level::TRACE),
-    };
-    if enabled {
-        eprintln!("Enabled verbose test logging at {level:?}.");
+    if env::var("VERBOSE_TEST_LOGS").is_ok() {
+        eprintln!("Enabled verbose test logging.");
         writer.loud();
     } else {
-        eprintln!(
-            "To see full logs from this test set VERBOSE_TEST_LOGS=true \
-                (or to a log level, e.g., trace, debug, info, etc)"
-        );
+        eprintln!("To see full logs from this test set VERBOSE_TEST_LOGS=true");
     }
     let subscriber = tracing_subscriber::fmt()
-        .with_max_level(level)
+        .with_max_level(Level::TRACE)
         .with_writer(Mutex::new(writer))
         .finish();
     let guard = tracing::subscriber::set_default(subscriber);
-    (LogCaptureGuard(guard), rx)
+    (LogCaptureGuard(Some(guard)), rx)
 }
 
 /// Receiver for the captured logs.

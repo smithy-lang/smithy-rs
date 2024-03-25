@@ -15,7 +15,7 @@ use stalled_stream_common::*;
 /// Expected: MUST NOT timeout.
 #[tokio::test]
 async fn download_success() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
@@ -41,7 +41,7 @@ async fn download_success() {
 /// Expected: MUT NOT timeout.
 #[tokio::test]
 async fn download_slow_start() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
@@ -69,7 +69,7 @@ async fn download_slow_start() {
 /// Expected: MUST timeout.
 #[tokio::test]
 async fn download_too_slow() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
@@ -100,7 +100,7 @@ async fn download_too_slow() {
 /// Expected: MUST timeout.
 #[tokio::test]
 async fn download_stalls() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
@@ -133,7 +133,7 @@ async fn download_stalls() {
 /// Expected: MUST NOT timeout.
 #[tokio::test]
 async fn download_stall_recovery_in_grace_period() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
@@ -167,7 +167,7 @@ async fn download_stall_recovery_in_grace_period() {
 /// Expected: MUST NOT timeout.
 #[tokio::test]
 async fn user_downloads_data_too_slowly() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();

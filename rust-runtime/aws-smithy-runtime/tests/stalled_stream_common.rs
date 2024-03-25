@@ -17,7 +17,7 @@ pub use aws_smithy_runtime::{
         orchestrator::operation::Operation,
         stalled_stream_protection::StalledStreamProtectionInterceptor,
     },
-    test_util::capture_test_logs::capture_test_logs,
+    test_util::capture_test_logs::show_test_logs,
 };
 pub use aws_smithy_runtime_api::{
     box_error::BoxError,

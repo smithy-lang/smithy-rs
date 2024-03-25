@@ -13,7 +13,7 @@ use stalled_stream_common::*;
 /// Expected: MUST NOT timeout.
 #[tokio::test]
 async fn upload_success() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (server, time, sleep) = eager_server(true);
     let op = operation(server, time, sleep);
@@ -33,7 +33,7 @@ async fn upload_success() {
 /// Expected: MUST NOT timeout.
 #[tokio::test]
 async fn upload_slow_start() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (server, time, sleep) = eager_server(false);
     let op = operation(server, time.clone(), sleep);
@@ -61,7 +61,7 @@ async fn upload_slow_start() {
 /// Expected: MUST timeout.
 #[tokio::test]
 async fn upload_too_slow() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     // Server that starts off fast enough, but gets slower over time until it should timeout.
     let (server, time, sleep) = time_sequence_server([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -86,7 +86,7 @@ async fn upload_too_slow() {
 /// Expected: MUST timeout after the grace period completes.
 #[tokio::test]
 async fn upload_stalls() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (server, time, sleep) = stalling_server();
     let op = operation(server, time.clone(), sleep);
@@ -112,7 +112,7 @@ async fn upload_stalls() {
 /// Expected: MUST timeout after the grace period completes.
 #[tokio::test]
 async fn complete_upload_no_response() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (server, time, sleep) = stalling_server();
     let op = operation(server, time.clone(), sleep);
@@ -136,7 +136,7 @@ async fn complete_upload_no_response() {
 // Expected: MUST NOT timeout.
 #[tokio::test]
 async fn upload_stall_recovery_in_grace_period() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     // Server starts off fast enough, but then slows down almost up to
     // the grace period, and then recovers.
@@ -163,7 +163,7 @@ async fn upload_stall_recovery_in_grace_period() {
 // Expected: MUST NOT timeout.
 #[tokio::test]
 async fn user_provides_data_too_slowly() {
-    let _logs = capture_test_logs();
+    let _logs = show_test_logs();
 
     let (server, time, sleep) = eager_server(false);
     let op = operation(server, time.clone(), sleep.clone());
