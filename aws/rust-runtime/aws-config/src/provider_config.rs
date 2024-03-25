@@ -6,9 +6,9 @@
 //! Configuration Options for Credential Providers
 
 use crate::profile;
-use aws_runtime::profile::error::ProfileFileLoadError;
-use aws_runtime::profile::profile_file::ProfileFiles;
-use aws_runtime::profile::profile_set::ProfileSet;
+#[allow(deprecated)]
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::{ProfileFileLoadError, ProfileSet};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::client::http::HttpClient;
@@ -45,6 +45,7 @@ pub struct ProviderConfig {
     /// An AWS profile created from `ProfileFiles` and a `profile_name`
     parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     /// A list of [std::path::Path]s to profile files
+    #[allow(deprecated)]
     profile_files: ProfileFiles,
     /// An override to use when constructing a `ProfileSet`
     profile_name_override: Option<Cow<'static, str>>,
@@ -78,6 +79,7 @@ impl Default for ProviderConfig {
             use_fips: None,
             use_dual_stack: None,
             parsed_profile: Default::default(),
+            #[allow(deprecated)]
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
         }
@@ -98,6 +100,7 @@ impl ProviderConfig {
         let env = Env::from_slice(&[]);
         Self {
             parsed_profile: Default::default(),
+            #[allow(deprecated)]
             profile_files: ProfileFiles::default(),
             env,
             fs,
@@ -150,6 +153,7 @@ impl ProviderConfig {
             use_fips: None,
             use_dual_stack: None,
             parsed_profile: Default::default(),
+            #[allow(deprecated)]
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
         }
@@ -162,6 +166,7 @@ impl ProviderConfig {
     ) -> Self {
         Self {
             parsed_profile: Default::default(),
+            #[allow(deprecated)]
             profile_files: ProfileFiles::default(),
             env: Env::default(),
             fs: Fs::default(),
@@ -294,6 +299,7 @@ impl ProviderConfig {
     }
 
     /// Override the profile file paths (`~/.aws/config` by default) and name (`default` by default)
+    #[allow(deprecated)]
     pub(crate) fn with_profile_config(
         self,
         profile_files: Option<ProfileFiles>,

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
+use aws_runtime::env_config::file::{EnvConfigFileKind, EnvConfigFiles};
 use aws_sdk_dynamodb::config::{
     BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
 };
@@ -53,8 +53,8 @@ dynamodb =
         .behavior_version(BehaviorVersion::latest())
         .profile_name("custom")
         .profile_files(
-            ProfileFiles::builder()
-                .with_contents(ProfileFileKind::Config, config)
+            EnvConfigFiles::builder()
+                .with_contents(EnvConfigFileKind::Config, config)
                 .build(),
         )
         .load()

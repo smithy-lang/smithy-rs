@@ -3,25 +3,162 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Code for accessing and validating AWS config profiles
+//! Sections within an AWS config profile.
 
-use crate::profile::normalize;
-use crate::profile::parse::{parse_profile_file, ProfileParseError};
-use crate::profile::section::{Profile, Properties, SsoSession};
-use crate::profile::source::Source;
+use crate::env_config::normalize;
+use crate::env_config::parse::{parse_profile_file, EnvConfigParseError};
+use crate::env_config::property::{Properties, Property};
+use crate::env_config::source::Source;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+/// Represents a top-level section (e.g., `[profile name]`) in a config file.
+pub(crate) trait Section {
+    /// The name of this section
+    fn name(&self) -> &str;
+
+    /// Returns all the properties in this section
+    fn properties(&self) -> &HashMap<String, Property>;
+
+    /// Returns a reference to the property named `name`
+    fn get(&self, name: &str) -> Option<&str>;
+
+    /// True if there are no properties in this section.
+    fn is_empty(&self) -> bool;
+
+    /// Insert a property into a section
+    fn insert(&mut self, name: String, value: Property);
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) struct SectionInner {
+    pub(super) name: String,
+    pub(super) properties: HashMap<String, Property>,
+}
+
+impl Section for SectionInner {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn properties(&self) -> &HashMap<String, Property> {
+        &self.properties
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.properties
+            .get(name.to_ascii_lowercase().as_str())
+            .map(|prop| prop.value())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.properties.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.properties.insert(name.to_ascii_lowercase(), value);
+    }
+}
+
+/// An individual configuration profile
+///
+/// An AWS config may be composed of a multiple named profiles within a [`EnvConfigSections`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Profile(SectionInner);
+
+impl Profile {
+    /// Create a new profile
+    pub fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
+        Self(SectionInner {
+            name: name.into(),
+            properties,
+        })
+    }
+
+    /// The name of this profile
+    pub fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// Returns a reference to the property named `name`
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+}
+
+impl Section for Profile {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn properties(&self) -> &HashMap<String, Property> {
+        self.0.properties()
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.0.insert(name, value)
+    }
+}
+
+/// A `[sso-session name]` section in the config.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SsoSession(SectionInner);
+
+impl SsoSession {
+    /// Create a new SSO session section.
+    pub(super) fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
+        Self(SectionInner {
+            name: name.into(),
+            properties,
+        })
+    }
+
+    /// Returns a reference to the property named `name`
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+}
+
+impl Section for SsoSession {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn properties(&self) -> &HashMap<String, Property> {
+        self.0.properties()
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.0.insert(name, value)
+    }
+}
+
 /// A top-level configuration source containing multiple named profiles
 #[derive(Debug, Eq, Clone, PartialEq)]
-pub struct ProfileSet {
+pub struct EnvConfigSections {
     pub(crate) profiles: HashMap<String, Profile>,
     pub(crate) selected_profile: Cow<'static, str>,
     pub(crate) sso_sessions: HashMap<String, SsoSession>,
     pub(crate) other_sections: Properties,
 }
 
-impl Default for ProfileSet {
+impl Default for EnvConfigSections {
     fn default() -> Self {
         Self {
             profiles: Default::default(),
@@ -32,7 +169,7 @@ impl Default for ProfileSet {
     }
 }
 
-impl ProfileSet {
+impl EnvConfigSections {
     /// Create a new Profile set directly from a HashMap
     ///
     /// This method creates a ProfileSet directly from a hashmap with no normalization for test purposes.
@@ -43,9 +180,7 @@ impl ProfileSet {
         sso_sessions: HashMap<String, HashMap<String, String>>,
         other_sections: Properties,
     ) -> Self {
-        use crate::profile::section::Property;
-
-        let mut base = ProfileSet {
+        let mut base = EnvConfigSections {
             selected_profile: selected_profile.into(),
             ..Default::default()
         };
@@ -119,9 +254,9 @@ impl ProfileSet {
         &self.other_sections
     }
 
-    /// Given a [`Source`] of profile config, parse and merge them into a `ProfileSet`.
-    pub fn parse(source: Source) -> Result<Self, ProfileParseError> {
-        let mut base = ProfileSet {
+    /// Given a [`Source`] of profile config, parse and merge them into a `EnvConfigSections`.
+    pub fn parse(source: Source) -> Result<Self, EnvConfigParseError> {
+        let mut base = EnvConfigSections {
             selected_profile: source.profile,
             ..Default::default()
         };
@@ -135,10 +270,10 @@ impl ProfileSet {
 
 #[cfg(test)]
 mod test {
-    use super::ProfileSet;
-    use crate::profile::profile_file::ProfileFileKind;
-    use crate::profile::section::Section;
-    use crate::profile::source::{File, Source};
+    use super::EnvConfigSections;
+    use crate::env_config::file::EnvConfigFileKind;
+    use crate::env_config::section::Section;
+    use crate::env_config::source::{File, Source};
     use arbitrary::{Arbitrary, Unstructured};
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -168,7 +303,7 @@ mod test {
             credentials_file: Some("".to_string()),
         });
 
-        let profile_set = ProfileSet::parse(source).expect("empty profiles are valid");
+        let profile_set = EnvConfigSections::parse(source).expect("empty profiles are valid");
         assert!(profile_set.is_empty());
     }
 
@@ -179,7 +314,7 @@ mod test {
             credentials_file: Some("".to_string()),
         });
 
-        let profile_set = ProfileSet::parse(source).expect("profiles loaded");
+        let profile_set = EnvConfigSections::parse(source).expect("profiles loaded");
 
         let mut profile_names: Vec<_> = profile_set.profiles().collect();
         profile_names.sort();
@@ -201,12 +336,12 @@ mod test {
             let profile_source = Source {
                 files: vec![
                     File {
-                        kind: ProfileFileKind::Config,
+                        kind: EnvConfigFileKind::Config,
                         path: Some("~/.aws/config".to_string()),
                         contents: conf.unwrap_or_default().to_string(),
                     },
                     File {
-                        kind: ProfileFileKind::Credentials,
+                        kind: EnvConfigFileKind::Credentials,
                         path: Some("~/.aws/credentials".to_string()),
                         contents: creds.unwrap_or_default().to_string(),
                     },
@@ -214,7 +349,7 @@ mod test {
                 profile: "default".into(),
             };
             // don't care if parse fails, just don't panic
-            let _ = ProfileSet::parse(profile_source);
+            let _ = EnvConfigSections::parse(profile_source);
         }
 
         Ok(())
@@ -226,7 +361,7 @@ mod test {
         profiles: HashMap<String, HashMap<String, String>>,
         sso_sessions: HashMap<String, HashMap<String, String>>,
     }
-    fn flatten(config: ProfileSet) -> FlattenedProfileSet {
+    fn flatten(config: EnvConfigSections) -> FlattenedProfileSet {
         FlattenedProfileSet {
             profiles: flatten_sections(config.profiles.values().map(|p| p as _)),
             sso_sessions: flatten_sections(config.sso_sessions.values().map(|s| s as _)),
@@ -253,12 +388,12 @@ mod test {
         Source {
             files: vec![
                 File {
-                    kind: ProfileFileKind::Config,
+                    kind: EnvConfigFileKind::Config,
                     path: Some("~/.aws/config".to_string()),
                     contents: input.config_file.unwrap_or_default(),
                 },
                 File {
-                    kind: ProfileFileKind::Credentials,
+                    kind: EnvConfigFileKind::Credentials,
                     path: Some("~/.aws/credentials".to_string()),
                     contents: input.credentials_file.unwrap_or_default(),
                 },
@@ -270,7 +405,7 @@ mod test {
     // wrapper to generate nicer errors during test failure
     fn check(test_case: ParserTest) {
         let copy = test_case.clone();
-        let parsed = ProfileSet::parse(make_source(test_case.input));
+        let parsed = EnvConfigSections::parse(make_source(test_case.input));
         let res = match (parsed.map(flatten), &test_case.output) {
             (
                 Ok(FlattenedProfileSet {

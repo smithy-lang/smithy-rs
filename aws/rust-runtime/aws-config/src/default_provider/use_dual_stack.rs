@@ -33,8 +33,9 @@ pub(crate) async fn use_dual_stack_provider(provider_config: &ProviderConfig) ->
 #[cfg(test)]
 mod test {
     use crate::default_provider::use_dual_stack::use_dual_stack_provider;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
-    use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_types::os_shim_internal::{Env, Fs};
     use tracing_test::traced_test;
 
@@ -57,8 +58,13 @@ mod test {
             .with_env(Env::from_slice(&[("AWS_USE_DUALSTACK_ENDPOINT", "TRUE")]))
             .with_profile_config(
                 Some(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "conf")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "conf",
+                        )
                         .build(),
                 ),
                 None,
@@ -76,8 +82,13 @@ mod test {
         let conf = ProviderConfig::empty()
             .with_profile_config(
                 Some(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "conf")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "conf",
+                        )
                         .build(),
                 ),
                 None,

@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::profile::parse::{RawProfileSet, WHITESPACE};
-use crate::profile::profile_file::ProfileFileKind;
-use crate::profile::profile_set::ProfileSet;
-use crate::profile::section::{Profile, PropertiesKey, Property, Section, SsoSession};
+use crate::env_config::file::EnvConfigFileKind;
+use crate::env_config::parse::{RawProfileSet, WHITESPACE};
+use crate::env_config::property::{PropertiesKey, Property};
+use crate::env_config::section::{EnvConfigSections, Profile, Section, SsoSession};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -52,9 +52,9 @@ impl<'a> SectionPair<'a> {
     /// 2. For Config files, the profile must either be `default` or it must have a profile prefix
     /// 3. For credentials files, the profile name MUST NOT have a profile prefix
     /// 4. Only config files can have sections other than `profile` sections
-    fn valid_for(self, kind: ProfileFileKind) -> Result<Self, String> {
+    fn valid_for(self, kind: EnvConfigFileKind) -> Result<Self, String> {
         match kind {
-            ProfileFileKind::Config => match (&self.prefix, &self.suffix) {
+            EnvConfigFileKind::Config => match (&self.prefix, &self.suffix) {
                 (Some(prefix), suffix) => {
                     if validate_identifier(suffix).is_ok() {
                         Ok(self)
@@ -70,7 +70,7 @@ impl<'a> SectionPair<'a> {
                     }
                 }
             },
-            ProfileFileKind::Credentials => match (&self.prefix, &self.suffix) {
+            EnvConfigFileKind::Credentials => match (&self.prefix, &self.suffix) {
                 (Some(prefix), suffix) => {
                     if prefix == PROFILE_PREFIX {
                         Err(format!("profile `{suffix}` ignored because credential profiles must NOT begin with `profile`"))
@@ -100,9 +100,9 @@ impl<'a> SectionPair<'a> {
 /// - A profile named `profile default` takes priority over a profile named `default`.
 /// - Profiles with identical names are merged
 pub(super) fn merge_in(
-    base: &mut ProfileSet,
+    base: &mut EnvConfigSections,
     raw_profile_set: RawProfileSet<'_>,
-    kind: ProfileFileKind,
+    kind: EnvConfigFileKind,
 ) {
     // parse / validate sections
     let validated_sections = raw_profile_set
@@ -230,11 +230,10 @@ fn parse_sub_properties(sub_properties_str: &str) -> impl Iterator<Item = (Strin
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::profile::normalize::{validate_identifier, SectionPair};
-    use crate::profile::parse::RawProfileSet;
-    use crate::profile::profile_file::ProfileFileKind;
-    use crate::profile::profile_set::ProfileSet;
+    use crate::env_config::file::EnvConfigFileKind;
+    use crate::env_config::normalize::{merge_in, validate_identifier, SectionPair};
+    use crate::env_config::parse::RawProfileSet;
+    use crate::env_config::section::{EnvConfigSections, Section};
     use std::borrow::Cow;
     use std::collections::HashMap;
     use tracing_test::traced_test;
@@ -361,8 +360,8 @@ mod tests {
             out.insert(Cow::Borrowed("invalid key"), "value".into());
             out
         });
-        let mut base = ProfileSet::default();
-        merge_in(&mut base, profile, ProfileFileKind::Config);
+        let mut base = EnvConfigSections::default();
+        merge_in(&mut base, profile, EnvConfigFileKind::Config);
         assert!(base
             .get_profile("default")
             .expect("contains default profile")
@@ -377,7 +376,11 @@ mod tests {
     fn invalid_profile_generates_warning() {
         let mut profile: RawProfileSet<'_> = HashMap::new();
         profile.insert("foo", HashMap::new());
-        merge_in(&mut ProfileSet::default(), profile, ProfileFileKind::Config);
+        merge_in(
+            &mut EnvConfigSections::default(),
+            profile,
+            EnvConfigFileKind::Config,
+        );
         assert!(logs_contain("profile [foo] ignored"));
     }
 }

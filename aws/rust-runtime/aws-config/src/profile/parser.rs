@@ -5,16 +5,15 @@
 
 //! Code for parsing AWS profile config
 
-use aws_runtime::profile::profile_file::ProfileFiles;
-use aws_runtime::profile::source;
+use aws_runtime::env_config::file::EnvConfigFiles as ProfileFiles;
+use aws_runtime::env_config::source;
 use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
 
-pub use aws_runtime::profile::error::ProfileFileLoadError;
-pub use aws_runtime::profile::parse::ProfileParseError;
-pub use aws_runtime::profile::profile_set::ProfileSet;
-pub use aws_runtime::profile::section::Profile;
-pub use aws_runtime::profile::section::Property;
+pub use aws_runtime::env_config::error::EnvConfigFileLoadError as ProfileFileLoadError;
+pub use aws_runtime::env_config::parse::EnvConfigParseError as ProfileParseError;
+pub use aws_runtime::env_config::property::Property;
+pub use aws_runtime::env_config::section::{EnvConfigSections as ProfileSet, Profile};
 
 /// Read & parse AWS config files
 ///

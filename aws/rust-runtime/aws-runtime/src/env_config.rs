@@ -3,14 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::env_config::property::PropertiesKey;
+use crate::env_config::section::EnvConfigSections;
+use aws_types::os_shim_internal::Env;
+use aws_types::service_config::ServiceConfigKey;
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 
-use aws_types::os_shim_internal::Env;
+pub mod error;
+pub mod file;
+mod normalize;
+pub mod parse;
+pub mod property;
+pub mod section;
+pub mod source;
 
-use crate::profile::profile_set::ProfileSet;
-use crate::profile::section::PropertiesKey;
+/// Given a key, access to the environment, and a validator, return a config value if one was set.
+pub async fn get_service_env_config<'a, T, E>(
+    key: ServiceConfigKey<'a>,
+    env: &'a Env,
+    shared_config_sections: Option<&'a EnvConfigSections>,
+    validator: impl Fn(&str) -> Result<T, E>,
+) -> Result<Option<T>, EnvConfigError<E>>
+where
+    E: Error + Send + Sync + 'static,
+{
+    EnvConfigValue::default()
+        .env(key.env())
+        .profile(key.profile())
+        .service_id(key.service_id())
+        .validate(env, shared_config_sections, validator)
+}
 
 #[derive(Debug)]
 enum Location<'a> {
@@ -159,7 +183,7 @@ impl<'a> EnvConfigValue<'a> {
     pub fn validate<T, E: Error + Send + Sync + 'static>(
         self,
         env: &Env,
-        profiles: Option<&ProfileSet>,
+        profiles: Option<&EnvConfigSections>,
         validator: impl Fn(&str) -> Result<T, E>,
     ) -> Result<Option<T>, EnvConfigError<E>> {
         let value = self.load(env, profiles);
@@ -177,7 +201,7 @@ impl<'a> EnvConfigValue<'a> {
     pub fn load(
         &self,
         env: &'a Env,
-        profiles: Option<&'a ProfileSet>,
+        profiles: Option<&'a EnvConfigSections>,
     ) -> Option<(Cow<'a, str>, EnvConfigSource<'a>)> {
         let env_value = self.environment_variable.as_ref().and_then(|env_var| {
             // Check for a service-specific env var first
@@ -243,7 +267,7 @@ fn get_service_config_from_env<'a>(
 const SERVICES: &str = "services";
 
 fn get_service_config_from_profile<'a>(
-    profile: &ProfileSet,
+    profile: &EnvConfigSections,
     service_id: Option<Cow<'a, str>>,
     profile_key: Cow<'a, str>,
 ) -> Option<(Cow<'a, str>, EnvConfigSource<'a>)> {
@@ -274,14 +298,12 @@ fn format_service_id_for_profile(service_id: impl AsRef<str>) -> String {
 
 #[cfg(test)]
 mod test {
+    use crate::env_config::property::{Properties, PropertiesKey};
+    use crate::env_config::section::EnvConfigSections;
+    use aws_types::os_shim_internal::Env;
     use std::borrow::Cow;
     use std::collections::HashMap;
     use std::num::ParseIntError;
-
-    use aws_types::os_shim_internal::Env;
-
-    use crate::profile::profile_set::ProfileSet;
-    use crate::profile::section::{Properties, PropertiesKey};
 
     use super::EnvConfigValue;
 
@@ -315,7 +337,7 @@ mod test {
             ("AWS_SOME_KEY_SERVICE", "2"),
             ("AWS_SOME_KEY_ANOTHER_SERVICE", "3"),
         ]);
-        let profiles = ProfileSet::new(
+        let profiles = EnvConfigSections::new(
             HashMap::from([(
                 "default".to_owned(),
                 HashMap::from([
@@ -389,7 +411,7 @@ mod test {
             ("AWS_SOME_KEY_S3", "2"),
         ]);
 
-        let profiles = ProfileSet::new(
+        let profiles = EnvConfigSections::new(
             HashMap::from([(
                 "default".to_owned(),
                 HashMap::from([
@@ -443,7 +465,7 @@ mod test {
             ("AWS_SOME_KEY_EC2", "3"),
         ]);
 
-        let profiles = ProfileSet::new(
+        let profiles = EnvConfigSections::new(
             HashMap::from([(
                 "default".to_owned(),
                 HashMap::from([

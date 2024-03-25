@@ -41,11 +41,9 @@ pub mod request_info;
 /// Interceptor that determines the clock skew between the client and service.
 pub mod service_clock_skew;
 
-/// Supporting code for extracting config from an AWS config file.
-pub mod profile;
-
 /// Filesystem utilities
 pub mod fs_util;
 
-/// Supporting code for parsing AWS config values set in a user's environment
+/// Supporting code for parsing AWS config values set in a user's environment or
+/// in a shared config file.
 pub mod env_config;

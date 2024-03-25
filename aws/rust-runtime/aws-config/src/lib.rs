@@ -212,7 +212,6 @@ mod loader {
         ProvideCredentials, SharedCredentialsProvider,
     };
     use aws_credential_types::Credentials;
-    use aws_runtime::profile::profile_file::ProfileFiles;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
@@ -233,6 +232,8 @@ mod loader {
         retry_config, timeout_config, use_dual_stack, use_fips,
     };
     use crate::meta::region::ProvideRegion;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
 
     #[derive(Default, Debug)]
@@ -266,6 +267,7 @@ mod loader {
         provider_config: Option<ProviderConfig>,
         http_client: Option<SharedHttpClient>,
         profile_name_override: Option<String>,
+        #[allow(deprecated)]
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
@@ -570,6 +572,7 @@ mod loader {
         ///     .load()
         ///     .await;
         /// # }
+        #[allow(deprecated)]
         pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
             self.profile_files_override = Some(profile_files);
             self
@@ -809,7 +812,7 @@ mod loader {
             let profiles = conf.profile().await;
             let service_config = EnvServiceConfig {
                 env: conf.env(),
-                profiles: profiles.cloned().unwrap_or_default(),
+                env_config_sections: profiles.cloned().unwrap_or_default(),
             };
             let mut builder = SdkConfig::builder()
                 .region(region)
@@ -871,11 +874,12 @@ mod loader {
 
     #[cfg(test)]
     mod test {
+        #[allow(deprecated)]
+        use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
         use crate::BehaviorVersion;
         use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
-        use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
         use aws_types::app_name::AppName;
@@ -902,8 +906,13 @@ mod loader {
                 .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -1021,8 +1030,13 @@ mod loader {
                 .env(env)
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -1034,8 +1048,13 @@ mod loader {
                 .fs(fs)
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -1057,8 +1076,13 @@ mod loader {
                 .env(env.clone())
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -1085,8 +1109,13 @@ mod loader {
                 .endpoint_url("http://localhost")
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()

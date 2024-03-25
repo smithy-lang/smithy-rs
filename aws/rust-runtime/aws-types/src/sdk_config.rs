@@ -95,7 +95,7 @@ pub struct Builder {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
-    service_config: Option<Box<dyn LoadServiceConfig>>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
 }
 
 impl Builder {
@@ -629,7 +629,7 @@ impl Builder {
         &mut self,
         service_config: Option<impl LoadServiceConfig + 'static>,
     ) -> &mut Self {
-        self.service_config = service_config.map(|it| Box::new(it) as _);
+        self.service_config = service_config.map(|it| Arc::new(it) as Arc<dyn LoadServiceConfig>);
         self
     }
 
@@ -651,7 +651,7 @@ impl Builder {
             time_source: self.time_source,
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
-            service_config: self.service_config.map(Arc::new),
+            service_config: self.service_config,
         }
     }
 }
@@ -805,7 +805,7 @@ impl SdkConfig {
 
     /// Return an immutable reference to the service config provider configured for this client.
     pub fn service_config(&self) -> Option<&dyn LoadServiceConfig> {
-        self.service_config.as_deref().map(|it| it.as_ref())
+        self.service_config.as_deref()
     }
 
     /// Config builder
@@ -840,7 +840,7 @@ impl SdkConfig {
             use_dual_stack: self.use_dual_stack,
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
-            service_config: self.service_config.and_then(Arc::into_inner),
+            service_config: self.service_config,
         }
     }
 }

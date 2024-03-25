@@ -89,9 +89,10 @@ impl Builder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
     use crate::test_case::{no_traffic_client, InstantSleep};
-    use aws_runtime::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_types::os_shim_internal::{Env, Fs};
 
@@ -125,8 +126,13 @@ mod tests {
             .http_client(no_traffic_client())
             .profile_name("custom")
             .profile_files(
+                #[allow(deprecated)]
                 ProfileFiles::builder()
-                    .with_file(ProfileFileKind::Config, "test_config")
+                    .with_file(
+                        #[allow(deprecated)]
+                        ProfileFileKind::Config,
+                        "test_config",
+                    )
                     .build(),
             )
             .load()

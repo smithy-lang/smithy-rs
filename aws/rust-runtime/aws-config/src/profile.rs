@@ -21,15 +21,17 @@ pub mod token;
 pub use token::ProfileFileTokenProvider;
 
 #[doc(inline)]
-pub use aws_runtime::profile::parse::ProfileParseError;
+pub use aws_runtime::env_config::error::EnvConfigFileLoadError as ProfileFileLoadError;
 #[doc(inline)]
-pub use aws_runtime::profile::profile_set::ProfileSet;
+pub use aws_runtime::env_config::parse::EnvConfigParseError as ProfileParseError;
 #[doc(inline)]
-pub use aws_runtime::profile::section::{Profile, Property};
+pub use aws_runtime::env_config::property::Property;
+#[doc(inline)]
+pub use aws_runtime::env_config::section::{EnvConfigSections as ProfileSet, Profile};
 #[doc(inline)]
 pub use credentials::ProfileFileCredentialsProvider;
 #[doc(inline)]
-pub use parser::{load, ProfileFileLoadError};
+pub use parser::load;
 #[doc(inline)]
 pub use region::ProfileFileRegionProvider;
 

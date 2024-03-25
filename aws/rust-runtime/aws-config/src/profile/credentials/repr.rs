@@ -13,10 +13,9 @@
 //! multiple actions into the same profile).
 
 use crate::profile::credentials::ProfileFileError;
+use crate::profile::{Profile, ProfileSet};
 use crate::sensitive_command::CommandWithSensitiveArgs;
 use aws_credential_types::Credentials;
-use aws_runtime::profile::profile_set::ProfileSet;
-use aws_runtime::profile::section::Profile;
 
 /// Chain of Profile Providers
 ///

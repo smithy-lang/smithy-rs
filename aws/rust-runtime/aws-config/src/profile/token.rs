@@ -6,13 +6,14 @@
 //! Profile File Based Token Providers
 
 use crate::profile::cell::ErrorTakingOnceCell;
+#[allow(deprecated)]
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::ProfileSet;
 use crate::provider_config::ProviderConfig;
 use crate::sso::SsoTokenProvider;
 use aws_credential_types::provider::{
     error::TokenError, future, token::ProvideToken, token::Result as TokenResult,
 };
-use aws_runtime::profile::profile_file::ProfileFiles;
-use aws_runtime::profile::profile_set::ProfileSet;
 use aws_types::{region::Region, SdkConfig};
 
 async fn load_profile_set(provider_config: &ProviderConfig) -> Result<&ProfileSet, TokenError> {
@@ -123,6 +124,7 @@ impl ProvideToken for ProfileFileTokenProvider {
 pub struct Builder {
     provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
+    #[allow(deprecated)]
     profile_files: Option<ProfileFiles>,
 }
 
@@ -140,6 +142,7 @@ impl Builder {
     }
 
     /// Set the profile file that should be used by the [`ProfileFileTokenProvider`]
+    #[allow(deprecated)]
     pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
         self.profile_files = Some(profile_files);
         self
