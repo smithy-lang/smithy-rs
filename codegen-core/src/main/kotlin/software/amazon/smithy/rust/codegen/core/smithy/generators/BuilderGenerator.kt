@@ -308,11 +308,16 @@ class BuilderGenerator(
         writer.docs("A builder for #D.", structureSymbol)
         metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
+        RenderSerdeAttribute.addSerde(writer, shape, model)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         writer.rustBlock("pub struct $builderName") {
+            // add serde
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional.
                 val memberSymbol = symbolProvider.toSymbol(member).makeOptional()
+                RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
+                RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
                 renderBuilderMember(this, memberName, memberSymbol)
             }
             writeCustomizations(customizations, BuilderSection.AdditionalFields(shape))
