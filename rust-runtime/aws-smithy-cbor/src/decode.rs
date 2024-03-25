@@ -77,9 +77,11 @@ impl<'b> Decoder<'b> {
         self.decoder.skip().map_err(DeserializeError::new)
     }
 
-    // TODO: confirm benchmarks and keep either `str_alt` or `str`.
+    // TODO-David: confirm benchmarks and keep either `str_alt` or `str`.
     // The following seems to be a bit slower than the one we have kept.
     pub fn str_alt(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        // This implementation uses `next` twice to see if there is
+        // another str chunk. If there is, it returns a owned `String`.
         let mut chunks_iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
         let head = match chunks_iter.next() {
             Some(Ok(head)) => head,
@@ -113,7 +115,7 @@ impl<'b> Decoder<'b> {
         }
     }
 
-    // TODO: confirm benchmarks and keep either `string_alt` or `string` implementation.
+    // TODO-David: confirm benchmarks and keep either `string_alt` or `string` implementation.
     // The following seems to be a bit slower than the one we have kept.
     pub fn string_alt(&mut self) -> Result<String, DeserializeError> {
         let s: Result<String, _> = self

@@ -1,4 +1,4 @@
-use aws_smithy_cbor::decode::{Decoder, DeserializeError};
+use aws_smithy_cbor::decode::Decoder;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 pub fn str_benchmark(c: &mut Criterion) {
@@ -44,6 +44,8 @@ pub fn str_benchmark(c: &mut Criterion) {
     });
 }
 
+// We have two `string` implementations. One uses `collect` the other
+// uses `String::new` followed by `string::push`.
 pub fn string_benchmark(c: &mut Criterion) {
     // Definite length key `thisIsAKey`.
     let definite_bytes = [
@@ -99,15 +101,13 @@ pub fn blob_benchmark(c: &mut Criterion) {
             let _ = black_box(decoder.blob());
         })
     });
-
-    // c.bench_function("blob-alt", |b| {
-    //     b.iter(|| {
-    //         let mut decoder = Decoder::new(&blob_indefinite_bytes);
-    //         let _ = black_box(decoder.blob_alt());
-    //     })
-    // });
 }
 
-criterion_group!(benches, string_benchmark, /*str_benchmark blob_benchmark */,);
+criterion_group!(
+    benches,
+    string_benchmark,
+    // str_benchmark blob_benchmark,
+    // str_benchmark,
+);
 
 criterion_main!(benches);
