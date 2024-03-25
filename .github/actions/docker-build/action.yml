@@ -66,3 +66,4 @@ runs:
       path: artifacts-${{ inputs.action }}.tar.gz
       if-no-files-found: error
       retention-days: 3
+      overwrite: true
