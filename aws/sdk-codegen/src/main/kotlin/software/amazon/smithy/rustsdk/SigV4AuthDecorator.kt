@@ -61,7 +61,7 @@ class SigV4AuthDecorator : ConditionalDecorator(
     delegateTo =
         object : ClientCodegenDecorator {
             override val name: String get() = "SigV4AuthDecorator"
-            override val order: Byte = 0
+            override val order: Byte = ORDER
 
             private val sigv4a = "sigv4a"
 
@@ -121,7 +121,11 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 }
             }
         },
-)
+) {
+    companion object {
+        const val ORDER: Byte = 0
+    }
+}
 
 private class SigV4SigningConfig(
     runtimeConfig: RuntimeConfig,
