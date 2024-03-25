@@ -14,8 +14,10 @@ use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::base64;
 use bytes::Bytes;
 use http::HeaderMap;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 
 mod record;
 mod replay;
@@ -37,6 +39,18 @@ impl NetworkTraffic {
     /// Network events
     pub fn events(&self) -> &Vec<Event> {
         &self.events
+    }
+
+    /// Create a NetworkTraffic instance from a file
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Box<dyn std::error::Error>> {
+        let contents = std::fs::read_to_string(path)?;
+        Ok(serde_json::from_str(&contents)?)
+    }
+
+    /// Create a NetworkTraffic instance from a file
+    pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<(), Box<dyn std::error::Error>> {
+        let serialized = serde_json::to_string_pretty(&self)?;
+        Ok(std::fs::write(path, serialized)?)
     }
 
     /// Update the network traffic with all `content-length` fields fixed to match the contents
@@ -101,7 +115,7 @@ pub struct Event {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Request {
     uri: String,
-    headers: HashMap<String, Vec<String>>,
+    headers: IndexMap<String, Vec<String>>,
     method: String,
 }
 
@@ -112,7 +126,7 @@ pub struct Request {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Response {
     status: u16,
-    headers: HashMap<String, Vec<String>>,
+    headers: IndexMap<String, Vec<String>>,
 }
 
 impl From<&Request> for http::Request<()> {
@@ -130,7 +144,7 @@ impl From<&Request> for http::Request<()> {
 impl<'a> From<&'a HttpRequest> for Request {
     fn from(req: &'a HttpRequest) -> Self {
         let uri = req.uri().to_string();
-        let headers = headers_to_map_http(req.headers());
+        let headers = headers_to_map_http(req.headers()).into();
         let method = req.method().to_string();
         Self {
             uri,
@@ -140,8 +154,8 @@ impl<'a> From<&'a HttpRequest> for Request {
     }
 }
 
-fn headers_to_map_http(headers: &Headers) -> HashMap<String, Vec<String>> {
-    let mut out: HashMap<_, Vec<_>> = HashMap::new();
+fn headers_to_map_http(headers: &Headers) -> IndexMap<String, Vec<String>> {
+    let mut out: IndexMap<_, Vec<_>> = IndexMap::new();
     for (header_name, header_value) in headers.iter() {
         let entry = out.entry(header_name.to_string()).or_default();
         entry.push(header_value.to_string());
@@ -149,8 +163,8 @@ fn headers_to_map_http(headers: &Headers) -> HashMap<String, Vec<String>> {
     out
 }
 
-fn headers_to_map_02x(headers: &HeaderMap) -> HashMap<String, Vec<String>> {
-    let mut out: HashMap<_, Vec<_>> = HashMap::new();
+fn headers_to_map_02x(headers: &HeaderMap) -> IndexMap<String, Vec<String>> {
+    let mut out: IndexMap<_, Vec<_>> = IndexMap::new();
     for (header_name, header_value) in headers.iter() {
         let entry = out.entry(header_name.to_string()).or_default();
         entry.push(
@@ -162,8 +176,8 @@ fn headers_to_map_02x(headers: &HeaderMap) -> HashMap<String, Vec<String>> {
     out
 }
 
-fn headers_to_map(headers: &Headers) -> HashMap<String, Vec<String>> {
-    let mut out: HashMap<_, Vec<_>> = HashMap::new();
+fn headers_to_map(headers: &Headers) -> IndexMap<String, Vec<String>> {
+    let mut out: IndexMap<_, Vec<_>> = IndexMap::new();
     for (header_name, header_value) in headers.iter() {
         let entry = out.entry(header_name.to_string()).or_default();
         entry.push(
