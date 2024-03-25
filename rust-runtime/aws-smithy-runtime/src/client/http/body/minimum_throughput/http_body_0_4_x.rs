@@ -143,6 +143,14 @@ where
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
+
+    fn size_hint(&self) -> http_body_0_4::SizeHint {
+        self.inner.size_hint()
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
 }
 
 impl<B> Body for ThroughputReadingBody<B>
@@ -185,5 +193,13 @@ where
     ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
+    }
+
+    fn size_hint(&self) -> http_body_0_4::SizeHint {
+        self.inner.size_hint()
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
     }
 }
