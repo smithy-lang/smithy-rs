@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
