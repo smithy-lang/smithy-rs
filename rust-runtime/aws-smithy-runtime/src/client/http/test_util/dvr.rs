@@ -144,7 +144,7 @@ impl From<&Request> for http::Request<()> {
 impl<'a> From<&'a HttpRequest> for Request {
     fn from(req: &'a HttpRequest) -> Self {
         let uri = req.uri().to_string();
-        let headers = headers_to_map_http(req.headers()).into();
+        let headers = headers_to_map_http(req.headers());
         let method = req.method().to_string();
         Self {
             uri,
