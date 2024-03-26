@@ -11,47 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-smithy-mocks-experimental]]
-message = "Replace `enforce_order(bool)` with `enum RuleMode`"
-references = ["smithy-rs#3502", "awsdocs/aws-doc-sdk-examples#6264"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-
 [[smithy-rs]]
-message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1."
-references = ["smithy-rs#3476"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-authors = ["landonxjames"]
-
-[[aws-sdk-rust]]
-message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
-references = ["smithy-rs#3478"]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "ysaito1001"
+author = "rcoh"
 
-[[aws-sdk-rust]]
-message = """
-Users may now set an endpoint URL from the env or profile file:
-
-- env: `AWS_ENDPOINT_URL="http://localhost"`
-- profile: `endpoint_url = http://localhost`
-
-Users may also ignore endpoint URLs sourced from the env and profile files:
-
-- env: `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS="true"`
-- profile: `ignore_configured_endpoint_urls = true`
-"""
-references = ["smithy-rs#3488"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-authors = ["Velfi"]
-
-[[aws-sdk-rust]]
-message = "Fix a bug where a `sigv4-s3express` auth scheme was incorrectly positioned at the front of `auth_scheme_options` and was used when no auth schemes were available for an endpoint."
-references = ["smithy-rs#3498"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = "Ability to add an inline policy or a list of policy ARNs to the `WebIdentityTokenCredentialsProvider` builder."
 references = []
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "mokhaled2992"
+
+
+
