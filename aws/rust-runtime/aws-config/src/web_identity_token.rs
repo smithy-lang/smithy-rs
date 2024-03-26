@@ -64,10 +64,11 @@
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_sdk_sts::Client as StsClient;
+use aws_sdk_sts::{ Client as StsClient, types::PolicyDescriptorType };
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal::{Env, Fs};
+
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
@@ -238,8 +239,8 @@ impl Builder {
             fs: conf.fs(),
             sts_client: StsClient::new(&conf.client_config()),
             time_source: conf.time_source(),
-            policy,
-            policy_arns
+            policy: self.policy,
+            policy_arns: self.policy_arns
         }
     }
 }
@@ -264,8 +265,8 @@ async fn load_credentials(
     let resp = sts_client.assume_role_with_web_identity()
         .role_arn(role_arn)
         .role_session_name(session_name)
-        .set_policy(self.policy)
-        .set_policy_arns(self.policy_arns)
+        .set_policy(policy)
+        .set_policy_arns(policy_arns)
         .web_identity_token(token)
         .send()
         .await
