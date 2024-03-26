@@ -882,15 +882,15 @@ mod loader {
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
+        use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
         use aws_types::app_name::AppName;
         use aws_types::os_shim_internal::{Env, Fs};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use tracing_test::traced_test;
 
-        #[traced_test]
         #[tokio::test]
         async fn provider_config_used() {
+            let (_guard, logs_rx) = capture_test_logs();
             let env = Env::from_slice(&[
                 ("AWS_MAX_ATTEMPTS", "10"),
                 ("AWS_REGION", "us-west-4"),
@@ -930,21 +930,18 @@ mod loader {
                     .access_key_id(),
             );
             assert_eq!(Some(&AppName::new("correct").unwrap()), loader.app_name());
-            logs_assert(|lines| {
-                let num_config_loader_logs = lines
-                    .iter()
-                    .filter(|l| l.contains("provider_config_used"))
-                    .filter(|l| l.contains("config file loaded"))
-                    .count();
-                match num_config_loader_logs {
-                    0 => Err("no config file logs found!".to_string()),
-                    1 => Ok(()),
-                    more => Err(format!(
-                        "the config file was parsed more than once! (parsed {})",
-                        more
-                    )),
-                }
-            });
+
+            let num_config_loader_logs = logs_rx.contents()
+                .lines()
+                // The logger uses fancy formatting, so we have to account for that.
+                .filter(|l| l.contains("config file loaded \u{1b}[3mpath\u{1b}[0m\u{1b}[2m=\u{1b}[0mSome(\"test_config\") \u{1b}[3msize\u{1b}[0m\u{1b}[2m=\u{1b}"))
+                .count();
+
+            match num_config_loader_logs {
+                0 => panic!("no config file logs found!"),
+                1 => (),
+                more => panic!("the config file was parsed more than once! (parsed {more})",),
+            };
         }
 
         fn base_conf() -> ConfigLoader {
