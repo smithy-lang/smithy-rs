@@ -67,6 +67,8 @@ class RpcV2HttpBindingResolver(
      * > The `Content-Type` for the serialization format MUST NOT be set.
      */
     override fun responseContentType(operationShape: OperationShape): String? {
+        // When `syntheticOutputTrait.originalId == null` it implies that the operation had no output defined
+        // in the Smithy model.
         val syntheticOutputTrait = operationShape.outputShape(model).expectTrait<SyntheticOutputTrait>()
         if (syntheticOutputTrait.originalId == null) {
             return null

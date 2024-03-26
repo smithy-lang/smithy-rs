@@ -450,6 +450,8 @@ open class Instantiator(
 
     /**
      * Returns a default value for a shape.
+     *
+     * Warning: this method does not take into account any constraint traits attached to the shape.
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {

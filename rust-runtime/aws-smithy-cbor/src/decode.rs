@@ -104,11 +104,13 @@ impl<'b> Decoder<'b> {
     }
 
     pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        let bookmark = self.decoder.position();
         match self.decoder.str() {
             Ok(str_value) => Ok(Cow::Borrowed(str_value)),
             Err(e) if e.is_type_mismatch() => {
-                // Move the position back by one element to the indefinite string marker.
-                self.decoder.set_position(self.decoder.position() - 1);
+                // Move the position back to the start of the Cbor element and then try
+                // decoding it as a indefinite length string.
+                self.decoder.set_position(bookmark);
                 Ok(Cow::Owned(self.string()?))
             }
             Err(e) => Err(DeserializeError::new(e)),
@@ -134,11 +136,11 @@ impl<'b> Decoder<'b> {
             None => String::new(),
             Some(head) => {
                 // The following is faster in benchmarks than using `Collect()` on a `String`.
-                let mut head = String::from(head.map_err(DeserializeError::new)?);
+                let mut combined_chunks = String::from(head.map_err(DeserializeError::new)?);
                 for chunk in iter {
-                    head.push_str(chunk.map_err(DeserializeError::new)?);
+                    combined_chunks.push_str(chunk.map_err(DeserializeError::new)?);
                 }
-                head
+                combined_chunks
             }
         };
 
