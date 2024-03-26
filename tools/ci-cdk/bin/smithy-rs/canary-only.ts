@@ -4,14 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// This CDK app sets up the absolute minimum set of resources to succesfully
+// This CDK app sets up the absolute minimum set of resources to successfully
 // execute the canary with.
 
 import "source-map-support/register";
 import { App } from "aws-cdk-lib";
-import { CanaryStack } from "../lib/aws-sdk-rust/canary-stack";
+import { CanaryStack } from "../../lib/canary-stack";
 
 const app = new App();
 const env = { region: "us-west-2" };
 
-new CanaryStack(app, "aws-sdk-rust-canary-stack", { env });
+new CanaryStack(app, "smithy-rs-canary-stack", {
+    lambdaExecutionRole: "smithy-rs-canary-lambda-exec-role",
+    env,
+});
