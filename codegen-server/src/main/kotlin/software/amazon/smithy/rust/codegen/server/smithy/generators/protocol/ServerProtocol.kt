@@ -357,5 +357,5 @@ class ServerRpcV2Protocol(
 
     override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
 
-    override fun serverContentTypeCheckNoModeledInput() = true
+    override fun serverContentTypeCheckNoModeledInput() = false
 }

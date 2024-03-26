@@ -83,8 +83,6 @@ macro_rules! opaque_future {
     };
 }
 
-pub use opaque_future;
-
 macro_rules! convert_to_request_rejection {
     ($from:ty, $to:ident) => {
         impl From<$from> for RequestRejection {

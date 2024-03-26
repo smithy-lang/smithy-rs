@@ -30,6 +30,7 @@ buildscript {
 dependencies {
     implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
@@ -45,8 +46,10 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        CodegenTest("aws.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2_cbor"),
-        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2", imports = listOf("$commonModels/rpcv2.smithy")),
+        // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
+        CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
+        // Todo: change this to rpcv2extra
+        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2Extra", imports = listOf("$commonModels/rpcv2.smithy")),
         CodegenTest(
             "aws.protocoltests.rpcv2#RpcV2Protocol",
             "adwait-main",

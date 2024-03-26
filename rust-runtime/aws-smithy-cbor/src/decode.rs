@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use aws_smithy_types::{Blob, DateTime};
 use minicbor::decode::Error;
 
@@ -75,28 +77,87 @@ impl<'b> Decoder<'b> {
         self.decoder.skip().map_err(DeserializeError::new)
     }
 
-    // TODO An API to support both definite and indefinite strings could be:
-    //
-    //     pub fn str(&mut self, cap: u64) -> Result<&'b str, DeserializeError> {
-    //
-    pub fn str(&mut self) -> Result<&'b str, DeserializeError> {
-        self.decoder.str().map_err(DeserializeError::new)
+    // TODO-David: confirm benchmarks and keep either `str_alt` or `str`.
+    // The following seems to be a bit slower than the one we have kept.
+    pub fn str_alt(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        // This implementation uses `next` twice to see if there is
+        // another str chunk. If there is, it returns a owned `String`.
+        let mut chunks_iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let head = match chunks_iter.next() {
+            Some(Ok(head)) => head,
+            None => return Ok(Cow::Borrowed("")),
+            Some(Err(e)) => return Err(DeserializeError::new(e)),
+        };
+
+        match chunks_iter.next() {
+            None => Ok(Cow::Borrowed(head)),
+            Some(Err(e)) => Err(DeserializeError::new(e)),
+            Some(Ok(next)) => {
+                let mut concatenated_string = String::from(head);
+                concatenated_string.push_str(next);
+                for chunk in chunks_iter {
+                    concatenated_string.push_str(chunk.map_err(DeserializeError::new)?);
+                }
+                Ok(Cow::Owned(concatenated_string))
+            }
+        }
     }
 
-    // TODO Support indefinite text strings.
+    pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
+        let bookmark = self.decoder.position();
+        match self.decoder.str() {
+            Ok(str_value) => Ok(Cow::Borrowed(str_value)),
+            Err(e) if e.is_type_mismatch() => {
+                // Move the position back to the start of the Cbor element and then try
+                // decoding it as a indefinite length string.
+                self.decoder.set_position(bookmark);
+                Ok(Cow::Owned(self.string()?))
+            }
+            Err(e) => Err(DeserializeError::new(e)),
+        }
+    }
+
+    // TODO-David: confirm benchmarks and keep either `string_alt` or `string` implementation.
+    // The following seems to be a bit slower than the one we have kept.
+    pub fn string_alt(&mut self) -> Result<String, DeserializeError> {
+        let s: Result<String, _> = self
+            .decoder
+            .str_iter()
+            .map_err(DeserializeError::new)?
+            .collect();
+        s.map_err(DeserializeError::new)
+    }
+
     pub fn string(&mut self) -> Result<String, DeserializeError> {
-        self.decoder
-            .str()
-            .map(String::from) // This allocates.
-            .map_err(DeserializeError::new)
+        let mut iter = self.decoder.str_iter().map_err(DeserializeError::new)?;
+        let head = iter.next();
+
+        let decoded_string = match head {
+            None => String::new(),
+            Some(head) => {
+                // The following is faster in benchmarks than using `Collect()` on a `String`.
+                let mut combined_chunks = String::from(head.map_err(DeserializeError::new)?);
+                for chunk in iter {
+                    combined_chunks.push_str(chunk.map_err(DeserializeError::new)?);
+                }
+                combined_chunks
+            }
+        };
+
+        Ok(decoded_string)
     }
 
-    // TODO Support indefinite byte strings.
     pub fn blob(&mut self) -> Result<Blob, DeserializeError> {
-        self.decoder
-            .bytes()
-            .map(Blob::new) // This allocates.
-            .map_err(DeserializeError::new)
+        let iter = self.decoder.bytes_iter().map_err(DeserializeError::new)?;
+        let parts: Vec<&[u8]> = iter
+            .collect::<Result<_, _>>()
+            .map_err(DeserializeError::new)?;
+
+        Ok(if parts.len() == 1 {
+            Blob::new(parts[0]) // Directly convert &[u8] to Blob if there's only one part.
+        } else {
+            Blob::new(parts.concat()) // Concatenate all parts into a single Blob.
+        })
     }
 
     pub fn boolean(&mut self) -> Result<bool, DeserializeError> {
@@ -183,5 +244,82 @@ where
         self.inner
             .next()
             .map(|opt| opt.map_err(DeserializeError::new))
+    }
+}
+
+pub fn set_optional<B, F>(builder: B, decoder: &mut Decoder, f: F) -> Result<B, DeserializeError>
+where
+    F: Fn(B, &mut Decoder) -> Result<B, DeserializeError>,
+{
+    match decoder.datatype()? {
+        crate::data::Type::Null => {
+            decoder.null()?;
+            Ok(builder)
+        }
+        _ => f(builder, decoder),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Decoder;
+
+    #[test]
+    fn test_definite_str_is_cow_borrowed() {
+        // Definite length key `thisIsAKey`.
+        let definite_bytes = [
+            0x6a, 0x74, 0x68, 0x69, 0x73, 0x49, 0x73, 0x41, 0x4b, 0x65, 0x79,
+        ];
+        let mut decoder = Decoder::new(&definite_bytes);
+        let member = decoder.str().expect("could not decode str");
+        assert_eq!(member, "thisIsAKey");
+        assert!(matches!(member, std::borrow::Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn test_indefinite_str_is_cow_owned() {
+        // Indefinite length key `this`, `Is`, `A` and `Key`.
+        let indefinite_bytes = [
+            0x7f, 0x64, 0x74, 0x68, 0x69, 0x73, 0x62, 0x49, 0x73, 0x61, 0x41, 0x63, 0x4b, 0x65,
+            0x79, 0xff,
+        ];
+        let mut decoder = Decoder::new(&indefinite_bytes);
+        let member = decoder.str().expect("could not decode str");
+        assert_eq!(member, "thisIsAKey");
+        assert!(matches!(member, std::borrow::Cow::Owned(_)));
+    }
+
+    #[test]
+    fn test_empty_str_works() {
+        let bytes = [0x60];
+        let mut decoder = Decoder::new(&bytes);
+        let member = decoder.str().expect("could not decode empty str");
+        assert_eq!(member, "");
+    }
+
+    #[test]
+    fn test_empty_blob_works() {
+        let bytes = [0x40];
+        let mut decoder = Decoder::new(&bytes);
+        let member = decoder.blob().expect("could not decode an empty blob");
+        assert_eq!(member, aws_smithy_types::Blob::new(&[]));
+    }
+
+    #[test]
+    fn test_indefinite_length_blob() {
+        // Indefinite length blob containing bytes corresponding to `indefinite-byte, chunked, on each comma`.
+        // https://cbor.nemo157.com/#type=hex&value=bf69626c6f6256616c75655f50696e646566696e6974652d627974652c49206368756e6b65642c4e206f6e206561636820636f6d6d61ffff
+        let indefinite_bytes = [
+            0x5f, 0x50, 0x69, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x65, 0x2d, 0x62,
+            0x79, 0x74, 0x65, 0x2c, 0x49, 0x20, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x65, 0x64, 0x2c,
+            0x4e, 0x20, 0x6f, 0x6e, 0x20, 0x65, 0x61, 0x63, 0x68, 0x20, 0x63, 0x6f, 0x6d, 0x6d,
+            0x61, 0xff,
+        ];
+        let mut decoder = Decoder::new(&indefinite_bytes);
+        let member = decoder.blob().expect("could not decode blob");
+        assert_eq!(
+            member,
+            aws_smithy_types::Blob::new("indefinite-byte, chunked, on each comma".as_bytes())
+        );
     }
 }
