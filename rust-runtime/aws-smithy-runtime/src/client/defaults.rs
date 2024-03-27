@@ -192,6 +192,8 @@ pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntime
     )
 }
 
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/3523)
+#[allow(dead_code)]
 fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
@@ -269,7 +271,8 @@ pub fn default_plugins(
         default_time_source_plugin(),
         default_timeout_config_plugin(),
         default_stalled_stream_protection_config_plugin(),
-        enforce_content_length_runtime_plugin(),
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3523): Reenable this
+        /* enforce_content_length_runtime_plugin(), */
     ]
     .into_iter()
     .flatten()
