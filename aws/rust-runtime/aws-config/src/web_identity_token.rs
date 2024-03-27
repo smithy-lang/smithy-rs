@@ -204,7 +204,7 @@ impl Builder {
     ///
     /// This parameter is optional
     /// For more information, see
-    /// [policy](aws_sdk_sts::input::assume_role_input::Builder::policy_arns)
+    /// [policy](aws_sdk_sts::operation::assume_role::builders::AssumeRoleInputBuilder::policy_arns)
     pub fn policy(mut self, policy: impl Into<String>) -> Self {
         self.policy = Some(policy.into());
         self
@@ -214,7 +214,7 @@ impl Builder {
     ///
     /// This parameter is optional.
     /// For more information, see
-    /// [policy_arns](aws_sdk_sts::input::assume_role_input::Builder::policy_arns)
+    /// [policy_arns](aws_sdk_sts::operation::assume_role::builders::AssumeRoleInputBuilder::policy_arns)
     pub fn policy_arns(mut self, policy_arns: Vec<String>) -> Self {
         self.policy_arns = Some(
             policy_arns
