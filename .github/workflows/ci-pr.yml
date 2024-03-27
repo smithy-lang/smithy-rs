@@ -94,6 +94,19 @@ jobs:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
+  # Run the canary against generated SDKs
+  canary:
+    name: Canary
+    needs: acquire-base-image
+    if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
+    uses: ./.github/workflows/canary.yml
+    with:
+      pull_request_number: ${{ github.event.number }}
+      commit_sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
+
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
     name: PR Bot
