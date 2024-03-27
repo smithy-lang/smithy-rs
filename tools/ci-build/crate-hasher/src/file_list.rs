@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::fs::Metadata;
 use std::path::Path;
-
-use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Default)]
 pub struct FileList(BTreeSet<FileMetadata>);
