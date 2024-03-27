@@ -37,10 +37,13 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 #[cfg(feature = "tls-rustls")]
 mod default_connector {
+    use std::sync::Arc;
+
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
     use hyper_0_14::client::HttpConnector;
     use hyper_rustls::HttpsConnector;
+    use rustls::crypto::ring::cipher_suite;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
@@ -50,25 +53,28 @@ mod default_connector {
 
     fn default_tls() -> HttpsConnector<HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;
+
+        let mut crypto_provider = rustls::crypto::ring::default_provider();
+        crypto_provider.cipher_suites = vec![
+            // TLS1.3 suites
+            cipher_suite::TLS13_AES_256_GCM_SHA384,
+            cipher_suite::TLS13_AES_128_GCM_SHA256,
+            // TLS1.2 suites
+            cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+            cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+            cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+            cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+            cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+        ];
+
         hyper_rustls::HttpsConnectorBuilder::new()
-               .with_tls_config(
-                rustls::ClientConfig::builder()
-                    .with_cipher_suites(&[
-                        // TLS1.3 suites
-                        rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
-                        rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
-                        // TLS1.2 suites
-                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-                    ])
-                    .with_safe_default_kx_groups()
+            .with_tls_config(
+                rustls::ClientConfig::builder_with_provider(Arc::new(crypto_provider))
                     .with_safe_default_protocol_versions()
                     .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
                     .with_native_roots()
-                    .with_no_client_auth()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
+                    .with_no_client_auth(),
             )
             .https_or_http()
             .enable_http1()
