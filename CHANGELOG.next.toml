@@ -57,3 +57,16 @@ message = "Unions with unit target member shape are now fully supported"
 references = ["smithy-rs#2546"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
 author = "drganjoo"
+
+[[smithy-rs]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by updating."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by updating."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "jdisanti"
+>>>>>>> e6ee18941 (Add changelog entries)
