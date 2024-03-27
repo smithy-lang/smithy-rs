@@ -10,9 +10,60 @@ on:
         type: string
 
 jobs:
-  canary:
-    name: Canary
+  get-pr-info:
+    name: Get PR info
     runs-on: ubuntu-latest
     steps:
-    - name: Invoke canary
-      run: echo "Hello World"
+    - name: Get PR info
+      id: get-pr-info
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const response = await github.rest.pulls.get({
+            pull_number: ${{ inputs.pull_request_number }},
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          const data = {
+            commit_sha: response.data.head.sha,
+          };
+          console.log("data:", data);
+          return data;
+    outputs:
+      pull_data: ${{ steps.get-pr-info.outputs.result }}
+
+  acquire-base-image:
+    name: Acquire Base Image
+    needs:
+    - get-pr-info
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+          # The ref used needs to match the HEAD revision of the PR being diffed, or else
+          # the `docker-build` action won't find the built Docker image.
+        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+        fetch-depth: 0
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v4
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  invoke-canary:
+    name: Canary
+    needs:
+    - get-pr-info
+    - acquire-base-image
+    uses: ./.github/workflows/canary.yml
+    with:
+      pull_request_number: ${{ inputs.pull_request_number }}
+      commit_sha: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
