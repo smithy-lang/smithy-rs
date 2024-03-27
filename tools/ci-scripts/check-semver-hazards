@@ -22,7 +22,7 @@ set -eux
 echo -e "${C_YELLOW}# Patching SDK...${C_RESET}"
 runtime-versioner patch-runtime \
   --sdk-path "$(pwd)/aws-sdk-rust" \
-  --smithy-rs-path "$(pwd)/smithy-rs" \
+  --smithy-rs-path "$(pwd)/smithy-rs"
 
 # Testing just a small subset of the full SDK to check for semver hazards
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
