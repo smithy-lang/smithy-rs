@@ -770,9 +770,9 @@ impl SdkConfig {
         self.stalled_stream_protection_config.clone()
     }
 
-    /// Behavior major version configured for this client
+    /// Behavior version configured for this client
     pub fn behavior_version(&self) -> Option<BehaviorVersion> {
-        self.behavior_version.clone()
+        self.behavior_version
     }
 
     /// Config builder
