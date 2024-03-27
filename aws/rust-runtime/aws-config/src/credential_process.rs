@@ -231,7 +231,7 @@ mod test {
     use time::OffsetDateTime;
     use tokio::time::timeout;
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
     #[cfg_attr(windows, ignore)]
     async fn test_credential_process() {
@@ -254,7 +254,7 @@ mod test {
         );
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
     #[cfg_attr(windows, ignore)]
     async fn test_credential_process_no_expiry() {

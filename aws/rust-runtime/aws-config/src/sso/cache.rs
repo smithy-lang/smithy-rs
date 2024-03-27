@@ -514,7 +514,7 @@ mod tests {
         );
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[test]
     fn determine_correct_cache_filenames() {
@@ -536,7 +536,7 @@ mod tests {
         );
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn save_cached_token() {

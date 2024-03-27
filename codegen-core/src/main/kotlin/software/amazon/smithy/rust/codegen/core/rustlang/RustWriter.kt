@@ -626,11 +626,12 @@ class RustWriter private constructor(
             if (filename.endsWith(".rs")) {
                 require(
                     namespace.startsWith("crate") ||
-                    // Unix systems
-                    filename.startsWith("tests/") ||
-                    // Windows systems
-                    filename.startsWith("tests\\") ||
-                    filename == "build.rs") {
+                        // Unix systems
+                        filename.startsWith("tests/") ||
+                        // Windows systems
+                        filename.startsWith("tests\\") ||
+                        filename == "build.rs",
+                ) {
                     "We can only write into files in the crate (got $namespace)"
                 }
             }

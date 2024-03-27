@@ -454,7 +454,7 @@ mod test {
         );
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     #[cfg(feature = "rustls")]

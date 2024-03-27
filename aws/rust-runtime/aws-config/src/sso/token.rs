@@ -513,7 +513,7 @@ mod tests {
         }
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn use_unexpired_cached_token() {
@@ -538,7 +538,7 @@ mod tests {
         req_rx.expect_no_request();
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_cached_token() {
@@ -561,7 +561,7 @@ mod tests {
         req_rx.expect_no_request();
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_and_expired_client_registration() {
@@ -590,7 +590,7 @@ mod tests {
         req_rx.expect_no_request();
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_refresh_with_refresh_token() {
@@ -674,7 +674,7 @@ mod tests {
         );
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_refresh_fails() {
@@ -715,7 +715,7 @@ mod tests {
         let _ = req_rx.expect_request();
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     // Expired token refresh without new refresh token
     #[tokio::test]
@@ -767,7 +767,7 @@ mod tests {
         let _ = req_rx.expect_request();
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn refresh_timings() {

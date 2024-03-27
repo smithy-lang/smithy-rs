@@ -413,7 +413,7 @@ mod tests {
         assert_eq!(contents, source.files[0].contents);
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
     #[cfg_attr(windows, ignore)]
     async fn programmatically_include_default_files() {

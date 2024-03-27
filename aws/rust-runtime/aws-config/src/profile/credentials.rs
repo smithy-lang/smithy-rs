@@ -594,10 +594,10 @@ mod test {
     make_test!(retry_on_error);
     make_test!(invalid_config);
     make_test!(region_override);
-    // (TODO aws-sdk-rust#1117) This test is disabled on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is disabled on Windows because it uses Unix-style paths
     #[cfg(all(feature = "credentials-process", not(windows)))]
     make_test!(credential_process);
-    // (TODO aws-sdk-rust#1117) This test is disabled on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is disabled on Windows because it uses Unix-style paths
     #[cfg(all(feature = "credentials-process", not(windows)))]
     make_test!(credential_process_failure);
     #[cfg(feature = "credentials-process")]
@@ -624,7 +624,7 @@ mod sso_tests {
     use aws_types::os_shim_internal::{Env, Fs};
     use std::collections::HashMap;
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     // In order to preserve the SSO token cache, the inner provider must only
     // be created once, rather than once per credential resolution.

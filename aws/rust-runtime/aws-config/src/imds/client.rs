@@ -982,7 +982,7 @@ pub(crate) mod test {
         http_client.assert_requests_match(&[]);
     }
 
-    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]

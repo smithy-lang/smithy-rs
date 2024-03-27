@@ -96,7 +96,7 @@ impl FileMetadata {
 }
 
 /// Returns the file mode (permissions) for the given path.
-/// 
+///
 /// On Windows, this returns the file attributes instead of the permissions.
 fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
     #[cfg(windows)]
@@ -110,15 +110,16 @@ fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
 
     #[cfg(unix)]
     {
-    use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::PermissionsExt;
 
-    if metadata.file_type().is_symlink() {
-        let actual_path = std::fs::read_link(path).context("follow symlink")?;
-        let actual_metadata = std::fs::metadata(&actual_path).context("file metadata")?;
-        file_mode(&actual_path, &actual_metadata)
-    } else {
-        Ok(metadata.permissions().mode())
-    }}
+        if metadata.file_type().is_symlink() {
+            let actual_path = std::fs::read_link(path).context("follow symlink")?;
+            let actual_metadata = std::fs::metadata(&actual_path).context("file metadata")?;
+            file_mode(&actual_path, &actual_metadata)
+        } else {
+            Ok(metadata.permissions().mode())
+        }
+    }
 }
 
 #[cfg(test)]
