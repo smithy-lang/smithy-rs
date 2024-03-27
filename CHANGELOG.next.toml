@@ -28,3 +28,10 @@ message = "Make `BehaviorVersion` be future-proof by disallowing it to be constr
 references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
 author = "Ten0"
+
+[[smithy-rs]]
+message = "Fixed comparison of Throughput when one or both have zero duration; prevents false positive Err for stalled stream detection"
+references = ["smithy-rs#3464"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+authors = ["iamjpotts"]
+
