@@ -70,3 +70,15 @@ message = "Stalled stream protection on downloads will now only trigger if the u
 references = ["smithy-rs#3485"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by updating."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by updating."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "jdisanti"
