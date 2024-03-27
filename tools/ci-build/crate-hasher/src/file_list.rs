@@ -8,7 +8,7 @@ use std::fmt::Write;
 use std::fs::Metadata;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Default)]
 pub struct FileList(BTreeSet<FileMetadata>);
@@ -95,8 +95,21 @@ impl FileMetadata {
     }
 }
 
-/// Returns the file mode (permissions) for the given path
+/// Returns the file mode (permissions) for the given path.
+/// 
+/// On Windows, this returns the file attributes instead of the permissions.
 fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        let _ = path; // Unused on Windows
+
+        // Not actually equivalent to a unix permission, but good enough to be hashed.
+        Ok(metadata.file_attributes())
+    }
+
+    #[cfg(unix)]
+    {
     use std::os::unix::fs::PermissionsExt;
 
     if metadata.file_type().is_symlink() {
@@ -105,7 +118,7 @@ fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
         file_mode(&actual_path, &actual_metadata)
     } else {
         Ok(metadata.permissions().mode())
-    }
+    }}
 }
 
 #[cfg(test)]
