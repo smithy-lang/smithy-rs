@@ -524,13 +524,22 @@ fun RustWriter.rawTemplate(
  */
 fun docLink(docLink: String): String = docLink.replace("::r##", "::").replace("::r#", "::")
 
+class SafeNamer {
+    private var n = 0
+
+    fun safeName(prefix: String = "var"): String {
+        n += 1
+        return "${prefix}_$n"
+    }
+}
+
 class RustWriter private constructor(
     private val filename: String,
     val namespace: String,
     private val commentCharacter: String = "//",
     private val printWarning: Boolean = true,
     /** Insert comments indicating where code was generated */
-    private val debugMode: Boolean = false,
+    val debugMode: Boolean = false,
     /** When true, automatically change all dependencies to be in the test scope */
     val devDependenciesOnly: Boolean = false,
 ) :
@@ -619,7 +628,7 @@ class RustWriter private constructor(
 
         private val preamble = mutableListOf<Writable>()
         private val formatter = RustSymbolFormatter()
-        private var n = 0
+        private val safeNamer = SafeNamer()
 
         init {
             expressionStart = '#'
@@ -640,10 +649,7 @@ class RustWriter private constructor(
                 null
             }
 
-        fun safeName(prefix: String = "var"): String {
-            n += 1
-            return "${prefix}_$n"
-        }
+        fun safeName(prefix: String = "var"): String = safeNamer.safeName(prefix)
 
         fun first(preWriter: Writable) {
             preamble.add(preWriter)
