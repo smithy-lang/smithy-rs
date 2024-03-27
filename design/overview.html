@@ -179,9 +179,9 @@
 <h2 id="acknowledgments"><a class="header" href="#acknowledgments">Acknowledgments</a></h2>
 <p>The design builds on the learnings, ideas, hard work, and GitHub issues of the 142 Rusoto contributors &amp; thousands of users who built this first and learned the hard way.</p>
 <h2 id="external-api-overview"><a class="header" href="#external-api-overview">External API Overview</a></h2>
-<p>The Rust SDK is &quot;modular&quot; meaning that each AWS service is its own crate. Each crate provides two layers to access the service:</p>
+<p>The Rust SDK is "modular" meaning that each AWS service is its own crate. Each crate provides two layers to access the service:</p>
 <ol>
-<li>The &quot;fluent&quot; API. For most use cases, a high level API that ties together connection management and serialization will be the quickest path to success.</li>
+<li>The "fluent" API. For most use cases, a high level API that ties together connection management and serialization will be the quickest path to success.</li>
 </ol>
 <pre><code class="language-rust ignore">#[tokio::main]
 async fn main() {
@@ -190,10 +190,10 @@ async fn main() {
         .list_tables()
         .limit(10)
         .send()
-        .await.expect(&quot;failed to load tables&quot;);
+        .await.expect("failed to load tables");
 }</code></pre>
 <ol start="2">
-<li>The &quot;low-level&quot; API: It is also possible for customers to assemble the pieces themselves. This offers more control over operation construction &amp; dispatch semantics:</li>
+<li>The "low-level" API: It is also possible for customers to assemble the pieces themselves. This offers more control over operation construction &amp; dispatch semantics:</li>
 </ol>
 <pre><code class="language-rust ignore">#[tokio::main]
 async fn main() {
@@ -202,8 +202,8 @@ async fn main() {
     let operation = dynamodb::ListTables::builder()
         .limit(10)
         .build(&amp;conf)
-        .expect(&quot;invalid operation&quot;);
-    let tables = conn.call(operation).await.expect(&quot;failed to list tables&quot;);
+        .expect("invalid operation");
+    let tables = conn.call(operation).await.expect("failed to list tables");
 }</code></pre>
 <p>The Fluent API is implemented as a thin wrapper around the core API to improve ergonomics.</p>
 <h2 id="internals"><a class="header" href="#internals">Internals</a></h2>

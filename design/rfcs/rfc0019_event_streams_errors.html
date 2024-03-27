@@ -215,7 +215,7 @@ it does not signal termination and thus does not complete the stream.</p>
 <li><code>Receiver</code> must treat any error coming from the other end as terminal</li>
 </ul>
 <p>The code examples below have been generated using the <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server-test/model/pokemon.smithy#L27">following model</a>:</p>
-<pre><code class="language-smithy">@http(uri: &quot;/capture-pokemon-event/{region}&quot;, method: &quot;POST&quot;)
+<pre><code class="language-smithy">@http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemonOperation {
     input: CapturePokemonOperationEventsInput,
     output: CapturePokemonOperationEventsOutput,
@@ -272,22 +272,22 @@ structure CaptureEvent {
     pokedex_update: Blob,
 }
 
-@error(&quot;server&quot;)
+@error("server")
 structure UnsupportedRegionError {
     @required
     region: String,
 }
-@error(&quot;client&quot;)
+@error("client")
 structure InvalidPokeballError {
     @required
     pokeball: String,
 }
-@error(&quot;server&quot;)
+@error("server")
 structure MasterBallUnsuccessful {
     @required
     message: String,
 }
-@error(&quot;client&quot;)
+@error("client")
 structure ThrottlingError {}
 </code></pre>
 <p>Wherever irrelevant, documentation and other lines are stripped out from the code examples below.</p>

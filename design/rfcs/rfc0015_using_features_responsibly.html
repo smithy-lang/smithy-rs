@@ -173,14 +173,14 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates"><a class="header" href="#rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates">RFC: How Cargo &quot;features&quot; should be used in the SDK and runtime crates</a></h1>
+                        <h1 id="rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates"><a class="header" href="#rfc-how-cargo-features-should-be-used-in-the-sdk-and-runtime-crates">RFC: How Cargo "features" should be used in the SDK and runtime crates</a></h1>
 <blockquote>
 <p>Status: Accepted</p>
 </blockquote>
 <h2 id="some-background-on-features"><a class="header" href="#some-background-on-features">Some background on features</a></h2>
 <p>What is a feature? Here's a definition from the <a href="https://doc.rust-lang.org/cargo/reference/features.html">Cargo Book section on features</a>:</p>
 <blockquote>
-<p>Cargo &quot;features&quot; provide a mechanism to express conditional compilation and optional dependencies. A package defines a set of named features in the <code>[features]</code> table of <code>Cargo.toml</code>, and each feature can either be enabled or disabled. Features for the package being built can be enabled on the command-line with flags such as <code>--features</code>. Features for dependencies can be enabled in the dependency declaration in <code>Cargo.toml</code>.</p>
+<p>Cargo "features" provide a mechanism to express conditional compilation and optional dependencies. A package defines a set of named features in the <code>[features]</code> table of <code>Cargo.toml</code>, and each feature can either be enabled or disabled. Features for the package being built can be enabled on the command-line with flags such as <code>--features</code>. Features for dependencies can be enabled in the dependency declaration in <code>Cargo.toml</code>.</p>
 </blockquote>
 <p>We use features in a majority of our runtime crates and in all of our SDK crates. For example, <a href="https://github.com/smithy-lang/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml">aws-sigv4</a> uses them to enable event streams. Another common use case is exhibited by <a href="https://github.com/awslabs/aws-sdk-rust/blob/f2b4361b004ee822960ea9791f566fd4eb6d1aba/sdk/s3/Cargo.toml">aws-sdk-s3</a> which uses them to enable the <code>tokio</code> runtime and the TLS implementation used when making requests.</p>
 <h3 id="features-should-be-additive"><a class="header" href="#features-should-be-additive">Features should be additive</a></h3>
@@ -206,7 +206,7 @@
 </blockquote>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[cfg(feature = &quot;rustls&quot;)]
+</span>#[cfg(feature = "rustls")]
 impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     /// Connect to the service over HTTPS using Rustls.
     pub fn tls_adapter(self) -&gt; ClientBuilder&lt;Adapter&lt;crate::conns::Https&gt;, M, R&gt; {
@@ -214,7 +214,7 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     }
 }
 
-#[cfg(feature = &quot;native-tls&quot;)]
+#[cfg(feature = "native-tls")]
 impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     /// Connect to the service over HTTPS using the native TLS library on your platform.
     pub fn tls_adapter(
@@ -224,11 +224,11 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     }
 }
 <span class="boring">}</span></code></pre></pre>
-<p>When the example code above is compiled with both features enabled, compilation will fail with a &quot;duplicate definitions with name <code>tls_adapter</code>&quot; error. Also, note that the return type of the function differs between the two versions. This is a SemVer-incompatible change.</p>
+<p>When the example code above is compiled with both features enabled, compilation will fail with a "duplicate definitions with name <code>tls_adapter</code>" error. Also, note that the return type of the function differs between the two versions. This is a SemVer-incompatible change.</p>
 <p>Here's an updated version of the example that fixes these issues:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[cfg(feature = &quot;rustls&quot;)]
+</span>#[cfg(feature = "rustls")]
 impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     /// Connect to the service over HTTPS using Rustls.
     pub fn rustls(self) -&gt; ClientBuilder&lt;Adapter&lt;crate::conns::Https&gt;, M, R&gt; {
@@ -236,7 +236,7 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     }
 }
 
-#[cfg(feature = &quot;native-tls&quot;)]
+#[cfg(feature = "native-tls")]
 impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
     /// Connect to the service over HTTPS using the native TLS library on your platform.
     pub fn native_tls(
@@ -248,39 +248,39 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
 <span class="boring">}</span></code></pre></pre>
 <p>Both features can now be enabled at once without creating a conflict. Since both methods have different names, it's now Ok for them to have different return types.</p>
 <p><a href="https://github.com/smithy-lang/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303"><em>This is real code, see it in context</em></a></p>
-<h3 id="we-should-avoid-using-cfgnotfeature--some-feature"><a class="header" href="#we-should-avoid-using-cfgnotfeature--some-feature">We should avoid using <code>#[cfg(not(feature = &quot;some-feature&quot;))]</code></a></h3>
+<h3 id="we-should-avoid-using-cfgnotfeature--some-feature"><a class="header" href="#we-should-avoid-using-cfgnotfeature--some-feature">We should avoid using <code>#[cfg(not(feature = "some-feature"))]</code></a></h3>
 <p>At the risk of seeming repetitive, the Cargo book says:</p>
 <blockquote>
 <p>enabling a feature should not disable functionality, and it should usually be safe to enable any combination of features</p>
 </blockquote>
-<p>Conditionally compiling code when a feature is <strong>not</strong> activated can make it hard for users and maintainers to reason about what will happen when they activate a feature. This is also a sign that a feature may not be &quot;additive&quot;.</p>
+<p>Conditionally compiling code when a feature is <strong>not</strong> activated can make it hard for users and maintainers to reason about what will happen when they activate a feature. This is also a sign that a feature may not be "additive".</p>
 <p><em><strong>NOTE</strong></em>: It's ok to use <code>#[cfg(not())]</code> to conditionally compile code based on a user's OS. It's also useful when controlling what code gets rendered when testing or when generating docs.</p>
 <p>One case where using <code>not</code> is acceptable is when providing a fallback when no features are set:</p>
-<pre><code class="language-rust ignore">#[cfg(feature = &quot;rt-tokio&quot;)]
+<pre><code class="language-rust ignore">#[cfg(feature = "rt-tokio")]
 pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
     Some(sleep_tokio())
 }
 
-#[cfg(not(feature = &quot;rt-tokio&quot;))]
+#[cfg(not(feature = "rt-tokio"))]
 pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
     None
 }</code></pre>
-<h3 id="dont-default-to-defining-default-features"><a class="header" href="#dont-default-to-defining-default-features">Don't default to defining &quot;default features&quot;</a></h3>
+<h3 id="dont-default-to-defining-default-features"><a class="header" href="#dont-default-to-defining-default-features">Don't default to defining "default features"</a></h3>
 <p>Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than <a href="https://github.com/awslabs/aws-sdk-rust/issues/304">this issue</a> submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled <em>(This issue was resolved in <a href="https://github.com/smithy-lang/smithy-rs/pull/935">this PR</a> which removed default features from our runtime crates.)</em> This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.</p>
 <h4 id="when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality"><a class="header" href="#when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality">When a default feature providing some functionality is disabled, active features must not automatically replace that functionality</a></h4>
 <p>As the SDK is currently designed, the TLS implementation in use can change depending on what features are pulled in. Currently, if a user disables <code>default-features</code> (which include <code>rustls</code>) and activates the <code>native-tls</code> feature, then we automatically use <code>native-tls</code> when making requests. For an example of what this looks like from the user's perspective, <a href="https://github.com/smithy-lang/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls">see this example</a>.</p>
 <p>This RFC proposes that we should have a single default for any configurable functionality and that that functionality depends on a corresponding default feature being active. If <code>default-features</code> are disabled, then so is the corresponding default functionality. In its place would be functionality that fails fast with a message describing why it failed <em>(a default was deactivated but the user didn't set a replacement)</em>, and what the user should do to fix it <em>(with links to documentation and examples where necessary)</em>. We should use <a href="https://doc.rust-lang.org/stable/std/macro.compile_error.html">compile-time errors</a> to communicate failures with users, or <code>panic</code>s for cases that can't be evaluated at compile-time.</p>
 <p>For an example: Say you have a crate with features <code>a</code>, <code>b</code>, <code>c</code> that all provide some version of functionality <code>foo</code>. Feature <code>a</code> is part of <code>default-features</code>. When <code>no-default-features = true</code> but features <code>b</code> and <code>c</code> are active, don't automatically fall back to <code>b</code> or <code>c</code>. Instead, emit an error with a message like this:</p>
 <blockquote>
-<p>&quot;When default features are disabled, you must manually set <code>foo</code>. Features <code>b</code> and <code>c</code> active; You can use one of those. See an example of setting a custom <code>foo</code> here: <em>link-to-docs.amazon.com/setting-foo</em>&quot;</p>
+<p>"When default features are disabled, you must manually set <code>foo</code>. Features <code>b</code> and <code>c</code> active; You can use one of those. See an example of setting a custom <code>foo</code> here: <em>link-to-docs.amazon.com/setting-foo</em>"</p>
 </blockquote>
 <h2 id="further-reading"><a class="header" href="#further-reading">Further reading</a></h2>
 <ul>
-<li><a href="https://stackoverflow.com/questions/59761045/how-to-tell-what-features-are-available-per-crate">How to tell what &quot;features&quot; are available per crate?</a></li>
+<li><a href="https://stackoverflow.com/questions/59761045/how-to-tell-what-features-are-available-per-crate">How to tell what "features" are available per crate?</a></li>
 <li><a href="https://stackoverflow.com/questions/40021555/how-do-i-pass-down-feature-flags-to-subdependencies-in-cargo">How do I 'pass down' feature flags to subdependencies in Cargo?</a></li>
 <li>A small selection of feature-related GitHub issues submitted for popular crates
 <ul>
-<li><a href="https://github.com/chyh1990/yaml-rust/issues/44">The feature <code>preserve_order</code> is not &quot;purely additive,&quot; which makes it impossible to use <code>serde_yaml</code> 0.5.0 and <code>clap</code> in the same program</a></li>
+<li><a href="https://github.com/chyh1990/yaml-rust/issues/44">The feature <code>preserve_order</code> is not "purely additive," which makes it impossible to use <code>serde_yaml</code> 0.5.0 and <code>clap</code> in the same program</a></li>
 <li><a href="https://github.com/Geal/nom/issues/544">cargo features (verbose-errors may be other?) should be additive</a></li>
 <li><a href="https://github.com/aclysma/profiling/issues/32">Mutually exclusive features are present in profiling-procmacros</a></li>
 <li><a href="https://github.com/KyleMayes/clang-sys/issues/128">Clang-sys features not additive</a></li>

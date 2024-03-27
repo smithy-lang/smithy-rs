@@ -195,18 +195,18 @@ applies-to: The smithy client</p>
 <li>Runtime Plugins: To be described in depth in a future RFC.</li>
 </ul>
 <h2 id="tldr"><a class="header" href="#tldr">TLDR;</a></h2>
-<p>When a smithy client communicates with a smithy service, messages are handled by an &quot;orchestrator.&quot; The orchestrator runs in two main phases:</p>
+<p>When a smithy client communicates with a smithy service, messages are handled by an "orchestrator." The orchestrator runs in two main phases:</p>
 <ol>
 <li>Constructing configuration.
 <ul>
-<li>This process is user-configurable with &quot;runtime plugins.&quot;</li>
+<li>This process is user-configurable with "runtime plugins."</li>
 <li>Configuration is stored in a typemap.</li>
 </ul>
 </li>
 <li>Transforming a client request into a server response.
 <ul>
-<li>This process is user-configurable with &quot;interceptors.&quot;</li>
-<li>Interceptors are functions that are run by &quot;hooks&quot; in the request/response lifecycle.</li>
+<li>This process is user-configurable with "interceptors."</li>
+<li>Interceptors are functions that are run by "hooks" in the request/response lifecycle.</li>
 </ul>
 </li>
 </ol>
@@ -221,7 +221,7 @@ applies-to: The smithy client</p>
 <li><strong>Output Message</strong>: A modeled response or exception returned to an <em>SDK client</em> caller. For example, S3’s <code>ListObjectsResponse</code> or <code>NoSuchBucketException</code>.</li>
 <li><strong>The request/response lifecycle</strong>: The process by which an <em>SDK client</em> makes requests and receives responses from a <em>remote service</em>. This process is enacted and managed by the <em>orchestrator</em>.</li>
 <li><strong>Orchestrator</strong>: The code within an <em>SDK client</em> that handles the process of making requests and receiving responses from <em>remote services</em>. The orchestrator is configurable by modifying the <em>runtime plugins</em> it's built from. The orchestrator is responsible for calling <em>interceptors</em> at the appropriate times in the <em>request/response lifecycle</em>.</li>
-<li><strong>Interceptor</strong>/<strong>Hook</strong>: A generic extension point within the <em>orchestrator</em>. Supports &quot;anything that someone should be able to do&quot;, NOT &quot;anything anyone might want to do&quot;. These hooks are:
+<li><strong>Interceptor</strong>/<strong>Hook</strong>: A generic extension point within the <em>orchestrator</em>. Supports "anything that someone should be able to do", NOT "anything anyone might want to do". These hooks are:
 <ul>
 <li>Either <strong>read-only</strong> or <strong>read/write</strong>.</li>
 <li>Able to read and modify the <strong>Input</strong>, <strong>Transport Request</strong>, <strong>Transport Response</strong>, or <strong>Output</strong> messages.</li>
@@ -235,24 +235,24 @@ applies-to: The smithy client</p>
 <pre><code class="language-rust ignore">let sdk_config = aws_config::load_from_env().await;
 let client = aws_sdk_s3::Client::new(&amp;sdk_config);
 let res = client.get_object()
-    .bucket(&quot;a-bucket&quot;)
-    .key(&quot;a-file.txt&quot;)
+    .bucket("a-bucket")
+    .key("a-file.txt")
     .send()
     .await?;
 
 match res {
-    Ok(res) =&gt; println!(&quot;success: {:?}&quot;),
-    Err(err) =&gt; eprintln!(&quot;failure: {:?}&quot;)
+    Ok(res) =&gt; println!("success: {:?}"),
+    Err(err) =&gt; eprintln!("failure: {:?}")
 };</code></pre>
 <p>Users may further configure clients and operations with <strong>runtime plugins</strong>, and they can modify requests and responses with <strong>interceptors</strong>. We'll examine each of these concepts in the following sections.</p>
 <h3 id="service-clients-and-operations-are-configured-with-runtime-plugins"><a class="header" href="#service-clients-and-operations-are-configured-with-runtime-plugins">Service clients and operations are configured with runtime plugins</a></h3>
 <blockquote>
-<p>The exact implementation of <strong>runtime plugins</strong> is left for another RFC. That other RFC will be linked here once it's written. To get an idea of what they may look like, see the <em>&quot;Layered configuration, stored in type maps&quot;</em> section of this RFC.</p>
+<p>The exact implementation of <strong>runtime plugins</strong> is left for another RFC. That other RFC will be linked here once it's written. To get an idea of what they may look like, see the <em>"Layered configuration, stored in type maps"</em> section of this RFC.</p>
 </blockquote>
 <p>Runtime plugins construct and modify client configuration. Plugin initialization is the first step of sending a request, and plugins set in later steps can override the actions of earlier plugins. Plugin ordering is deterministic and non-customizable.</p>
 <p>While AWS services define a default set of plugins, users may define their own plugins, and set them by calling the appropriate methods on a service's config, client, or operation. Plugins are specifically meant for constructing service and operation configuration. If a user wants to define behavior that should occur at specific points in the <em>request/response lifecycle</em>, then they should instead consider defining an <em>interceptor</em>.</p>
 <h3 id="requests-and-responses-are-modified-by-interceptors"><a class="header" href="#requests-and-responses-are-modified-by-interceptors">Requests and responses are modified by interceptors</a></h3>
-<p>Interceptors are similar to middlewares, in that they are functions that can read and modify request and response state. However, they are more restrictive than middlewares in that they can't modify the &quot;control flow&quot; of the request/response lifecycle. This is intentional. Interceptors can be registered on a client or operation, and the orchestrator is responsible for calling interceptors at the appropriate time. Users MUST NOT perform blocking IO within an interceptor. Interceptors are sync, and are not intended to perform large amounts of work. This makes them easier to reason about and use. Depending on when they are called, interceptors may read and modify <em>input messages</em>, <em>transport request messages</em>, <em>transport response messages</em>, and <em>output messages</em>. Additionally, all interceptors may write to a context object that is shared between all interceptors.</p>
+<p>Interceptors are similar to middlewares, in that they are functions that can read and modify request and response state. However, they are more restrictive than middlewares in that they can't modify the "control flow" of the request/response lifecycle. This is intentional. Interceptors can be registered on a client or operation, and the orchestrator is responsible for calling interceptors at the appropriate time. Users MUST NOT perform blocking IO within an interceptor. Interceptors are sync, and are not intended to perform large amounts of work. This makes them easier to reason about and use. Depending on when they are called, interceptors may read and modify <em>input messages</em>, <em>transport request messages</em>, <em>transport response messages</em>, and <em>output messages</em>. Additionally, all interceptors may write to a context object that is shared between all interceptors.</p>
 <h4 id="currently-supported-hooks"><a class="header" href="#currently-supported-hooks">Currently supported hooks</a></h4>
 <ol>
 <li><strong>Read Before Execution <em>(Read-Only)</em></strong>: Before anything happens. This is the first
@@ -297,7 +297,7 @@ marshaling the input message into a transport message.</li>
     // A type-keyed map
     properties: SharedPropertyBag,
 }</code></pre>
-<p>The optional request and response types in the interceptor context can only be accessed by interceptors that are run after specific points in the <em>request/response lifecycle</em>. Rather than go into depth in this RFC, I leave that to a future &quot;Interceptors RFC.&quot;</p>
+<p>The optional request and response types in the interceptor context can only be accessed by interceptors that are run after specific points in the <em>request/response lifecycle</em>. Rather than go into depth in this RFC, I leave that to a future "Interceptors RFC."</p>
 <h2 id="how-to-implement-this-rfc"><a class="header" href="#how-to-implement-this-rfc">How to implement this RFC</a></h2>
 <h3 id="integrating-with-the-orchestrator"><a class="header" href="#integrating-with-the-orchestrator">Integrating with the orchestrator</a></h3>
 <p>Imagine we have some sort of request signer. This signer doesn't refer to any orchestrator types. All it needs is a <code>HeaderMap</code> along with two strings, and will return a signature in string form.</p>
@@ -319,11 +319,11 @@ fn invoke() {
     // code omitted for brevity
 
     // Get the request to be signed
-    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
     // Fetch the auth orchestrator from the bag
     let auth_orchestrator = cfg
         .get::&lt;Box&lt;dyn AuthOrchestrator&lt;Req&gt;&gt;&gt;()
-        .ok_or(&quot;missing auth orchestrator&quot;)?;
+        .ok_or("missing auth orchestrator")?;
     // Auth the request
     auth_orchestrator.auth_request(tx_req_mut, cfg)?;
 
@@ -341,8 +341,8 @@ impl AuthOrchestrator for Sigv4AuthOrchestrator {
 
         let signature = signer.sign(headers, signing_name, signing_region);
         match cfg.get::&lt;SignatureLocation&gt;() {
-            Some(SignatureLocation::Query) =&gt; req.query.set(&quot;sig&quot;, signature),
-            Some(SignatureLocation::Header) =&gt; req.headers_mut().insert(&quot;sig&quot;, signature),
+            Some(SignatureLocation::Query) =&gt; req.query.set("sig", signature),
+            Some(SignatureLocation::Header) =&gt; req.headers_mut().insert("sig", signature),
             None =&gt; return Err(Error::MissingSignatureLocation),
         };
 
@@ -361,7 +361,7 @@ impl AuthOrchestrator for Sigv4AuthOrchestrator {
     // Or, protocol-specific
     .with(HttpClient::builder().build())
     // Or, AWS-specific
-    .with(Region::from(&quot;us-east-1&quot;))
+    .with(Region::from("us-east-1"))
     // Or, service-specific
     .with(S3Config::builder().force_path_style(false).build())
     .await;
@@ -375,7 +375,7 @@ client.list_buckets()
     .send()
     .await;</code></pre>
 <p>Setting configuration that will not be used wastes memory and can make debugging more difficult. Therefore, configuration defaults are only set when they're relevant. For example, if a smithy service doesn't support HTTP, then no HTTP client will be set.</p>
-<h4 id="what-is-layered-configuration"><a class="header" href="#what-is-layered-configuration">What is &quot;layered&quot; configuration?</a></h4>
+<h4 id="what-is-layered-configuration"><a class="header" href="#what-is-layered-configuration">What is "layered" configuration?</a></h4>
 <p>Configuration has precedence. Configuration set on an operation will override configuration set on a client, and configuration set on a client will override default configuration. However, configuration with a higher precedence can also augment configuration with a lower precedence. For example:</p>
 <pre><code class="language-rust ignore">let conf: ConfigBag = aws_config::from_env()
     .with(
@@ -428,9 +428,9 @@ impl struct SomeBuilder&lt;T&gt; {
         self
     }
 }</code></pre>
-<p>Because of <code>impl Into&lt;Value&lt;T&gt;&gt;</code>, users don't need to reference the <code>Value</code> enum unless they want to &quot;unset&quot; a value.</p>
+<p>Because of <code>impl Into&lt;Value&lt;T&gt;&gt;</code>, users don't need to reference the <code>Value</code> enum unless they want to "unset" a value.</p>
 <h4 id="layer-separation-and-precedence"><a class="header" href="#layer-separation-and-precedence">Layer separation and precedence</a></h4>
-<p>Codegen defines default sets of interceptors and runtime plugins at various &quot;levels&quot;:</p>
+<p>Codegen defines default sets of interceptors and runtime plugins at various "levels":</p>
 <ol>
 <li>AWS-wide defaults set by codegen.</li>
 <li>Service-wide defaults set by codegen.</li>
@@ -442,7 +442,7 @@ impl struct SomeBuilder&lt;T&gt; {
 <li>The service config level, e.g. <code>aws_sdk_s3::Config</code>.</li>
 <li>The operation config level, e.g. <code>aws_sdk_s3::Client::get_object</code>.</li>
 </ol>
-<p>Configuration is resolved in a fixed manner by reading the &quot;lowest level&quot; of config available, falling back to &quot;higher levels&quot; only when no value has been set. Therefore, at least 3 separate <code>ConfigBag</code>s are necessary, and user configuration has precedence over codegen-defined default configuration. With that in mind, resolution of configuration would look like this:</p>
+<p>Configuration is resolved in a fixed manner by reading the "lowest level" of config available, falling back to "higher levels" only when no value has been set. Therefore, at least 3 separate <code>ConfigBag</code>s are necessary, and user configuration has precedence over codegen-defined default configuration. With that in mind, resolution of configuration would look like this:</p>
 <ol>
 <li>Check user-set operation config.</li>
 <li>Check codegen-defined operation config.</li>
@@ -486,7 +486,7 @@ pub async fn invoke&lt;In, Req, Res, T&gt;(
 
     let request_serializer = cfg
         .get::&lt;Box&lt;dyn RequestSerializer&lt;In, Req&gt;&gt;&gt;()
-        .ok_or(&quot;missing serializer&quot;)?;
+        .ok_or("missing serializer")?;
     let req = request_serializer.serialize_request(ctx.modeled_request_mut(), cfg)?;
     ctx.set_tx_request(req);
 
@@ -500,10 +500,10 @@ pub async fn invoke&lt;In, Req, Res, T&gt;(
 
         let retry_strategy = cfg
             .get::&lt;Box&lt;dyn RetryStrategy&lt;Result&lt;T, BoxError&gt;&gt;&gt;&gt;()
-            .ok_or(&quot;missing retry strategy&quot;)?;
+            .ok_or("missing retry strategy")?;
         let mod_res = ctx
             .modeled_response()
-            .expect(&quot;it's set during 'make_an_attempt'&quot;);
+            .expect("it's set during 'make_an_attempt'");
         if retry_strategy.should_retry(mod_res, cfg)? {
             continue;
         }
@@ -511,7 +511,7 @@ pub async fn invoke&lt;In, Req, Res, T&gt;(
         interceptors.modify_before_completion(&amp;mut ctx, cfg)?;
         let trace_probe = cfg
             .get::&lt;Box&lt;dyn TraceProbe&gt;&gt;()
-            .ok_or(&quot;missing trace probes&quot;)?;
+            .ok_or("missing trace probes")?;
         trace_probe.dispatch_events(cfg);
         interceptors.read_after_execution(&amp;ctx, cfg)?;
 
@@ -538,19 +538,19 @@ async fn make_an_attempt&lt;In, Req, Res, T&gt;(
 {
     interceptors.read_before_attempt(ctx, cfg)?;
 
-    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
     let endpoint_orchestrator = cfg
         .get::&lt;Box&lt;dyn EndpointOrchestrator&lt;Req&gt;&gt;&gt;()
-        .ok_or(&quot;missing endpoint orchestrator&quot;)?;
+        .ok_or("missing endpoint orchestrator")?;
     endpoint_orchestrator.resolve_and_apply_endpoint(tx_req_mut, cfg)?;
 
     interceptors.modify_before_signing(ctx, cfg)?;
     interceptors.read_before_signing(ctx, cfg)?;
 
-    let tx_req_mut = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+    let tx_req_mut = ctx.tx_request_mut().expect("tx_request has been set");
     let auth_orchestrator = cfg
         .get::&lt;Box&lt;dyn AuthOrchestrator&lt;Req&gt;&gt;&gt;()
-        .ok_or(&quot;missing auth orchestrator&quot;)?;
+        .ok_or("missing auth orchestrator")?;
     auth_orchestrator.auth_request(tx_req_mut, cfg)?;
 
     interceptors.read_after_signing(ctx, cfg)?;
@@ -560,10 +560,10 @@ async fn make_an_attempt&lt;In, Req, Res, T&gt;(
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
     let res = {
-        let tx_req = ctx.tx_request_mut().expect(&quot;tx_request has been set&quot;);
+        let tx_req = ctx.tx_request_mut().expect("tx_request has been set");
         let connection = cfg
             .get::&lt;Box&lt;dyn Connection&lt;Req, Res&gt;&gt;&gt;()
-            .ok_or(&quot;missing connector&quot;)?;
+            .ok_or("missing connector")?;
         connection.call(tx_req, cfg).await?
     };
     ctx.set_tx_response(res);
@@ -571,10 +571,10 @@ async fn make_an_attempt&lt;In, Req, Res, T&gt;(
     interceptors.read_after_transmit(ctx, cfg)?;
     interceptors.modify_before_deserialization(ctx, cfg)?;
     interceptors.read_before_deserialization(ctx, cfg)?;
-    let tx_res = ctx.tx_response_mut().expect(&quot;tx_response has been set&quot;);
+    let tx_res = ctx.tx_response_mut().expect("tx_response has been set");
     let response_deserializer = cfg
         .get::&lt;Box&lt;dyn ResponseDeserializer&lt;Res, Result&lt;T, BoxError&gt;&gt;&gt;&gt;()
-        .ok_or(&quot;missing response deserializer&quot;)?;
+        .ok_or("missing response deserializer")?;
     let res = response_deserializer.deserialize_response(tx_res, cfg)?;
     ctx.set_modeled_response(res);
 

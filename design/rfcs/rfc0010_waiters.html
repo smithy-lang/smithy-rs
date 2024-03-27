@@ -236,13 +236,13 @@ would otherwise be retried by default might be the termination condition for the
 if waiting for a S3 bucket to exist, it would look like the following:</p>
 <pre><code class="language-rust ignore">// Request bucket creation
 client.create_bucket()
-    .bucket_name(&quot;my-bucket&quot;)
+    .bucket_name("my-bucket")
     .send()
     .await()?;
 
 // Wait for it to be created
 client.wait_until_bucket_exists()
-    .bucket_name(&quot;my-bucket&quot;)
+    .bucket_name("my-bucket")
     .send()
     .await?;</code></pre>
 <p>The call to <code>wait_until_bucket_exists()</code> will return a waiter-specific fluent builder with a <code>send()</code> function
@@ -292,7 +292,7 @@ with a no-retry classifier, and then determine what to do next based on that cla
         match classify_result(&amp;input, result) {
             AcceptorState::Retry =&gt; {
                 // The sleep implementation is available here from `handle.conf.sleep_impl`
-                unimplemented!(&quot;Check if another attempt should be made and calculate delay time if so&quot;)
+                unimplemented!("Check if another attempt should be made and calculate delay time if so")
             }
             AcceptorState::Terminate(output) =&gt; return output,
         }
@@ -304,7 +304,7 @@ fn classify_result(
     result: Result&lt;HeadBucketOutput, SdkError&lt;HeadBucketError&gt;&gt;,
 ) -&gt; AcceptorState&lt;HeadBucketOutput, SdkError&lt;HeadBucketError&gt;&gt; {
     unimplemented!(
-        &quot;The Smithy model would dictate conditions to check here to produce an `AcceptorState`&quot;
+        "The Smithy model would dictate conditions to check here to produce an `AcceptorState`"
     )
 }</code></pre>
 <p>The retry delay time should be calculated by the same exponential backoff with jitter code that the

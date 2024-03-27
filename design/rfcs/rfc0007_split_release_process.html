@@ -266,10 +266,10 @@ This CI process would look as follows:</p>
 <li>Run a script to remove the <code>path</code> argument for the Smithy runtime crate dependencies for every crate
 in <code>aws-sdk-rust</code>. For example,</li>
 </ol>
-<pre><code class="language-toml">aws-smithy-types = { version = &quot;0.33.0&quot;, path = &quot;../aws-smithy-types&quot; }
+<pre><code class="language-toml">aws-smithy-types = { version = "0.33.0", path = "../aws-smithy-types" }
 </code></pre>
 <p>Would become:</p>
-<pre><code class="language-toml">aws-smithy-types = { version = &quot;0.33.0&quot; }
+<pre><code class="language-toml">aws-smithy-types = { version = "0.33.0" }
 </code></pre>
 <ol start="3">
 <li>Run the tests as usual</li>
@@ -303,11 +303,11 @@ For example:</li>
 <pre><code class="language-toml"># The dependencies section is left alone, but is here for context
 [dependencies]
 # Some version of aws-smithy-types that isn't on crates.io yet, referred to as `&lt;unreleased&gt;` below
-aws-smithy-types = &quot;&lt;unreleased&gt;&quot;
+aws-smithy-types = "&lt;unreleased&gt;"
 
 # This patch section gets added by the script
 [patch.crates-io]
-aws-smithy-types = { version = &quot;&lt;unreleased&gt;&quot;, path = &quot;path/to/local/smithy-rs/rust-runtime/aws-smithy-types&quot;}
+aws-smithy-types = { version = "&lt;unreleased&gt;", path = "path/to/local/smithy-rs/rust-runtime/aws-smithy-types"}
 </code></pre>
 <ol start="5">
 <li>Run CI as normal.</li>

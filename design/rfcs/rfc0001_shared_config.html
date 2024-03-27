@@ -200,10 +200,10 @@ credentials, retry configuration, etc.)</li>
 </ol>
 <p>Add the following to your Cargo.toml:</p>
 <pre><code class="language-toml">[dependencies]
-aws-sdk-dynamo = &quot;0.1&quot;
-aws-config = &quot;0.5&quot;
+aws-sdk-dynamo = "0.1"
+aws-config = "0.5"
 
-tokio = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+tokio = { version = "1", features = ["full"] }
 </code></pre>
 <p>Let's write a small example project to list tables:</p>
 <pre><code class="language-rust ignore">use aws_sdk_dynamodb as dynamodb;
@@ -213,7 +213,7 @@ async fn main() -&gt; Result&lt;(), dynamodb::Error&gt; {
     let config = aws_config::load_from_env().await;
     let dynamodb = dynamodb::Client::new(&amp;config);
     let resp = dynamodb.list_tables().send().await;
-    println!(&quot;my tables: {}&quot;, resp.tables.unwrap_or_default());
+    println!("my tables: {}", resp.tables.unwrap_or_default());
     Ok(())
 }</code></pre>
 <blockquote>
@@ -228,22 +228,22 @@ using <code>aws_config::from_env()</code> directly:</p>
 
 #[tokio::main]
 async fn main() -&gt; Result&lt;(), dynamodb::Error&gt; {
-    let region_provider = RegionProviderChain::default_provider().or_else(&quot;us-west-2&quot;);
+    let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
     let config = aws_config::from_env().region(region_provider).load().await;
     let dynamodb = dynamodb::Client::new(&amp;config);
     let resp = dynamodb.list_tables().send().await;
-    println!(&quot;my tables: {}&quot;, resp.tables.unwrap_or_default());
+    println!("my tables: {}", resp.tables.unwrap_or_default());
     Ok(())
 }</code></pre>
 <h3 id="sharing-configuration-between-multiple-services"><a class="header" href="#sharing-configuration-between-multiple-services">Sharing configuration between multiple services</a></h3>
 <p>The <code>Config</code> produced by <code>aws-config</code> can be used with any AWS service. If we wanted to read our Dynamodb DB tables
 aloud with Polly, we could create a Polly client as well. First, we'll need to add Polly to our <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-aws-sdk-dynamo = &quot;0.1&quot;
-aws-sdk-polly = &quot;0.1&quot;
-aws-config = &quot;0.5&quot;
+aws-sdk-dynamo = "0.1"
+aws-sdk-polly = "0.1"
+aws-config = "0.5"
 
-tokio = { version = &quot;1&quot;, features = [&quot;full&quot;] }
+tokio = { version = "1", features = ["full"] }
 </code></pre>
 <p>Then, we can use the shared configuration to build both service clients. The region override will apply to both clients:</p>
 <pre><code class="language-rust ignore">use aws_sdk_dynamodb as dynamodb;
@@ -251,14 +251,14 @@ use aws_sdk_polly as polly;
 
 #[tokio::main]
 async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; { // error type changed to `Box&lt;dyn Error&gt;` because we now have dynamo and polly errors
-    let config = aws_config::env_loader().with_region(Region::new(&quot;us-west-2&quot;)).load().await;
+    let config = aws_config::env_loader().with_region(Region::new("us-west-2")).load().await;
 
     let dynamodb = dynamodb::Client::new(&amp;config);
     let polly = polly::Client::new(&amp;config);
 
     let resp = dynamodb.list_tables().send().await;
     let tables = resp.tables.unwrap_or_default();
-    let table_sentence = format!(&quot;my dynamo DB tables are: {}&quot;, tables.join(&quot;, &quot;));
+    let table_sentence = format!("my dynamo DB tables are: {}", tables.join(", "));
     let audio = polly.synthesize_speech()
         .output_format(OutputFormat::Mp3)
         .text(table_sentence)
@@ -271,15 +271,15 @@ async fn main() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; { // error type cha
         .audio_stream
         .collect()
         .await
-        .expect(&quot;failed to read data&quot;);
+        .expect("failed to read data");
 
-    let mut file = tokio::fs::File::create(&quot;tables.mp3&quot;)
+    let mut file = tokio::fs::File::create("tables.mp3")
         .await
-        .expect(&quot;failed to create file&quot;);
+        .expect("failed to create file");
 
     file.write_all_buf(&amp;mut blob)
         .await
-        .expect(&quot;failed to write to file&quot;);
+        .expect("failed to write to file");
     Ok(())
 }</code></pre>
 <h3 id="specifying-a-custom-credential-provider"><a class="header" href="#specifying-a-custom-credential-provider">Specifying a custom credential provider</a></h3>
@@ -325,7 +325,7 @@ generated service clients will depend on <code>aws-config</code>. This is critic
 allow <code>aws-config</code> to depend on other AWS services. <code>aws-config</code> contains individual providers as well as a
 pre-assembled default provider chain for region and credentials. It will also contain crate features to automatically
 bring in HTTPS and async-sleep implementations.</li>
-<li>Remove all &quot;business logic&quot; from <code>aws-types</code>. <code>aws-types</code> should be an interface-only crate that is extremely stable.
+<li>Remove all "business logic" from <code>aws-types</code>. <code>aws-types</code> should be an interface-only crate that is extremely stable.
 The ProvideCredentials trait should move into <code>aws-types</code>. The region provider trait which only exists to support
 region-chaining will move out of aws-types into aws-config.</li>
 </ol>
@@ -364,7 +364,7 @@ each service to maintain their own Tokio/Hyper features.</p>
 settings.</p>
 <h2 id="the-build-method-on-config"><a class="header" href="#the-build-method-on-config">The <code>.build()</code> method on <service>::Config</a></h2>
 <p>Currently, the <code>.build()</code> method on service config will fill in defaults. As part of this change, <code>.build()</code> called on
-the service config with missing properties will fill in &quot;empty&quot; defaults. If no credentials provider is given,
+the service config with missing properties will fill in "empty" defaults. If no credentials provider is given,
 a <code>NoCredentials</code> provider will be set, and <code>Region</code> will remain as <code>None</code>.</p>
 <h2 id="stability-and-versioning"><a class="header" href="#stability-and-versioning">Stability and Versioning</a></h2>
 <p>The introduction of <code>Config</code> to aws-types is not without risks. If a customer depends on a version aws-config that

@@ -207,11 +207,11 @@ out.some_field.unwrap(); // &lt;- partial move, impossible with an accessor</cod
 </ol>
 <h3 id="example-structure-output"><a class="header" href="#example-structure-output">Example Structure Output</a></h3>
 <p><strong>Smithy Input</strong>:</p>
-<pre><code class="language-java">@documentation(&quot;&lt;p&gt;Contains I/O usage metrics...&quot;)
+<pre><code class="language-java">@documentation("&lt;p&gt;Contains I/O usage metrics...")
 structure IOUsage {
-    @documentation(&quot;... elided&quot;)
+    @documentation("... elided")
     ReadIOs: ReadIOs,
-    @documentation(&quot;... elided&quot;)
+    @documentation("... elided")
     WriteIOs: WriteIOs
 }
 
@@ -231,9 +231,9 @@ pub struct IoUsage {
 }
 impl std::fmt::Debug for IoUsage {
     fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
-        let mut formatter = f.debug_struct(&quot;IoUsage&quot;);
-        formatter.field(&quot;read_i_os&quot;, &amp;self.read_i_os);
-        formatter.field(&quot;write_i_os&quot;, &amp;self.write_i_os);
+        let mut formatter = f.debug_struct("IoUsage");
+        formatter.field("read_i_os", &amp;self.read_i_os);
+        formatter.field("write_i_os", &amp;self.write_i_os);
         formatter.finish()
     }
 }
@@ -298,7 +298,7 @@ impl IoUsage {
 <pre><code class="language-java">namespace test
 
 union AttributeValue {
-    @documentation(&quot;A string value&quot;)
+    @documentation("A string value")
     string: String,
     bool: Boolean,
     bools: BoolList,

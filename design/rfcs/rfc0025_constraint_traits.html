@@ -250,7 +250,7 @@ string NiceString
 validate</a>. Instead of code-generating a Rust <code>String</code> to represent <code>NiceString</code>
 values and perform the <em>validation</em> at request deserialization, we can
 <a href="https://www.lpalmieri.com/posts/2020-12-11-zero-to-production-6-domain-modelling/">leverage Rust's type system to guarantee domain invariants</a>. We can generate a
-wrapper <a href="https://doc.rust-lang.org/1.9.0/book/structs.html#tuple-structs">tuple struct</a> that <em>parses</em> the string's value and is &quot;tight&quot; in the
+wrapper <a href="https://doc.rust-lang.org/1.9.0/book/structs.html#tuple-structs">tuple struct</a> that <em>parses</em> the string's value and is "tight" in the
 set of values it can accept:</p>
 <pre><code class="language-rust ignore">pub struct NiceString(String);
 
@@ -292,7 +292,7 @@ with one enum variant per applied constraint trait:</p>
 case we will just print the name of the struct:</p>
 <pre><code class="language-rust ignore">impl std::fmt::Debug for ConstraintViolation {
     fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
-        let mut formatter = f.debug_struct(&quot;ConstraintViolation&quot;);
+        let mut formatter = f.debug_struct("ConstraintViolation");
         formatter.finish()
     }
 }</code></pre>
@@ -307,9 +307,9 @@ tuple struct that will eventually be handed over to the operation handler. This
 is what we're <em>already</em> doing when deserializing strings into <code>enums</code>. For
 example, given the Smithy model:</p>
 <pre><code class="language-smithy">@enum([
-    { name: &quot;Spanish&quot;, value: &quot;es&quot; },
-    { name: &quot;English&quot;, value: &quot;en&quot; },
-    { name: &quot;Japanese&quot;, value: &quot;jp&quot; },
+    { name: "Spanish", value: "es" },
+    { name: "English", value: "en" },
+    { name: "Japanese", value: "jp" },
 ])
 string Language
 </code></pre>
@@ -317,7 +317,7 @@ string Language
 into the <code>Language</code> enum is (excerpt):</p>
 <pre><code class="language-rust ignore">...
 match key.to_unescaped()?.as_ref() {
-    &quot;language&quot; =&gt; {
+    "language" =&gt; {
         builder = builder.set_language(
             aws_smithy_json::deserialize::token::expect_string_or_null(
                 tokens.next(),
@@ -336,9 +336,9 @@ match key.to_unescaped()?.as_ref() {
 <pre><code class="language-rust ignore">impl std::convert::From&lt;&amp;str&gt; for Language {
     fn from(s: &amp;str) -&gt; Self {
         match s {
-            &quot;es&quot; =&gt; Language::Spanish,
-            &quot;en&quot; =&gt; Language::English,
-            &quot;jp&quot; =&gt; Language::Japanese,
+            "es" =&gt; Language::Spanish,
+            "en" =&gt; Language::English,
+            "jp" =&gt; Language::Japanese,
             other =&gt; Language::Unknown(other.to_owned()),
         }
     }
@@ -346,8 +346,8 @@ match key.to_unescaped()?.as_ref() {
 <p>For constrained shapes we would do the same to parse the inner deserialized
 value into the wrapper tuple struct, except for these differences:</p>
 <ol>
-<li>For enums, the client generates an <code>Unknown</code> variant that &quot;contains new
-variants that have been added since this code was generated&quot;. The server
+<li>For enums, the client generates an <code>Unknown</code> variant that "contains new
+variants that have been added since this code was generated". The server
 does not need such a variant (<a href="https://github.com/smithy-lang/smithy-rs/issues/1187">#1187</a>).</li>
 <li>Conversions into the tuple struct are fallible (<code>try_from()</code> instead of
 <code>from()</code>). These errors will result in a <code>my_struct::ConstraintViolation</code>.</li>
@@ -417,7 +417,7 @@ immediately render a response, or attempt to parse the entire request and
 provide a complete and structured report?
 <ul>
 <li>UPDATE: We will provide a response containing all violations. See the
-&quot;Collecting Constraint Violations&quot; section in the <a href="https://github.com/smithy-lang/smithy-rs/pull/2040">Better Constraint
+"Collecting Constraint Violations" section in the <a href="https://github.com/smithy-lang/smithy-rs/pull/2040">Better Constraint
 Violations</a> RFC.</li>
 </ul>
 </li>
@@ -440,7 +440,7 @@ always be added later if this feature is requested.</li>
 <h2 id="alternative-design"><a class="header" href="#alternative-design">Alternative design</a></h2>
 <p>An alternative design with less public API surface would be to perform
 constraint validation at request deserialization, but hand over a regular
-&quot;loose&quot; type (e.g. <code>String</code> instead of <code>NiceString</code>) that allows for values
+"loose" type (e.g. <code>String</code> instead of <code>NiceString</code>) that allows for values
 violating the constraints. If we were to implement this approach, we can
 implement it by wrapping the incoming value in the aforementioned tuple struct
 to perform the validation, and immediately unwrap it.</p>
@@ -449,7 +449,7 @@ to perform the validation, and immediately unwrap it.</p>
 <li>Validation remains an internal detail of the framework. If the semantics of a
 constraint trait change, the behavior of the service is still
 backwards-incompatibly affected, but user code is not.</li>
-<li>Less &quot;invasive&quot;. Baking validation in the generated type might be deemed as
+<li>Less "invasive". Baking validation in the generated type might be deemed as
 the service framework overreaching responsibilities.</li>
 </ul>
 <p>Comparative disadvantages:</p>

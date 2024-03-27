@@ -245,8 +245,8 @@ the usage of this will look as follows:</p>
 let client = s3::Client::new(&amp;config);
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
 let presigned: PresignedRequest = client.get_object()
-    .bucket(&quot;example-bucket&quot;)
-    .key(&quot;example-object&quot;)
+    .bucket("example-bucket")
+    .key("example-object")
     .presigned(presigning_config)
     .await?;</code></pre>
 <p>This API requires a client, and for use-cases where no actual service calls need to be made,
@@ -274,8 +274,8 @@ This would look as follows:</p>
 <pre><code class="language-rust ignore">let config = aws_config::load_config_from_environment().await;
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
 let presigned: PresignedRequest = GetObjectInput::builder()
-    .bucket(&quot;example-bucket&quot;)
-    .key(&quot;example-bucket&quot;)
+    .bucket("example-bucket")
+    .key("example-bucket")
     .presigned(&amp;config, presigning_config)
     .await?;</code></pre>
 <p>Creating the URL through the input will exercise the same code path as creating it through the client,

@@ -209,8 +209,8 @@ pub enum InvalidFullUriError {
 impl Display for InvalidFullUriError {
     fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
         match self {
-            InvalidFullUriError::InvalidUri(err) =&gt; write!(f, &quot;URI was invalid: {}&quot;, err),
-            InvalidFullUriError::MissingHost =&gt; write!(f, &quot;URI did not specify a host&quot;),
+            InvalidFullUriError::InvalidUri(err) =&gt; write!(f, "URI was invalid: {}", err),
+            InvalidFullUriError::MissingHost =&gt; write!(f, "URI did not specify a host"),
             // ... omitted ...
         }
     }
@@ -264,7 +264,7 @@ impl Display for ProfileParseError {
     fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; fmt::Result {
         write!(
             f,
-            &quot;error parsing {} on line {}:\n  {}&quot;,
+            "error parsing {} on line {}:\n  {}",
             self.location.path, self.location.line_number, self.message
         )
     }
@@ -439,8 +439,8 @@ adding a new error variant's source at a later date.</p>
 impl fmt::Display for Error {
     fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
         match self {
-            Self::VariantA =&gt; write!(f, &quot;variant a&quot;),
-            Self::VariantB { some_additional_info, .. } =&gt; write!(f, &quot;variant b ({some_additional_info})&quot;),
+            Self::VariantA =&gt; write!(f, "variant a"),
+            Self::VariantB { some_additional_info, .. } =&gt; write!(f, "variant b ({some_additional_info})"),
             // ... and so on
         }
     }
@@ -450,9 +450,9 @@ impl fmt::Display for Error {
 impl fmt::Display for Error {
     fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
         match self {
-            Self::VariantA =&gt; write!(f, &quot;variant a&quot;),
+            Self::VariantA =&gt; write!(f, "variant a"),
             // Bad: includes the source in the `Display` output, which leads to duplicate error information
-            Self::VariantB { some_additional_info, source } =&gt; write!(f, &quot;variant b ({some_additional_info}): {source}&quot;),
+            Self::VariantB { some_additional_info, source } =&gt; write!(f, "variant b ({some_additional_info}): {source}"),
             // ... and so on
         }
     }
@@ -468,7 +468,7 @@ pub struct InformativeError {
 
 impl fmt::Display for InformativeError {
     fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
-        write!(f, &quot;some informative message with {}&quot;, self.some_additional_info)
+        write!(f, "some informative message with {}", self.some_additional_info)
     }
 }
 
@@ -484,7 +484,7 @@ for the situation.</p>
 <p>In code where errors are logged rather than returned to the customer, the full error source chain
 must be displayed. This will be made easy by placing a <code>DisplayErrorContext</code> struct in <code>aws-smithy-types</code> that
 is used as a wrapper to get the better error formatting:</p>
-<pre><code class="language-rust ignore">tracing::warn!(err = %DisplayErrorContext(err), &quot;some message&quot;);</code></pre>
+<pre><code class="language-rust ignore">tracing::warn!(err = %DisplayErrorContext(err), "some message");</code></pre>
 <p>This might be implemented as follows:</p>
 <pre><code class="language-rust ignore">#[derive(Debug)]
 pub struct DisplayErrorContext&lt;E: Error&gt;(pub E);
@@ -493,14 +493,14 @@ impl&lt;E: Error&gt; fmt::Display for DisplayErrorContext&lt;E&gt; {
     fn fmt(&amp;self, f: &amp;mut fmt::Formatter&lt;'_&gt;) -&gt; fmt::Result {
         write_err(f, &amp;self.0)?;
         // Also add a debug version of the error at the end
-        write!(f, &quot; ({:?})&quot;, self)
+        write!(f, " ({:?})", self)
     }
 }
 
 fn write_err(f: &amp;mut fmt::Formatter&lt;'_&gt;, err: &amp;dyn Error) -&gt; fmt::Result {
-    write!(f, &quot;{}&quot;, err)?;
+    write!(f, "{}", err)?;
     if let Some(source) = err.source() {
-        write!(f, &quot;: &quot;)?;
+        write!(f, ": ")?;
         write_err(f, source)?;
     }
     Ok(())

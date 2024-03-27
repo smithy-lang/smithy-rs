@@ -459,27 +459,27 @@ pub struct Router {
 }
 <span class="boring">}</span></code></pre></pre>
 <p>The implementations of <code>Handler</code> in <code>axum</code> and <code>smithy-rs</code> follow a similar pattern - convert <code>http::Request</code> into the closure's input, run the closure, convert the output of the closure to <code>http::Response</code>.</p>
-<p>In <code>smithy-rs</code> we do not need a general notion of &quot;extractor&quot; - the <code>http::Request</code> decomposition is specified by the Smithy model, whereas in <code>axum</code> it's defined by the handlers signature. Despite the Smithy specification the customer may still want an &quot;escape hatch&quot; to allow them access to data outside of the Smithy service inputs, for this reason we should continue to support a restricted notion of extractor. This will help support use cases such as passing <a href="https://docs.rs/lambda_http/latest/lambda_http/struct.Context.html">lambda_http::Context</a> through to the handler despite it not being modeled in the Smithy model.</p>
+<p>In <code>smithy-rs</code> we do not need a general notion of "extractor" - the <code>http::Request</code> decomposition is specified by the Smithy model, whereas in <code>axum</code> it's defined by the handlers signature. Despite the Smithy specification the customer may still want an "escape hatch" to allow them access to data outside of the Smithy service inputs, for this reason we should continue to support a restricted notion of extractor. This will help support use cases such as passing <a href="https://docs.rs/lambda_http/latest/lambda_http/struct.Context.html">lambda_http::Context</a> through to the handler despite it not being modeled in the Smithy model.</p>
 <p>Dual to <code>FromRequest</code> is the <a href="https://docs.rs/axum/latest/axum/response/trait.IntoResponse.html">axum::response::IntoResponse</a> trait. This plays the role of converting the output of the handler to <code>http::Response</code>. Again, the difference between <code>axum</code> and <code>smithy-rs</code> is that <code>smithy-rs</code> has the conversion from <code>{Operation}Output</code> to <code>http::Response</code> specified by the Smithy model, whereas in <code>axum</code> the customer is free to specify a return type which implements <code>axum::response::IntoResponse</code>.</p>
 <h4 id="routing"><a class="header" href="#routing">Routing</a></h4>
 <p>The Smithy model not only specifies the <code>http::Request</code> decomposition and <code>http::Response</code> composition for a given service, it also determines the routing. The <code>From&lt;OperationRegistry&gt;</code> implementation, described in <a href="#builder">Builder</a>, yields a fully formed router based on the protocol and <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#http-trait">http traits</a> specified.</p>
 <p>This is in contrast to <code>axum</code>, where the user specifies the routing by use of various combinators included on the <code>axum::Router</code>, applied to other <code>tower::Service</code>s. In an <code>axum</code> application one might encounter the following code:</p>
-<pre><code class="language-rust ignore">let user_routes = Router::new().route(&quot;/:id&quot;, /* service */);
+<pre><code class="language-rust ignore">let user_routes = Router::new().route("/:id", /* service */);
 
-let team_routes = Router::new().route(&quot;/&quot;, /* service */);
+let team_routes = Router::new().route("/", /* service */);
 
 let api_routes = Router::new()
-    .nest(&quot;/users&quot;, user_routes)
-    .nest(&quot;/teams&quot;, team_routes);
+    .nest("/users", user_routes)
+    .nest("/teams", team_routes);
 
-let app = Router::new().nest(&quot;/api&quot;, api_routes);</code></pre>
+let app = Router::new().nest("/api", api_routes);</code></pre>
 <p>Note that, in <code>axum</code> handlers are eagerly converted to a <code>tower::Service</code> (via <code>IntoService</code>) before they are passed into the <code>Router</code>. In contrast, in <code>smithy-rs</code>, handlers are passed into a builder and then the conversion to <code>tower::Service</code> is performed (via <code>OperationHandler</code>).</p>
 <p>Introducing state to handlers in <code>axum</code> is done in the same way as <code>smithy-rs</code>, described briefly in <a href="#handlers">Handlers</a> - a layer is used to insert state into incoming <code>http::Request</code>s and the <code>Handler</code> implementation pops it out of the type map layer. In <code>axum</code>, if a customer wanted to scope state to all routes within <code>/users/</code> they are able to do the following:</p>
 <pre><code class="language-rust ignore">async fn handler(Extension(state): Extension&lt;/* State */&gt;) -&gt; /* Return Type */ {}
 
 let api_routes = Router::new()
-    .nest(&quot;/users&quot;, user_routes.layer(Extension(/* state */)))
-    .nest(&quot;/teams&quot;, team_routes);</code></pre>
+    .nest("/users", user_routes.layer(Extension(/* state */)))
+    .nest("/teams", team_routes);</code></pre>
 <p>In <code>smithy-rs</code> a customer is only able to apply a layer around the <code>aws_smithy_http::routing::Router</code> or around every route via the <a href="#router">layer method</a> described above.</p>
 <h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
 <p>The proposal is presented as a series of compatible transforms to the existing service builder, each paired with a motivation. Most of these can be independently implemented, and it is stated in the cases where an interdependency exists.</p>

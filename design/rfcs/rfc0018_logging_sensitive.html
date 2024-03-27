@@ -213,7 +213,7 @@
 <h3 id="scope-and-guidelines"><a class="header" href="#scope-and-guidelines">Scope and Guidelines</a></h3>
 <p>It would be unfeasible to forbid the logging of sensitive data all together using the type system. With the current API, the customer will always have an opportunity to log a request containing sensitive data before it enters the <code>Service&lt;Request&lt;B&gt;&gt;</code> that we provide to them.</p>
 <pre><code class="language-rust ignore">// The API provides us with a `Service&lt;Request&lt;B&gt;&gt;`
-let app: Router = OperationRegistryBuilder::default().build().expect(&quot;unable to build operation registry&quot;).into();
+let app: Router = OperationRegistryBuilder::default().build().expect("unable to build operation registry").into();
 
 // We can `ServiceExt::map_request` log a request with potentially sensitive data
 let app = app.map_request(|request| {
@@ -238,14 +238,14 @@ let app = app.map_request(|request| {
 <p>The crates existing in <code>rust-runtime</code> are not code generated - their source code is agnostic to the specific model in use. For this reason, if such a crate wanted to log potentially sensitive data then there must be a way to conditionally toggle that log without manipulation of the source code. Any proposed solution must acknowledge this concern.</p>
 <h2 id="proposal"><a class="header" href="#proposal">Proposal</a></h2>
 <p>This proposal serves to honor the sensitivity specification via code generation of a logging middleware which is aware of the sensitivity, together with a developer contract disallowing logging potentially sensitive data in the runtime crates. A developer guideline should be provided in addition to the middleware.</p>
-<p>All data known to be sensitive should be replaced with <code>&quot;{redacted}&quot;</code> when logged. Implementation wise this means that <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html">tracing::Event</a>s and <a href="https://docs.rs/tracing/latest/tracing/struct.Span.html">tracing::Span</a>s of the form <code>debug!(field = &quot;sensitive data&quot;)</code> and <code>span!(..., field = &quot;sensitive data&quot;)</code> must become <code>debug!(field = &quot;{redacted}&quot;)</code> and <code>span!(..., field = &quot;{redacted}&quot;)</code>.</p>
+<p>All data known to be sensitive should be replaced with <code>"{redacted}"</code> when logged. Implementation wise this means that <a href="https://docs.rs/tracing/latest/tracing/struct.Event.html">tracing::Event</a>s and <a href="https://docs.rs/tracing/latest/tracing/struct.Span.html">tracing::Span</a>s of the form <code>debug!(field = "sensitive data")</code> and <code>span!(..., field = "sensitive data")</code> must become <code>debug!(field = "{redacted}")</code> and <code>span!(..., field = "{redacted}")</code>.</p>
 <h3 id="debug-logging"><a class="header" href="#debug-logging">Debug Logging</a></h3>
 <p>Developers might want to observe sensitive data for debugging purposes. It should be possible to opt-out of the redactions by enabling a feature flag <code>unredacted-logging</code> (which is disabled by default).</p>
 <p>To prevent excessive branches such as</p>
-<pre><code class="language-rust ignore">if cfg!(feature = &quot;unredacted-logging&quot;) {
-    debug!(%data, &quot;logging here&quot;);
+<pre><code class="language-rust ignore">if cfg!(feature = "unredacted-logging") {
+    debug!(%data, "logging here");
 } else {
-    debug!(data = &quot;{redacted}&quot;, &quot;logging here&quot;);
+    debug!(data = "{redacted}", "logging here");
 }</code></pre>
 <p>the following wrapper should be provided from a runtime crate:</p>
 <pre><code class="language-rust ignore">pub struct Sensitive&lt;T&gt;(T);
@@ -255,10 +255,10 @@ where
     T: Debug
 {
     fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; Result&lt;(), Error&gt; {
-        if cfg!(feature = &quot;unredacted-logging&quot;) {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
-            &quot;{redacted}&quot;.fmt(f)
+            "{redacted}".fmt(f)
         }
     }
 }
@@ -268,10 +268,10 @@ where
     T: Display
 {
     fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; Result&lt;(), Error&gt; {
-        if cfg!(feature = &quot;unredacted-logging&quot;) {
+        if cfg!(feature = "unredacted-logging") {
             self.0.fmt(f)
         } else {
-            &quot;{redacted}&quot;.fmt(f)
+            "{redacted}".fmt(f)
         }
     }
 }</code></pre>
@@ -282,7 +282,7 @@ where
 <p>As a request enters this middleware it should record the method, HTTP headers, status code, and URI in a <code>tracing::span</code>. As a response leaves this middleware it should record the HTTP headers and status code in a <code>tracing::debug</code>.</p>
 <p>The following model</p>
 <pre><code class="language-smithy">@readonly
-@http(uri: &quot;/inventory/{name}&quot;, method: &quot;GET&quot;)
+@http(uri: "/inventory/{name}", method: "GET")
 operation Inventory {
     input: Product,
     output: Stocked
@@ -337,13 +337,13 @@ where
             let status_code = /* redact status code */;
             let headers = /* no redactions */;
 
-            debug!(%status_code, ?headers, &quot;response&quot;);
+            debug!(%status_code, ?headers, "response");
 
             response
         };
 
         // Instrument the future with a span
-        let span = debug_span!(&quot;request&quot;, operation = %self.operation_name, method = %request.method(), %uri, ?headers);
+        let span = debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers);
         fut.instrument(span)
     }
 }</code></pre>
@@ -476,7 +476,7 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
 <li>Pollutes the API of middleware.</li>
 </ul>
 <h3 id="redact-values-using-a-tracing-layer"><a class="header" href="#redact-values-using-a-tracing-layer">Redact values using a tracing Layer</a></h3>
-<p>Distinct from <code>tower::Layer</code>, a <a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html">tracing::Layer</a> is a &quot;composable handler for <code>tracing</code> events&quot;. It would be possible to write an implementation which would filter out events which contain sensitive data.</p>
+<p>Distinct from <code>tower::Layer</code>, a <a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html">tracing::Layer</a> is a "composable handler for <code>tracing</code> events". It would be possible to write an implementation which would filter out events which contain sensitive data.</p>
 <p>Examples of filtering <code>tracing::Layer</code>s already exist in the form of the <a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html">EnvFilter</a> and <a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/targets/struct.Targets.html">Targets</a>. It is unlikely that we'll be able to leverage them for our use, but the underlying principle remains the same - the <code>tracing::Layer</code> inspects <code>tracing::Event</code>s/<code>tracing::Span</code>s, filtering them based on some criteria.</p>
 <p>Code generation would be need to be used in order to produce the filtering criteria from the models. Internal developers would need to adhere to a common set of field names in order for them to be subject to the filtering. Spans would need to be opened after routing occurs in order for the <code>tracing::Layer</code> to know which operation <code>Event</code>s are being produced within and hence which filtering rules to apply.</p>
 <h4 id="advantages-2"><a class="header" href="#advantages-2">Advantages</a></h4>

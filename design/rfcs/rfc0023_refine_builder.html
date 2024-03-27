@@ -379,10 +379,10 @@ We'll look at the impact of those generic parameters on two scenarios:</p>
 <li>Branching in startup logic;</li>
 <li>Breaking down a monolithic startup function into multiple smaller functions.</li>
 </ul>
-<h3 id="branching---incompatible-types"><a class="header" href="#branching---incompatible-types">Branching -&gt; &quot;Incompatible types&quot;</a></h3>
+<h3 id="branching---incompatible-types"><a class="header" href="#branching---incompatible-types">Branching -&gt; "Incompatible types"</a></h3>
 <p>Conditional statements appear quite often in the startup logic for an application (or in the setup code for its integration tests).
 Let's consider a toy example: if a <code>check_database</code> flag is set to <code>true</code>, we want to register a different <code>check_health</code> handler - one that takes care of pinging the database to make sure it's up.</p>
-<p>The &quot;obvious&quot; solution would look somewhat like this:</p>
+<p>The "obvious" solution would look somewhat like this:</p>
 <pre><code class="language-rust ignore">let check_database: bool = /* */;
 let app = if check_database {
     app.check_health(check_health)
@@ -412,14 +412,14 @@ app.build();</code></pre>
 <p>The developer must be aware of the following facts to unpack the error message:</p>
 <ol>
 <li>The two branches of an <code>if</code>/<code>else</code> statement need to return the same type.</li>
-<li>Each function closure has a new unique type (represented as <code>fn(CheckHealthInput) -&gt; impl Future&lt;Output = CheckHealthOutput&gt; {check_health}</code> for <code>check_health</code>);</li>
-<li>The handler function type becomes part of the overall <code>PokemonServiceBuilder</code> type, a cog in the larger <code>Op1</code> generic parameter used to hold the handler for the <code>CheckHealth</code> operation (i.e. <code>Operation&lt;IntoService&lt;_, fn(CheckHealthInput) -&gt; impl Future&lt;Output = CheckHealthOutput&gt; {check_health}&gt;&gt;</code>);</li>
+<li>Each function closure has a new unique type (represented as <code>fn(CheckHealthInput) -&gt; impl Future&lt;Output =  CheckHealthOutput&gt; {check_health}</code> for <code>check_health</code>);</li>
+<li>The handler function type becomes part of the overall <code>PokemonServiceBuilder</code> type, a cog in the larger <code>Op1</code> generic parameter used to hold the handler for the <code>CheckHealth</code> operation (i.e. <code>Operation&lt;IntoService&lt;_, fn(CheckHealthInput) -&gt; impl Future&lt;Output =  CheckHealthOutput&gt; {check_health}&gt;&gt;</code>);</li>
 </ol>
 <p>The second fact requires an intermediate understanding of Rust's closures and opaque types (<code>impl Trait</code>). It's quite likely to confuse Rust beginners.</p>
 <p>The developer has three options to move forward:</p>
 <ol>
 <li>Convert <code>check_health</code> and <code>check_health_with_database</code> into a common type that can be passed as a handler to <code>PokemonServiceBuilder::check_health</code>;</li>
-<li>Invoke the <code>build</code> method inside the two branches in order to return a &quot;plain&quot; <code>PokemonService&lt;Route&lt;B&gt;&gt;</code> from both branches.</li>
+<li>Invoke the <code>build</code> method inside the two branches in order to return a "plain" <code>PokemonService&lt;Route&lt;B&gt;&gt;</code> from both branches.</li>
 <li>Embed the configuration parameter (<code>check_database</code>) in the application state, retrieve it inside <code>check_health</code> and perform the branching there.</li>
 </ol>
 <p>I can't easily see a way to accomplish 1) using the current API. Pursuing 2) is straight-forward with a single conditional:</p>
@@ -450,7 +450,7 @@ match (check_database, include_cpu_statics) {
         .get_server_statistics(get_server_statistics)
         .build(),
 }</code></pre>
-<p>A lot of repetition compared to the code for the &quot;obvious&quot; approach:</p>
+<p>A lot of repetition compared to the code for the "obvious" approach:</p>
 <pre><code class="language-rust ignore">let check_database: bool = /* */;
 let include_cpu_statics: bool = /* */;
 let app = if check_database {
@@ -629,7 +629,7 @@ let app = builder.build();</code></pre>
 <h3 id="alternatives-lazy-and-eager-on-demand-type-erasure"><a class="header" href="#alternatives-lazy-and-eager-on-demand-type-erasure">Alternatives: lazy and eager-on-demand type erasure</a></h3>
 <p>A lot of our issues stem from type mismatch errors: we are encoding the type of our handlers into the overall type of the service builder and, as a consequence, we end up modifying that type every time we set a handler or modify its state.
 Type erasure is a common approach for mitigating these issues - reduce those generic parameters to a common type to avoid the mismatch errors.
-This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as the handler is registered, using <code>Option&lt;Route&lt;B&gt;&gt;</code> as our &quot;common type&quot; after erasure.</p>
+This whole RFC can be seen as a type erasure proposal - done eagerly, as soon as the handler is registered, using <code>Option&lt;Route&lt;B&gt;&gt;</code> as our "common type" after erasure.</p>
 <p>We could try to strike a different balance - i.e. avoid performing type erasure eagerly, but allow developers to erase types on demand.
 Based on my analysis, this could happen in two ways:</p>
 <ol>

@@ -213,7 +213,7 @@ impl BodyCallback for Box&lt;dyn BodyCallback&gt; {
 impl ByteStream {
     // ...other impls omitted
 
-    // A &quot;builder-style&quot; method for setting callbacks
+    // A "builder-style" method for setting callbacks
     pub fn with_body_callback(&amp;mut self, body_callback: Box&lt;dyn BodyCallback&gt;) -&gt; &amp;mut Self {
         self.inner.with_body_callback(body_callback);
         self
@@ -221,7 +221,7 @@ impl ByteStream {
 }
 
 impl Inner&lt;SdkBody&gt; {
-    // `Inner` wraps an `SdkBody` which has a &quot;builder-style&quot; function for adding callbacks.
+    // `Inner` wraps an `SdkBody` which has a "builder-style" function for adding callbacks.
     pub fn with_body_callback(&amp;mut self, body_callback: Box&lt;dyn BodyCallback&gt;) -&gt; &amp;mut Self {
         self.body.with_body_callback(body_callback);
         self
@@ -263,7 +263,7 @@ impl SdkBody {
             InnerProj::Streaming(body) =&gt; body.poll_data(cx).map_err(|e| e.into()),
             InnerProj::Dyn(box_body) =&gt; box_body.poll_data(cx),
             InnerProj::Taken =&gt; {
-                Poll::Ready(Some(Err(&quot;A `Taken` body should never be polled&quot;.into())))
+                Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
         };
 
@@ -323,18 +323,18 @@ impl SdkBody {
 /// # Example
 ///
 /// ```rust
-/// let header_name = HeaderName::from_static(&quot;some_key&quot;);
+/// let header_name = HeaderName::from_static("some_key");
 ///
 /// let mut left_hand_side_headers = HeaderMap::new();
 /// left_hand_side_headers.insert(
 ///     header_name.clone(),
-///     HeaderValue::from_str(&quot;lhs value&quot;).unwrap(),
+///     HeaderValue::from_str("lhs value").unwrap(),
 /// );
 ///
 /// let mut right_hand_side_headers = HeaderMap::new();
 /// right_hand_side_headers.insert(
 ///     header_name.clone(),
-///     HeaderValue::from_str(&quot;rhs value&quot;).unwrap(),
+///     HeaderValue::from_str("rhs value").unwrap(),
 /// );
 ///
 /// let merged_header_map =
@@ -344,8 +344,8 @@ impl SdkBody {
 ///     .into_iter()
 ///     .collect();
 ///
-/// // Will print 'some_key: [&quot;lhs value&quot;, &quot;rhs value&quot;]'
-/// println!(&quot;{}: {:?}&quot;, header_name.as_str(), merged_values);
+/// // Will print 'some_key: ["lhs value", "rhs value"]'
+/// println!("{}: {:?}", header_name.as_str(), merged_values);
 /// ```
 fn append_merge_header_maps(
     mut lhs: HeaderMap&lt;HeaderValue&gt;,
@@ -420,11 +420,11 @@ impl ReadCallback for Crc32cChecksumCallback {
     {
         let mut header_map = HeaderMap::new();
         // This checksum name is an Amazon standard and would be a `const` in the real implementation
-        let key = HeaderName::from_static(&quot;x-amz-checksum-crc32c&quot;);
+        let key = HeaderName::from_static("x-amz-checksum-crc32c");
         // If no data was provided to this callback and no CRC was ever calculated, we return zero as the checksum.
         let crc = self.state.unwrap_or_default();
         // Convert the CRC to a string, base 64 encode it, and then convert it into a `HeaderValue`.
-        let value = HeaderValue::from_str(&amp;base64::encode(crc.to_string())).expect(&quot;base64 will always produce valid header values&quot;);
+        let value = HeaderValue::from_str(&amp;base64::encode(crc.to_string())).expect("base64 will always produce valid header values");
 
         header_map.insert(key, value);
 

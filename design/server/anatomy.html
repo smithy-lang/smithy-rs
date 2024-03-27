@@ -178,7 +178,7 @@
 <p>This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.</p>
 <p>During the survey we will use the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
 <pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
-@title(&quot;Pokémon Species&quot;)
+@title("Pokémon Species")
 resource PokemonSpecies {
     identifiers: {
         name: String
@@ -195,10 +195,10 @@ resource Storage {
 }
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
-@title(&quot;Pokémon Service&quot;)
+@title("Pokémon Service")
 @restJson1
 service PokemonService {
-    version: &quot;2021-12-01&quot;,
+    version: "2021-12-01",
     resources: [PokemonSpecies, Storage],
     operations: [
         GetServerStatistics,
@@ -229,7 +229,7 @@ let pokemon_service = PokemonService::builder(config)
     .get_pokemon_species(get_pokemon_species)
     /* other operation setters */
     .build()
-    .expect(&quot;failed to create an instance of the Pokémon service&quot;);
+    .expect("failed to create an instance of the Pokémon service");
 <span class="boring">let pokemon_service: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = pokemon_service;
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="operations"><a class="header" href="#operations">Operations</a></h2>
@@ -262,7 +262,7 @@ let pokemon_service = PokemonService::builder(config)
 <p>For each Smithy Operation shape,</p>
 <pre><code class="language-smithy">/// Retrieve information about a Pokémon species.
 @readonly
-@http(uri: &quot;/pokemon-species/{name}&quot;, method: &quot;GET&quot;)
+@http(uri: "/pokemon-species/{name}", method: "GET")
 operation GetPokemonSpecies {
     input: GetPokemonSpeciesInput,
     output: GetPokemonSpeciesOutput,
@@ -280,7 +280,7 @@ operation GetPokemonSpecies {
 pub struct GetPokemonSpecies;
 
 impl OperationShape for GetPokemonSpecies {
-    const ID: ShapeId = ShapeId::new(&quot;com.aws.example#GetPokemonSpecies&quot;, &quot;com.aws.example&quot;, &quot;GetPokemonSpecies&quot;);
+    const ID: ShapeId = ShapeId::new("com.aws.example#GetPokemonSpecies", "com.aws.example", "GetPokemonSpecies");
 
     type Input = GetPokemonSpeciesInput;
     type Output = GetPokemonSpeciesOutput;
@@ -289,7 +289,7 @@ impl OperationShape for GetPokemonSpecies {
 <span class="boring">}</span></code></pre></pre>
 <p>where <code>GetPokemonSpeciesInput</code>, <code>GetPokemonSpeciesOutput</code> are both generated from the Smithy structures and <code>GetPokemonSpeciesError</code> is an enum generated from the <code>errors: [ResourceNotFoundException]</code>.</p>
 <p>Note that the <code>GetPokemonSpecies</code> marker structure is a zero-sized type (ZST), and therefore does not exist at runtime - it is a way to attach operation-specific data on an entity within the type system.</p>
-<p>The following nomenclature will aid us in our survey. We describe a <code>tower::Service</code> as a &quot;model service&quot; if its request and response are Smithy structures, as defined by the <code>OperationShape</code> trait - the <code>GetPokemonSpeciesInput</code>, <code>GetPokemonSpeciesOutput</code>, and <code>GetPokemonSpeciesError</code> described above. Similarly, we describe a <code>tower::Service</code> as a &quot;HTTP service&quot; if its request and response are <a href="https://github.com/hyperium/http"><code>http</code></a> structures - <code>http::Request</code> and <code>http::Response</code>.</p>
+<p>The following nomenclature will aid us in our survey. We describe a <code>tower::Service</code> as a "model service" if its request and response are Smithy structures, as defined by the <code>OperationShape</code> trait - the <code>GetPokemonSpeciesInput</code>, <code>GetPokemonSpeciesOutput</code>, and <code>GetPokemonSpeciesError</code> described above. Similarly, we describe a <code>tower::Service</code> as a "HTTP service" if its request and response are <a href="https://github.com/hyperium/http"><code>http</code></a> structures - <code>http::Request</code> and <code>http::Response</code>.</p>
 <p>The constructors exist on the marker ZSTs as an extension trait to <code>OperationShape</code>, namely <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/trait.OperationShapeExt.html"><code>OperationShapeExt</code></a>:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -438,7 +438,7 @@ pub struct AwsJson1_0;
 pub struct AwsJson1_1;
 <span class="boring">}</span></code></pre></pre>
 <h2 id="upgrading-a-model-service"><a class="header" href="#upgrading-a-model-service">Upgrading a Model Service</a></h2>
-<p>We can &quot;upgrade&quot; a model service to a HTTP service using <code>FromRequest</code> and <code>IntoResponse</code> described in the prior section:</p>
+<p>We can "upgrade" a model service to a HTTP service using <code>FromRequest</code> and <code>IntoResponse</code> described in the prior section:</p>
 <pre class="mermaid">stateDiagram-v2
     direction LR
     HttpService: HTTP Service
@@ -528,7 +528,7 @@ where
             Ok(ok) =&gt; ok.oneshot(req).await,
             // Failed to route, use the `R::Error`s `IntoResponse&lt;P&gt;`.
             Err(error) =&gt; {
-                debug!(%error, &quot;failed to route&quot;);
+                debug!(%error, "failed to route");
                 Err(Box::new(error.into_response()))
             }
         }
@@ -774,7 +774,7 @@ pub struct PokemonService&lt;S&gt; {
     C4 --&gt; [*]: HTTP Response
 </pre>
 <h2 id="accessing-unmodelled-data"><a class="header" href="#accessing-unmodelled-data">Accessing Unmodelled Data</a></h2>
-<p>An additional omitted detail is that we provide an &quot;escape hatch&quot; allowing <code>Handler</code>s and <code>OperationService</code>s to accept data that isn't modelled. In addition to accepting <code>Op::Input</code> they can accept additional arguments which implement the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html"><code>FromParts</code></a> trait:</p>
+<p>An additional omitted detail is that we provide an "escape hatch" allowing <code>Handler</code>s and <code>OperationService</code>s to accept data that isn't modelled. In addition to accepting <code>Op::Input</code> they can accept additional arguments which implement the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html"><code>FromParts</code></a> trait:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
@@ -839,7 +839,7 @@ where
 
 /// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
 #[derive(Debug, Error)]
-#[error(&quot;the `Extension` is not present in the `http::Request`&quot;)]
+#[error("the `Extension` is not present in the `http::Request`")]
 pub struct MissingExtension;
 
 impl&lt;Protocol&gt; IntoResponse&lt;Protocol&gt; for MissingExtension {

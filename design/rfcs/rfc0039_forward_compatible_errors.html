@@ -210,7 +210,7 @@ pub enum AbortMultipartUploadError {
         Ok(obj) =&gt; { ... },
         Err(e) =&gt; match e.into_service_error() {
             GetObjectError::NotFound =&gt; { ... },
-            GetObjectError::Unhandled(err) if err.code() == &quot;ValidationException&quot; =&gt; { ... }
+            GetObjectError::Unhandled(err) if err.code() == "ValidationException" =&gt; { ... }
             other =&gt; { /** do something with this variant */ }
         }
     }
@@ -221,8 +221,8 @@ pub enum AbortMultipartUploadError {
         Ok(obj) =&gt; { ... },
         Err(e) =&gt; match e.into_service_error() {
             GetObjectError::NotFound =&gt; { ... },
-            err if err.code() == &quot;ValidationException&quot; =&gt; { ... },
-            err =&gt; warn!(&quot;{}&quot;, err.code()),
+            err if err.code() == "ValidationException" =&gt; { ... },
+            err =&gt; warn!("{}", err.code()),
         }
     }
 <span class="boring">}</span></code></pre>
@@ -234,7 +234,7 @@ There are two areas we need to handle:</p>
 <li>Alert customers <em>currently</em> using unhandled what to use instead. For example, the following code is still problematic:
 <pre><code class="language-rust ignore">    match err {
         GetObjectError::NotFound =&gt; { ... },
-        err @ GetObject::Unhandled(_) if err.code() == Some(&quot;ValidationException&quot;) =&gt; { ... }
+        err @ GetObject::Unhandled(_) if err.code() == Some("ValidationException") =&gt; { ... }
     }</code></pre>
 </li>
 </ol>
@@ -258,7 +258,7 @@ pub fn introspect(&amp;self) -&gt; impl ProvideErrorMetadata + '_ {
 <p>The <code>Unhandled</code> variant will be deprecated to prevent users from matching on it inadvertently.</p>
 <pre><code class="language-rust ignore">enum GetObjectError {
    NotFound(NotFound),
-   #[deprecated(&quot;Matching on `Unhandled` directly is a backwards compatibility hazard. Use `err if err.error_code() == ...` instead. See [here](&lt;docs about using errors&gt;) for more information.&quot;)]
+   #[deprecated("Matching on `Unhandled` directly is a backwards compatibility hazard. Use `err if err.error_code() == ...` instead. See [here](&lt;docs about using errors&gt;) for more information.")]
    Unhandled(Unhandled)
 }</code></pre>
 <h3 id=""><a class="header" href="#"></a></h3>

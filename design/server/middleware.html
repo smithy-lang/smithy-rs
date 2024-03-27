@@ -177,7 +177,7 @@
 <p>The following document provides a brief survey of the various positions middleware can be inserted in Smithy Rust.</p>
 <p>We use the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy">Pokémon service</a> as a reference model throughout.</p>
 <pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
-@title(&quot;Pokémon Species&quot;)
+@title("Pokémon Species")
 resource PokemonSpecies {
     identifiers: {
         name: String
@@ -194,10 +194,10 @@ resource Storage {
 }
 
 /// The Pokémon Service allows you to retrieve information about Pokémon species.
-@title(&quot;Pokémon Service&quot;)
+@title("Pokémon Service")
 @restJson1
 service PokemonService {
-    version: &quot;2021-12-01&quot;,
+    version: "2021-12-01",
     resources: [PokemonSpecies, Storage],
     operations: [
         GetServerStatistics,
@@ -358,7 +358,7 @@ let app = PokemonService::builder(config)
 </span><span class="boring">}</span></code></pre></pre>
 <p>Note that requests pass through this middleware immediately <em>after</em> routing succeeds and therefore will <em>not</em> be encountered if routing fails. This means that the <a href="https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html">TraceLayer</a> in the example above does <em>not</em> provide logs unless routing has completed. This contrasts to <a href="#a-outer-middleware">middleware A</a>, which <em>all</em> requests/responses pass through when entering/leaving the service.</p>
 <h3 id="c-operation-specific-http-middleware"><a class="header" href="#c-operation-specific-http-middleware">C. Operation Specific HTTP Middleware</a></h3>
-<p>A &quot;HTTP layer&quot; can be applied to specific operations.</p>
+<p>A "HTTP layer" can be applied to specific operations.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate tower;
@@ -399,7 +399,7 @@ let app = PokemonService::builder(config)
 </span><span class="boring">}</span></code></pre></pre>
 <p>This middleware transforms the operations HTTP requests and responses.</p>
 <h3 id="d-operation-specific-model-middleware"><a class="header" href="#d-operation-specific-model-middleware">D. Operation Specific Model Middleware</a></h3>
-<p>A &quot;model layer&quot; can be applied to specific operations.</p>
+<p>A "model layer" can be applied to specific operations.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate tower;
@@ -467,7 +467,7 @@ where
     }
 
     fn call(&amp;mut self, req: R) -&gt; Self::Future {
-        println!(&quot;Hi {} in {}&quot;, self.operation_id.name(), self.service_id.name());
+        println!("Hi {} in {}", self.operation_id.name(), self.service_id.name());
         self.inner.call(req)
     }
 }

@@ -180,7 +180,7 @@
 <li>Endpoints must support manual configuration by end users:</li>
 </ol>
 <pre><code class="language-rust ignore">let config = dynamodb::Config::builder()
-    .endpoint(StaticEndpoint::for_uri(&quot;http://localhost:8000&quot;))</code></pre>
+    .endpoint(StaticEndpoint::for_uri("http://localhost:8000"))</code></pre>
 <p>When a user specifies a custom endpoint URI, <em>typically</em> they will want to avoid having this URI mutated by other endpoint discovery machinery.</p>
 <ol start="2">
 <li>

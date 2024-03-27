@@ -192,7 +192,7 @@ and <code>Standard</code> retry policy.</li>
 <li><strong>Standard retry behavior</strong>: The standard set of retry rules across AWS SDKs. This mode includes a standard set of errors that are retried, and support for retry quotas. The default maximum number of attempts with this mode is three, unless <code>max_attempts</code> is explicitly configured.</li>
 <li><strong>Adaptive retry behavior</strong>: Adaptive retry mode dynamically limits the rate of AWS requests to maximize success rate. This may be at the expense of request latency. Adaptive retry mode is not recommended when predictable latency is important.
 <ul>
-<li><em>Note: supporting the &quot;adaptive&quot; retry behavior is considered outside the scope of this RFC</em></li>
+<li><em>Note: supporting the "adaptive" retry behavior is considered outside the scope of this RFC</em></li>
 </ul>
 </li>
 </ul>
@@ -215,7 +215,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 
     let sts = sts::Client::new(&amp;config);
     let resp = sts.get_caller_identity().send().await?;
-    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
     Ok(())
 }</code></pre>
 <p>Then, in your terminal:</p>
@@ -236,7 +236,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 
     let sts = sts::Client::new(&amp;config);
     let resp = sts.get_caller_identity().send().await?;
-    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
     Ok(())
 }</code></pre>
 <h3 id="calling-a-method-on-service-specific-config"><a class="header" href="#calling-a-method-on-service-specific-config">Calling a method on service-specific config</a></h3>
@@ -252,7 +252,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 
     let sts = sts::Client::new(&amp;sts_config);
     let resp = sts.get_caller_identity().send().await?;
-    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
     Ok(())
 }</code></pre>
 <h3 id="disabling-retries"><a class="header" href="#disabling-retries">Disabling retries</a></h3>
@@ -267,7 +267,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 
     let sts = sts::Client::new(&amp;sts_config);
     let resp = sts.get_caller_identity().send().await?;
-    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
     Ok(())
 }</code></pre>
 <p>Retries can also be disabled by explicitly passing the <code>RetryConfig::NoRetries</code> enum variant to the <code>retry_config</code> builder method:</p>
@@ -281,7 +281,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 
     let sts = sts::Client::new(&amp;sts_config);
     let resp = sts.get_caller_identity().send().await?;
-    println!(&quot;your user id: {}&quot;, resp.user_id.unwrap_or_default());
+    println!("your user id: {}", resp.user_id.unwrap_or_default());
     Ok(())
 }</code></pre>
 <h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
@@ -315,7 +315,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 <li>The smithy client creates a new <code>Service</code> and attaches a copy of its retry policy</li>
 <li>The <code>Service</code> is <code>call</code>ed, sending out the request and retrying it according to the retry policy</li>
 </ol>
-<p>These changes will be made in such a way that they enable us to add the &quot;adaptive&quot; retry behavior at a later date without introducing a breaking change.</p>
+<p>These changes will be made in such a way that they enable us to add the "adaptive" retry behavior at a later date without introducing a breaking change.</p>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>

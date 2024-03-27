@@ -185,7 +185,7 @@ I spent much more time developing the feature than I had anticipated. In this ar
 <li>Key takeaways for contributors developing similar low-level features</li>
 </ul>
 <h2 id="how-the-sdk-sends-requests-with-a-body"><a class="header" href="#how-the-sdk-sends-requests-with-a-body">How the SDK sends requests with a body</a></h2>
-<p>All interactions between the SDK and a service are modeled as <a href="../transport/operation.html">&quot;operations&quot;</a>. Operations contain:</p>
+<p>All interactions between the SDK and a service are modeled as <a href="../transport/operation.html">"operations"</a>. Operations contain:</p>
 <ul>
 <li>A base HTTP request (with a potentially streaming body)</li>
 <li>A typed property bag of configuration options</li>
@@ -206,7 +206,7 @@ if let Some(content_length) = body.content_length() {
         content_length,
     );
 }
-let request = request.body(body).expect(&quot;should be valid request&quot;);</code></pre>
+let request = request.body(body).expect("should be valid request");</code></pre>
 <p>Most all request body creation in the SDKs looks like that. Note how it automatically sets the <code>Content-Length</code> header
 whenever the size of the body is known; It'll be relevant later. The body is read into memory and can be inspected
 before the request is sent. This allows for things like calculating a checksum and then inserting it into the request
@@ -222,15 +222,15 @@ trailers. Additionally, some metadata, like <code>Content-Length</code>, can't b
 request
     .headers_mut()
     .insert(
-        http::header::HeaderName::from_static(&quot;x-amz-trailer&quot;),
-        http::header::HeaderValue::from_static(&quot;x-amz-checksum-sha256&quot;),
+        http::header::HeaderName::from_static("x-amz-trailer"),
+        http::header::HeaderValue::from_static("x-amz-checksum-sha256"),
     );</code></pre>
 <h2 id="the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies"><a class="header" href="#the-issues-i-encountered-while-implementing-checksums-for-streaming-request-bodies">The issues I encountered while implementing checksums for streaming request bodies</a></h2>
 <h3 id="content-encoding-aws-chunked"><a class="header" href="#content-encoding-aws-chunked"><code>Content-Encoding: aws-chunked</code></a></h3>
 <p>When sending a request body with trailers, we must use an AWS-specific content encoding called <code>aws-chunked</code>. To encode
 a request body for <code>aws-chunked</code> requires us to know the length of each chunk we're going to send before we send it. We
 have to prefix each chunk with its size in bytes, represented by one or more <a href="https://en.wikipedia.org/wiki/Hexadecimal">hexadecimal</a> digits. To close the body, we
-send a final chunk with a zero. For example, the body &quot;Hello world&quot; would look like this when encoded:</p>
+send a final chunk with a zero. For example, the body "Hello world" would look like this when encoded:</p>
 <pre><code class="language-text">B\r\n
 Hello world\r\n
 0\r\n
@@ -317,7 +317,7 @@ looked like this:</p>
             }
             Poll::Ready(None) =&gt; {
                 *this.already_wrote_chunk_terminator = true;
-                Poll::Ready(Some(Ok(Bytes::from(&quot;\r\n0\r\n&quot;))))
+                Poll::Ready(Some(Ok(Bytes::from("\r\n0\r\n"))))
             }
             Poll::Ready(Some(Err(e))) =&gt; Poll::Ready(Some(Err(e))),
             Poll::Pending =&gt; Poll::Pending,
@@ -339,12 +339,12 @@ looked like this:</p>
     fn size_hint(&amp;self) -&gt; SizeHint {
         SizeHint::with_exact(
             self.encoded_length()
-                .expect(&quot;Requests made with aws-chunked encoding must have known size&quot;)
+                .expect("Requests made with aws-chunked encoding must have known size")
                 as u64,
         )
     }
 }</code></pre>
-<h3 id="the-stream-is-closing-early-and-i-dont-know-why"><a class="header" href="#the-stream-is-closing-early-and-i-dont-know-why">&quot;The stream is closing early, and I don't know why&quot;</a></h3>
+<h3 id="the-stream-is-closing-early-and-i-dont-know-why"><a class="header" href="#the-stream-is-closing-early-and-i-dont-know-why">"The stream is closing early, and I don't know why"</a></h3>
 <p>In my early implementation of <code>http_body::Body</code> for an <code>aws-chunked</code> encoded body, the body wasn't being completely read
 out. The problem turned out to be that I was delegating to the <code>is_end_stream</code> trait method of the inner body. Because
 the innermost body had no knowledge of the trailers I needed to send, it was reporting that the stream had ended.
@@ -384,15 +384,15 @@ used to send requests to something like <a href="https://localstack.cloud/">Loca
 <pre><code class="language-rust ignore">#[tokio::test]
 async fn test_checksum_on_streaming_request_against_s3() {
     let sdk_config = aws_config::from_env()
-        .endpoint_resolver(Endpoint::immutable(&quot;http://localhost:8080&quot;.parse().expect(&quot;valid URI&quot;)))
+        .endpoint_resolver(Endpoint::immutable("http://localhost:8080".parse().expect("valid URI")))
         .load().await;
     let s3_client = aws_sdk_s3::Client::new(&amp;sdk_config);
 
-    let input_text = b&quot;Hello world&quot;;
+    let input_text = b"Hello world";
     let _res = s3_client
         .put_object()
-        .bucket(&quot;some-real-bucket&quot;)
-        .key(&quot;test.txt&quot;)
+        .bucket("some-real-bucket")
+        .key("test.txt")
         .body(aws_sdk_s3::types::ByteStream::from_static(input_text))
         .checksum_algorithm(ChecksumAlgorithm::Sha256)
         .send()
@@ -414,17 +414,17 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 #[tokio::main]
 async fn main() {
   tracing_subscriber::registry().with(tracing_subscriber::EnvFilter::new(
-    std::env::var(&quot;RUST_LOG&quot;).unwrap_or_else(|_| &quot;trace&quot;.into()),
+    std::env::var("RUST_LOG").unwrap_or_else(|_| "trace".into()),
   ))
   .with(tracing_subscriber::fmt::layer())
   .init();
 
   let app = Router::new()
-      .route(&quot;/&quot;, put(|| async move { &quot;200 OK&quot; }))
+      .route("/", put(|| async move { "200 OK" }))
       .layer(middleware::from_fn(print_request_response));
 
   let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-  tracing::debug!(&quot;listening on {}&quot;, addr);
+  tracing::debug!("listening on {}", addr);
   axum::Server::bind(&amp;addr)
       .serve(app.into_make_service())
       .await
@@ -438,7 +438,7 @@ async fn print_request_response(
     let (parts, body) = req.into_parts();
 
     print_parts(&amp;parts).await;
-    let bytes = buffer_and_print(&quot;request&quot;, body).await?;
+    let bytes = buffer_and_print("request", body).await?;
     let req = Request::from_parts(parts, Body::from(bytes));
 
     let res = next.run(req).await;
@@ -447,7 +447,7 @@ async fn print_request_response(
 }
 
 async fn print_parts(parts: &amp;Parts) {
-    tracing::debug!(&quot;{:#?}&quot;, parts);
+    tracing::debug!("{:#?}", parts);
 }
 
 async fn buffer_and_print&lt;B&gt;(direction: &amp;str, body: B) -&gt; Result&lt;Bytes, (StatusCode, String)&gt;
@@ -460,13 +460,13 @@ where
         Err(err) =&gt; {
             return Err((
                 StatusCode::BAD_REQUEST,
-                format!(&quot;failed to read {} body: {}&quot;, direction, err),
+                format!("failed to read {} body: {}", direction, err),
             ));
         }
     };
 
     if let Ok(body) = std::str::from_utf8(&amp;bytes) {
-        tracing::debug!(&quot;{} body = {:?}&quot;, direction, body);
+        tracing::debug!("{} body = {:?}", direction, body);
     }
 
     Ok(bytes)

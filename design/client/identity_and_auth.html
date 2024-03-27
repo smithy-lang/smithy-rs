@@ -308,15 +308,15 @@ it might look like the following:</p>
     config_bag: &amp;ConfigBag,
 ) -&gt; Result&lt;(), BoxError&gt; {
     let aws_credentials = identity.data::&lt;Credentials&gt;()
-        .ok_or_else(|| &quot;The SigV4 signer requires AWS credentials&quot;)?;
+        .ok_or_else(|| "The SigV4 signer requires AWS credentials")?;
     let access_key = &amp;aws_credentials.secret_access_key;
     // -- snip --
 }</code></pre>
 <p>Also note that identity data structs are expected to censor their own sensitive fields, as
 <code>Identity</code> implements the automatically derived <code>Debug</code> trait.</p>
 <h3 id="challenges-with-this-identity-design"><a class="header" href="#challenges-with-this-identity-design">Challenges with this <code>Identity</code> design</a></h3>
-<p>A keen observer would note that there is an <code>expiration</code> field on <code>Identity</code>, and may ask, &quot;what about
-non-expiring identities?&quot; This is the result of a limitation on <code>Box&lt;dyn Any&gt;</code>, where it can only be
+<p>A keen observer would note that there is an <code>expiration</code> field on <code>Identity</code>, and may ask, "what about
+non-expiring identities?" This is the result of a limitation on <code>Box&lt;dyn Any&gt;</code>, where it can only be
 downcasted to concrete types. There is no way to downcast to a <code>dyn Trait</code> since the information required
 to verify that that type is that trait is lost at compile time (a <code>std::any::TypeId</code> only encodes information
 about the concrete type).</p>

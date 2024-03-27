@@ -183,7 +183,7 @@
 	D--&gt;|Unretryable Failure|F(&quot;Err(SdkError)&quot;)
 	D--&gt;|Retryable Failure|C
 </pre>
-<p>This process is also referred to as the &quot;request/response lifecycle.&quot; In this example, the types of &quot;transmit request&quot; and &quot;transmit response&quot; are protocol-dependent. Typical operations use <a href="https://en.wikipedia.org/wiki/HTTP">HTTP</a>, but we plan to support other protocols like <a href="https://en.wikipedia.org/wiki/MQTT">MQTT</a> in the future.</p>
+<p>This process is also referred to as the "request/response lifecycle." In this example, the types of "transmit request" and "transmit response" are protocol-dependent. Typical operations use <a href="https://en.wikipedia.org/wiki/HTTP">HTTP</a>, but we plan to support other protocols like <a href="https://en.wikipedia.org/wiki/MQTT">MQTT</a> in the future.</p>
 <p>In addition to the above steps, the orchestrator must also handle:</p>
 <ul>
 <li><strong>Endpoint resolution:</strong> figuring out which URL to send a request to.</li>
@@ -233,40 +233,40 @@
 <ul>
 <li><em>This phase is fallible.</em></li>
 <li>An interceptor context is created. This will hold request and response objects, making them available to interceptors.</li>
-<li>All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
-<li>All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new <em>&quot;read before execution&quot;</em> interceptors that have been set get run.</li>
+<li>All runtime plugins set at the client-level are run. These plugins can set config and mount interceptors. Any <em>"read before execution"</em> interceptors that have been set get run.</li>
+<li>All runtime plugins set at the operation-level are run. These plugins can also set config and mount interceptors. Any new <em>"read before execution"</em> interceptors that have been set get run.</li>
 </ul>
 </li>
 <li><strong>Request Construction</strong>
 <ul>
 <li><em>This phase is fallible.</em></li>
-<li>The <em>&quot;read before serialization&quot;</em> and <em>&quot;modify before serialization&quot;</em> interceptors are called.</li>
+<li>The <em>"read before serialization"</em> and <em>"modify before serialization"</em> interceptors are called.</li>
 <li>The input is serialized into a transmit request.</li>
-<li>The <em>&quot;read after serialization&quot;</em> and <em>&quot;modify before retry</em> loop&quot; interceptors are called.</li>
+<li>The <em>"read after serialization"</em> and <em>"modify before retry</em> loop" interceptors are called.</li>
 <li>Before making an attempt, the retry handler is called to check if an attempt should be made. The retry handler makes this decision for an initial attempt as well as for the retry attempts. If an initial attempt should be made, then the orchestrator enters the Dispatch phase. Otherwise, a throttling error is returned.</li>
 </ul>
 </li>
 <li><strong>Request Dispatch</strong>
 <ul>
 <li><em>This phase is fallible. This phase's tasks are performed in a loop. Retryable request failures will be retried, and unretryable failures will end the loop.</em></li>
-<li>The <em>&quot;read before attempt&quot;</em> interceptors are run.</li>
+<li>The <em>"read before attempt"</em> interceptors are run.</li>
 <li>An endpoint is resolved according to an endpoint resolver. The resolved endpoint is then applied to the transmit request.</li>
-<li>The <em>&quot;read before signing&quot;</em> and <em>&quot;modify before signing&quot;</em> interceptors are run.</li>
+<li>The <em>"read before signing"</em> and <em>"modify before signing"</em> interceptors are run.</li>
 <li>An identity and a signer are resolved according to an authentication resolver. The signer then signs the transmit request with the identity.</li>
-<li>The <em>&quot;read after signing&quot;</em>, <em>&quot;read before transmit&quot;</em>, and <em>&quot;modify before transmit&quot;</em> interceptors are run.</li>
+<li>The <em>"read after signing"</em>, <em>"read before transmit"</em>, and <em>"modify before transmit"</em> interceptors are run.</li>
 <li>The transmit request is passed into the connection, and a transmit response is received.</li>
-<li>The <em>&quot;read after transmit&quot;</em>, <em>&quot;read before deserialization&quot;</em>, and <em>&quot;modify before deserialization&quot;</em> interceptors are run.</li>
+<li>The <em>"read after transmit"</em>, <em>"read before deserialization"</em>, and <em>"modify before deserialization"</em> interceptors are run.</li>
 <li>The transmit response is deserialized.</li>
-<li>The <em>&quot;read after attempt&quot;</em> and <em>&quot;modify before attempt</em> completion&quot; interceptors are run.</li>
+<li>The <em>"read after attempt"</em> and <em>"modify before attempt</em> completion" interceptors are run.</li>
 <li>The retry strategy is called to check if a retry is necessary. If a retry is required, the Dispatch phase restarts. Otherwise, the orchestrator enters the Response Handling phase.</li>
 </ul>
 </li>
 <li><strong>Response Handling</strong>
 <ul>
 <li><em>This phase is fallible.</em></li>
-<li>The <em>&quot;read after deserialization&quot;</em> and <em>&quot;modify before completion&quot;</em> interceptors are run.</li>
+<li>The <em>"read after deserialization"</em> and <em>"modify before completion"</em> interceptors are run.</li>
 <li>Events are dispatched to any trace probes that the user has set.</li>
-<li>The <em>&quot;read after execution&quot;</em> interceptors are run.</li>
+<li>The <em>"read after execution"</em> interceptors are run.</li>
 </ul>
 </li>
 </ol>
@@ -325,7 +325,7 @@ where
 ) -&gt; Result&lt;Output, SdkError&lt;Error, HttpResponse&gt;&gt; {
 	// The request/response lifecycle
 }</code></pre>
-<p>Wait a second, I hear you ask. &quot;I see an <code>Input</code> and <code>Output</code> there, but you're not declaring any generic type arguments. What gives?&quot;</p>
+<p>Wait a second, I hear you ask. "I see an <code>Input</code> and <code>Output</code> there, but you're not declaring any generic type arguments. What gives?"</p>
 <p>I'm glad you asked. Generally, when you need traits, but you aren't willing to use generic type arguments, then you must <a href="https://doc.rust-lang.org/std/boxed/index.html"><code>Box</code></a>. Polymorphism is achieved through <a href="https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch">dynamic dispatch</a> instead of <a href="https://doc.rust-lang.org/book/ch10-01-syntax.html#performance-of-code-using-generics">static dispatch</a>, and this comes with a small runtime cost.</p>
 <p>So, what are <code>Input</code> and <code>Output</code>? They're our own special flavor of a boxed trait object.</p>
 <pre><code class="language-rust ignore">pub type Input = TypeErasedBox;

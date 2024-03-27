@@ -177,8 +177,8 @@
 <blockquote>
 <p>Status: Implemented</p>
 </blockquote>
-<p>We can't currently update the S3 SDK because we don't support the new &quot;Flexible Checksums&quot; feature. This RFC describes this new feature and details how we should implement it in <code>smithy-rs</code>.</p>
-<h2 id="what-is-the-flexible-checksums-feature"><a class="header" href="#what-is-the-flexible-checksums-feature">What is the &quot;Flexible Checksums&quot; feature?</a></h2>
+<p>We can't currently update the S3 SDK because we don't support the new "Flexible Checksums" feature. This RFC describes this new feature and details how we should implement it in <code>smithy-rs</code>.</p>
+<h2 id="what-is-the-flexible-checksums-feature"><a class="header" href="#what-is-the-flexible-checksums-feature">What is the "Flexible Checksums" feature?</a></h2>
 <p>S3 has previously supported MD5 checksum validation of data. Now, it supports more checksum algorithms like CRC32, CRC32C, SHA-1, and SHA-256. This validation is available when putting objects to S3 and when getting them from S3. For more information, see <a href="https://aws.amazon.com/blogs/aws/new-additional-checksum-algorithms-for-amazon-s3/">this AWS News Blog post</a>.</p>
 <h2 id="implementing-checksums"><a class="header" href="#implementing-checksums">Implementing Checksums</a></h2>
 <p>Checksum callbacks were introduced as a result of the acceptance of <a href="./rfc0013_body_callback_apis.html">RFC0013</a> and this RFC proposes a refactor to those callbacks, as well as several new wrappers for <code>SdkBody</code> that will provide new functionality.</p>
@@ -186,14 +186,14 @@
 <p>TLDR; This refactor of aws-smithy-checksums:</p>
 <ul>
 <li>
-<p><strong>Removes the &quot;callback&quot; terminology:</strong> As a word, &quot;callback&quot; doesn't carry any useful information, and doesn't aid in understanding.</p>
+<p><strong>Removes the "callback" terminology:</strong> As a word, "callback" doesn't carry any useful information, and doesn't aid in understanding.</p>
 </li>
 <li>
-<p><strong>Removes support for the <code>BodyCallback</code> API:</strong> Instead of adding checksum callbacks to a body, we're going to use a &quot;body wrapping&quot; instead. &quot;Body wrapping&quot; is demonstrated in the <a href="#checksumbody"><code>ChecksumBody</code></a>, <a href="#awschunkedbody-and-awschunkedbodyoptions"><code>AwsChunkedBody</code></a>, and <a href="#checksumvalidatedbody"><code>ChecksumValidatedBody</code></a> sections.</p>
+<p><strong>Removes support for the <code>BodyCallback</code> API:</strong> Instead of adding checksum callbacks to a body, we're going to use a "body wrapping" instead. "Body wrapping" is demonstrated in the <a href="#checksumbody"><code>ChecksumBody</code></a>, <a href="#awschunkedbody-and-awschunkedbodyoptions"><code>AwsChunkedBody</code></a>, and <a href="#checksumvalidatedbody"><code>ChecksumValidatedBody</code></a> sections.</p>
 <p><em>NOTE: This doesn't remove the <code>BodyCallback</code> trait. That will still exist, we just won't use it.</em></p>
 </li>
 <li>
-<p><strong>Updates terminology to focus on &quot;headers&quot; instead of &quot;trailers&quot;:</strong> Because the types we deal with in this module are named for HTTP headers, I chose to use that terminology instead. My hope is that this will be less strange to people reading this code.</p>
+<p><strong>Updates terminology to focus on "headers" instead of "trailers":</strong> Because the types we deal with in this module are named for HTTP headers, I chose to use that terminology instead. My hope is that this will be less strange to people reading this code.</p>
 </li>
 <li>
 <p><strong>Adds <code>fn checksum_algorithm_to_checksum_header_name</code>:</strong> a function that's used in generated code to set a checksum request header.</p>
@@ -202,7 +202,7 @@
 <p><strong>Adds <code>fn checksum_header_name_to_checksum_algorithm</code>:</strong> a function that's used in generated code when creating a checksum-validating response body.</p>
 </li>
 <li>
-<p><strong>Add new checksum-related &quot;body wrapping&quot; HTTP body types</strong>: These are defined in the <code>body</code> module and will be shown later in this RFC.</p>
+<p><strong>Add new checksum-related "body wrapping" HTTP body types</strong>: These are defined in the <code>body</code> module and will be shown later in this RFC.</p>
 </li>
 </ul>
 <pre><code class="language-rust ignore">// In aws-smithy-checksums/src/lib.rs
@@ -218,19 +218,19 @@ use std::io::Write;
 pub mod body;
 
 // Valid checksum algorithm names
-pub const CRC_32_NAME: &amp;str = &quot;crc32&quot;;
-pub const CRC_32_C_NAME: &amp;str = &quot;crc32c&quot;;
-pub const SHA_1_NAME: &amp;str = &quot;sha1&quot;;
-pub const SHA_256_NAME: &amp;str = &quot;sha256&quot;;
+pub const CRC_32_NAME: &amp;str = "crc32";
+pub const CRC_32_C_NAME: &amp;str = "crc32c";
+pub const SHA_1_NAME: &amp;str = "sha1";
+pub const SHA_256_NAME: &amp;str = "sha256";
 
-pub const CRC_32_HEADER_NAME: HeaderName = HeaderName::from_static(&quot;x-amz-checksum-crc32&quot;);
-pub const CRC_32_C_HEADER_NAME: HeaderName = HeaderName::from_static(&quot;x-amz-checksum-crc32c&quot;);
-pub const SHA_1_HEADER_NAME: HeaderName = HeaderName::from_static(&quot;x-amz-checksum-sha1&quot;);
-pub const SHA_256_HEADER_NAME: HeaderName = HeaderName::from_static(&quot;x-amz-checksum-sha256&quot;);
+pub const CRC_32_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32");
+pub const CRC_32_C_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-crc32c");
+pub const SHA_1_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha1");
+pub const SHA_256_HEADER_NAME: HeaderName = HeaderName::from_static("x-amz-checksum-sha256");
 
 // Preserved for compatibility purposes. This should never be used by users, only within smithy-rs
-const MD5_NAME: &amp;str = &quot;md5&quot;;
-const MD5_HEADER_NAME: HeaderName = HeaderName::from_static(&quot;content-md5&quot;);
+const MD5_NAME: &amp;str = "md5";
+const MD5_HEADER_NAME: HeaderName = HeaderName::from_static("content-md5");
 
 /// Given a `&amp;str` representing a checksum algorithm, return the corresponding `HeaderName`
 /// for that checksum algorithm.
@@ -247,7 +247,7 @@ pub fn checksum_algorithm_to_checksum_header_name(checksum_algorithm: &amp;str) 
         MD5_HEADER_NAME
     } else {
         // TODO what's the best way to handle this case?
-        HeaderName::from_static(&quot;x-amz-checksum-unknown&quot;)
+        HeaderName::from_static("x-amz-checksum-unknown")
     }
 }
 
@@ -268,7 +268,7 @@ pub fn checksum_header_name_to_checksum_algorithm(
         MD5_NAME
     } else {
         // TODO what's the best way to handle this case?
-        &quot;unknown-checksum-algorithm&quot;
+        "unknown-checksum-algorithm"
     }
 }
 
@@ -295,11 +295,11 @@ pub trait Checksum: Send + Sync {
     fn headers(&amp;self) -&gt; Result&lt;Option&lt;HeaderMap&lt;HeaderValue&gt;&gt;, BoxError&gt;;
     /// Return the `HeaderName` used to represent this checksum algorithm
     fn header_name(&amp;self) -&gt; HeaderName;
-    /// &quot;Finalize&quot; this checksum, returning the calculated value as `Bytes` or an error that
+    /// "Finalize" this checksum, returning the calculated value as `Bytes` or an error that
     /// occurred during checksum calculation. To print this value in a human-readable hexadecimal
     /// format, you can print it using Rust's builtin [formatter].
     ///
-    /// _**NOTE:** typically, &quot;finalizing&quot; a checksum in Rust will take ownership of the checksum
+    /// _**NOTE:** typically, "finalizing" a checksum in Rust will take ownership of the checksum
     /// struct. In this method, we clone the checksum's state before finalizing because checksums
     /// may be used in a situation where taking ownership is not possible._
     ///
@@ -327,7 +327,7 @@ pub fn new_checksum(checksum_algorithm: &amp;str) -&gt; Box&lt;dyn Checksum&gt; 
         // We deliberately hide this from users so that they don't go using it.
         Box::new(Md5::default())
     } else {
-        panic!(&quot;unsupported checksum algorithm '{}'&quot;, checksum_algorithm)
+        panic!("unsupported checksum algorithm '{}'", checksum_algorithm)
     }
 }
 
@@ -369,7 +369,7 @@ impl Crc32 {
         // We clone the hasher because `Hasher::finalize` consumes `self`
         let hash = self.hasher.clone().finalize();
         HeaderValue::from_str(&amp;base64::encode(u32::to_be_bytes(hash)))
-            .expect(&quot;will always produce a valid header value from a CRC32 checksum&quot;)
+            .expect("will always produce a valid header value from a CRC32 checksum")
     }
 }
 
@@ -437,7 +437,7 @@ impl Crc32c {
         // If no data was provided to this callback and no CRC was ever calculated, return zero as the checksum.
         let hash = self.state.unwrap_or_default();
         HeaderValue::from_str(&amp;base64::encode(u32::to_be_bytes(hash)))
-            .expect(&quot;will always produce a valid header value from a CRC32C checksum&quot;)
+            .expect("will always produce a valid header value from a CRC32C checksum")
     }
 }
 
@@ -502,7 +502,7 @@ impl Sha1 {
         // We clone the hasher because `Hasher::finalize` consumes `self`
         let hash = self.hasher.clone().finalize();
         HeaderValue::from_str(&amp;base64::encode(&amp;hash[..]))
-            .expect(&quot;will always produce a valid header value from a SHA-1 checksum&quot;)
+            .expect("will always produce a valid header value from a SHA-1 checksum")
     }
 }
 
@@ -567,7 +567,7 @@ impl Sha256 {
         // We clone the hasher because `Hasher::finalize` consumes `self`
         let hash = self.hasher.clone().finalize();
         HeaderValue::from_str(&amp;base64::encode(&amp;hash[..]))
-            .expect(&quot;will always produce a valid header value from a SHA-256 checksum&quot;)
+            .expect("will always produce a valid header value from a SHA-256 checksum")
     }
 }
 
@@ -632,7 +632,7 @@ impl Md5 {
         // We clone the hasher because `Hasher::finalize` consumes `self`
         let hash = self.hasher.clone().finalize();
         HeaderValue::from_str(&amp;base64::encode(&amp;hash[..]))
-            .expect(&quot;will always produce a valid header value from an MD5 checksum&quot;)
+            .expect("will always produce a valid header value from an MD5 checksum")
     }
 }
 
@@ -724,7 +724,7 @@ impl ChecksumBody&lt;SdkBody&gt; {
         (trailer_name_size_in_bytes
             // HTTP trailer names and values may be separated by either a single colon or a single
             // colon and a whitespace. In the AWS Rust SDK, we use a single colon.
-            + &quot;:&quot;.len() as u64
+            + ":".len() as u64
             + base64_encoded_checksum_size_in_bytes)
     }
 
@@ -920,7 +920,7 @@ impl Display for Error {
         match self {
             Error::ChecksumMismatch { expected, actual } =&gt; write!(
                 f,
-                &quot;body checksum mismatch. expected body checksum to be {:x} but it was {:x}&quot;,
+                "body checksum mismatch. expected body checksum to be {:x} but it was {:x}",
                 expected, actual
             ),
         }
@@ -1010,13 +1010,13 @@ use pin_project::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-const CRLF: &amp;str = &quot;\r\n&quot;;
-const CHUNK_TERMINATOR: &amp;str = &quot;0\r\n&quot;;
+const CRLF: &amp;str = "\r\n";
+const CHUNK_TERMINATOR: &amp;str = "0\r\n";
 
 /// Content encoding header value constants
 pub mod header_value {
-    /// Header value denoting &quot;aws-chunked&quot; encoding
-    pub const AWS_CHUNKED: &amp;str = &quot;aws-chunked&quot;;
+    /// Header value denoting "aws-chunked" encoding
+    pub const AWS_CHUNKED: &amp;str = "aws-chunked";
 }
 
 /// Options used when constructing an [`AwsChunkedBody`][AwsChunkedBody].
@@ -1084,9 +1084,9 @@ enum AwsChunkedBodyState {
 ///
 /// chunk           = chunk-size CRLF chunk-data CRLF
 /// chunk-size      = 1*HEXDIG
-/// last-chunk      = 1*(&quot;0&quot;) CRLF
+/// last-chunk      = 1*("0") CRLF
 /// chunked-trailer = *( entity-header CRLF )
-/// entity-header   = field-name &quot;:&quot; OWS field-value OWS
+/// entity-header   = field-name ":" OWS field-value OWS
 /// ```
 /// For more info on what the abbreviations mean, see https://datatracker.ietf.org/doc/html/rfc7230#section-1.2
 ///
@@ -1151,7 +1151,7 @@ impl AwsChunkedBody&lt;Inner&gt; {
 
 fn prefix_with_chunk_size(data: Bytes, chunk_size: u64) -&gt; Bytes {
     // Len is the size of the entire chunk as defined in `AwsChunkedBodyOptions`
-    let mut prefixed_data = BytesMut::from(format!(&quot;{:X?}\r\n&quot;, chunk_size).as_bytes());
+    let mut prefixed_data = BytesMut::from(format!("{:X?}\r\n", chunk_size).as_bytes());
     prefixed_data.extend_from_slice(&amp;data);
 
     prefixed_data.into()
@@ -1220,14 +1220,14 @@ impl Body for AwsChunkedBody&lt;Inner&gt; {
         self: Pin&lt;&amp;mut Self&gt;,
         cx: &amp;mut Context&lt;'_&gt;,
     ) -&gt; Poll&lt;Option&lt;Result&lt;Self::Data, Self::Error&gt;&gt;&gt; {
-        tracing::info!(&quot;polling AwsChunkedBody&quot;);
+        tracing::info!("polling AwsChunkedBody");
         let mut this = self.project();
 
         match *this.state {
             AwsChunkedBodyState::WritingChunkSize =&gt; match this.inner.poll_data(cx) {
                 Poll::Ready(Some(Ok(data))) =&gt; {
                     // A chunk must be prefixed by chunk size in hexadecimal
-                    tracing::info!(&quot;writing chunk size and start of chunk&quot;);
+                    tracing::info!("writing chunk size and start of chunk");
                     *this.state = AwsChunkedBodyState::WritingChunk;
                     let total_chunk_size = this
                         .options
@@ -1237,22 +1237,22 @@ impl Body for AwsChunkedBody&lt;Inner&gt; {
                     Poll::Ready(Some(Ok(prefix_with_chunk_size(data, total_chunk_size))))
                 }
                 Poll::Ready(None) =&gt; {
-                    tracing::info!(&quot;chunk was empty, writing last-chunk&quot;);
+                    tracing::info!("chunk was empty, writing last-chunk");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
-                    Poll::Ready(Some(Ok(Bytes::from(&quot;0\r\n&quot;))))
+                    Poll::Ready(Some(Ok(Bytes::from("0\r\n"))))
                 }
                 Poll::Ready(Some(Err(e))) =&gt; Poll::Ready(Some(Err(e))),
                 Poll::Pending =&gt; Poll::Pending,
             },
             AwsChunkedBodyState::WritingChunk =&gt; match this.inner.poll_data(cx) {
                 Poll::Ready(Some(Ok(mut data))) =&gt; {
-                    tracing::info!(&quot;writing rest of chunk data&quot;);
+                    tracing::info!("writing rest of chunk data");
                     Poll::Ready(Some(Ok(data.copy_to_bytes(data.len()))))
                 }
                 Poll::Ready(None) =&gt; {
-                    tracing::info!(&quot;no more chunk data, writing CRLF and last-chunk&quot;);
+                    tracing::info!("no more chunk data, writing CRLF and last-chunk");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
-                    Poll::Ready(Some(Ok(Bytes::from(&quot;\r\n0\r\n&quot;))))
+                    Poll::Ready(Some(Ok(Bytes::from("\r\n0\r\n"))))
                 }
                 Poll::Ready(Some(Err(e))) =&gt; Poll::Ready(Some(Err(e))),
                 Poll::Pending =&gt; Poll::Pending,
@@ -1294,7 +1294,7 @@ impl Body for AwsChunkedBody&lt;Inner&gt; {
     fn size_hint(&amp;self) -&gt; SizeHint {
         SizeHint::with_exact(
             self.encoded_length()
-                .expect(&quot;Requests made with aws-chunked encoding must have known size&quot;)
+                .expect("Requests made with aws-chunked encoding must have known size")
                 as u64,
         )
     }
@@ -1330,14 +1330,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_aws_chunked_encoded_body() {
-        let input_text = &quot;Hello world&quot;;
+        let input_text = "Hello world";
         let sdk_body = SdkBody::from(input_text);
-        let checksum_body = ChecksumBody::new(sdk_body, &quot;sha256&quot;);
+        let checksum_body = ChecksumBody::new(sdk_body, "sha256");
         let aws_chunked_body_options = AwsChunkedBodyOptions {
             stream_length: Some(input_text.len() as u64),
             chunk_length: None,
             trailer_lens: vec![
-                &quot;x-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=&quot;.len() as u64,
+                "x-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=".len() as u64,
             ],
         };
         let mut aws_chunked_body = AwsChunkedBody::new(checksum_body, aws_chunked_body_options);
@@ -1351,9 +1351,9 @@ mod tests {
         output
             .reader()
             .read_to_string(&amp;mut actual_output)
-            .expect(&quot;Doesn't cause IO errors&quot;);
+            .expect("Doesn't cause IO errors");
 
-        let expected_output = &quot;B\r\nHello world\r\n0\r\nx-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=\r\n\r\n&quot;;
+        let expected_output = "B\r\nHello world\r\n0\r\nx-amz-checksum-sha256:ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=\r\n\r\n";
 
         // Verify data is complete and correctly encoded
         assert_eq!(expected_output, actual_output);
@@ -1362,21 +1362,21 @@ mod tests {
             aws_chunked_body
                 .trailers()
                 .await
-                .expect(&quot;checksum generation was without error&quot;)
+                .expect("checksum generation was without error")
                 .is_none(),
-            &quot;aws-chunked encoded bodies don't have normal HTTP trailers&quot;
+            "aws-chunked encoded bodies don't have normal HTTP trailers"
         );
     }
 
     #[tokio::test]
     async fn test_empty_aws_chunked_encoded_body() {
-        let sdk_body = SdkBody::from(&quot;&quot;);
-        let checksum_body = ChecksumBody::new(sdk_body, &quot;sha256&quot;);
+        let sdk_body = SdkBody::from("");
+        let checksum_body = ChecksumBody::new(sdk_body, "sha256");
         let aws_chunked_body_options = AwsChunkedBodyOptions {
             stream_length: Some(0),
             chunk_length: None,
             trailer_lens: vec![
-                &quot;x-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=&quot;.len() as u64,
+                "x-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=".len() as u64,
             ],
         };
         let mut aws_chunked_body = AwsChunkedBody::new(checksum_body, aws_chunked_body_options);
@@ -1390,10 +1390,10 @@ mod tests {
         output
             .reader()
             .read_to_string(&amp;mut actual_output)
-            .expect(&quot;Doesn't cause IO errors&quot;);
+            .expect("Doesn't cause IO errors");
 
         let expected_output =
-            &quot;0\r\nx-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\r\n\r\n&quot;;
+            "0\r\nx-amz-checksum-sha256:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\r\n\r\n";
 
         // Verify data is complete and correctly encoded
         assert_eq!(expected_output, actual_output);
@@ -1402,15 +1402,15 @@ mod tests {
             aws_chunked_body
                 .trailers()
                 .await
-                .expect(&quot;checksum generation was without error&quot;)
+                .expect("checksum generation was without error")
                 .is_none(),
-            &quot;aws-chunked encoded bodies don't have normal HTTP trailers&quot;
+            "aws-chunked encoded bodies don't have normal HTTP trailers"
         );
     }
 }</code></pre>
 <h3 id="sigv4-update"><a class="header" href="#sigv4-update">Sigv4 Update</a></h3>
 <p>When sending checksum-verified requests with a streaming body, we must update the usual signing process. Instead of signing the request based on the request body's checksum, we must sign it with a special header instead:</p>
-<pre><code class="language-HTTP">Authorization: &lt;computed authorization header value using &quot;STREAMING-UNSIGNED-PAYLOAD-TRAILER&quot;&gt;
+<pre><code class="language-HTTP">Authorization: &lt;computed authorization header value using "STREAMING-UNSIGNED-PAYLOAD-TRAILER"&gt;
 x-amz-content-sha256: STREAMING-UNSIGNED-PAYLOAD-TRAILER
 </code></pre>
 <p>Setting <code>STREAMING-UNSIGNED-PAYLOAD-TRAILER</code> tells the signer that we're sending an unsigned streaming body that will be followed by trailers.</p>
@@ -1484,7 +1484,7 @@ pub fn build_checksum_validated_request(
         aws_smithy_checksums::checksum_algorithm_to_checksum_header_name(checksum_algorithm),
         aws_smithy_types::base64::encode(&amp;checksum[..])
             .parse()
-            .expect(&quot;base64-encoded checksums are always valid header values&quot;),
+            .expect("base64-encoded checksums are always valid header values"),
     );
 
     Ok(())
@@ -1503,7 +1503,7 @@ pub fn build_checksum_validated_request_with_streaming_body(
     let original_body_size = body
         .size_hint()
         .exact()
-        .expect(&quot;body must be sized if checksum is requested&quot;);
+        .expect("body must be sized if checksum is requested");
     let body = aws_smithy_checksums::body::ChecksumBody::new(body, checksum_algorithm);
     let checksum_trailer_name = body.trailer_name();
     let aws_chunked_body_options = aws_http::content_encoding::AwsChunkedBodyOptions::new()
@@ -1514,18 +1514,18 @@ pub fn build_checksum_validated_request_with_streaming_body(
     let encoded_content_length = body
         .size_hint()
         .exact()
-        .expect(&quot;encoded_length must return known size&quot;);
+        .expect("encoded_length must return known size");
     let request_builder = request_builder
         .header(
             http::header::CONTENT_LENGTH,
             http::HeaderValue::from(encoded_content_length),
         )
         .header(
-            http::header::HeaderName::from_static(&quot;x-amz-decoded-content-length&quot;),
+            http::header::HeaderName::from_static("x-amz-decoded-content-length"),
             http::HeaderValue::from(original_body_size),
         )
         .header(
-            http::header::HeaderName::from_static(&quot;x-amz-trailer&quot;),
+            http::header::HeaderName::from_static("x-amz-trailer"),
             checksum_trailer_name,
         )
         .header(

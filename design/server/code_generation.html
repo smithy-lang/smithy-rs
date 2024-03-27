@@ -185,7 +185,7 @@
 <li><code>/rust-runtime</code>: the generated client and server crates may depend on crates in this folder. Crates here are not code generated. The only crate that is not published is <code>inlineable</code>,
 which contains common functions used by other crates, <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/CargoDependency.kt#L95-L95">copied into</a> the source crate</li>
 </ul>
-<p>Crates in <code>/rust-runtime</code> (informally referred to as &quot;runtime crates&quot;) are added to a crate's dependency only when used.
+<p>Crates in <code>/rust-runtime</code> (informally referred to as "runtime crates") are added to a crate's dependency only when used.
 For example, if a model uses event streams, the generated crates will depend on <a href="https://docs.rs/aws-smithy-eventstream"><code>aws-smithy-eventstream</code></a>.</p>
 <h2 id="generating-code"><a class="header" href="#generating-code">Generating code</a></h2>
 <p><code>smithy-rs</code>'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L34">RustCodegenPlugin::execute</a> and

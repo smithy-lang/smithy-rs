@@ -187,7 +187,7 @@
 <!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
 <h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
 <ul>
-<li><code>Extensions</code> / &quot;Request Extensions&quot;: The <code>http</code> crate Request/Response types include a typed property bag to store additional metadata along with the request.</li>
+<li><code>Extensions</code> / "Request Extensions": The <code>http</code> crate Request/Response types include a typed property bag to store additional metadata along with the request.</li>
 </ul>
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 <h2 id="the-user-experience-if-this-rfc-is-implemented"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented">The user experience if this RFC is implemented</a></h2>
@@ -205,7 +205,7 @@
 <p>Our header library restricts header names and values to <code>String</code>s (UTF-8).</p>
 <p>Although the <code>http</code> library is very precise in its representation—it allows for <code>HeaderValue</code>s that are both a super and subset of <code>String</code>—a superset because headers support arbitrary binary data but a subset because headers cannot contain control characters like <code>\n</code>.</p>
 <p>Although technically allowed, headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.</p>
-<p>Finally, it's nicer for users if they can stay in &quot;string land&quot;. Because of this, HttpRequest and Response expose header names and values as strings. Internally, the current design uses <code>HeaderName</code> and <code>HeaderValue</code>, however, there is a gate on construction that enforces that values are valid UTF-8.</p>
+<p>Finally, it's nicer for users if they can stay in "string land". Because of this, HttpRequest and Response expose header names and values as strings. Internally, the current design uses <code>HeaderName</code> and <code>HeaderValue</code>, however, there is a gate on construction that enforces that values are valid UTF-8.</p>
 <p><strong>This is a one way door because <code>.as_str()</code> would panic in the future if we allow non-string values into headers.</strong></p>
 <h4 id="where-should-these-types-live"><a class="header" href="#where-should-these-types-live">Where should these types live?</a></h4>
 <p>These types will be used by all orchestrator functionality, so they will be housed in <code>aws-smithy-runtime-api</code></p>

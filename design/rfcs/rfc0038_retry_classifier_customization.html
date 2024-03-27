@@ -193,7 +193,7 @@ model file.</li>
 an AWS service.</li>
 <li><strong>Operation</strong>: A modeled interaction with a service, defining the proper input
 and expected output shapes, as well as important metadata related to request
-construction. &quot;Sending&quot; an operation implies sending one or more HTTP requests
+construction. "Sending" an operation implies sending one or more HTTP requests
 to a <strong>Smithy service</strong>, and then receiving an output or error in response.</li>
 <li><strong>Orchestrator</strong>: The client code which manages the request/response pipeline.
 The orchestrator is responsible for:
@@ -239,7 +239,7 @@ they'll always run in a consistent order.</p>
 
         // Otherwise, set the result to the new result.
         tracing::trace!(
-            &quot;Classifier '{}' set the result of classification to '{}'&quot;,
+            "Classifier '{}' set the result of classification to '{}'",
             classifier.name(),
             new_result
         );
@@ -247,7 +247,7 @@ they'll always run in a consistent order.</p>
 
         // If the result is `RetryForbidden`, stop running classifiers.
         if result == RetryAction::RetryForbidden {
-            tracing::trace!(&quot;retry classification ending early because a `RetryAction::RetryForbidden` was emitted&quot;,);
+            tracing::trace!("retry classification ending early because a `RetryAction::RetryForbidden` was emitted",);
             break;
         }
     }
@@ -281,10 +281,10 @@ impl ClassifyRetry for CustomRetryClassifier {
             Some(Err(err)) =&gt; err,
         };
 
-        todo!(&quot;inspect the error to determine if a retry attempt should be made.&quot;)
+        todo!("inspect the error to determine if a retry attempt should be made.")
     }
 
-    fn name(&amp;self) -&gt; &amp;'static str { &quot;my custom retry classifier&quot; }
+    fn name(&amp;self) -&gt; &amp;'static str { "my custom retry classifier" }
 
     fn priority(&amp;self) -&gt; RetryClassifierPriority {
         RetryClassifierPriority::default()

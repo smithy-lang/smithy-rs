@@ -178,7 +178,7 @@
 <p>Status: Implemented</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
-<p>While it is currently possible for users to implement request timeouts by racing operation send futures against timeout futures, this RFC proposes a more ergonomic solution that would also enable users to set timeouts for things like TLS negotiation and &quot;time to first byte&quot;.</p>
+<p>While it is currently possible for users to implement request timeouts by racing operation send futures against timeout futures, this RFC proposes a more ergonomic solution that would also enable users to set timeouts for things like TLS negotiation and "time to first byte".</p>
 <h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
 <p>There's a lot of terminology to define, so I've broken it up into three sections.</p>
 <h3 id="general-terms"><a class="header" href="#general-terms">General terms</a></h3>
@@ -187,7 +187,7 @@
 <li><strong>Fluent Client</strong>: A code-generated <code>Client&lt;C, M, R&gt;</code> that has methods for each service operation on it. A fluent builder is generated alongside it to make construction easier.</li>
 <li><strong>AWS Client</strong>: A specialized Fluent Client that defaults to using a <code>DynConnector</code>, <code>AwsMiddleware</code>, and <code>Standard</code> retry policy.</li>
 <li><strong>Shared Config</strong>: An <code>aws_types::Config</code> struct that is responsible for storing shared configuration data that is used across all services. This is not generated and lives in the <code>aws-types</code> crate.</li>
-<li><strong>Service-specific Config</strong>: A code-generated <code>Config</code> that has methods for setting service-specific configuration. Each <code>Config</code> is defined in the <code>config</code> module of its parent service. For example, the S3-specific config struct  is <code>use</code>able from <code>aws_sdk_s3::config::Config</code> and re-exported as <code>aws_sdk_s3::Config</code>. In this case, &quot;service&quot; refers to an AWS offering like S3.</li>
+<li><strong>Service-specific Config</strong>: A code-generated <code>Config</code> that has methods for setting service-specific configuration. Each <code>Config</code> is defined in the <code>config</code> module of its parent service. For example, the S3-specific config struct  is <code>use</code>able from <code>aws_sdk_s3::config::Config</code> and re-exported as <code>aws_sdk_s3::Config</code>. In this case, "service" refers to an AWS offering like S3.</li>
 </ul>
 <h3 id="http-stack-terms"><a class="header" href="#http-stack-terms">HTTP stack terms</a></h3>
 <ul>
@@ -196,7 +196,7 @@
 <li><strong>Middleware</strong>: a term with several meanings,
 <ul>
 <li>Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.</li>
-<li>In the SDK, &quot;Middleware&quot; refers to a layer that can be wrapped around a <code>DispatchService</code>. In practice, this means that the resulting <code>Service</code> (and the inner service) must meet the bound <code>T: where T: Service&lt;operation::Request, Response=operation::Response, Error=SendOperationError&gt;</code>.
+<li>In the SDK, "Middleware" refers to a layer that can be wrapped around a <code>DispatchService</code>. In practice, this means that the resulting <code>Service</code> (and the inner service) must meet the bound <code>T: where T: Service&lt;operation::Request, Response=operation::Response, Error=SendOperationError&gt;</code>.
 <ul>
 <li><em>Note: This doesn't apply to the middlewares we use when generating presigned request because those don't wrap a <code>DispatchService</code>.</em></li>
 </ul>
@@ -225,7 +225,7 @@ a fresh connection will be use for a given request.</em></li>
 </li>
 <li><strong>TLS Negotiation Timeout</strong>: A limit on the amount of time a TLS handshake takes from when the CLIENT HELLO message is
 sent to the time the client and server have fully negotiated ciphers and exchanged keys.</li>
-<li><strong>Time to First Byte Timeout</strong>: <em>Sometimes referred to as a &quot;read timeout.&quot;</em> A limit on the amount of time an application takes to attempt to read the first byte over
+<li><strong>Time to First Byte Timeout</strong>: <em>Sometimes referred to as a "read timeout."</em> A limit on the amount of time an application takes to attempt to read the first byte over
 an established, open connection after write request.</li>
 <li><strong>HTTP Request Timeout For A Single Attempt</strong>: A limit on the amount of time it takes for the first byte to be sent over
 an established, open connection and when the last byte is received from the service.</li>
@@ -267,7 +267,7 @@ environment variables.</p>
 <li>[tokio::time::sleep_until] creates a <code>Future</code> that completes after some time has elapsed. Used within <code>tokio-io-timeout</code>.</li>
 </ul>
 <h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
-<p>Timeouts are achieved by racing a future against a <code>tokio::time::Sleep</code> future. The question, then, is &quot;how can I create a future that represents a condition I want to watch for?&quot;. For example, in the case of a <code>ConnectTimeout</code>, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.</p>
+<p>Timeouts are achieved by racing a future against a <code>tokio::time::Sleep</code> future. The question, then, is "how can I create a future that represents a condition I want to watch for?". For example, in the case of a <code>ConnectTimeout</code>, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.</p>
 <h3 id="middlewares-for-aws-client-requests"><a class="header" href="#middlewares-for-aws-client-requests">Middlewares for AWS Client requests</a></h3>
 <p><em>View <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
 <pre><code class="language-rust ignore">#[derive(Debug, Default)]

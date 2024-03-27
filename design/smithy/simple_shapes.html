@@ -209,7 +209,7 @@ pub struct BigDecimal(String);
 /// DateTime in time represented as seconds and sub-second nanos since
 /// the Unix epoch (January 1, 1970 at midnight UTC/GMT).
 ///
-/// This type can be converted to/from the standard library's [`SystemTime`](std::time::SystemTime):
+/// This type can be converted to/from the standard library's [`SystemTime`]:
 /// ```rust
 /// # fn doc_fn() -&gt; Result&lt;(), aws_smithy_types::date_time::ConversionError&gt; {
 /// # use aws_smithy_types::date_time::DateTime;
@@ -246,7 +246,7 @@ pub struct DateTime {
 <p>A third compromise could be storing <code>Arc&lt;String&gt;</code>, an atomic reference counted pointer to a <code>String</code>. This may be ideal for certain advanced users, but is likely to confuse most users and produces worse ergonomics. <em>This is an open design area where we will seek user feedback.</em> Rusoto uses <code>String</code> and there has been <a href="https://github.com/rusoto/rusoto/issues/1806">one feature request</a> to date to change that.</p>
 <p>Current models represent strings as <code>String</code>.</p>
 <h3 id="document-types"><a class="header" href="#document-types">Document Types</a></h3>
-<p>Smithy defines the concept of &quot;Document Types&quot;:</p>
+<p>Smithy defines the concept of "Document Types":</p>
 <blockquote>
 <p>[Documents represent] protocol-agnostic open content that is accessed like JSON data. Open content is useful for modeling unstructured data that has no schema, data that can't be modeled using rigid types, or data that has a schema that evolves outside of the purview of a model. The serialization format of a document is an implementation detail of a protocol and MUST NOT have any effect on the types exposed by tooling to represent a document value.</p>
 </blockquote>

@@ -183,7 +183,7 @@
 <!-- A great RFC will include a list of changes at the bottom so that the implementor can be sure they haven't missed anything -->
 <p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
 <!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
-<p>This RFC describes &quot;Behavior Versions,&quot; a mechanism to allow SDKs to ship breaking behavioral changes like a new retry strategy, while allowing customers who rely on extremely consistent behavior to evolve at their own pace.</p>
+<p>This RFC describes "Behavior Versions," a mechanism to allow SDKs to ship breaking behavioral changes like a new retry strategy, while allowing customers who rely on extremely consistent behavior to evolve at their own pace.</p>
 <p>By adding behavior major versions (BMV) to the Rust SDK, we will make it possible to ship new secure/recommended defaults to new customers without impacting legacy customers.</p>
 <p>The fundamental issue stems around our inability to communicate and decouple releases of service updates and behavior within a single major version.</p>
 <p>Both legacy and new SDKs have the need to alter their SDKs default. Historically, this caused new customers on legacy SDKs to be subject to legacy defaults, even when a better alternative existed.</p>
@@ -199,9 +199,9 @@ Once this RFC is implemented, there will be two ways to set a behavior major ver
 </ol>
 <pre><code class="language-toml"># Cargo.toml
 [dependencies]
-aws-config = { version = &quot;1&quot;, features = [&quot;behavior-version-latest&quot;] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
 # OR
-aws-sdk-s3 = { version = &quot;1&quot;, features = [&quot;behavior-version-latest&quot;] }
+aws-sdk-s3 = { version = "1", features = ["behavior-version-latest"] }
 </code></pre>
 <p>If no <code>BehaviorVersion</code> is set, the client will panic during construction.</p>
 <p><code>BehaviorVersion</code> is an opaque struct with initializers like <code>::latest()</code>, <code>::v2023_11_09()</code>. Downstream code can check the version by calling methods like <code>::supports_v1()</code></p>
@@ -218,11 +218,12 @@ aws-sdk-s3 = { version = &quot;1&quot;, features = [&quot;behavior-version-lates
 #[derive(Debug, Clone)]
 pub struct BehaviorVersion {
     // currently there is only 1 MV so we don't actually need anything in here.
+    _private: (),
 }
 <span class="boring">}</span></code></pre></pre>
 <p>To help customers migrate, we are including <code>from_env</code> hooks that set <code>behavior-version-latest</code> that are <em>deprecated</em>. This allows customers to see that they are missing the required cargo feature and add it to remove the deprecation warning.</p>
 <p>Internally, <code>BehaviorVersion</code> will become an additional field on <code>&lt;client&gt;::Config</code>. It is <em>not</em> ever stored in the <code>ConfigBag</code> or in <code>RuntimePlugins</code>.</p>
-<p>When constructing the set of &quot;default runtime plugins,&quot; the default runtime plugin parameters will be passed the <code>BehaviorVersion</code>. This will select the correct runtime plugin. Logging will clearly indicate which plugin was selected.</p>
+<p>When constructing the set of "default runtime plugins," the default runtime plugin parameters will be passed the <code>BehaviorVersion</code>. This will select the correct runtime plugin. Logging will clearly indicate which plugin was selected.</p>
 <h2 id="design-alternatives-considered"><a class="header" href="#design-alternatives-considered">Design Alternatives Considered</a></h2>
 <p>An original design was also considered that made BMV optional and relied on documentation to steer customers in the right direction. This was
 deemed too weak of a mechanism to ensure that customers aren't broken by unexpected changes.</p>

@@ -286,7 +286,7 @@ implementation.</li>
 </ol>
 <p><strong>Example: overriding the endpoint URI globally</strong></p>
 <pre><code class="language-rust ignore">async fn main() {
-    let sdk_conf = aws_config::from_env().endpoint_url(&quot;http://localhost:8123&quot;).load().await;
+    let sdk_conf = aws_config::from_env().endpoint_url("http://localhost:8123").load().await;
     let dynamo = aws_sdk_dynamodb::Client::new(&amp;sdk_conf);
     // snip ...
 }</code></pre>
@@ -297,10 +297,10 @@ struct CustomDdbResolver;
 impl ResolveEndpoint&lt;aws_sdk_dynamodb::endpoint::Params&gt; for CustomDdbResolver {
     fn resolve_endpoint(&amp;self, params: &amp;Params) -&gt; Result&lt;Endpoint, EndpointResolutionError&gt; {
         // custom resolver to redirect to DDB local if a flag is set
-        let base_endpoint = aws_sdk_dynamodb::endpoint::default_resolver().resolve_endpoint(params).expect(&quot;valid endpoint should be resolved&quot;);
-        if env::var(&quot;LOCAL&quot;) == Ok(&quot;true&quot;) {
+        let base_endpoint = aws_sdk_dynamodb::endpoint::default_resolver().resolve_endpoint(params).expect("valid endpoint should be resolved");
+        if env::var("LOCAL") == Ok("true") {
             // update the URI on the returned endpoint to localhost while preserving the other properties
-            Ok(base_endpoint.builder().uri(&quot;http://localhost:8888&quot;).build())
+            Ok(base_endpoint.builder().uri("http://localhost:8888").build())
         } else {
             Ok(base_endpoint)
         }
@@ -317,7 +317,7 @@ generic
 clients do not necessarily rules. However, they can use the <code>impl&lt;T&gt; ResolveEndpoint&lt;T&gt; for &amp;'static str { ... }</code>
 implementation.</p>
 <blockquote>
-<p><strong>What about alternative S3 implementations? How do we say &quot;don't put prefix bucket on this?&quot;</strong></p>
+<p><strong>What about alternative S3 implementations? How do we say "don't put prefix bucket on this?"</strong></p>
 <p>For cases where users want to use the provided URL directly with no modification users will need to rely on service
 specific configuration, like forcing path style addressing for S3.</p>
 </blockquote>
@@ -360,7 +360,7 @@ SDKs. Other Smithy implementors may choose a different pattern. For AWS SDKs, th
 of authentication/signing schemes supported by the Endpoint that the SDK should use.</p>
 </blockquote>
 <p>To perform produce an <code>Endpoint</code> struct we have a generic <code>ResolveEndpoint</code> trait which will be both generic in terms of
-parameters and being &quot;smithy-generic:</p>
+parameters and being "smithy-generic:</p>
 <pre><code class="language-rust ignore">// module: `smithy_types::endpoint` or `aws_smithy_client`??
 pub trait ResolveEndpoint&lt;Params&gt;: Send + Sync {
     /// Resolves an `Endpoint` for `Params`
@@ -370,7 +370,7 @@ pub trait ResolveEndpoint&lt;Params&gt;: Send + Sync {
 endpoint resolver implementation. The default endpoint resolver <strong>MUST</strong> be public, so that customers can delegate to it
 if they wish to override the endpoint resolver.</p>
 <h3 id="endpoint-params"><a class="header" href="#endpoint-params">Endpoint Params</a></h3>
-<p>We've mentioned &quot;service specific endpoint parameters&quot; a few times. In Endpoints 2.0, we will code generate Endpoint
+<p>We've mentioned "service specific endpoint parameters" a few times. In Endpoints 2.0, we will code generate Endpoint
 Parameters for every service based on their rules. <strong>Note</strong>: the endpoint parameters themselves are generated solely
 from the ruleset. The Smithy model provides additional information about parameter binding, but that only influences how
 the parameters are set, <em>not</em> how they are generated.</p>
@@ -458,7 +458,7 @@ of the endpoint resolution is written into the property bag.</p>
 rules-engine internals, skip to <a href="#implementing-the-rules-engine">implementing the rules engine</a>.</p>
 <h3 id="code-generating-client-context-params"><a class="header" href="#code-generating-client-context-params">Code generating client context params</a></h3>
 <p>When a smithy model uses the <code>@clientContextParams</code> trait, we need to generate client params onto the Rust SDK. This is
-a <strong>Smithy-native</strong> feature. This should be implemented as a &quot;standard&quot; config decorator that reads traits from the
+a <strong>Smithy-native</strong> feature. This should be implemented as a "standard" config decorator that reads traits from the
 current model.</p>
 <details>
 <summary>Kotlin Snippet for Client context params</summary>
@@ -471,9 +471,9 @@ current model.</p>
             private fun toSymbol(shapeType: ShapeType, symbolProvider: RustSymbolProvider): Symbol =
                 symbolProvider.toSymbol(
                     when (shapeType) {
-                        ShapeType.STRING -&gt; StringShape.builder().id(&quot;smithy.api#String&quot;).build()
-                        ShapeType.BOOLEAN -&gt; BooleanShape.builder().id(&quot;smithy.api#Boolean&quot;).build()
-                        else -&gt; TODO(&quot;unsupported type&quot;)
+                        ShapeType.STRING -&gt; StringShape.builder().id("smithy.api#String").build()
+                        ShapeType.BOOLEAN -&gt; BooleanShape.builder().id("smithy.api#Boolean").build()
+                        else -&gt; TODO("unsupported type")
                     }
                 )
 
@@ -495,32 +495,32 @@ current model.</p>
         return when (section) {
             is ServiceConfig.ConfigStruct -&gt; writable {
                 contextParams.forEach { param -&gt;
-                    rust(&quot;pub (crate) ${param.name}: #T,&quot;, param.type.makeOptional())
+                    rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
                 }
             }
             ServiceConfig.ConfigImpl -&gt; emptySection
             ServiceConfig.BuilderStruct -&gt; writable {
                 contextParams.forEach { param -&gt;
-                    rust(&quot;${param.name}: #T,&quot;, param.type.makeOptional())
+                    rust("${param.name}: #T,", param.type.makeOptional())
                 }
             }
             ServiceConfig.BuilderImpl -&gt; writable {
                 contextParams.forEach { param -&gt;
                     param.docs?.also { docs(it) }
                     rust(
-                        &quot;&quot;&quot;
+                        """
                         pub fn ${param.name}(mut self, ${param.name}: #T) -&gt; Self {
                             self.${param.name} = Some(${param.name});
                             self
                         }
-                        &quot;&quot;&quot;,
+                        """,
                         param.type
                     )
                 }
             }
             ServiceConfig.BuilderBuild -&gt; writable {
                 contextParams.forEach { param -&gt;
-                    rust(&quot;${param.name}: self.${param.name},&quot;)
+                    rust("${param.name}: self.${param.name},")
                 }
             }
             else -&gt; emptySection
@@ -547,16 +547,16 @@ overriding higher priority ones.</p>
         return when (section) {
             is OperationSection.MutateInput -&gt; writable {
                 rustTemplate(
-                    &quot;&quot;&quot;
+                    """
                     let params = #{Params}::builder()
-                        #{builder:W}.expect(&quot;invalid endpoint&quot;);
-                    &quot;&quot;&quot;,
-                    &quot;Params&quot; to EndpointParamsGenerator(ruleset).paramsStruct(),
-                    &quot;builder&quot; to builderFields(section)
+                        #{builder:W}.expect("invalid endpoint");
+                    """,
+                    "Params" to EndpointParamsGenerator(ruleset).paramsStruct(),
+                    "builder" to builderFields(section)
                 )
             }
             is OperationSection.MutateRequest -&gt; writable {
-                rust(&quot;// ${section.request}.properties_mut().insert(params);&quot;)
+                rust("// ${section.request}.properties_mut().insert(params);")
             }
             else -&gt; emptySection
         }
@@ -569,22 +569,22 @@ overriding higher priority ones.</p>
         builtInParams.forEach { param -&gt;
             val defaultProviders = section.endpointCustomizations.mapNotNull { it.defaultFor(param, section.config) }
             if (defaultProviders.size &gt; 1) {
-                error(&quot;Multiple providers provided a value for the builtin $param&quot;)
+                error("Multiple providers provided a value for the builtin $param")
             }
             defaultProviders.firstOrNull()?.also { defaultValue -&gt;
-                rust(&quot;.set_${param.name.rustName()}(#W)&quot;, defaultValue)
+                rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
         // these can be overridden with client context params
         idx.getClientContextParams(ctx.serviceShape).forEach { (name, _param) -&gt;
-            rust(&quot;.set_${name.toSnakeCase()}(${section.config}.${name.toSnakeCase()}.as_ref())&quot;)
+            rust(".set_${name.toSnakeCase()}(${section.config}.${name.toSnakeCase()}.as_ref())")
         }
 
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) -&gt;
-            rust(&quot;.set_${param.name.toSnakeCase()}(${section.input}.${ctx.symbolProvider.toMemberName(memberShape)}.as_ref())&quot;)
+            rust(".set_${param.name.toSnakeCase()}(${section.input}.${ctx.symbolProvider.toMemberName(memberShape)}.as_ref())")
         }
-        rust(&quot;.build()&quot;)
+        rust(".build()")
     }
 }
 </code></pre>
@@ -652,8 +652,8 @@ Remove the old smithy endpoint</li>
 <h2 id="alternative-designs"><a class="header" href="#alternative-designs">Alternative Designs</a></h2>
 <h3 id="context-aware-endpoint-traits"><a class="header" href="#context-aware-endpoint-traits">Context Aware Endpoint Traits</a></h3>
 <p>An alternative design that could provide more flexibility is a context-aware endpoint trait where the return type would
-give context about the endpoint being returned. This would, for example, allow a customer to say explicitly &quot;don't
-modify this endpoint&quot;:</p>
+give context about the endpoint being returned. This would, for example, allow a customer to say explicitly "don't
+modify this endpoint":</p>
 <pre><code class="language-rust ignore">enum ContextualEndpoint {
     /// Just the URI please. Pass it into the default endpoint resolver as a baseline
     Uri { uri: Uri, immutable: bool },

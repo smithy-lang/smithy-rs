@@ -244,7 +244,7 @@ all SDK and Smithy runtime crates.</p>
 </ul>
 <p>During phase 3, bumps to the <code>major</code> version must be coordinated across all SDK and runtime crates.</p>
 <h3 id="release-identification"><a class="header" href="#release-identification">Release Identification</a></h3>
-<p>Since there will no longer be one SDK &quot;version&quot;, release tags will be dates in <code>YYYY-MM-DD</code> format
+<p>Since there will no longer be one SDK "version", release tags will be dates in <code>YYYY-MM-DD</code> format
 rather than version numbers. Additionally, the SDK's user agent string will need to include a separate
 service version number (this requirement has already been implemented).</p>
 <h3 id="yanking"><a class="header" href="#yanking">Yanking</a></h3>
@@ -267,17 +267,17 @@ as additional metadata that's required for maintaining version process in the fu
 <p>The special <code>0.0.0-smithy-rs-head</code> version that is used prior to Phase 1 for maintaining the runtime crate
 versions will no longer be used (as detailed in <a href="#versioning-for-runtime-crates">Versioning for Runtime Crates</a>).</p>
 <p>This format will look as follows:</p>
-<pre><code class="language-toml">smithy_rs_version = &quot;&lt;release-tag|commit-hash&gt;&quot;
+<pre><code class="language-toml">smithy_rs_version = "&lt;release-tag|commit-hash&gt;"
 
 [aws-smithy-types]
-version = &quot;0.50.1&quot;
+version = "0.50.1"
 
 [aws-config]
-version = &quot;0.40.0&quot;
+version = "0.40.0"
 
 [aws-sdk-s3]
-version = &quot;0.89.0&quot;
-model_hash = &quot;&lt;hash&gt;&quot;
+version = "0.89.0"
+model_hash = "&lt;hash&gt;"
 
 # ...
 </code></pre>

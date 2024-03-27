@@ -175,7 +175,7 @@
                     <main>
                         <h1 id="accessing-un-modelled-data"><a class="header" href="#accessing-un-modelled-data">Accessing Un-modelled Data</a></h1>
 <p>For every <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> an input, output, and optional error are specified. This in turn constrains the function signature of the handler provided to the service builder - the input to the handler must be the input specified by the operation etc.</p>
-<p>But what if we, the customer, want to access data in the handler which is <em>not</em> modelled by our Smithy model? Smithy Rust provides an escape hatch in the form of the <code>FromParts</code> trait. In <a href="https://docs.rs/axum/latest/axum/index.html"><code>axum</code></a> these are referred to as <a href="https://docs.rs/axum/latest/axum/extract/index.html">&quot;extractors&quot;</a>.</p>
+<p>But what if we, the customer, want to access data in the handler which is <em>not</em> modelled by our Smithy model? Smithy Rust provides an escape hatch in the form of the <code>FromParts</code> trait. In <a href="https://docs.rs/axum/latest/axum/index.html"><code>axum</code></a> these are referred to as <a href="https://docs.rs/axum/latest/axum/extract/index.html">"extractors"</a>.</p>
 <!-- TODO(IntoParts): Dually, what if we want to return data from the handler which is _not_ modelled by our Smithy model? -->
 <pre><code class="language-rust ignore">/// Provides a protocol aware extraction from a [`Request`]. This borrows the
 /// [`Parts`], in contrast to [`FromRequest`].
@@ -201,7 +201,7 @@ pub struct Extension&lt;T&gt;(pub T);
 
 /// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
 #[derive(Debug, Error)]
-#[error(&quot;the `Extension` is not present in the `http::Request`&quot;)]
+#[error("the `Extension` is not present in the `http::Request`")]
 pub struct MissingExtension;
 
 impl&lt;Protocol&gt; IntoResponse&lt;Protocol&gt; for MissingExtension {
@@ -242,7 +242,7 @@ impl&lt;P&gt; FromParts&lt;P&gt; for CustomerDefined {
 
     fn from_parts(parts: &amp;mut Parts) -&gt; Result&lt;Self, Self::Error&gt; {
         // Construct `CustomerDefined` using the request headers.
-        let header_value = parts.headers.get(&quot;header-name&quot;).ok_or(/* ... */)?;
+        let header_value = parts.headers.get("header-name").ok_or(/* ... */)?;
         Ok(CustomerDefined { /* ... */ })
     }
 }

@@ -181,7 +181,7 @@
 <ol>
 <li>Extend <code>HttpService</code> to add a <code>sleep</code> method. This is required to enable runtimes other than Tokio to define how they should sleep.</li>
 <li>Replace <code>hyper::Body</code> in responses with SDK Body. For now, SDKBody will probably privately wrap <code>hyper::Body</code>.</li>
-<li>Merge <code>aws-hyper</code> into <code>aws-http</code>. Tokio becomes an optional feature—When the Tokio feature is opted out the &quot;fast path&quot; variants for the connection variants are <code>cfg</code>'d out.</li>
+<li>Merge <code>aws-hyper</code> into <code>aws-http</code>. Tokio becomes an optional feature—When the Tokio feature is opted out the "fast path" variants for the connection variants are <code>cfg</code>'d out.</li>
 <li>By default, customers get a fully baked HTTP stack, but they can opt out of certain features and BYO implementation of <code>HttpService</code>.</li>
 </ol>
 

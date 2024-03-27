@@ -221,18 +221,18 @@ We have created this RFC with the following use cases in mind.</p>
 <li>specifying it on .cargo/config.toml</li>
 </ul>
 <pre><code class="language-toml">[build]
-rustflags = [&quot;--cfg&quot;, &quot;aws-sdk-unstable&quot;]
+rustflags = ["--cfg", "aws-sdk-unstable"]
 </code></pre>
 <ul>
 <li>As an environment variable</li>
 </ul>
-<pre><code class="language-bash">export RUSTFLAGS=&quot;--cfg aws-sdk-unstable&quot;
+<pre><code class="language-bash">export RUSTFLAGS="--cfg aws-sdk-unstable"
 cargo build
 </code></pre>
 <p>We considered allowing users to enable this feature on a crate-level.</p>
 <p>e.g.</p>
 <pre><code class="language-toml">[dependencies]
-aws_sdk_dynamodb = { version = &quot;0.22.0&quot;, features = [&quot;unstable&quot;, &quot;serialize&quot;] }
+aws_sdk_dynamodb = { version = "0.22.0", features = ["unstable", "serialize"] }
 </code></pre>
 <p>Compared to the cfg approach, it is lot easier for the users to enable this feature.
 However, we believe that cfg approach ensure users won't enable this feature by surprise, and communicate to users that features behind this feature gate can be taken-away or exprience breaking changes any time in future.</p>
@@ -314,11 +314,11 @@ Additionally, it implements container attribute <code>#[serde(untagged)]</code>.
 <p>Builder types and non Builder types implement <code>Serialize</code> and <code>Deserialize</code> with derive macro.</p>
 <p>Example:</p>
 <pre><code class="language-rust ignore">#[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;serialize&quot;),
+    all(aws-sdk-unstable, feature = "serialize"),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;deserialize&quot;),
+    all(aws-sdk-unstable, feature = "deserialize"),
     derive(serde::Deserialize)
 )]
 #[non_exhaustive]
@@ -333,7 +333,7 @@ pub struct UploadPartCopyOutput {
 For example, <a href="https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/model/enum.AttributeValue.html">aws_sdk_dynamodb::model::AttributeValue</a> has <code>Null(bool)</code> and <code>Bool(bool)</code>, which you cannot distinguish serialized values without a tag.</p>
 <h3 id="internal"><a class="header" href="#internal">internal</a></h3>
 <p>This results in compile time error.
-<a href="https://serde.rs/enum-representations.html"><em>Using a #[serde(tag = &quot;...&quot;)] attribute on an enum containing a tuple variant is an error at compile time</em></a>.</p>
+<a href="https://serde.rs/enum-representations.html"><em>Using a #[serde(tag = "...")] attribute on an enum containing a tuple variant is an error at compile time</em></a>.</p>
 <h3 id="external-and-adjacent"><a class="header" href="#external-and-adjacent">external and adjacent</a></h3>
 <p>We are left with <code>external</code> and <code>adjacent</code> tagging.
 External tagging is the default way.
@@ -353,11 +353,11 @@ Any fields with these data types are tagged with <code>#[serde(skip)]</code>.</p
 <p>Here is an example snippet.</p>
 <pre><code class="language-rust ignore">#[allow(missing_docs)]
 #[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;serde-serialize&quot;),
+    all(aws-sdk-unstable, feature = "serde-serialize"),
     derive(serde::Serialize)
 )]
 #[cfg_attr(
-    all(aws-sdk-unstable, feature = &quot;serde-deserialize&quot;),
+    all(aws-sdk-unstable, feature = "serde-deserialize"),
     derive(serde::Deserialize)
 )]
 #[non_exhaustive]
@@ -436,10 +436,10 @@ struct OutputV2 {
   #[serde(skip)]
   skip_not_serializable: Option&lt;SomeComplexDataType&gt;,
   // We can implement a custom serialization logic
-  #[serde(serialize_with = &quot;custom_serilization_logic&quot;, deserialize_with = &quot;custom_deserilization_logic&quot;)]
+  #[serde(serialize_with = "custom_serilization_logic", deserialize_with = "custom_deserilization_logic")]
   not_derive_able: SomeComplexDataType,
   // Serialization will be skipped, and de-serialization will be handled with the function provided on default tag
-  #[serde(skip, default = &quot;default_value&quot;)]
+  #[serde(skip, default = "default_value")]
   skip_with_custom: DataTypeWithoutDefaultTrait,
 }</code></pre>
 <h1 id="discussions"><a class="header" href="#discussions">Discussions</a></h1>
@@ -513,24 +513,24 @@ async fn example(read_builder: bool) -&gt; Result&lt;(), Error&gt; {
 
     // de-serializing input's builder types and input types from json
     let deserialized_input = if read_builder {
-      let mut parameter: aws_sdk_dynamodb::input::list_tables_input::Builder = serde_json::from_str(include_str!(&quot;./builder.json&quot;));
-      parameter.set_exclusive_start_table_name(&quot;some_name&quot;).build()
+      let mut parameter: aws_sdk_dynamodb::input::list_tables_input::Builder = serde_json::from_str(include_str!("./builder.json"));
+      parameter.set_exclusive_start_table_name("some_name").build()
     } else {
-      let input: aws_sdk_dynamodb::input::ListTablesInput = serde_json::from_str(include_str!(&quot;./input.json&quot;));
+      let input: aws_sdk_dynamodb::input::ListTablesInput = serde_json::from_str(include_str!("./input.json"));
       input
     };
 
     // sending request using the deserialized input
     let res = client.list_tables().set_fields(deserialized_input).send().await?;
-    println!(&quot;DynamoDB tables: {:?}&quot;, res.table_names);
+    println!("DynamoDB tables: {:?}", res.table_names);
 
     let out: aws_sdk_dynamodb::output::ListTablesOutput = {
       // say you want some of the field to have certain values
-      let mut out_builder: aws_sdk_dynamodb::output::list_tables_output::Builder = serde_json::from_str(r#&quot;
+      let mut out_builder: aws_sdk_dynamodb::output::list_tables_output::Builder = serde_json::from_str(r#"
         {
-          table_names: [ &quot;table1&quot;, &quot;table2&quot; ]
+          table_names: [ "table1", "table2" ]
         }
-      &quot;#);
+      "#);
       // but you don't really care about some other values
       out_builder.set_last_evaluated_table_name(res.last_evaluated_table_name()).build()
     };

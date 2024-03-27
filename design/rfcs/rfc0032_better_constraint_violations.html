@@ -183,7 +183,7 @@ implementation</a> of <a href="https://awslabs.github.io/smithy/2.0/spec/constra
 SDK, some problems relating to constraint violations were identified. This RFC
 sets out to explain and address three of them: <a href="#impossible-constraint-violations">impossible constraint
 violations</a>, <a href="#collecting-constraint-violations">collecting constraint
-violations</a>, and <a href="#tightness-of-constraint-violations">&quot;tightness&quot; of constraint
+violations</a>, and <a href="#tightness-of-constraint-violations">"tightness" of constraint
 violations</a>. The RFC explains each of them
 in turn, solving them in an iterative and pedagogical manner, i.e. the solution
 of a problem depends on the previous ones having been solved with their
@@ -197,7 +197,7 @@ regards to commit <a href="https://github.com/smithy-lang/smithy-rs/tree/2226fef
 PR</a> where the core implementation of constraint traits
 was made are recommended prior reading to understand this RFC.</p>
 <ul>
-<li><strong>Shape closure</strong>: the set of shapes a shape can &quot;reach&quot;, including itself.</li>
+<li><strong>Shape closure</strong>: the set of shapes a shape can "reach", including itself.</li>
 <li><strong>Transitively constrained shape</strong>: a shape whose closure includes:
 <ol>
 <li>a shape with a <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint trait</a> attached,</li>
@@ -219,8 +219,8 @@ was made are recommended prior reading to understand this RFC.</p>
 shapes that are not <code>structure</code>, <code>union</code>, <code>enum</code> or <code>intEnum</code> shapes, these
 are wrapper <a href="https://doc.rust-lang.org/rust-by-example/generics/new_types.html">newtype</a>s.</li>
 </ul>
-<p>In the absence of a qualifier, &quot;constrained shape&quot; should be interpreted as
-&quot;transitively constrained shape&quot;.</p>
+<p>In the absence of a qualifier, "constrained shape" should be interpreted as
+"transitively constrained shape".</p>
 <h2 id="impossible-constraint-violations"><a class="header" href="#impossible-constraint-violations">Impossible constraint violations</a></h2>
 <h3 id="background"><a class="header" href="#background">Background</a></h3>
 <p>A constrained type has a fallible constructor by virtue of it implementing the
@@ -234,7 +234,7 @@ are wrapper <a href="https://doc.rust-lang.org/rust-by-example/generics/new_type
     }
 }</code></pre>
 <p>The <code>ConstraintViolation</code> type is a Rust <code>enum</code> with one variant per way
-&quot;constraining&quot; the input value may fail. So, for example, the following Smithy
+"constraining" the input value may fail. So, for example, the following Smithy
 model:</p>
 <pre><code class="language-smithy">structure A {
     @required
@@ -325,7 +325,7 @@ pub mod length_map {
 Indeed, this variant is impossible to be constructed <em>in application code</em>: a
 user has to provide a map whose values are already constrained <code>LengthString</code>s
 to the <code>try_from</code> constructor, which only enforces the map's <code>@length</code> trait.</p>
-<p>The reason why these seemingly &quot;impossible violations&quot; are being generated is
+<p>The reason why these seemingly "impossible violations" are being generated is
 because they can arise during request deserialization. Indeed, the server
 framework deserializes requests into <strong>fully unconstrained types</strong>. These are
 types holding unconstrained types all the way through their closures. For
@@ -373,7 +373,7 @@ docs, nor have to <code>match</code> on these variants when handling errors.</p>
 <p>The problem can be mitigated by adding <code>#[doc(hidden)]</code> to the internal
 variants and <code>#[non_exhaustive]</code> to the enum. We're already doing this in some
 constraint violation types.</p>
-<p>However, a &quot;less leaky&quot; solution is achieved by <em>splitting</em> the constraint
+<p>However, a "less leaky" solution is achieved by <em>splitting</em> the constraint
 violation type into two types, which this RFC proposes:</p>
 <ol>
 <li>one for use by the framework, with <code>pub(crate)</code> visibility, named
@@ -415,14 +415,14 @@ the modeled constraints.</p>
 <a href="https://search.maven.org/artifact/software.amazon.smithy/smithy-validation-model"><code>smithy-validation-model</code></a>
 Maven package, <a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy">as
 follows</a>:</p>
-<pre><code class="language-smithy">$version: &quot;2.0&quot;
+<pre><code class="language-smithy">$version: "2.0"
 
 namespace smithy.framework
 
 /// A standard error for input validation failures.
 /// This should be thrown by services when a member of the input structure
 /// falls outside of the modeled or documented constraints.
-@error(&quot;client&quot;)
+@error("client")
 structure ValidationException {
 
     /// A summary of the validation failure.
@@ -459,7 +459,7 @@ errors encountered during constraint trait enforcement to the client.</p>
 <p>As of writing, the <code>TryFrom</code> constructor of constrained types whose shapes have
 more than one constraint trait attached can only yield a single error. For
 example, the following shape:</p>
-<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+<pre><code class="language-smithy">@pattern("[a-f0-5]*")
 @length(min: 5, max: 10)
 string LengthPatternString
 </code></pre>
@@ -493,7 +493,7 @@ impl LengthPatternString {
 
     pub fn compile_regex() -&gt; &amp;'static regex::Regex {
         static REGEX: once_cell::sync::Lazy&lt;regex::Regex&gt; = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support&quot;#)
+            regex::Regex::new(r#"[a-f0-5]*"#).expect(r#"The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"#)
         });
 
         &amp;REGEX
@@ -573,7 +573,7 @@ list ListOfPatternStrings {
     member: PatternString
 }
 
-@pattern(&quot;expensive regex to evaluate&quot;)
+@pattern("expensive regex to evaluate")
 string PatternString
 </code></pre>
 <p>Our implementation currently enforces constraints <em>from the leaf to the root</em>:
@@ -615,10 +615,10 @@ is <a href="https://jfrog.com/blog/watch-out-for-dos-when-using-rusts-popular-hy
 exploitable</a>.
 Users can always manually apply the layer again to their resulting service if
 they want to further restrict a request's body size.</p>
-<h2 id="tightness-of-constraint-violations"><a class="header" href="#tightness-of-constraint-violations">&quot;Tightness&quot; of constraint violations</a></h2>
+<h2 id="tightness-of-constraint-violations"><a class="header" href="#tightness-of-constraint-violations">"Tightness" of constraint violations</a></h2>
 <h3 id="problem-2"><a class="header" href="#problem-2">Problem</a></h3>
 <p><code>ConstraintViolationExceptions</code> <a href="https://www.ecorax.net/tightness/">is not
-&quot;tight&quot;</a> in that there's nothing in the type
+"tight"</a> in that there's nothing in the type
 system that indicates to the user, when writing the custom validation error
 mapping function, that the iterator will not return a sequence of
 <code>ConstraintViolationException</code>s that is actually impossible to occur in
@@ -664,7 +664,7 @@ and the Rust docs, but it's not expressed in the type system.</p>
 highlights the tightness problem. Note, however, that <strong>the tightness problem
 also afflicts <code>ConstraintViolations</code></strong>.</p>
 <p>Indeed, consider the following model:</p>
-<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+<pre><code class="language-smithy">@pattern("[a-f0-5]*")
 @length(min: 5, max: 10)
 string LengthPatternString
 </code></pre>
@@ -710,7 +710,7 @@ constraint violations of type <code>Members</code>.</li>
 </li>
 </ol>
 <p>Let's walk through an example. Take the last model:</p>
-<pre><code class="language-smithy">@pattern(&quot;[a-f0-5]*&quot;)
+<pre><code class="language-smithy">@pattern("[a-f0-5]*")
 @length(min: 5, max: 10)
 string LengthPatternString
 </code></pre>
@@ -839,7 +839,7 @@ violations in <code>LengthMap</code> values occurred, set
 <code>length_map::ConstraintViolations::length</code> to <code>None</code> and
 <code>length_map::ConstraintViolations::member_violations</code> eventually reach an empty
 iterator. However, it's best that we use the expressiveness of <code>Option</code>s at the
-earliest (&quot;highest&quot; in the shape hierarchy) opportunity: if a member is <code>Some</code>,
+earliest ("highest" in the shape hierarchy) opportunity: if a member is <code>Some</code>,
 it means it (eventually) reaches data.</p>
 <h2 id="checklist"><a class="header" href="#checklist">Checklist</a></h2>
 <p>Unfortunately, while this RFC <em>could</em> be implemented iteratively (i.e. solve
@@ -853,7 +853,7 @@ Generate <code>ConstraintViolations</code> and <code>ConstraintViolationExceptio
 so as to not reify <a href="#impossible-constraint-violations">impossible constraint
 violations</a>, add the ability to <a href="#collecting-constraint-violations">collect
 constraint
-violations</a>, and solve the <a href="#tightness-of-constraint-violations">&quot;tightness&quot; problem of constraint violations</a>.</li>
+violations</a>, and solve the <a href="#tightness-of-constraint-violations">"tightness" problem of constraint violations</a>.</li>
 <li><input disabled="" type="checkbox"/>
 Special-case generated request deserialization code for operations
 using <code>@length</code> and <code>@uniqueItems</code> constrained shapes whose closures reach

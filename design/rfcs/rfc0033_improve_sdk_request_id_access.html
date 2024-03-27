@@ -207,8 +207,8 @@ They are an enum of every possible modeled error that that operation can respond
 as an <code>Unhandled</code> variant for any unmodeled or unrecognized errors.</li>
 <li><strong>Modeled Errors:</strong> Any error that is represented in a Smithy model with the <code>@error</code> trait.</li>
 <li><strong>Unmodeled Errors:</strong> Errors that a service responds with that do not appear in the Smithy model.</li>
-<li><strong>SDK Clients:</strong> Clients generated for the AWS SDK, including &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
-<li><strong>Smithy Clients:</strong> Any clients not generated for the AWS SDK, excluding &quot;adhoc&quot; or &quot;one-off&quot; clients.</li>
+<li><strong>SDK Clients:</strong> Clients generated for the AWS SDK, including "adhoc" or "one-off" clients.</li>
+<li><strong>Smithy Clients:</strong> Any clients not generated for the AWS SDK, excluding "adhoc" or "one-off" clients.</li>
 </ul>
 <h2 id="sdksmithy-purity"><a class="header" href="#sdksmithy-purity">SDK/Smithy Purity</a></h2>
 <p>Before proposing any changes, the topic of purity needs to be covered. Request IDs are not
@@ -301,7 +301,7 @@ for a customer to feed the return value from <code>send()</code> directly to a r
 use aws_sdk_service::primitives::RequestId;
 
 fn my_request_id_logging_fn(request_id: &amp;dyn RequestId) {
-    println!(&quot;request ID: {:?}&quot;, request_id.request_id());
+    println!("request ID: {:?}", request_id.request_id());
 }
 
 let result = client.some_operation().send().await?;
@@ -310,14 +310,14 @@ my_request_id_logging_fn(&amp;result);</code></pre>
 <pre><code class="language-rust ignore">use aws_sdk_service::primitives::RequestId;
 
 let output = client.some_operation().send().await?;
-println!(&quot;request ID: {:?}&quot;, output.request_id());</code></pre>
+println!("request ID: {:?}", output.request_id());</code></pre>
 <h3 id="error-case-with-sdkerror"><a class="header" href="#error-case-with-sdkerror">Error Case with <code>SdkError</code></a></h3>
 <pre><code class="language-rust ignore">use aws_sdk_service::primitives::RequestId;
 
 match client.some_operation().send().await {
     Ok(_) =&gt; { /* handle OK */ }
     Err(err) =&gt; {
-        println!(&quot;request ID: {:?}&quot;, output.request_id());
+        println!("request ID: {:?}", output.request_id());
     }
 }</code></pre>
 <h3 id="error-case-with-operation-error"><a class="header" href="#error-case-with-operation-error">Error Case with operation error</a></h3>
@@ -326,7 +326,7 @@ match client.some_operation().send().await {
 match client.some_operation().send().await {
     Ok(_) =&gt; { /* handle OK */ }
     Err(err) =&gt; match err.into_service_err() {
-        err @ SomeOperationError::SomeError(_) =&gt; { println!(&quot;request ID: {:?}&quot;, err.request_id()); }
+        err @ SomeOperationError::SomeError(_) =&gt; { println!("request ID: {:?}", err.request_id()); }
         _ =&gt; { /* don't care */ }
     }
 }</code></pre>

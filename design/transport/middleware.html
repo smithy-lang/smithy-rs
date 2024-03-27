@@ -176,7 +176,7 @@
                         <h1 id="http-middleware"><a class="header" href="#http-middleware">HTTP middleware</a></h1>
 <p>Signing, endpoint specification, and logging are all handled as middleware. The Rust SDK takes a minimalist approach to middleware:</p>
 <p>Middleware is defined as minimally as possible, then adapted into the middleware system used by the IO layer. Tower is the de facto standard for HTTP middleware in Rust—we will probably use it. But we also want to make our middleware usable for users who aren't using Tower (or if we decide to not use Tower in the long run).</p>
-<p>Because of this, rather than implementing all our middleware as &quot;Tower Middleware&quot;, we implement it narrowly (e.g. as a function that operates on <code>operation::Request</code>), then define optional adapters to make our middleware tower compatible.</p>
+<p>Because of this, rather than implementing all our middleware as "Tower Middleware", we implement it narrowly (e.g. as a function that operates on <code>operation::Request</code>), then define optional adapters to make our middleware tower compatible.</p>
 
                     </main>
 

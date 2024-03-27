@@ -175,7 +175,7 @@
                     <main>
                         <h1 id="recursive-shapes"><a class="header" href="#recursive-shapes">Recursive Shapes</a></h1>
 <blockquote>
-<p>Note: Throughout this document, the word &quot;box&quot; always refers to a Rust <a href="https://doc.rust-lang.org/std/boxed/struct.Box.html"><code>Box&lt;T&gt;</code></a>, a heap allocated pointer to T, and not the Smithy concept of boxed vs. unboxed.</p>
+<p>Note: Throughout this document, the word "box" always refers to a Rust <a href="https://doc.rust-lang.org/std/boxed/struct.Box.html"><code>Box&lt;T&gt;</code></a>, a heap allocated pointer to T, and not the Smithy concept of boxed vs. unboxed.</p>
 </blockquote>
 <p>Recursive shapes pose a problem for Rust, because the following Rust code will not compile:</p>
 <pre><pre class="playground"><code class="language-rust compile_fail edition2021"><span class="boring">#![allow(unused)]
@@ -197,7 +197,7 @@ struct IntermediateStructure {
   = help: insert indirection (e.g., a `Box`, `Rc`, or `&amp;`) at some point to make `main::TopStructure` representable
 </code></pre>
 <p>This occurs because Rust types must be a size known at compile time. The way around this, as the message suggests, is to Box the offending type. <code>smithy-rs</code> implements this design in <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/RecursiveShapeBoxer.kt">RecursiveShapeBoxer.kt</a></p>
-<p>To support this, as the message suggests, we must &quot;<code>Box</code>&quot; the offending type. There is a touch of trickiness—only one element in the cycle needs to be boxed, but we need to select it deterministically such that we always pick the same element between multiple codegen runs. To do this the Rust SDK will:</p>
+<p>To support this, as the message suggests, we must "<code>Box</code>" the offending type. There is a touch of trickiness—only one element in the cycle needs to be boxed, but we need to select it deterministically such that we always pick the same element between multiple codegen runs. To do this the Rust SDK will:</p>
 <ol>
 <li>Topologically sort the graph of shapes.</li>
 <li>Identify cycles that do not pass through an existing Box<T>, List, Set, or Map</li>

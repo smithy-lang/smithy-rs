@@ -248,7 +248,7 @@ let client = Client::with_config(connector, Config::builder().build());</code></
 select the correct TLS implementation. For example:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[cfg(feature = &quot;rustls&quot;)]
+</span>#[cfg(feature = "rustls")]
 pub fn https() -&gt; Https {
     let https = hyper_rustls::HttpsConnector::with_native_roots();
     let client = hyper::Client::builder().build::&lt;_, SdkBody&gt;(https);
@@ -275,7 +275,7 @@ struct will be marked <code>non_exhaustive</code> so that new requirements can b
 Cargo feature flags. This might look something like this:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[cfg(feature = &quot;rustls&quot;)]
+</span>#[cfg(feature = "rustls")]
 pub fn default_connector(reqs: &amp;HttpRequirements) -&gt; HyperAdapter {
     let https = hyper_rustls::HttpsConnector::with_native_roots();
     let mut builder = hyper::Client::builder();
@@ -289,7 +289,7 @@ pub fn default_connector(reqs: &amp;HttpRequirements) -&gt; HyperAdapter {
 <p>For any given service, <code>make_connector</code> could be called multiple times to create connectors
 for all required HTTP versions and settings.</p>
 <p><strong>Note:</strong> the <code>make_connector</code> returns an <code>Option</code> since an HTTP version may not be required, but rather, preferred
-according to a Smithy model. For operations that list out <code>[&quot;h2&quot;, &quot;HTTP/1.1&quot;]</code> as the desired versions,
+according to a Smithy model. For operations that list out <code>["h2", "HTTP/1.1"]</code> as the desired versions,
 a customer could choose to provide only an HTTP 1 connector, and the operation should still succeed.</p>
 <h2 id="solving-the-connector-selection-problem"><a class="header" href="#solving-the-connector-selection-problem">Solving the Connector Selection Problem</a></h2>
 <p>Each service operation needs to be able to select a connector that meets its requirements best

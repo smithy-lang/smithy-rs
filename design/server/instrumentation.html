@@ -194,7 +194,7 @@
 </span><span class="boring">extern crate tracing;
 </span><span class="boring">use tracing_subscriber::filter;
 </span><span class="boring">use tracing::Level;
-</span>let filter = filter::Targets::new().with_target(&quot;aws_smithy_http_server&quot;, Level::DEBUG);
+</span>let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 <span class="boring">}</span></code></pre></pre>
 <p>In general, Smithy Rust is conservative when using high-priority log levels:</p>
 <ul>
@@ -274,7 +274,7 @@ let app = PokemonService::builder(config)
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new(&quot;info&quot;))
+        .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
     tracing_subscriber::registry().with(format).with(filter).init();
 }
@@ -283,21 +283,21 @@ pub fn setup_tracing() {
 <pre><code class="language-bash">RUST_LOG=aws_smithy_http_server=debug,pokemon_service=debug cargo r
 </code></pre>
 <p>and then using <code>cargo t</code> to run integration tests against the server, yields the following logs:</p>
-<pre><code class="language-text">  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;content-length&quot;: &quot;17&quot;}, status_code: 200 OK
+<pre><code class="language-text">  2022-09-27T09:13:35.372517Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {"content-type": "application/json", "content-length": "17"}, status_code: 200 OK
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::instrumentation::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {&quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_server_statistics, method: GET, uri: /stats, headers: {"host": "localhost:13734"}
 
   2022-09-27T09:13:35.374104Z DEBUG pokemon_service: attempting to authenticate storage user
     at pokemon-service/src/lib.rs:184
-    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 
   2022-09-27T09:13:35.374152Z DEBUG pokemon_service: authentication failed
     at pokemon-service/src/lib.rs:188
-    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 
-  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {&quot;content-type&quot;: &quot;application/json&quot;, &quot;x-amzn-errortype&quot;: &quot;NotAuthorized&quot;, &quot;content-length&quot;: &quot;2&quot;}, status_code: 401 Unauthorized
+  2022-09-27T09:13:35.374230Z DEBUG aws_smithy_http_server::instrumentation::service: response, headers: {"content-type": "application/json", "x-amzn-errortype": "NotAuthorized", "content-length": "2"}, status_code: 401 Unauthorized
     at /smithy-rs/rust-runtime/aws-smithy-http-server/src/logging/service.rs:47
-    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {&quot;passcode&quot;: &quot;{redacted}&quot;, &quot;host&quot;: &quot;localhost:13734&quot;}
+    in aws_smithy_http_server::instrumentation::service::request with operation: get_storage, method: GET, uri: /pokedex/{redacted}, headers: {"passcode": "{redacted}", "host": "localhost:13734"}
 </code></pre>
 <h2 id="interactions-with-sensitivity"><a class="header" href="#interactions-with-sensitivity">Interactions with Sensitivity</a></h2>
 <p>Instrumentation interacts with Smithy's <a href="https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait">sensitive trait</a>.</p>

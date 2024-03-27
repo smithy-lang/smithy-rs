@@ -190,8 +190,8 @@ let operation = {
 
     let request = request.augment(|req, _props| {
         req.headers_mut().insert(
-            HeaderName::from_static(&quot;x-some-header&quot;),
-            HeaderValue::from_static(&quot;some-value&quot;)
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
         );
         Result::&lt;_, Infallible&gt;::Ok(req)
     })?;
@@ -221,8 +221,8 @@ follows:</p>
     .await?
     .mutate_request(|mut req| {
         req.headers_mut().insert(
-            HeaderName::from_static(&quot;x-some-header&quot;),
-            HeaderValue::from_static(&quot;some-value&quot;)
+            HeaderName::from_static("x-some-header"),
+            HeaderValue::from_static("some-value")
         );
     })
     .send()
@@ -253,7 +253,7 @@ impl&lt;O, R&gt; CustomizableOperation&lt;O, R&gt; {
         self.map_request(|mut req| {
             f(&amp;mut req);
             Result::&lt;_, Infallible&gt;::Ok(req)
-        }).expect(&quot;infallible&quot;);
+        }).expect("infallible");
         Ok(self)
     }
 
@@ -298,8 +298,8 @@ can look as follows:</p>
 operation.request_mut()
     .headers_mut()
     .insert(
-        HeaderName::from_static(&quot;x-some-header&quot;),
-        HeaderValue::from_static(&quot;some-value&quot;)
+        HeaderName::from_static("x-some-header"),
+        HeaderValue::from_static("some-value")
     );
 let response = operation.send().await?;</code></pre>
 <h3 id="why-not-remove-async-from-customize-to-make-this-more-ergonomic"><a class="header" href="#why-not-remove-async-from-customize-to-make-this-more-ergonomic">Why not remove <code>async</code> from <code>customize</code> to make this more ergonomic?</a></h3>

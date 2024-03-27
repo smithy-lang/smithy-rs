@@ -192,7 +192,7 @@ transformations must not break compilation when upgrading to a new version:</p>
 detail below.</p>
 <h2 id="new-operation-added"><a class="header" href="#new-operation-added">New Operation Added</a></h2>
 <p><strong>Before</strong></p>
-<pre><code class="language-smithy">$version: &quot;1&quot;
+<pre><code class="language-smithy">$version: "1"
 namespace s3
 
 service S3 {
@@ -200,14 +200,14 @@ service S3 {
 }
 </code></pre>
 <p><strong>After</strong></p>
-<pre><code class="language-smithy">$version: &quot;1&quot;
+<pre><code class="language-smithy">$version: "1"
 namespace s3
 
 service S3 {
     operations: [GetObject, PutObject]
 }
 </code></pre>
-<p>Adding support for a new operation is backwards compatible because SDKs to not expose any sort of &quot;service trait&quot; that
+<p>Adding support for a new operation is backwards compatible because SDKs to not expose any sort of "service trait" that
 provides an interface over an entire service. This <em>prevents</em> clients from inheriting or implementing an interface that
 would be broken by the addition of a new operation.</p>
 <h2 id="new-member-added-to-structure"><a class="header" href="#new-member-added-to-structure">New member added to structure</a></h2>
@@ -227,14 +227,14 @@ following patterns:</p>
 <li>
 <p>Direct structure instantiation:</p>
 <pre><code class="language-rust ignore"><span class="boring">fn foo() {
-</span>let ip_addr = IpAddress { addr: &quot;192.168.1.1&quot; };
+</span>let ip_addr = IpAddress { addr: "192.168.1.1" };
 <span class="boring">}</span></code></pre>
 <p>If a new member <code>is_local: boolean</code> was added to the IpAddress structure, this code would not compile. To enable
 users to still construct
 our structures while maintaining backwards compatibility, all structures expose a builder, accessible
 at <code>SomeStruct::Builder</code>:</p>
 <pre><code class="language-rust ignore"><span class="boring">fn foo() {
-</span>let ip_addr = IpAddress::builder().addr(&quot;192.168.1.1&quot;).build();
+</span>let ip_addr = IpAddress::builder().addr("192.168.1.1").build();
 <span class="boring">}</span></code></pre>
 </li>
 <li>
