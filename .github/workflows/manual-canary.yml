@@ -1,0 +1,18 @@
+# This workflow allows maintainers to manually run the canary given an external contributor's pull request created from
+# a forked repository, which does not have required repository secrets to execute the canary.
+name: Invoke Canary as Maintainer
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: The PR number to invoke the canary for.
+        required: true
+        type: string
+
+jobs:
+  canary:
+    name: Canary
+    runs-on: ubuntu-latest
+    steps:
+    - name: Invoke canary
+      run: echo "Hello World"
