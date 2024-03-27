@@ -16,3 +16,15 @@ message = "Clients now enforce that the Content-Length sent by the server matche
 references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
+references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "Ten0"
+
+[[smithy-rs]]
+message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
+references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
+author = "Ten0"
