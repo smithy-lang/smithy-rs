@@ -29,11 +29,6 @@ pub fn patch(args: PatchRuntime) -> Result<()> {
         bail!("aws-sdk-rust has a dirty working tree. Aborting.");
     }
 
-    step(
-        "Patching smithy-rs/gradle.properties with given crate version numbers",
-        || patch_gradle_properties(&smithy_rs, &args),
-    )?;
-
     // Use aws:sdk:assemble to generate both the smithy-rs runtime and AWS SDK
     // runtime crates with the correct version numbers.
     step("Generating an AWS SDK", || {
@@ -93,31 +88,6 @@ pub fn patch_with(args: PatchRuntimeWith) -> Result<()> {
             .expect_success_output("cargo update")
     })?;
 
-    Ok(())
-}
-
-fn patch_gradle_properties(smithy_rs: &Repo, args: &PatchRuntime) -> Result<()> {
-    let props_path = smithy_rs.root.join("gradle.properties");
-    let props =
-        fs::read_to_string(&props_path).context("failed to read smithy-rs/gradle.properties")?;
-    let mut new_props = String::with_capacity(props.len());
-    for line in props.lines() {
-        if line.starts_with("smithy.rs.runtime.crate.stable.version=") {
-            new_props.push_str(&format!(
-                "smithy.rs.runtime.crate.stable.version={}",
-                args.stable_crate_version
-            ));
-        } else if line.starts_with("smithy.rs.runtime.crate.unstable.version=") {
-            new_props.push_str(&format!(
-                "smithy.rs.runtime.crate.unstable.version={}",
-                args.unstable_crate_version
-            ));
-        } else {
-            new_props.push_str(line);
-        }
-        new_props.push('\n');
-    }
-    fs::write(&props_path, new_props).context("failed to write smithy-rs/gradle.properties")?;
     Ok(())
 }
 
