@@ -454,6 +454,8 @@ mod test {
         );
     }
 
+    // (TODO aws-sdk-rust#1117) This test is ignored on Windows because it uses Unix-style paths
+    #[cfg_attr(windows, ignore)]
     #[tokio::test]
     #[cfg(feature = "rustls")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
