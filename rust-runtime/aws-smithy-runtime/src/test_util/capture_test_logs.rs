@@ -12,36 +12,29 @@ use tracing_subscriber::fmt::TestWriter;
 
 /// A guard that resets log capturing upon being dropped.
 #[derive(Debug)]
-pub struct LogCaptureGuard(#[allow(dead_code)] Option<DefaultGuard>);
+pub struct LogCaptureGuard(#[allow(dead_code)] DefaultGuard);
 
-/// Enables output of test logs to stdout.
+/// Enables output of test logs to stdout at trace level by default.
 ///
-/// The `VERBOSE_TEST_LOGS` environment variable acts as a
-/// tracing_subscriber fmt env filter. You can give it full env filter
-/// expressions, or just simply give it a log level (e.g., tracing, debug, info, etc).
-/// Setting it to "1" or "true" will enable trace logging.
+/// The env filter can be changed with the `RUST_LOG` environment variable.
 #[must_use]
 pub fn show_test_logs() -> LogCaptureGuard {
     let (mut writer, _rx) = Tee::stdout();
-    let env_var = env::var("VERBOSE_TEST_LOGS").ok();
-    let env_filter = match env_var.as_deref() {
-        Some("true") | Some("1") => Some("trace"),
-        Some(filter) => Some(filter),
-        None => None,
-    };
-    if let Some(env_filter) = env_filter {
-        eprintln!("Enabled verbose test logging with env filter {env_filter:?}.");
-        writer.loud();
+    writer.loud();
 
-        let subscriber = tracing_subscriber::fmt()
-            .with_env_filter(env_filter)
-            .with_writer(Mutex::new(writer))
-            .finish();
-        let guard = tracing::subscriber::set_default(subscriber);
-        LogCaptureGuard(Some(guard))
-    } else {
-        LogCaptureGuard(None)
-    }
+    let env_var = env::var("RUST_LOG").ok();
+    let env_filter = env_var.as_deref().unwrap_or("trace");
+    eprintln!(
+        "Enabled verbose test logging with env filter {env_filter:?}. \
+        You can change the env filter with the RUST_LOG environment variable."
+    );
+
+    let subscriber = tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_writer(Mutex::new(writer))
+        .finish();
+    let guard = tracing::subscriber::set_default(subscriber);
+    LogCaptureGuard(guard)
 }
 
 /// Capture logs from this test.
@@ -65,7 +58,7 @@ pub fn capture_test_logs() -> (LogCaptureGuard, Rx) {
         .with_writer(Mutex::new(writer))
         .finish();
     let guard = tracing::subscriber::set_default(subscriber);
-    (LogCaptureGuard(Some(guard)), rx)
+    (LogCaptureGuard(guard), rx)
 }
 
 /// Receiver for the captured logs.
