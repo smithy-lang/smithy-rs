@@ -64,7 +64,7 @@
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_sdk_sts::{ Client as StsClient, types::PolicyDescriptorType };
+use aws_sdk_sts::{types::PolicyDescriptorType, Client as StsClient};
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal::{Env, Fs};
@@ -200,7 +200,6 @@ impl Builder {
         self
     }
 
-
     /// Set an IAM policy in JSON format that you want to use as an inline session policy.
     ///
     /// This parameter is optional
@@ -216,7 +215,7 @@ impl Builder {
     /// This parameter is optional.
     /// For more information, see
     /// [policy_arns](aws_sdk_sts::input::assume_role_input::Builder::policy_arns)
-    pub fn policy_arns(mut self, policy_arns:  Vec<String>) -> Self {
+    pub fn policy_arns(mut self, policy_arns: Vec<String>) -> Self {
         self.policy_arns = Some(
             policy_arns
                 .into_iter()
@@ -240,7 +239,7 @@ impl Builder {
             sts_client: StsClient::new(&conf.client_config()),
             time_source: conf.time_source(),
             policy: self.policy,
-            policy_arns: self.policy_arns
+            policy_arns: self.policy_arns,
         }
     }
 }
