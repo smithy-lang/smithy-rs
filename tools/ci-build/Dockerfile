@@ -149,6 +149,7 @@ RUN cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_versi
 FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
+RUN set -eux; cd /tmp; curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && unzip awscliv2.zip && ./aws/install
 RUN set -eux; \
     yum -y install --allowerasing \
         bc \
