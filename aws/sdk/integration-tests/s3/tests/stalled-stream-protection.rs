@@ -92,11 +92,10 @@ async fn test_stalled_stream_protection_defaults_for_upload() {
     let _ = tokio::spawn(server);
 
     let conf = Config::builder()
+        // Stalled stream protection MUST BE enabled by default. Do not configure it explicitly.
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3510): make stalled stream protection enabled by default with BMV and remove this line
-        .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
         .build();
     let client = Client::from_conf(conf);
 
@@ -255,6 +254,7 @@ async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
 
     // Stalled stream protection should be enabled by default.
     let sdk_config = aws_config::from_env()
+        // Stalled stream protection MUST BE enabled by default. Do not configure it explicitly.
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))

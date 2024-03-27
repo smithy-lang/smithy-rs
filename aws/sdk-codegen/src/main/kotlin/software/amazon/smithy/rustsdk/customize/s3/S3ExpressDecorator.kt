@@ -155,7 +155,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             rustTemplate(
                                 """
                                 #{DefaultS3ExpressIdentityProvider}::builder()
-                                    .behavior_version(${section.serviceConfigName}.behavior_version.clone().expect(${behaviorVersionError.dq()}))
+                                    .behavior_version(${section.serviceConfigName}.behavior_version.expect(${behaviorVersionError.dq()}))
                                     .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
                                     .build()
                                 """,
