@@ -59,11 +59,15 @@ pub struct PatchRuntime {
     #[arg(long)]
     previous_release_tag: Option<String>,
     /// Version number for stable crates.
+    ///
+    /// Deprecated: this argument is ignored
     #[arg(long)]
-    stable_crate_version: String,
+    stable_crate_version: Option<String>,
     /// Version number for unstable crates.
+    ///
+    /// Deprecated: this argument is ignored
     #[arg(long)]
-    unstable_crate_version: String,
+    unstable_crate_version: Option<String>,
 }
 
 #[derive(clap::Args, Clone)]
