@@ -97,22 +97,6 @@ class S3ExpressDecorator : ClientCodegenDecorator {
                                 str_config.and_then(|it| it.parse::<bool>().ok())
                             }),
                     );
-                    ${section.serviceConfigBuilder}.set_disable_multi_region_access_points(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS", "s3_disable_multi_region_access_points"));
-                                str_config.and_then(|it| it.parse::<bool>().ok())
-                            }),
-                    );
-                    ${section.serviceConfigBuilder}.set_use_arn_region(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                let str_config = conf.load_config(service_config_key("AWS_S3_USE_ARN_REGION", "s3_use_arn_region"));
-                                str_config.and_then(|it| it.parse::<bool>().ok())
-                            }),
-                    );
                     """,
                 )
             },

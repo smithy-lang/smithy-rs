@@ -78,7 +78,7 @@ impl<'a> fmt::Display for Scope<'a> {
 pub struct EnvConfigSource<'a> {
     key: Cow<'a, str>,
     location: Location<'a>,
-    source: Scope<'a>,
+    scope: Scope<'a>,
 }
 
 impl<'a> EnvConfigSource<'a> {
@@ -86,7 +86,7 @@ impl<'a> EnvConfigSource<'a> {
         Self {
             key,
             location: Location::Environment,
-            source: Scope::Global,
+            scope: Scope::Global,
         }
     }
 
@@ -94,7 +94,7 @@ impl<'a> EnvConfigSource<'a> {
         Self {
             key,
             location: Location::Profile { name: profile_name },
-            source: Scope::Global,
+            scope: Scope::Global,
         }
     }
 
@@ -102,7 +102,7 @@ impl<'a> EnvConfigSource<'a> {
         Self {
             key,
             location: Location::Environment,
-            source: Scope::Service { service_id },
+            scope: Scope::Service { service_id },
         }
     }
 
@@ -114,14 +114,14 @@ impl<'a> EnvConfigSource<'a> {
         Self {
             key,
             location: Location::Profile { name: profile_name },
-            source: Scope::Service { service_id },
+            scope: Scope::Service { service_id },
         }
     }
 }
 
 impl<'a> fmt::Display for EnvConfigSource<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {} key: `{}`", self.source, self.location, self.key)
+        write!(f, "{} {} key: `{}`", self.scope, self.location, self.key)
     }
 }
 
