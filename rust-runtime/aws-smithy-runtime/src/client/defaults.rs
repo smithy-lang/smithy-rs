@@ -273,7 +273,6 @@ pub fn default_plugins(
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/3523): Reenable this
         /* enforce_content_length_runtime_plugin(), */
         default_stalled_stream_protection_config_plugin(),
-        enforce_content_length_runtime_plugin(),
     ]
     .into_iter()
     .flatten()
