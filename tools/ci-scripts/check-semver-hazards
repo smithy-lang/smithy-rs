@@ -26,7 +26,7 @@ runtime-versioner patch-runtime \
 
 # Testing just a small subset of the full SDK to check for semver hazards
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
-for sdk in dynamodb s3; do
+for sdk in dynamodb s3 aws-config; do
   echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
   pushd "aws-sdk-rust/sdk/${sdk}" &>/dev/null
   cargo test --all-features
