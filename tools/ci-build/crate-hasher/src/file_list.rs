@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use anyhow::{Context, Result};
 use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::fs::Metadata;
 use std::path::Path;
-
-use anyhow::{Context, Result};
 
 #[derive(Debug, Default)]
 pub struct FileList(BTreeSet<FileMetadata>);
@@ -95,16 +94,30 @@ impl FileMetadata {
     }
 }
 
-/// Returns the file mode (permissions) for the given path
+/// Returns the file mode (permissions) for the given path.
+///
+/// On Windows, this returns the file attributes instead of the permissions.
 fn file_mode(path: &Path, metadata: &Metadata) -> Result<u32> {
-    use std::os::unix::fs::PermissionsExt;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        let _ = path; // Unused on Windows
 
-    if metadata.file_type().is_symlink() {
-        let actual_path = std::fs::read_link(path).context("follow symlink")?;
-        let actual_metadata = std::fs::metadata(&actual_path).context("file metadata")?;
-        file_mode(&actual_path, &actual_metadata)
-    } else {
-        Ok(metadata.permissions().mode())
+        // Not actually equivalent to a unix permission, but good enough to be hashed.
+        Ok(metadata.file_attributes())
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        if metadata.file_type().is_symlink() {
+            let actual_path = std::fs::read_link(path).context("follow symlink")?;
+            let actual_metadata = std::fs::metadata(&actual_path).context("file metadata")?;
+            file_mode(&actual_path, &actual_metadata)
+        } else {
+            Ok(metadata.permissions().mode())
+        }
     }
 }
 
