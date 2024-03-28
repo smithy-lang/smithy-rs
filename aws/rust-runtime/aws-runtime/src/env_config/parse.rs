@@ -254,7 +254,19 @@ fn parse_property_line(line: &str) -> Result<(Cow<'_, str>, &str), PropertyError
     if k.is_empty() {
         return Err(PropertyError::NoName);
     }
-    Ok((k.to_ascii_lowercase().into(), v))
+    // We don't want to blindly use `alloc::str::to_ascii_lowercase` because it
+    // always allocates. Instead, we check for uppercase ascii letters. Then,
+    // we only allocate in the case that there ARE letters that need to be
+    // lower-cased.
+    Ok((to_ascii_lowercase(k), v))
+}
+
+pub(crate) fn to_ascii_lowercase(s: &str) -> Cow<'_, str> {
+    if s.bytes().any(|b| b.is_ascii_uppercase()) {
+        Cow::Owned(s.to_ascii_lowercase())
+    } else {
+        Cow::Borrowed(s)
+    }
 }
 
 /// Prepare a line for parsing
