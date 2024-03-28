@@ -12,14 +12,9 @@ export AWS_SECRET_ACCESS_KEY=$3
 export AWS_SESSION_TOKEN=$4
 export AWS_REGION=us-west-2
 
-SMITHY_RS="$(pwd)/smithy-rs"
-SDK_PATH="${SMITHY_RS}/aws/sdk/build/aws-sdk/sdk"
+SDK_PATH="$(pwd)/aws-sdk/sdk"
 
-cd "${SMITHY_RS}"
-# Generate only SDKs used by canary (see BASE_MANIFEST in build_bundle.rs of canary-runner)
-./gradlew -Paws.services=+ec2,+s3,+sso,+ssooidc,+sts,+transcribestreaming :aws:sdk:assemble
-
-cd tools/ci-cdk/canary-runner
+cd smithy-rs/tools/ci-cdk/canary-runner
 aws s3 cp s3://"${CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME}"/cdk-outputs.json .
 cargo run -- \
   run --rust-version "${RUST_STABLE_VERSION}" \
