@@ -350,39 +350,13 @@ jobs:
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support
-    - canary
     # Run this job even if its dependency jobs fail
-    if: |
-      always() &&
-      ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
+    if: always()
     runs-on: ubuntu-latest
     name: Matrix Success
     steps:
     - name: Verify jobs succeeded
       # Pinned to commit hash of v1.2.2
-      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
-      with:
-        jobs: ${{ toJSON(needs) }}
-
-  # Pseudo-job that depends on matrix jobs so that we don't have to enter
-  # the myriad of test matrix combinations into GitHub's protected branch rules
-  require-all-but-canary:
-    # Should NOT depend on check-sdk-examples since that's an optional check
-    needs:
-    - generate
-    - test-codegen
-    - test-sdk
-    - test-rust-windows
-    - test-exotic-platform-support
-    # Run this job even if its dependency jobs fail
-    if: |
-      always() &&
-      ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
-    runs-on: ubuntu-latest
-    name: Matrix Success
-    steps:
-    - name: Verify jobs succeeded
-        # Pinned to commit hash of v1.2.2
       uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
       with:
         jobs: ${{ toJSON(needs) }}
