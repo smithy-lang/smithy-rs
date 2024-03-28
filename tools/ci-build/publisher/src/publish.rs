@@ -4,13 +4,12 @@
  */
 
 use crate::cargo;
-use crate::package::PackageHandle;
 use anyhow::Result;
-use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::{
     index::CratesIndex,
     retry::{run_with_retry, BoxError, ErrorClass},
 };
+use smithy_rs_tool_common::{package::PackageHandle, shell::ShellOperation};
 use std::time::Duration;
 use std::{path::Path, sync::Arc};
 use tracing::info;
