@@ -80,6 +80,8 @@ import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
+    private val envKey = "AWS_REGION".dq()
+    private val profileKey = "region".dq()
 
     // Services that have an endpoint ruleset that references the SDK::Region built in, or
     // that use SigV4, both need a configurable region.
@@ -102,8 +104,15 @@ class RegionDecorator : ClientCodegenDecorator {
             adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust(
                     """
-                    ${section.serviceConfigBuilder} =
-                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
+                    ${section.serviceConfigBuilder}.set_region(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                conf.load_config(service_config_key($envKey, $profileKey))
+                                    .map(Region::new)
+                            })
+                            .or_else(|| ${section.sdkConfig}.region().cloned()),
+                    );
                     """,
                 )
             }
