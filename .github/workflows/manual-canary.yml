@@ -8,6 +8,7 @@ on:
         description: The PR number to invoke the canary for.
         required: true
         type: string
+run-name: ${{ github.workflow }} for Pull Request ${{ inputs.pull_request_number }}
 
 jobs:
   get-pr-info:
