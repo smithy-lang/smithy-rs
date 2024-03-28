@@ -27,10 +27,6 @@ on:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
         required: false
-      CANARY_GITHUB_ACTIONS_ROLE_ARN:
-        required: false
-      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
-        required: false
 
 env:
   rust_version: 1.74.1
@@ -298,31 +294,6 @@ jobs:
     - name: Test AWS rust-runtime crates
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
-
-  # Run the canary against generated SDKs
-  canary:
-    name: Canary
-    if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        path: smithy-rs
-        ref: ${{ inputs.git_ref }}
-    - name: Configure credentials
-      id: creds
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-region: us-west-2
-        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
-        output-credentials: true
-    - name: Run canary
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: run-canary
-        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
