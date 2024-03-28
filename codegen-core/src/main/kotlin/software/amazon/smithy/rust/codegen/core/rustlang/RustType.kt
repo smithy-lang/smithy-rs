@@ -257,7 +257,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 if (this.lifetime == "&") {
                     "&${this.member.render(fullyQualified)}"
                 } else {
-                    "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+                    "&${this.lifetime?.let { "'$it " } ?: ""}${this.member.render(fullyQualified)}"
                 }
             }
             is RustType.Application -> {
