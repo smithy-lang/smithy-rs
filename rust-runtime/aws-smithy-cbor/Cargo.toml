@@ -34,3 +34,7 @@ criterion = "0.5.1"
 [[bench]]
 name = "string"
 harness = false
+
+[[bench]]
+name = "blob"
+harness = false

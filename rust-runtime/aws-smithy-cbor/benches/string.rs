@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use aws_smithy_cbor::decode::Decoder;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -13,21 +15,6 @@ pub fn str_benchmark(c: &mut Criterion) {
         0xff,
     ];
 
-    c.bench_function("definite str_alt", |b| {
-        b.iter(|| {
-            let mut decoder = Decoder::new(&definite_bytes);
-            let x = black_box(decoder.str_alt());
-            assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
-        })
-    });
-    c.bench_function("indefinite str_alt", |b| {
-        b.iter(|| {
-            let mut decoder = Decoder::new(&indefinite_bytes);
-            let x = black_box(decoder.str_alt());
-            assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
-        })
-    });
-
     c.bench_function("definite str()", |b| {
         b.iter(|| {
             let mut decoder = Decoder::new(&definite_bytes);
@@ -35,6 +22,15 @@ pub fn str_benchmark(c: &mut Criterion) {
             assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
         })
     });
+
+    c.bench_function("definite str_alt", |b| {
+        b.iter(|| {
+            let mut decoder = minicbor::decode::Decoder::new(&indefinite_bytes);
+            let x = black_box(str_alt(&mut decoder));
+            assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
+        })
+    });
+
     c.bench_function("indefinite str()", |b| {
         b.iter(|| {
             let mut decoder = Decoder::new(&indefinite_bytes);
@@ -42,6 +38,50 @@ pub fn str_benchmark(c: &mut Criterion) {
             assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
         })
     });
+
+    c.bench_function("indefinite str_alt", |b| {
+        b.iter(|| {
+            let mut decoder = minicbor::decode::Decoder::new(&indefinite_bytes);
+            let x = black_box(str_alt(&mut decoder));
+            assert!(matches!(x.unwrap().as_ref(), "thisIsAKey"));
+        })
+    });
+}
+
+// The following seems to be a bit slower than the implementation that we have
+// kept in the `aws_smithy_cbor::Decoder`.
+pub fn string_alt<'b>(
+    decoder: &'b mut minicbor::Decoder<'b>,
+) -> Result<String, minicbor::decode::Error> {
+    decoder.str_iter()?.collect()
+}
+
+// The following seems to be a bit slower than the implementation that we have
+// kept in the `aws_smithy_cbor::Decoder`.
+fn str_alt<'b>(
+    decoder: &'b mut minicbor::Decoder<'b>,
+) -> Result<Cow<'b, str>, minicbor::decode::Error> {
+    // This implementation uses `next` twice to see if there is
+    // another str chunk. If there is, it returns a owned `String`.
+    let mut chunks_iter = decoder.str_iter()?;
+    let head = match chunks_iter.next() {
+        Some(Ok(head)) => head,
+        None => return Ok(Cow::Borrowed("")),
+        Some(Err(e)) => return Err(e),
+    };
+
+    match chunks_iter.next() {
+        None => Ok(Cow::Borrowed(head)),
+        Some(Err(e)) => Err(e),
+        Some(Ok(next)) => {
+            let mut concatenated_string = String::from(head);
+            concatenated_string.push_str(next);
+            for chunk in chunks_iter {
+                concatenated_string.push_str(chunk?);
+            }
+            Ok(Cow::Owned(concatenated_string))
+        }
+    }
 }
 
 // We have two `string` implementations. One uses `collect` the other
@@ -61,53 +101,31 @@ pub fn string_benchmark(c: &mut Criterion) {
     c.bench_function("definite string()", |b| {
         b.iter(|| {
             let mut decoder = Decoder::new(&definite_bytes);
-            let _ = black_box(decoder.str());
+            let _ = black_box(decoder.string());
+        })
+    });
+
+    c.bench_function("definite string_alt()", |b| {
+        b.iter(|| {
+            let mut decoder = minicbor::decode::Decoder::new(&indefinite_bytes);
+            let _ = black_box(string_alt(&mut decoder));
         })
     });
 
     c.bench_function("indefinite string()", |b| {
         b.iter(|| {
             let mut decoder = Decoder::new(&indefinite_bytes);
-            let _ = black_box(decoder.str());
-        })
-    });
-
-    c.bench_function("definite string_alt()", |b| {
-        b.iter(|| {
-            let mut decoder = Decoder::new(&definite_bytes);
-            let _ = black_box(decoder.str_alt());
+            let _ = black_box(decoder.string());
         })
     });
 
     c.bench_function("indefinite string_alt()", |b| {
         b.iter(|| {
-            let mut decoder = Decoder::new(&indefinite_bytes);
-            let _ = black_box(decoder.str_alt());
+            let mut decoder = minicbor::decode::Decoder::new(&indefinite_bytes);
+            let _ = black_box(string_alt(&mut decoder));
         })
     });
 }
 
-pub fn blob_benchmark(c: &mut Criterion) {
-    // Indefinite length blob containing bytes corresponding to `indefinite-byte, chunked, on each comma`.
-    let blob_indefinite_bytes = [
-        0x5f, 0x50, 0x69, 0x6e, 0x64, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x65, 0x2d, 0x62, 0x79,
-        0x74, 0x65, 0x2c, 0x49, 0x20, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x65, 0x64, 0x2c, 0x4e, 0x20,
-        0x6f, 0x6e, 0x20, 0x65, 0x61, 0x63, 0x68, 0x20, 0x63, 0x6f, 0x6d, 0x6d, 0x61, 0xff,
-    ];
-
-    c.bench_function("blob", |b| {
-        b.iter(|| {
-            let mut decoder = Decoder::new(&blob_indefinite_bytes);
-            let _ = black_box(decoder.blob());
-        })
-    });
-}
-
-criterion_group!(
-    benches,
-    string_benchmark,
-    // str_benchmark blob_benchmark,
-    // str_benchmark,
-);
-
+criterion_group!(benches, string_benchmark, str_benchmark,);
 criterion_main!(benches);
