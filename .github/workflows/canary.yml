@@ -3,12 +3,50 @@
 
 name: Canary
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      pull_request_number:
+        description: |
+          PR Number: The PR number to run the canary for.
+        required: true
+        type: string
+      commit_sha:
+        description: |
+          Commit SHA: The SHA of the git commit for which canary runs.
+        required: true
+        type: string
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: true
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: true
+
+# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
+concurrency:
+  group: canary-yml-${{ inputs.pull_request_number }}
+  cancel-in-progress: true
 
 jobs:
   canary:
     name: Canary
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
     steps:
-    - name: Invoke canary in aws-sdk-rust
-      run: echo "Hello World"
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
