@@ -11,41 +11,62 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-smithy-mocks-experimental]]
-message = "Replace `enforce_order(bool)` with `enum RuleMode`"
-references = ["smithy-rs#3502", "awsdocs/aws-doc-sdk-examples#6264"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-
 [[smithy-rs]]
-message = "Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1."
-references = ["smithy-rs#3476"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-authors = ["landonxjames"]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly."
-references = ["smithy-rs#3478"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "ysaito1001"
+message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
+references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "Ten0"
+
+[[smithy-rs]]
+message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
+references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
+author = "Ten0"
+
+[[smithy-rs]]
+message = """
+Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+```rust
+let config = my_service::Config::builder()
+    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+    // ...
+    .build();
+```
+"""
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
 message = """
-Users may now set an endpoint URL from the env or profile file:
+Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
 
-- env: `AWS_ENDPOINT_URL="http://localhost"`
-- profile: `endpoint_url = http://localhost`
-
-Users may also ignore endpoint URLs sourced from the env and profile files:
-
-- env: `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS="true"`
-- profile: `ignore_configured_endpoint_urls = true`
+```rust
+let config = aws_config::defaults(BehaviorVersion::latest())
+    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+    .load()
+    .await;
+```
 """
-references = ["smithy-rs#3488"]
+references = ["smithy-rs#3485"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
-authors = ["Velfi"]
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
-message = "Fix a bug where a `sigv4-s3express` auth scheme was incorrectly positioned at the front of `auth_scheme_options` and was used when no auth schemes were available for an endpoint."
-references = ["smithy-rs#3498"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "ysaito1001"
+message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"

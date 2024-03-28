@@ -48,3 +48,6 @@ tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
 # If you're writing a test with this, take heed! `no-env-filter` means you'll be capturing
 # logs from everything that speaks, so be specific with your asserts.
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+
+[dependencies]
+pin-project-lite = "0.2.13"
