@@ -136,6 +136,26 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
+  # Separate from the main checks above because it uses aws-sdk-rust from GitHub
+  check-semver-hazards:
+    name: Check for semver hazards
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
+
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
   test-sdk:
@@ -370,6 +390,7 @@ jobs:
     needs:
     - generate
     - test-codegen
+    - check-semver-hazards
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support
