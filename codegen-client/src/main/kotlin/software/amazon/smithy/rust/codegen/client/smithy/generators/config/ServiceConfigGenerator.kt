@@ -438,7 +438,7 @@ class ServiceConfigGenerator(
                         config: self.cloneable.clone(),
                         runtime_components: self.runtime_components.clone(),
                         runtime_plugins: self.runtime_plugins.clone(),
-                        behavior_version: self.behavior_version.clone(),
+                        behavior_version: self.behavior_version,
                     }
                 }
                 """,
