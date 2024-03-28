@@ -64,3 +64,9 @@ message = "Stalled stream protection on downloads will now only trigger if the u
 references = ["smithy-rs#3485"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Users may now set service-specific configuration in the environment. For more information, see [this discussion topic](https://github.com/smithy-lang/smithy-rs/discussions/3537)."
+references = ["smithy-rs#3493"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "Velfi"
