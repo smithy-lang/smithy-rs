@@ -139,7 +139,6 @@ jobs:
       id: branch-push
       shell: bash
       env:
-        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -e
