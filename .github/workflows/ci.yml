@@ -9,6 +9,11 @@ name: Test
 on:
   workflow_call:
     inputs:
+      run_canary:
+        description: Whether to run the canary or not.
+        required: false
+        default: true
+        type: boolean
       run_sdk_examples:
         description: Whether to run the SDK example checks or not.
         required: false
@@ -354,9 +359,7 @@ jobs:
     - test-exotic-platform-support
     - canary
     # Run this job even if its dependency jobs fail
-    if: |
-      always() &&
-      ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
+    if: always() && ${{ inputs.run_canary }}
     runs-on: ubuntu-latest
     name: Matrix Success
     steps:
@@ -369,7 +372,6 @@ jobs:
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all-but-canary:
-    # Should NOT depend on check-sdk-examples since that's an optional check
     needs:
     - generate
     - test-codegen
@@ -377,11 +379,9 @@ jobs:
     - test-rust-windows
     - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
-    if: |
-      always() &&
-      ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
+    if: always() && ${{ ! inputs.run_canary }}
     runs-on: ubuntu-latest
-    name: Matrix Success
+    name: Matrix Success (from fork)
     steps:
     - name: Verify jobs succeeded
         # Pinned to commit hash of v1.2.2
