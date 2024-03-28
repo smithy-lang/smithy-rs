@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME=$1
+export AWS_ACCESS_KEY_ID=$2
+export AWS_SECRET_ACCESS_KEY=$3
+export AWS_SESSION_TOKEN=$4
+export AWS_REGION=us-west-2
+
+SDK_PATH="$(pwd)/aws-sdk/sdk"
+
+cd smithy-rs/tools/ci-cdk/canary-runner
+aws s3 cp s3://"${CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME}"/cdk-outputs.json .
+cargo run -- \
+  run --rust-version "${RUST_STABLE_VERSION}" \
+      --sdk-path "${SDK_PATH}" \
+      --cdk-output cdk-outputs.json \
+      --musl

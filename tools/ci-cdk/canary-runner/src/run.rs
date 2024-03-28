@@ -153,15 +153,42 @@ impl Options {
                 lambda_execution_role_arn: String,
             }
             #[derive(Deserialize)]
-            struct Outer {
+            enum Outer {
                 #[serde(rename = "aws-sdk-rust-canary-stack")]
-                inner: Inner,
+                AwsSdkRust {
+                    #[serde(flatten)]
+                    aws_sdk_rust_canary_stack: Inner,
+                },
+                #[serde(rename = "smithy-rs-canary-stack")]
+                SmithyRs {
+                    #[serde(flatten)]
+                    smithy_rs_canary_stack: Inner,
+                },
+            }
+            impl Outer {
+                fn into_inner(self) -> Inner {
+                    match self {
+                        Outer::AwsSdkRust {
+                            aws_sdk_rust_canary_stack,
+                        } => aws_sdk_rust_canary_stack,
+                        Outer::SmithyRs {
+                            smithy_rs_canary_stack,
+                        } => smithy_rs_canary_stack,
+                    }
+                }
             }
 
             let value: Outer = serde_json::from_reader(
                 std::fs::File::open(cdk_output).context("open cdk output")?,
             )
             .context("read cdk output")?;
+            let Inner {
+                lambda_code_s3_bucket_name,
+                lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn,
+                lambda_test_s3_express_bucket_name,
+                lambda_execution_role_arn,
+            } = value.into_inner();
             Ok(Options {
                 rust_version: run_opt.rust_version,
                 sdk_release_tag: run_opt.sdk_release_tag,
@@ -171,11 +198,11 @@ impl Options {
                 lambda_function_memory_size_in_mb: run_opt
                     .lambda_function_memory_size_in_mb
                     .unwrap_or(DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB),
-                lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
-                lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
-                lambda_test_s3_mrap_bucket_arn: value.inner.lambda_test_s3_mrap_bucket_arn,
-                lambda_test_s3_express_bucket_name: value.inner.lambda_test_s3_express_bucket_name,
-                lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
+                lambda_code_s3_bucket_name,
+                lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn,
+                lambda_test_s3_express_bucket_name,
+                lambda_execution_role_arn,
             })
         } else {
             Ok(Options {
