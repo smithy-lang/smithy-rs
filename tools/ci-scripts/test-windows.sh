@@ -16,4 +16,6 @@ for runtime_path in "rust-runtime" "aws/rust-runtime"; do
   cargo doc --no-deps --document-private-items --all-features --workspace "${exclusions[@]}"
   popd &>/dev/null
 done
+# TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) We don't have a way to codegen the deps needed by the aws-config crate
+# (cd aws/rust-runtime/aws-config && cargo test --all-features) # aws-config is not part of the workspace so we have to test it separately
 (cd rust-runtime && cargo test -p aws-smithy-experimental --features crypto-ring) # only ring works on windows
