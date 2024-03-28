@@ -50,6 +50,8 @@ jobs:
     name: Canary
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     runs-on: ubuntu-latest
-    run: |
-      echo "Canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke it using your PR."
-      exit 1
+    steps:
+    - name: Ask maintainer to run the canary
+      run: |
+        echo "Canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke it using your PR."
+        exit 1
