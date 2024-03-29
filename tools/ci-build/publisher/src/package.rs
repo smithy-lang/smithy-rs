@@ -59,7 +59,7 @@ pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let packages = discover_packages(fs, path.as_ref().into())
+    let packages = discover_packages(fs, path.as_ref())
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)

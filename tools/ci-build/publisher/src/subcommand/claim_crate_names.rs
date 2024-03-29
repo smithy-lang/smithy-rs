@@ -78,7 +78,7 @@ async fn claim_crate_name(name: &str) -> Result<()> {
 }
 
 async fn load_publishable_crate_names(path: &Path) -> Result<HashSet<String>> {
-    let manifest_paths = discover_manifests(path.into()).await?;
+    let manifest_paths = discover_manifests(path).await?;
     let mut result = HashSet::new();
     for manifest_path in &manifest_paths {
         let content =
