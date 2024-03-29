@@ -146,7 +146,7 @@ impl Builder {
 
     /// Include the default SDK credentials file in the list of profile files to be loaded.
     ///
-    /// The default SDK config typically resides in `~/.aws/credentials`. When this flag is enabled,
+    /// The default SDK credentials typically reside in `~/.aws/credentials`. When this flag is enabled,
     /// this credentials file will be included in the profile files that get loaded in the built
     /// [`EnvConfigFiles`] file set.
     ///
