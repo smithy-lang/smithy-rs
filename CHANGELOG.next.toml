@@ -52,3 +52,9 @@ message = "Stalled stream protection on downloads will now only trigger if the u
 references = ["smithy-rs#3485"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `SigningSettings` and its fields implement `Clone` and `Copy`"
+references = ["smithy-rs#3533"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "avandesa"
