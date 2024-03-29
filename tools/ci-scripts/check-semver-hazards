@@ -24,11 +24,12 @@ runtime-versioner patch-runtime \
   --sdk-path "$(pwd)/aws-sdk-rust" \
   --smithy-rs-path "$(pwd)/smithy-rs"
 
-# Testing just a small subset of the full SDK to check for semver hazards
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
-for sdk in dynamodb s3 aws-config; do
-  echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
-  pushd "aws-sdk-rust/sdk/${sdk}" &>/dev/null
-  cargo test --all-features
-  popd &>/dev/null
+for sdk in aws-sdk-rust/sdk/*; do
+  if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
+    echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
+    pushd "$sdk" &>/dev/null
+    cargo test --all-features
+    popd &>/dev/null
+  fi
 done
