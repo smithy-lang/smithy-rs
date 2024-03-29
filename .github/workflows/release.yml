@@ -13,7 +13,7 @@ env:
   rust_version: 1.74.1
 
 name: Release smithy-rs
-run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} ${{ inputs.stable_semantic_version }}/${{ inputs.unstable_semantic_version }} (${{ inputs.commit_sha }})
+run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} (${{ inputs.commit_sha }})
 on:
   workflow_dispatch:
     inputs:
@@ -21,16 +21,6 @@ on:
         description: |
           Commit SHA: The SHA of the git commit that you want to release.
           You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
-        required: true
-        type: string
-      stable_semantic_version:
-        description: |
-          Stable semantic version: The semver tag that you want to release for stable crates (e.g. 1.0.2)
-        required: true
-        type: string
-      unstable_semantic_version:
-        description: |
-          Unstable semantic version: The semver tag that you want to release for unstable crates (e.g. 0.52.1)
         required: true
         type: string
       dry_run:
@@ -122,7 +112,6 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-semver-hazards
-        action-arguments: ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }}
 
   get-or-create-release-branch:
     name: Get or create a release branch
@@ -150,7 +139,6 @@ jobs:
       id: branch-push
       shell: bash
       env:
-        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -e
@@ -158,75 +146,10 @@ jobs:
         ./.github/scripts/get-or-create-release-branch.sh output
         cat output > $GITHUB_OUTPUT
 
-  upgrade-gradle-properties:
-    name: Upgrade gradle.properties
-    needs:
-    - get-or-create-release-branch
-    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
-    # we need this here _even though_ the job we depend on is never skipped.
-    if: |
-      always() &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
-    runs-on: ubuntu-latest
-    outputs:
-      release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
-      commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.commit_sha }}
-        path: smithy-rs
-        fetch-depth: 0
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-    - name: Upgrade gradle.properties
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: upgrade-gradle-properties
-        action-arguments: ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }}
-    - name: Download all artifacts
-      uses: ./smithy-rs/.github/actions/download-all-artifacts
-    - name: Push gradle.properties changes
-      id: gradle-push
-      working-directory: upgrade-gradle-properties/smithy-rs
-      shell: bash
-      env:
-        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
-        RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
-        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
-        DRY_RUN: ${{ inputs.dry_run }}
-      run: |
-        set -x
-
-        # For debugging purposes
-        git status
-
-        if ! git diff-index --quiet HEAD; then
-          # gradle.properties was changed, we need to commit and push the diff
-          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-
-          # This will fail if we tried to release from a non-HEAD commit on the release branch.
-          # The only scenario where we would try to release a non-HEAD commit from the release branch is
-          # to retry a release action execution that failed due to a transient issue.
-          # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
-          # should already be the expected one.
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
-            # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
-            git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
-          else
-            git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
-          fi
-
-          echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
-        else
-          echo "commit_sha=${RELEASE_COMMIT_SHA}" > $GITHUB_OUTPUT
-        fi
-
   release:
     name: Release
     needs:
-    - upgrade-gradle-properties
+    - get-or-create-release-branch
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
     # we need this here _even though_ the job we depend on is never skipped.
     if: |
@@ -242,7 +165,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
-        ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
+        ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -256,7 +179,7 @@ jobs:
       working-directory: smithy-rs-release/smithy-rs
       id: push-changelog
       env:
-        RELEASE_BRANCH_NAME: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         if ! git diff-index --quiet HEAD; then
