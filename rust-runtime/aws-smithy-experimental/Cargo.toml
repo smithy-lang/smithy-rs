@@ -21,7 +21,7 @@ pin-project-lite = "0.2.13"
 hyper-util = "0.1.3"
 http = "1"
 tokio = "1"
-hyper-rustls = { version = "0.27", features = ["http2", "http1"] }
+hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false }
 rustls = { version = "0.23", default-features = false }
 h2 = "0.4"
 once_cell = "1.18.0"
