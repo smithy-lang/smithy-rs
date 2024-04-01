@@ -40,7 +40,7 @@ class ClientContextConfigCustomization(ctx: ClientCodegenContext) : ConfigCustom
     private val configParams =
         ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
             .map { (key, value) -> fromClientParam(key, value, ctx.symbolProvider, runtimeConfig) }
-    private val decorators = configParams.map { standardConfigParam(it, ctx) }
+    private val decorators = configParams.map { standardConfigParam(it) }
 
     companion object {
         fun toSymbol(

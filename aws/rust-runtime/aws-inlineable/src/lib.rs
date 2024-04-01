@@ -31,6 +31,11 @@ pub mod presigning;
 /// Presigning interceptors
 pub mod presigning_interceptors;
 
+// This module uses module paths that assume the target crate to which it is copied, e.g.
+// `crate::config::endpoint::Params`. If included into `aws-inlineable`, this module would
+// fail to compile.
+// pub mod s3_express;
+
 /// Special logic for extracting request IDs from S3's responses.
 #[allow(dead_code)]
 pub mod s3_request_id;

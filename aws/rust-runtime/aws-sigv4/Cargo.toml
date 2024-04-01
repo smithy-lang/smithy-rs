@@ -1,6 +1,6 @@
 [package]
 name = "aws-sigv4"
-version = "0.0.0-smithy-rs-head"
+version = "1.2.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
@@ -28,7 +28,6 @@ hex = "0.4"
 hmac = "0.12"
 http0 = { version = "0.2", optional = true, package = "http" }
 http = { version = "1", optional = true }
-num-bigint = { version = "0.4.2", optional = true }
 once_cell = "1.8"
 p256 = { version = "0.11", features = ["ecdsa"], optional = true }
 percent-encoding = { version = "2.1", optional = true }

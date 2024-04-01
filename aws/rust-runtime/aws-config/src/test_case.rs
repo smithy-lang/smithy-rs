@@ -13,7 +13,7 @@ use aws_smithy_runtime::client::http::test_util::dvr::{
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::shared::IntoShared;
-use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::{date_time::Format, error::display::DisplayErrorContext, DateTime};
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::sdk_config::SharedHttpClient;
 use serde::Deserialize;
@@ -79,6 +79,39 @@ impl From<aws_credential_types::Credentials> for Credentials {
     }
 }
 
+/// Test case token
+///
+/// Token for use in test cases. These implement Serialize/Deserialize and have a
+/// non-hidden debug implementation.
+#[derive(Deserialize, Debug, Eq, PartialEq)]
+pub(crate) struct Token {
+    pub(crate) token: String,
+    pub(crate) expiration: Option<String>,
+}
+
+impl Secrets for Token {
+    fn secrets(&self) -> Vec<String> {
+        vec![self.token.clone()]
+    }
+}
+
+impl From<&aws_credential_types::Token> for Token {
+    fn from(value: &aws_credential_types::Token) -> Self {
+        Self {
+            token: value.token().into(),
+            expiration: value
+                .expiration()
+                .map(|s| DateTime::from(s).fmt(Format::DateTime).unwrap()),
+        }
+    }
+}
+
+impl From<aws_credential_types::Token> for Token {
+    fn from(value: aws_credential_types::Token) -> Self {
+        Self::from(&value)
+    }
+}
+
 /// Connector which expects no traffic
 pub(crate) fn no_traffic_client() -> SharedHttpClient {
     ReplayingClient::new(Vec::new()).into_shared()
@@ -120,7 +153,7 @@ where
             }
             (Err(actual_error), GenericTestResult::Ok(expected_creds)) => {
                 panic!(
-                    "expected credentials ({:?}) but an error was returned: {}",
+                    "expected output ({:?}) but an error was returned: {}",
                     expected_creds,
                     DisplayErrorContext(actual_error)
                 )
@@ -192,6 +225,20 @@ where
     })
 }
 
+#[cfg(feature = "sso")]
+pub(crate) fn test_token_provider<F, Fut, E>(
+    run_provider_fn: F,
+) -> impl RunTestProvider<Output = Token, Error = E>
+where
+    F: Fn(ProviderConfig) -> Fut + Send + Clone + 'static,
+    Fut: Future<Output = Result<aws_credential_types::Token, E>> + Send,
+{
+    StaticTestProvider::<Token, E>::new(move |config| {
+        let run_provider_fn = run_provider_fn.clone();
+        Box::pin(async move { (run_provider_fn)(config).await.map(Into::into) })
+    })
+}
+
 /// Provider test environment
 ///
 /// A provider test environment is a directory containing:
@@ -224,7 +271,8 @@ where
         let fs = Fs::from_test_dir(dir.join("fs"), "/");
         let network_traffic = std::fs::read_to_string(dir.join("http-traffic.json"))
             .map_err(|e| format!("failed to load http traffic: {}", e))?;
-        let network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
+        let mut network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
+        network_traffic.correct_content_lengths();
 
         let metadata: Metadata<O> = serde_json::from_str(
             &std::fs::read_to_string(dir.join("test-case.json"))

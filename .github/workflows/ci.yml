@@ -51,17 +51,17 @@ jobs:
         - action: generate-aws-sdk-smoketest
         - action: generate-smithy-rs-release
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
     # The models from aws-sdk-rust are needed to generate the full SDK for CI
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
     # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: awsdocs/aws-doc-sdk-examples
         path: aws-doc-sdk-examples
@@ -116,7 +116,7 @@ jobs:
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -126,6 +126,26 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+
+  # Separate from the main checks above because it uses aws-sdk-rust from GitHub
+  check-semver-hazards:
+    name: Check for semver hazards
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
@@ -155,7 +175,7 @@ jobs:
         - action: check-aws-sdk-standalone-integration-tests
           runner: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -175,11 +195,11 @@ jobs:
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
-      # Pinned to the commit hash of v2.1.0
-    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: |
@@ -194,16 +214,7 @@ jobs:
     - run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
       shell: bash
-      run: |
-        for runtime_path in "rust-runtime" "aws/rust-runtime"; do
-          pushd "${runtime_path}" &>/dev/null
-          # aws-smithy-http-server-python cannot be compiled on Windows since it uses the `signal-hook` crate
-          # which is not really yet fully supported on the platform.
-          # aws-smithy-http-server-typescript cannot be compiled right now on Windows.
-          cargo test --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
-          cargo doc --no-deps --document-private-items --all-features --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
-          popd &>/dev/null
-        done
+      run: tools/ci-scripts/test-windows.sh
 
   # We make sure that smithy-rs can be compiled on platforms that are not
   # natively supported by GitHub actions. We run as many tests as we can on
@@ -243,11 +254,11 @@ jobs:
       CROSS_CONFIG: Cross.toml
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
-      # Pinned to the commit hash of v2.1.0
-    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
         workspaces: |
@@ -311,7 +322,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -327,6 +338,7 @@ jobs:
     needs:
     - generate
     - test-codegen
+    - check-semver-hazards
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support

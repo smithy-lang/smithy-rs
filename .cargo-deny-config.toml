@@ -22,6 +22,7 @@ allow = [
 confidence-threshold = 1.0
 exceptions = [
     { allow = ["OpenSSL"], name = "ring", version = "*" },
+    { allow = ["OpenSSL"], name = "aws-lc-sys", version = "*" },
 ]
 
 [[licenses.clarify]]

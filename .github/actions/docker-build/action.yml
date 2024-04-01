@@ -15,7 +15,7 @@ inputs:
 runs:
   using: composite
   steps:
-  - uses: actions/cache@v3
+  - uses: actions/cache@v4
     name: Gradle Cache
     with:
       path: |
@@ -24,8 +24,8 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
-    # Pinned to the commit hash of v2.1.0
-  - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+    # Pinned to the commit hash of v2.7.3
+  - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
       shared-key: ${{ runner.os }}-${{ github.job }}
       workspaces: |
@@ -60,9 +60,10 @@ runs:
       ./smithy-rs/tools/ci-build/ci-action ${{ inputs.action }} ${{ inputs.action-arguments}}
       tar cfz artifacts-${{ inputs.action }}.tar.gz -C artifacts .
   - name: Upload artifacts
-    uses: actions/upload-artifact@v3
+    uses: actions/upload-artifact@v4
     with:
       name: artifacts-${{ inputs.action }}
       path: artifacts-${{ inputs.action }}.tar.gz
       if-no-files-found: error
       retention-days: 3
+      overwrite: true

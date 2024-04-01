@@ -9,6 +9,7 @@
 //! for _your_ client, since many things can change these defaults on the way to
 //! code generating and constructing a full client.
 
+use crate::client::http::body::content_length_enforcement::EnforceContentLengthRuntimePlugin;
 use crate::client::identity::IdentityCache;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
@@ -191,6 +192,12 @@ pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntime
     )
 }
 
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/3523)
+#[allow(dead_code)]
+fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
+    Some(EnforceContentLengthRuntimePlugin::new().into_shared())
+}
+
 fn validate_stalled_stream_protection_config(
     components: &RuntimeComponentsBuilder,
     cfg: &ConfigBag,
@@ -263,6 +270,8 @@ pub fn default_plugins(
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
         default_timeout_config_plugin(),
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3523): Reenable this
+        /* enforce_content_length_runtime_plugin(), */
         default_stalled_stream_protection_config_plugin(),
     ]
     .into_iter()
