@@ -110,10 +110,7 @@ impl<S> FromIterator<(String, S)> for AwsJsonRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (String, S)>>(iter: T) -> Self {
         Self {
-            routes: iter
-                .into_iter()
-                .map(|(svc, request_spec)| (svc, request_spec))
-                .collect(),
+            routes: iter.into_iter().collect(),
         }
     }
 }

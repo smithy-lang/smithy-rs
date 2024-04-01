@@ -6,8 +6,8 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.72.1
-ARG rust_nightly_version=nightly-2023-10-10
+ARG rust_stable_version=1.74.1
+ARG rust_nightly_version=nightly-2024-02-07
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -15,9 +15,9 @@ RUN yum -y updateinfo
 FROM bare_base_image as musl_toolchain
 RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
-  && ls \
-  && tar xvzf musl-1.2.3.tar.gz \
-  && (cd musl-1.2.3 && ./configure && make install)
+    && ls \
+    && tar xvzf musl-1.2.3.tar.gz \
+    && (cd musl-1.2.3 && ./configure && make install)
 
 #
 # Rust & Tools Installation Stage
@@ -96,7 +96,7 @@ ARG cargo_deny_version=0.13.5
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.42
+ARG cargo_udeps_version=0.1.46
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
@@ -105,11 +105,11 @@ ARG cargo_hack_version=0.5.23
 RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.19
+ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.8
+ARG cargo_check_external_types_version=0.1.11
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
@@ -121,17 +121,14 @@ ARG wasm_pack_version=0.11.0
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v7.0.0/wasmtime-v7.0.0-x86_64-linux.tar.xz
-ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8a5f3dce84cffec99
-RUN set -eux; \
-    curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
-    echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
-    tar xf wasmtime.xz; \
-    mv wasmtime-v*/wasmtime /opt;
+ARG cargo_wasmtime_version=18.0.1
+ARG rust_nightly_version
+RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
-FROM install_rust AS cargo_wasi
-ARG cargo_wasi_version=0.1.27
-RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
+FROM install_rust AS cargo_component
+ARG cargo_component_version=0.7.1
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.24.1
@@ -168,6 +165,7 @@ RUN set -eux; \
         python3-devel \
         python3-pip \
         shadow-utils \
+        cmake \
         tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \
@@ -182,8 +180,8 @@ COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-mini
 COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
+COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook

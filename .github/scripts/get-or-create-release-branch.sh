@@ -5,18 +5,9 @@
 #
 set -eux
 
-# Compute the name of the release branch starting from the version that needs to be released ($SEMANTIC_VERSION).
-# If it's the beginning of a new release series, the branch is created and pushed to the remote (chosen according to
-# the value $DRY_RUN).
-#
 # The script populates an output file with key-value pairs that are needed in the release CI workflow to carry out
 # the next steps in the release flow: the name of the release branch and a boolean flag that is set to 'true' if this
 # is the beginning of a new release series.
-
-if [ -z "$SEMANTIC_VERSION" ]; then
-  echo "'SEMANTIC_VERSION' must be populated."
-  exit 1
-fi
 
 if [ -z "$1" ]; then
   echo "You need to specify the path of the file where you want to collect the output"
@@ -25,26 +16,7 @@ else
   output_file="$1"
 fi
 
-# Split on the dots
-version_array=(${SEMANTIC_VERSION//./ })
-major=${version_array[0]}
-minor=${version_array[1]}
-patch=${version_array[2]}
-if [[ "${major}" == "" || "${minor}" == "" || "${patch}" == "" ]]; then
-  echo "'${SEMANTIC_VERSION}' is not a valid semver tag"
-  exit 1
-fi
-if [[ $major == 0 ]]; then
-  branch_name="smithy-rs-release-${major}.${minor}.x"
-  if [[ $patch == 0 ]]; then
-    echo "new_release_series=true" >"${output_file}"
-  fi
-else
-  branch_name="smithy-rs-release-${major}.x.y"
-  if [[ $minor == 0 && $patch == 0 ]]; then
-    echo "new_release_series=true" >"${output_file}"
-  fi
-fi
+branch_name="smithy-rs-release-1.x.y"
 
 if [[ "${DRY_RUN}" == "true" ]]; then
   branch_name="${branch_name}-preview"

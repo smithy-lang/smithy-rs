@@ -213,7 +213,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             self
                         }
 
-                        /// Set the timeout_config for the builder
+                        /// Set the timeout_config for the builder.
+                        ///
+                        /// Setting this to `None` has no effect if another source of configuration has set timeouts. If you
+                        /// are attempting to disable timeouts, use [`TimeoutConfig::disabled`](#{TimeoutConfig}::disabled)
+                        ///
                         ///
                         /// ## Examples
                         ///
@@ -237,10 +241,22 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
+                    // A timeout config can be set from SdkConfig. We want to merge that with a timeout config set here.
+                    // Ideally, we would actually preserve `SdkConfig` as a separate layer (probably by converting it into
+                    // its own runtime plugin). In the short term, this functionality accomplishes that for
+                    // timeout configs.
                     rustTemplate(
                         """
                         pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                            timeout_config.map(|t| self.config.store_put(t));
+                            // passing None has no impact.
+                            let Some(mut timeout_config) = timeout_config else {
+                                return self
+                            };
+
+                            if let Some(base) = self.config.load::<#{TimeoutConfig}>() {
+                                timeout_config.take_defaults_from(base);
+                            }
+                            self.config.store_put(timeout_config);
                             self
                         }
                         """,
@@ -270,6 +286,21 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             self
                         }
                         """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.BuilderFromConfigBag -> {
+                    rustTemplate(
+                        "${section.builder}.set_retry_config(${section.config_bag}.load::<#{RetryConfig}>().cloned());",
+                        *codegenScope,
+                    )
+                    rustTemplate(
+                        "${section.builder}.set_timeout_config(${section.config_bag}.load::<#{TimeoutConfig}>().cloned());",
+                        *codegenScope,
+                    )
+                    rustTemplate(
+                        "${section.builder}.set_retry_partition(${section.config_bag}.load::<#{RetryPartition}>().cloned());",
                         *codegenScope,
                     )
                 }
