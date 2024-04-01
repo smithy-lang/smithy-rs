@@ -3,7 +3,7 @@
 Staging ground for experimental new features in the smithy-rs ecosystem.
 
 ### Hyper 1.0 Support
-This crate allows customers to use Hyper 1.0. A valuable consequence of this is access to aws-lc-rs and its `FIPS` compliant crypto. This is available behind the `aws-lc-fips` feature. **Note** that this has somewhat [complex build requirements](https://github.com/aws/aws-lc/blob/main/BUILDING.md).
+This crate allows customers to use Hyper 1.0. A valuable consequence of this is access to aws-lc-rs and its `FIPS` compliant crypto. This is available behind the `crypto-aws-lc-fips` feature. **Note**: FIPS support has somewhat [complex build requirements](https://github.com/aws/aws-lc/blob/main/BUILDING.md), namely CMake and Go.
 
 ## Crate Stabilization
 
