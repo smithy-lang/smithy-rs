@@ -16,6 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tower::Service;
 
+#[cfg(feature = "crypto-ring")]
 #[tokio::test]
 async fn ring_client() {
     let client = HyperClientBuilder::new()
@@ -24,6 +25,7 @@ async fn ring_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
+#[cfg(feature = "crypto-aws-lc-fips")]
 #[tokio::test]
 async fn aws_lc_fips_client() {
     let client = HyperClientBuilder::new()
@@ -32,6 +34,7 @@ async fn aws_lc_fips_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
+#[cfg(feature = "crypto-aws-lc")]
 #[tokio::test]
 async fn aws_lc_client() {
     let client = HyperClientBuilder::new()
@@ -40,6 +43,7 @@ async fn aws_lc_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
+#[cfg(feature = "crypto-ring")]
 #[tokio::test]
 async fn custom_dns_client() {
     #[derive(Debug, Clone)]
@@ -67,7 +71,7 @@ async fn custom_dns_client() {
         count: Default::default(),
     };
     let client = HyperClientBuilder::new()
-        .crypto_mode(CryptoMode::AwsLc)
+        .crypto_mode(CryptoMode::Ring)
         .build_with_resolver(resolver.clone());
     smoke_test_client(&client).await.unwrap();
     assert_eq!(resolver.count.load(Ordering::Relaxed), 1);

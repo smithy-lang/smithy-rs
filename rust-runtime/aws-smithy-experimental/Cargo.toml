@@ -40,7 +40,7 @@ doc-scrape-examples = true
 
 [[example]]
 name = "client-aws-lc"
-required-features = ["crypto-aws-lc-fips"]
+required-features = ["crypto-aws-lc", "crypto-aws-lc-fips"]
 doc-scrape-examples = true
 
 [[example]]
