@@ -64,3 +64,25 @@ message = "Users may now set service-specific configuration in the environment. 
 references = ["smithy-rs#3493"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "Fix bug in Hyper 1.0 support where https URLs returned an error"
+references = ["smithy-rs#3539"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).
+
+Please note that support for Hyper 1.0 remains experimental."""
+references = ["smithy-rs#3539"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).
+
+Please note that support for Hyper 1.0 remains experimental."""
+references = ["smithy-rs#3539"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
