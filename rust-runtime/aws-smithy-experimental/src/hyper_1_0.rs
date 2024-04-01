@@ -45,6 +45,7 @@ use aws_smithy_types::retry::ErrorKind;
 
 use crate::hyper_1_0::timeout_middleware::{ConnectTimeout, HttpTimeoutError};
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[non_exhaustive]
 pub enum CryptoMode {
     #[cfg(feature = "crypto-ring")]
     Ring,
