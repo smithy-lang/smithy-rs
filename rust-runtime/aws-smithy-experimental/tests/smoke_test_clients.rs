@@ -12,7 +12,6 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder
 use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
 use std::error::Error;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tower::Service;
 
@@ -46,10 +45,11 @@ async fn aws_lc_client() {
 #[cfg(feature = "crypto-ring")]
 #[tokio::test]
 async fn custom_dns_client() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     #[derive(Debug, Clone)]
     struct PassThroughResolver {
         inner: GaiResolver,
-        count: Arc<AtomicU64>,
+        count: Arc<AtomicUsize>,
     }
     impl ResolveDns for PassThroughResolver {
         fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
