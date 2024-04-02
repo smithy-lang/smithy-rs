@@ -12,6 +12,12 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Ability to add an inline policy or a list of policy ARNs to the `WebIdentityTokenCredentialsProvider` builder."
+references = ["smithy-rs#3506"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "mokhaled2992"
+
+[[aws-sdk-rust]]
 message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
 references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
