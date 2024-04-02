@@ -72,6 +72,18 @@ meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
 
 [[smithy-rs]]
+message = "All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed."
+references = ["smithy-rs#3389"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+authors = ["Velfi"]
+
+[[aws-sdk-rust]]
+message = "All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed."
+references = ["smithy-rs#3389"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
 message = "Fix bug in Hyper 1.0 support where https URLs returned an error"
 references = ["smithy-rs#3539"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
