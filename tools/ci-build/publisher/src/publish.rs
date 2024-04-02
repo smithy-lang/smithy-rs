@@ -7,6 +7,7 @@ use crate::cargo;
 use anyhow::Result;
 use smithy_rs_tool_common::{
     index::CratesIndex,
+    package::Publishable,
     retry::{run_with_retry, BoxError, ErrorClass},
 };
 use smithy_rs_tool_common::{package::PackageHandle, shell::ShellOperation};
@@ -22,7 +23,7 @@ pub async fn is_published(index: Arc<CratesIndex>, crate_name: &str) -> Result<b
 }
 
 #[tracing::instrument]
-pub async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
+pub async fn publish(handle: &PackageHandle<Publishable>, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
         &format!("Publishing `{}`", handle),

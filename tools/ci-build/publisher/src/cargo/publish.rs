@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use smithy_rs_tool_common::{
-    package::PackageHandle,
+    package::{PackageHandle, Publishable, PublishableHandle},
     shell::{capture_error, output_text, ShellOperation},
 };
 use std::path::PathBuf;
@@ -14,12 +14,15 @@ use tracing::info;
 
 pub struct Publish {
     program: &'static str,
-    package_handle: PackageHandle,
+    package_handle: PublishableHandle,
     package_path: PathBuf,
 }
 
 impl Publish {
-    pub fn new(package_handle: PackageHandle, package_path: impl Into<PathBuf>) -> Publish {
+    pub fn new(
+        package_handle: PackageHandle<Publishable>,
+        package_path: impl Into<PathBuf>,
+    ) -> Publish {
         assert!(
             package_handle.version.is_some(),
             "crate version number required; given {package_handle}"
@@ -48,7 +51,7 @@ impl ShellOperation for Publish {
             let (stdout, stderr) = output_text(&output);
             let already_uploaded_msg = format!(
                 "error: crate version `{}` is already uploaded",
-                self.package_handle.expect_version()
+                self.package_handle.version()
             );
             if stdout.contains(&already_uploaded_msg) || stderr.contains(&already_uploaded_msg) {
                 info!(
@@ -76,7 +79,8 @@ mod tests {
             package_handle: PackageHandle::new(
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").ok(),
-            ),
+            )
+            .expect_publishable(),
             package_path: env::current_dir().unwrap(),
         }
         .spawn()
@@ -88,7 +92,8 @@ mod tests {
     async fn publish_fails() {
         let result = Publish {
             program: "./fake_cargo/cargo_fails",
-            package_handle: PackageHandle::new("something", Version::parse("0.0.22-alpha").ok()),
+            package_handle: PackageHandle::new("something", Version::parse("0.0.22-alpha").ok())
+                .expect_publishable(),
             package_path: env::current_dir().unwrap(),
         }
         .spawn()
@@ -110,7 +115,8 @@ mod tests {
             package_handle: PackageHandle::new(
                 "aws-sdk-dynamodb",
                 Version::parse("0.0.22-alpha").ok(),
-            ),
+            )
+            .expect_publishable(),
             package_path: env::current_dir().unwrap(),
         }
         .spawn()

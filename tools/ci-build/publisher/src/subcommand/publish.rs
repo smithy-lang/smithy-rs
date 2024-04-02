@@ -10,7 +10,7 @@ use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use dialoguer::Confirm;
-use smithy_rs_tool_common::package::{Package, PackageHandle};
+use smithy_rs_tool_common::package::{Package, PackageHandle, Publishable, PublishablePackage};
 use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::{git, index::CratesIndex};
@@ -105,7 +105,7 @@ pub fn resolve_publish_location(location: &Path) -> PathBuf {
     }
 }
 
-async fn is_published(index: Arc<CratesIndex>, handle: &PackageHandle) -> Result<bool> {
+async fn is_published<T>(index: Arc<CratesIndex>, handle: &PackageHandle<T>) -> Result<bool> {
     let name = handle.name.clone();
     let version = handle.expect_version().clone();
     tokio::task::spawn_blocking(move || {
@@ -115,7 +115,10 @@ async fn is_published(index: Arc<CratesIndex>, handle: &PackageHandle) -> Result
 }
 
 /// Waits for the given package to show up on crates.io
-async fn wait_for_eventual_consistency(index: Arc<CratesIndex>, package: &Package) -> Result<()> {
+async fn wait_for_eventual_consistency(
+    index: Arc<CratesIndex>,
+    package: &PublishablePackage,
+) -> Result<()> {
     let max_wait_time = 10usize;
     for _ in 0..max_wait_time {
         if !is_published(index.clone(), &package.handle).await? {
@@ -134,7 +137,7 @@ async fn wait_for_eventual_consistency(index: Arc<CratesIndex>, package: &Packag
 }
 
 /// Corrects the crate ownership.
-pub async fn correct_owner(handle: &PackageHandle) -> Result<()> {
+pub async fn correct_owner(handle: &PackageHandle<Publishable>) -> Result<()> {
     // https://github.com/orgs/awslabs/teams/smithy-rs-server
     const SMITHY_RS_SERVER_OWNER: &str = "github:awslabs:smithy-rs-server";
     // https://github.com/orgs/awslabs/teams/rust-sdk-owners
@@ -200,7 +203,7 @@ fn confirm_plan(
         for package in batch {
             full_plan.push(format!(
                 "Publish version `{}` of `{}`",
-                package.handle.expect_version(),
+                package.handle.version(),
                 package.handle.name
             ));
         }

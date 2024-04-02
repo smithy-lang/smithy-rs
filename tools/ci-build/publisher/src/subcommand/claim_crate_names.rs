@@ -66,7 +66,7 @@ async fn claim_crate_name(name: &str) -> Result<()> {
     let crate_dir_path = temporary_directory.path();
     create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
 
-    let package_handle = PackageHandle::new(name, Some(Version::new(0, 0, 1)));
+    let package_handle = PackageHandle::publishable(name, Version::new(0, 0, 1));
     publish(&package_handle, crate_dir_path).await?;
 
     // Keep things slow to avoid getting throttled by crates.io

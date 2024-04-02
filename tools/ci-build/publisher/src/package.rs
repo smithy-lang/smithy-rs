@@ -9,7 +9,9 @@ use crate::fs::Fs;
 use crate::sort::dependency_order;
 use anyhow::Result;
 use semver::Version;
-use smithy_rs_tool_common::package::{Package, PackageCategory, PackageHandle, Publish};
+use smithy_rs_tool_common::package::{
+    Package, PackageCategory, PackageHandle, Publish, Publishable, PublishablePackage,
+};
 use std::error::Error as StdError;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, path::Path};
@@ -17,7 +19,7 @@ use tokio::fs;
 use tracing::warn;
 
 /// Batch of packages.
-pub type PackageBatch = Vec<Package>;
+pub type PackageBatch = Vec<PublishablePackage>;
 
 /// Stats about the packages.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -63,7 +65,8 @@ pub async fn discover_and_validate_package_batches(
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)
-        .collect::<Vec<Package>>();
+        .map(|package| package.expect_publishable())
+        .collect::<Vec<PublishablePackage>>();
     validate_packages(&packages)?;
     let batches = batch_packages(packages)?;
     let stats = PackageStats::calculate(&batches);
@@ -113,21 +116,21 @@ pub async fn discover_packages(fs: Fs, path: &Path) -> Result<Vec<Package>> {
 
 /// Validates that all of the publishable crates use consistent version numbers
 /// across all of their local dependencies.
-fn validate_packages(packages: &[Package]) -> Result<()> {
+fn validate_packages(packages: &[PublishablePackage]) -> Result<()> {
     let mut versions: BTreeMap<String, Version> = BTreeMap::new();
-    let track_version = &mut |handle: &PackageHandle| -> Result<(), Error> {
+    let track_version = &mut |handle: &PackageHandle<Publishable>| -> Result<(), Error> {
         if let Some(version) = versions.get(&handle.name) {
-            if version != handle.expect_version() {
+            if version != handle.version() {
                 Err(Error::MultipleVersions(
                     (&handle.name).into(),
                     versions[&handle.name].clone(),
-                    handle.expect_version().clone(),
+                    handle.version().clone(),
                 ))
             } else {
                 Ok(())
             }
         } else {
-            versions.insert(handle.name.clone(), handle.expect_version().clone());
+            versions.insert(handle.name.clone(), handle.version().clone());
             Ok(())
         }
     };
@@ -154,7 +157,7 @@ pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<P
 
 /// Splits the given packages into a list of batches that can be published in order.
 /// All of the packages in a given batch can be safely published in parallel.
-fn batch_packages(packages: Vec<Package>) -> Result<Vec<PackageBatch>> {
+fn batch_packages(packages: Vec<PublishablePackage>) -> Result<Vec<PackageBatch>> {
     // Sort packages in order of local dependencies
     let mut packages = dependency_order(packages)?;
 
@@ -196,7 +199,7 @@ mod tests {
     use super::*;
     use semver::Version;
 
-    fn package(name: &str, dependencies: &[&str]) -> Package {
+    fn package(name: &str, dependencies: &[&str]) -> PublishablePackage {
         Package::new(
             PackageHandle::new(name, Version::parse("1.0.0").ok()),
             format!("{}/Cargo.toml", name),
@@ -206,6 +209,7 @@ mod tests {
                 .collect(),
             Publish::Allowed,
         )
+        .expect_publishable()
     }
 
     fn fmt_batches(batches: Vec<PackageBatch>) -> String {
@@ -278,7 +282,7 @@ mod tests {
         );
     }
 
-    fn pkg_ver(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Package {
+    fn pkg_ver(name: &str, version: &str, dependencies: &[(&str, &str)]) -> PublishablePackage {
         Package::new(
             PackageHandle::new(name, Some(Version::parse(version).unwrap())),
             format!("{}/Cargo.toml", name),
@@ -288,6 +292,7 @@ mod tests {
                 .collect(),
             Publish::Allowed,
         )
+        .expect_publishable()
     }
 
     #[test]

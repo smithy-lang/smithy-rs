@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
     fmt, fs,
+    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
@@ -56,18 +57,65 @@ pub enum PackageStability {
     Unstable,
 }
 
-/// Information required to identify a package (crate).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct PackageHandle {
+pub struct Publishable;
+
+/// Information required to identify a package (crate).
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PackageHandle<T = ()> {
     pub name: String,
     pub version: Option<Version>,
+    publishable: PhantomData<T>,
 }
 
-impl PackageHandle {
+pub type PublishableHandle = PackageHandle<Publishable>;
+
+impl<T> Clone for PackageHandle<T> {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            version: self.version.clone(),
+            publishable: self.publishable.clone(),
+        }
+    }
+}
+
+impl PackageHandle<()> {
     pub fn new(name: impl Into<String>, version: Option<Version>) -> Self {
         Self {
             name: name.into(),
             version,
+            publishable: Default::default(),
+        }
+    }
+}
+
+impl PackageHandle<Publishable> {
+    pub fn publishable(name: impl Into<String>, version: Version) -> Self {
+        Self {
+            name: name.into(),
+            version: Some(version),
+            publishable: Default::default(),
+        }
+    }
+}
+
+impl PackageHandle<Publishable> {
+    pub fn version(&self) -> &Version {
+        self.expect_version()
+    }
+}
+
+impl<T> PackageHandle<T> {
+    pub fn expect_publishable(self) -> PackageHandle<Publishable> {
+        if self.version.is_some() {
+            PackageHandle {
+                name: self.name,
+                version: self.version,
+                publishable: Default::default(),
+            }
+        } else {
+            panic!("package did not have a version")
         }
     }
 
@@ -86,7 +134,7 @@ impl PackageHandle {
     }
 }
 
-impl fmt::Display for PackageHandle {
+impl<T> fmt::Display for PackageHandle<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.version {
             Some(version) => write!(f, "{}-{version}", self.name),
@@ -103,9 +151,9 @@ pub enum Publish {
 
 /// Represents a crate (called Package since crate is a reserved word).
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-pub struct Package {
+pub struct Package<T = ()> {
     /// Package name and version information
-    pub handle: PackageHandle,
+    pub handle: PackageHandle<T>,
     /// Package category (Generated, SmithyRuntime, AwsRuntime, etc.)
     pub category: PackageCategory,
     /// Location to the crate on the current file system
@@ -113,10 +161,12 @@ pub struct Package {
     /// Location to the crate manifest on the current file system
     pub manifest_path: PathBuf,
     /// Dependencies used by this package
-    pub local_dependencies: BTreeSet<PackageHandle>,
+    pub local_dependencies: BTreeSet<PackageHandle<T>>,
     /// Whether or not the package should be published
     pub publish: Publish,
 }
+
+pub type PublishablePackage = Package<Publishable>;
 
 impl Package {
     pub fn new(
@@ -134,6 +184,21 @@ impl Package {
             manifest_path,
             local_dependencies,
             publish,
+        }
+    }
+
+    pub fn expect_publishable(self) -> Package<Publishable> {
+        Package {
+            handle: self.handle.expect_publishable(),
+            category: self.category,
+            crate_path: self.crate_path,
+            manifest_path: self.manifest_path,
+            local_dependencies: self
+                .local_dependencies
+                .into_iter()
+                .map(|t| t.expect_publishable())
+                .collect(),
+            publish: self.publish,
         }
     }
 
@@ -163,10 +228,7 @@ impl Package {
         if let Some(package) = manifest.package {
             let name = package.name;
             let version = parse_version(manifest_path, &package.version.unwrap())?;
-            let handle = PackageHandle {
-                name,
-                version: Some(version),
-            };
+            let handle = PackageHandle::new(name, Some(version));
             let publish = match package.publish.unwrap() {
                 cargo_toml::Publish::Flag(true) => Publish::Allowed,
                 _ => Publish::NotAllowed,
@@ -192,9 +254,11 @@ impl Package {
             Ok(None)
         }
     }
+}
 
+impl<T: Ord> Package<T> {
     /// Returns `true` if this package depends on `other`
-    pub fn locally_depends_on(&self, other: &PackageHandle) -> bool {
+    pub fn locally_depends_on(&self, other: &PackageHandle<T>) -> bool {
         self.local_dependencies.contains(other)
     }
 

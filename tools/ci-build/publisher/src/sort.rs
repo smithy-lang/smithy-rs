@@ -6,19 +6,21 @@
 //! Logic for topological sorting packages by dependencies.
 
 use anyhow::{anyhow, bail, Result};
-use smithy_rs_tool_common::package::{Package, PackageHandle};
+use smithy_rs_tool_common::package::{
+    Package, PackageHandle, PublishableHandle, PublishablePackage,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Determines the dependency order of the given packages.
-pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
+pub fn dependency_order(packages: Vec<PublishablePackage>) -> Result<Vec<PublishablePackage>> {
     let mut order = Vec::new();
-    let mut packages: BTreeMap<PackageHandle, Package> = packages
+    let mut packages: BTreeMap<PublishableHandle, PublishablePackage> = packages
         .into_iter()
         .map(|p| (p.handle.clone(), p))
         .collect();
     let mut visited = BTreeSet::new();
 
-    let mut to_visit: Vec<&Package> = packages.iter().map(|e| e.1).collect();
+    let mut to_visit: Vec<&PublishablePackage> = packages.iter().map(|e| e.1).collect();
     to_visit.sort_by(|a, b| a.local_dependencies.len().cmp(&b.local_dependencies.len()));
 
     // Depth-first search topological sort
@@ -34,16 +36,16 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
 
     Ok(order
         .into_iter()
-        .map(&mut |handle: PackageHandle| packages.remove(&handle).unwrap())
+        .map(&mut |handle: PublishableHandle| packages.remove(&handle).unwrap())
         .collect())
 }
 
 fn dependency_order_visit(
-    package_handle: &PackageHandle,
-    packages: &BTreeMap<PackageHandle, Package>,
-    stack: &mut BTreeSet<PackageHandle>,
-    visited: &mut BTreeSet<PackageHandle>,
-    result: &mut Vec<PackageHandle>,
+    package_handle: &PublishableHandle,
+    packages: &BTreeMap<PublishableHandle, PublishablePackage>,
+    stack: &mut BTreeSet<PublishableHandle>,
+    visited: &mut BTreeSet<PublishableHandle>,
+    result: &mut Vec<PublishableHandle>,
 ) -> Result<()> {
     if visited.contains(package_handle) {
         return Ok(());
@@ -75,7 +77,7 @@ mod tests {
     use semver::Version;
     use smithy_rs_tool_common::package::Publish;
 
-    fn package(name: &str, dependencies: &[&str]) -> Package {
+    fn package(name: &str, dependencies: &[&str]) -> PublishablePackage {
         Package::new(
             PackageHandle::new(name, Version::parse("1.0.0").ok()),
             format!("{}/Cargo.toml", name),
@@ -85,6 +87,7 @@ mod tests {
                 .collect(),
             Publish::Allowed,
         )
+        .expect_publishable()
     }
 
     #[test]
