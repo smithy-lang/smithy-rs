@@ -64,7 +64,7 @@ overrides the first variable, but only for the DynamoDB service.
 When defining service-specific configuration in a profile file, it looks like
 this:
 
-```
+```ignore
 [profile dev]
 services = testing-s3-and-eb
 endpoint_url = http://localhost:9000
