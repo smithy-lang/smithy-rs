@@ -1,0 +1,17 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "codecatalyst-tests"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-sdk-codecatalyst = { path = "../../build/aws-sdk/sdk/codecatalyst", features = ["behavior-version-latest", "test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "wire-mock", "test-util"] }
+tokio = { version = "1.23.1", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

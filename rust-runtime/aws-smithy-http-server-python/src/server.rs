@@ -499,9 +499,7 @@ event_loop.add_signal_handler(signal.SIGINT,
 }
 
 fn addr_incoming_from_socket(socket: Socket) -> AddrIncoming {
-    let std_listener: StdTcpListener = socket
-        .try_into()
-        .expect("unable to convert `socket2::Socket` into `std::net::TcpListener`");
+    let std_listener: StdTcpListener = socket.into();
     // StdTcpListener::from_std doesn't set O_NONBLOCK
     std_listener
         .set_nonblocking(true)

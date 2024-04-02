@@ -80,6 +80,18 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /** impl block of `ConfigBuilder` **/
     object BuilderImpl : ServiceConfig("BuilderImpl")
 
+    // It is important to ensure through type system that each field added to config implements this injection,
+    // tracked by smithy-rs#3419
+
+    /**
+     * Load a value from a config bag and store it in ConfigBuilder
+     *  e.g.
+     *  ```kotlin
+     *  rust("""builder.set_field(config_bag.load::<FieldType>().cloned())""")
+     *  ```
+     */
+    data class BuilderFromConfigBag(val builder: String, val config_bag: String) : ServiceConfig("BuilderFromConfigBag")
+
     /**
      * Convert from a field in the builder to the final field in config
      *  e.g.
@@ -88,11 +100,6 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  ```
      */
     object BuilderBuild : ServiceConfig("BuilderBuild")
-
-    /**
-     * A section for customizing individual fields in the initializer of Config
-     */
-    object BuilderBuildExtras : ServiceConfig("BuilderBuildExtras")
 
     /**
      * A section for setting up a field to be used by ConfigOverrideRuntimePlugin
@@ -203,10 +210,7 @@ fun loadFromConfigBag(
  * 2. convenience setter (non-optional)
  * 3. standard setter (&mut self)
  */
-fun standardConfigParam(
-    param: ConfigParam,
-    codegenContext: ClientCodegenContext,
-): ConfigCustomization =
+fun standardConfigParam(param: ConfigParam): ConfigCustomization =
     object : ConfigCustomization() {
         override fun section(section: ServiceConfig): Writable {
             return when (section) {
@@ -232,6 +236,16 @@ fun standardConfigParam(
                             """,
                             "T" to param.type,
                             "newtype" to param.newtype!!,
+                        )
+                    }
+
+                is ServiceConfig.BuilderFromConfigBag ->
+                    writable {
+                        rustTemplate(
+                            """
+                            ${section.builder}.set_${param.name}(${section.config_bag}.#{load_from_config_bag});
+                            """,
+                            "load_from_config_bag" to loadFromConfigBag(param.type.name, param.newtype!!),
                         )
                     }
 
@@ -304,6 +318,26 @@ class ServiceConfigGenerator(
                     RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::behavior_version::BehaviorVersion"),
                 ),
         )
+
+    private fun builderFromConfigBag() =
+        writable {
+            val builderVar = "builder"
+            val configBagVar = "config_bag"
+
+            docs("Constructs a config builder from the given `$configBagVar`, setting only fields stored in the config bag,")
+            docs("but not those in runtime components.")
+            Attribute.AllowUnused.render(this)
+            rustBlockTemplate(
+                "pub(crate) fn from_config_bag($configBagVar: &#{ConfigBag}) -> Self",
+                *codegenScope,
+            ) {
+                rust("let mut $builderVar = Self::new();")
+                customizations.forEach {
+                    it.section(ServiceConfig.BuilderFromConfigBag(builderVar, configBagVar))(this)
+                }
+                rust("$builderVar")
+            }
+        }
 
     private fun behaviorMv() =
         writable {
@@ -451,6 +485,8 @@ class ServiceConfigGenerator(
         writer.rustBlock("impl Builder") {
             writer.docs("Constructs a config builder.")
             writer.rust("pub fn new() -> Self { Self::default() }")
+
+            builderFromConfigBag()(this)
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
@@ -522,9 +558,6 @@ class ServiceConfigGenerator(
                     it.section(ServiceConfig.BuilderBuild)(this)
                 }
                 rustBlock("Config") {
-                    customizations.forEach {
-                        it.section(ServiceConfig.BuilderBuildExtras)(this)
-                    }
                     rustTemplate(
                         """
                         config: #{Layer}::from(layer.clone()).with_name("$moduleUseName::config::Config").freeze(),

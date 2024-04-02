@@ -18,7 +18,6 @@ test-util = []
 async-std = "1.12.0"
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["behavior-version-latest"] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
@@ -27,6 +26,7 @@ aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util", "wire-mock"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
+aws-smithy-experimental = { path = "../../build/aws-sdk/sdk/aws-smithy-experimental", features = ["crypto-ring"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"

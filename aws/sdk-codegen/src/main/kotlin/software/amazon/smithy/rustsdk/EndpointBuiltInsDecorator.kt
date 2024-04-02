@@ -148,7 +148,6 @@ fun decoratorForBuiltIn(
                 standardConfigParam(
                     clientParamBuilder?.toConfigParam(builtIn, codegenContext.runtimeConfig) ?: ConfigParam.Builder()
                         .toConfigParam(builtIn, codegenContext.runtimeConfig),
-                    codegenContext,
                 )
             }
         }

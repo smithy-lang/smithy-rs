@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.testutil.BasicTestModels
@@ -24,6 +25,11 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class ServiceConfigGeneratorTest {
+    private fun codegenScope(rc: RuntimeConfig): Array<Pair<String, Any>> =
+        arrayOf(
+            "ConfigBag" to RuntimeType.configBag(rc),
+        )
+
     @Test
     fun `idempotency token when used`() {
         fun model(trait: String) =
@@ -124,6 +130,20 @@ internal class ServiceConfigGeneratorTest {
                             )
                         }
 
+                    is ServiceConfig.BuilderFromConfigBag ->
+                        writable {
+                            rustTemplate(
+                                """
+                                ${section.builder} = ${section.builder}.config_field(${section.config_bag}.load::<#{T}>().map(|u| u.0).unwrap());
+                                """,
+                                "T" to
+                                    configParamNewtype(
+                                        "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
+                                        codegenContext.runtimeConfig,
+                                    ),
+                            )
+                        }
+
                     else -> emptySection
                 }
             }
@@ -172,6 +192,34 @@ internal class ServiceConfigGeneratorTest {
                         .runtime_plugin(TestRuntimePlugin)
                         .build();
                     assert_eq!(config.runtime_plugins.len(), 1);
+                    """,
+                )
+
+                unitTest(
+                    "builder_from_config_bag",
+                    """
+                    use aws_smithy_runtime::client::retries::RetryPartition;
+                    use aws_smithy_types::config_bag::ConfigBag;
+                    use aws_smithy_types::config_bag::Layer;
+                    use aws_smithy_types::retry::RetryConfig;
+                    use aws_smithy_types::timeout::TimeoutConfig;
+
+                    let mut layer = Layer::new("test");
+                    layer.store_put(crate::config::ConfigField(0));
+                    layer.store_put(RetryConfig::disabled());
+                    layer.store_put(crate::config::StalledStreamProtectionConfig::disabled());
+                    layer.store_put(TimeoutConfig::builder().build());
+                    layer.store_put(RetryPartition::new("test"));
+
+                    let config_bag = ConfigBag::of_layers(vec![layer]);
+                    let builder = crate::config::Builder::from_config_bag(&config_bag);
+                    let config = builder.build();
+
+                    assert_eq!(config.config_field(), 0);
+                    assert!(config.retry_config().is_some());
+                    assert!(config.stalled_stream_protection().is_some());
+                    assert!(config.timeout_config().is_some());
+                    assert!(config.retry_partition().is_some());
                     """,
                 )
             }

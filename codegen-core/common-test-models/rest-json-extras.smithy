@@ -8,6 +8,30 @@ use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use smithy.framework#ValidationException
 
+// TODO(https://github.com/smithy-lang/smithy/pull/2167): Remove this test once it's fixed in Smithy
+apply AllQueryStringTypes @httpRequestTests([
+    {
+        id: "RestJsonZeroAndFalseQueryValuesFixed"
+        documentation: "Query values of 0 and false are serialized"
+        protocol: restJson1
+        method: "GET"
+        uri: "/AllQueryStringTypesInput"
+        body: ""
+        queryParams: [
+            "Integer=0"
+            "Boolean=false"
+        ]
+        params: {
+            queryInteger: 0
+            queryBoolean: false
+            queryParamsMapOfStringList: {
+                Integer: ["0"]
+                Boolean: ["false"]
+            }
+        }
+    }
+])
+
 apply QueryPrecedence @httpRequestTests([
     {
         id: "UrlParamsKeyEncoding",
@@ -65,11 +89,9 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
-        // They're being added in https://github.com/smithy-lang/smithy/pull/1908
-        HttpPayloadWithUnion,
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3315)
-        ZeroAndFalseQueryParams,
+        QueryPrecedence,
+        // TODO(https://github.com/smithy-lang/smithy/pull/2167): Remove this test once it's fixed in Smithy
+        AllQueryStringTypes,
     ],
     errors: [ExtraError]
 }
@@ -352,34 +374,4 @@ structure EmptyStructWithContentOnWireOpOutput {
 ])
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
-}
-@http(uri: "/zero-and-false-query-params", method: "GET")
-@httpRequestTests([
-    {
-        id: "RestJsonZeroAndFalseQueryParamsAreSerialized",
-        protocol: restJson1,
-        code: 200,
-        method: "GET",
-        uri: "/zero-and-false-query-params",
-        body: "",
-        queryParams: [
-            "Zero=0",
-            "False=false"
-        ],
-        params: {
-            zeroValue: 0,
-            falseValue: false
-        }
-    }
-])
-operation ZeroAndFalseQueryParams {
-    input: ZeroAndFalseQueryParamsInput
-}
-
-structure ZeroAndFalseQueryParamsInput {
-    @httpQuery("Zero")
-    zeroValue: Integer
-
-    @httpQuery("False")
-    falseValue: Boolean
 }

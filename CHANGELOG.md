@@ -1,4 +1,73 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 25th, 2024
+================
+**New this release:**
+- (all, [smithy-rs#3476](https://github.com/smithy-lang/smithy-rs/issues/3476), @landonxjames) Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @landonxjames ([smithy-rs#3476](https://github.com/smithy-lang/smithy-rs/issues/3476))
+
+
+March 12th, 2024
+================
+**New this release:**
+- :tada: (all, [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409), [aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), @landonxjames, @eduardomourar) Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments
+- :tada: (client, [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409), @landonxjames, @eduardomourar) Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments
+- :tada: (all, [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365), [aws-sdk-rust#1046](https://github.com/awslabs/aws-sdk-rust/issues/1046), @cayman-amzn) [`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/body/struct.SdkBody.html) now implements the 1.0 version of the `http_body::Body` trait.
+- (all, [smithy-rs#3470](https://github.com/smithy-lang/smithy-rs/issues/3470)) Upgrade Smithy to 1.45.
+- (client, [smithy-rs#3465](https://github.com/smithy-lang/smithy-rs/issues/3465), [smithy-rs#3477](https://github.com/smithy-lang/smithy-rs/issues/3477)) The `ResolveIdentity` trait is now aware of its `IdentityCache` location.
+- (client, [smithy-rs#3465](https://github.com/smithy-lang/smithy-rs/issues/3465), [smithy-rs#3477](https://github.com/smithy-lang/smithy-rs/issues/3477)) `RuntimeComponents` can now be converted back to a `RuntimeComponentsBuilder`, using `.to_builder()`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @cayman-amzn ([aws-sdk-rust#1046](https://github.com/awslabs/aws-sdk-rust/issues/1046), [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365))
+- @eduardomourar ([aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409))
+- @landonxjames ([aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409))
+
+
+February 22nd, 2024
+===================
+**New this release:**
+- (all, [smithy-rs#3410](https://github.com/smithy-lang/smithy-rs/issues/3410)) The MSRV has been increase to 1.74.1
+
+
+February 15th, 2024
+===================
+**Breaking Changes:**
+- :bug::warning: (client, [smithy-rs#3405](https://github.com/smithy-lang/smithy-rs/issues/3405), [smithy-rs#3400](https://github.com/smithy-lang/smithy-rs/issues/3400), [smithy-rs#3258](https://github.com/smithy-lang/smithy-rs/issues/3258)) Fix bug where timeout settings where not merged properly. This will add a default connect timeout of 3.1s seconds for most clients.
+
+    [**For more details see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3408).
+
+**New this release:**
+- (all, [aws-sdk-rust#977](https://github.com/awslabs/aws-sdk-rust/issues/977), [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365), [smithy-rs#3373](https://github.com/smithy-lang/smithy-rs/issues/3373)) Add `try_into_http1x` and `try_from_http1x` to Request and Response container types.
+- (client, [smithy-rs#3336](https://github.com/smithy-lang/smithy-rs/issues/3336), [smithy-rs#3391](https://github.com/smithy-lang/smithy-rs/issues/3391), @iampkmone) Added impl `Display` to Enums.
+- :bug: (all, [smithy-rs#3322](https://github.com/smithy-lang/smithy-rs/issues/3322)) Retry classifiers will now be sorted by priority. This change only affects requests
+    that are retried. Some requests that were previously been classified as transient
+    errors may now be classified as throttling errors.
+
+    If you were
+
+    - configuring multiple custom retry classifiers
+    - that would disagree on how to classify a response
+    - that have differing priorities
+
+    you may see a behavior change in that classification for the same response is now
+    dependent on the classifier priority instead of the order in which the classifier
+    was added.
+- :bug: (client, [smithy-rs#3402](https://github.com/smithy-lang/smithy-rs/issues/3402)) Cap the maximum jitter fraction for identity cache refresh buffer time to 0.5. It was previously 1.0, and if the fraction was randomly set to 1.0, it was equivalent to disregarding the buffer time for cache refresh.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @iampkmone ([smithy-rs#3336](https://github.com/smithy-lang/smithy-rs/issues/3336), [smithy-rs#3391](https://github.com/smithy-lang/smithy-rs/issues/3391))
+
+
+February 8th, 2024
+==================
+
+January 24th, 2024
+==================
+
 January 18th, 2024
 ==================
 **New this release:**

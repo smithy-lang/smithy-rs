@@ -89,14 +89,10 @@ class FluentClientGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
-    fun render(
-        crate: RustCrate,
-        customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList(),
-    ) {
+    fun render(crate: RustCrate) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator =
-            CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -166,7 +162,7 @@ class FluentClientGenerator(
                 """,
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext, customizations),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "client_docs" to
                     writable {
@@ -471,7 +467,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType =
+private fun baseClientRuntimePluginsFn(
+    codegenContext: ClientCodegenContext,
+    customizations: List<FluentClientCustomization>,
+): RuntimeType =
     codegenContext.runtimeConfig.let { rc ->
         RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
             val api = RuntimeType.smithyRuntimeApiClient(rc)
@@ -487,8 +486,6 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                 ) -> #{RuntimePlugins} {
                     let mut configured_plugins = #{Vec}::new();
                     ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
-                    ##[allow(unused_mut)]
-                    let mut behavior_version = config.behavior_version.clone();
                     #{update_bmv}
 
                     let mut plugins = #{RuntimePlugins}::new()
@@ -496,7 +493,7 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                         .with_client_plugins(#{default_plugins}(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
-                                .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
+                                .with_behavior_version(config.behavior_version.clone().expect(${behaviorVersionError.dq()}))
                         ))
                         // user config
                         .with_client_plugin(
@@ -505,8 +502,10 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                                 .with_runtime_components(config.runtime_components.clone())
                         )
                         // codegen config
-                        .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
+                        .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
                         .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+
+                    #{additional_client_plugins:W};
 
                     for plugin in configured_plugins {
                         plugins = plugins.with_client_plugin(plugin);
@@ -515,6 +514,13 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                 }
                 """,
                 *preludeScope,
+                "additional_client_plugins" to
+                    writable {
+                        writeCustomizations(
+                            customizations,
+                            FluentClientSection.AdditionalBaseClientPlugins("plugins", "config"),
+                        )
+                    },
                 "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
                 "default_plugins" to rt.resolve("client::defaults::default_plugins"),
                 "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
@@ -524,8 +530,8 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                     featureGatedBlock(BehaviorVersionLatest) {
                         rustTemplate(
                             """
-                            if behavior_version.is_none() {
-                                behavior_version = Some(#{BehaviorVersion}::latest());
+                            if config.behavior_version.is_none() {
+                                config.behavior_version = Some(#{BehaviorVersion}::latest());
                             }
 
                             """,
@@ -594,7 +600,7 @@ private fun generateShapeMemberDocs(
     }
 }
 
-internal fun OperationShape.fluentBuilderType(symbolProvider: RustSymbolProvider): RuntimeType =
+fun OperationShape.fluentBuilderType(symbolProvider: RustSymbolProvider): RuntimeType =
     symbolProvider.moduleForBuilder(this).toType()
         .resolve(symbolProvider.toSymbol(this).name + "FluentBuilder")
 

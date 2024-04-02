@@ -184,6 +184,26 @@ class JsonParserGeneratorTest {
             )
 
             unitTest(
+                "allow_null_for_variants",
+                """
+                // __type field should be ignored during deserialization
+                let input = br#"{ "top": { "choice": { "blob": null, "boolean": null, "int": 5, "long": null, "__type": "value-should-be-ignored-anyway" } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
+                use test_model::Choice;
+                assert_eq!(Choice::Int(5), output.top.unwrap().choice);
+                """,
+            )
+
+            unitTest(
+                "all_variants_null",
+                """
+                // __type field should be ignored during deserialization
+                let input = br#"{ "top": { "choice": { "blob": null, "boolean": null, "int": null, "long": null, "__type": "value-should-be-ignored-anyway" } } }"#;
+                let _err = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).expect_err("invalid union");
+                """,
+            )
+
+            unitTest(
                 "empty_error",
                 """
                 // empty error

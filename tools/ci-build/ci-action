@@ -33,7 +33,7 @@ ACTION_PATH="$("${SCRIPT_PATH}"/ci-create-workspace)"
 cd "${SCRIPT_PATH}"
 
 function cleanup {
-    docker-compose -f build.docker-compose.yml down
+    docker compose -f build.docker-compose.yml down
     cd "${START_PATH}"
     mv "${ACTION_PATH}/workspace/artifacts" .
     if [[ -d "${ACTION_PATH}/workspace/smithy-rs/target" ]]; then
@@ -51,10 +51,10 @@ GROUP_ID="$(id -g)"
 export USER_ID
 export GROUP_ID
 export GRADLE_CACHE_PATH="${START_PATH}/gradle"
-docker-compose -f build.docker-compose.yml up -d
+docker compose -f build.docker-compose.yml up -d
 if [[ "${ACTION_NAME}" == "--shell" ]]; then
-    docker-compose -f build.docker-compose.yml exec smithy-rs-build /bin/bash
+    docker compose -f build.docker-compose.yml exec smithy-rs-build /bin/bash
 else
-    docker-compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./ci-scripts/${ACTION_NAME} ${ACTION_ARGS[*]}"
+    docker compose -f build.docker-compose.yml exec -T smithy-rs-build bash -c "cd workspace; ./ci-scripts/${ACTION_NAME} ${ACTION_ARGS[*]}"
 fi
 exit $?

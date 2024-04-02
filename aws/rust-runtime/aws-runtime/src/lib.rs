@@ -19,6 +19,10 @@
 /// Supporting code for authentication in the AWS SDK.
 pub mod auth;
 
+/// AWS-specific content-encoding tools
+#[cfg(feature = "http-02x")]
+pub mod content_encoding;
+
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;
 
@@ -36,3 +40,10 @@ pub mod request_info;
 
 /// Interceptor that determines the clock skew between the client and service.
 pub mod service_clock_skew;
+
+/// Filesystem utilities
+pub mod fs_util;
+
+/// Supporting code for parsing AWS config values set in a user's environment or
+/// in a shared config file.
+pub mod env_config;
