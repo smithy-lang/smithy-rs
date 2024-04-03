@@ -34,7 +34,7 @@ impl GetBenchmark for GetObjectMultipart {
     type Setup = Vec<Client>;
 
     async fn prepare(&self, conf: &SdkConfig) -> Self::Setup {
-        let clients = (0..32).map(|_| Client::new(&conf)).collect::<Vec<_>>();
+        let clients = (0..32).map(|_| Client::new(conf)).collect::<Vec<_>>();
         for client in &clients {
             let _ = client.list_buckets().send().await;
         }
@@ -59,22 +59,19 @@ pub async fn get_object_multipart(
     bucket: &str,
     key: &str,
 ) -> Result<(), BoxError> {
-    let mut part_count = (args.size_bytes / args.part_size_bytes + 1) as u64;
-    let mut size_of_last_part = (args.size_bytes % args.part_size_bytes) as u64;
+    let mut part_count = args.size_bytes / args.part_size_bytes + 1;
+    let mut size_of_last_part = args.size_bytes % args.part_size_bytes;
     if size_of_last_part == 0 {
-        size_of_last_part = args.part_size_bytes as u64;
+        size_of_last_part = args.part_size_bytes;
         part_count -= 1;
     }
 
     let ranges = (0..part_count).map(|i| {
         if i == part_count - 1 {
-            let start = i * args.part_size_bytes as u64;
+            let start = i * args.part_size_bytes;
             ContentRange::new(start, start + size_of_last_part - 1)
         } else {
-            ContentRange::new(
-                i * args.part_size_bytes as u64,
-                (i + 1) * args.part_size_bytes as u64 - 1,
-            )
+            ContentRange::new(i * args.part_size_bytes, (i + 1) * args.part_size_bytes - 1)
         }
     });
 
