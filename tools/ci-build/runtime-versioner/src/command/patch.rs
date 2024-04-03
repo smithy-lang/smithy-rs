@@ -203,8 +203,8 @@ fn remove_unchanged_path_dependencies(
     patched_crate: &Package,
 ) -> Result<()> {
     let manifest_path = &patched_crate.manifest_path;
-    let manifest = Manifest::from_path(&manifest_path)?;
-    let mut mutable_manifest = fs::read_to_string(&manifest_path)
+    let manifest = Manifest::from_path(manifest_path)?;
+    let mut mutable_manifest = fs::read_to_string(manifest_path)
         .context("failed to read file")
         .with_context(|| manifest_path.display().to_string())?
         .parse::<DocumentMut>()
@@ -245,7 +245,7 @@ fn remove_unchanged_path_dependencies(
         }
     }
     if updates {
-        fs::write(&manifest_path, mutable_manifest.to_string())
+        fs::write(manifest_path, mutable_manifest.to_string())
             .context("failed to write back manifest")?
     }
     Ok(())
