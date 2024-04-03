@@ -28,11 +28,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.SdkConfigSection
 import software.amazon.smithy.rustsdk.SigV4AuthDecorator
 
 class S3ExpressDecorator : ClientCodegenDecorator {
@@ -80,6 +83,25 @@ class S3ExpressDecorator : ClientCodegenDecorator {
             S3ExpressRequestChecksumCustomization(
                 codegenContext, operation,
             )
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        return listOf(
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_disable_s3_express_session_auth(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_EXPRESS_SESSION_AUTH", "s3_disable_express_session_auth"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    """,
+                )
+            },
+        )
+    }
 }
 
 private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
