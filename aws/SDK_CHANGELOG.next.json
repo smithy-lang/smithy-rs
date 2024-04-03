@@ -284,20 +284,6 @@
       "age": 1
     },
     {
-      "message": "Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:\n\n```rust\nlet config = aws_config::defaults(BehaviorVersion::latest())\n    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())\n    .load()\n    .await;\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3485"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 1
-    },
-    {
       "message": "Users may now set service-specific configuration in the environment. For more information, see [this discussion topic](https://github.com/smithy-lang/smithy-rs/discussions/3537).",
       "meta": {
         "bug": false,
