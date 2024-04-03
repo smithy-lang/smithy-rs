@@ -10,3 +10,10 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[smithy-rs]]
+message = "Unions with unit target member shape are now fully supported"
+references = ["smithy-rs#2546"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "drganjoo"
+
+
