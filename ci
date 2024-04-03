@@ -10,7 +10,7 @@ if [[ $# -lt 1 ]]; then
     echo "Usage: ci <action> [args...]"
     echo
     echo "Runs a CI action from tools/ci-build/scripts within the Docker build image."
-    echo "Requires Docker and docker-compose to both be installed."
+    echo "Requires Docker and docker compose to both be installed."
     echo
     echo "Note: Some actions may require 'aws-sdk-rust' and/or 'aws-doc-sdk-examples'"
     echo "to be checked out in the same directory as 'smithy-rs'."
