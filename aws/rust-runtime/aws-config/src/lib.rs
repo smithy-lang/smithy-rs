@@ -512,8 +512,8 @@ mod loader {
         /// This allows for testing in a reproducible environment that ensures any
         /// environment variables from the host do not influence environment variable
         /// resolution.
-        pub fn empty_test_environment(self) -> Self {
-            self.env(Env::from_slice(&[]));
+        pub fn empty_test_environment(mut self) -> Self {
+            self.env = Some(Env::from_slice(&[]));
             self
         }
 
@@ -762,6 +762,7 @@ mod loader {
                     .region()
                     .await
             };
+            let conf = conf.with_region(region.clone());
 
             let retry_config = if let Some(retry_config) = self.retry_config {
                 retry_config
