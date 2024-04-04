@@ -1,0 +1,67 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Open a backport PR to merge the release branch into main
+
+on:
+  # automatically called by release.yml
+  workflow_dispatch:
+  # can also be manually triggered when a patch fix is merged into the release branch and needs to be back-ported
+  workflow_call:
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
+
+env:
+  release_branch: smithy-rs-release-1.x.y
+
+jobs:
+  create-backport-pull-request:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+
+    - name: Prepare backport branch
+      id: backport-branch
+      run: |
+        git fetch
+        git checkout origin/main
+        backport_branch="merge-${{ env.release_branch }}-to-main-$(date +%s)"
+        git checkout -b "${backport_branch}"
+
+        # This assumes the merge runs cleanly without conflicts, which should be the case when
+        # this workflow is called by the release workflow right after a release tag has been created.
+        git merge "origin/${{ env.release_branch }}" -m 'Merge remote-tracking branch "origin/${{ env.release_branch }}" into "merge-${{ env.release_branch }}-to-main"'
+        git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' push origin HEAD
+
+        echo "branch_name=${backport_branch}" > $GITHUB_OUTPUT
+
+    - name: Create pull request
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        script: |
+          const { repo, owner } = context.repo;
+          const result = await github.rest.pulls.create({
+            title: 'Merge ${{ env.release_branch }} into main',
+            owner,
+            repo,
+            head: '${{ steps.backport-branch.outputs.branch_name }}',
+            base: 'main',
+            body: [
+              "Merge it with `gh pr merge --admin --merge` or manually merge it with the merge commit (not squash merge).",
+              "",
+              "_By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice._"
+            ].join('\n'),
+            draft: true
+          });
+
+          github.rest.issues.addLabels({
+            owner,
+            repo,
+            issue_number: result.data.number,
+            labels: ['needs-sdk-review']
+          });
