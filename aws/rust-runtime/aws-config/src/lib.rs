@@ -507,6 +507,16 @@ mod loader {
             ret
         }
 
+        /// Ignore any environment variables on the host during config resolution
+        ///
+        /// This allows for testing in a reproducible environment that ensures any
+        /// environment variables from the host do not influence environment variable
+        /// resolution.
+        pub fn empty_test_environment(self) -> Self {
+            self.env(Env::from_slice(&[]));
+            self
+        }
+
         /// Override the access token provider used to build [`SdkConfig`].
         ///
         /// # Examples
