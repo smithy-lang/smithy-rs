@@ -58,6 +58,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             RetryInformationHeaderDecorator(),
             RemoveDefaultsDecorator(),
             TokenProvidersDecorator(),
+            ServiceEnvConfigDecorator(),
         ),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
