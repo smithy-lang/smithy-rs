@@ -272,10 +272,9 @@ jobs:
   open-backport-pull-request:
     name: Open backport pull request to merge the release branch back to main
     needs:
-    - release
     - trim-changelog-next-on-main
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
-    if: inputs.dry_run == false && always() && contains(needs.*.result, 'success')
+    if: inputs.dry_run == false && always() && needs.trim-changelog-next-on-main.result == 'success'
     uses: ./.github/workflows/backport-pull-request.yml
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
