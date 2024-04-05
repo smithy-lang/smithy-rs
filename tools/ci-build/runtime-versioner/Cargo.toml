@@ -1,0 +1,33 @@
+[package]
+name = "runtime-versioner"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "Tool that manages runtime crate versions."
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+anyhow = "1.0.75"
+camino = "1.1.6"
+clap = { version = "4.4.11", features = ["derive"] }
+crates-index = "2.3.0"
+indicatif = "0.17.7"
+reqwest = { version = "0.11.22", features = ["blocking"] }
+smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
+tempfile = "3.9.0"
+toml = { version = "0.5.8", features = ["preserve_order"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+# why both? cargo_toml can't write out to a file because of a toml_rs longstanding issue/bug
+cargo_toml = "0.19.0"
+toml_edit = "0.22"
+
+[dev-dependencies]
+test-common = { path = "./test-common" }

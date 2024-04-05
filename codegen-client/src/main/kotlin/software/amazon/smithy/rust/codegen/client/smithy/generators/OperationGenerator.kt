@@ -36,9 +36,10 @@ import software.amazon.smithy.rust.codegen.core.util.sdkId
 open class OperationGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
-    private val bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(
-        codegenContext, protocol,
-    ),
+    private val bodyGenerator: ProtocolPayloadGenerator =
+        ClientHttpBoundProtocolPayloadGenerator(
+            codegenContext, protocol,
+        ),
 ) {
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -87,31 +88,35 @@ open class OperationGenerator(
 
             val outputType = symbolProvider.toSymbol(operationShape.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operationShape)
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "Arc" to RuntimeType.Arc,
-                "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
-                "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
-                "Operation" to symbolProvider.toSymbol(operationShape),
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                    .resolve("client::orchestrator::HttpResponse"),
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            )
-            val additionalPlugins = writable {
-                writeCustomizations(
-                    operationCustomizations,
-                    OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "Arc" to RuntimeType.Arc,
+                    "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
+                    "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
+                    "Operation" to symbolProvider.toSymbol(operationShape),
+                    "OperationError" to errorType,
+                    "OperationOutput" to outputType,
+                    "HttpResponse" to
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::orchestrator::HttpResponse"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 )
-                rustTemplate(
-                    ".with_client_plugin(#{auth_plugin})",
-                    "auth_plugin" to AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                        operationShape,
-                        authSchemeOptions,
-                    ),
-                )
-            }
+            val additionalPlugins =
+                writable {
+                    writeCustomizations(
+                        operationCustomizations,
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+                    )
+                    rustTemplate(
+                        ".with_client_plugin(#{auth_plugin})",
+                        "auth_plugin" to
+                            AuthOptionsPluginGenerator(codegenContext).authPlugin(
+                                operationShape,
+                                authSchemeOptions,
+                            ),
+                    )
+                }
             rustTemplate(
                 """
                 pub(crate) async fn orchestrate(
@@ -166,24 +171,27 @@ open class OperationGenerator(
                 *codegenScope,
                 "Error" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Error"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-                "OrchestratorError" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                    .resolve("client::orchestrator::error::OrchestratorError"),
+                "OrchestratorError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::orchestrator::error::OrchestratorError"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                 "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-                "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig)
-                    .resolve("client::orchestrator::invoke_with_stop_point"),
-                "additional_runtime_plugins" to writable {
-                    if (additionalPlugins.isNotEmpty()) {
-                        rustTemplate(
-                            """
-                            runtime_plugins = runtime_plugins
-                                #{additional_runtime_plugins};
-                            """,
-                            "additional_runtime_plugins" to additionalPlugins,
-                        )
-                    }
-                },
+                "invoke_with_stop_point" to
+                    RuntimeType.smithyRuntime(runtimeConfig)
+                        .resolve("client::orchestrator::invoke_with_stop_point"),
+                "additional_runtime_plugins" to
+                    writable {
+                        if (additionalPlugins.isNotEmpty()) {
+                            rustTemplate(
+                                """
+                                runtime_plugins = runtime_plugins
+                                    #{additional_runtime_plugins};
+                                """,
+                                "additional_runtime_plugins" to additionalPlugins,
+                            )
+                        }
+                    },
             )
 
             writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))

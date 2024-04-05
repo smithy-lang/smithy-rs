@@ -16,22 +16,23 @@ import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 
 class MetadataCustomizationTest {
-
     @Test
     fun `extract metadata via customizable operation`() {
         clientIntegrationTest(BasicTestModels.AwsJson10TestModel) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
-                "BoxError" to RuntimeType.boxError(runtimeConfig),
-                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-                "Intercept" to RuntimeType.intercept(runtimeConfig),
-                "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
-                "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                "RuntimeComponents" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                    .resolve("client::runtime_components::RuntimeComponents"),
-            )
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
+                    "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+                    "Intercept" to RuntimeType.intercept(runtimeConfig),
+                    "Metadata" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::Metadata"),
+                    "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                    "RuntimeComponents" to
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::runtime_components::RuntimeComponents"),
+                )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_extract_metadata_via_customizable_operation") {

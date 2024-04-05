@@ -24,24 +24,32 @@ class S3ControlDecorator : ClientCodegenDecorator {
     override val name: String = "S3Control"
     override val order: Byte = 0
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
-        stripEndpointTrait("AccountId")(model)
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model = stripEndpointTrait("AccountId")(model)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
-        return listOf(object : EndpointCustomization {
-            override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                if (!name.startsWith("AWS::S3Control")) {
-                    return null
+        return listOf(
+            object : EndpointCustomization {
+                override fun setBuiltInOnServiceConfig(
+                    name: String,
+                    value: Node,
+                    configBuilderRef: String,
+                ): Writable? {
+                    if (!name.startsWith("AWS::S3Control")) {
+                        return null
+                    }
+                    val builtIn = codegenContext.getBuiltIn(name) ?: return null
+                    return writable {
+                        rustTemplate(
+                            "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
+                            "value" to value.toWritable(),
+                        )
+                    }
                 }
-                val builtIn = codegenContext.getBuiltIn(name) ?: return null
-                return writable {
-                    rustTemplate(
-                        "let $configBuilderRef = $configBuilderRef.${builtIn.name.rustName()}(#{value});",
-                        "value" to value.toWritable(),
-                    )
-                }
-            }
-        },
+            },
         )
     }
 }

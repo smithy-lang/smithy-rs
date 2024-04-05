@@ -37,12 +37,16 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
  */
 class ClientContextConfigCustomization(ctx: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = ctx.runtimeConfig
-    private val configParams = ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
-        .map { (key, value) -> fromClientParam(key, value, ctx.symbolProvider, runtimeConfig) }
-    private val decorators = configParams.map { standardConfigParam(it, ctx) }
+    private val configParams =
+        ctx.serviceShape.getTrait<ClientContextParamsTrait>()?.parameters.orEmpty().toList()
+            .map { (key, value) -> fromClientParam(key, value, ctx.symbolProvider, runtimeConfig) }
+    private val decorators = configParams.map { standardConfigParam(it) }
 
     companion object {
-        fun toSymbol(shapeType: ShapeType, symbolProvider: RustSymbolProvider): Symbol =
+        fun toSymbol(
+            shapeType: ShapeType,
+            symbolProvider: RustSymbolProvider,
+        ): Symbol =
             symbolProvider.toSymbol(
                 when (shapeType) {
                     ShapeType.STRING -> StringShape.builder().id("smithy.api#String").build()

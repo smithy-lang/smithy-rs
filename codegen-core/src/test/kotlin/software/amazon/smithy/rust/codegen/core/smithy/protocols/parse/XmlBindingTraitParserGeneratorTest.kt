@@ -29,7 +29,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 internal class XmlBindingTraitParserGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#restXml
         union Choice {
@@ -89,17 +90,18 @@ internal class XmlBindingTraitParserGeneratorTest {
             input: Top,
             output: Top
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = XmlBindingTraitParserGenerator(
-            codegenContext,
-            RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
-        ) { _, inner -> inner("decoder") }
+        val parserGenerator =
+            XmlBindingTraitParserGenerator(
+                codegenContext,
+                RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+            ) { _, inner -> inner("decoder") }
         val operationParser = parserGenerator.operationParser(model.lookup("test#Op"))!!
 
         val choiceShape = model.lookup<UnionShape>("test#Choice")

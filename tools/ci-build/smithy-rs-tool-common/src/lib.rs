@@ -5,10 +5,13 @@
 
 pub mod changelog;
 pub mod ci;
+pub mod command;
 pub mod git;
 #[macro_use]
 pub mod macros;
+pub mod index;
 pub mod package;
 pub mod release_tag;
+pub mod retry;
 pub mod shell;
 pub mod versions_manifest;

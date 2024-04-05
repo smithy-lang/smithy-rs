@@ -28,9 +28,10 @@ class TsConstrainedEnum(
 ) : ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator) {
     private val napiDerive = TsServerCargoDependency.NapiDerive.toType()
 
-    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
-        this.rust("use napi::bindgen_prelude::ToNapiValue;")
-    }
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable =
+        writable {
+            this.rust("use napi::bindgen_prelude::ToNapiValue;")
+        }
 
     override fun additionalEnumAttributes(context: EnumGeneratorContext): List<Attribute> =
         listOf(Attribute(napiDerive.resolve("napi")))
@@ -41,12 +42,12 @@ class TsServerEnumGenerator(
     shape: StringShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) : EnumGenerator(
-    codegenContext.model,
-    codegenContext.symbolProvider,
-    shape,
-    TsConstrainedEnum(
-        codegenContext,
+        codegenContext.model,
+        codegenContext.symbolProvider,
         shape,
-        validationExceptionConversionGenerator,
-    ),
-)
+        TsConstrainedEnum(
+            codegenContext,
+            shape,
+            validationExceptionConversionGenerator,
+        ),
+    )

@@ -30,7 +30,11 @@ class STSDecorator : ClientCodegenDecorator {
 
     private fun isAwsCredentials(shape: Shape): Boolean = shape.id == ShapeId.from("com.amazonaws.sts#Credentials")
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isIdpCommunicationError(shape)) {
                 logger.info("Adding @retryable trait to $shape and setting its error type to 'server'")

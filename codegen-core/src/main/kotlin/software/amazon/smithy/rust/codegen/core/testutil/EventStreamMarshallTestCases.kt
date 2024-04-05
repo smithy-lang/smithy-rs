@@ -23,8 +23,9 @@ object EventStreamMarshallTestCases {
     ) {
         val generator = "crate::event_stream_serde::TestStreamMarshaller"
 
-        val protocolTestHelpers = CargoDependency.smithyProtocolTestHelpers(TestRuntimeConfig)
-            .copy(scope = DependencyScope.Compile)
+        val protocolTestHelpers =
+            CargoDependency.smithyProtocolTestHelpers(TestRuntimeConfig)
+                .copy(scope = DependencyScope.Compile)
 
         fun builderInput(
             @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}")

@@ -22,7 +22,8 @@ internal class EC2MakePrimitivesOptionalTest {
         "CLIENT_ZERO_VALUE_V1_NO_INPUT",
     )
     fun `primitive shapes are boxed`(nullabilityCheckMode: NullableIndex.CheckMode) {
-        val baseModel = """
+        val baseModel =
+            """
             namespace test
             structure Primitives {
                 int: PrimitiveInteger,
@@ -38,7 +39,7 @@ internal class EC2MakePrimitivesOptionalTest {
 
             structure Other {}
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val model = EC2MakePrimitivesOptional.processModel(baseModel)
         val nullableIndex = NullableIndex(model)
         val struct = model.lookup<StructureShape>("test#Primitives")

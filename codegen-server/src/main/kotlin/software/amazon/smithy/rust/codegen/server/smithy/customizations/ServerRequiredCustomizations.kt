@@ -31,10 +31,12 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
 
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val rc = codegenContext.runtimeConfig
 
         // Add rt-tokio feature for `ByteStream::from_path`

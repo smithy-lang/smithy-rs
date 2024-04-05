@@ -34,40 +34,45 @@ class TemplateGenerator(
     private val ownership: Ownership,
     private val exprGenerator: (Expression, Ownership) -> Writable,
 ) : TemplateVisitor<Writable> {
-    override fun visitStaticTemplate(value: String) = writable {
-        // In the case of a static template, return the literal string, eg. `"foo"`.
-        rust(value.dq())
-        if (ownership == Ownership.Owned) {
-            rust(".to_string()")
+    override fun visitStaticTemplate(value: String) =
+        writable {
+            // In the case of a static template, return the literal string, eg. `"foo"`.
+            rust(value.dq())
+            if (ownership == Ownership.Owned) {
+                rust(".to_string()")
+            }
         }
-    }
 
     override fun visitSingleDynamicTemplate(expr: Expression): Writable {
         return exprGenerator(expr, ownership)
     }
 
-    override fun visitStaticElement(str: String) = writable {
-        when (str.length) {
-            0 -> {}
-            1 -> rust("out.push('$str');")
-            else -> rust("out.push_str(${str.dq()});")
+    override fun visitStaticElement(str: String) =
+        writable {
+            when (str.length) {
+                0 -> {}
+                1 -> rust("out.push('$str');")
+                else -> rust("out.push_str(${str.dq()});")
+            }
         }
-    }
 
-    override fun visitDynamicElement(expr: Expression) = writable {
-        // we don't need to own the argument to push_str
-        Attribute.AllowClippyNeedlessBorrow.render(this)
-        rust("out.push_str(&#W);", exprGenerator(expr, Ownership.Borrowed))
-    }
-
-    override fun startMultipartTemplate() = writable {
-        if (ownership == Ownership.Borrowed) {
-            rust("&")
+    override fun visitDynamicElement(expr: Expression) =
+        writable {
+            // we don't need to own the argument to push_str
+            Attribute.AllowClippyNeedlessBorrow.render(this)
+            rust("out.push_str(&#W);", exprGenerator(expr, Ownership.Borrowed))
         }
-        rust("{ let mut out = String::new();")
-    }
 
-    override fun finishMultipartTemplate() = writable {
-        rust(" out }")
-    }
+    override fun startMultipartTemplate() =
+        writable {
+            if (ownership == Ownership.Borrowed) {
+                rust("&")
+            }
+            rust("{ let mut out = String::new();")
+        }
+
+    override fun finishMultipartTemplate() =
+        writable {
+            rust(" out }")
+        }
 }

@@ -1,0 +1,29 @@
+[package]
+name = "aws-smithy-wasm"
+version = "0.1.2"
+authors = [
+  "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+  "Eduardo Rodrigues <16357187+eduardomourar@users.noreply.github.com>",
+]
+description = "Smithy WebAssembly configuration for smithy-rs."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+[dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
+aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-types = { path = "../aws-smithy-types" }
+bytes = "1"
+http = "1.0.0"
+tracing = "0.1.40"
+# Note the wasi crate will only build for target wasm32-wasi, but having a target
+# statement here breaks some of the CI tests, so we leave it with the rest of the deps
+wasi = "0.12.1" # This is build on wasi-0.2.0
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

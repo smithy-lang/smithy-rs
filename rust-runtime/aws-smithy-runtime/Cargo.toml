@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "0.0.0-smithy-rs-head"
+version = "1.3.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -10,14 +10,14 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-client = ["aws-smithy-runtime-api/client"]
+client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
 connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream", "dep:h2"]
 tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
-test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json"]
+test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json", "dep:indexmap"]
 wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
 
 [dependencies]
@@ -31,6 +31,7 @@ fastrand = "2.0.0"
 h2 = { version = "0.3", default-features = false, optional = true }
 http = { version = "0.2.8" }
 http-body-0-4 = { package = "http-body", version = "0.4.4" }
+http-body-1 = { package = "http-body", version = "1" }
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 once_cell = "1.18.0"
@@ -38,28 +39,36 @@ pin-project-lite = "0.2.7"
 pin-utils = "0.1.0"
 rustls = { version = "0.21.8", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1", optional = true }
+serde_json = { version = "1", features = ["preserve_order"], optional = true }
+indexmap = { version = "2", optional = true, features = ["serde"] }
 tokio = { version = "1.25", features = [] }
 tracing = "0.1.37"
-tracing-subscriber = { version = "0.3.16", optional = true, features = ["fmt", "json"] }
+tracing-subscriber = { version = "0.3.16", optional = true, features = ["env-filter", "fmt", "json"] }
 
 [dev-dependencies]
 approx = "0.5.1"
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
-futures-util = "0.3.28"
+futures-util = "0.3.29"
 pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
-hyper_0_14 = { package = "hyper", version = "0.14.27",features = ["client", "server", "tcp", "http1", "http2"] }
+hyper_0_14 = { package = "hyper", version = "0.14.27", features = ["client", "server", "tcp", "http1", "http2"] }
+http1 = { package = "http", version = "1" }
 
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# aws-smithy-http is used by the http-auth feature, which is not turned on by the SDK at all.
+# Without ignoring it, the `check-aws-sdk-smoketest-docs-clippy-udeps` CI script fails.
+[package.metadata.cargo-udeps.ignore]
+normal = ["aws-smithy-http"]

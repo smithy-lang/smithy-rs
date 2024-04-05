@@ -28,17 +28,21 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rustsdk.SdkConfigSection
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
@@ -50,21 +54,33 @@ class S3Decorator : ClientCodegenDecorator {
     override val name: String = "S3"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
-    private val invalidXmlRootAllowList = setOf(
-        // API returns GetObjectAttributes_Response_ instead of Output
-        ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
-    )
+    private val invalidXmlRootAllowList =
+        setOf(
+            // To work around https://github.com/awslabs/aws-sdk-rust/issues/991
+            ShapeId.from("com.amazonaws.s3#CreateSessionOutput"),
+            // API returns GetObjectAttributes_Response_ instead of Output
+            ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
+            // API returns ListAllMyDirectoryBucketsResult instead of ListDirectoryBucketsOutput
+            ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
+        )
 
     override fun protocols(
         serviceId: ShapeId,
         currentProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>,
-    ): ProtocolMap<OperationGenerator, ClientCodegenContext> = currentProtocols + mapOf(
-        RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
-            S3ProtocolOverride(protocolConfig)
-        },
-    )
+    ): ProtocolMap<OperationGenerator, ClientCodegenContext> =
+        currentProtocols +
+            mapOf(
+                RestXmlTrait.ID to
+                    ClientRestXmlFactory { protocolConfig ->
+                        S3ProtocolOverride(protocolConfig)
+                    },
+            )
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
@@ -93,7 +109,11 @@ class S3Decorator : ClientCodegenDecorator {
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
             object : EndpointCustomization {
-                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(
+                    name: String,
+                    value: Node,
+                    configBuilderRef: String,
+                ): Writable? {
                     if (!name.startsWith("AWS::S3")) {
                         return null
                     }
@@ -114,27 +134,55 @@ class S3Decorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + object : OperationCustomization() {
-            override fun section(section: OperationSection): Writable {
-                return writable {
-                    when (section) {
-                        is OperationSection.BeforeParseResponse -> {
-                            section.body?.also { body ->
-                                rustTemplate(
-                                    """
-                                    if matches!(#{errors}::body_is_error($body), Ok(true)) {
-                                        ${section.forceError} = true;
-                                    }
-                                    """,
-                                    "errors" to RuntimeType.unwrappedXmlErrors(codegenContext.runtimeConfig),
-                                )
+        return baseCustomizations +
+            object : OperationCustomization() {
+                override fun section(section: OperationSection): Writable {
+                    return writable {
+                        when (section) {
+                            is OperationSection.BeforeParseResponse -> {
+                                section.body?.also { body ->
+                                    rustTemplate(
+                                        """
+                                        if matches!(#{errors}::body_is_error($body), Ok(true)) {
+                                            ${section.forceError} = true;
+                                        }
+                                        """,
+                                        "errors" to RuntimeType.unwrappedXmlErrors(codegenContext.runtimeConfig),
+                                    )
+                                }
                             }
+                            else -> {}
                         }
-                        else -> {}
                     }
                 }
             }
-        }
+    }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        return listOf(
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_disable_multi_region_access_points(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS", "s3_disable_multi_region_access_points"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    ${section.serviceConfigBuilder}.set_use_arn_region(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                let str_config = conf.load_config(service_config_key("AWS_S3_USE_ARN_REGION", "s3_use_arn_region"));
+                                str_config.and_then(|it| it.parse::<bool>().ok())
+                            }),
+                    );
+                    """,
+                )
+            },
+        )
     }
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
@@ -154,41 +202,45 @@ class FilterEndpointTests(
         }
     }
 
-    fun transform(model: Model): Model = ModelTransformer.create().mapTraits(model) { _, trait ->
-        when (trait) {
-            is EndpointTestsTrait -> EndpointTestsTrait.builder().testCases(updateEndpointTests(trait.testCases))
-                .version(trait.version).build()
+    fun transform(model: Model): Model =
+        ModelTransformer.create().mapTraits(model) { _, trait ->
+            when (trait) {
+                is EndpointTestsTrait ->
+                    EndpointTestsTrait.builder().testCases(updateEndpointTests(trait.testCases))
+                        .version(trait.version).build()
 
-            else -> trait
+                else -> trait
+            }
         }
-    }
 }
 
 // TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
 private class AddOptionalAuth {
-    fun transform(model: Model): Model = ModelTransformer.create().mapShapes(model) { shape ->
-        // Add @optionalAuth to all S3 operations
-        if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
-            shape.toBuilder()
-                .addTrait(OptionalAuthTrait())
-                .build()
-        } else {
-            shape
+    fun transform(model: Model): Model =
+        ModelTransformer.create().mapShapes(model) { shape ->
+            // Add @optionalAuth to all S3 operations
+            if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
+                shape.toBuilder()
+                    .addTrait(OptionalAuthTrait())
+                    .build()
+            } else {
+                shape
+            }
         }
-    }
 }
 
 class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        *RuntimeType.preludeScope,
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
-        "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-        "base_errors" to restXmlErrors,
-    )
+    private val errorScope =
+        arrayOf(
+            *RuntimeType.preludeScope,
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
+            "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+            "base_errors" to restXmlErrors,
+        )
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->

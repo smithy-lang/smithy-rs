@@ -239,10 +239,9 @@ fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
         };
 
         let mut local_dependencies = BTreeSet::new();
-        local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
-        local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
-        local_dependencies
-            .extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
+        local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?);
+        local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?);
+        local_dependencies.extend(read_dependencies(path, &manifest.build_dependencies)?);
         Ok(Some(Package::new(
             handle,
             path,

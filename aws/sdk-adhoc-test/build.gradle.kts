@@ -9,7 +9,14 @@ extra["moduleName"] = "software.amazon.smithy.rust.awssdk.adhoc.test"
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy")
+    java
+    id("software.amazon.smithy.gradle.smithy-base")
+    id("software.amazon.smithy.gradle.smithy-jar")
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 val smithyVersion: String by project
@@ -21,13 +28,6 @@ val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
-}
-
-buildscript {
-    val smithyVersion: String by project
-    dependencies {
-        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
-    }
 }
 
 dependencies {
@@ -48,14 +48,6 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
         extraCodegenConfig = """
             "includeFluentClient": false,
             "nullabilityCheckMode": "${getNullabilityCheckMode()}"
-        """,
-        extraConfig = """
-            , "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false,
-                    "requireEndpointResolver": false
-                }
-            }
         """,
     )
 }
@@ -82,7 +74,7 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()

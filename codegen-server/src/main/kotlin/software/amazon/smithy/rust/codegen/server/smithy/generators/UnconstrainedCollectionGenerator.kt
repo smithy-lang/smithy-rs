@@ -60,11 +60,12 @@ class UnconstrainedCollectionGenerator(
         }
     private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
-    private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
-        constrainedShapeSymbolProvider.toSymbol(shape)
-    } else {
-        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
-    }
+    private val constrainedSymbol =
+        if (shape.isDirectlyConstrained(symbolProvider)) {
+            constrainedShapeSymbolProvider.toSymbol(shape)
+        } else {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
+        }
     private val innerShape = model.expectShape(shape.member.target)
 
     fun render() {
@@ -103,22 +104,25 @@ class UnconstrainedCollectionGenerator(
                             !innerShape.isDirectlyConstrained(symbolProvider) &&
                             innerShape !is StructureShape &&
                             innerShape !is UnionShape
-                    val constrainedMemberSymbol = if (resolvesToNonPublicConstrainedValueType) {
-                        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
-                    } else {
-                        constrainedShapeSymbolProvider.toSymbol(shape.member)
-                    }
-                    val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
-                    val boxErr = if (shape.member.hasTrait<ConstraintViolationRustBoxTrait>()) {
-                        ".map_err(|(idx, inner_violation)| (idx, Box::new(inner_violation)))"
-                    } else {
-                        ""
-                    }
-                    val constrainValueWritable = writable {
-                        conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
-                            rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
+                    val constrainedMemberSymbol =
+                        if (resolvesToNonPublicConstrainedValueType) {
+                            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
+                        } else {
+                            constrainedShapeSymbolProvider.toSymbol(shape.member)
                         }
-                    }
+                    val innerConstraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(innerShape)
+                    val boxErr =
+                        if (shape.member.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                            ".map_err(|(idx, inner_violation)| (idx, Box::new(inner_violation)))"
+                        } else {
+                            ""
+                        }
+                    val constrainValueWritable =
+                        writable {
+                            conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
+                                rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
+                            }
+                        }
 
                     rustTemplate(
                         """

@@ -8,5 +8,7 @@ import java.security.MessageDigest
 
 fun ByteArray.toHex() = joinToString(separator = "") { byte -> "%02x".format(byte) }
 
-fun getChecksumForFile(file: File, digest: MessageDigest = MessageDigest.getInstance("SHA-256")): String =
-    digest.digest(file.readText().toByteArray()).toHex()
+fun getChecksumForFile(
+    file: File,
+    digest: MessageDigest = MessageDigest.getInstance("SHA-256"),
+): String = digest.digest(file.readText().toByteArray()).toHex()

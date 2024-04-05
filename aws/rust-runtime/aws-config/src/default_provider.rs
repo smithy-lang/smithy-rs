@@ -5,7 +5,7 @@
 
 //! Providers that implement the default AWS provider chain
 //!
-//! Default Provider chains for [`region`](crate::default_provider::region), [`credentials`](crate::default_provider::credentials),
+//! Default Provider chains for [`region`], [`credentials`],
 //! [retries](crate::default_provider::retry_config), [timeouts](crate::default_provider::timeout_config) and
 //! [app name](crate::default_provider::app_name).
 //!
@@ -47,3 +47,13 @@ pub mod use_fips;
 
 /// Default dual-stack provider chain
 pub mod use_dual_stack;
+
+/// Default access token provider chain
+#[cfg(feature = "sso")]
+pub mod token;
+
+/// Default "ignore configured endpoint URLs" provider chain
+pub mod ignore_configured_endpoint_urls;
+
+/// Default endpoint URL provider chain
+pub mod endpoint_url;

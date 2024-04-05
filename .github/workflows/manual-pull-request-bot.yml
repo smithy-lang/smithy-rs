@@ -16,7 +16,7 @@ jobs:
     steps:
     - name: Get PR info
       id: get-pr-info
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const response = await github.rest.pulls.get({
@@ -42,7 +42,7 @@ jobs:
     - get-pr-info
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         # The ref used needs to match the HEAD revision of the PR being diffed, or else
@@ -55,7 +55,7 @@ jobs:
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image

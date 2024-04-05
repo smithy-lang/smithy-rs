@@ -77,9 +77,9 @@ where
     }
 }
 
-/// A middleware [`Service`](tower::Service) responsible for:
+/// A middleware [`Service`] responsible for:
 ///   - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
-///     [`Uri`](http::Uri), and the request headers.
+///     [`Uri`], and the request headers.
 ///   - A [`tracing::debug`] during response, which includes the response status code and headers.
 ///
 /// The [`Display`](std::fmt::Display) and [`Debug`] of the request and response components can be modified using

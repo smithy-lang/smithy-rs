@@ -5,7 +5,6 @@ It gets instantiated and copied into the build artifacts by the `aws:sdk:assembl
 Available template arguments:
 - `{{sdk_version_<crate_name_in_snake_case>}}` (e.g., `{{sdk_version_aws_config}}` for the `aws-config` crate): the version number of the given crate (just the number, no `v` prefix)
 - `{{msrv}}`: The MSRV Rust compiler version (just the number, no `v` prefix)
-- `{{warning_banner}}`: Show the production warning banner
 --}}
 <!--
 IMPORTANT:
@@ -16,10 +15,6 @@ To update it, edit the `aws/SDK_README.md.hb` Handlebars template in that reposi
 # The AWS SDK for Rust [![Docs](https://img.shields.io/badge/docs-blue)](https://awslabs.github.io/aws-sdk-rust/) ![MSRV](https://img.shields.io/badge/msrv-{{msrv}}-red) [![Usage Guide](https://img.shields.io/badge/Developer_Guide-blue)](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)
 
 This repo contains the AWS SDK for Rust and its [public roadmap](https://github.com/orgs/awslabs/projects/50/views/1).
-
-{{#if warning_banner}}
-**Please Note**: The SDK is currently released as a developer preview, without support or assistance for use on production workloads. Any use in production is at your own risk.
-{{/if}}
 
 The SDK is code generated from [Smithy models](https://smithy.io/2.0/index.html) that represent each AWS service.
 The code used to generate the SDK can be found in [smithy-rs](https://github.com/smithy-lang/smithy-rs).

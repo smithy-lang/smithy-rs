@@ -164,6 +164,7 @@ fn to_md_link(reference: &Reference) -> String {
     let org_name = match reference.repo.as_str() {
         "smithy-rs" => "smithy-lang",
         "aws-sdk-rust" => "awslabs",
+        "aws-sdk" => "aws",
         repo => panic!("unrecognized repo named {repo}"),
     };
     format!(
@@ -198,9 +199,13 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         .map(|t| t.to_string())
         .chain(entry.references.iter().map(to_md_link))
         .collect::<Vec<_>>();
-    if !is_maintainer(&entry.author) {
-        references.push(format!("@{}", entry.author));
-    };
+    let non_maintainers = entry
+        .authors
+        .iter()
+        .filter(|author| !is_maintainer(author))
+        .map(|author| format!("@{author}"));
+    references.extend(non_maintainers);
+
     if !references.is_empty() {
         write!(meta, "({}) ", references.join(", ")).unwrap();
     }
@@ -371,7 +376,8 @@ fn render_sdk_model_entries<'a>(
 fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
     let mut external_contribs = entries
         .iter()
-        .filter_map(|entry| entry.hand_authored().map(|e| &e.author))
+        .filter_map(|entry| entry.hand_authored().map(|e| &e.authors))
+        .flat_map(|authors| authors.iter())
         .filter(|author| !is_maintainer(author))
         .collect::<Vec<_>>();
     if external_contribs.is_empty() {
@@ -387,7 +393,11 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
             .filter(|entry| {
                 entry
                     .hand_authored()
-                    .map(|e| e.author.eq_ignore_ascii_case(contributor_handle.as_str()))
+                    .map(|e| {
+                        e.authors
+                            .iter()
+                            .any(|author| author.eq_ignore_ascii_case(contributor_handle.as_str()))
+                    })
                     .unwrap_or(false)
             })
             .flat_map(|entry| {
@@ -396,6 +406,7 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
                     .unwrap()
                     .references
                     .iter()
+                    .filter(|r| matches!(r.repo.as_str(), "aws-sdk-rust" | "smithy-rs"))
                     .map(to_md_link)
             })
             .collect::<Vec<_>>();
@@ -473,6 +484,7 @@ fn render(
         entries.iter().filter_map(ChangelogEntry::aws_sdk_model),
         &mut out,
     );
+
     render_external_contributors(entries, &mut out);
     render_crate_versions(crate_version_metadata_map, &mut out);
 
@@ -498,16 +510,16 @@ mod test {
     fn end_to_end_changelog() {
         let changelog_toml = r#"
 [[smithy-rs]]
-author = "rcoh"
+author = ["rcoh", "jdisanti"]
 message = "I made a major change to update the code generator"
 meta = { breaking = true, tada = false, bug = false }
 references = ["smithy-rs#445"]
 
 [[smithy-rs]]
-author = "external-contrib"
+author = ["external-contrib", "other-external-dev"]
 message = "I made a change to update the code generator"
 meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
+references = ["smithy-rs#446", "aws-sdk#123"]
 
 [[smithy-rs]]
 author = "another-contrib"
@@ -528,7 +540,7 @@ meta = { breaking = false, tada = true, bug = false }
 references = ["smithy-rs#446"]
 
 [[smithy-rs]]
-author = "external-contrib"
+authors = ["external-contrib", "other-external-dev"]
 message = """
 I made a change to update the code generator
 
@@ -536,7 +548,7 @@ I made a change to update the code generator
 blah blah
 """
 meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
+references = ["smithy-rs#446", "smithy-rs#447"]
 
 [[aws-sdk-model]]
 module = "aws-sdk-s3"
@@ -570,8 +582,8 @@ v0.3.0 (January 4th, 2022)
 - :warning: (all, [smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib, @other-external-dev) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447), @external-contrib, @other-external-dev) I made a change to update the code generator
 
     **Update guide:**
     blah blah
@@ -580,7 +592,8 @@ v0.3.0 (January 4th, 2022)
 **Contributors**
 Thank you for your contributions! ❤
 - @another-contrib ([smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200))
-- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
+- @other-external-dev ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
 
 "#
         .trim_start();

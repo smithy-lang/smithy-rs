@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 internal class PaginatorGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         use aws.protocols#awsJson1_1
 
@@ -67,7 +68,7 @@ internal class PaginatorGeneratorTest {
             key: String,
             value: Integer
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate paginators that compile`() {

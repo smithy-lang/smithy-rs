@@ -6,7 +6,7 @@
 /// Binary Blob Type
 ///
 /// Blobs represent protocol-agnostic binary content.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
 pub struct Blob {
     inner: Vec<u8>,
 }
@@ -34,7 +34,6 @@ impl AsRef<[u8]> for Blob {
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;
-    use crate::base64;
     use serde::Serialize;
 
     impl Serialize for Blob {
@@ -43,7 +42,7 @@ mod serde_serialize {
             S: serde::Serializer,
         {
             if serializer.is_human_readable() {
-                serializer.serialize_str(&base64::encode(&self.inner))
+                serializer.serialize_str(&crate::base64::encode(&self.inner))
             } else {
                 serializer.serialize_bytes(&self.inner)
             }
@@ -54,7 +53,6 @@ mod serde_serialize {
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod serde_deserialize {
     use super::*;
-    use crate::base64;
     use serde::{de::Visitor, Deserialize};
 
     struct HumanReadableBlobVisitor;
@@ -68,7 +66,7 @@ mod serde_deserialize {
         where
             E: serde::de::Error,
         {
-            match base64::decode(v) {
+            match crate::base64::decode(v) {
                 Ok(inner) => Ok(Blob { inner }),
                 Err(e) => Err(E::custom(e)),
             }

@@ -29,15 +29,16 @@ internal class EndpointConfigCustomization(
     private val epModule = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     private val epRuntimeModule = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints")
 
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "Params" to typesGenerator.paramsStruct(),
-        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
-        "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
-        "ServiceSpecificResolver" to codegenContext.serviceSpecificEndpointResolver(),
-        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Params" to typesGenerator.paramsStruct(),
+            "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
+            "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
+            "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
+            "ServiceSpecificResolver" to codegenContext.serviceSpecificEndpointResolver(),
+            "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
+        )
 
     override fun section(section: ServiceConfig): Writable {
         return writable {
@@ -55,17 +56,19 @@ internal class EndpointConfigCustomization(
                 }
 
                 ServiceConfig.BuilderImpl -> {
-                    val endpointModule = ClientRustModule.Config.endpoint.fullyQualifiedPath()
-                        .replace("crate::", "$moduleUseName::")
+                    val endpointModule =
+                        ClientRustModule.Config.endpoint.fullyQualifiedPath()
+                            .replace("crate::", "$moduleUseName::")
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
-                    val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
-                        """
-                        /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
-                        /// rules for `$moduleUseName`.
-                        """
-                    } else {
-                        "/// This service does not define a default endpoint resolver."
-                    }
+                    val defaultResolverDocs =
+                        if (typesGenerator.defaultResolver() != null) {
+                            """
+                            /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
+                            /// rules for `$moduleUseName`.
+                            """
+                        } else {
+                            "/// This service does not define a default endpoint resolver."
+                        }
                     if (codegenContext.settings.codegenConfig.includeEndpointUrlConfig) {
                         rustTemplate(
                             """

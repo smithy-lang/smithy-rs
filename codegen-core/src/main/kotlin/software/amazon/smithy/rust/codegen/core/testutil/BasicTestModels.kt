@@ -6,7 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.testutil
 
 object BasicTestModels {
-    val AwsJson10TestModel = """
+    val AwsJson10TestModel =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
         @awsJson1_0
@@ -19,5 +20,5 @@ object BasicTestModels {
         structure TestInput {
            foo: String,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 }

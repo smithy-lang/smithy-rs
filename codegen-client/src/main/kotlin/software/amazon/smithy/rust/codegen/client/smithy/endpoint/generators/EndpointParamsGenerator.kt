@@ -42,13 +42,14 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 // internals contains the actual resolver function
 fun endpointImplModule() = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
 
-fun endpointTestsModule() = RustModule.new(
-    "test",
-    visibility = Visibility.PRIVATE,
-    parent = ClientRustModule.Config.endpoint,
-    inline = true,
-    documentationOverride = "",
-).cfgTest()
+fun endpointTestsModule() =
+    RustModule.new(
+        "test",
+        visibility = Visibility.PRIVATE,
+        parent = ClientRustModule.Config.endpoint,
+        inline = true,
+        documentationOverride = "",
+    ).cfgTest()
 
 // stdlib is isolated because it contains code generated names of stdlib functions–we want to ensure we avoid clashing
 val EndpointStdLib = RustModule.private("endpoint_lib")
@@ -117,43 +118,47 @@ internal class EndpointParamsGenerator(
 ) {
     companion object {
         fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()
+
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
     }
 
-    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.Config.endpoint) {
-        generateEndpointsStruct(this)
-    }
+    fun paramsStruct(): RuntimeType =
+        RuntimeType.forInlineFun("Params", ClientRustModule.Config.endpoint) {
+            generateEndpointsStruct(this)
+        }
 
-    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Config.endpoint) {
-        generateEndpointParamsBuilder(this)
-    }
+    internal fun paramsBuilder(): RuntimeType =
+        RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Config.endpoint) {
+            generateEndpointParamsBuilder(this)
+        }
 
-    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Config.endpoint) {
-        rust(
-            """
-            /// An error that occurred during endpoint resolution
-            ##[derive(Debug)]
-            pub struct InvalidParams {
-                field: std::borrow::Cow<'static, str>
-            }
-
-            impl InvalidParams {
-                ##[allow(dead_code)]
-                fn missing(field: &'static str) -> Self {
-                    Self { field: field.into() }
+    private fun paramsError(): RuntimeType =
+        RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Config.endpoint) {
+            rust(
+                """
+                /// An error that occurred during endpoint resolution
+                ##[derive(Debug)]
+                pub struct InvalidParams {
+                    field: std::borrow::Cow<'static, str>
                 }
-            }
 
-            impl std::fmt::Display for InvalidParams {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "a required field was missing: `{}`", self.field)
+                impl InvalidParams {
+                    ##[allow(dead_code)]
+                    fn missing(field: &'static str) -> Self {
+                        Self { field: field.into() }
+                    }
                 }
-            }
 
-            impl std::error::Error for InvalidParams { }
-            """,
-        )
-    }
+                impl std::fmt::Display for InvalidParams {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "a required field was missing: `{}`", self.field)
+                    }
+                }
+
+                impl std::error::Error for InvalidParams { }
+                """,
+            )
+        }
 
     /**
      * Generates an endpoints struct based on the provided endpoint rules. The struct fields are `pub(crate)`
@@ -165,11 +170,9 @@ internal class EndpointParamsGenerator(
         // Automatically implement standard Rust functionality
         Attribute(derive(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)).render(writer)
         // Generate the struct block:
-        /*
-            pub struct Params {
-                ... members: pub(crate) field
-            }
-         */
+        //    pub struct Params {
+        //        ... members: pub(crate) field
+        //    }
         writer.docs("Configuration parameters for resolving the correct endpoint")
         writer.rustBlock("pub struct Params") {
             parameters.toList().forEach { parameter ->
@@ -203,14 +206,15 @@ internal class EndpointParamsGenerator(
 
                     """,
                     "paramType" to type.makeOptional().mapRustType { t -> t.asDeref() },
-                    "param" to writable {
-                        when {
-                            type.isOptional() && type.rustType().isCopy() -> rust("self.$name")
-                            type.isOptional() -> rust("self.$name.as_deref()")
-                            type.rustType().isCopy() -> rust("Some(self.$name)")
-                            else -> rust("Some(&self.$name)")
-                        }
-                    },
+                    "param" to
+                        writable {
+                            when {
+                                type.isOptional() && type.rustType().isCopy() -> rust("self.$name")
+                                type.isOptional() -> rust("self.$name.as_deref()")
+                                type.rustType().isCopy() -> rust("Some(self.$name)")
+                                else -> rust("Some(&self.$name)")
+                            }
+                        },
                 )
             }
         }
@@ -243,22 +247,23 @@ internal class EndpointParamsGenerator(
                 "Params" to paramsStruct(),
                 "ParamsError" to paramsError(),
             ) {
-                val params = writable {
-                    Attribute.AllowClippyUnnecessaryLazyEvaluations.render(this)
-                    rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
-                        parameters.toList().forEach { parameter ->
-                            rust("${parameter.memberName()}: self.${parameter.memberName()}")
-                            parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
-                            if (parameter.isRequired) {
-                                rustTemplate(
-                                    ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",
-                                    "Error" to paramsError(),
-                                )
+                val params =
+                    writable {
+                        Attribute.AllowClippyUnnecessaryLazyEvaluations.render(this)
+                        rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
+                            parameters.toList().forEach { parameter ->
+                                rust("${parameter.memberName()}: self.${parameter.memberName()}")
+                                parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
+                                if (parameter.isRequired) {
+                                    rustTemplate(
+                                        ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",
+                                        "Error" to paramsError(),
+                                    )
+                                }
+                                rust(",")
                             }
-                            rust(",")
                         }
                     }
-                }
                 rust("Ok(#W)", params)
             }
             parameters.toList().forEach { parameter ->
@@ -282,15 +287,16 @@ internal class EndpointParamsGenerator(
                     """,
                     "nonOptionalType" to parameter.symbol().mapRustType { it.stripOuter<RustType.Option>() },
                     "type" to type,
-                    "extraDocs" to writable {
-                        if (parameter.default.isPresent || parameter.documentation.isPresent) {
-                            docs("")
-                        }
-                        parameter.default.orNull()?.also {
-                            docs("When unset, this parameter has a default value of `$it`.")
-                        }
-                        parameter.documentation.orNull()?.also { docs(it) }
-                    },
+                    "extraDocs" to
+                        writable {
+                            if (parameter.default.isPresent || parameter.documentation.isPresent) {
+                                docs("")
+                            }
+                            parameter.default.orNull()?.also {
+                                docs("When unset, this parameter has a default value of `$it`.")
+                            }
+                            parameter.documentation.orNull()?.also { docs(it) }
+                        },
                 )
             }
         }
