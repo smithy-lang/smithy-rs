@@ -3,13 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_runtime::env_config::file::{EnvConfigFileKind, EnvConfigFiles};
-use aws_sdk_dynamodb::config::{
-    BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
-};
+use aws_sdk_dynamodb::config::{Credentials, Region, StalledStreamProtectionConfig};
 use aws_smithy_runtime::client::http::test_util::capture_request;
 use http::Uri;
-use std::env;
 
 /// Iterative test of loading clients from shared configuration
 #[tokio::test]
