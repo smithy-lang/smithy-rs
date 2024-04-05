@@ -27,13 +27,14 @@ jobs:
     - name: Prepare backport branch
       id: backport-branch
       run: |
+        # This step assumes the merge runs cleanly without conflicts, which should be the case when
+        # this workflow is called by the release workflow right after a release tag has been created.
+
         git fetch
         git checkout origin/main
         backport_branch="merge-${{ env.release_branch }}-to-main-$(date +%s)"
         git checkout -b "${backport_branch}"
 
-        # This assumes the merge runs cleanly without conflicts, which should be the case when
-        # this workflow is called by the release workflow right after a release tag has been created.
         git merge "origin/${{ env.release_branch }}" -m 'Merge remote-tracking branch "origin/${{ env.release_branch }}" into "merge-${{ env.release_branch }}-to-main"'
         git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' push origin HEAD
 
