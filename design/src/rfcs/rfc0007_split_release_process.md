@@ -1,7 +1,7 @@
 RFC: Split Release Process
 ==========================
 
-> Status: Implemented in [smithy-rs#986](https://github.com/awslabs/smithy-rs/pull/986) and [aws-sdk-rust#351](https://github.com/awslabs/aws-sdk-rust/pull/351)
+> Status: Implemented in [smithy-rs#986](https://github.com/smithy-lang/smithy-rs/pull/986) and [aws-sdk-rust#351](https://github.com/awslabs/aws-sdk-rust/pull/351)
 
 At the time of writing, the `aws-sdk-rust` repository is used exclusively
 for the entire release process of both the Rust runtime crates from `smithy-rs` as

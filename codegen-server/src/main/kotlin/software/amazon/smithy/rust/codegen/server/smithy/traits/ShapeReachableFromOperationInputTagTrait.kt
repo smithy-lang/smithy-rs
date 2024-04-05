@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.traits
 
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -34,18 +35,27 @@ class ShapeReachableFromOperationInputTagTrait : AnnotationTrait(ID, Node.object
     }
 }
 
-private fun isShapeReachableFromOperationInput(shape: Shape) = when (shape) {
-    is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
-        shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
+private fun isShapeReachableFromOperationInput(shape: Shape) =
+    when (shape) {
+        is StructureShape, is UnionShape, is MapShape, is ListShape, is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
+            shape.hasTrait<ShapeReachableFromOperationInputTagTrait>()
+        }
+
+        else -> PANIC("this method does not support shape type ${shape.type}")
     }
 
-    else -> PANIC("this method does not support shape type ${shape.type}")
-}
-
 fun StringShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun StructureShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun CollectionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun UnionShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun MapShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun IntegerShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
 fun NumberShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)
+
+fun BlobShape.isReachableFromOperationInput() = isShapeReachableFromOperationInput(this)

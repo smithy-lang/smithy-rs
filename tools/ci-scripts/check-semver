@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+
+if [[ $# -gt 2 ]]; then
+    echo "Usage: check-semver <base-revision> <warn-on-failure (true/false)>"
+    exit 1
+fi
+
+# Override version commit hash to prevent unnecessary diffs
+export SMITHY_RS_VERSION_COMMIT_HASH_OVERRIDE=ci
+base_revision="$1"
+warn_on_failure="$2"
+if [[ $warn_on_failure == "true" ]]
+then
+  ./tools/ci-scripts/codegen-diff/semver-checks.py . "${base_revision}" || echo "allowing failure"
+else
+  ./tools/ci-scripts/codegen-diff/semver-checks.py . "${base_revision}"
+fi

@@ -57,44 +57,49 @@ class RustGenericsTest {
 
     @Test
     fun `bounds is correct for several args`() {
-        val gg = RustGenerics(
-            GenericTypeArg("A", testRT("Apple")),
-            GenericTypeArg("PL", testRT("Plum")),
-            GenericTypeArg("PE", testRT("Pear")),
-        )
+        val gg =
+            RustGenerics(
+                GenericTypeArg("A", testRT("Apple")),
+                GenericTypeArg("PL", testRT("Plum")),
+                GenericTypeArg("PE", testRT("Pear")),
+            )
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("#{bounds:W}", "bounds" to gg.bounds())
 
-        writer.toString() shouldContain """
+        writer.toString() shouldContain
+            """
             A: test::Apple,
             PL: test::Plum,
             PE: test::Pear,
-        """.trimIndent()
+            """.trimIndent()
     }
 
     @Test
     fun `bounds skips arg with no bounds`() {
-        val gg = RustGenerics(
-            GenericTypeArg("A", testRT("Apple")),
-            GenericTypeArg("PL"),
-            GenericTypeArg("PE", testRT("Pear")),
-        )
+        val gg =
+            RustGenerics(
+                GenericTypeArg("A", testRT("Apple")),
+                GenericTypeArg("PL"),
+                GenericTypeArg("PE", testRT("Pear")),
+            )
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("#{bounds:W}", "bounds" to gg.bounds())
 
-        writer.toString() shouldContain """
+        writer.toString() shouldContain
+            """
             A: test::Apple,
             PE: test::Pear,
-        """.trimIndent()
+            """.trimIndent()
     }
 
     @Test
     fun `bounds generates nothing if all args are skipped`() {
-        val gg = RustGenerics(
-            GenericTypeArg("A"),
-            GenericTypeArg("PL"),
-            GenericTypeArg("PE"),
-        )
+        val gg =
+            RustGenerics(
+                GenericTypeArg("A"),
+                GenericTypeArg("PL"),
+                GenericTypeArg("PE"),
+            )
         val writer = RustWriter.forModule("model")
         writer.rustTemplate("A#{bounds:W}B", "bounds" to gg.bounds())
 
@@ -103,19 +108,22 @@ class RustGenericsTest {
 
     @Test
     fun `Adding GenericGenerators works`() {
-        val ggA = RustGenerics(
-            GenericTypeArg("A", testRT("Apple")),
-        )
-        val ggB = RustGenerics(
-            GenericTypeArg("B", testRT("Banana")),
-        )
+        val ggA =
+            RustGenerics(
+                GenericTypeArg("A", testRT("Apple")),
+            )
+        val ggB =
+            RustGenerics(
+                GenericTypeArg("B", testRT("Banana")),
+            )
         RustWriter.forModule("model").let {
             it.rustTemplate("#{bounds:W}", "bounds" to (ggA + ggB).bounds())
 
-            it.toString() shouldContain """
+            it.toString() shouldContain
+                """
                 A: test::Apple,
                 B: test::Banana,
-            """.trimIndent()
+                """.trimIndent()
         }
 
         RustWriter.forModule("model").let {
@@ -125,5 +133,5 @@ class RustGenericsTest {
         }
     }
 
-    private fun testRT(name: String): RuntimeType = RuntimeType(name, null, "test")
+    private fun testRT(name: String): RuntimeType = RuntimeType("test::$name")
 }

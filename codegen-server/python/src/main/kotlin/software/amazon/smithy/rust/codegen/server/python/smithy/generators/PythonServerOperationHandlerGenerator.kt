@@ -6,16 +6,15 @@
 package software.amazon.smithy.rust.codegen.server.python.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
-import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerOperationHandlerGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 
 /**
  * The Rust code responsible to run the Python business logic on the Python interpreter
@@ -25,7 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * Rust application), which are built into a `Router` by [PythonApplicationGenerator].
  *
  * To call a Python function from Rust, anything dealing with Python runs inside an async
- * block that allows to catch stacktraces. The handler function is extracted from `PyHandler`
+ * block that allows to catch stack traces. The handler function is extracted from `PyHandler`
  * and called with the necessary arguments inside a blocking Tokio task.
  * At the end the block is awaited and errors are collected and reported.
  *
@@ -33,60 +32,60 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  */
 class PythonServerOperationHandlerGenerator(
     codegenContext: CodegenContext,
-    protocol: ServerProtocol,
-    private val operations: List<OperationShape>,
-) : ServerOperationHandlerGenerator(codegenContext, protocol, operations) {
+    private val operation: OperationShape,
+) {
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(runtimeConfig).toType(),
-            "SmithyServer" to ServerCargoDependency.SmithyHttpServer(runtimeConfig).toType(),
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
+            "SmithyServer" to PythonServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "pyo3" to PythonServerCargoDependency.PyO3.toType(),
             "pyo3_asyncio" to PythonServerCargoDependency.PyO3Asyncio.toType(),
             "tokio" to PythonServerCargoDependency.Tokio.toType(),
             "tracing" to PythonServerCargoDependency.Tracing.toType(),
         )
 
-    override fun render(writer: RustWriter) {
-        super.render(writer)
+    fun render(writer: RustWriter) {
         renderPythonOperationHandlerImpl(writer)
     }
 
     private fun renderPythonOperationHandlerImpl(writer: RustWriter) {
-        for (operation in operations) {
-            val operationName = symbolProvider.toSymbol(operation).name
-            val input = "crate::input::${operationName}Input"
-            val output = "crate::output::${operationName}Output"
-            val error = "crate::error::${operationName}Error"
-            val fnName = operationName.toSnakeCase()
+        val operationName = symbolProvider.toSymbol(operation).name
+        val input = "crate::input::${operationName.toPascalCase()}Input"
+        val output = "crate::output::${operationName.toPascalCase()}Output"
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2552) - Use to pascalCase for error shapes.
+        val error = "crate::error::${operationName}Error"
+        val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
 
-            writer.rustTemplate(
-                """
-                /// Python handler for operation `$operationName`.
-                pub(crate) async fn $fnName(
-                    input: $input,
-                    state: #{SmithyServer}::Extension<#{pyo3}::PyObject>,
-                    handler: #{SmithyPython}::PyHandler,
-                ) -> std::result::Result<$output, $error> {
-                    // Async block used to run the handler and catch any Python error.
-                    let result = if handler.is_coroutine {
-                        #{PyCoroutine:W}
-                    } else {
-                        #{PyFunction:W}
-                    };
-                    #{PyError:W}
-                }
-                """,
-                *codegenScope,
-                "PyCoroutine" to renderPyCoroutine(fnName, output),
-                "PyFunction" to renderPyFunction(fnName, output),
-                "PyError" to renderPyError(),
-            )
-        }
+        writer.rustTemplate(
+            """
+            /// Python handler for operation `$operationName`.
+            pub(crate) async fn $fnName(
+                input: $input,
+                state: #{SmithyServer}::Extension<#{SmithyPython}::context::PyContext>,
+                handler: #{SmithyPython}::PyHandler,
+            ) -> std::result::Result<$output, $error> {
+                // Async block used to run the handler and catch any Python error.
+                let result = if handler.is_coroutine {
+                    #{PyCoroutine:W}
+                } else {
+                    #{PyFunction:W}
+                };
+                #{PyError:W}
+            }
+            """,
+            *codegenScope,
+            "PyCoroutine" to renderPyCoroutine(fnName, output),
+            "PyFunction" to renderPyFunction(fnName, output),
+            "PyError" to renderPyError(),
+        )
     }
 
-    private fun renderPyFunction(name: String, output: String): Writable =
+    private fun renderPyFunction(
+        name: String,
+        output: String,
+    ): Writable =
         writable {
             rustTemplate(
                 """
@@ -96,7 +95,7 @@ class PythonServerOperationHandlerGenerator(
                     let output = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     output.extract::<$output>()
                 })
@@ -105,7 +104,10 @@ class PythonServerOperationHandlerGenerator(
             )
         }
 
-    private fun renderPyCoroutine(name: String, output: String): Writable =
+    private fun renderPyCoroutine(
+        name: String,
+        output: String,
+    ): Writable =
         writable {
             rustTemplate(
                 """
@@ -115,11 +117,11 @@ class PythonServerOperationHandlerGenerator(
                     let coroutine = if handler.args == 1 {
                         pyhandler.call1((input,))?
                     } else {
-                        pyhandler.call1((input, state.0))?
+                        pyhandler.call1((input, #{pyo3}::ToPyObject::to_object(&state.0, py)))?
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
-                result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
+                result.await.and_then(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))
                 """,
                 *codegenScope,
             )

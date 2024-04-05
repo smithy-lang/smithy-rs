@@ -4,7 +4,7 @@
 #
 
 # This is a makefile executed by the `./ci` script that
-# has a target for every single CI script in `tools/ci-build/scripts`,
+# has a target for every single CI script in `tools/ci-scripts`,
 # with dependencies between targets included so that it's not necessary
 # to remember to generate a SDK for the targets that require one.
 
@@ -14,7 +14,7 @@ CI_ACTION=$(CI_BUILD)/ci-action
 
 .PHONY: acquire-build-image
 acquire-build-image:
-	$(CI_BUILD)/acquire-build-image
+	./smithy-rs/.github/scripts/acquire-build-image
 
 .PHONY: check-aws-config
 check-aws-config: generate-aws-sdk-smoketest
@@ -36,6 +36,10 @@ check-aws-sdk-examples: generate-aws-sdk
 check-aws-sdk-services: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-only-aws-sdk-services
+check-only-aws-sdk-services: generate-aws-sdk
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-aws-sdk-smoketest-docs-clippy-udeps
 check-aws-sdk-smoketest-docs-clippy-udeps: generate-aws-sdk-smoketest
 	$(CI_ACTION) $@ $(ARGS)
@@ -46,6 +50,10 @@ check-aws-sdk-smoketest-unit-tests: generate-aws-sdk-smoketest
 
 .PHONY: check-aws-sdk-standalone-integration-tests
 check-aws-sdk-standalone-integration-tests: generate-aws-sdk-smoketest
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-book
+check-book: check-rust-runtimes
 	$(CI_ACTION) $@ $(ARGS)
 
 .PHONY: check-client-codegen-integration-tests
@@ -112,10 +120,18 @@ generate-aws-sdk:
 generate-codegen-diff:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-deterministic-codegen
+check-deterministic-codegen:
+	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: check-semver
+check-semver:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: generate-smithy-rs-release
 generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: sanity-test
-sanity-test:
+.PHONY: verify-tls-config
+verify-tls-config:
 	$(CI_ACTION) $@ $(ARGS)

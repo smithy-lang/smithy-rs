@@ -5,6 +5,7 @@
 
 //! This module defines types that describe when to retry given a response.
 
+use crate::config_bag::{Storable, StoreReplace};
 use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
@@ -38,6 +39,17 @@ pub enum ErrorKind {
 
     /// Doesn't count against any budgets. This could be something like a 401 challenge in Http.
     ClientError,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TransientError => write!(f, "transient error"),
+            Self::ThrottlingError => write!(f, "throttling error"),
+            Self::ServerError => write!(f, "server error"),
+            Self::ClientError => write!(f, "client error"),
+        }
+    }
 }
 
 /// Trait that provides an `ErrorKind` and an error code.
@@ -98,12 +110,12 @@ impl FromStr for RetryMode {
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
+
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): adaptive retries
-        // } else if string.eq_ignore_ascii_case("adaptive") {
-        //     Ok(RetryMode::Adaptive)
+        } else if string.eq_ignore_ascii_case("adaptive") {
+            Ok(RetryMode::Adaptive)
         } else {
             Err(RetryModeParseError::new(string))
         }
@@ -143,6 +155,8 @@ pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
     initial_backoff: Option<Duration>,
+    max_backoff: Option<Duration>,
+    reconnect_mode: Option<ReconnectMode>,
 }
 
 impl RetryConfigBuilder {
@@ -160,6 +174,30 @@ impl RetryConfigBuilder {
     /// Sets the retry mode.
     pub fn mode(mut self, mode: RetryMode) -> Self {
         self.set_mode(Some(mode));
+        self
+    }
+
+    /// Set the [`ReconnectMode`] for the retry strategy
+    ///
+    /// By default, when a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host but may increase the load on
+    /// the server.
+    ///
+    /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
+    pub fn reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
+        self.set_reconnect_mode(Some(reconnect_mode));
+        self
+    }
+
+    /// Set the [`ReconnectMode`] for the retry strategy
+    ///
+    /// By default, when a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host but may increase the load on
+    /// the server.
+    ///
+    /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
+    pub fn set_reconnect_mode(&mut self, reconnect_mode: Option<ReconnectMode>) -> &mut Self {
+        self.reconnect_mode = reconnect_mode;
         self
     }
 
@@ -187,6 +225,18 @@ impl RetryConfigBuilder {
         self
     }
 
+    /// Set the max_backoff duration. This duration should be non-zero.
+    pub fn set_max_backoff(&mut self, max_backoff: Option<Duration>) -> &mut Self {
+        self.max_backoff = max_backoff;
+        self
+    }
+
+    /// Set the max_backoff duration. This duration should be non-zero.
+    pub fn max_backoff(mut self, max_backoff: Duration) -> Self {
+        self.set_max_backoff(Some(max_backoff));
+        self
+    }
+
     /// Merge two builders together. Values from `other` will only be used as a fallback for values
     /// from `self` Useful for merging configs from different sources together when you want to
     /// handle "precedence" per value instead of at the config level
@@ -208,6 +258,8 @@ impl RetryConfigBuilder {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
             initial_backoff: self.initial_backoff.or(other.initial_backoff),
+            max_backoff: self.max_backoff.or(other.max_backoff),
+            reconnect_mode: self.reconnect_mode.or(other.reconnect_mode),
         }
     }
 
@@ -219,6 +271,11 @@ impl RetryConfigBuilder {
             initial_backoff: self
                 .initial_backoff
                 .unwrap_or_else(|| Duration::from_secs(1)),
+            reconnect_mode: self
+                .reconnect_mode
+                .unwrap_or(ReconnectMode::ReconnectOnTransientError),
+            max_backoff: self.max_backoff.unwrap_or_else(|| Duration::from_secs(20)),
+            use_static_exponential_base: false,
         }
     }
 }
@@ -230,6 +287,33 @@ pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,
     initial_backoff: Duration,
+    max_backoff: Duration,
+    reconnect_mode: ReconnectMode,
+    use_static_exponential_base: bool,
+}
+
+impl Storable for RetryConfig {
+    type Storer = StoreReplace<RetryConfig>;
+}
+
+/// Mode for connection re-establishment
+///
+/// By default, when a transient error is encountered, the connection in use will be poisoned. This
+/// behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum ReconnectMode {
+    /// Reconnect on [`ErrorKind::TransientError`]
+    ReconnectOnTransientError,
+
+    /// Disable reconnect on error
+    ///
+    /// When this setting is applied, 503s, timeouts, and other transient errors will _not_
+    /// lead to a new connection being established unless the connection is closed by the remote.
+    ReuseAllConnections,
+}
+
+impl Storable for ReconnectMode {
+    type Storer = StoreReplace<ReconnectMode>;
 }
 
 impl RetryConfig {
@@ -239,6 +323,21 @@ impl RetryConfig {
             mode: RetryMode::Standard,
             max_attempts: 3,
             initial_backoff: Duration::from_secs(1),
+            reconnect_mode: ReconnectMode::ReconnectOnTransientError,
+            max_backoff: Duration::from_secs(20),
+            use_static_exponential_base: false,
+        }
+    }
+
+    /// Creates a default `RetryConfig` with `RetryMode::Adaptive` and max attempts of three.
+    pub fn adaptive() -> Self {
+        Self {
+            mode: RetryMode::Adaptive,
+            max_attempts: 3,
+            initial_backoff: Duration::from_secs(1),
+            reconnect_mode: ReconnectMode::ReconnectOnTransientError,
+            max_backoff: Duration::from_secs(20),
+            use_static_exponential_base: false,
         }
     }
 
@@ -257,6 +356,18 @@ impl RetryConfig {
     /// This value must be greater than zero.
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
+        self
+    }
+
+    /// Set the [`ReconnectMode`] for the retry strategy
+    ///
+    /// By default, when a transient error is encountered, the connection in use will be poisoned.
+    /// This prevents reusing a connection to a potentially bad host but may increase the load on
+    /// the server.
+    ///
+    /// This behavior can be disabled by setting [`ReconnectMode::ReuseAllConnections`] instead.
+    pub fn with_reconnect_mode(mut self, reconnect_mode: ReconnectMode) -> Self {
+        self.reconnect_mode = reconnect_mode;
         self
     }
 
@@ -282,9 +393,34 @@ impl RetryConfig {
         self
     }
 
+    /// Set the maximum backoff time.
+    pub fn with_max_backoff(mut self, max_backoff: Duration) -> Self {
+        self.max_backoff = max_backoff;
+        self
+    }
+
+    /// Hint to the retry strategy whether to use a static exponential base.
+    ///
+    /// When a retry strategy uses exponential backoff, it calculates a random base. This causes the
+    /// retry delay to be slightly random, and helps prevent "thundering herd" scenarios. However,
+    /// it's often useful during testing to know exactly how long the delay will be.
+    ///
+    /// Therefore, if you're writing a test and asserting an expected retry delay,
+    /// set this to `true`.
+    #[cfg(feature = "test-util")]
+    pub fn with_use_static_exponential_base(mut self, use_static_exponential_base: bool) -> Self {
+        self.use_static_exponential_base = use_static_exponential_base;
+        self
+    }
+
     /// Returns the retry mode.
     pub fn mode(&self) -> RetryMode {
         self.mode
+    }
+
+    /// Returns the [`ReconnectMode`]
+    pub fn reconnect_mode(&self) -> ReconnectMode {
+        self.reconnect_mode
     }
 
     /// Returns the max attempts.
@@ -297,9 +433,22 @@ impl RetryConfig {
         self.initial_backoff
     }
 
+    /// Returns the max backoff duration.
+    pub fn max_backoff(&self) -> Duration {
+        self.max_backoff
+    }
+
     /// Returns true if retry is enabled with this config
     pub fn has_retry(&self) -> bool {
         self.max_attempts > 1
+    }
+
+    /// Returns `true` if retry strategies should use a static exponential base instead of the
+    /// default random base.
+    ///
+    /// To set this value, the `test-util` feature must be enabled.
+    pub fn use_static_exponential_base(&self) -> bool {
+        self.use_static_exponential_base
     }
 }
 

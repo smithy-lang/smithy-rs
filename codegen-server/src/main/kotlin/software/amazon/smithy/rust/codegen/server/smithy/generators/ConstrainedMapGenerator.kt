@@ -7,17 +7,22 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPublicType
 
 /**
  * [ConstrainedMapGenerator] generates a wrapper tuple newtype holding a constrained `std::collections::HashMap`.
@@ -55,43 +60,50 @@ class ConstrainedMapGenerator(
         val lengthTrait = shape.expectTrait<LengthTrait>()
 
         val name = constrainedShapeSymbolProvider.toSymbol(shape).name
-        val inner = "std::collections::HashMap<#{KeySymbol}, #{ValueSymbol}>"
+        val inner = "#{HashMap}<#{KeySymbol}, #{ValueMemberSymbol}>"
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
+        val constrainedSymbol = symbolProvider.toSymbol(shape)
 
-        val constrainedTypeVisibility = Visibility.publicIf(publicConstrainedTypes, Visibility.PUBCRATE)
-        val constrainedTypeMetadata = RustMetadata(
-            Attribute.Derives(setOf(RuntimeType.Debug, RuntimeType.Clone, RuntimeType.PartialEq)),
-            visibility = constrainedTypeVisibility,
-        )
+        val codegenScope =
+            arrayOf(
+                "HashMap" to RuntimeType.HashMap,
+                "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
+                "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
+                "From" to RuntimeType.From,
+                "TryFrom" to RuntimeType.TryFrom,
+                "ConstraintViolation" to constraintViolation,
+            )
 
-        val codegenScope = arrayOf(
-            "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueSymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.value.target)),
-            "From" to RuntimeType.From,
-            "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation,
-        )
-
-        writer.documentShape(shape, model, note = rustDocsNote(name))
-        constrainedTypeMetadata.render(writer)
+        writer.documentShape(shape, model)
+        writer.docs(rustDocsConstrainedTypeEpilogue(name))
+        val metadata = constrainedSymbol.expectRustMetadata()
+        metadata.render(writer)
         writer.rustTemplate("struct $name(pub(crate) $inner);", *codegenScope)
-        if (constrainedTypeVisibility == Visibility.PUBCRATE) {
-            Attribute.AllowUnused.render(writer)
-        }
-        writer.rustTemplate(
-            """
-            impl $name {
-                /// ${rustDocsInnerMethod(inner)}
-                pub fn inner(&self) -> &$inner {
-                    &self.0
-                }
-
+        writer.rustBlockTemplate("impl $name", *codegenScope) {
+            if (metadata.visibility == Visibility.PUBLIC) {
+                writer.rustTemplate(
+                    """
+                    /// ${rustDocsInnerMethod(inner)}
+                    pub fn inner(&self) -> &$inner {
+                        &self.0
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+            writer.rustTemplate(
+                """
                 /// ${rustDocsIntoInnerMethod(inner)}
                 pub fn into_inner(self) -> $inner {
                     self.0
                 }
-            }
+                """,
+                *codegenScope,
+            )
+        }
 
+        writer.rustTemplate(
+            """
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
 
@@ -115,7 +127,21 @@ class ConstrainedMapGenerator(
             *codegenScope,
         )
 
-        if (!publicConstrainedTypes && isValueConstrained(shape, model, symbolProvider)) {
+        val valueShape = model.expectShape(shape.value.target)
+        if (!publicConstrainedTypes &&
+            isValueConstrained(valueShape, model, symbolProvider) &&
+            valueShape !is StructureShape &&
+            valueShape !is UnionShape
+        ) {
+            val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
+            val keyNeedsConversion = keyShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+            val key =
+                if (keyNeedsConversion) {
+                    "k.into()"
+                } else {
+                    "k"
+                }
+
             writer.rustTemplate(
                 """
                 impl #{From}<$name> for #{FullyUnconstrainedSymbol} {
@@ -123,7 +149,7 @@ class ConstrainedMapGenerator(
                         value
                             .into_inner()
                             .into_iter()
-                            .map(|(k, v)| (k, v.into()))
+                            .map(|(k, v)| ($key, v.into()))
                             .collect()
                     }
                 }
@@ -140,7 +166,8 @@ class ConstrainedMapGenerator(
                     type Unconstrained = #{UnconstrainedSymbol};
                 }
                 """,
-                "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+                *codegenScope,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
                 "UnconstrainedSymbol" to unconstrainedSymbol,
             )
         }

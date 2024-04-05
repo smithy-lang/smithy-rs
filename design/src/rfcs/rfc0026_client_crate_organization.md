@@ -1,7 +1,7 @@
 RFC: Client Crate Organization
 ==============================
 
-> Status: Accepted
+> Status: Implemented
 >
 > Applies to: clients (and may impact servers due to shared codegen)
 
@@ -163,7 +163,7 @@ or that are required for the most frequent config changes (such as setting crede
 or changing the region/endpoint).
 
 Previously, the following were exported in root:
-```
+```text
 .
 ├── AppName
 ├── Client
@@ -182,7 +182,7 @@ need to be at the top-level, and will be moved into `crate::config`. `ErrorExt` 
 `crate::error`, but `Error` will stay in the crate root so that customers that alias the SDK crate
 can easily reference it in their `Result`s:
 
-```rust
+```rust,ignore
 use aws_sdk_s3 as s3;
 
 fn some_function(/* ... */) -> Result<(), s3::Error> {
@@ -374,19 +374,31 @@ All combined, the following is the new publicly visible organization:
 Changes Checklist
 -----------------
 
-- [ ] Move `crate::AppName`, `crate::Endpoint`, `crate::Credentials`, and `crate::Region` into `crate::config`
-- [ ] Move `crate::PKG_VERSION` into a new `crate::meta` module
-- [ ] Move `crate::operation::customize` into `crate::client`
-- [ ] Organize code generated types by operation
-- [ ] Reorganize builders that aren't per-operation
-- [ ] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
-- [ ] Rename `crate::types` to `crate::primitives`
-- [ ] Rename `crate::model` to `crate::types`
-- [ ] Move `crate::error` into `crate::types`
-- [ ] Move `crate::ErrorExt` into `crate::error`
-- [ ] Re-export `aws_smithy_types::error::display::DisplayErrorContext` and `aws_smithy_http::result::SdkError` in `crate::error`
-- [ ] Move `crate::paginator` into `crate::operation`
-- [ ] Flatten `crate::presigning`
-- [ ] Remove/hide operation `ParseResponse` implementations in `crate::operation`
-- [ ] Hide or remove `crate::lens` and `crate::http_body_checksum`
-- [ ] Update "Crate Organization" top-level section in generated crate docs
+- [x] Move `crate::AppName` into `crate::config`
+- [x] Move `crate::PKG_VERSION` into a new `crate::meta` module
+- [x] Move `crate::Endpoint` into `crate::config`
+- [x] Move `crate::Credentials` into `crate::config`
+- [x] Move `crate::Region` into `crate::config`
+- [x] Move `crate::operation::customize` into `crate::client`
+- [x] Finish refactor to decouple client/server modules
+- [x] Organize code generated types by operation
+- [x] Reorganize builders
+- [x] Rename `crate::types` to `crate::primitives`
+- [x] Rename `crate::model` to `crate::types`
+- [x] Move `crate::error` into `crate::types`
+- [x] Only re-export `aws_smithy_client::client::Builder` for non-SDK clients (remove from SDK clients)
+- [x] Move `crate::ErrorExt` into `crate::error`
+- [x] Re-export `aws_smithy_types::error::display::DisplayErrorContext` and `aws_smithy_http::result::SdkError` in `crate::error`
+- [x] Move `crate::paginator` into `crate::operation`
+- [x] Flatten `crate::presigning`
+- [x] Hide or remove `crate::lens` and `crate::http_body_checksum`
+- [x] Move fluent builders into `crate::operation::x::builders`
+- [x] Remove/hide operation `ParseResponse` implementations in `crate::operation`
+- [x] Update "Crate Organization" top-level section in generated crate docs
+- [x] Update all module docs
+- [x] Break up modules/files so that they're not 30k lines of code
+  - [x] models/types; each struct/enum should probably get its own file with pub-use
+  - [x] models/types::builders: now this needs to get split up
+  - [x] `client.rs`
+- [x] Fix examples
+- [x] Write changelog

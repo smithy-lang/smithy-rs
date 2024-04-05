@@ -4,27 +4,26 @@
  */
 
 use aws_config::SdkConfig;
-use aws_sdk_s3::model::{
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::types::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization, SelectObjectContentEventStream,
 };
-use aws_sdk_s3::{Client, Credentials, Region};
-use aws_smithy_client::dvr::{Event, ReplayingConnection};
+use aws_sdk_s3::Client;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-use aws_types::credentials::SharedCredentialsProvider;
+use aws_smithy_runtime::client::http::test_util::dvr::{Event, ReplayingClient};
 use std::error::Error;
 
 #[tokio::test]
 async fn test_success() {
     let events: Vec<Event> =
         serde_json::from_str(include_str!("select-object-content.json")).unwrap();
-    let replayer = ReplayingConnection::new(events);
+    let replayer = ReplayingClient::new(events);
     let sdk_config = SdkConfig::builder()
         .region(Region::from_static("us-east-2"))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
-        .http_connector(replayer.clone())
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .http_client(replayer.clone())
         .build();
     let client = Client::new(&sdk_config);
 
@@ -68,7 +67,9 @@ async fn test_success() {
                 let stats = stats.details.unwrap();
                 received.push(format!(
                     "scanned:{},processed:{},returned:{}",
-                    stats.bytes_scanned, stats.bytes_processed, stats.bytes_returned
+                    stats.bytes_scanned.unwrap(),
+                    stats.bytes_processed.unwrap(),
+                    stats.bytes_returned.unwrap()
                 ))
             }
             SelectObjectContentEventStream::End(_) => {}

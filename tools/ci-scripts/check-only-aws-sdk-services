@@ -1,0 +1,29 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# this job runs `cargo check` only instead of `cargo test --all-features`
+
+set -eux
+cd aws-sdk
+
+# Remove examples from workspace
+sed -i '/"examples\//d' Cargo.toml
+
+cargo check --all-targets --all-features
+
+for test_dir in tests/*; do
+    if [ -f "${test_dir}/Cargo.toml" ]; then
+        echo "#### Checking ${test_dir}..."
+        cargo check --all-targets --all-features --manifest-path "${test_dir}/Cargo.toml"
+    fi
+done
+
+large_file_count="$(find sdk -iname '*.rs' -type f -size +1M | wc -l | bc)"
+if [[ "${large_file_count}" != "0" ]]; then
+    echo "Found ${large_file_count} generated code files larger than 1 MB:"
+    find sdk -iname '*.rs' -type f -size +1M
+    exit 1
+fi

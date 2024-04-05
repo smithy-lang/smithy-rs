@@ -12,12 +12,12 @@
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use crate::endpoint_lib::partition::deser::deserialize_partitions;
 use aws_smithy_json::deserialize::error::DeserializeError;
-use regex::Regex;
+use regex_lite::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Determine the AWS partition metadata for a given region
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct PartitionResolver {
     partitions: Vec<PartitionMetadata>,
 }
@@ -151,6 +151,7 @@ impl PartitionResolver {
 
 type Str = Cow<'static, str>;
 
+#[derive(Clone, Debug)]
 pub(crate) struct PartitionMetadata {
     id: Str,
     region_regex: Regex,
@@ -203,6 +204,7 @@ impl PartitionMetadata {
     }
 }
 
+#[derive(Clone, Debug)]
 pub(crate) struct PartitionOutput {
     name: Str,
     dns_suffix: Str,
@@ -211,7 +213,7 @@ pub(crate) struct PartitionOutput {
     supports_dual_stack: bool,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct PartitionOutputOverride {
     name: Option<Str>,
     dns_suffix: Option<Str>,
@@ -249,7 +251,7 @@ mod deser {
         expect_bool_or_null, expect_start_object, expect_string_or_null, skip_value,
     };
     use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
-    use regex::Regex;
+    use regex_lite::Regex;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
@@ -453,10 +455,10 @@ mod test {
     use crate::endpoint_lib::partition::{
         Partition, PartitionMetadata, PartitionOutput, PartitionOutputOverride, PartitionResolver,
     };
-    use regex::Regex;
+    use regex_lite::Regex;
     use std::collections::HashMap;
 
-    fn resolve<'a, 'b>(resolver: &'a PartitionResolver, region: &'b str) -> Partition<'a> {
+    fn resolve<'a>(resolver: &'a PartitionResolver, region: &str) -> Partition<'a> {
         resolver
             .resolve_partition(region, &mut DiagnosticCollector::new())
             .expect("could not resolve partition")
@@ -574,8 +576,10 @@ mod test {
     #[test]
     fn resolve_partitions() {
         let mut resolver = PartitionResolver::empty();
-        let mut new_suffix = PartitionOutputOverride::default();
-        new_suffix.dns_suffix = Some("mars.aws".into());
+        let new_suffix = PartitionOutputOverride {
+            dns_suffix: Some("mars.aws".into()),
+            ..Default::default()
+        };
         resolver.add_partition(PartitionMetadata {
             id: "aws".into(),
             region_regex: Regex::new("^(us|eu|ap|sa|ca|me|af)-\\w+-\\d+$").unwrap(),

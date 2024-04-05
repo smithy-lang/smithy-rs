@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
@@ -41,6 +42,7 @@ const val baseModelString =
 
     structure TestInputOutput {
         constrainedString: ConstrainedString,
+        constrainedBlob: ConstrainedBlob,
         constrainedInteger: ConstrainedInteger,
         constrainedShort: ConstrainedShort,
         constrainedMap: ConstrainedMap,
@@ -49,6 +51,9 @@ const val baseModelString =
 
     @length(min: 1, max: 69)
     string ConstrainedString
+
+    @length(min: 1, max: 70)
+    blob ConstrainedBlob
 
     @range(min: -2, max: 10)
     short ConstrainedShort
@@ -85,7 +90,7 @@ class ConstrainedShapeSymbolProviderTest {
     private val model = baseModelString.asSmithyModel()
     private val serviceShape = model.lookup<ServiceShape>("test#TestService")
     private val symbolProvider = serverTestSymbolProvider(model, serviceShape)
-    private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, model, serviceShape)
+    private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, serviceShape, true)
 
     companion object {
         @JvmStatic
@@ -97,6 +102,7 @@ class ConstrainedShapeSymbolProviderTest {
                 Arguments.of("ConstrainedByte", { s: Shape -> s is ByteShape }),
                 Arguments.of("ConstrainedString", { s: Shape -> s is StringShape }),
                 Arguments.of("ConstrainedMap", { s: Shape -> s is MapShape }),
+                Arguments.of("ConstrainedBlob", { s: Shape -> s is BlobShape }),
             )
     }
 

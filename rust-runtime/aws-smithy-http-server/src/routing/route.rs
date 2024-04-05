@@ -64,10 +64,6 @@ impl<B> Route<B> {
             service: BoxCloneService::new(svc),
         }
     }
-
-    pub(super) fn from_box_clone_service(svc: BoxCloneService<Request<B>, Response<BoxBody>, Infallible>) -> Self {
-        Self { service: svc }
-    }
 }
 
 impl<ReqBody> Clone for Route<ReqBody> {

@@ -129,7 +129,6 @@ pub(crate) mod epoch_seconds {
 }
 
 pub(crate) mod http_date {
-    use super::remove_trailing_zeros;
     use crate::date_time::format::{
         DateTimeFormatError, DateTimeFormatErrorKind, DateTimeParseError, DateTimeParseErrorKind,
         NANOS_PER_SECOND,
@@ -141,18 +140,15 @@ pub(crate) mod http_date {
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
     // - Removed use of unsafe
-    // - Add serialization and deserialization of subsecond nanos
+    // - Add deserialization of subsecond nanos
     //
-    /// Format a `DateTime` in the HTTP date format (imf-fixdate) with added support for subsecond precision
+    /// Format a `DateTime` in the HTTP date format (imf-fixdate)
     ///
     /// Example: "Mon, 16 Dec 2019 23:48:18 GMT"
     ///
     /// Some notes:
     /// - HTTP date does not support years before `0001`—this will cause a panic.
-    /// - If you _don't_ want subsecond precision (e.g. if you want strict adherence to the spec),
-    ///   you need to zero-out the date-time before formatting
-    /// - If subsecond nanos are 0, no fractional seconds are added
-    /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
+    /// - Subsecond nanos are not emitted
     pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
         fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {
             DateTimeFormatErrorKind::OutOfRange(
@@ -193,7 +189,7 @@ pub(crate) mod http_date {
         let mut out = String::with_capacity(32);
         fn push_digit(out: &mut String, digit: u8) {
             debug_assert!(digit < 10);
-            out.push((b'0' + digit as u8) as char);
+            out.push((b'0' + digit) as char);
         }
 
         out.push_str(weekday);
@@ -241,16 +237,6 @@ pub(crate) mod http_date {
         let second = structured.second();
         push_digit(&mut out, second / 10);
         push_digit(&mut out, second % 10);
-
-        // If non-zero nanos, push a 3-digit fractional second
-        let millis = structured.millisecond();
-        if millis != 0 {
-            out.push('.');
-            push_digit(&mut out, (millis / 100 % 10) as u8);
-            push_digit(&mut out, (millis / 10 % 10) as u8);
-            push_digit(&mut out, (millis % 10) as u8);
-            remove_trailing_zeros(&mut out);
-        }
 
         out.push_str(" GMT");
         Ok(out)
@@ -399,13 +385,23 @@ pub(crate) mod rfc3339 {
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
 
+    #[derive(Debug, PartialEq)]
+    pub(crate) enum AllowOffsets {
+        OffsetsAllowed,
+        OffsetsForbidden,
+    }
+
     // OK: 1985-04-12T23:20:50.52Z
     // OK: 1985-04-12T23:20:50Z
     //
     // Timezones not supported:
     // Not OK: 1985-04-12T23:20:50-02:00
-    pub(crate) fn parse(s: &str) -> Result<DateTime, DateTimeParseError> {
-        if !matches!(s.chars().last(), Some('Z')) {
+    pub(crate) fn parse(
+        s: &str,
+        allow_offsets: AllowOffsets,
+    ) -> Result<DateTime, DateTimeParseError> {
+        if allow_offsets == AllowOffsets::OffsetsForbidden && !matches!(s.chars().last(), Some('Z'))
+        {
             return Err(DateTimeParseErrorKind::Invalid(
                 "Smithy does not support timezone offsets in RFC-3339 date times".into(),
             )
@@ -419,10 +415,13 @@ pub(crate) mod rfc3339 {
     }
 
     /// Read 1 RFC-3339 date from &str and return the remaining str
-    pub(crate) fn read(s: &str) -> Result<(DateTime, &str), DateTimeParseError> {
+    pub(crate) fn read(
+        s: &str,
+        allow_offests: AllowOffsets,
+    ) -> Result<(DateTime, &str), DateTimeParseError> {
         let delim = s.find('Z').map(|idx| idx + 1).unwrap_or_else(|| s.len());
         let (head, rest) = s.split_at(delim);
-        Ok((parse(head)?, rest))
+        Ok((parse(head, allow_offests)?, rest))
     }
 
     /// Format a [DateTime] in the RFC-3339 date format
@@ -491,6 +490,7 @@ pub(crate) mod rfc3339 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::date_time::format::rfc3339::AllowOffsets;
     use crate::DateTime;
     use lazy_static::lazy_static;
     use proptest::prelude::*;
@@ -634,7 +634,9 @@ mod tests {
 
     #[test]
     fn parse_date_time() {
-        parse_test(&TEST_CASES.parse_date_time, rfc3339::parse);
+        parse_test(&TEST_CASES.parse_date_time, |date| {
+            rfc3339::parse(date, AllowOffsets::OffsetsForbidden)
+        });
     }
 
     #[test]
@@ -655,8 +657,10 @@ mod tests {
     #[test]
     fn read_rfc3339_date_comma_split() {
         let date = "1985-04-12T23:20:50Z,1985-04-12T23:20:51Z";
-        let (e1, date) = rfc3339::read(date).expect("should succeed");
-        let (e2, date2) = rfc3339::read(&date[1..]).expect("should succeed");
+        let (e1, date) =
+            rfc3339::read(date, AllowOffsets::OffsetsForbidden).expect("should succeed");
+        let (e2, date2) =
+            rfc3339::read(&date[1..], AllowOffsets::OffsetsForbidden).expect("should succeed");
         assert_eq!(date2, "");
         assert_eq!(date, ",1985-04-12T23:20:51Z");
         let expected = DateTime::from_secs_and_nanos(482196050, 0);
@@ -666,8 +670,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_rfc3339_with_timezone() {
+        let dt = rfc3339::parse("1985-04-12T21:20:51-02:00", AllowOffsets::OffsetsAllowed);
+        assert_eq!(dt.unwrap(), DateTime::from_secs_and_nanos(482196051, 0));
+    }
+
+    #[test]
     fn parse_rfc3339_timezone_forbidden() {
-        let dt = rfc3339::parse("1985-04-12T23:20:50-02:00");
+        let dt = rfc3339::parse("1985-04-12T23:20:50-02:00", AllowOffsets::OffsetsForbidden);
         assert!(matches!(
             dt.unwrap_err(),
             DateTimeParseError {
@@ -683,7 +693,7 @@ mod tests {
             http_date::format(&DateTime::from_secs(-62_135_596_800)).unwrap()
         );
         assert_eq!(
-            "Fri, 31 Dec 9999 23:59:59.999 GMT",
+            "Fri, 31 Dec 9999 23:59:59 GMT",
             http_date::format(&DateTime::from_secs_and_nanos(253402300799, 999_999_999)).unwrap()
         );
 

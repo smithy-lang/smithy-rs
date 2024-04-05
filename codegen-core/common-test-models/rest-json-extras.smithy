@@ -8,6 +8,30 @@ use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use smithy.framework#ValidationException
 
+// TODO(https://github.com/smithy-lang/smithy/pull/2167): Remove this test once it's fixed in Smithy
+apply AllQueryStringTypes @httpRequestTests([
+    {
+        id: "RestJsonZeroAndFalseQueryValuesFixed"
+        documentation: "Query values of 0 and false are serialized"
+        protocol: restJson1
+        method: "GET"
+        uri: "/AllQueryStringTypesInput"
+        body: ""
+        queryParams: [
+            "Integer=0"
+            "Boolean=false"
+        ]
+        params: {
+            queryInteger: 0
+            queryBoolean: false
+            queryParamsMapOfStringList: {
+                Integer: ["0"]
+                Boolean: ["false"]
+            }
+        }
+    }
+])
+
 apply QueryPrecedence @httpRequestTests([
     {
         id: "UrlParamsKeyEncoding",
@@ -65,6 +89,9 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
+        QueryPrecedence,
+        // TODO(https://github.com/smithy-lang/smithy/pull/2167): Remove this test once it's fixed in Smithy
+        AllQueryStringTypes,
     ],
     errors: [ExtraError]
 }
@@ -81,16 +108,12 @@ service RestJsonExtras {
         appliesTo: "client",
     },
     {
-        documentation: """
-            Upper case error modeled lower case.
-            Servers render the full shape ID (including namespace), since some
-            existing clients rely on it to deserialize the error shape and fail
-            if only the shape name is present.""",
+        documentation: "Upper case error modeled lower case.",
         id: "ServiceLevelErrorServer",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "{}",
-        headers: { "X-Amzn-Errortype": "aws.protocoltests.restjson#ExtraError" },
+        headers: { "X-Amzn-Errortype": "ExtraError" },
         params: {},
         appliesTo: "server",
     }
@@ -318,7 +341,7 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
+        documentation: "Upper case error modeled lower case. See: https://github.com/smithy-lang/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,

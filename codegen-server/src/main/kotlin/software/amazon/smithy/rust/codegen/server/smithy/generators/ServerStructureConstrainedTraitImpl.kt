@@ -24,7 +24,7 @@ class ServerStructureConstrainedTraitImpl(
                 type Unconstrained = #{Builder};
             }
             """,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait(),
+            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
             "Structure" to symbolProvider.toSymbol(shape),
             "Builder" to shape.serverBuilderSymbol(symbolProvider, !publicConstrainedTypes),
         )

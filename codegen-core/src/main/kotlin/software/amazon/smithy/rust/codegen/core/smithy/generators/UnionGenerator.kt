@@ -16,13 +16,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -30,10 +34,11 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-fun CodegenTarget.renderUnknownVariant() = when (this) {
-    CodegenTarget.SERVER -> false
-    CodegenTarget.CLIENT -> true
-}
+fun CodegenTarget.renderUnknownVariant() =
+    when (this) {
+        CodegenTarget.SERVER -> false
+        CodegenTarget.CLIENT -> true
+    }
 
 /**
  * Generate an `enum` for a Smithy Union Shape
@@ -48,7 +53,7 @@ fun CodegenTarget.renderUnknownVariant() = when (this) {
  * Finally, if `[renderUnknownVariant]` is true (the default), it will render an `Unknown` variant. This is used by
  * clients to allow response parsing to succeed, even if the server has added a new variant since the client was generated.
  */
-class UnionGenerator(
+open class UnionGenerator(
     val model: Model,
     private val symbolProvider: SymbolProvider,
     private val writer: RustWriter,
@@ -58,7 +63,7 @@ class UnionGenerator(
     private val sortedMembers: List<MemberShape> = shape.allMembers.values.sortedBy { symbolProvider.toMemberName(it) }
     private val unionSymbol = symbolProvider.toSymbol(shape)
 
-    fun render() {
+    open fun render() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
 
@@ -67,7 +72,7 @@ class UnionGenerator(
 
         renderUnion(unionSymbol)
         renderImplBlock(unionSymbol)
-        if (!unionSymbol.expectRustMetadata().derives.derives.contains(RuntimeType.Debug)) {
+        if (!containerMeta.hasDebugDerive()) {
             if (shape.hasTrait<SensitiveTrait>()) {
                 renderFullyRedactedDebugImpl()
             } else {
@@ -105,14 +110,13 @@ class UnionGenerator(
     private fun renderImplBlock(unionSymbol: Symbol) {
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
-                val memberSymbol = symbolProvider.toSymbol(member)
                 val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = symbolProvider.toMemberName(member)
 
                 if (sortedMembers.size == 1) {
-                    Attribute.Custom("allow(irrefutable_let_patterns)").render(this)
+                    Attribute.AllowIrrefutableLetPatterns.render(this)
                 }
-                writer.renderAsVariant(member, variantName, funcNamePart, unionSymbol, memberSymbol)
+                writer.renderAsVariant(model, symbolProvider, member, variantName, funcNamePart, unionSymbol)
                 rust("/// Returns true if this is a [`$variantName`](#T::$variantName).", unionSymbol)
                 rustBlock("pub fn is_$funcNamePart(&self) -> bool") {
                     rust("self.as_$funcNamePart().is_ok()")
@@ -132,18 +136,18 @@ class UnionGenerator(
             """
             impl #{Debug} for ${unionSymbol.name} {
                 fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
-                    write!(f, $REDACTION)
+                    ::std::write!(f, $REDACTION)
                 }
             }
             """,
             "Debug" to RuntimeType.Debug,
-            "StdFmt" to RuntimeType.stdfmt,
+            "StdFmt" to RuntimeType.stdFmt,
         )
     }
 
     private fun renderDebugImpl() {
         writer.rustBlock("impl #T for ${unionSymbol.name}", RuntimeType.Debug) {
-            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdfmt) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rustBlock("match self") {
                     sortedMembers.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
@@ -174,7 +178,11 @@ fun unknownVariantError(union: String) =
         "The `Unknown` variant is intended for responses only. " +
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
-private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
+private fun RustWriter.renderVariant(
+    symbolProvider: SymbolProvider,
+    member: MemberShape,
+    memberSymbol: Symbol,
+) {
     if (member.isTargetUnit()) {
         write("${symbolProvider.toMemberName(member)},")
     } else {
@@ -183,29 +191,38 @@ private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: Mem
 }
 
 private fun RustWriter.renderAsVariant(
+    model: Model,
+    symbolProvider: SymbolProvider,
     member: MemberShape,
     variantName: String,
     funcNamePart: String,
     unionSymbol: Symbol,
-    memberSymbol: Symbol,
 ) {
     if (member.isTargetUnit()) {
         rust(
             "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<(), &Self>") {
-            rust("if let ${unionSymbol.name}::$variantName = &self { Ok(()) } else { Err(self) }")
+        rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<(), &Self>", *preludeScope) {
+            rustTemplate(
+                "if let ${unionSymbol.name}::$variantName = &self { #{Ok}(()) } else { #{Err}(self) }",
+                *preludeScope,
+            )
         }
     } else {
+        val memberSymbol = symbolProvider.toSymbol(member)
+        val targetSymbol = symbolProvider.toSymbol(model.expectShape(member.target))
         rust(
             "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner #D.",
             unionSymbol,
-            memberSymbol,
+            targetSymbol,
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlock("pub fn as_$funcNamePart(&self) -> std::result::Result<&#T, &Self>", memberSymbol) {
-            rust("if let ${unionSymbol.name}::$variantName(val) = &self { Ok(val) } else { Err(self) }")
+        rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<&${memberSymbol.rustType().render()}, &Self>", *preludeScope) {
+            rustTemplate(
+                "if let ${unionSymbol.name}::$variantName(val) = &self { #{Ok}(val) } else { #{Err}(self) }",
+                *preludeScope,
+            )
         }
     }
 }

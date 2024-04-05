@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_s3::{types::ByteStream, Client, Credentials, Region};
-use aws_smithy_client::test_connection::capture_request;
-use aws_types::{credentials::SharedCredentialsProvider, SdkConfig};
+#![cfg(feature = "test-util")]
+
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::Config;
+use aws_sdk_s3::{config::Credentials, config::Region, primitives::ByteStream, Client};
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use http::HeaderValue;
-use std::{
-    convert::Infallible,
-    time::{Duration, UNIX_EPOCH},
-};
 
 const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 
@@ -51,20 +49,18 @@ const NAUGHTY_STRINGS: &str = include_str!("blns/blns.txt");
 
 #[tokio::test]
 async fn test_s3_signer_with_naughty_string_metadata() {
-    let (conn, rcvr) = capture_request(None);
-    let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+    let (http_client, rcvr) = capture_request(None);
+    let config = Config::builder()
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
+        .with_test_defaults()
+        .force_path_style(true)
         .build();
 
-    let client = Client::new(&sdk_config);
+    let client = Client::from_conf(config);
     let mut builder = client
         .put_object()
         .bucket("test-bucket")
@@ -74,28 +70,14 @@ async fn test_s3_signer_with_naughty_string_metadata() {
     for (idx, line) in NAUGHTY_STRINGS.split('\n').enumerate() {
         // add lines to metadata unless they're a comment or empty
         // Some naughty strings aren't valid HeaderValues so we skip those too
-        if !line.starts_with("#") && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
+        if !line.starts_with('#') && !line.is_empty() && HeaderValue::from_str(line).is_ok() {
             let key = format!("line-{}", idx);
 
             builder = builder.metadata(key, line);
         }
     }
 
-    let _ = builder
-        .customize()
-        .await
-        .unwrap()
-        .map_operation(|mut op| {
-            op.properties_mut()
-                .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
-            op.properties_mut().insert(AwsUserAgent::for_tests());
-
-            Result::Ok::<_, Infallible>(op)
-        })
-        .unwrap()
-        .send()
-        .await
-        .unwrap();
+    let _ = builder.send().await.unwrap();
 
     let expected_req = rcvr.expect_request();
     let auth_header = expected_req
@@ -106,14 +88,11 @@ async fn test_s3_signer_with_naughty_string_metadata() {
 
     // This is a snapshot test taken from a known working test result
     let snapshot_signature =
-        "Signature=8dfa41f2db599a9fba53393b0ae5da646e5e452fa3685f7a1487d6eade5ec5c8";
+        "Signature=a5115604df66219874a9e5a8eab4c9f7a28c992ab2d918037a285756c019f3b2";
     assert!(
-        auth_header
-            .to_str()
-            .unwrap()
-            .contains(snapshot_signature),
+        auth_header .contains(snapshot_signature),
         "authorization header signature did not match expected signature: got {}, expected it to contain {}",
-        auth_header.to_str().unwrap(),
+        auth_header,
         snapshot_signature
     );
 }

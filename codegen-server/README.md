@@ -4,7 +4,7 @@ Server-side Smithy code generator
 
 ** This is a work in progress and generates serialization/de-serialization code that is probably unusable for the time being. **
 
-[Design documentation (WIP)](https://awslabs.github.io/smithy-rs/)
+[Design documentation (WIP)](https://smithy-lang.github.io/smithy-rs/)
 
 ## Project Layout
 

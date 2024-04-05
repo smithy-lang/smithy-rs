@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFromOperationInputTagTrait
 
@@ -44,30 +45,34 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ShapeReachableFr
  */
 object ShapesReachableFromOperationInputTagger {
     fun transform(model: Model): Model {
-        val inputShapes = model.operationShapes.map {
-            model.expectShape(it.inputShape, StructureShape::class.java)
-        }
-        val walker = Walker(model)
-        val shapesReachableFromOperationInputs = inputShapes
-            .flatMap { walker.walkShapes(it) }
-            .toSet()
+        val inputShapes =
+            model.operationShapes.map {
+                model.expectShape(it.inputShape, StructureShape::class.java)
+            }
+        val walker = DirectedWalker(model)
+        val shapesReachableFromOperationInputs =
+            inputShapes
+                .flatMap { walker.walkShapes(it) }
+                .toSet()
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             when (shape) {
-                is StructureShape, is UnionShape, is ListShape, is MapShape, is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape -> {
+                is StructureShape, is UnionShape, is ListShape, is MapShape, is StringShape, is IntegerShape, is ShortShape, is LongShape, is ByteShape, is BlobShape -> {
                     if (shapesReachableFromOperationInputs.contains(shape)) {
-                        val builder = when (shape) {
-                            is StructureShape -> shape.toBuilder()
-                            is UnionShape -> shape.toBuilder()
-                            is ListShape -> shape.toBuilder()
-                            is MapShape -> shape.toBuilder()
-                            is StringShape -> shape.toBuilder()
-                            is IntegerShape -> shape.toBuilder()
-                            is ShortShape -> shape.toBuilder()
-                            is LongShape -> shape.toBuilder()
-                            is ByteShape -> shape.toBuilder()
-                            else -> UNREACHABLE("the `when` is exhaustive")
-                        }
+                        val builder =
+                            when (shape) {
+                                is StructureShape -> shape.toBuilder()
+                                is UnionShape -> shape.toBuilder()
+                                is ListShape -> shape.toBuilder()
+                                is MapShape -> shape.toBuilder()
+                                is StringShape -> shape.toBuilder()
+                                is IntegerShape -> shape.toBuilder()
+                                is ShortShape -> shape.toBuilder()
+                                is LongShape -> shape.toBuilder()
+                                is ByteShape -> shape.toBuilder()
+                                is BlobShape -> shape.toBuilder()
+                                else -> UNREACHABLE("the `when` is exhaustive")
+                            }
                         builder.addTrait(ShapeReachableFromOperationInputTagTrait()).build()
                     } else {
                         shape

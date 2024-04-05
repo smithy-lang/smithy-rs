@@ -5,41 +5,62 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.AllowLintsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.CrateVersionGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.pubUseSmithyTypes
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
  * A set of customizations that are included in all protocols.
  *
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  *
- * See [RequiredCustomizations] from the `rust-codegen` subproject for the client version of this decorator.
+ * See [RequiredCustomizations] from the `codegen-client` subproject for the client version of this decorator.
  */
-class ServerRequiredCustomizations : RustCodegenDecorator<ServerProtocolGenerator, ServerCodegenContext> {
+class ServerRequiredCustomizations : ServerCodegenDecorator {
     override val name: String = "ServerRequired"
     override val order: Byte = -1
 
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        baseCustomizations + CrateVersionGenerator() + AllowLintsGenerator()
+    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
 
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val rc = codegenContext.runtimeConfig
+
         // Add rt-tokio feature for `ByteStream::from_path`
-        rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+        rustCrate.mergeFeature(
+            Feature(
+                "rt-tokio",
+                true,
+                listOf("aws-smithy-types/rt-tokio"),
+            ),
+        )
 
-        pubUseSmithyTypes(codegenContext.runtimeConfig, codegenContext.model, rustCrate)
+        rustCrate.withModule(ServerRustModule.Types) {
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
+            rustTemplate(
+                """
+                pub use #{DisplayErrorContext};
+                """,
+                "Response" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
+                "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
+            )
+        }
+
+        rustCrate.withModule(ServerRustModule.root) {
+            CrateVersionCustomization.extras(rustCrate, ServerRustModule.root)
+        }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ServerCodegenContext::class.java)
 }

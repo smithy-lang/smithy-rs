@@ -6,9 +6,9 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.RustCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Approx
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStd
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.AsyncStream
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.BytesUtils
@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HdrHistogram
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
@@ -25,18 +26,24 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyExperimental
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
+import software.amazon.smithy.rustsdk.AwsCargoDependency.awsConfig
+import software.amazon.smithy.rustsdk.AwsCargoDependency.awsRuntime
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolute
 
-class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, ClientCodegenContext> {
+class IntegrationTestDecorator : ClientCodegenDecorator {
     override val name: String = "IntegrationTest"
     override val order: Byte = 0
 
@@ -55,55 +62,68 @@ class IntegrationTestDecorator : RustCodegenDecorator<ClientProtocolGenerator, C
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
-            baseCustomizations + IntegrationTestDependencies(
-                moduleName,
-                codegenContext.runtimeConfig,
-                hasTests,
-                hasBenches,
-            )
+            baseCustomizations +
+                IntegrationTestDependencies(
+                    codegenContext,
+                    moduleName,
+                    hasTests,
+                    hasBenches,
+                )
         } else {
             baseCustomizations
         }
     }
-
-    override fun supportsCodegenContext(clazz: Class<out CodegenContext>): Boolean =
-        clazz.isAssignableFrom(ClientCodegenContext::class.java)
 }
 
 class IntegrationTestDependencies(
+    private val codegenContext: ClientCodegenContext,
     private val moduleName: String,
-    private val runtimeConfig: RuntimeConfig,
     private val hasTests: Boolean,
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
-    override fun section(section: LibRsSection) = when (section) {
-        is LibRsSection.Body -> writable {
-            if (hasTests) {
-                val smithyClient = CargoDependency.smithyClient(runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                addDependency(smithyClient)
-                addDependency(CargoDependency.smithyProtocolTestHelpers(runtimeConfig))
-                addDependency(SerdeJson)
-                addDependency(Tokio)
-                addDependency(FuturesUtil)
-                addDependency(Tracing)
-                addDependency(TracingSubscriber)
-            }
-            if (hasBenches) {
-                addDependency(Criterion)
-            }
-            for (serviceSpecific in serviceSpecificCustomizations()) {
-                serviceSpecific.section(section)(this)
-            }
-        }
-        else -> emptySection
-    }
+    private val runtimeConfig = codegenContext.runtimeConfig
 
-    private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
-        "transcribestreaming" -> listOf(TranscribeTestDependencies())
-        "s3" -> listOf(S3TestDependencies())
-        else -> emptyList()
-    }
+    override fun section(section: LibRsSection) =
+        when (section) {
+            is LibRsSection.Body ->
+                testDependenciesOnly {
+                    if (hasTests) {
+                        val smithyAsync =
+                            CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        val smithyTypes =
+                            CargoDependency.smithyTypes(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
+                        addDependency(FuturesUtil)
+                        addDependency(SerdeJson)
+                        addDependency(smithyAsync)
+                        addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
+                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
+                        addDependency(smithyTypes)
+                        addDependency(Tokio)
+                        addDependency(Tracing.toDevDependency())
+                        addDependency(TracingSubscriber)
+                    }
+                    if (hasBenches) {
+                        addDependency(Criterion)
+                    }
+                    for (serviceSpecific in serviceSpecificCustomizations()) {
+                        serviceSpecific.section(section)(this)
+                    }
+                }
+
+            else -> emptySection
+        }
+
+    private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
+        when (moduleName) {
+            "transcribestreaming" -> listOf(TranscribeTestDependencies())
+            "s3" -> listOf(S3TestDependencies(codegenContext))
+            "dynamodb" -> listOf(DynamoDbTestDependencies())
+            else -> emptyList()
+        }
 }
 
 class TranscribeTestDependencies : LibRsCustomization() {
@@ -115,15 +135,27 @@ class TranscribeTestDependencies : LibRsCustomization() {
         }
 }
 
-class S3TestDependencies : LibRsCustomization() {
+class DynamoDbTestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
+            addDependency(Approx)
+        }
+}
+
+class S3TestDependencies(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(awsConfig(codegenContext.runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
+            addDependency(smithyExperimental(codegenContext.runtimeConfig).toDevDependency())
             addDependency(AsyncStd)
-            addDependency(BytesUtils)
-            addDependency(FastRand)
+            addDependency(BytesUtils.toDevDependency())
+            addDependency(FastRand.toDevDependency())
+            addDependency(FuturesUtil.toDevDependency())
             addDependency(HdrHistogram)
+            addDependency(HttpBody.toDevDependency())
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)
+            addDependency(TracingTest)
         }
 }

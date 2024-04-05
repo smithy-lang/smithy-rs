@@ -7,6 +7,9 @@ on:
 
 name: Update GitHub Pages
 
+env:
+  rust_version: 1.74.1
+
 # Allow only one doc pages build to run at a time for the entire smithy-rs repo
 concurrency:
   group: github-pages-yml
@@ -17,10 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
-    - uses: dtolnay/rust-toolchain@stable
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
     - name: Generate docs
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -32,7 +37,7 @@ jobs:
 
         pushd design &>/dev/null
         cargo install mdbook
-        cargo install mdbook-mermaid
+        cargo install --locked mdbook-mermaid
         mdbook build --dest-dir ../../output
         popd &>/dev/null
 

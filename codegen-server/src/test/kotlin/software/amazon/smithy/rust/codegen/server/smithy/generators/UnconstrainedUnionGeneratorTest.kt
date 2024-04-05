@@ -8,14 +8,16 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.renderInlineMemoryModules
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -42,16 +44,23 @@ class UnconstrainedUnionGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
-            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(model, symbolProvider, this)
+        project.withModule(ServerRustModule.Model) {
+            model.lookup<StructureShape>("test#Structure").serverRenderWithModelBuilder(
+                project,
+                model,
+                symbolProvider,
+                this,
+                ServerRestJsonProtocol(codegenContext),
+            )
         }
 
-        project.withModule(ModelsModule) {
+        project.withModule(ServerRustModule.Model) {
             UnionGenerator(model, symbolProvider, this, unionShape, renderUnknownVariant = false).render()
         }
-        project.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-            project.withModule(ModelsModule) modelsModuleWriter@{
-                UnconstrainedUnionGenerator(codegenContext, this@unconstrainedModuleWriter, this@modelsModuleWriter, unionShape).render()
+
+        project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+            project.withModule(ServerRustModule.Model) modelsModuleWriter@{
+                UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
                 this@unconstrainedModuleWriter.unitTest(
                     name = "unconstrained_union_fail_to_constrain",
@@ -97,6 +106,7 @@ class UnconstrainedUnionGeneratorTest {
                 )
             }
         }
+        project.renderInlineMemoryModules()
         project.compileAndTest()
     }
 }

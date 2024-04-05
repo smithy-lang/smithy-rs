@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
@@ -23,21 +24,23 @@ import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstr
  */
 class BeforeSerializingMemberJsonCustomization(private val codegenContext: ServerCodegenContext) :
     JsonSerializerCustomization() {
-    override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.BeforeSerializingNonNullMember -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                if (section.shape is IntegerShape || section.shape is ShortShape || section.shape is LongShape || section.shape is ByteShape) {
-                    section.context.valueExpression =
-                        ValueExpression.Reference("&${section.context.valueExpression.name}.0")
+    override fun section(section: JsonSerializerSection): Writable =
+        when (section) {
+            is JsonSerializerSection.BeforeSerializingNonNullMember ->
+                writable {
+                    if (workingWithPublicConstrainedWrapperTupleType(
+                            section.shape,
+                            codegenContext.model,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+                    ) {
+                        if (section.shape is IntegerShape || section.shape is ShortShape || section.shape is LongShape || section.shape is ByteShape || section.shape is BlobShape) {
+                            section.context.valueExpression =
+                                ValueExpression.Reference("&${section.context.valueExpression.name}.0")
+                        }
+                    }
                 }
-            }
-        }
 
-        else -> emptySection
-    }
+            else -> emptySection
+        }
 }

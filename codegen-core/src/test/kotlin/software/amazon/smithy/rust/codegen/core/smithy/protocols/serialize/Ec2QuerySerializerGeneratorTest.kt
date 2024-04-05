@@ -5,12 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -19,14 +22,15 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class Ec2QuerySerializerGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
 
         union Choice {
@@ -82,12 +86,20 @@ class Ec2QuerySerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    @Test
-    fun `generates valid serializers`() {
-        val model = RecursiveShapeBoxer.transform(OperationNormalizer.transform(baseModel))
-        val codegenContext = testCodegenContext(model)
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers`(nullabilityCheckMode: NullableIndex.CheckMode) {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
+        val settings = testRustSettings()
+        val codegenContext = testCodegenContext(model, settings = settings, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = Ec2QuerySerializerGenerator(codegenContext)
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
@@ -97,9 +109,9 @@ class Ec2QuerySerializerGeneratorTest {
             unitTest(
                 "ec2query_serializer",
                 """
-                use model::Top;
+                use test_model::Top;
 
-                let input = crate::input::OpInput::builder()
+                let input = crate::test_input::OpInput::builder()
                     .top(
                         Top::builder()
                             .field("hello!")
@@ -126,15 +138,172 @@ class Ec2QuerySerializerGeneratorTest {
                 """,
             )
         }
-        project.withModule(RustModule.public("model")) {
-            model.lookup<StructureShape>("test#Top").renderWithModelBuilder(model, symbolProvider, this)
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
-            val enum = model.lookup<StringShape>("test#FooEnum")
-            EnumGenerator(model, symbolProvider, this, enum, enum.expectTrait()).render()
+        model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(top) {
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
         }
 
-        project.withModule(RustModule.public("input")) {
-            model.lookup<OperationShape>("test#Op").inputShape(model).renderWithModelBuilder(model, symbolProvider, this)
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    private val baseModelWithRequiredTypes =
+        """
+        namespace test
+
+        union Choice {
+            blob: Blob,
+            boolean: Boolean,
+            date: Timestamp,
+            enum: FooEnum,
+            int: Integer,
+            @xmlFlattened
+            list: SomeList,
+            long: Long,
+            map: MyMap,
+            number: Double,
+            s: String,
+            top: Top,
+            unit: Unit,
+        }
+
+        @enum([{name: "FOO", value: "FOO"}])
+        string FooEnum
+
+        map MyMap {
+            key: String,
+            value: Choice,
+        }
+
+        list SomeList {
+            member: Choice
+        }
+
+        structure Top {
+            @required
+            choice: Choice,
+            @required
+            field: String,
+            @required
+            extra: Long,
+            @xmlName("rec")
+            recursive: TopList
+        }
+
+        list TopList {
+            @xmlName("item")
+            member: Top
+        }
+
+        structure OpInput {
+            @required
+            @xmlName("some_bool")
+            boolean: Boolean,
+            list: SomeList,
+            map: MyMap,
+            @required
+            top: Top,
+            @required
+            blob: Blob
+        }
+
+        @http(uri: "/top", method: "POST")
+        operation Op {
+            input: OpInput,
+        }
+        """.asSmithyModel()
+
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers for required types`(nullabilityCheckMode: NullableIndex.CheckMode) {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
+        val settings = testRustSettings()
+        val codegenContext = testCodegenContext(model, settings = settings, nullabilityCheckMode = nullabilityCheckMode)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator = Ec2QuerySerializerGenerator(codegenContext)
+        val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
+
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
+
+        // Depending on the nullability check mode, the builder can be fallible or not. When it's fallible, we need to
+        // add unwrap calls.
+        val builderIsFallible =
+            BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
+        val maybeUnwrap =
+            if (builderIsFallible) {
+                ".unwrap()"
+            } else {
+                ""
+            }
+        project.lib {
+            unitTest(
+                "ec2query_serializer",
+                """
+                use test_model::{Choice, Top};
+
+                let input = crate::test_input::OpInput::builder()
+                    .top(
+                        Top::builder()
+                            .field("Hello")
+                            .choice(Choice::Boolean(true))
+                            .extra(45)
+                            .recursive(
+                                Top::builder()
+                                    .field("World!")
+                                    .choice(Choice::Boolean(true))
+                                    .extra(55)
+                                    .build()
+                                    $maybeUnwrap
+                            )
+                            .build()
+                            $maybeUnwrap
+                    )
+                    .boolean(true)
+                    .blob(aws_smithy_types::Blob::new(&b"test"[..]))
+                    .build()
+                    .unwrap();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(
+                    output,
+                    "\
+                    Action=Op\
+                    &Version=test\
+                    &Some_bool=true\
+                    &Top.Choice.Choice=true\
+                    &Top.Field=Hello\
+                    &Top.Extra=45\
+                    &Top.Rec.1.Choice.Choice=true\
+                    &Top.Rec.1.Field=World%21\
+                    &Top.Rec.1.Extra=55\
+                    &Blob=dGVzdA%3D%3D"
+                );
+                """,
+            )
+        }
+        model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(top) {
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
+        }
+
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
     }

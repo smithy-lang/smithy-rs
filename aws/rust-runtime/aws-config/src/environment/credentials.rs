@@ -5,10 +5,9 @@
 
 use std::env::VarError;
 
-use aws_types::credentials::future;
-use aws_types::credentials::{CredentialsError, ProvideCredentials};
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
-use aws_types::{credentials, Credentials};
 
 /// Load Credentials from Environment Variables
 ///
@@ -22,7 +21,7 @@ pub struct EnvironmentVariableCredentialsProvider {
 }
 
 impl EnvironmentVariableCredentialsProvider {
-    fn credentials(&self) -> credentials::Result {
+    fn credentials(&self) -> provider::Result {
         let access_key = self
             .env
             .get("AWS_ACCESS_KEY_ID")
@@ -59,11 +58,10 @@ impl EnvironmentVariableCredentialsProvider {
         Self::new_with_env(Env::real())
     }
 
-    #[doc(hidden)]
     /// Create a new `EnvironmentVariableCredentialsProvider` with `Env` overridden
     ///
     /// This function is intended for tests that mock out the process environment.
-    pub fn new_with_env(env: Env) -> Self {
+    pub(crate) fn new_with_env(env: Env) -> Self {
         Self { env }
     }
 }
@@ -102,7 +100,7 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 
 #[cfg(test)]
 mod test {
-    use aws_types::credentials::{CredentialsError, ProvideCredentials};
+    use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
 
@@ -246,6 +244,6 @@ mod test {
     fn real_environment() {
         let provider = EnvironmentVariableCredentialsProvider::new();
         // we don't know what's in the env, just make sure it doesn't crash.
-        let _ = provider.provide_credentials();
+        let _fut = provider.provide_credentials();
     }
 }

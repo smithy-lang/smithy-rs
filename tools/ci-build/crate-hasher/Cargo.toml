@@ -1,0 +1,27 @@
+[package]
+name = "crate-hasher"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "Tool to deterministically hash a Rust crate's source code"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[workspace]
+
+[profile.release]
+# prefer fast compile time over runtime performance
+opt-level = 0
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "~3.1.18", features = ["derive"] }
+# pin to 0.4.18 to deal with newer version relying on 1.65.0
+ignore = "=0.4.18"
+sha256 = "1.1"
+
+[dev-dependencies]
+flate2 = "1.0"
+pretty_assertions = "1.3"
+tar = "0.4"
+tempfile = "3.5.0"

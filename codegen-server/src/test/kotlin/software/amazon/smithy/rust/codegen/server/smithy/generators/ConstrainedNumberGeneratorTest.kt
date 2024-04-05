@@ -14,18 +14,20 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
+import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import java.util.stream.Stream
 
 class ConstrainedNumberGeneratorTest {
-
     data class TestCaseInputs(val constraintAnnotation: String, val validValue: Int, val invalidValue: Int)
+
     data class TestCase(val model: Model, val validValue: Int, val invalidValue: Int, val shapeName: String)
 
     class ConstrainedNumberGeneratorTestProvider : ArgumentsProvider {
@@ -70,8 +72,14 @@ class ConstrainedNumberGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        project.withModule(ModelsModule) {
-            ConstrainedNumberGenerator(codegenContext, this, shape).render()
+        project.withModule(ServerRustModule.Model) {
+            ConstrainedNumberGenerator(
+                codegenContext,
+                this.createTestInlineModuleCreator(),
+                this,
+                shape,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+            ).render()
 
             unitTest(
                 name = "try_from_success",
@@ -119,20 +127,27 @@ class ConstrainedNumberGeneratorTest {
 
     @ParameterizedTest
     @ArgumentsSource(NoStructuralConstructorTestProvider::class)
-    fun `type should not be constructible without using a constructor`(args: Triple<String, String, String>) {
+    fun `type should not be constructable without using a constructor`(args: Triple<String, String, String>) {
         val (smithyType, shapeName, rustType) = args
-        val model = """
+        val model =
+            """
             namespace test
 
             @range(min: -1, max: 5)
             $smithyType $shapeName
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedShape = model.lookup<NumberShape>("test#$shapeName")
 
         val codegenContext = serverTestCodegenContext(model)
 
-        val writer = RustWriter.forModule(ModelsModule.name)
-        ConstrainedNumberGenerator(codegenContext, writer, constrainedShape).render()
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        ConstrainedNumberGenerator(
+            codegenContext,
+            writer.createTestInlineModuleCreator(),
+            writer,
+            constrainedShape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render()
 
         // Check that the wrapped type is `pub(crate)`.
         writer.toString() shouldContain "pub struct $shapeName(pub(crate) $rustType);"

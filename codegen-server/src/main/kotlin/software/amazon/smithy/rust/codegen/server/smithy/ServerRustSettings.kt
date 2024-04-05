@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import java.util.Optional
 
-/**
+/*
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
  *
  * These classes are entirely analogous to [ClientRustSettings] and [ClientCodegenConfig]. Refer to the documentation
@@ -25,7 +25,7 @@ import java.util.Optional
  */
 
 /**
- * Settings used by [RustCodegenServerPlugin].
+ * Settings used by [RustServerCodegenPlugin].
  */
 data class ServerRustSettings(
     override val service: ShapeId,
@@ -40,20 +40,23 @@ data class ServerRustSettings(
     override val examplesUri: String?,
     override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
-    service,
-    moduleName,
-    moduleVersion,
-    moduleAuthors,
-    moduleDescription,
-    moduleRepository,
-    runtimeConfig,
-    codegenConfig,
-    license,
-    examplesUri,
-    customizationConfig,
-) {
+        service,
+        moduleName,
+        moduleVersion,
+        moduleAuthors,
+        moduleDescription,
+        moduleRepository,
+        runtimeConfig,
+        codegenConfig,
+        license,
+        examplesUri,
+        customizationConfig,
+    ) {
     companion object {
-        fun from(model: Model, config: ObjectNode): ServerRustSettings {
+        fun from(
+            model: Model,
+            config: ObjectNode,
+        ): ServerRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
             val codegenSettingsNode = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettingsNode)
@@ -83,26 +86,37 @@ data class ServerCodegenConfig(
     override val debugMode: Boolean = defaultDebugMode,
     val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
     val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
+    /**
+     * A flag to enable _experimental_ support for custom validation exceptions via the
+     * [CustomValidationExceptionWithReasonDecorator] decorator.
+     * TODO(https://github.com/smithy-lang/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
+     *  able to define the converters in their Rust application code.
+     */
+    val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode,
-) {
+        formatTimeoutSeconds, debugMode,
+    ) {
     companion object {
         private const val defaultPublicConstrainedTypes = true
         private const val defaultIgnoreUnsupportedConstraints = false
+        private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
 
-        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
-            if (node.isPresent) {
-                ServerCodegenConfig(
-                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                    debugMode = coreCodegenConfig.debugMode,
-                    publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
-                    ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
-                )
-            } else {
-                ServerCodegenConfig(
-                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                    debugMode = coreCodegenConfig.debugMode,
-                )
-            }
+        fun fromCodegenConfigAndNode(
+            coreCodegenConfig: CoreCodegenConfig,
+            node: Optional<ObjectNode>,
+        ) = if (node.isPresent) {
+            ServerCodegenConfig(
+                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                debugMode = coreCodegenConfig.debugMode,
+                publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
+                ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
+                experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = node.get().getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
+            )
+        } else {
+            ServerCodegenConfig(
+                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                debugMode = coreCodegenConfig.debugMode,
+            )
+        }
     }
 }

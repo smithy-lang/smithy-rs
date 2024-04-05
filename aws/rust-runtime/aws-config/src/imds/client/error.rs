@@ -5,17 +5,15 @@
 
 //! Error types for [`ImdsClient`](crate::imds::client::Client)
 
-use crate::profile::credentials::ProfileFileError;
-use aws_smithy_client::SdkError;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::error::InvalidEndpointError;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::client::result::SdkError;
 use std::error::Error;
 use std::fmt;
 
 /// Error context for [`ImdsError::FailedToLoadToken`]
 #[derive(Debug)]
 pub struct FailedToLoadToken {
-    source: SdkError<TokenError>,
+    source: SdkError<TokenError, HttpResponse>,
 }
 
 impl FailedToLoadToken {
@@ -24,7 +22,7 @@ impl FailedToLoadToken {
         matches!(self.source, SdkError::DispatchFailure(_))
     }
 
-    pub(crate) fn into_source(self) -> SdkError<TokenError> {
+    pub(crate) fn into_source(self) -> SdkError<TokenError, HttpResponse> {
         self.source
     }
 }
@@ -32,12 +30,12 @@ impl FailedToLoadToken {
 /// Error context for [`ImdsError::ErrorResponse`]
 #[derive(Debug)]
 pub struct ErrorResponse {
-    raw: http::Response<SdkBody>,
+    raw: HttpResponse,
 }
 
 impl ErrorResponse {
     /// Returns the raw response from IMDS
-    pub fn response(&self) -> &http::Response<SdkBody> {
+    pub fn response(&self) -> &HttpResponse {
         &self.raw
     }
 }
@@ -77,11 +75,11 @@ pub enum ImdsError {
 }
 
 impl ImdsError {
-    pub(super) fn failed_to_load_token(source: SdkError<TokenError>) -> Self {
+    pub(super) fn failed_to_load_token(source: SdkError<TokenError, HttpResponse>) -> Self {
         Self::FailedToLoadToken(FailedToLoadToken { source })
     }
 
-    pub(super) fn error_response(raw: http::Response<SdkBody>) -> Self {
+    pub(super) fn error_response(raw: HttpResponse) -> Self {
         Self::ErrorResponse(ErrorResponse { raw })
     }
 
@@ -178,9 +176,6 @@ enum BuildErrorKind {
     /// The endpoint mode was invalid
     InvalidEndpointMode(InvalidEndpointMode),
 
-    /// The AWS Profile (e.g. `~/.aws/config`) was invalid
-    InvalidProfile(ProfileFileError),
-
     /// The specified endpoint was not a valid URI
     InvalidEndpointUri(Box<dyn Error + Send + Sync + 'static>),
 }
@@ -195,12 +190,6 @@ impl BuildError {
     pub(super) fn invalid_endpoint_mode(source: InvalidEndpointMode) -> Self {
         Self {
             kind: BuildErrorKind::InvalidEndpointMode(source),
-        }
-    }
-
-    pub(super) fn invalid_profile(source: ProfileFileError) -> Self {
-        Self {
-            kind: BuildErrorKind::InvalidProfile(source),
         }
     }
 
@@ -219,7 +208,6 @@ impl fmt::Display for BuildError {
         write!(f, "failed to build IMDS client: ")?;
         match self.kind {
             InvalidEndpointMode(_) => write!(f, "invalid endpoint mode"),
-            InvalidProfile(_) => write!(f, "profile file error"),
             InvalidEndpointUri(_) => write!(f, "invalid URI"),
         }
     }
@@ -230,16 +218,7 @@ impl Error for BuildError {
         use BuildErrorKind::*;
         match &self.kind {
             InvalidEndpointMode(e) => Some(e),
-            InvalidProfile(e) => Some(e),
             InvalidEndpointUri(e) => Some(e.as_ref()),
-        }
-    }
-}
-
-impl From<InvalidEndpointError> for BuildError {
-    fn from(err: InvalidEndpointError) -> Self {
-        Self {
-            kind: BuildErrorKind::InvalidEndpointUri(err.into()),
         }
     }
 }

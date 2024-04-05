@@ -16,6 +16,8 @@ use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
+use crate::shape_id::ShapeId;
+
 use super::{MakeDebug, MakeDisplay, MakeIdentity};
 
 pin_project_lite::pin_project! {
@@ -75,10 +77,10 @@ where
     }
 }
 
-/// A middleware [`Service`](tower::Service) responsible for:
-///     - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
-///     [`Uri`](http::Uri), and the request headers.
-///     - A [`tracing::debug`] during response, which includes the response status code and headers.
+/// A middleware [`Service`] responsible for:
+///   - Opening a [`tracing::debug_span`] for the lifetime of the request, which includes the operation name, the
+///     [`Uri`], and the request headers.
+///   - A [`tracing::debug`] during response, which includes the response status code and headers.
 ///
 /// The [`Display`](std::fmt::Display) and [`Debug`] of the request and response components can be modified using
 /// [`request_fmt`](InstrumentOperation::request_fmt) and [`response_fmt`](InstrumentOperation::response_fmt).
@@ -87,15 +89,17 @@ where
 ///
 /// ```
 /// # use aws_smithy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
+/// # use aws_smithy_http_server::shape_id::ShapeId;
 /// # use tower::{Service, service_fn};
 /// # use http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
 /// # let mut svc = service_fn(f);
+/// # const ID: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
 /// let request_fmt = RequestFmt::new()
 ///     .label(|index| index == 1, None)
 ///     .query(|_| QueryMarker { key: false, value: true });
 /// let response_fmt = ResponseFmt::new().status_code();
-/// let mut svc = InstrumentOperation::new(svc, "foo-operation")
+/// let mut svc = InstrumentOperation::new(svc, ID)
 ///     .request_fmt(request_fmt)
 ///     .response_fmt(response_fmt);
 /// # svc.call(Request::new(()));
@@ -103,17 +107,17 @@ where
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
-    operation_name: &'static str,
+    operation_id: ShapeId,
     make_request: RequestMakeFmt,
     make_response: ResponseMakeFmt,
 }
 
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
-    pub fn new(inner: S, operation_name: &'static str) -> Self {
+    pub fn new(inner: S, operation_id: ShapeId) -> Self {
         Self {
             inner,
-            operation_name,
+            operation_id,
             make_request: MakeIdentity,
             make_response: MakeIdentity,
         }
@@ -127,7 +131,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn request_fmt<R>(self, make_request: R) -> InstrumentOperation<S, R, ResponseMakeFmt> {
         InstrumentOperation {
             inner: self.inner,
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request,
             make_response: self.make_response,
         }
@@ -139,7 +143,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     pub fn response_fmt<R>(self, make_response: R) -> InstrumentOperation<S, RequestMakeFmt, R> {
         InstrumentOperation {
             inner: self.inner,
-            operation_name: self.operation_name,
+            operation_id: self.operation_id,
             make_request: self.make_request,
             make_response,
         }
@@ -170,7 +174,7 @@ where
         let span = {
             let headers = self.make_request.make_debug(request.headers());
             let uri = self.make_request.make_display(request.uri());
-            debug_span!("request", operation = %self.operation_name, method = %request.method(), %uri, ?headers)
+            debug_span!("request", operation = %self.operation_id.absolute(), method = %request.method(), %uri, ?headers)
         };
 
         InstrumentedFuture {

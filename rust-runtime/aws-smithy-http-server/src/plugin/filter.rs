@@ -3,74 +3,76 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::util::Either;
+use super::{either::Either, IdentityPlugin, ModelMarker};
 
-use crate::operation::{Operation, OperationShape};
+use crate::operation::OperationShape;
+use crate::service::ContainsOperation;
 
-use super::Plugin;
+use super::{HttpMarker, Plugin};
 
 /// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::NAME`](crate::operation::OperationShape).
+/// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
 ///
-/// See [`filter_by_operation_name`] for more details.
-pub struct FilterByOperationName<Inner, F> {
+/// This contrasts with [`Scoped`](crate::plugin::Scoped) which can be used to selectively apply a [`Plugin`] to a
+/// subset of operations at _compile time_.
+///
+/// See [`filter_by_operation`] for more details.
+pub struct FilterByOperation<Inner, F> {
     inner: Inner,
     predicate: F,
 }
 
+impl<Ser, Op, T, Inner, F> Plugin<Ser, Op, T> for FilterByOperation<Inner, F>
+where
+    Ser: ContainsOperation<Op>,
+    F: Fn(Ser::Operations) -> bool,
+    Inner: Plugin<Ser, Op, T>,
+    Op: OperationShape,
+{
+    type Output = Either<Inner::Output, T>;
+
+    fn apply(&self, input: T) -> Self::Output {
+        let either_plugin = if (self.predicate)(<Ser as ContainsOperation<Op>>::VALUE) {
+            Either::Left { value: &self.inner }
+        } else {
+            Either::Right { value: IdentityPlugin }
+        };
+        either_plugin.apply(input)
+    }
+}
+
+impl<Inner, F> HttpMarker for FilterByOperation<Inner, F> where Inner: HttpMarker {}
+impl<Inner, F> ModelMarker for FilterByOperation<Inner, F> where Inner: ModelMarker {}
+
 /// Filters the application of an inner [`Plugin`] using a predicate over the
-/// [`OperationShape::NAME`](crate::operation::OperationShape).
+/// [`ServiceShape::Operations`](crate::service::ServiceShape::Operations).
+///
+/// Users should prefer [`Scoped`](crate::plugin::Scoped) and fallback to [`filter_by_operation`]
+/// in cases where [`Plugin`] application must be decided at runtime.
 ///
 /// # Example
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::filter_by_operation_name;
-/// # use aws_smithy_http_server::{plugin::Plugin, operation::{Operation, OperationShape}};
+/// use aws_smithy_http_server::plugin::filter_by_operation;
+/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId, service::{ServiceShape, ContainsOperation}};
 /// # struct Pl;
+/// # struct PokemonService;
+/// # #[derive(PartialEq, Eq)]
+/// # enum Operation { CheckHealth }
+/// # impl ServiceShape for PokemonService { const VERSION: Option<&'static str> = None; const ID: ShapeId = ShapeId::new("", "", ""); type Operations = Operation; type Protocol = (); }
+/// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # struct CheckHealth;
-/// # impl OperationShape for CheckHealth { const NAME: &'static str = ""; type Input = (); type Output = (); type Error = (); }
-/// # impl Plugin<(), CheckHealth, (), ()> for Pl { type Service = (); type Layer = (); fn map(&self, input: Operation<(), ()>) -> Operation<(), ()> { input }}
+/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+/// # impl Plugin<PokemonService, CheckHealth, ()> for Pl { type Output = (); fn apply(&self, input: ()) -> Self::Output { input }}
 /// # let plugin = Pl;
-/// # let operation = Operation { inner: (), layer: () };
+/// # let svc = ();
 /// // Prevents `plugin` from being applied to the `CheckHealth` operation.
-/// let filtered_plugin = filter_by_operation_name(plugin, |name| name != CheckHealth::NAME);
-/// let new_operation = filtered_plugin.map(operation);
+/// let filtered_plugin = filter_by_operation(plugin, |name| name != Operation::CheckHealth);
+/// let new_operation = filtered_plugin.apply(svc);
 /// ```
-pub fn filter_by_operation_name<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperationName<Inner, F>
-where
-    F: Fn(&str) -> bool,
-{
-    FilterByOperationName::new(plugins, predicate)
-}
-
-impl<Inner, F> FilterByOperationName<Inner, F> {
-    /// Creates a new [`FilterByOperationName`].
-    fn new(inner: Inner, predicate: F) -> Self {
-        Self { inner, predicate }
-    }
-}
-
-impl<P, Op, S, L, Inner, F> Plugin<P, Op, S, L> for FilterByOperationName<Inner, F>
-where
-    F: Fn(&str) -> bool,
-    Inner: Plugin<P, Op, S, L>,
-    Op: OperationShape,
-{
-    type Service = Either<Inner::Service, S>;
-    type Layer = Either<Inner::Layer, L>;
-
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        if (self.predicate)(Op::NAME) {
-            let Operation { inner, layer } = self.inner.map(input);
-            Operation {
-                inner: Either::A(inner),
-                layer: Either::A(layer),
-            }
-        } else {
-            Operation {
-                inner: Either::B(input.inner),
-                layer: Either::B(input.layer),
-            }
-        }
+pub fn filter_by_operation<Inner, F>(plugins: Inner, predicate: F) -> FilterByOperation<Inner, F> {
+    FilterByOperation {
+        inner: plugins,
+        predicate,
     }
 }

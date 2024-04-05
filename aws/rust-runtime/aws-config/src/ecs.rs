@@ -17,12 +17,21 @@
 //! to construct a URI rooted at `http://169.254.170.2`. For example, if the value of the environment
 //! variable was `/credentials`, the SDK would look for credentials at `http://169.254.170.2/credentials`.
 //!
-//! **Next**: It wil check the value of `$AWS_CONTAINER_CREDENTIALS_FULL_URI`. This specifies the full
-//! URL to load credentials. The URL MUST satisfy one of the following two properties:
+//! **Next**: It will check the value of `$AWS_CONTAINER_CREDENTIALS_FULL_URI`. This specifies the full
+//! URL to load credentials. The URL MUST satisfy one of the following three properties:
 //! 1. The URL begins with `https`
-//! 2. The URL refers to a loopback device. If a URL contains a domain name instead of an IP address,
-//! a DNS lookup will be performed. ALL resolved IP addresses MUST refer to a loopback interface, or
-//! the credentials provider will return `CredentialsError::InvalidConfiguration`
+//! 2. The URL refers to an allowed IP address. If a URL contains a domain name instead of an IP address,
+//! a DNS lookup will be performed. ALL resolved IP addresses MUST refer to an allowed IP address, or
+//! the credentials provider will return `CredentialsError::InvalidConfiguration`. Valid IP addresses are:
+//!     a) Loopback interfaces
+//!     b) The [ECS Task Metadata V2](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v2.html)
+//!        address ie 169.254.170.2.
+//!     c) [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) addresses
+//!        ie 169.254.170.23 or fd00:ec2::23
+//!
+//! **Next**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`. If this is set,
+//! the filename specified will be read, and the value passed in the `Authorization` header. If the file
+//! cannot be read, an error is returned.
 //!
 //! **Finally**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN`. If this is set, the
 //! value will be passed in the `Authorization` header.
@@ -46,25 +55,21 @@
 //! }
 //! ```
 
-use std::error::Error;
-use std::fmt::{Display, Formatter};
-use std::io;
-use std::net::IpAddr;
-
-use aws_smithy_client::erase::boxclone::BoxCloneService;
-use aws_smithy_http::endpoint::Endpoint;
-use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials;
-use aws_types::credentials::{future, CredentialsError, ProvideCredentials};
-use http::uri::{InvalidUri, Scheme};
-use http::{HeaderValue, Uri};
-use tower::{Service, ServiceExt};
-
 use crate::http_credential_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
-use aws_smithy_client::http_connector::ConnectorSettings;
-use aws_types::os_shim_internal::Env;
+use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_smithy_runtime::client::endpoint::apply_endpoint;
+use aws_smithy_runtime_api::client::dns::{ResolveDns, ResolveDnsError, SharedDnsResolver};
+use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
+use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_types::os_shim_internal::{Env, Fs};
 use http::header::InvalidHeaderValue;
+use http::uri::{InvalidUri, PathAndQuery, Scheme};
+use http::{HeaderValue, Uri};
+use std::error::Error;
+use std::fmt::{Display, Formatter};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 use tokio::sync::OnceCell;
 
@@ -75,7 +80,8 @@ const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const BASE_HOST: &str = "http://169.254.170.2";
 const ENV_RELATIVE_URI: &str = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
 const ENV_FULL_URI: &str = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
-const ENV_AUTHORIZATION: &str = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+const ENV_AUTHORIZATION_TOKEN: &str = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+const ENV_AUTHORIZATION_TOKEN_FILE: &str = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE";
 
 /// Credential provider for ECS and generalized HTTP credentials
 ///
@@ -86,6 +92,7 @@ const ENV_AUTHORIZATION: &str = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
 pub struct EcsCredentialsProvider {
     inner: OnceCell<Provider>,
     env: Env,
+    fs: Fs,
     builder: Builder,
 }
 
@@ -96,16 +103,33 @@ impl EcsCredentialsProvider {
     }
 
     /// Load credentials from this credentials provider
-    pub async fn credentials(&self) -> credentials::Result {
-        let auth = match self.env.get(ENV_AUTHORIZATION).ok() {
-            Some(auth) => Some(HeaderValue::from_str(&auth).map_err(|err| {
-                tracing::warn!(token = %auth, "invalid auth token");
+    pub async fn credentials(&self) -> provider::Result {
+        let env_token_file = self.env.get(ENV_AUTHORIZATION_TOKEN_FILE).ok();
+        let env_token = self.env.get(ENV_AUTHORIZATION_TOKEN).ok();
+        let auth = if let Some(auth_token_file) = env_token_file {
+            let auth = self
+                .fs
+                .read_to_end(auth_token_file)
+                .await
+                .map_err(CredentialsError::provider_error)?;
+            Some(HeaderValue::from_bytes(auth.as_slice()).map_err(|err| {
+                let auth_token = String::from_utf8_lossy(auth.as_slice()).to_string();
+                tracing::warn!(token = %auth_token, "invalid auth token");
                 CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
                     err,
-                    value: auth,
+                    value: auth_token,
                 })
-            })?),
-            None => None,
+            })?)
+        } else if let Some(auth_token) = env_token {
+            Some(HeaderValue::from_str(&auth_token).map_err(|err| {
+                tracing::warn!(token = %auth_token, "invalid auth token");
+                CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
+                    err,
+                    value: auth_token,
+                })
+            })?)
+        } else {
+            None
         };
         match self.provider().await {
             Provider::NotConfigured => {
@@ -144,14 +168,14 @@ enum Provider {
 }
 
 impl Provider {
-    async fn uri(env: Env, dns: Option<DnsService>) -> Result<Uri, EcsConfigurationError> {
+    async fn uri(env: Env, dns: Option<SharedDnsResolver>) -> Result<Uri, EcsConfigurationError> {
         let relative_uri = env.get(ENV_RELATIVE_URI).ok();
         let full_uri = env.get(ENV_FULL_URI).ok();
         if let Some(relative_uri) = relative_uri {
             Self::build_full_uri(relative_uri)
         } else if let Some(full_uri) = full_uri {
-            let mut dns = dns.or_else(tokio_dns);
-            validate_full_uri(&full_uri, dns.as_mut())
+            let dns = dns.or_else(default_dns);
+            validate_full_uri(&full_uri, dns)
                 .await
                 .map_err(|err| EcsConfigurationError::InvalidFullUri { err, uri: full_uri })
         } else {
@@ -167,15 +191,24 @@ impl Provider {
             Err(EcsConfigurationError::NotConfigured) => return Provider::NotConfigured,
             Err(err) => return Provider::InvalidConfiguration(err),
         };
+        let path = uri.path().to_string();
+        let endpoint = {
+            let mut parts = uri.into_parts();
+            parts.path_and_query = Some(PathAndQuery::from_static("/"));
+            Uri::from_parts(parts)
+        }
+        .expect("parts will be valid")
+        .to_string();
+
         let http_provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
-            .connector_settings(
-                ConnectorSettings::builder()
+            .http_connector_settings(
+                HttpConnectorSettings::builder()
                     .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
                     .read_timeout(DEFAULT_READ_TIMEOUT)
                     .build(),
             )
-            .build("EcsContainer", uri);
+            .build("EcsContainer", &endpoint, path);
         Provider::Configured(http_provider)
     }
 
@@ -190,10 +223,8 @@ impl Provider {
                 });
             }
         };
-        let endpoint =
-            Endpoint::immutable_uri(Uri::from_static(BASE_HOST)).expect("BASE_HOST is valid");
-        endpoint
-            .set_endpoint(&mut relative_uri, None)
+        let endpoint = Uri::from_static(BASE_HOST);
+        apply_endpoint(&mut relative_uri, &endpoint, None)
             .expect("appending relative URLs to the ECS endpoint should always succeed");
         Ok(relative_uri)
     }
@@ -255,7 +286,7 @@ impl Error for EcsConfigurationError {
 #[derive(Default, Debug, Clone)]
 pub struct Builder {
     provider_config: Option<ProviderConfig>,
-    dns: Option<DnsService>,
+    dns: Option<SharedDnsResolver>,
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
 }
@@ -269,10 +300,10 @@ impl Builder {
 
     /// Override the DNS resolver used to validate URIs
     ///
-    /// URIs must refer to loopback addresses. The `DnsService` is used to retrieve IP addresses for
-    /// a given domain.
-    pub fn dns(mut self, dns: DnsService) -> Self {
-        self.dns = Some(dns);
+    /// URIs must refer to valid IP addresses as defined in the module documentation. The [`ResolveDns`]
+    /// implementation is used to retrieve IP addresses for a given domain.
+    pub fn dns(mut self, dns: impl ResolveDns + 'static) -> Self {
+        self.dns = Some(dns.into_shared());
         self
     }
 
@@ -299,9 +330,15 @@ impl Builder {
             .as_ref()
             .map(|config| config.env())
             .unwrap_or_default();
+        let fs = self
+            .provider_config
+            .as_ref()
+            .map(|config| config.fs())
+            .unwrap_or_default();
         EcsCredentialsProvider {
             inner: OnceCell::new(),
             env,
+            fs,
             builder: self,
         }
     }
@@ -313,25 +350,26 @@ enum InvalidFullUriErrorKind {
     #[non_exhaustive]
     InvalidUri(InvalidUri),
 
-    /// No Dns service was provided
+    /// No Dns resolver was provided
     #[non_exhaustive]
-    NoDnsService,
+    NoDnsResolver,
 
     /// The URI did not specify a host
     #[non_exhaustive]
     MissingHost,
 
-    /// The URI did not refer to the loopback interface
+    /// The URI did not refer to an allowed IP address
     #[non_exhaustive]
-    NotLoopback,
+    DisallowedIP,
 
     /// DNS lookup failed when attempting to resolve the host to an IP Address for validation.
-    DnsLookupFailed(io::Error),
+    DnsLookupFailed(ResolveDnsError),
 }
 
 /// Invalid Full URI
 ///
-/// When the full URI setting is used, the URI must either be HTTPS or point to a loopback interface.
+/// When the full URI setting is used, the URI must either be HTTPS, point to a loopback interface,
+/// or point to known ECS/EKS container IPs.
 #[derive(Debug)]
 pub struct InvalidFullUriError {
     kind: InvalidFullUriErrorKind,
@@ -343,8 +381,8 @@ impl Display for InvalidFullUriError {
         match self.kind {
             InvalidUri(_) => write!(f, "URI was invalid"),
             MissingHost => write!(f, "URI did not specify a host"),
-            NotLoopback => {
-                write!(f, "URI did not refer to the loopback interface")
+            DisallowedIP => {
+                write!(f, "URI did not refer to an allowed IP address")
             }
             DnsLookupFailed(_) => {
                 write!(
@@ -352,7 +390,7 @@ impl Display for InvalidFullUriError {
                     "failed to perform DNS lookup while validating URI"
                 )
             }
-            NoDnsService => write!(f, "no DNS service was provided. Enable `rt-tokio` or provide a `dns` service to the builder.")
+            NoDnsResolver => write!(f, "no DNS resolver was provided. Enable `rt-tokio` or provide a `dns` resolver to the builder.")
         }
     }
 }
@@ -362,7 +400,7 @@ impl Error for InvalidFullUriError {
         use InvalidFullUriErrorKind::*;
         match &self.kind {
             InvalidUri(err) => Some(err),
-            DnsLookupFailed(err) => Some(err),
+            DnsLookupFailed(err) => Some(err as _),
             _ => None,
         }
     }
@@ -374,18 +412,16 @@ impl From<InvalidFullUriErrorKind> for InvalidFullUriError {
     }
 }
 
-/// Dns resolver interface
-pub type DnsService = BoxCloneService<String, Vec<IpAddr>, io::Error>;
-
 /// Validate that `uri` is valid to be used as a full provider URI
 /// Either:
 /// 1. The URL is uses `https`
-/// 2. The URL refers to a loopback device. If a URL contains a domain name instead of an IP address,
-/// a DNS lookup will be performed. ALL resolved IP addresses MUST refer to a loopback interface, or
-/// the credentials provider will return `CredentialsError::InvalidConfiguration`
+/// 2. The URL refers to an allowed IP. If a URL contains a domain name instead of an IP address,
+/// a DNS lookup will be performed. ALL resolved IP addresses MUST refer to an allowed IP, or
+/// the credentials provider will return `CredentialsError::InvalidConfiguration`. Allowed IPs
+/// are the loopback interfaces, and the known ECS/EKS container IPs.
 async fn validate_full_uri(
     uri: &str,
-    dns: Option<&mut DnsService>,
+    dns: Option<SharedDnsResolver>,
 ) -> Result<Uri, InvalidFullUriError> {
     let uri = uri
         .parse::<Uri>()
@@ -393,115 +429,102 @@ async fn validate_full_uri(
     if uri.scheme() == Some(&Scheme::HTTPS) {
         return Ok(uri);
     }
-    // For HTTP URIs, we need to validate that it points to a loopback address
+    // For HTTP URIs, we need to validate that it points to a valid IP
     let host = uri.host().ok_or(InvalidFullUriErrorKind::MissingHost)?;
-    let is_loopback = match host.parse::<IpAddr>() {
-        Ok(addr) => addr.is_loopback(),
+    let maybe_ip = if host.starts_with('[') && host.ends_with(']') {
+        host[1..host.len() - 1].parse::<IpAddr>()
+    } else {
+        host.parse::<IpAddr>()
+    };
+    let is_allowed = match maybe_ip {
+        Ok(addr) => is_full_uri_ip_allowed(&addr),
         Err(_domain_name) => {
-            let dns = dns.ok_or(InvalidFullUriErrorKind::NoDnsService)?;
-            dns.ready().await.map_err(InvalidFullUriErrorKind::DnsLookupFailed)?
-                    .call(host.to_owned())
-                    .await
-                    .map_err(InvalidFullUriErrorKind::DnsLookupFailed)?
-                    .iter()
+            let dns = dns.ok_or(InvalidFullUriErrorKind::NoDnsResolver)?;
+            dns.resolve_dns(host)
+                .await
+                .map_err(|err| InvalidFullUriErrorKind::DnsLookupFailed(ResolveDnsError::new(err)))?
+                .iter()
                     .all(|addr| {
-                        if !addr.is_loopback() {
+                        if !is_full_uri_ip_allowed(addr) {
                             tracing::warn!(
                                 addr = ?addr,
-                                "HTTP credential provider cannot be used: Address does not resolve to the loopback interface."
+                                "HTTP credential provider cannot be used: Address does not resolve to an allowed IP."
                             )
                         };
-                        addr.is_loopback()
+                        is_full_uri_ip_allowed(addr)
                     })
         }
     };
-    match is_loopback {
+    match is_allowed {
         true => Ok(uri),
-        false => Err(InvalidFullUriErrorKind::NotLoopback.into()),
+        false => Err(InvalidFullUriErrorKind::DisallowedIP.into()),
     }
 }
 
-#[cfg(not(feature = "rt-tokio"))]
-fn tokio_dns() -> Option<DnsService> {
+// "169.254.170.2"
+const ECS_CONTAINER_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(169, 254, 170, 2));
+
+// "169.254.170.23"
+const EKS_CONTAINER_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(169, 254, 170, 23));
+
+// "fd00:ec2::23"
+const EKS_CONTAINER_IPV6: IpAddr = IpAddr::V6(Ipv6Addr::new(0xFD00, 0x0EC2, 0, 0, 0, 0, 0, 0x23));
+fn is_full_uri_ip_allowed(ip: &IpAddr) -> bool {
+    ip.is_loopback()
+        || ip.eq(&ECS_CONTAINER_IPV4)
+        || ip.eq(&EKS_CONTAINER_IPV4)
+        || ip.eq(&EKS_CONTAINER_IPV6)
+}
+
+/// Default DNS resolver impl
+///
+/// DNS resolution is required to validate that provided URIs point to a valid IP address
+#[cfg(any(not(feature = "rt-tokio"), target_family = "wasm"))]
+fn default_dns() -> Option<SharedDnsResolver> {
     None
 }
-
-/// DNS resolver that uses tokio::spawn_blocking
-///
-/// DNS resolution is required to validate that provided URIs point to the loopback interface
-#[cfg(feature = "rt-tokio")]
-fn tokio_dns() -> Option<DnsService> {
-    use aws_smithy_client::erase::boxclone::BoxFuture;
-    use std::io::ErrorKind;
-    use std::net::ToSocketAddrs;
-    use std::task::{Context, Poll};
-
-    #[derive(Clone)]
-    struct TokioDns;
-    impl Service<String> for TokioDns {
-        type Response = Vec<IpAddr>;
-        type Error = io::Error;
-        type Future = BoxFuture<Self::Response, Self::Error>;
-
-        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
-        }
-
-        fn call(&mut self, req: String) -> Self::Future {
-            Box::pin(async move {
-                let result = tokio::task::spawn_blocking(move || (req, 0).to_socket_addrs()).await;
-                match result {
-                    Err(join_failure) => Err(io::Error::new(ErrorKind::Other, join_failure)),
-                    Ok(Ok(dns_result)) => {
-                        Ok(dns_result.into_iter().map(|addr| addr.ip()).collect())
-                    }
-                    Ok(Err(dns_failure)) => Err(dns_failure),
-                }
-            })
-        }
-    }
-    Some(BoxCloneService::new(TokioDns))
+#[cfg(all(feature = "rt-tokio", not(target_family = "wasm")))]
+fn default_dns() -> Option<SharedDnsResolver> {
+    use aws_smithy_runtime::client::dns::TokioDnsResolver;
+    Some(TokioDnsResolver::new().into_shared())
 }
 
 #[cfg(test)]
 mod test {
-    use aws_smithy_client::erase::boxclone::BoxCloneService;
-    use aws_smithy_client::never::NeverService;
+    use super::*;
+    use crate::provider_config::ProviderConfig;
+    use crate::test_case::{no_traffic_client, GenericTestResult};
+    use aws_credential_types::provider::ProvideCredentials;
+    use aws_credential_types::Credentials;
+    use aws_smithy_async::future::never::Never;
+    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use aws_smithy_runtime_api::client::dns::DnsFuture;
+    use aws_smithy_runtime_api::client::http::HttpClient;
+    use aws_smithy_runtime_api::shared::IntoShared;
+    use aws_smithy_types::body::SdkBody;
+    use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
+    use http::header::AUTHORIZATION;
     use http::Uri;
     use serde::Deserialize;
-    use tracing_test::traced_test;
-
-    use crate::ecs::{
-        tokio_dns, validate_full_uri, Builder, EcsCredentialsProvider, InvalidFullUriError,
-        InvalidFullUriErrorKind, Provider,
-    };
-    use crate::provider_config::ProviderConfig;
-    use crate::test_case::GenericTestResult;
-
-    use aws_types::credentials::ProvideCredentials;
-    use aws_types::os_shim_internal::Env;
-    use aws_types::Credentials;
-
-    use aws_smithy_async::rt::sleep::TokioSleep;
-    use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_client::test_connection::TestConnection;
-    use aws_smithy_http::body::SdkBody;
-    use http::header::AUTHORIZATION;
     use std::collections::HashMap;
     use std::error::Error;
-    use std::future::Ready;
-    use std::io;
+    use std::ffi::OsString;
     use std::net::IpAddr;
-    use std::task::{Context, Poll};
     use std::time::{Duration, UNIX_EPOCH};
-    use tower::Service;
+    use tracing_test::traced_test;
 
-    fn provider(env: Env, connector: DynConnector) -> EcsCredentialsProvider {
+    fn provider(
+        env: Env,
+        fs: Fs,
+        http_client: impl HttpClient + 'static,
+    ) -> EcsCredentialsProvider {
         let provider_config = ProviderConfig::empty()
             .with_env(env)
-            .with_http_connector(connector)
-            .with_sleep(TokioSleep::new());
+            .with_fs(fs)
+            .with_http_client(http_client)
+            .with_sleep_impl(TokioSleep::new());
         Builder::default().configure(&provider_config).build()
     }
 
@@ -514,10 +537,10 @@ mod test {
     impl EcsUriTest {
         async fn check(&self) {
             let env = Env::from(self.env.clone());
-            let uri = Provider::uri(env, Some(BoxCloneService::new(TestDns::default())))
+            let uri = Provider::uri(env, Some(TestDns::default().into_shared()))
                 .await
                 .map(|uri| uri.to_string());
-            self.result.assert_matches(uri);
+            self.result.assert_matches(uri.as_ref());
         }
     }
 
@@ -540,8 +563,7 @@ mod test {
     #[test]
     fn validate_uri_https() {
         // over HTTPs, any URI is fine
-        let never = NeverService::new();
-        let mut dns = Some(BoxCloneService::new(never));
+        let dns = Some(NeverDns.into_shared());
         assert_eq!(
             validate_full_uri("https://amazon.com", None)
                 .now_or_never()
@@ -551,7 +573,7 @@ mod test {
         );
         // over HTTP, it will try to lookup
         assert!(
-            validate_full_uri("http://amazon.com", dns.as_mut())
+            validate_full_uri("http://amazon.com", dns)
                 .now_or_never()
                 .is_none(),
             "DNS lookup should occur, but it will never return"
@@ -565,7 +587,7 @@ mod test {
             matches!(
                 no_dns_error,
                 InvalidFullUriError {
-                    kind: InvalidFullUriErrorKind::NoDnsService
+                    kind: InvalidFullUriErrorKind::NoDnsResolver
                 }
             ),
             "expected no dns service, got: {}",
@@ -590,19 +612,70 @@ mod test {
         assert!(matches!(
             err,
             InvalidFullUriError {
-                kind: InvalidFullUriErrorKind::NotLoopback
+                kind: InvalidFullUriErrorKind::DisallowedIP
+            }
+        ));
+    }
+
+    #[test]
+    fn valid_uri_ecs_eks() {
+        assert_eq!(
+            validate_full_uri("http://169.254.170.2:8080/get-credentials", None)
+                .now_or_never()
+                .unwrap()
+                .expect("valid uri"),
+            Uri::from_static("http://169.254.170.2:8080/get-credentials")
+        );
+        assert_eq!(
+            validate_full_uri("http://169.254.170.23:8080/get-credentials", None)
+                .now_or_never()
+                .unwrap()
+                .expect("valid uri"),
+            Uri::from_static("http://169.254.170.23:8080/get-credentials")
+        );
+        assert_eq!(
+            validate_full_uri("http://[fd00:ec2::23]:8080/get-credentials", None)
+                .now_or_never()
+                .unwrap()
+                .expect("valid uri"),
+            Uri::from_static("http://[fd00:ec2::23]:8080/get-credentials")
+        );
+
+        let err = validate_full_uri("http://169.254.171.23/creds", None)
+            .now_or_never()
+            .unwrap()
+            .expect_err("not an ecs/eks container address");
+        assert!(matches!(
+            err,
+            InvalidFullUriError {
+                kind: InvalidFullUriErrorKind::DisallowedIP
+            }
+        ));
+
+        let err = validate_full_uri("http://[fd00:ec2::2]/creds", None)
+            .now_or_never()
+            .unwrap()
+            .expect_err("not an ecs/eks container address");
+        assert!(matches!(
+            err,
+            InvalidFullUriError {
+                kind: InvalidFullUriErrorKind::DisallowedIP
             }
         ));
     }
 
     #[test]
     fn all_addrs_local() {
-        let svc = TestDns::with_fallback(vec![
-            "127.0.0.1".parse().unwrap(),
-            "127.0.0.2".parse().unwrap(),
-        ]);
-        let mut svc = Some(BoxCloneService::new(svc));
-        let resp = validate_full_uri("http://localhost:8888", svc.as_mut())
+        let dns = Some(
+            TestDns::with_fallback(vec![
+                "127.0.0.1".parse().unwrap(),
+                "127.0.0.2".parse().unwrap(),
+                "169.254.170.23".parse().unwrap(),
+                "fd00:ec2::23".parse().unwrap(),
+            ])
+            .into_shared(),
+        );
+        let resp = validate_full_uri("http://localhost:8888", dns)
             .now_or_never()
             .unwrap();
         assert!(resp.is_ok(), "Should be valid: {:?}", resp);
@@ -610,19 +683,21 @@ mod test {
 
     #[test]
     fn all_addrs_not_local() {
-        let svc = TestDns::with_fallback(vec![
-            "127.0.0.1".parse().unwrap(),
-            "192.168.0.1".parse().unwrap(),
-        ]);
-        let mut svc = Some(BoxCloneService::new(svc));
-        let resp = validate_full_uri("http://localhost:8888", svc.as_mut())
+        let dns = Some(
+            TestDns::with_fallback(vec![
+                "127.0.0.1".parse().unwrap(),
+                "192.168.0.1".parse().unwrap(),
+            ])
+            .into_shared(),
+        );
+        let resp = validate_full_uri("http://localhost:8888", dns)
             .now_or_never()
             .unwrap();
         assert!(
             matches!(
                 resp,
                 Err(InvalidFullUriError {
-                    kind: InvalidFullUriErrorKind::NotLoopback
+                    kind: InvalidFullUriErrorKind::DisallowedIP
                 })
             ),
             "Should be invalid: {:?}",
@@ -669,37 +744,130 @@ mod test {
             ("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials"),
             ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "Basic password"),
         ]);
-        let connector = TestConnection::new(vec![(
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             creds_request("http://169.254.170.2/credentials", Some("Basic password")),
             ok_creds_response(),
         )]);
-        let provider = provider(env, DynConnector::new(connector.clone()));
+        let provider = provider(env, Fs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await
             .expect("valid credentials");
         assert_correct(creds);
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn load_valid_creds_auth_file() {
+        let env = Env::from_slice(&[
+            (
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "http://169.254.170.23/v1/credentials",
+            ),
+            (
+                "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+        ]);
+        let fs = Fs::from_raw_map(HashMap::from([(
+            OsString::from(
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+            "Basic password".into(),
+        )]));
+
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            creds_request(
+                "http://169.254.170.23/v1/credentials",
+                Some("Basic password"),
+            ),
+            ok_creds_response(),
+        )]);
+        let provider = provider(env, fs, http_client.clone());
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("valid credentials");
+        assert_correct(creds);
+        http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn auth_file_precedence_over_env() {
+        let env = Env::from_slice(&[
+            (
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "http://169.254.170.23/v1/credentials",
+            ),
+            (
+                "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+            ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "unused"),
+        ]);
+        let fs = Fs::from_raw_map(HashMap::from([(
+            OsString::from(
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+            "Basic password".into(),
+        )]));
+
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            creds_request(
+                "http://169.254.170.23/v1/credentials",
+                Some("Basic password"),
+            ),
+            ok_creds_response(),
+        )]);
+        let provider = provider(env, fs, http_client.clone());
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("valid credentials");
+        assert_correct(creds);
+        http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn fs_missing_file() {
+        let env = Env::from_slice(&[
+            (
+                "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "http://169.254.170.23/v1/credentials",
+            ),
+            (
+                "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
+            ),
+        ]);
+        let fs = Fs::from_raw_map(HashMap::new());
+
+        let provider = provider(env, fs, no_traffic_client());
+        let err = provider.credentials().await.expect_err("no JWT token file");
+        match err {
+            CredentialsError::ProviderError { .. } => { /* ok */ }
+            _ => panic!("incorrect error variant"),
+        }
     }
 
     #[tokio::test]
     async fn retry_5xx() {
         let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
-        let connector = TestConnection::new(vec![
-            (
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
                 creds_request("http://169.254.170.2/credentials", None),
                 http::Response::builder()
                     .status(500)
                     .body(SdkBody::empty())
                     .unwrap(),
             ),
-            (
+            ReplayEvent::new(
                 creds_request("http://169.254.170.2/credentials", None),
                 ok_creds_response(),
             ),
         ]);
         tokio::time::pause();
-        let provider = provider(env, DynConnector::new(connector.clone()));
+        let provider = provider(env, Fs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await
@@ -710,17 +878,17 @@ mod test {
     #[tokio::test]
     async fn load_valid_creds_no_auth() {
         let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
-        let connector = TestConnection::new(vec![(
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             creds_request("http://169.254.170.2/credentials", None),
             ok_creds_response(),
         )]);
-        let provider = provider(env, DynConnector::new(connector.clone()));
+        let provider = provider(env, Fs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await
             .expect("valid credentials");
         assert_correct(creds);
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     // ignored by default because it relies on actual DNS resolution
@@ -729,30 +897,41 @@ mod test {
     #[traced_test]
     #[ignore]
     async fn real_dns_lookup() {
-        let mut dns = Some(tokio_dns().expect("feature must be enabled"));
-        let err = validate_full_uri("http://www.amazon.com/creds", dns.as_mut())
+        let dns = Some(
+            default_dns()
+                .expect("feature must be enabled")
+                .into_shared(),
+        );
+        let err = validate_full_uri("http://www.amazon.com/creds", dns.clone())
             .await
-            .expect_err("not a loopback");
+            .expect_err("not a valid IP");
         assert!(
             matches!(
                 err,
                 InvalidFullUriError {
-                    kind: InvalidFullUriErrorKind::NotLoopback
+                    kind: InvalidFullUriErrorKind::DisallowedIP
                 }
             ),
             "{:?}",
             err
         );
-        assert!(logs_contain(
-            "Address does not resolve to the loopback interface"
-        ));
-        validate_full_uri("http://localhost:8888/creds", dns.as_mut())
+        assert!(logs_contain("Address does not resolve to an allowed IP"));
+        validate_full_uri("http://localhost:8888/creds", dns.clone())
             .await
             .expect("localhost is the loopback interface");
+        validate_full_uri("http://169.254.170.2.backname.io:8888/creds", dns.clone())
+            .await
+            .expect("169.254.170.2.backname.io is the ecs container address");
+        validate_full_uri("http://169.254.170.23.backname.io:8888/creds", dns.clone())
+            .await
+            .expect("169.254.170.23.backname.io is the eks pod identity address");
+        validate_full_uri("http://fd00-ec2--23.backname.io:8888/creds", dns)
+            .await
+            .expect("fd00-ec2--23.backname.io is the eks pod identity address");
     }
 
-    /// TestService which always returns the same IP addresses
-    #[derive(Clone)]
+    /// Always returns the same IP addresses
+    #[derive(Clone, Debug)]
     struct TestDns {
         addrs: HashMap<String, Vec<IpAddr>>,
         fallback: Vec<IpAddr>,
@@ -783,17 +962,20 @@ mod test {
         }
     }
 
-    impl Service<String> for TestDns {
-        type Response = Vec<IpAddr>;
-        type Error = io::Error;
-        type Future = Ready<Result<Self::Response, Self::Error>>;
-
-        fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
+    impl ResolveDns for TestDns {
+        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+            DnsFuture::ready(Ok(self.addrs.get(name).unwrap_or(&self.fallback).clone()))
         }
+    }
 
-        fn call(&mut self, _req: String) -> Self::Future {
-            std::future::ready(Ok(self.addrs.get(&_req).unwrap_or(&self.fallback).clone()))
+    #[derive(Debug)]
+    struct NeverDns;
+    impl ResolveDns for NeverDns {
+        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
+            DnsFuture::new(async {
+                Never::new().await;
+                unreachable!()
+            })
         }
     }
 }

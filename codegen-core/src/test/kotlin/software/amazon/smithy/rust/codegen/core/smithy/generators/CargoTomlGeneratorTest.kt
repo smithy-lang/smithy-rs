@@ -36,7 +36,7 @@ class CargoTomlGeneratorTest {
                     .expect("missing `smithy.codegen-version` field")
                     .as_str()
                     .expect("`smithy.codegen-version` is not str");
-                assert_eq!(codegen_version, "${Version.fullVersion()}");
+                assert_eq!(codegen_version, "${Version.fromDefaultResource().gitHash}");
                 """,
             )
         }

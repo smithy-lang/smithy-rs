@@ -1,7 +1,7 @@
 RFC: RequestID in business logic handlers
 =============
 
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: server
 
@@ -43,13 +43,13 @@ To aid customers already relying on clients' request IDs, there will be two type
 
 1. Implementing `FromParts` for `Extension<RequestId>` gives customers the ability to write their handlers:
 
-```rust
+```rust,ignore
 pub async fn handler(
     input: input::Input,
     request_id: Extension<ServerRequestId>,
 ) -> ...
 ```
-```rust
+```rust,ignore
 pub async fn handler(
     input: input::Input,
     request_id: Extension<ClientRequestId>,
@@ -71,7 +71,7 @@ For privacy reasons, any format that provides service details should be avoided.
 The proposed format is to use UUID, version 4.
 
 A `Service` that inserts a RequestId in the extensions will be implemented as follows:
-```rust
+```rust,ignore
 impl<R, S> Service<http::Request<R>> for ServerRequestIdProvider<S>
 where
     S: Service<http::Request<R>>,
@@ -85,7 +85,7 @@ where
     }
 
     fn call(&mut self, mut req: http::Request<R>) -> Self::Future {
-        request.extensions_mut().insert(ServerRequestId::new());
+        req.extensions_mut().insert(ServerRequestId::new());
         self.inner.call(req)
     }
 }
@@ -96,7 +96,7 @@ For client request IDs, the process will be, in order:
 * Otherwise, None
 
 `Option` is used to distinguish whether a client had provided an ID or not.
-```rust
+```rust,ignore
 impl<R, S> Service<http::Request<R>> for ClientRequestIdProvider<S>
 where
     S: Service<http::Request<R>>,
@@ -131,7 +131,12 @@ Although the generated ID is opaque, this will give guarantees to customers as t
 Changes checklist
 -----------------
 
-- [ ] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
+- [x] Implement `ServerRequestId`: a `new()` function that generates a UUID, with `Display`, `Debug` and `ToStr` implementations
 - [ ] Implement `ClientRequestId`: `new()` that wraps a string (the header value) and the header in which the value could be found, with `Display`, `Debug` and `ToStr` implementations
 - [x] Implement `FromParts` for `Extension<ServerRequestId>`
-- [x] Implement `FromParts` for `Extension<ClientRequestId>`
+- [ ] Implement `FromParts` for `Extension<ClientRequestId>`
+
+Changes since the RFC has been approved
+---------------------------------------
+
+This RFC has been changed to only implement `ServerRequestId`.

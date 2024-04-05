@@ -17,6 +17,8 @@ const KNOWN_YANKED_RELEASE_TAGS: &[&str] = &[
     "release-2022-07-04",
     // Add release tags here to get the canary passing after yanking a release
     "release-2022-10-13",
+    "release-2022-12-15", // Failed release
+    "release-2022-12-16", // Failed release
 ];
 
 #[derive(Debug, Parser, Eq, PartialEq)]
@@ -63,6 +65,7 @@ impl RetrieveReleases for GitHubRetrieveReleases {
             .repos()
             .list_tags(owner, repo, 100, page_num)
             .await?
+            .body
             .into_iter()
             .filter_map(|tag| ReleaseTag::from_str(&tag.name).ok())
             .collect();

@@ -25,7 +25,7 @@ checksum and attaching it either as a header or a trailer.)
 
 Here's [an example from the QLDB SDK of creating a body] from inputs and inserting it into the request to be sent:
 
-```rust
+```rust,ignore
 let body = aws_smithy_http::body::SdkBody::from(
     crate::operation_ser::serialize_operation_crate_operation_send_command(&self)?,
 );
@@ -52,7 +52,7 @@ body until you've sent the request. Any metadata that needs to be calculated by 
 trailers. Additionally, some metadata, like `Content-Length`, can't be sent as a trailer at all.
 [MDN maintains a helpful list] of metadata that can only be sent as a header.
 
-```rust
+```rust,ignore
 // When trailers are set, we must send an AWS-specific header that lists them named `x-amz-trailer`.
 // For example, when sending a SHA256 checksum as a trailer,
 // we have to send an `x-amz-trailer` header telling the service to watch out for it:
@@ -73,7 +73,7 @@ a request body for `aws-chunked` requires us to know the length of each chunk we
 have to prefix each chunk with its size in bytes, represented by one or more [hexadecimal] digits. To close the body, we
 send a final chunk with a zero. For example, the body "Hello world" would look like this when encoded:
 
-```
+```text
 B\r\n
 Hello world\r\n
 0\r\n
@@ -120,7 +120,7 @@ When using `aws-chunked` encoding, the trailers have to be appended to the body 
 relying on the `poll_trailers` method. The working `http_body::Body` implementation of an `aws-chunked` encoded body
 looked like this:
 
-```rust
+```rust,ignore
 impl Body for AwsChunkedBody<Inner> {
     type Data = Bytes;
     type Error = aws_smithy_http::body::Error;
@@ -222,14 +222,14 @@ been read.
   be visible when printing with the `Debug` impl. Case in point was an error I was getting because of the
   `is_end_stream` issue. When `Debug` printed, the error looked like this:
 
-  ```
+  ```rust,ignore
   DispatchFailure(ConnectorError { err: hyper::Error(User(Body), hyper::Error(BodyWriteAborted)), kind: User })
   ```
 
   That wasn't too helpful for me on its own. I looked into the `hyper` source code and found that the `Display` impl
   contained a helpful message, so I matched into the error and printed the `hyper::Error` with the `Display` impl:
 
-  ```
+  ```markdown
   user body write aborted: early end, expected 2 more bytes'
   ```
 
@@ -239,7 +239,7 @@ been read.
   being sent out by the SDK as I was working on it. The Rust SDK supports setting endpoints for request. This is often
   used to send requests to something like [LocalStack], but I used it to send request to `localhost` instead:
 
-  ```rust
+  ```rust,ignore
   #[tokio::test]
   async fn test_checksum_on_streaming_request_against_s3() {
       let sdk_config = aws_config::from_env()
@@ -262,7 +262,7 @@ been read.
 
   The echo server was based off of an [axum] example and looked like this:
 
-  ```rust
+  ```rust,ignore
   use axum::{
     body::{Body, Bytes},
     http::{request::Parts, Request, StatusCode},

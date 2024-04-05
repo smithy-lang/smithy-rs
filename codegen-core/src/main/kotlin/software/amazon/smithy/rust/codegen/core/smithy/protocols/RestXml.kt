@@ -6,17 +6,12 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.builderSymbol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -26,19 +21,19 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "Error" to RuntimeType.GenericError(runtimeConfig),
-        "HeaderMap" to RuntimeType.http.member("HeaderMap"),
-        "Response" to RuntimeType.http.member("Response"),
-        "XmlDecodeError" to CargoDependency.smithyXml(runtimeConfig).toType().member("decode::XmlDecodeError"),
-    )
-    private val xmlDeserModule = RustModule.private("xml_deser")
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
 
-    protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
-        true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
-        false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
-    }
+    protected val restXmlErrors: RuntimeType =
+        when (restXml.isNoErrorWrapping) {
+            true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
+            false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
+        }
 
     override val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
@@ -46,33 +41,29 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        fun builderSymbol(shape: StructureShape): Symbol =
-            shape.builderSymbol(codegenContext.symbolProvider)
-        return RestXmlParserGenerator(codegenContext, restXmlErrors, ::builderSymbol)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        RestXmlParserGenerator(codegenContext, restXmlErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator {
-        return XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
-    }
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
 
-    override fun parseHttpGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_generic_error", xmlDeserModule) {
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn parse_http_generic_error(response: &#{Response}<#{Bytes}>) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_generic_error(response.body().as_ref())", restXmlErrors)
+                rust("#T::parse_error_metadata(response_body)", restXmlErrors)
             }
         }
 
-    override fun parseEventStreamGenericError(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_generic_error", xmlDeserModule) {
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn parse_event_stream_generic_error(payload: &#{Bytes}) -> Result<#{Error}, #{XmlDecodeError}>",
+                "pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
-                rust("#T::parse_generic_error(payload.as_ref())", restXmlErrors)
+                rust("#T::parse_error_metadata(payload.as_ref())", restXmlErrors)
             }
         }
 }

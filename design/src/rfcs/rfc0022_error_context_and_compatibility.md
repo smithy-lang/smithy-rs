@@ -28,7 +28,7 @@ that this RFC will attempt to solve, and calls out what was done well, and what 
 ### Case study: `InvalidFullUriError`
 
 To start, let's examine `InvalidFullUriError` (doc comments omitted):
-```rust
+```rust,ignore
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum InvalidFullUriError {
@@ -89,7 +89,7 @@ However, there are also a number of things that could be improved:
 Next, let's look at a much simpler error. The `ProfileParseError` is focused purely on the parsing
 logic for the SDK config file:
 
-```rust
+```rust,ignore
 #[derive(Debug, Clone)]
 pub struct ProfileParseError {
     location: Location,
@@ -128,7 +128,7 @@ What could be improved:
 
 The SDK currently generates errors such as the following (from S3):
 
-```rust
+```rust,ignore
 #[non_exhaustive]
 pub enum Error {
     BucketAlreadyExists(BucketAlreadyExists),
@@ -232,7 +232,7 @@ all errors in the public API for the Rust runtime crates and generated client cr
 Actionable errors are represented as enums. If an error variant has an error source or additional contextual
 information, it must use a separate context struct that is referenced via tuple in the enum. For example:
 
-```rust
+```rust,ignore
 // Good: new error types can be added in the future
 #[non_exhaustive]
 pub enum Error {
@@ -296,7 +296,7 @@ adding a new error variant's source at a later date.
 
 The error `Display` implementation _must not_ include the source in its output:
 
-```rust
+```rust,ignore
 // Good
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -326,7 +326,7 @@ impl fmt::Display for Error {
 Informative errors must be represented as structs. If error messaging changes based on an underlying cause, then a
 private error kind enum can be used internally for this purpose. For example:
 
-```rust
+```rust,ignore
 #[derive(Debug)]
 pub struct InformativeError {
     some_additional_info: u32,
@@ -356,13 +356,13 @@ In code where errors are logged rather than returned to the customer, the full e
 must be displayed. This will be made easy by placing a `DisplayErrorContext` struct in `aws-smithy-types` that
 is used as a wrapper to get the better error formatting:
 
-```rust
+```rust,ignore
 tracing::warn!(err = %DisplayErrorContext(err), "some message");
 ```
 
 This might be implemented as follows:
 
-```rust
+```rust,ignore
 #[derive(Debug)]
 pub struct DisplayErrorContext<E: Error>(pub E);
 

@@ -5,31 +5,18 @@
 
 package software.amazon.smithy.rustsdk
 
+import SdkCodegenIntegrationTest
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
-import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class RegionProviderConfigTest {
     @Test
     fun `generates a valid config`() {
-        val project = TestWorkspace.testProject()
-        val projectSettings = project.rustSettings()
-        val coreRustSettings = CoreRustSettings(
-            service = projectSettings.service,
-            moduleName = projectSettings.moduleName,
-            moduleVersion = projectSettings.moduleVersion,
-            moduleAuthors = projectSettings.moduleAuthors,
-            moduleDescription = projectSettings.moduleDescription,
-            moduleRepository = projectSettings.moduleRepository,
-            runtimeConfig = AwsTestRuntimeConfig,
-            codegenConfig = projectSettings.codegenConfig,
-            license = projectSettings.license,
-            examplesUri = projectSettings.examplesUri,
-            customizationConfig = projectSettings.customizationConfig,
-        )
-        val codegenContext = awsTestCodegenContext(coreRustSettings = coreRustSettings)
-        validateConfigCustomizations(RegionProviderConfig(codegenContext), project)
+        awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { _, crate ->
+            crate.unitTest {
+                rustTemplate("let conf: Option<crate::Config> = None; let _reg: Option<crate::config::Region> = conf.and_then(|c|c.region().cloned());")
+            }
+        }
     }
 }

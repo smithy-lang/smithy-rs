@@ -20,6 +20,10 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 and
 
 ```rust
+# extern crate tracing_subscriber;
+# extern crate tracing;
+# use tracing_subscriber::filter;
+# use tracing::Level;
 let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 ```
 
@@ -55,23 +59,39 @@ Smithy provides an out-the-box middleware which:
 
 This is enabled via the `instrument` method provided by the `aws_smithy_http_server::instrumentation::InstrumentExt` trait.
 
-```rust
-use aws_smithy_http_server::instrumentation::InstrumentExt;
+```rust,no_run
+# extern crate aws_smithy_http_server;
+# extern crate pokemon_service_server_sdk;
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+use aws_smithy_http_server::{
+  instrumentation::InstrumentExt,
+  plugin::{IdentityPlugin, HttpPlugins}
+};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
+use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 
-let plugins = PluginPipeline::new().instrument();
-let app = PokemonService::builder_with_plugins(plugins)
-  .get_pokemon_species(/* handler */)
+let http_plugins = HttpPlugins::new().instrument();
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+let app = PokemonService::builder(config)
+  .get_pokemon_species(handler)
   /* ... */
-  .build();
+  .build()
+  .unwrap();
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 ```
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 
 ### Example
 
-The Pokémon service example, located at `rust-runtime/aws-smithy-http-server/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
+The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
 ```rust
+# extern crate tracing_subscriber;
+use tracing_subscriber::{prelude::*, EnvFilter};
+
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();

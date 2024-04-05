@@ -3,19 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_iam::{Credentials, Region};
-use aws_smithy_client::test_connection::capture_request;
+use aws_sdk_iam::config::{Credentials, Region};
+use aws_smithy_runtime::client::http::test_util::capture_request;
 
 #[tokio::test]
 async fn correct_endpoint_resolver() {
-    let (conn, request) = capture_request(None);
+    let (http_client, request) = capture_request(None);
     let conf = aws_sdk_iam::Config::builder()
-        .region(Region::from_static("iam-fips"))
-        .credentials_provider(Credentials::new("asdf", "asdf", None, None, "tests"))
-        .http_connector(conn)
+        .credentials_provider(Credentials::for_tests())
+        .use_fips(true)
+        .region(Region::new("us-east-1"))
+        .http_client(http_client)
         .build();
     let client = aws_sdk_iam::Client::from_conf(conf);
-    let _ = client.list_roles().send().await;
+    let _ = dbg!(client.list_roles().send().await);
     let req = request.expect_request();
     assert_eq!(&req.uri().to_string(), "https://iam-fips.amazonaws.com/");
 }

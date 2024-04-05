@@ -8,7 +8,7 @@ use smithy.test#httpRequestTests
 apply NotFound @httpResponseTests([
     {
         id: "HeadObjectEmptyBody",
-        documentation: "This test case validates https://github.com/awslabs/smithy-rs/issues/456",
+        documentation: "This test case validates https://github.com/smithy-lang/smithy-rs/issues/456",
         params: {
         },
         bodyMediaType: "application/xml",
@@ -109,7 +109,7 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         documentation: "This test validates that the content md5 header is set correctly",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket",
+        uri: "/",
         headers: {
             // we can assert this, but when this test is promoted, it can't assert
             // on the exact contents
@@ -151,7 +151,7 @@ apply CreateMultipartUpload @httpRequestTests([
         documentation: "This test validates that the URI for CreateMultipartUpload is created correctly",
         method: "POST",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/object.txt",
+        uri: "/object.txt",
         queryParams: [
             "uploads",
             "x-id=CreateMultipartUpload"
@@ -176,7 +176,7 @@ apply PutObject @httpRequestTests([
         documentation: "This test validates that if a content-type is specified, that only one content-type header is sent",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/test-key",
+        uri: "/test-key",
         headers: { "content-type": "text/html" },
         params: {
             Bucket: "test-bucket",
@@ -196,7 +196,7 @@ apply PutObject @httpRequestTests([
         documentation: "This test validates that if a content-length is specified, that only one content-length header is sent",
         method: "PUT",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/test-key",
+        uri: "/test-key",
         headers: { "content-length": "2" },
         params: {
             Bucket: "test-bucket",
@@ -221,7 +221,7 @@ apply HeadObject @httpRequestTests([
 
         method: "HEAD",
         protocol: "aws.protocols#restXml",
-        uri: "/test-bucket/%3C%3E%20%60%3F%F0%9F%90%B1",
+        uri: "/%3C%3E%20%60%3F%F0%9F%90%B1",
         params: {
             Bucket: "test-bucket",
             Key: "<> `?🐱",
@@ -235,3 +235,152 @@ apply HeadObject @httpRequestTests([
         }
     }
 ])
+
+apply GetObject @httpRequestTests([
+    {
+        id: "GetObjectIfModifiedSince",
+        documentation: "https://github.com/awslabs/aws-sdk-rust/issues/818",
+
+        method: "GET",
+        protocol: "aws.protocols#restXml",
+        uri: "/object.txt",
+        headers: { "if-modified-since": "Fri, 16 Jul 2021 16:20:53 GMT" }
+        params: {
+            Bucket: "test-bucket",
+            Key: "object.txt"
+            IfModifiedSince: 1626452453.123,
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
+        }
+    }
+])
+
+apply ListObjectVersions @httpResponseTests([
+    {
+        id: "OutOfOrderVersions",
+        documentation: "Verify that interleaving list elements (DeleteMarker and Version) from different lists works",
+        code: 200,
+        bodyMediaType: "application/xml",
+        protocol: "aws.protocols#restXml",
+        body: """
+        <?xml version="1.0"?>
+        <ListVersionsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+          <Name>sdk-obj-versions-test</Name>
+          <Prefix/>
+          <KeyMarker/>
+          <VersionIdMarker/>
+          <MaxKeys>1000</MaxKeys>
+          <IsTruncated>false</IsTruncated>
+          <DeleteMarker>
+            <Key>build.gradle.kts</Key>
+            <VersionId>null</VersionId>
+            <IsLatest>true</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+          </DeleteMarker>
+          <Version>
+            <Key>build.gradle.kts</Key>
+            <VersionId>IfK9Z4.H5TLAtMxFrxN_C7rFEZbufF3V</VersionId>
+            <IsLatest>false</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <ETag>"99613b85e3f38b222c4ee548cde1e59d"</ETag>
+            <Size>6903</Size>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+            <StorageClass>STANDARD</StorageClass>
+          </Version>
+          <DeleteMarker>
+            <Key>file-2</Key>
+            <VersionId>o98RL6vmlOYiymftbX7wgy_4XWQG4AmY</VersionId>
+            <IsLatest>true</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+          </DeleteMarker>
+          <Version>
+            <Key>file-2</Key>
+            <VersionId>PSVAbvQihRdsNiktGothjGng7q.5ou9Q</VersionId>
+            <IsLatest>false</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <ETag>"1727d9cb38dd325d9c12c973ef3675fc"</ETag>
+            <Size>14</Size>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+            <StorageClass>STANDARD</StorageClass>
+          </Version>
+        </ListVersionsResult>
+        """,
+            "params": {
+                "Name": "sdk-obj-versions-test",
+                "Prefix": "",
+                "KeyMarker": "",
+                "VersionIdMarker": "",
+                "MaxKeys": 1000,
+                "IsTruncated": false,
+                "DeleteMarkers": [
+                    {
+                        "Key": "build.gradle.kts",
+                        "VersionId": "null",
+                        "IsLatest": true,
+                        "LastModified": 1234567890,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        }
+                    },
+                    {
+                        "Key": "file-2",
+                        "VersionId": "o98RL6vmlOYiymftbX7wgy_4XWQG4AmY",
+                        "IsLatest": true,
+                        "LastModified": 1234567890,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        }
+                    }
+                ],
+                "Versions": [
+                    {
+                        "Key": "build.gradle.kts",
+                        "VersionId": "IfK9Z4.H5TLAtMxFrxN_C7rFEZbufF3V",
+                        "IsLatest": false,
+                        "LastModified": 1234567890,
+                        "ETag": "\"99613b85e3f38b222c4ee548cde1e59d\"",
+                        "Size": 6903,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        },
+                        "StorageClass": "STANDARD"
+                    },
+                    {
+                        "Key": "file-2",
+                        "VersionId": "PSVAbvQihRdsNiktGothjGng7q.5ou9Q",
+                        "IsLatest": false,
+                        "LastModified": 1234567890,
+                        "ETag": "\"1727d9cb38dd325d9c12c973ef3675fc\"",
+                        "Size": 14,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        },
+                        "StorageClass": "STANDARD"
+                    }
+                ]
+            }
+}]
+)

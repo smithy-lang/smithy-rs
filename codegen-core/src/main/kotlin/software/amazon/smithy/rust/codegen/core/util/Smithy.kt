@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.util
 
+import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -18,6 +19,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
@@ -42,10 +44,15 @@ fun StructureShape.expectMember(member: String): MemberShape =
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
-fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or { this.getMember("Message") }.orNull()
+fun StructureShape.errorMessageMember(): MemberShape? =
+    this.getMember("message").or {
+        this.getMember("Message")
+    }.orNull()
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
+
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
+
 fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent
 
 fun UnionShape.isEventStream(): Boolean {
@@ -86,19 +93,23 @@ fun OperationShape.isEventStream(model: Model): Boolean {
     return isInputEventStream(model) || isOutputEventStream(model)
 }
 
-fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.any { id ->
-    model.expectShape(id, OperationShape::class.java).isEventStream(model)
-}
+fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
+    operations.any { id ->
+        model.expectShape(id, OperationShape::class.java).isEventStream(model)
+    }
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
-        is MemberShape -> model.expectShape(this.target).shouldRedact(model)
+        is MemberShape -> model.expectShape(this.target).shouldRedact(model) || model.expectShape(this.container).shouldRedact(model)
         else -> this.hasTrait<SensitiveTrait>()
     }
 
 const val REDACTION = "\"*** Sensitive Data Redacted ***\""
 
-fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
+fun Shape.redactIfNecessary(
+    model: Model,
+    safeToPrint: String,
+): String =
     if (this.shouldRedact(model)) {
         REDACTION
     } else {
@@ -137,3 +148,12 @@ fun Shape.isPrimitive(): Boolean {
         else -> false
     }
 }
+
+/** Convert a string to a ShapeId */
+fun String.shapeId() = ShapeId.from(this)
+
+/** Returns the service name, or a default value if the service doesn't have a title trait */
+fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default
+
+/** Returns the SDK ID of the given service shape */
+fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)

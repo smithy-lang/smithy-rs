@@ -10,13 +10,17 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ResourceShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.Version
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.python.smithy.PythonServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class PythonServerModuleGenerator(
@@ -24,17 +28,16 @@ class PythonServerModuleGenerator(
     private val rustCrate: RustCrate,
     private val serviceShapes: Set<Shape>,
 ) {
-    private val codegenScope = arrayOf(
-        "SmithyPython" to PythonServerCargoDependency.SmithyHttpServerPython(codegenContext.runtimeConfig).toType(),
-        "pyo3" to PythonServerCargoDependency.PyO3.toType(),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(codegenContext.runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+        )
     private val symbolProvider = codegenContext.symbolProvider
-    private val libName = "lib${codegenContext.settings.moduleName.toSnakeCase()}"
+    private val libName = codegenContext.settings.moduleName.toSnakeCase()
 
     fun render() {
-        rustCrate.withModule(
-            RustModule.public("python_module_export", "Export PyO3 symbols in the shared library"),
-        ) {
+        rustCrate.withModule(PythonServerRustModule.PythonModuleExport) {
             rustBlockTemplate(
                 """
                 ##[#{pyo3}::pymodule]
@@ -48,7 +51,11 @@ class PythonServerModuleGenerator(
                 renderPySocketType()
                 renderPyLogging()
                 renderPyMiddlewareTypes()
+                renderPyTlsTypes()
+                renderPyLambdaTypes()
                 renderPyApplicationType()
+                renderCodegenVersion()
+                rust("Ok(())")
             }
         }
     }
@@ -60,19 +67,39 @@ class PythonServerModuleGenerator(
             let input = #{pyo3}::types::PyModule::new(py, "input")?;
             let output = #{pyo3}::types::PyModule::new(py, "output")?;
             let error = #{pyo3}::types::PyModule::new(py, "error")?;
-            let model = #{pyo3}::types::PyModule::new(py, "model")?;
             """,
             *codegenScope,
         )
+        // The `model` type section can be unused in models like `simple`, so we accommodate for it.
+        var visitedModelType = false
         serviceShapes.forEach { shape ->
             val moduleType = moduleType(shape)
             if (moduleType != null) {
-                rustTemplate(
-                    """
-                    $moduleType.add_class::<crate::$moduleType::${shape.id.name}>()?;
-                    """,
-                    *codegenScope,
-                )
+                if (moduleType == "model" && !visitedModelType) {
+                    rustTemplate(
+                        """
+                        let model = #{pyo3}::types::PyModule::new(py, "model")?;
+                        """,
+                        *codegenScope,
+                    )
+                    visitedModelType = true
+                }
+                when (shape) {
+                    is UnionShape ->
+                        rustTemplate(
+                            """
+                            $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name.toPascalCase()}>()?;
+                            """,
+                            *codegenScope,
+                        )
+                    else ->
+                        rustTemplate(
+                            """
+                            $moduleType.add_class::<crate::$moduleType::${shape.id.name.toPascalCase()}>()?;
+                            """,
+                            *codegenScope,
+                        )
+                }
             }
         }
         rustTemplate(
@@ -83,11 +110,18 @@ class PythonServerModuleGenerator(
             m.add_submodule(output)?;
             #{pyo3}::py_run!(py, error, "import sys; sys.modules['$libName.error'] = error");
             m.add_submodule(error)?;
-            #{pyo3}::py_run!(py, model, "import sys; sys.modules['$libName.model'] = model");
-            m.add_submodule(model)?;
             """,
             *codegenScope,
         )
+        if (visitedModelType) {
+            rustTemplate(
+                """
+                #{pyo3}::py_run!(py, model, "import sys; sys.modules['$libName.model'] = model");
+                m.add_submodule(model)?;
+                """,
+                *codegenScope,
+            )
+        }
     }
 
     // Render wrapper types that are substituted to the ones coming from `aws_smithy_types`.
@@ -97,6 +131,7 @@ class PythonServerModuleGenerator(
             let types = #{pyo3}::types::PyModule::new(py, "types")?;
             types.add_class::<#{SmithyPython}::types::Blob>()?;
             types.add_class::<#{SmithyPython}::types::DateTime>()?;
+            types.add_class::<#{SmithyPython}::types::Format>()?;
             types.add_class::<#{SmithyPython}::types::ByteStream>()?;
             #{pyo3}::py_run!(
                 py,
@@ -162,15 +197,50 @@ class PythonServerModuleGenerator(
         )
     }
 
-    // Render Python application type.
-    private fun RustWriter.renderPyApplicationType() {
+    private fun RustWriter.renderPyTlsTypes() {
         rustTemplate(
             """
-            m.add_class::<crate::python_server_application::App>()?;
-            Ok(())
+            let tls = #{pyo3}::types::PyModule::new(py, "tls")?;
+            tls.add_class::<#{SmithyPython}::tls::PyTlsConfig>()?;
+            pyo3::py_run!(
+                py,
+                tls,
+                "import sys; sys.modules['$libName.tls'] = tls"
+            );
+            m.add_submodule(tls)?;
             """,
             *codegenScope,
         )
+    }
+
+    private fun RustWriter.renderPyLambdaTypes() {
+        rustTemplate(
+            """
+            let aws_lambda = #{pyo3}::types::PyModule::new(py, "aws_lambda")?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyLambdaContext>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientApplication>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyClientContext>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyCognitoIdentity>()?;
+            aws_lambda.add_class::<#{SmithyPython}::lambda::PyConfig>()?;
+            pyo3::py_run!(
+                py,
+                aws_lambda,
+                "import sys; sys.modules['$libName.aws_lambda'] = aws_lambda"
+            );
+            m.add_submodule(aws_lambda)?;
+            """,
+            *codegenScope,
+        )
+    }
+
+    // Render Python application type.
+    private fun RustWriter.renderPyApplicationType() {
+        rust("""m.add_class::<crate::python_server_application::App>()?;""")
+    }
+
+    // Render the codegeneration version as module attribute.
+    private fun RustWriter.renderCodegenVersion() {
+        rust("""m.add("CODEGEN_VERSION", "${Version.fromDefaultResource().gitHash}")?;""")
     }
 
     // Convert to symbol and check the namespace to figure out where they should be imported from.

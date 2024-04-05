@@ -6,54 +6,74 @@
 
 # Allow only one release to run at a time
 concurrency:
-  group: release-smithy-rs
+  group: release-smithy-rs-${{ inputs.dry_run }}
   cancel-in-progress: true
 
 env:
-  rust_version: 1.62.1
+  rust_version: 1.74.1
 
 name: Release smithy-rs
-run-name: ${{ github.workflow }} - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
+run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} (${{ inputs.commit_sha }})
 on:
   workflow_dispatch:
     inputs:
+      commit_sha:
+        description: |
+          Commit SHA: The SHA of the git commit that you want to release.
+          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
+        required: true
+        type: string
       dry_run:
-        description: Dry runs will only produce release artifacts, but will not cut a release tag in GitHub nor publish to crates.io
+        description: |
+          Dry run: When selected, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io
         required: true
         type: boolean
         default: true
 
 jobs:
-  main-branch-check:
-    name: Check that workflow is running in main
+  check-actor-for-prod-run:
+    name: Check actor for prod run
+    if: inputs.dry_run == false
     runs-on: ubuntu-latest
+    env:
+      ACTOR: ${{ github.actor }}
     steps:
-    - name: Main branch check
-      if: ${{ github.ref_name != 'main' }}
-      uses: actions/github-script@v6
-      with:
-        script: |
-          core.setFailed("The release workflow can only be ran on main (current branch: ${{ github.ref_name }})")
+    - name: Check actor for prod run
+      run: |
+        set -e
 
-  # If a release is kicked off before an image is built after push to main,
-  # or if a dry-run release is kicked off against a non-main branch to test
-  # automation changes, we'll need to build a base image to work against.
-  # This job will be a no-op if an image was already built on main.
+        if [ "${ACTOR}" != "aws-sdk-rust-ci" ]; then
+          echo "Error: The current actor is '${ACTOR}' but only 'aws-sdk-rust-ci' is allowed to run a prod release workflow."
+          exit 1
+        fi
+
+        echo "The current actor is 'aws-sdk-rust-ci', continuing with the workflow."
+
+  # We'll need to build a base image to work against if:
+  # - a release was kicked off before the image build step triggered by a push to the release branch/main completed
+  # - a dry-run release was kicked off against a feature branch to test automation changes
+  # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
     needs:
-    - main-branch-check
-    runs-on: ubuntu-latest
+    - check-actor-for-prod-run
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: |
+      always() &&
+      (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
+    runs-on: smithy_ubuntu-latest_16-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
-      run: ./smithy-rs/tools/ci-build/acquire-build-image
+      run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image
@@ -61,15 +81,81 @@ jobs:
 
   release-ci:
     name: Prerelease checks
+    if: inputs.dry_run == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
+    with:
+      run_sdk_examples: false
+      git_ref: ${{ inputs.commit_sha }}
+
+  check-semver-hazards:
+    name: Check for semver hazards
+    needs:
+    - acquire-base-image
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always()
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
+
+  get-or-create-release-branch:
+    name: Get or create a release branch
+    needs:
+    - acquire-base-image
+    - check-semver-hazards
+    - release-ci
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: |
+      always() &&
+      needs.acquire-base-image.result == 'success' &&
+      (needs.release-ci.result == 'success' || needs.release-ci.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      release_branch: ${{ steps.branch-push.outputs.release_branch }}
+      new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.commit_sha }}
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
+    - name: Get or create release branch
+      id: branch-push
+      shell: bash
+      env:
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -e
+
+        ./.github/scripts/get-or-create-release-branch.sh output
+        cat output > $GITHUB_OUTPUT
 
   release:
     name: Release
     needs:
-    - acquire-base-image
-    - release-ci
+    - get-or-create-release-branch
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
+    # we need this here _even though_ the job we depend on is never skipped.
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
     - name: Install Rust
@@ -77,8 +163,9 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
+        ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -90,16 +177,32 @@ jobs:
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
+      id: push-changelog
+      env:
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
+        DRY_RUN: ${{ inputs.dry_run }}
       run: |
-        if [[ "${{ inputs.dry_run }}" == "true" ]]; then
-          echo "Pushing a preview of the release to the smithy-rs-release-preview branch"
-          git push --force origin HEAD:smithy-rs-release-preview
-        else
+        if ! git diff-index --quiet HEAD; then
           echo "Pushing release commits..."
-          git push origin
+          # This will fail if we tried to release from a non-HEAD commit on the release branch.
+          # The only scenario where we would try to release a non-HEAD commit from the release branch is
+          # to retry a release action execution that failed due to a transient issue.
+          # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
+          # been processed.
+          git fetch --unshallow
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
+            # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
+            git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+            git push --dry-run origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+          else
+            echo "attempting to push $(git rev-parse HEAD) to $RELEASE_BRANCH_NAME $(git rev-parse $RELEASE_BRANCH_NAME)"
+            git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+          fi
         fi
+        echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
     - name: Tag release
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
         script: |
@@ -107,16 +210,16 @@ jobs:
           await createReleaseScript({
             github,
             isDryRun: ${{ inputs.dry_run }},
-            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json"
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
+            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
           });
     - name: Publish to crates.io
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
       env:
-        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
-        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
-        cargo install --path "$(realpath ../smithy-rs/tools/publisher)"
+        cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version
 
@@ -125,9 +228,43 @@ jobs:
             echo "Crates to publish not found!"
             exit 1
           fi
-          # The following owner list command fails without a valid crates.io auth token
           echo "Checking cargo auth token..."
-          cargo owner --list aws-smithy-types
+          # This version has already been yanked. This command succeeds if we have a token with permission to yank the crate.
+          cargo yank aws-sigv4 --version 0.55.0
         else
           publisher publish -y --location .
         fi
+
+  trim-changelog-next-on-main:
+    name: Remove released entries from CHANGELOG.next.toml on the main branch
+    if: inputs.dry_run == false && needs.get-or-create-release-branch.outputs.new_release_series == true
+    needs:
+    - get-or-create-release-branch
+    - release
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.commit_sha }}
+        path: smithy-rs
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Empty CHANGELOG.next.toml
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-new-changelog-next-toml
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Push smithy-rs changes
+      working-directory: generate-new-changelog-next-toml/smithy-rs
+      shell: bash
+      run: |
+        set -eux
+
+        # This will fail if other commits have been pushed to `main` after `commit_sha`
+        # In particular, this will ALWAYS fail if you are creating a new release series from
+        # a commit that is not the current tip of `main`.
+        # We can build more refined automation to handle this case in the future - until then, it'll require
+        # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
+        git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
+        git push origin main

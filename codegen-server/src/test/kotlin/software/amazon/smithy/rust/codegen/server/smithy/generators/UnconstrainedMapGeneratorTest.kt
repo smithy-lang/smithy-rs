@@ -7,16 +7,14 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MapShape
-import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
-import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWithModelBuilder
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class UnconstrainedMapGeneratorTest {
@@ -25,6 +23,25 @@ class UnconstrainedMapGeneratorTest {
         val model =
             """
             namespace test
+
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+
+            @restJson1
+            service TestService {
+                operations: ["Operation"]
+            }
+
+            @http(uri: "/operation", method: "POST")
+            operation Operation {
+                input: OperationInputOutput
+                output: OperationInputOutput
+                errors: [ValidationException]
+            }
+
+            structure OperationInputOutput {
+                map: MapA
+            }
 
             map MapA {
                 key: String,
@@ -50,37 +67,22 @@ class UnconstrainedMapGeneratorTest {
         val mapA = model.lookup<MapShape>("test#MapA")
         val mapB = model.lookup<MapShape>("test#MapB")
 
-        val project = TestWorkspace.testProject(symbolProvider, debugMode = true)
+        val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
 
-        project.withModule(ModelsModule) {
-            model.lookup<StructureShape>("test#StructureC").serverRenderWithModelBuilder(model, symbolProvider, this)
-        }
-
-        project.withModule(ConstrainedModule) {
-            listOf(mapA, mapB).forEach {
-                PubCrateConstrainedMapGenerator(codegenContext, this, it).render()
-            }
-        }
-        project.withModule(UnconstrainedModule) unconstrainedModuleWriter@{
-            project.withModule(ModelsModule) modelsModuleWriter@{
-                listOf(mapA, mapB).forEach {
-                    UnconstrainedMapGenerator(codegenContext, this@unconstrainedModuleWriter, it).render()
-
-                    MapConstraintViolationGenerator(codegenContext, this@modelsModuleWriter, it).render()
-                }
-
-                this@unconstrainedModuleWriter.unitTest(
-                    name = "map_a_unconstrained_fail_to_constrain_with_some_error",
-                    test = """
+        serverIntegrationTest(model) { _, rustCrate ->
+            rustCrate.testModule {
+                unitTest("map_a_unconstrained_fail_to_constrain_with_some_error") {
+                    rust(
+                        """
                         let c_builder1 = crate::model::StructureC::builder().int(69);
                         let c_builder2 = crate::model::StructureC::builder().string(String::from("david"));
-                        let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
+                        let map_b_unconstrained = crate::unconstrained::map_b_unconstrained::MapBUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyB1"), c_builder1),
                                 (String::from("KeyB2"), c_builder2),
                             ])
                         );
-                        let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
+                        let map_a_unconstrained = crate::unconstrained::map_a_unconstrained::MapAUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyA"), map_b_unconstrained),
                             ])
@@ -105,19 +107,19 @@ class UnconstrainedMapGeneratorTest {
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
 
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
-                    """,
-                )
-
-                this@unconstrainedModuleWriter.unitTest(
-                    name = "map_a_unconstrained_succeed_to_constrain",
-                    test = """
+                        """,
+                    )
+                }
+                unitTest("map_a_unconstrained_succeed_to_constrain") {
+                    rust(
+                        """
                         let c_builder = crate::model::StructureC::builder().int(69).string(String::from("david"));
-                        let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
+                        let map_b_unconstrained = crate::unconstrained::map_b_unconstrained::MapBUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyB"), c_builder),
                             ])
                         );
-                        let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
+                        let map_a_unconstrained = crate::unconstrained::map_a_unconstrained::MapAUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyA"), map_b_unconstrained),
                             ])
@@ -136,30 +138,29 @@ class UnconstrainedMapGeneratorTest {
                             expected,
                             crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap().into()
                         );
-                    """,
-                )
-
-                this@unconstrainedModuleWriter.unitTest(
-                    name = "map_a_unconstrained_converts_into_constrained",
-                    test = """
+                        """,
+                    )
+                }
+                unitTest("map_a_unconstrained_converts_into_constrained") {
+                    rust(
+                        """
                         let c_builder = crate::model::StructureC::builder();
-                        let map_b_unconstrained = map_b_unconstrained::MapBUnconstrained(
+                        let map_b_unconstrained = crate::unconstrained::map_b_unconstrained::MapBUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyB"), c_builder),
                             ])
                         );
-                        let map_a_unconstrained = map_a_unconstrained::MapAUnconstrained(
+                        let map_a_unconstrained = crate::unconstrained::map_a_unconstrained::MapAUnconstrained(
                             std::collections::HashMap::from([
                                 (String::from("KeyA"), map_b_unconstrained),
                             ])
                         );
 
                         let _map_a: crate::constrained::MaybeConstrained<crate::constrained::map_a_constrained::MapAConstrained> = map_a_unconstrained.into();
-                    """,
-                )
+                        """,
+                    )
+                }
             }
         }
-
-        project.compileAndTest()
     }
 }
