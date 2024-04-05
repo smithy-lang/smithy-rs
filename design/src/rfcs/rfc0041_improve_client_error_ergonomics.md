@@ -18,7 +18,7 @@ Case Study: Handling an error in S3
 The following is an example of handling errors with S3 with the latest generated (and unreleased)
 SDK as of 2022-12-07:
 
-```rust
+```rust,ignore
 let result = client
     .get_object()
     .bucket(BUCKET_NAME)
@@ -58,7 +58,7 @@ nested matching shown in the case study above.
 To make error handling more ergonomic, the code generated `Error` and `ErrorKind` types
 should be combined. Hypothetically, this would allow for the case study above to look as follows:
 
-```rust
+```rust,ignore
 let result = client
     .get_object()
     .bucket(BUCKET_NAME)
@@ -82,7 +82,7 @@ match result {
 
 If a customer only cares about checking one specific error type, they can also do:
 
-```rust
+```rust,ignore
 match result {
     Ok(_output) => { /* Do something with the output */ }
     Err(err) => {
