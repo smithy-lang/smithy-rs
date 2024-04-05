@@ -14,7 +14,7 @@ use cargo_toml::Manifest;
 use indicatif::{ProgressBar, ProgressStyle};
 use smithy_rs_tool_common::command::sync::CommandExt;
 use std::{fs, time::Duration};
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 pub fn patch(args: PatchRuntime) -> Result<()> {
     let smithy_rs = step("Resolving smithy-rs", || {
@@ -28,11 +28,6 @@ pub fn patch(args: PatchRuntime) -> Result<()> {
     if is_dirty(&aws_sdk_rust)? {
         bail!("aws-sdk-rust has a dirty working tree. Aborting.");
     }
-
-    step(
-        "Patching smithy-rs/gradle.properties with given crate version numbers",
-        || patch_gradle_properties(&smithy_rs, &args),
-    )?;
 
     // Use aws:sdk:assemble to generate both the smithy-rs runtime and AWS SDK
     // runtime crates with the correct version numbers.
@@ -96,31 +91,6 @@ pub fn patch_with(args: PatchRuntimeWith) -> Result<()> {
     Ok(())
 }
 
-fn patch_gradle_properties(smithy_rs: &Repo, args: &PatchRuntime) -> Result<()> {
-    let props_path = smithy_rs.root.join("gradle.properties");
-    let props =
-        fs::read_to_string(&props_path).context("failed to read smithy-rs/gradle.properties")?;
-    let mut new_props = String::with_capacity(props.len());
-    for line in props.lines() {
-        if line.starts_with("smithy.rs.runtime.crate.stable.version=") {
-            new_props.push_str(&format!(
-                "smithy.rs.runtime.crate.stable.version={}",
-                args.stable_crate_version
-            ));
-        } else if line.starts_with("smithy.rs.runtime.crate.unstable.version=") {
-            new_props.push_str(&format!(
-                "smithy.rs.runtime.crate.unstable.version={}",
-                args.unstable_crate_version
-            ));
-        } else {
-            new_props.push_str(line);
-        }
-        new_props.push('\n');
-    }
-    fs::write(&props_path, new_props).context("failed to write smithy-rs/gradle.properties")?;
-    Ok(())
-}
-
 fn apply_version_only_dependencies(aws_sdk_rust: &Repo) -> Result<()> {
     aws_sdk_rust
         .cmd(
@@ -148,11 +118,11 @@ fn crate_version_has_changed(
         .join(crate_name)
         .join("Cargo.toml");
     let to_patch_cargo_toml = runtime_crate_path.join(crate_name).join("Cargo.toml");
-    assert!(
-        sdk_cargo_toml.exists(),
-        "{:?} did not exist!",
-        sdk_cargo_toml
-    );
+    if !sdk_cargo_toml.exists() {
+        tracing::trace!("`{crate_name}` is a new crate, so there is nothing to patch.");
+        // This is a new runtime crate, so there is nothing to patch.
+        return Ok(false);
+    }
     assert!(
         to_patch_cargo_toml.exists(),
         "{:?} did not exist!",
@@ -184,6 +154,7 @@ fn patch_workspace_cargo_toml(
     let patch_section = format!("\n[patch.crates-io]\n{patch_sections}");
 
     let manifest_path = aws_sdk_rust.root.join("Cargo.toml");
+    tracing::trace!("patching {manifest_path}");
     let mut manifest_content =
         fs::read_to_string(&manifest_path).context("failed to read aws-sdk-rust/Cargo.toml")?;
     manifest_content.push_str(&patch_section);
@@ -213,6 +184,7 @@ fn remove_unchanged_dependencies(
         });
 
     for patched_crate in &all_crates {
+        tracing::trace!("removing unchanged path dependencies for {patched_crate}");
         remove_unchanged_path_dependencies(runtime_crate_path, &unchanged_crates, patched_crate)?;
     }
     Ok(crates_to_patch
@@ -234,7 +206,7 @@ fn remove_unchanged_path_dependencies(
     let mut mutable_manifest = fs::read_to_string(&path)
         .context("failed to read file")
         .context(path.clone())?
-        .parse::<Document>()
+        .parse::<DocumentMut>()
         .context("invalid toml in manifest!")?;
     let mut updates = false;
     let sections = [
@@ -249,10 +221,13 @@ fn remove_unchanged_path_dependencies(
                         .package()
                         .unwrap_or(dependency_name.as_str())
             }) {
-                mutable_manifest[key][dependency_name]
-                    .as_table_mut()
-                    .unwrap()
-                    .remove("path");
+                let it = &mut mutable_manifest[key][dependency_name];
+                match it.as_table_like_mut() {
+                    Some(table_like) => table_like.remove("path"),
+                    None => {
+                        panic!("crate `{patched_crate}` depends on crate `{dependency_name}` crate by version instead of by path. Please update it to use path dependencies for all runtime crates.");
+                    }
+                };
                 updates = true
             }
         }

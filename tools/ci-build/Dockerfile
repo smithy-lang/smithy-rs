@@ -105,7 +105,7 @@ ARG cargo_hack_version=0.5.23
 RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.19
+ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
@@ -157,6 +157,7 @@ RUN set -eux; \
         gcc \
         git \
         glibc-langpack-en \
+        go \
         java-11-amazon-corretto-headless \
         make \
         openssl-devel \
@@ -165,6 +166,7 @@ RUN set -eux; \
         python3-devel \
         python3-pip \
         shadow-utils \
+        cmake \
         tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \

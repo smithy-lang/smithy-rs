@@ -87,6 +87,9 @@ fun generateSmithyBuild(services: AwsServices): String {
         }
         val moduleName = "aws-sdk-${service.module}"
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
+        val defaultConfigPath = services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val partitionsConfigPath = services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val integrationTestPath = project.projectDir.resolve("integration-tests").let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         """
             "${service.module}": {
                 "imports": [${files.joinToString()}],
@@ -117,9 +120,9 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "awsSdk": {
                                 "awsSdkBuild": true,
                                 "awsConfigVersion": "$awsConfigVersion",
-                                "defaultConfigPath": "${services.defaultConfigPath}",
-                                "partitionsConfigPath": "${services.partitionsConfigPath}",
-                                "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
+                                "defaultConfigPath": $defaultConfigPath,
+                                "partitionsConfigPath": $partitionsConfigPath,
+                                "integrationTestPath": $integrationTestPath
                             }
                         }
                         ${service.extraConfig ?: ""}

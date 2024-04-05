@@ -64,6 +64,7 @@ object CrateSet {
             "aws-smithy-http-tower",
             "aws-smithy-json",
             "aws-smithy-mocks-experimental",
+            "aws-smithy-experimental",
             "aws-smithy-protocol-test",
             "aws-smithy-query",
             "aws-smithy-runtime",

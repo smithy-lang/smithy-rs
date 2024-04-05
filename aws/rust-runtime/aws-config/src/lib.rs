@@ -118,16 +118,15 @@ pub mod identity {
 #[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg(test)]
-mod test_case;
-
-mod fs_util;
 mod http_credential_provider;
 mod json_credentials;
+#[cfg(test)]
+mod test_case;
 
 pub mod credential_process;
 pub mod default_provider;
 pub mod ecs;
+mod env_service_config;
 pub mod environment;
 pub mod imds;
 pub mod meta;
@@ -138,7 +137,6 @@ mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
 pub mod stalled_stream_protection;
-pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
@@ -208,13 +206,11 @@ pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
 }
 
 mod loader {
-    use crate::default_provider::use_dual_stack::use_dual_stack_provider;
-    use crate::default_provider::use_fips::use_fips_provider;
-    use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
-    use crate::meta::region::ProvideRegion;
-    use crate::profile::profile_file::ProfileFiles;
-    use crate::provider_config::ProviderConfig;
-    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    use crate::env_service_config::EnvServiceConfig;
+    use aws_credential_types::provider::{
+        token::{ProvideToken, SharedTokenProvider},
+        ProvideCredentials, SharedCredentialsProvider,
+    };
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
@@ -230,6 +226,15 @@ mod loader {
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
+
+    use crate::default_provider::{
+        app_name, credentials, endpoint_url, ignore_configured_endpoint_urls as ignore_ep, region,
+        retry_config, timeout_config, use_dual_stack, use_fips,
+    };
+    use crate::meta::region::ProvideRegion;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::ProfileFiles;
+    use crate::provider_config::ProviderConfig;
 
     #[derive(Default, Debug)]
     enum CredentialsProviderOption {
@@ -253,6 +258,7 @@ mod loader {
         app_name: Option<AppName>,
         identity_cache: Option<SharedIdentityCache>,
         credentials_provider: CredentialsProviderOption,
+        token_provider: Option<SharedTokenProvider>,
         endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
@@ -261,6 +267,7 @@ mod loader {
         provider_config: Option<ProviderConfig>,
         http_client: Option<SharedHttpClient>,
         profile_name_override: Option<String>,
+        #[allow(deprecated)]
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
@@ -490,7 +497,36 @@ mod loader {
 
         /// Set test credentials for use when signing requests
         pub fn test_credentials(self) -> Self {
-            self.credentials_provider(Credentials::for_tests())
+            #[allow(unused_mut)]
+            let mut ret = self.credentials_provider(Credentials::for_tests());
+            #[cfg(all(feature = "sso", feature = "test-util"))]
+            {
+                use aws_smithy_runtime_api::client::identity::http::Token;
+                ret = ret.token_provider(Token::for_tests());
+            }
+            ret
+        }
+
+        /// Override the access token provider used to build [`SdkConfig`].
+        ///
+        /// # Examples
+        ///
+        /// Override the token provider but load the default value for region:
+        /// ```no_run
+        /// # use aws_credential_types::Token;
+        /// # fn create_my_token_provider() -> Token {
+        /// #     Token::new("example", None)
+        /// # }
+        /// # async fn create_config() {
+        /// let config = aws_config::from_env()
+        ///     .token_provider(create_my_token_provider())
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn token_provider(mut self, token_provider: impl ProvideToken + 'static) -> Self {
+            self.token_provider = Some(SharedTokenProvider::new(token_provider));
+            self
         }
 
         /// Override the name of the app used to build [`SdkConfig`].
@@ -536,6 +572,7 @@ mod loader {
         ///     .load()
         ///     .await;
         /// # }
+        #[allow(deprecated)]
         pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
             self.profile_files_override = Some(profile_files);
             self
@@ -693,13 +730,13 @@ mod loader {
             let use_fips = if let Some(use_fips) = self.use_fips {
                 Some(use_fips)
             } else {
-                use_fips_provider(&conf).await
+                use_fips::use_fips_provider(&conf).await
             };
 
             let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
                 Some(use_dual_stack)
             } else {
-                use_dual_stack_provider(&conf).await
+                use_dual_stack::use_dual_stack_provider(&conf).await
             };
 
             let conf = conf
@@ -754,19 +791,67 @@ mod loader {
                 CredentialsProviderOption::ExplicitlyUnset => None,
             };
 
+            let token_provider = match self.token_provider {
+                Some(provider) => Some(provider),
+                None => {
+                    #[cfg(feature = "sso")]
+                    {
+                        let mut builder =
+                            crate::default_provider::token::DefaultTokenChain::builder()
+                                .configure(conf.clone());
+                        builder.set_region(region.clone());
+                        Some(SharedTokenProvider::new(builder.build().await))
+                    }
+                    #[cfg(not(feature = "sso"))]
+                    {
+                        None
+                    }
+                }
+            };
+
+            let profiles = conf.profile().await;
+            let service_config = EnvServiceConfig {
+                env: conf.env(),
+                env_config_sections: profiles.cloned().unwrap_or_default(),
+            };
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .time_source(time_source);
+                .time_source(time_source)
+                .service_config(service_config);
+
+            // If an endpoint URL is set programmatically, then our work is done.
+            let endpoint_url = if self.endpoint_url.is_some() {
+                self.endpoint_url
+            } else {
+                // Otherwise, check to see if we should ignore EP URLs set in the environment.
+                let ignore_configured_endpoint_urls =
+                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                        .await
+                        .unwrap_or_default();
+
+                if ignore_configured_endpoint_urls {
+                    // If yes, log a trace and return `None`.
+                    tracing::trace!(
+                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                        NOTE: Endpoint URLs set programmatically WILL still be respected"
+                    );
+                    None
+                } else {
+                    // Otherwise, attempt to resolve one.
+                    endpoint_url::endpoint_url_provider(&conf).await
+                }
+            };
+            builder.set_endpoint_url(endpoint_url);
 
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
             builder.set_identity_cache(self.identity_cache);
             builder.set_credentials_provider(credentials_provider);
+            builder.set_token_provider(token_provider);
             builder.set_sleep_impl(sleep_impl);
-            builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
@@ -789,6 +874,7 @@ mod loader {
 
     #[cfg(test)]
     mod test {
+        #[allow(deprecated)]
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
         use crate::BehaviorVersion;
@@ -796,15 +882,15 @@ mod loader {
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
+        use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
         use aws_types::app_name::AppName;
         use aws_types::os_shim_internal::{Env, Fs};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use tracing_test::traced_test;
 
         #[tokio::test]
-        #[traced_test]
         async fn provider_config_used() {
+            let (_guard, logs_rx) = capture_test_logs();
             let env = Env::from_slice(&[
                 ("AWS_MAX_ATTEMPTS", "10"),
                 ("AWS_REGION", "us-west-4"),
@@ -820,8 +906,13 @@ mod loader {
                 .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -839,21 +930,18 @@ mod loader {
                     .access_key_id(),
             );
             assert_eq!(Some(&AppName::new("correct").unwrap()), loader.app_name());
-            logs_assert(|lines| {
-                let num_config_loader_logs = lines
-                    .iter()
-                    .filter(|l| l.contains("provider_config_used"))
-                    .filter(|l| l.contains("config file loaded"))
-                    .count();
-                match num_config_loader_logs {
-                    0 => Err("no config file logs found!".to_string()),
-                    1 => Ok(()),
-                    more => Err(format!(
-                        "the config file was parsed more than once! (parsed {})",
-                        more
-                    )),
-                }
-            });
+
+            let num_config_loader_logs = logs_rx.contents()
+                .lines()
+                // The logger uses fancy formatting, so we have to account for that.
+                .filter(|l| l.contains("config file loaded \u{1b}[3mpath\u{1b}[0m\u{1b}[2m=\u{1b}[0mSome(\"test_config\") \u{1b}[3msize\u{1b}[0m\u{1b}[2m=\u{1b}"))
+                .count();
+
+            match num_config_loader_logs {
+                0 => panic!("no config file logs found!"),
+                1 => (),
+                more => panic!("the config file was parsed more than once! (parsed {more})",),
+            };
         }
 
         fn base_conf() -> ConfigLoader {
@@ -917,6 +1005,119 @@ mod loader {
                 .expect_err("did not expect credentials to be loaded—no traffic is allowed");
             let num_requests = num_requests.load(Ordering::Relaxed);
             assert!(num_requests > 0, "{}", num_requests);
+        }
+
+        #[tokio::test]
+        async fn endpoint_urls_may_be_ignored_from_env() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nendpoint_url = http://profile",
+            )]);
+            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+
+            let conf = base_conf().use_dual_stack(false).load().await;
+            assert_eq!(Some(false), conf.use_dual_stack());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.use_dual_stack());
+
+            // Check that we get nothing back because the env said we should ignore endpoints
+            let config = base_conf()
+                .fs(fs.clone())
+                .env(env)
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(None, config.endpoint_url());
+
+            // Check that without the env, we DO get something back
+            let config = base_conf()
+                .fs(fs)
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(Some("http://profile"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn endpoint_urls_may_be_ignored_from_profile() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nignore_configured_endpoint_urls = true",
+            )]);
+            let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://environment")]);
+
+            // Check that we get nothing back because the profile said we should ignore endpoints
+            let config = base_conf()
+                .fs(fs)
+                .env(env.clone())
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(None, config.endpoint_url());
+
+            // Check that without the profile, we DO get something back
+            let config = base_conf().env(env).load().await;
+            assert_eq!(Some("http://environment"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn programmatic_endpoint_urls_may_not_be_ignored() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nignore_configured_endpoint_urls = true",
+            )]);
+            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+
+            // Check that we get something back because we explicitly set the loader's endpoint URL
+            let config = base_conf()
+                .fs(fs)
+                .env(env)
+                .endpoint_url("http://localhost")
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(Some("http://localhost"), config.endpoint_url());
         }
     }
 }

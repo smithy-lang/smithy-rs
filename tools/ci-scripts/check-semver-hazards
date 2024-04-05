@@ -10,14 +10,9 @@
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
-if [ "$#" -ne 2 ]; then
-  echo "Usage: check-semver-hazards <stable-crate-version> <unstable-crate-version>"
-  exit 1
+if [ "$#" -ne 0 ]; then
+  echo "Unexpected arguments ignored"
 fi
-STABLE_CRATE_VERSION="$1"
-UNSTABLE_CRATE_VERSION="$2"
-echo "Stable crate version: ${STABLE_CRATE_VERSION}"
-echo "Unstable crate version: ${UNSTABLE_CRATE_VERSION}"
 
 # Need to allow warnings since there may be deprecations that the old SDK uses
 unset RUSTFLAGS
@@ -27,15 +22,14 @@ set -eux
 echo -e "${C_YELLOW}# Patching SDK...${C_RESET}"
 runtime-versioner patch-runtime \
   --sdk-path "$(pwd)/aws-sdk-rust" \
-  --smithy-rs-path "$(pwd)/smithy-rs" \
-  --stable-crate-version "${STABLE_CRATE_VERSION}" \
-  --unstable-crate-version "${UNSTABLE_CRATE_VERSION}"
+  --smithy-rs-path "$(pwd)/smithy-rs"
 
-# Testing just a small subset of the full SDK to check for semver hazards
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
-for sdk in dynamodb s3; do
-  echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
-  pushd "aws-sdk-rust/sdk/${sdk}" &>/dev/null
-  cargo test --all-features
-  popd &>/dev/null
+for sdk in aws-sdk-rust/sdk/*; do
+  if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
+    echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
+    pushd "$sdk" &>/dev/null
+    cargo test --all-features
+    popd &>/dev/null
+  fi
 done

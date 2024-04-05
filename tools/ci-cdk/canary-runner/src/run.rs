@@ -36,6 +36,8 @@ use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
 use std::collections::HashMap;
 
+const DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB: i32 = 512;
+
 lazy_static::lazy_static! {
     // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
     // for older versions of the SDK since the canary is in the smithy-rs repository and will
@@ -89,6 +91,10 @@ pub struct RunArgs {
     #[clap(long)]
     expected_speech_text_by_transcribe: Option<String>,
 
+    /// Memory allocated for the function.
+    #[clap(long)]
+    lambda_function_memory_size_in_mb: Option<i32>,
+
     /// File path to a CDK outputs JSON file. This can be used instead
     /// of all the --lambda... args.
     #[clap(long)]
@@ -102,9 +108,13 @@ pub struct RunArgs {
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_test_s3_bucket_name: Option<String>,
 
-    /// The name of the S3 bucket for the canary Lambda to interact with
+    /// The ARN of the S3 MRAP bucket for the canary Lambda to interact with
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_test_s3_mrap_bucket_arn: Option<String>,
+
+    /// The name of the S3 Express One Zone bucket for the canary Lambda to interact with
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_test_s3_express_bucket_name: Option<String>,
 
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
@@ -118,9 +128,11 @@ struct Options {
     sdk_path: Option<PathBuf>,
     musl: bool,
     expected_speech_text_by_transcribe: Option<String>,
+    lambda_function_memory_size_in_mb: i32,
     lambda_code_s3_bucket_name: String,
     lambda_test_s3_bucket_name: String,
     lambda_test_s3_mrap_bucket_arn: String,
+    lambda_test_s3_express_bucket_name: String,
     lambda_execution_role_arn: String,
 }
 
@@ -135,6 +147,8 @@ impl Options {
                 lambda_test_s3_bucket_name: String,
                 #[serde(rename = "canarytestmrapbucketarn")]
                 lambda_test_s3_mrap_bucket_arn: String,
+                #[serde(rename = "canarytestexpressbucketname")]
+                lambda_test_s3_express_bucket_name: String,
                 #[serde(rename = "lambdaexecutionrolearn")]
                 lambda_execution_role_arn: String,
             }
@@ -154,9 +168,13 @@ impl Options {
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
+                lambda_function_memory_size_in_mb: run_opt
+                    .lambda_function_memory_size_in_mb
+                    .unwrap_or(DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB),
                 lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
                 lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
                 lambda_test_s3_mrap_bucket_arn: value.inner.lambda_test_s3_mrap_bucket_arn,
+                lambda_test_s3_express_bucket_name: value.inner.lambda_test_s3_express_bucket_name,
                 lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
             })
         } else {
@@ -166,10 +184,16 @@ impl Options {
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
+                lambda_function_memory_size_in_mb: run_opt
+                    .lambda_function_memory_size_in_mb
+                    .unwrap_or(DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB),
                 lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
                 lambda_test_s3_bucket_name: run_opt.lambda_test_s3_bucket_name.expect("required"),
                 lambda_test_s3_mrap_bucket_arn: run_opt
                     .lambda_test_s3_mrap_bucket_arn
+                    .expect("required"),
+                lambda_test_s3_express_bucket_name: run_opt
+                    .lambda_test_s3_express_bucket_name
                     .expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
             })
@@ -272,11 +296,7 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
         lambda_client.clone(),
         bundle_name,
         bundle_file_name,
-        &options.lambda_execution_role_arn,
-        options.expected_speech_text_by_transcribe.as_ref(),
-        &options.lambda_code_s3_bucket_name,
-        &options.lambda_test_s3_bucket_name,
-        &options.lambda_test_s3_mrap_bucket_arn,
+        options,
     )
     .await
     .context(here!())?;
@@ -344,25 +364,27 @@ async fn upload_bundle(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn create_lambda_fn(
     lambda_client: lambda::Client,
     bundle_name: &str,
     bundle_file_name: &str,
-    execution_role: &str,
-    expected_speech_text_by_transcribe: Option<&String>,
-    code_s3_bucket: &str,
-    test_s3_bucket: &str,
-    test_s3_mrap_bucket_arn: &str,
+    options: &Options,
 ) -> Result<()> {
     use lambda::types::*;
 
-    let env_builder = match expected_speech_text_by_transcribe {
+    let env_builder = match &options.expected_speech_text_by_transcribe {
         Some(expected_speech_text_by_transcribe) => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
-            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
-            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn)
+            .variables("CANARY_S3_BUCKET_NAME", &options.lambda_test_s3_bucket_name)
+            .variables(
+                "CANARY_S3_MRAP_BUCKET_ARN",
+                &options.lambda_test_s3_mrap_bucket_arn,
+            )
+            .variables(
+                "CANARY_S3_EXPRESS_BUCKET_NAME",
+                &options.lambda_test_s3_express_bucket_name,
+            )
             .variables(
                 "CANARY_EXPECTED_TRANSCRIBE_RESULT",
                 expected_speech_text_by_transcribe,
@@ -370,25 +392,33 @@ async fn create_lambda_fn(
         None => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
-            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
-            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn),
+            .variables("CANARY_S3_BUCKET_NAME", &options.lambda_test_s3_bucket_name)
+            .variables(
+                "CANARY_S3_MRAP_BUCKET_ARN",
+                &options.lambda_test_s3_mrap_bucket_arn,
+            )
+            .variables(
+                "CANARY_S3_EXPRESS_BUCKET_NAME",
+                &options.lambda_test_s3_express_bucket_name,
+            ),
     };
 
     lambda_client
         .create_function()
         .function_name(bundle_name)
         .runtime(Runtime::Providedal2)
-        .role(execution_role)
+        .role(&options.lambda_execution_role_arn)
         .handler("aws-sdk-rust-lambda-canary")
         .code(
             FunctionCode::builder()
-                .s3_bucket(code_s3_bucket)
+                .s3_bucket(&options.lambda_code_s3_bucket_name)
                 .s3_key(bundle_file_name)
                 .build(),
         )
         .publish(true)
         .environment(env_builder.build())
         .timeout(180)
+        .memory_size(options.lambda_function_memory_size_in_mb)
         .send()
         .await
         .context(here!("failed to create canary Lambda function"))?;
@@ -487,8 +517,7 @@ async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> R
 
 #[cfg(test)]
 mod tests {
-    use crate::run::Options;
-    use crate::run::RunArgs;
+    use crate::run::{Options, RunArgs, DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB};
     use clap::Parser;
 
     #[test]
@@ -500,11 +529,13 @@ mod tests {
                 sdk_path: Some("artifact-aws-sdk-rust/sdk".into()),
                 musl: false,
                 expected_speech_text_by_transcribe: Some("Good day to you transcribe.".to_owned()),
+                lambda_function_memory_size_in_mb: Some(1024),
                 cdk_output: Some("../cdk-outputs.json".into()),
                 lambda_code_s3_bucket_name: None,
                 lambda_test_s3_bucket_name: None,
                 lambda_execution_role_arn: None,
-                lambda_test_s3_mrap_bucket_arn: None
+                lambda_test_s3_mrap_bucket_arn: None,
+                lambda_test_s3_express_bucket_name: None
             },
             RunArgs::try_parse_from([
                 "run",
@@ -512,6 +543,8 @@ mod tests {
                 "artifact-aws-sdk-rust/sdk",
                 "--expected-speech-text-by-transcribe",
                 "Good day to you transcribe.",
+                "--lambda-function-memory-size-in-mb",
+                "1024",
                 "--cdk-output",
                 "../cdk-outputs.json",
             ])
@@ -535,6 +568,8 @@ mod tests {
             "arn:aws:lambda::role/exe-role",
             "--lambda-test-s3-mrap-bucket-arn",
             "arn:aws:s3::000000000000:accesspoint/example.mrap",
+            "--lambda-test-s3-express-bucket-name",
+            "test--usw2-az1--x-s3",
         ])
         .unwrap();
         assert_eq!(
@@ -544,11 +579,13 @@ mod tests {
                 sdk_path: Some("artifact-aws-sdk-rust/sdk".into()),
                 musl: false,
                 expected_speech_text_by_transcribe: Some("Good day to you transcribe.".to_owned()),
+                lambda_function_memory_size_in_mb: DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB,
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
                 lambda_test_s3_bucket_name: "bucket-for-test".to_owned(),
                 lambda_execution_role_arn: "arn:aws:lambda::role/exe-role".to_owned(),
                 lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
                     .to_owned(),
+                lambda_test_s3_express_bucket_name: "test--usw2-az1--x-s3".to_owned(),
             },
             Options::load_from(run_args).unwrap(),
         );

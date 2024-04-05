@@ -1,4 +1,48 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 2nd, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (client, [aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513), @Ten0) Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax.
+
+**New this release:**
+- :tada: (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).
+
+    Please note that support for Hyper 1.0 remains experimental.
+- (all, [smithy-rs#3389](https://github.com/smithy-lang/smithy-rs/issues/3389)) All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed.
+- (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Fix bug in Hyper 1.0 support where https URLs returned an error
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Ten0 ([aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513))
+
+
+March 25th, 2024
+================
+**New this release:**
+- (all, [smithy-rs#3476](https://github.com/smithy-lang/smithy-rs/issues/3476), @landonxjames) Increased minimum version of wasi crate dependency in aws-smithy-wasm to 0.12.1.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @landonxjames ([smithy-rs#3476](https://github.com/smithy-lang/smithy-rs/issues/3476))
+
+
+March 12th, 2024
+================
+**New this release:**
+- :tada: (all, [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409), [aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), @landonxjames, @eduardomourar) Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments
+- :tada: (client, [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409), @landonxjames, @eduardomourar) Added aws-smithy-wasm crate to enable SDK use in WASI compliant environments
+- :tada: (all, [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365), [aws-sdk-rust#1046](https://github.com/awslabs/aws-sdk-rust/issues/1046), @cayman-amzn) [`SdkBody`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/body/struct.SdkBody.html) now implements the 1.0 version of the `http_body::Body` trait.
+- (all, [smithy-rs#3470](https://github.com/smithy-lang/smithy-rs/issues/3470)) Upgrade Smithy to 1.45.
+- (client, [smithy-rs#3465](https://github.com/smithy-lang/smithy-rs/issues/3465), [smithy-rs#3477](https://github.com/smithy-lang/smithy-rs/issues/3477)) The `ResolveIdentity` trait is now aware of its `IdentityCache` location.
+- (client, [smithy-rs#3465](https://github.com/smithy-lang/smithy-rs/issues/3465), [smithy-rs#3477](https://github.com/smithy-lang/smithy-rs/issues/3477)) `RuntimeComponents` can now be converted back to a `RuntimeComponentsBuilder`, using `.to_builder()`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @cayman-amzn ([aws-sdk-rust#1046](https://github.com/awslabs/aws-sdk-rust/issues/1046), [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365))
+- @eduardomourar ([aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409))
+- @landonxjames ([aws-sdk-rust#59](https://github.com/awslabs/aws-sdk-rust/issues/59), [smithy-rs#2087](https://github.com/smithy-lang/smithy-rs/issues/2087), [smithy-rs#2520](https://github.com/smithy-lang/smithy-rs/issues/2520), [smithy-rs#3409](https://github.com/smithy-lang/smithy-rs/issues/3409))
+
+
 February 22nd, 2024
 ===================
 **New this release:**

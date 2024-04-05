@@ -25,17 +25,17 @@ use aws_credential_types::Credentials;
 /// ProfileChain is a direct representation of the Profile. It can contain named providers
 /// that don't actually have implementations.
 #[derive(Debug)]
-pub(super) struct ProfileChain<'a> {
-    pub(super) base: BaseProvider<'a>,
-    pub(super) chain: Vec<RoleArn<'a>>,
+pub(crate) struct ProfileChain<'a> {
+    pub(crate) base: BaseProvider<'a>,
+    pub(crate) chain: Vec<RoleArn<'a>>,
 }
 
 impl<'a> ProfileChain<'a> {
-    pub(super) fn base(&self) -> &BaseProvider<'a> {
+    pub(crate) fn base(&self) -> &BaseProvider<'a> {
         &self.base
     }
 
-    pub(super) fn chain(&self) -> &[RoleArn<'a>] {
+    pub(crate) fn chain(&self) -> &[RoleArn<'a>] {
         self.chain.as_slice()
     }
 }
@@ -46,7 +46,7 @@ impl<'a> ProfileChain<'a> {
 /// e.g. IMDS, ECS, Environment variables
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub(super) enum BaseProvider<'a> {
+pub(crate) enum BaseProvider<'a> {
     /// A profile that specifies a named credential source
     /// Eg: `credential_source = Ec2InstanceMetadata`
     ///
@@ -100,18 +100,18 @@ pub(super) enum BaseProvider<'a> {
 /// A RoleArn can only be created from either a profile with `source_profile`
 /// or one with `credential_source`.
 #[derive(Debug)]
-pub(super) struct RoleArn<'a> {
+pub(crate) struct RoleArn<'a> {
     /// Role to assume
-    pub(super) role_arn: &'a str,
+    pub(crate) role_arn: &'a str,
     /// external_id parameter to pass to the assume role provider
-    pub(super) external_id: Option<&'a str>,
+    pub(crate) external_id: Option<&'a str>,
 
     /// session name parameter to pass to the assume role provider
-    pub(super) session_name: Option<&'a str>,
+    pub(crate) session_name: Option<&'a str>,
 }
 
 /// Resolve a ProfileChain from a ProfileSet or return an error
-pub(super) fn resolve_chain(
+pub(crate) fn resolve_chain(
     profile_set: &ProfileSet,
 ) -> Result<ProfileChain<'_>, ProfileFileError> {
     // If there are no profiles, allow flowing into the next provider
@@ -469,18 +469,16 @@ fn credential_process_from_profile(
 
 #[cfg(test)]
 mod tests {
-    use crate::profile::credentials::repr::{resolve_chain, BaseProvider, ProfileChain};
-    use crate::profile::ProfileSet;
+    use crate::profile::credentials::repr::BaseProvider;
     use crate::sensitive_command::CommandWithSensitiveArgs;
     use serde::Deserialize;
-    use std::collections::HashMap;
-    use std::error::Error;
-    use std::fs;
 
+    #[cfg(feature = "test-utils")]
     #[test]
-    fn run_test_cases() -> Result<(), Box<dyn Error>> {
-        let test_cases: Vec<TestCase> =
-            serde_json::from_str(&fs::read_to_string("./test-data/assume-role-tests.json")?)?;
+    fn run_test_cases() -> Result<(), Box<dyn std::error::Error>> {
+        let test_cases: Vec<TestCase> = serde_json::from_str(&std::fs::read_to_string(
+            "./test-data/assume-role-tests.json",
+        )?)?;
         for test_case in test_cases {
             print!("checking: {}...", test_case.docs);
             check(test_case);
@@ -489,7 +487,10 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "test-utils")]
     fn check(test_case: TestCase) {
+        use aws_runtime::profile::profile_set::ProfileSet;
+        crate::profile::credentials::repr::resolve_chain;
         let source = ProfileSet::new(
             test_case.input.profiles,
             test_case.input.selected_profile,
@@ -514,6 +515,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "test-utils")]
     #[derive(Deserialize)]
     struct TestCase {
         docs: String,
@@ -521,6 +523,7 @@ mod tests {
         output: TestOutput,
     }
 
+    #[cfg(feature = "test-utils")]
     #[derive(Deserialize)]
     struct TestInput {
         profiles: HashMap<String, HashMap<String, String>>,
@@ -529,6 +532,7 @@ mod tests {
         sso_sessions: HashMap<String, HashMap<String, String>>,
     }
 
+    #[cfg(feature = "test-utils")]
     fn to_test_output(profile_chain: ProfileChain<'_>) -> Vec<Provider> {
         let mut output = vec![];
         match profile_chain.base {
