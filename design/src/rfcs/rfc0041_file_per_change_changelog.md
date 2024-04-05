@@ -82,7 +82,7 @@ stay in place.
 
 The `aws/SDK_CHANGELOG.next.json` will stay in place in its current format without changes.
 Its JSON format is capable of escaping characters in the message string, so it will be
-compatible with the transition from Markdown to TOML.
+compatible with the transition from TOML to Markdown with YAML front matter.
 
 The `SDK_CHANGELOG.next.json` file has had merge conflicts in the past, but this only
 happened when the release process wasn't followed correctly. If we're consistent with
@@ -107,6 +107,14 @@ At a high level, these requirements must be observed to do this refactor safely:
   and a mechanism _MUST_ be in place for making sure it is the correct format after
   merging with other PRs. It's probably better to leave this file alone though, or make
   any changes to it backwards compatible.
+
+Future Improvements
+-------------------
+
+After the initial migration, additional niceties could be added such as pulling authors
+from git history rather than needing to explicitly state them (at least by default; there
+should always be an option to override the author in case a maintainer adds a changelog
+entry on behalf of a contributor).
 
 Changes checklist
 -----------------
