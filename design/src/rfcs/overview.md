@@ -50,3 +50,4 @@
 - [RFC-0038: Retry Classifier Customization](./rfc0038_retry_classifier_customization.md)
 - [RFC-0039: Forward Compatible Errors](./rfc0039_forward_compatible_errors.md)
 - [RFC-0040: Behavior Versions](./rfc0040_behavior_versions.md)
+- [RFC-0041: Improve client error ergonomics](./rfc0041_improve_client_error_ergonomics.md)
