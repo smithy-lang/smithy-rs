@@ -7,10 +7,9 @@ use aws_smithy_runtime_api::client::endpoint::{
     error::ResolveEndpointError, EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::{box_error::BoxError, client::endpoint::EndpointPrefix};
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
 use http::uri::PathAndQuery;
@@ -67,37 +66,40 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
     }
 }
 
-pub(super) async fn orchestrate_endpoint(
-    ctx: &mut InterceptorContext,
+pub(super) async fn resolve_endpoint(
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
-    trace!("orchestrating endpoint resolution");
+    trace!("resolving endpoint");
 
     let params = cfg
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
-    let endpoint_prefix = cfg.load::<EndpointPrefix>();
-    tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
-    let request = ctx.request_mut().expect("set during serialization");
 
     let endpoint = runtime_components
         .endpoint_resolver()
         .resolve_endpoint(params)
         .await?;
-    tracing::debug!("will use endpoint {:?}", endpoint);
-    apply_endpoint(request, &endpoint, endpoint_prefix)?;
 
-    // Make the endpoint config available to interceptors
-    cfg.interceptor_state().store_put(endpoint);
+    let mut layer = Layer::new("resolve endpoint");
+    layer.store_put(endpoint);
+    cfg.push_layer(layer);
+
     Ok(())
 }
 
-fn apply_endpoint(
-    request: &mut HttpRequest,
-    endpoint: &Endpoint,
-    endpoint_prefix: Option<&EndpointPrefix>,
+pub(super) fn apply_endpoint(
+    ctx: &mut InterceptorContext,
+    cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
+    trace!("applying endpoint");
+
+    let endpoint = cfg.load::<Endpoint>().ok_or("should have been resolved")?;
+    tracing::debug!("will use endpoint {:?}", endpoint);
+
+    let endpoint_prefix = cfg.load::<EndpointPrefix>();
+    let request = ctx.request_mut().expect("set during serialization");
+
     let endpoint_url = match endpoint_prefix {
         None => Cow::Borrowed(endpoint.url()),
         Some(prefix) => {

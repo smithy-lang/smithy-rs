@@ -10,11 +10,11 @@ use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
     ResolveAuthSchemeOptions,
 };
-use aws_smithy_runtime_api::client::identity::ResolveIdentity;
+use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -109,11 +109,10 @@ impl fmt::Display for AuthOrchestrationError {
 
 impl StdError for AuthOrchestrationError {}
 
-pub(super) async fn orchestrate_auth(
-    ctx: &mut InterceptorContext,
+pub(super) async fn resolve_identity(
     runtime_components: &RuntimeComponents,
-    cfg: &ConfigBag,
-) -> Result<(), BoxError> {
+    cfg: &mut ConfigBag,
+) -> Result<AuthSchemeId, BoxError> {
     let params = cfg
         .load::<AuthSchemeOptionResolverParams>()
         .expect("auth scheme option resolver params must be set");
@@ -137,41 +136,34 @@ pub(super) async fn orchestrate_auth(
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
             // Use the resolved auth scheme to resolve an identity
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
-                let identity_cache = if identity_resolver.cache_location()
-                    == IdentityCacheLocation::RuntimeComponents
-                {
-                    runtime_components.identity_cache()
-                } else {
-                    IdentityCache::no_cache()
+                use IdentityCacheLocation::*;
+                let identity_cache = match identity_resolver.cache_location() {
+                    RuntimeComponents => runtime_components.identity_cache(),
+                    IdentityResolver => IdentityCache::no_cache(),
+                    _ => {
+                        return Err(BoxError::from(
+                        "`IdentityCacheLocation` adds a new variant, which needs to be handled in a separate match arm",
+                        ))
+                    }
                 };
-                let signer = auth_scheme.signer();
                 trace!(
                     auth_scheme = ?auth_scheme,
                     identity_cache = ?identity_cache,
-                    identity_resolver = ?identity_resolver,
-                    signer = ?signer,
-                    "resolved auth scheme, identity cache, identity resolver, and signing implementation"
+                    "resolved auth scheme, and identity cache",
                 );
 
                 match extract_endpoint_auth_scheme_config(endpoint, scheme_id) {
-                    Ok(auth_scheme_endpoint_config) => {
-                        trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
-
+                    Ok(_) => {
                         let identity = identity_cache
                             .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
 
-                        trace!("signing request");
-                        let request = ctx.request_mut().expect("set during serialization");
-                        signer.sign_http_request(
-                            request,
-                            &identity,
-                            auth_scheme_endpoint_config,
-                            runtime_components,
-                            cfg,
-                        )?;
-                        return Ok(());
+                        let mut layer = Layer::new("resolve_identity");
+                        layer.store_put(identity);
+                        cfg.push_layer(layer);
+
+                        return Ok(scheme_id);
                     }
                     Err(AuthOrchestrationError::MissingEndpointConfig) => {
                         explored.push(scheme_id, ExploreResult::MissingEndpointConfig);
@@ -220,6 +212,39 @@ fn extract_endpoint_auth_scheme_config(
         })
         .ok_or(AuthOrchestrationError::MissingEndpointConfig)?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
+}
+
+pub(super) fn sign_request(
+    scheme_id: AuthSchemeId,
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    trace!("signing request");
+    let request = ctx.request_mut().expect("set during serialization");
+    let identity = cfg
+        .load::<Identity>()
+        .expect("identity should be set by `resolve_identity`");
+    let endpoint = cfg
+        .load::<Endpoint>()
+        .expect("endpoint added to config bag by endpoint orchestrator");
+    let auth_scheme = runtime_components
+        .auth_scheme(scheme_id)
+        .ok_or("should be configured")?;
+    let signer = auth_scheme.signer();
+    let auth_scheme_endpoint_config = extract_endpoint_auth_scheme_config(&endpoint, scheme_id)?;
+    trace!(
+        signer = ?signer,
+        "signing implementation"
+    );
+    signer.sign_http_request(
+        request,
+        &identity,
+        auth_scheme_endpoint_config,
+        runtime_components,
+        cfg,
+    )?;
+    return Ok(());
 }
 
 #[derive(Debug)]

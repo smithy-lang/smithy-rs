@@ -7,7 +7,7 @@ use crate::box_error::BoxError;
 use crate::client::runtime_components::sealed::ValidateConfig;
 use crate::client::runtime_components::{RuntimeComponents, RuntimeComponentsBuilder};
 use crate::impl_shared_conversions;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
@@ -243,6 +243,10 @@ pub struct Identity {
     #[allow(clippy::type_complexity)]
     data_debug: Arc<dyn (Fn(&Arc<dyn Any + Send + Sync>) -> &dyn Debug) + Send + Sync>,
     expiration: Option<SystemTime>,
+}
+
+impl Storable for Identity {
+    type Storer = StoreReplace<Self>;
 }
 
 impl Identity {
