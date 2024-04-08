@@ -139,24 +139,22 @@ data class GeneratedExpression(
             "this function only works on number types"
         }
 
-        return if (desiredPrimitive is RustType.Reference) {
-            convertToNumberPrimitive(namer, desiredPrimitive.member)
-        } else if (outputType is RustType.Reference) {
-            dereference(namer).convertToNumberPrimitive(namer, desiredPrimitive)
-        } else if (outputType != desiredPrimitive) {
-            namer.safeName("_tmp").let { tmp ->
-                GeneratedExpression(
-                    identifier = tmp,
-                    outputType = desiredPrimitive,
-                    output =
-                        output +
-                            writable {
-                                rust("let $tmp = $identifier as ${desiredPrimitive.render()};")
-                            },
-                )
-            }
-        } else {
-            this
+        return when {
+            desiredPrimitive is RustType.Reference -> convertToNumberPrimitive(namer, desiredPrimitive.member)
+            outputType is RustType.Reference -> dereference(namer).convertToNumberPrimitive(namer, desiredPrimitive)
+            outputType != desiredPrimitive ->
+                namer.safeName("_tmp").let { tmp ->
+                    GeneratedExpression(
+                        identifier = tmp,
+                        outputType = desiredPrimitive,
+                        output =
+                            output +
+                                writable {
+                                    rust("let $tmp = $identifier as ${desiredPrimitive.render()};")
+                                },
+                    )
+                }
+            else -> this
         }
     }
 }
