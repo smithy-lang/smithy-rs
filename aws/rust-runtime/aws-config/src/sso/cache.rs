@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::fs_util::{home_dir, Os};
+use aws_runtime::fs_util::{home_dir, Os};
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::Token;
 use aws_smithy_json::deserialize::{json_token_iter, EscapeError};
@@ -514,6 +514,8 @@ mod tests {
         );
     }
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
+    #[cfg_attr(windows, ignore)]
     #[test]
     fn determine_correct_cache_filenames() {
         assert_eq!(
@@ -534,6 +536,8 @@ mod tests {
         );
     }
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
+    #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn save_cached_token() {
         let expires_at = SystemTime::UNIX_EPOCH + Duration::from_secs(50_000_000);

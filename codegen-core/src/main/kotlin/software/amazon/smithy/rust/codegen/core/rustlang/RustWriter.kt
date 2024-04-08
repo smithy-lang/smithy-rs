@@ -633,7 +633,11 @@ class RustWriter private constructor(
         init {
             expressionStart = '#'
             if (filename.endsWith(".rs")) {
-                require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
+                require(
+                    namespace.startsWith("crate") ||
+                        filename.startsWith("tests${File.separator}") ||
+                        filename == "build.rs",
+                ) {
                     "We can only write into files in the crate (got $namespace)"
                 }
             }

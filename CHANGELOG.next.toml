@@ -12,24 +12,6 @@
 # author = "rcoh"
 
 [[smithy-rs]]
-message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
-references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
-references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
-meta = { "breaking" = true, "tada" = false, "bug" = true }
-author = "Ten0"
-
-[[smithy-rs]]
-message = "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax."
-references = ["aws-sdk-rust#1111", "smithy-rs#3513"]
-meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
-author = "Ten0"
-
-[[smithy-rs]]
 message = """
 Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
 
