@@ -157,6 +157,7 @@ RUN set -eux; \
         gcc \
         git \
         glibc-langpack-en \
+        go \
         java-11-amazon-corretto-headless \
         make \
         openssl-devel \

@@ -1,4 +1,21 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 2nd, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (client, [aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513), @Ten0) Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax.
+
+**New this release:**
+- :tada: (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).
+
+    Please note that support for Hyper 1.0 remains experimental.
+- (all, [smithy-rs#3389](https://github.com/smithy-lang/smithy-rs/issues/3389)) All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed.
+- (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Fix bug in Hyper 1.0 support where https URLs returned an error
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Ten0 ([aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513))
+
+
 March 25th, 2024
 ================
 **New this release:**

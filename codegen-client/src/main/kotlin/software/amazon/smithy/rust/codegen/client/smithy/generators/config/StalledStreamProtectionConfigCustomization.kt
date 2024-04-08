@@ -120,15 +120,12 @@ class StalledStreamProtectionOperationCustomization(
                 is OperationSection.AdditionalInterceptors -> {
                     val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
                     section.registerInterceptor(rc, this) {
-                        // Currently, only response bodies are protected/supported because
-                        // we can't count on hyper to poll a request body on wake.
                         rustTemplate(
                             """
-                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::ResponseBody)
+                            #{StalledStreamProtectionInterceptor}::default()
                             """,
                             *preludeScope,
                             "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
-                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
                         )
                     }
                 }
