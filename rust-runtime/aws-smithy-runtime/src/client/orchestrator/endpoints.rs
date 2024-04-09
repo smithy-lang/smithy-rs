@@ -150,16 +150,28 @@ pub(super) fn apply_endpoint(
 #[cfg(test)]
 mod test {
     use super::*;
+    use aws_smithy_runtime_api::client::interceptors::context::Input;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 
     #[test]
     fn test_apply_endpoint() {
         let mut req = HttpRequest::empty();
         req.set_uri("/foo?bar=1").unwrap();
+
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.enter_serialization_phase();
+        ctx.set_request(req);
+
         let endpoint = Endpoint::builder().url("https://s3.amazon.com").build();
         let prefix = EndpointPrefix::new("prefix.subdomain.").unwrap();
-        super::apply_endpoint(&mut req, &endpoint, Some(&prefix)).expect("should succeed");
+        let mut layer = Layer::new("test");
+        layer.store_put(endpoint);
+        layer.store_put(prefix);
+        let mut cfg = ConfigBag::of_layers(vec![layer]);
+
+        super::apply_endpoint(&mut ctx, &mut cfg).expect("should succeed");
         assert_eq!(
-            req.uri(),
+            ctx.request().unwrap().uri(),
             "https://prefix.subdomain.s3.amazon.com/foo?bar=1"
         );
     }

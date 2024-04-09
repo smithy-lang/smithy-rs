@@ -399,11 +399,12 @@ mod tests {
         let mut layer: Layer = Layer::new("test");
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
         layer.store_put(Endpoint::builder().url("dontcare").build());
-        let cfg = ConfigBag::of_layers(vec![layer]);
+        let mut cfg = ConfigBag::of_layers(vec![layer]);
 
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+        resolve_identity(&runtime_components, &mut cfg)
             .await
             .expect("success");
+        sign_request(TEST_SCHEME_ID, &mut ctx, &runtime_components, &mut cfg).expect("success");
 
         assert_eq!(
             "success!",
@@ -455,11 +456,18 @@ mod tests {
         }
 
         // First, test the presence of a basic auth login and absence of a bearer token
-        let (runtime_components, cfg) =
+        let (runtime_components, mut cfg) =
             config_with_identity(HTTP_BASIC_AUTH_SCHEME_ID, Login::new("a", "b", None));
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+        resolve_identity(&runtime_components, &mut cfg)
             .await
             .expect("success");
+        sign_request(
+            HTTP_BASIC_AUTH_SCHEME_ID,
+            &mut ctx,
+            &runtime_components,
+            &mut cfg,
+        )
+        .expect("success");
         assert_eq!(
             // "YTpi" == "a:b" in base64
             "Basic YTpi",
@@ -471,16 +479,23 @@ mod tests {
         );
 
         // Next, test the presence of a bearer token and absence of basic auth
-        let (runtime_components, cfg) =
+        let (runtime_components, mut cfg) =
             config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
         let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
         ctx.enter_serialization_phase();
         ctx.set_request(HttpRequest::empty());
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+        resolve_identity(&runtime_components, &mut cfg)
             .await
             .expect("success");
+        sign_request(
+            HTTP_BEARER_AUTH_SCHEME_ID,
+            &mut ctx,
+            &runtime_components,
+            &mut cfg,
+        )
+        .expect("success");
         assert_eq!(
             "Bearer t",
             ctx.request()
@@ -631,11 +646,18 @@ mod tests {
         let mut layer = Layer::new("test");
         layer.store_put(Endpoint::builder().url("dontcare").build());
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-        let config_bag = ConfigBag::of_layers(vec![layer]);
+        let mut cfg = ConfigBag::of_layers(vec![layer]);
 
-        orchestrate_auth(&mut ctx, &runtime_components, &config_bag)
+        resolve_identity(&runtime_components, &mut cfg)
             .await
             .expect("success");
+        sign_request(
+            HTTP_API_KEY_AUTH_SCHEME_ID,
+            &mut ctx,
+            &runtime_components,
+            &mut cfg,
+        )
+        .expect("success");
         assert_eq!(
             "result: cached (pass)",
             ctx.request()
