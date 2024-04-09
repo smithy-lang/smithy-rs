@@ -249,7 +249,6 @@ impl<'a> EnvConfigValue<'a> {
         env: &'a Env,
         profiles: Option<&'a EnvConfigSections>,
     ) -> Option<(Cow<'a, str>, EnvConfigSource<'a>)> {
-        tracing::trace!("loading env config from {env:?}");
         let env_value = self.environment_variable.as_ref().and_then(|env_var| {
             // Check for a service-specific env var first
             let service_config =
@@ -274,7 +273,6 @@ impl<'a> EnvConfigValue<'a> {
             }
         });
 
-        tracing::trace!("loading profile config from {profiles:?}");
         let profile_value = match (profiles, self.profile_key.as_ref()) {
             (Some(profiles), Some(profile_key)) => {
                 // Check for a service-specific profile key first

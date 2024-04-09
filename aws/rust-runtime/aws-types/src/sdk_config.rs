@@ -644,17 +644,6 @@ impl Builder {
         self.config_origins.insert(setting, origin);
     }
 
-    /// Get the origin of a setting.
-    ///
-    /// This is used internally to understand how to merge config structs while
-    /// respecting precedence of origins.
-    pub fn get_origin(&self, setting: &'static str) -> Origin {
-        self.config_origins
-            .get(setting)
-            .cloned()
-            .unwrap_or_default()
-    }
-
     /// Build a [`SdkConfig`] from this builder.
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -843,14 +832,6 @@ impl SdkConfig {
     /// Convert this [`SdkConfig`] into a [`Builder`] by cloning it first
     pub fn to_builder(&self) -> Builder {
         self.clone().into_builder()
-    }
-
-    /// Set the origin of a setting.
-    ///
-    /// This is used internally to understand how to merge config structs while
-    /// respecting precedence of origins.
-    pub fn insert_origin(&mut self, setting: &'static str, origin: Origin) {
-        self.config_origins.insert(setting, origin);
     }
 
     /// Get the origin of a setting.
