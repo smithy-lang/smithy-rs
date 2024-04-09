@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.replaceLifetimes
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -35,9 +37,13 @@ class RustJmespathShapeTraversalGeneratorTest {
         private val model = codegenContext.model
         private val symbolProvider = codegenContext.symbolProvider
 
+        private val inputShape =
+            model.lookup<OperationShape>("test#TestOperation")
+                .inputShape(model)
         private val outputShape =
             model.lookup<OperationShape>("test#TestOperation")
                 .outputShape(model)
+        val input = symbolProvider.toSymbol(inputShape)
         val output = symbolProvider.toSymbol(outputShape)
         val entityPrimitives = symbolProvider.toSymbol(model.lookup<StructureShape>("test#EntityPrimitives"))
         val entityLists = symbolProvider.toSymbol(model.lookup<StructureShape>("test#EntityLists"))
@@ -45,15 +51,34 @@ class RustJmespathShapeTraversalGeneratorTest {
         val enum = symbolProvider.toSymbol(model.lookup<Shape>("test#Enum"))
         val struct = symbolProvider.toSymbol(model.lookup<Shape>("test#Struct"))
 
-        val testDataFn1: RuntimeType
+        val testInputDataFn: RuntimeType
+        val testOutputDataFn: RuntimeType
 
         init {
-            testDataFn1 =
-                RuntimeType.forInlineFun("test_data_1", ClientRustModule.root) {
+            testInputDataFn =
+                RuntimeType.forInlineFun("test_input_data", ClientRustModule.root) {
                     rustTemplate(
                         """
                         ##[allow(dead_code)]
-                        fn test_data_1() -> #{Output} {
+                        fn test_input_data() -> #{Input} {
+                            #{Input}::builder()
+                                .name("foobaz")
+                                .true_bool(true)
+                                .false_bool(false)
+                                .build()
+                                .unwrap()
+                        }
+                        """,
+                        "Input" to input,
+                    )
+                }
+
+            testOutputDataFn =
+                RuntimeType.forInlineFun("test_output_data", ClientRustModule.root) {
+                    rustTemplate(
+                        """
+                        ##[allow(dead_code)]
+                        fn test_output_data() -> #{Output} {
                             let primitives = #{EntityPrimitives}::builder()
                                 .required_boolean(true)
                                 .required_string("required-test")
@@ -107,28 +132,40 @@ class RustJmespathShapeTraversalGeneratorTest {
         fun testCase(
             testName: String,
             expression: String,
-            testData: RuntimeType,
             assertions: RustWriter.() -> Unit,
+            inputData: RuntimeType = testInputDataFn,
+            outputData: RuntimeType = testOutputDataFn,
+            dualBinding: Boolean = false,
         ) {
             val generator = RustJmespathShapeTraversalGenerator(codegenContext)
             val parsed = JmespathExpression.parse(expression)
-            val generated = generator.generate(parsed, "_output", outputShape)
+            val bindings =
+                when {
+                    dualBinding ->
+                        listOf(
+                            TraversalBinding.Named("input", "_input", inputShape),
+                            TraversalBinding.Named("output", "_output", outputShape),
+                        )
+                    else -> listOf(TraversalBinding.Global("_output", outputShape))
+                }
+            val generated = generator.generate(parsed, bindings)
             rustCrate.unitTest(testName) {
                 rust("// jmespath: $expression")
                 rust("// jmespath parsed: $parsed")
                 rustBlockTemplate(
-                    "fn inner(_output: &#{Arg}) -> #{Option}<#{Ret}>",
-                    "Arg" to output,
-                    "Ret" to generated.outputType,
+                    "fn inner<'a>(_input: &'a #{Input}, _output: &'a #{Output}) -> #{Option}<#{Ret}>",
+                    "Input" to input,
+                    "Output" to output,
+                    "Ret" to generated.outputType.replaceLifetimes("a"),
                     *preludeScope,
                 ) {
                     generated.output(this)
                     rustTemplate("#{Some}(${generated.identifier})", *preludeScope)
                 }
-                rustTemplate("let output = #{test_data}();", "test_data" to testData)
+                rustTemplate("let (input, output) = (#{in}(), #{out}());", "in" to inputData, "out" to outputData)
                 rust("""println!("test data: {output:##?}");""")
                 rust("""println!("jmespath: {}", ${expression.dq()});""")
-                rust("let result = inner(&output);")
+                rust("let result = inner(&input, &output);")
                 rust("""println!("result: {result:##?}");""")
                 rust("let result = result.unwrap();")
                 assertions()
@@ -140,11 +177,21 @@ class RustJmespathShapeTraversalGeneratorTest {
         fun invalid(
             expression: String,
             contains: String,
+            dualBinding: Boolean = false,
         ) {
             try {
                 val generator = RustJmespathShapeTraversalGenerator(codegenContext)
                 val parsed = JmespathExpression.parse(expression)
-                generator.generate(parsed, "_output", outputShape).output(RustWriter.forModule("unsupported"))
+                val bindings =
+                    when {
+                        dualBinding ->
+                            listOf(
+                                TraversalBinding.Named("input", "_input", inputShape),
+                                TraversalBinding.Named("output", "_output", outputShape),
+                            )
+                        else -> listOf(TraversalBinding.Global("_output", outputShape))
+                    }
+                generator.generate(parsed, bindings).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown InvalidJmesPathTraversalException")
             } catch (ex: InvalidJmesPathTraversalException) {
                 ex.message shouldContain contains
@@ -158,7 +205,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             try {
                 val generator = RustJmespathShapeTraversalGenerator(codegenContext)
                 val parsed = JmespathExpression.parse(expression)
-                generator.generate(parsed, "_output", outputShape).output(RustWriter.forModule("unsupported"))
+                generator.generate(parsed, listOf(TraversalBinding.Global("_output", outputShape))).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown UnsupportedJmesPathException")
             } catch (ex: UnsupportedJmesPathException) {
                 ex.message shouldContain contains
@@ -186,6 +233,7 @@ class RustJmespathShapeTraversalGeneratorTest {
         integrationTest {
             fieldExpressions()
             subExpressions()
+            namedBindings()
             flattenExpressions()
             literalTypes()
             functions()
@@ -206,7 +254,7 @@ class RustJmespathShapeTraversalGeneratorTest {
         fun test(
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_field_$expression", expression, testDataFn1, assertions)
+        ) = testCase("traverse_field_$expression", expression, assertions)
 
         test("primitives") {
             rust("assert!(std::ptr::eq(output.primitives.as_ref().unwrap(), result));")
@@ -227,7 +275,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_subexpression_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_subexpression_$name", expression, assertions)
 
         test("boolean", "primitives.boolean", expectTrue)
         test("string", "primitives.string", simple("assert_eq!(\"test\", result);"))
@@ -248,12 +296,25 @@ class RustJmespathShapeTraversalGeneratorTest {
         test("required_string", "primitives.requiredString", simple("assert_eq!(\"required-test\", result);"))
     }
 
+    private fun TestCase.namedBindings() {
+        fun test(
+            name: String,
+            expression: String,
+            assertions: RustWriter.() -> Unit,
+        ) = testCase("named_bindings_$name", expression, assertions, dualBinding = true)
+
+        test("input_and_output_bool_true", "input.trueBool && output.primitives.boolean", expectTrue)
+        test("input_and_output_bool_false", "input.falseBool && output.primitives.boolean", expectFalse)
+
+        invalid("input.doesNotExist && output.primitives.boolean", "Member `doesNotExist` doesn't exist", dualBinding = true)
+    }
+
     private fun TestCase.flattenExpressions() {
         fun test(
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_flatten_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_flatten_$name", expression, assertions)
 
         test("shortcircuit", "lists.structs[]") {
             rust("assert!(std::ptr::eq(output.lists.as_ref().unwrap().structs.as_ref().unwrap(), result));")
@@ -271,7 +332,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_literal_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_literal_$name", expression, assertions)
 
         test("bool", "`true`", expectTrue)
         test("int", "`0`", simple("assert_eq!(0f64, *result);"))
@@ -288,7 +349,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_fn_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_fn_$name", expression, assertions)
 
         test("list_length", "length(lists.structs[])", simple("assert_eq!(1, result);"))
         test("string_length", "length(primitives.string)", simple("assert_eq!(4, result);"))
@@ -343,7 +404,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_compare_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_compare_$name", expression, assertions)
 
         test("eq_boollit_w_boollit", "`true` == `true`", expectTrue)
         test("neq_boollit_w_boollit", "`true` != `true`", expectFalse)
@@ -379,7 +440,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_obj_projection_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_obj_projection_$name", expression, assertions)
 
         test("traverse_obj_projection_simple", "maps.booleans.*") {
             rust("assert_eq!(2, result.len());")
@@ -402,7 +463,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_filter_projection_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_filter_projection_$name", expression, assertions)
 
         test("boollit", "lists.structs[?`true`]") {
             rust("assert_eq!(1, result.len());")
@@ -433,7 +494,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_boolean_ops_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_boolean_ops_$name", expression, assertions)
 
         test("lit_not", "!`true`", expectFalse)
         test("bool_not", "!(primitives.boolean)", expectFalse)
@@ -455,7 +516,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_multiselectlists_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_multiselectlists_$name", expression, assertions)
 
         test("intlist_contains", "contains([`1`, `2`, `3`], `1`)", expectTrue)
         test("stringlist_contains", "contains(['foo', 'bar'], 'foo')", expectTrue)
@@ -473,7 +534,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             name: String,
             expression: String,
             assertions: RustWriter.() -> Unit,
-        ) = testCase("traverse_complex_combos_$name", expression, testDataFn1, assertions)
+        ) = testCase("traverse_complex_combos_$name", expression, assertions)
 
         test(
             "1",
@@ -501,6 +562,8 @@ class RustJmespathShapeTraversalGeneratorTest {
         structure GetEntityRequest {
             @required
             name: String
+            trueBool: Boolean
+            falseBool: Boolean
         }
 
         structure GetEntityResponse {
