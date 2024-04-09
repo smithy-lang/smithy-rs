@@ -268,3 +268,13 @@ jobs:
         # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
         git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
         git push origin main
+
+  open-backport-pull-request:
+    name: Open backport pull request to merge the release branch back to main
+    needs:
+    - trim-changelog-next-on-main
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
+    if: inputs.dry_run == false && always() && needs.trim-changelog-next-on-main.result == 'success'
+    uses: ./.github/workflows/backport-pull-request.yml
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
