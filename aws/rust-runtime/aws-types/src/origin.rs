@@ -146,7 +146,7 @@ impl PartialOrd for Inner {
         match self {
             // IMDS is the lowest priority
             Imds => Some(Ordering::Less),
-            // Programmatic is the second-lowest priority
+            // ProfileFile is the second-lowest priority
             ProfileFile(kind) => match other {
                 Imds => Some(Ordering::Greater),
                 ProfileFile(other_kind) => kind.partial_cmp(other_kind),
