@@ -104,15 +104,8 @@ class RegionDecorator : ClientCodegenDecorator {
             adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust(
                     """
-                    ${section.serviceConfigBuilder}.set_region(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                conf.load_config(service_config_key($envKey, $profileKey))
-                                    .map(Region::new)
-                            })
-                            .or_else(|| ${section.sdkConfig}.region().cloned()),
-                    );
+                    ${section.serviceConfigBuilder} =
+                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
                     """,
                 )
             }
