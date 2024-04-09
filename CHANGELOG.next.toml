@@ -10,7 +10,6 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
 [[smithy-rs]]
 message = """
 Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
@@ -52,3 +51,9 @@ message = "Stalled stream protection on downloads will now only trigger if the u
 references = ["smithy-rs#3485"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Unions with unit target member shape are now fully supported"
+references = ["smithy-rs#2546"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "drganjoo"
