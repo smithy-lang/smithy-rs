@@ -8,11 +8,98 @@ on:
         description: The PR number to invoke the canary for.
         required: true
         type: string
+run-name: ${{ github.workflow }} for Pull Request ${{ inputs.pull_request_number }}
+
+# Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
+concurrency:
+  group: manual-canary-${{ inputs.pull_request_number }}
+  cancel-in-progress: true
 
 jobs:
-  canary:
-    name: Canary
+  get-pr-info:
+    name: Get PR info
     runs-on: ubuntu-latest
     steps:
-    - name: Invoke canary
-      run: echo "Hello World"
+    - name: Get PR info
+      id: get-pr-info
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const response = await github.rest.pulls.get({
+            pull_number: ${{ inputs.pull_request_number }},
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          const data = {
+            commit_sha: response.data.head.sha,
+          };
+          console.log("data:", data);
+          return data;
+    outputs:
+      pull_data: ${{ steps.get-pr-info.outputs.result }}
+
+  acquire-base-image:
+    name: Acquire Base Image
+    needs:
+    - get-pr-info
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+            # The ref used needs to match the HEAD revision of the PR being diffed, or else
+          # the `docker-build` action won't find the built Docker image.
+        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+        fetch-depth: 0
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v4
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  generate:
+    name: Generate
+    needs:
+    - acquire-base-image
+    - get-pr-info
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+    - name: Generate a subset of SDKs for the canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-aws-sdk-for-canary
+
+  canary:
+    name: Canary
+    needs:
+    - generate
+    - get-pr-info
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}

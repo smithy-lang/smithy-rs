@@ -58,6 +58,13 @@ pub struct PatchRuntime {
     /// Explicitly state the previous release's tag. Discovers it if not provided.
     #[arg(long)]
     previous_release_tag: Option<String>,
+    /// Disable checking out the release tag in the SDK repo.
+    ///
+    /// This is useful if you need to test changes in runtime crates against
+    /// local changes in the SDK.
+    #[arg(long)]
+    no_checkout_sdk_release: bool,
+
     /// Version number for stable crates.
     ///
     /// Deprecated: this argument is ignored
@@ -75,15 +82,24 @@ pub struct PatchRuntimeWith {
     /// Path to aws-sdk-rust.
     #[arg(long)]
     sdk_path: Utf8PathBuf,
-    /// Path to runtime crates to patch in.
+    /// Path(s) to runtime crates to patch in.
+    ///
+    /// Multiple paths can be passed in, for example, if patching SDK and Smithy
+    /// runtime crates that are in different directories.
     ///
     /// Note: this doesn't need to be a complete set of runtime crates. It will
     /// only patch the crates included in the provided path.
     #[arg(long)]
-    runtime_crate_path: Utf8PathBuf,
+    runtime_crate_path: Vec<Utf8PathBuf>,
     /// Explicitly state the previous release's tag. Discovers it if not provided.
     #[arg(long)]
     previous_release_tag: Option<String>,
+    /// Disable checking out the release tag in the SDK repo.
+    ///
+    /// This is useful if you need to test changes in runtime crates against
+    /// local changes in the SDK.
+    #[arg(long)]
+    no_checkout_sdk_release: bool,
 }
 
 #[derive(clap::Parser, Clone)]
