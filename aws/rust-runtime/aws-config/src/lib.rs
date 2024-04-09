@@ -624,7 +624,7 @@ mod loader {
         /// exists to set a static endpoint for tools like `LocalStack`. When sending requests to
         /// production AWS services, this method should only be used for service-specific behavior.
         ///
-        /// When this method is used, the [`Region`] is only used for signing;
+        /// When this method is used, the [`Region`](aws_types::region::Region) is only used for signing;
         /// It is **not** used to route the request.
         ///
         /// # Examples

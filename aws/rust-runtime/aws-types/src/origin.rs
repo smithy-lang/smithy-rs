@@ -89,13 +89,13 @@ impl Origin {
 
     /// Return true if the origin was set programmatically i.e. on an `SdkConfig` or service `Config`.
     pub fn is_client_config(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Origin {
                 inner: Inner::Programmatic(..),
                 ..
-            } => true,
-            _ => false,
-        }
+            }
+        )
     }
 }
 
