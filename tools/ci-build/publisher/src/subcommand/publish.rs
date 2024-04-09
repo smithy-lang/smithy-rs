@@ -4,16 +4,13 @@
  */
 
 use crate::fs::Fs;
-use crate::package::{
-    discover_and_validate_package_batches, expected_package_owners, Package, PackageBatch,
-    PackageHandle, PackageStats,
-};
+use crate::package::{discover_and_validate_package_batches, PackageBatch, PackageStats};
 use crate::publish::publish;
 use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use dialoguer::Confirm;
-use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::package::{Package, PackageHandle};
 use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::{git, index::CratesIndex};
@@ -90,7 +87,7 @@ pub async fn subcommand_publish(
 
     for batch in &batches {
         for package in batch {
-            correct_owner(&package.handle, &package.category).await?;
+            correct_owner(&package.handle).await?;
         }
     }
 
@@ -110,7 +107,7 @@ pub fn resolve_publish_location(location: &Path) -> PathBuf {
 
 async fn is_published(index: Arc<CratesIndex>, handle: &PackageHandle) -> Result<bool> {
     let name = handle.name.clone();
-    let version = handle.version.clone();
+    let version = handle.expect_version().clone();
     tokio::task::spawn_blocking(move || {
         smithy_rs_tool_common::index::is_published(index.as_ref(), &name, &version)
     })
@@ -137,7 +134,7 @@ async fn wait_for_eventual_consistency(index: Arc<CratesIndex>, package: &Packag
 }
 
 /// Corrects the crate ownership.
-pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -> Result<()> {
+pub async fn correct_owner(handle: &PackageHandle) -> Result<()> {
     // https://github.com/orgs/awslabs/teams/smithy-rs-server
     const SMITHY_RS_SERVER_OWNER: &str = "github:awslabs:smithy-rs-server";
     // https://github.com/orgs/awslabs/teams/rust-sdk-owners
@@ -149,7 +146,7 @@ pub async fn correct_owner(handle: &PackageHandle, category: &PackageCategory) -
         Duration::from_secs(5),
         || async {
             let actual_owners: HashSet<String> = cargo::GetOwners::new(&handle.name).spawn().await?.into_iter().collect();
-            let expected_owners = expected_package_owners(category, &handle.name);
+            let expected_owners = handle.expected_owners().iter().map(|s| s.to_string()).collect::<HashSet<_>>();
 
             let owners_to_be_added = expected_owners.difference(&actual_owners);
             let owners_to_be_removed = actual_owners.difference(&expected_owners);
@@ -203,7 +200,8 @@ fn confirm_plan(
         for package in batch {
             full_plan.push(format!(
                 "Publish version `{}` of `{}`",
-                package.handle.version, package.handle.name
+                package.handle.expect_version(),
+                package.handle.name
             ));
         }
         full_plan.push("-- wait --".into());

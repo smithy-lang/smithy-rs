@@ -2,17 +2,17 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use crate::publish::is_published;
 use crate::publish::publish;
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
 use crate::{fs::Fs, package::discover_manifests};
-use crate::{package::PackageHandle, publish::is_published};
 use anyhow::{Context, Result};
 use cargo_toml::Manifest;
 use clap::Parser;
 use dialoguer::Confirm;
 use semver::Version;
-use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::package::PackageHandle;
 use smithy_rs_tool_common::{git, index::CratesIndex};
 use std::time::Duration;
 use std::{collections::HashSet, fs};
@@ -66,20 +66,19 @@ async fn claim_crate_name(name: &str) -> Result<()> {
     let crate_dir_path = temporary_directory.path();
     create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
 
-    let category = PackageCategory::from_package_name(name);
-    let package_handle = PackageHandle::new(name, Version::new(0, 0, 1));
+    let package_handle = PackageHandle::new(name, Some(Version::new(0, 0, 1)));
     publish(&package_handle, crate_dir_path).await?;
 
     // Keep things slow to avoid getting throttled by crates.io
     tokio::time::sleep(Duration::from_secs(2)).await;
-    correct_owner(&package_handle, &category).await?;
+    correct_owner(&package_handle).await?;
 
     info!("Successfully published `{}`", package_handle);
     Ok(())
 }
 
 async fn load_publishable_crate_names(path: &Path) -> Result<HashSet<String>> {
-    let manifest_paths = discover_manifests(path.into()).await?;
+    let manifest_paths = discover_manifests(path).await?;
     let mut result = HashSet::new();
     for manifest_path in &manifest_paths {
         let content =
