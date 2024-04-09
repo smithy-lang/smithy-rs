@@ -1,8 +1,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow performs a release of smithy-rs. It is manually
-# kicked off via GitHub Actions workflow dispatch.
+# This is the shared release workflow run by both `prod-release.yml` and `dry-run-release.yml'.
+# A calling workflow will indicate whether it wants to run this with a prod run or a dry run.
 
 # Allow only one release to run at a time
 concurrency:
@@ -13,22 +13,22 @@ env:
   rust_version: 1.74.1
 
 name: Release smithy-rs
-run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} (${{ inputs.commit_sha }})
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       commit_sha:
-        description: |
-          Commit SHA: The SHA of the git commit that you want to release.
-          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
+        description: The SHA of the git commit that you want to release.
         required: true
         type: string
       dry_run:
-        description: |
-          Dry run: When selected, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io
+        description: When true, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
         required: true
         type: boolean
-        default: true
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
+      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN:
+        required: true
 
 jobs:
   check-actor-for-prod-run:
