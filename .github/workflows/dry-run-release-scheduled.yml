@@ -4,7 +4,7 @@
 # This workflow performs a scheduled dry-run for smithy-rs release.
 # When run, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
 
-name: Scheduled smithy-rs dry run release
+name: Scheduled smithy-rs dry-run release
 run-name: ${{ github.workflow }}
 on:
   schedule:

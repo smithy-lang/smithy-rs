@@ -88,8 +88,10 @@ jobs:
         retention-days: 1
 
   release-ci:
-    name: Prerelease checks
-    if: inputs.skip_ci == false
+    name: Pre-release checks
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always() && inputs.skip_ci == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
