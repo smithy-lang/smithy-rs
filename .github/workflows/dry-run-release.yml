@@ -1,15 +1,12 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow performs a dry run for smithy-rs release. It can be triggered via either cron or manually.
-# When ran, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
+# This workflow performs a manual dry-run for smithy-rs release.
+# When run, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
 
 name: Smithy-rs dry run release
-run-name: ${{ github.workflow }} ${{ inputs.commit_sha == ''  && 'scheduled' || (inputs.commit_sha) }}
+run-name: ${{ github.workflow }}-${{ inputs.commit_sha }}
 on:
-  schedule:
-    # Runs 00:00 UTC every day
-  - cron: 0 0 * * *
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -34,20 +31,6 @@ jobs:
       commit_sha: ${{ inputs.commit_sha }}
       dry_run: true
       skip_ci: ${{ inputs.skip_ci }}
-    secrets:
-      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
-      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
-      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
-
-  smithy-rs-scheduled-dry-run-release:
-    name: Scheduled dry run release
-    if: ${{ github.event_name == 'schedule' }}
-    uses: ./.github/workflows/release.yml
-    with:
-      commit_sha: main
-      dry_run: true
-      skip_ci: true
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
       RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
