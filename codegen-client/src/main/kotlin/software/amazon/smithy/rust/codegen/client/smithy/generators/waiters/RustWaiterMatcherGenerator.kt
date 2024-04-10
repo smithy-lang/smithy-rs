@@ -36,7 +36,7 @@ private typealias Scope = Array<Pair<String, Any>>
 
 /**
  * Generates the Rust code for the Smithy waiter "matcher union".
- * See https://smithy.io/1.0/spec/waiters.html#matcher-union
+ * See https://smithy.io/2.0/additional-specs/waiters.html#matcher-union
  */
 class RustWaiterMatcherGenerator(
     private val codegenContext: ClientCodegenContext,
