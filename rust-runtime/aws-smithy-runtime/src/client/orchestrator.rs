@@ -9,7 +9,7 @@ use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
     http::body::minimum_throughput::MaybeUploadThroughputCheckFuture,
-    orchestrator::endpoints::{apply_endpoint, resolve_endpoint},
+    orchestrator::endpoints::{orchestrate_endpoint, resolve_endpoint},
 };
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -349,6 +349,8 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
+    // Resolve an endpoint (but without applying it to the request yet) so we can obtain auth schemes
+    // associated with the endpoint.
     halt_on_err!([ctx] => resolve_endpoint(runtime_components, cfg).await.map_err(OrchestratorError::other));
     let scheme_id = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(OrchestratorError::other));
 
@@ -357,8 +359,7 @@ async fn try_attempt(
         read_before_signing(ctx, runtime_components, cfg);
     });
 
-    halt_on_err!([ctx] => apply_endpoint(ctx, cfg).map_err(OrchestratorError::other));
-
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
     halt_on_err!([ctx] => sign_request(scheme_id, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {

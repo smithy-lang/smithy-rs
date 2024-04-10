@@ -9,7 +9,7 @@ use aws_smithy_runtime_api::client::endpoint::{
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::{box_error::BoxError, client::endpoint::EndpointPrefix};
-use aws_smithy_types::config_bag::{ConfigBag, Layer};
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
 use http::uri::PathAndQuery;
@@ -66,6 +66,15 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
     }
 }
 
+pub(super) async fn orchestrate_endpoint(
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &mut ConfigBag,
+) -> Result<(), BoxError> {
+    resolve_endpoint(runtime_components, cfg).await?;
+    apply_endpoint(ctx, cfg)
+}
+
 pub(super) async fn resolve_endpoint(
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
@@ -81,20 +90,17 @@ pub(super) async fn resolve_endpoint(
         .resolve_endpoint(params)
         .await?;
 
-    let mut layer = Layer::new("resolve endpoint");
-    layer.store_put(endpoint);
-    cfg.push_layer(layer);
-
+    // Make the endpoint config available to interceptors
+    cfg.interceptor_state().store_put(endpoint);
     Ok(())
 }
 
-pub(super) fn apply_endpoint(
-    ctx: &mut InterceptorContext,
-    cfg: &mut ConfigBag,
-) -> Result<(), BoxError> {
+fn apply_endpoint(ctx: &mut InterceptorContext, cfg: &mut ConfigBag) -> Result<(), BoxError> {
     trace!("applying endpoint");
 
-    let endpoint = cfg.load::<Endpoint>().ok_or("should have been resolved")?;
+    let endpoint = cfg
+        .load::<Endpoint>()
+        .ok_or("`Endpoint` should have been resolved")?;
     tracing::debug!("will use endpoint {:?}", endpoint);
 
     let endpoint_prefix = cfg.load::<EndpointPrefix>();

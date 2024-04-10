@@ -14,7 +14,7 @@ use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::{ConfigBag, Layer};
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -109,6 +109,9 @@ impl fmt::Display for AuthOrchestrationError {
 
 impl StdError for AuthOrchestrationError {}
 
+// Resolve `Identity` given configurations specified in `runtime_components` and `cfg`.
+// This function stores the resulting `Identity` in `cfg` and returns an `AuthSchemeId` for which
+// the identity resolver we ended up using to retrieve the `Identity`.
 pub(super) async fn resolve_identity(
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
@@ -158,10 +161,7 @@ pub(super) async fn resolve_identity(
                             .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
-
-                        let mut layer = Layer::new("resolve_identity");
-                        layer.store_put(identity);
-                        cfg.push_layer(layer);
+                        cfg.interceptor_state().store_put(identity);
 
                         return Ok(scheme_id);
                     }

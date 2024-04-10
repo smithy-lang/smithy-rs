@@ -119,4 +119,87 @@ class EndpointBuiltInsDecoratorTest {
             }
         }
     }
+
+    @Test
+    fun `Endpoint can be re-resolved during endpoint orchestration`() {
+        awsSdkIntegrationTest(endpointUrlModel) { codegenContext, rustCrate ->
+            rustCrate.integrationTest("endpoint_can_be_reresolved_during_endpoint_orchestration") {
+                val module = codegenContext.moduleUseName()
+                rustTemplate(
+                    """
+                    use $module::{Config, Client, config::Region};
+
+                    use aws_smithy_runtime_api::box_error::BoxError;
+                    use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+                    use aws_smithy_runtime_api::client::interceptors::Intercept;
+                    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                    use aws_smithy_types::config_bag::ConfigBag;
+
+                    ##[derive(Debug, Clone)]
+                    struct EndpointParamsMutationInterceptor;
+
+                    impl Intercept for EndpointParamsMutationInterceptor {
+                        fn name(&self) -> &'static str {
+                            "EndpointParamsMutationInterceptor"
+                        }
+
+                        fn modify_before_signing(
+                            &self,
+                            _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                            _runtime_components: &RuntimeComponents,
+                            cfg: &mut ConfigBag,
+                        ) -> Result<(), BoxError> {
+                            let mut builder = cfg
+                                .load::<$module::config::endpoint::ParamsBuilder>()
+                                .expect("should be set")
+                                .clone();
+                            builder = builder.endpoint("https://LEFT".to_string());
+
+                            let params = builder.build().map_err(|err| {
+                                ::aws_smithy_runtime_api::client::interceptors::error::ContextAttachedError::new(
+                                    "endpoint params could not be built",
+                                    err,
+                                )
+                            })?;
+                            cfg.interceptor_state().store_put(
+                                ::aws_smithy_runtime_api::client::endpoint::EndpointResolverParams::new(params),
+                            );
+                            Ok(())
+                        }
+                    }
+
+                    ##[#{tokio}::test]
+                    async fn endpoint_can_be_reresolved_during_endpoint_orchestration() {
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .uri("https://LEFT/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap()
+                            )],
+                        );
+                        let config = Config::builder()
+                            .http_client(http_client.clone())
+                            .region(Region::new("us-east-1"))
+                            .endpoint_url("https://RIGHT")
+                            .interceptor(EndpointParamsMutationInterceptor)
+                            .build();
+                        let client = Client::from_conf(config);
+                        dbg!(client.some_operation().send().await).expect("success");
+                        http_client.assert_requests_match(&[]);
+                    }
+                    """,
+                    "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
+                    "StaticReplayClient" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::StaticReplayClient"),
+                    "ReplayEvent" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::ReplayEvent"),
+                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                )
+            }
+        }
+    }
 }
