@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.replaceLifetimes
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -62,6 +63,7 @@ class RustWaiterMatcherGenerator(
                 "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
             )
         return RuntimeType.forInlineFun(fnName, module) {
+            docs("Matcher union: " + Node.printJson(matcher.toNode()))
             rustBlockTemplate("pub(crate) fn $fnName(_input: &#{Input}, _result: &#{Result}<#{Output}, #{Error}>) -> bool", *scope) {
                 when (matcher) {
                     is OutputMember -> generateOutputMember(outputShape, matcher, scope)
