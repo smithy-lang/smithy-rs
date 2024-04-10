@@ -957,7 +957,7 @@ mod loader {
         #[tokio::test]
         async fn test_origin_programmatic() {
             let _ = tracing_subscriber::fmt::try_init();
-            let loader = defaults(BehaviorVersion::latest())
+            let loader = base_conf()
                 .test_credentials()
                 .profile_name("custom")
                 .profile_files(
@@ -980,7 +980,7 @@ mod loader {
         async fn test_origin_env() {
             let _ = tracing_subscriber::fmt::try_init();
             let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://localhost:7878")]);
-            let loader = defaults(BehaviorVersion::latest())
+            let loader = base_conf()
                 .test_credentials()
                 .env(env)
                 .profile_name("custom")
@@ -1005,7 +1005,7 @@ mod loader {
         #[tokio::test]
         async fn test_origin_fs() {
             let _ = tracing_subscriber::fmt::try_init();
-            let loader = defaults(BehaviorVersion::latest())
+            let loader = base_conf()
                 .test_credentials()
                 .profile_name("custom")
                 .profile_files(
