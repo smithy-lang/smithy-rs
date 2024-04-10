@@ -10,6 +10,25 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[aws-sdk-rust]]
+message = """
+Fixes the identity resolver types (`credentials_provider()` and `token_provider()`) from `SdkConfig` to have
+a consistent identity cache partition when re-used across different clients.
+"""
+references = ["smithy-rs#3427"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd"]
+
+
+[[smithy-rs]]
+message = """
+`SharedIdentityResolver` now respects an existing cache partition when the `ResolveIdentity` implementation
+provides one already.
+"""
+references = ["smithy-rs#3427"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd"]
+
 [[smithy-rs]]
 message = """
 Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
