@@ -959,7 +959,6 @@ mod loader {
             let _ = tracing_subscriber::fmt::try_init();
             let loader = defaults(BehaviorVersion::latest())
                 .test_credentials()
-                .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
                     #[allow(deprecated)]
@@ -983,7 +982,6 @@ mod loader {
             let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://localhost:7878")]);
             let loader = defaults(BehaviorVersion::latest())
                 .test_credentials()
-                .http_client(NeverClient::new())
                 .env(env)
                 .profile_name("custom")
                 .profile_files(
@@ -1009,7 +1007,6 @@ mod loader {
             let _ = tracing_subscriber::fmt::try_init();
             let loader = defaults(BehaviorVersion::latest())
                 .test_credentials()
-                .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
                     #[allow(deprecated)]
