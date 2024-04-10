@@ -24,10 +24,18 @@ on:
         description: When true, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
         required: true
         type: boolean
+      skip_ci:
+        description: Skip CI when executing a release
+        required: true
+        type: boolean
     secrets:
       RELEASE_AUTOMATION_BOT_PAT:
         required: true
       RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN:
+        required: true
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: true
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
         required: true
 
 jobs:
@@ -81,13 +89,16 @@ jobs:
 
   release-ci:
     name: Prerelease checks
-    if: inputs.dry_run == false
+    if: inputs.skip_ci == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: false
       git_ref: ${{ inputs.commit_sha }}
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
 
   check-semver-hazards:
     name: Check for semver hazards

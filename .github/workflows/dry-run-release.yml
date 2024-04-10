@@ -19,6 +19,11 @@ on:
           Alternatively, you can use the name of a branch.
         required: true
         type: string
+      skip_ci:
+        description: Skip CI
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   smithy-rs-manual-dry-run-release:
@@ -28,9 +33,12 @@ jobs:
     with:
       commit_sha: ${{ inputs.commit_sha }}
       dry_run: true
+      skip_ci: ${{ inputs.skip_ci }}
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
       RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
 
   smithy-rs-scheduled-dry-run-release:
     name: Scheduled dry run release
@@ -39,6 +47,9 @@ jobs:
     with:
       commit_sha: main
       dry_run: true
+      skip_ci: true
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
       RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
