@@ -17,6 +17,8 @@ pub struct Decoder<'b> {
     decoder: minicbor::Decoder<'b>,
 }
 
+/// When any of the decode methods are called they look for that particular data type at the current
+/// position. If the CBOR data tag does not match the type, a `DeserializeError` is returned.
 #[derive(Debug)]
 pub struct DeserializeError {
     #[allow(dead_code)]

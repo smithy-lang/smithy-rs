@@ -109,7 +109,7 @@ class CborParserGenerator(
                     """
                     let value = match decoder.datatype()? {
                         #{SmithyCbor}::data::Type::Null => {
-                            let _v = decoder.null()?;
+                            decoder.null()?;
                             None
                         }
                         _ => Some(#{DeserializeMember:W}?),
@@ -167,7 +167,7 @@ class CborParserGenerator(
                     """
                     let value = match decoder.datatype()? {
                         #{SmithyCbor}::data::Type::Null => {
-                            let _v = decoder.null()?;
+                            decoder.null()?;
                             None
                         }
                         _ => Some(#{DeserializeValue:W}?),
