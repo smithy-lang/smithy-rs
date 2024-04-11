@@ -10,6 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Content-Type header validation now ignores parameter portion of media types.
+"""
+references = ["smithy-rs#3471","smithy-rs#3576"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, target = "server" }
+authors = ["djedward"]
+
 [[aws-sdk-rust]]
 message = """
 Fixes the identity resolver types (`credentials_provider()` and `token_provider()`) from `SdkConfig` to have
@@ -18,7 +27,6 @@ a consistent identity cache partition when re-used across different clients.
 references = ["smithy-rs#3427"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 authors = ["aajtodd"]
-
 
 [[smithy-rs]]
 message = """

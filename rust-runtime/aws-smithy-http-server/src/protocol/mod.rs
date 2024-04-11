@@ -107,7 +107,7 @@ fn content_type_header_classifier(
             .parse::<mime::Mime>()
             // `expected_content_type` comes from the codegen.
             .expect("BUG: MIME parsing failed, `expected_content_type` is not valid. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues");
-        if expected_content_type != found_mime {
+        if expected_content_type != found_mime.essence_str() {
             return Err(MissingContentTypeReason::UnexpectedMimeType {
                 expected_mime: Some(expected_mime),
                 found_mime: Some(found_mime),
@@ -255,6 +255,13 @@ mod tests {
         let request = req_content_type("application/💩");
         let result = content_type_header_classifier_http(&request, EXPECTED_MIME_APPLICATION_JSON);
         assert!(matches!(result.unwrap_err(), MissingContentTypeReason::ToStrError(_)));
+    }
+
+    #[test]
+    fn valid_content_type_header_classifier_http_params() {
+        let request = req_content_type("application/json; charset=utf-8");
+        let result = content_type_header_classifier_http(&request, EXPECTED_MIME_APPLICATION_JSON);
+        assert!(result.is_ok());
     }
 
     #[test]
