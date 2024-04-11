@@ -81,7 +81,7 @@ fn internal_server_error() -> http::Response<BoxBody> {
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol> + std::error::Error;
+    type Rejection: IntoResponse<Protocol>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
@@ -139,7 +139,7 @@ impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 /// items from a HTTP request [`FromParts`] should be used.
 pub trait FromRequest<Protocol, B>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol> + std::error::Error;
+    type Rejection: IntoResponse<Protocol>;
     /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
@@ -163,6 +163,8 @@ impl<P, B, T1, T2> FromRequest<P, B> for (T1, T2)
 where
     T1: FromRequest<P, B>,
     T2: FromParts<P>,
+    T1::Rejection: std::fmt::Display,
+    T2::Rejection: std::fmt::Display
 {
     type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
     type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;
@@ -176,7 +178,9 @@ where
                 // user handler expects a specific type, such as `Extension<State>`, but
                 // either the `ExtensionLayer` has not been added, or it adds a different
                 // type to the extension bag, such as `Extension<Arc<State>>`.
-                tracing::error!(error = %e, "additional parameter for the handler function could not be constructed");
+                tracing::error!(
+                    error = %e,
+                    "additional parameter for the handler function could not be constructed");
                 any_rejections::Two::B(e)
             });
         try_join(

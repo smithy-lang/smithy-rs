@@ -117,6 +117,7 @@ pin_project! {
 impl<P, Input, B, S> Future for UpgradeFuture<P, Input, B, S>
 where
     Input: FromRequest<P, B>,
+    <Input as FromRequest<P, B>>::Rejection: std::fmt::Display,
     S: Service<Input>,
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
@@ -151,7 +152,6 @@ where
                     let output = match result {
                         Ok(ok) => ok.into_response(),
                         Err(err) => {
-                            // tracing::trace!(error = %err, "future could not be upgraded");
                             err.into_response()
                         }
                     };
@@ -167,6 +167,7 @@ where
 impl<P, Input, B, S> Service<http::Request<B>> for Upgrade<P, Input, S>
 where
     Input: FromRequest<P, B>,
+    <Input as FromRequest<P, B>>::Rejection: std::fmt::Display,
     S: Service<Input> + Clone,
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
