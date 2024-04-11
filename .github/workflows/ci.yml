@@ -9,6 +9,11 @@ name: Test
 on:
   workflow_call:
     inputs:
+      run_canary:
+        description: Whether to run the canary or not.
+        required: false
+        default: true
+        type: boolean
       run_sdk_examples:
         description: Whether to run the SDK example checks or not.
         required: false
@@ -26,6 +31,10 @@ on:
       ENCRYPTED_DOCKER_PASSWORD:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: false
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: false
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
         required: false
 
 env:
@@ -314,6 +323,49 @@ jobs:
     - name: Test AWS rust-runtime crates
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+
+  # Run the canary against generated SDKs
+  #
+  # In addition to Matrix Success, this job will also be required to pass for merge.
+  # CI execution from forked repositories will skip this job, and when it does
+  # this skipped job will report its status as "Success".
+  # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
+  canary:
+    name: Canary
+    if: ${{ inputs.run_canary }}
+    needs: generate
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+
+  # This is always a failing job since forked repositories do not have necessary repository secrets
+  # to run the PR bot workflow or the canary workflow
+  ask-maintainer-to-run-pr-bot-and-canary:
+    name: Ask maintainer to run the PR bot and canary workflows
+    if: ${{ !inputs.run_canary }}
+    runs-on: ubuntu-latest
+    steps:
+    - run: |
+        echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
+        exit 1
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:

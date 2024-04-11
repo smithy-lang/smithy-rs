@@ -1061,6 +1061,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cargo_toml",
  "crates-index",
  "lazy_static",
  "regex",
