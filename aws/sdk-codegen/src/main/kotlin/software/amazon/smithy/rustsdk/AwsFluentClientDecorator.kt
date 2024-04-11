@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -27,7 +28,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
+import software.amazon.smithy.rustsdk.customize.s3.S3ExpressFluentClientCustomization
 
 private class Types(runtimeConfig: RuntimeConfig) {
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
@@ -55,8 +58,10 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 listOf(
                     AwsPresignedFluentBuilderMethod(codegenContext),
                     AwsFluentClientDocs(codegenContext),
-                ),
-        ).render(rustCrate, emptyList())
+                ).letIf(codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
+                    it + S3ExpressFluentClientCustomization(codegenContext)
+                },
+        ).render(rustCrate)
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }

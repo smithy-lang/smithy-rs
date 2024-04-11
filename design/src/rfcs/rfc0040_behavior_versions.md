@@ -60,6 +60,7 @@ In order to implement this feature, we need to create a `BehaviorVersion` struct
 #[derive(Debug, Clone)]
 pub struct BehaviorVersion {
     // currently there is only 1 MV so we don't actually need anything in here.
+    _private: (),
 }
 ```
 

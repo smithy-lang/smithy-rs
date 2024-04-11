@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.0.0-smithy-rs-head"
+version = "0.61.1"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -18,7 +18,6 @@ unredacted-logging = []
 request-id = ["dep:uuid"]
 
 [dependencies]
-async-trait = "0.1.74"
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
@@ -38,7 +37,6 @@ regex = "1.5.5"
 serde_urlencoded = "0.7"
 thiserror = "1.0.40"
 tokio = { version = "1.23.1", features = ["full"] }
-tokio-rustls = "0.24"
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
 tower-http = { version = "0.3", features = ["add-extension", "map-response-body"] }
 tracing = "0.1.35"

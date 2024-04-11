@@ -10,33 +10,69 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[aws-sdk-rust]]
+message = """
+Fixes the identity resolver types (`credentials_provider()` and `token_provider()`) from `SdkConfig` to have
+a consistent identity cache partition when re-used across different clients.
+"""
+references = ["smithy-rs#3427"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd"]
+
+
+[[smithy-rs]]
+message = """
+`SharedIdentityResolver` now respects an existing cache partition when the `ResolveIdentity` implementation
+provides one already.
+"""
+references = ["smithy-rs#3427"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd"]
+
+[[smithy-rs]]
+message = """
+Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+```rust
+let config = my_service::Config::builder()
+    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+    // ...
+    .build();
+```
+"""
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
-message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
-references = ["smithy-rs#3318"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+message = """
+Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+```rust
+let config = aws_config::defaults(BehaviorVersion::latest())
+    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+    .load()
+    .await;
+```
+"""
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
-references = ["smithy-rs#3318"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
+references = ["smithy-rs#3485"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is."
-references = ["smithy-rs#3325"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Fix bug where overriding the credentials at the operation level failed if credentials were already set."
-references = ["aws-sdk-rust#901", "smithy-rs#3363"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Add `apply_to_request_http1x` to `aws-sigv4` to enable signing http = 1.0 requests."
-references = ["aws-sdk-rust#1041", "smithy-rs#3366"]
-meta = { "breaking" = false, "bug" = false, "tada" = true }
-author = "rcoh"
+message = "Unions with unit target member shape are now fully supported"
+references = ["smithy-rs#2546"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "drganjoo"

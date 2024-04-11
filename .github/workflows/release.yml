@@ -1,8 +1,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow performs a release of smithy-rs. It is manually
-# kicked off via GitHub Actions workflow dispatch.
+# This is the shared release workflow run by both `prod-release.yml` and `dry-run-release.yml'.
+# A calling workflow will indicate whether it wants to run this with a prod run or a dry run.
 
 # Allow only one release to run at a time
 concurrency:
@@ -10,35 +10,33 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.72.1
+  rust_version: 1.74.1
 
 name: Release smithy-rs
-run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} ${{ inputs.stable_semantic_version }}/${{ inputs.unstable_semantic_version }} (${{ inputs.commit_sha }})
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       commit_sha:
-        description: |
-          Commit SHA: The SHA of the git commit that you want to release.
-          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
-        required: true
-        type: string
-      stable_semantic_version:
-        description: |
-          Stable semantic version: The semver tag that you want to release for stable crates (e.g. 1.0.2)
-        required: true
-        type: string
-      unstable_semantic_version:
-        description: |
-          Unstable semantic version: The semver tag that you want to release for unstable crates (e.g. 0.52.1)
+        description: The SHA of the git commit that you want to release.
         required: true
         type: string
       dry_run:
-        description: |
-          Dry run: When selected, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io
+        description: When true, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
         required: true
         type: boolean
-        default: true
+      skip_ci:
+        description: Skip CI when executing a release
+        required: true
+        type: boolean
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
+      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN:
+        required: true
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: true
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: true
 
 jobs:
   check-actor-for-prod-run:
@@ -74,7 +72,7 @@ jobs:
       (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
     runs-on: smithy_ubuntu-latest_16-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
@@ -83,27 +81,57 @@ jobs:
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Upload base image
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: smithy-rs-base-image
         path: smithy-rs-base-image
         retention-days: 1
 
   release-ci:
-    name: Prerelease checks
-    if: inputs.dry_run == false
+    name: Pre-release checks
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always() && inputs.skip_ci == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: false
       git_ref: ${{ inputs.commit_sha }}
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
+
+  check-semver-hazards:
+    name: Check for semver hazards
+    needs:
+    - acquire-base-image
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always()
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
 
   get-or-create-release-branch:
     name: Get or create a release branch
     needs:
-    - release-ci
     - acquire-base-image
+    - check-semver-hazards
+    - release-ci
     # We need `always` here otherwise this job won't run if the previous job has been skipped
     # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
     if: |
@@ -115,7 +143,7 @@ jobs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
@@ -124,7 +152,6 @@ jobs:
       id: branch-push
       shell: bash
       env:
-        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -e
@@ -132,75 +159,10 @@ jobs:
         ./.github/scripts/get-or-create-release-branch.sh output
         cat output > $GITHUB_OUTPUT
 
-  upgrade-gradle-properties:
-    name: Upgrade gradle.properties
-    needs:
-    - get-or-create-release-branch
-    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
-    # we need this here _even though_ the job we depend on is never skipped.
-    if: |
-      always() &&
-      !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
-    runs-on: ubuntu-latest
-    outputs:
-      release_branch: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
-      commit_sha: ${{ steps.gradle-push.outputs.commit_sha }}
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        ref: ${{ inputs.commit_sha }}
-        path: smithy-rs
-        fetch-depth: 0
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-    - name: Upgrade gradle.properties
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: upgrade-gradle-properties
-        action-arguments: ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }}
-    - name: Download all artifacts
-      uses: ./smithy-rs/.github/actions/download-all-artifacts
-    - name: Push gradle.properties changes
-      id: gradle-push
-      working-directory: upgrade-gradle-properties/smithy-rs
-      shell: bash
-      env:
-        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
-        RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
-        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
-        DRY_RUN: ${{ inputs.dry_run }}
-      run: |
-        set -x
-
-        # For debugging purposes
-        git status
-
-        if ! git diff-index --quiet HEAD; then
-          # gradle.properties was changed, we need to commit and push the diff
-          git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit gradle.properties --message "Upgrade the smithy-rs runtime crates version to ${SEMANTIC_VERSION}"
-
-          # This will fail if we tried to release from a non-HEAD commit on the release branch.
-          # The only scenario where we would try to release a non-HEAD commit from the release branch is
-          # to retry a release action execution that failed due to a transient issue.
-          # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
-          # should already be the expected one.
-          if [[ "${DRY_RUN}" == "true" ]]; then
-            # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
-            # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
-            git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
-          else
-            git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
-          fi
-
-          echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
-        else
-          echo "commit_sha=${RELEASE_COMMIT_SHA}" > $GITHUB_OUTPUT
-        fi
-
   release:
     name: Release
     needs:
-    - upgrade-gradle-properties
+    - get-or-create-release-branch
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
     # we need this here _even though_ the job we depend on is never skipped.
     if: |
@@ -214,9 +176,9 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
-        ref: ${{ needs.upgrade-gradle-properties.outputs.commit_sha }}
+        ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Generate release artifacts
@@ -230,7 +192,7 @@ jobs:
       working-directory: smithy-rs-release/smithy-rs
       id: push-changelog
       env:
-        RELEASE_BRANCH_NAME: ${{ needs.upgrade-gradle-properties.outputs.release_branch }}
+        RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         if ! git diff-index --quiet HEAD; then
@@ -240,17 +202,20 @@ jobs:
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
           # been processed.
+          git fetch --unshallow
           if [[ "${DRY_RUN}" == "true" ]]; then
             # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
             # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
             git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+            git push --dry-run origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
           else
+            echo "attempting to push $(git rev-parse HEAD) to $RELEASE_BRANCH_NAME $(git rev-parse $RELEASE_BRANCH_NAME)"
             git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
           fi
         fi
         echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
     - name: Tag release
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
         script: |
@@ -265,9 +230,8 @@ jobs:
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
       env:
-        RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       run: |
-        cargo login -- "${RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN}"
         cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
         publisher --version
@@ -293,7 +257,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
@@ -317,3 +281,13 @@ jobs:
         # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
         git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
         git push origin main
+
+  open-backport-pull-request:
+    name: Open backport pull request to merge the release branch back to main
+    needs:
+    - trim-changelog-next-on-main
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
+    if: inputs.dry_run == false && always() && needs.trim-changelog-next-on-main.result == 'success'
+    uses: ./.github/workflows/backport-pull-request.yml
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}

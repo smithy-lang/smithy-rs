@@ -142,7 +142,7 @@ impl ValidateConfig for SharedConfigValidator {
         cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
         match &self.inner {
-            ValidatorInner::BaseConfigStaticFn(validator) => (validator)(runtime_components, cfg),
+            ValidatorInner::BaseConfigStaticFn(validator) => validator(runtime_components, cfg),
             ValidatorInner::Shared(validator) => {
                 validator.validate_base_client_config(runtime_components, cfg)
             }
@@ -334,9 +334,12 @@ macro_rules! declare_runtime_components {
 
             /// Builds [`RuntimeComponents`] from this builder.
             pub fn build(self) -> Result<$rc_name, BuildError> {
-                Ok($rc_name {
+                let mut rcs = $rc_name {
                     $($field_name: builder_field_value!($outer_type self.$field_name $($option)?),)+
-                })
+                };
+                rcs.sort();
+
+                Ok(rcs)
             }
         }
     };
@@ -383,6 +386,14 @@ impl RuntimeComponents {
         RuntimeComponentsBuilder::new(name)
     }
 
+    /// Clones and converts this [`RuntimeComponents`] into a [`RuntimeComponentsBuilder`].
+    pub fn to_builder(&self) -> RuntimeComponentsBuilder {
+        RuntimeComponentsBuilder::from_runtime_components(
+            self.clone(),
+            "RuntimeComponentsBuilder::from_runtime_components",
+        )
+    }
+
     /// Returns the auth scheme option resolver.
     pub fn auth_scheme_option_resolver(&self) -> SharedAuthSchemeOptionResolver {
         self.auth_scheme_option_resolver.value.clone()
@@ -419,6 +430,12 @@ impl RuntimeComponents {
     /// Returns an iterator over the retry classifiers.
     pub fn retry_classifiers(&self) -> impl Iterator<Item = SharedRetryClassifier> + '_ {
         self.retry_classifiers.iter().map(|s| s.value.clone())
+    }
+
+    // Needed for `impl ValidateConfig for SharedRetryClassifier {`
+    #[cfg(debug_assertions)]
+    pub(crate) fn retry_classifiers_slice(&self) -> &[Tracked<SharedRetryClassifier>] {
+        self.retry_classifiers.as_slice()
     }
 
     /// Returns the retry strategy.
@@ -470,6 +487,7 @@ impl RuntimeComponents {
         for validator in self.config_validators() {
             validator.validate_final_config(self, cfg)?;
         }
+
         validate!(Option: self.http_client);
         validate!(Required: self.endpoint_resolver);
         validate!(Vec: &self.auth_schemes);
@@ -477,11 +495,37 @@ impl RuntimeComponents {
         validate!(Map: self.identity_resolvers);
         validate!(Vec: &self.interceptors);
         validate!(Required: self.retry_strategy);
+        validate!(Vec: &self.retry_classifiers);
+
         Ok(())
+    }
+
+    fn sort(&mut self) {
+        self.retry_classifiers.sort_by_key(|rc| rc.value.priority());
     }
 }
 
 impl RuntimeComponentsBuilder {
+    /// Creates a new [`RuntimeComponentsBuilder`], inheriting all fields from the given
+    /// [`RuntimeComponents`].
+    pub fn from_runtime_components(rc: RuntimeComponents, builder_name: &'static str) -> Self {
+        Self {
+            builder_name,
+            auth_scheme_option_resolver: Some(rc.auth_scheme_option_resolver),
+            http_client: rc.http_client,
+            endpoint_resolver: Some(rc.endpoint_resolver),
+            auth_schemes: rc.auth_schemes,
+            identity_cache: Some(rc.identity_cache),
+            identity_resolvers: Some(rc.identity_resolvers),
+            interceptors: rc.interceptors,
+            retry_classifiers: rc.retry_classifiers,
+            retry_strategy: Some(rc.retry_strategy),
+            time_source: rc.time_source,
+            sleep_impl: rc.sleep_impl,
+            config_validators: rc.config_validators,
+        }
+    }
+
     /// Returns the auth scheme option resolver.
     pub fn auth_scheme_option_resolver(&self) -> Option<SharedAuthSchemeOptionResolver> {
         self.auth_scheme_option_resolver
@@ -695,7 +739,7 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Adds an retry_classifier.
+    /// Adds a retry_classifier.
     pub fn push_retry_classifier(
         &mut self,
         retry_classifier: impl ClassifyRetry + 'static,
@@ -707,7 +751,7 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Adds an retry_classifier.
+    /// Adds a retry_classifier.
     pub fn with_retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
         self.push_retry_classifier(retry_classifier);
         self
@@ -855,7 +899,7 @@ impl RuntimeComponentsBuilder {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-struct Tracked<T> {
+pub(crate) struct Tracked<T> {
     _origin: &'static str,
     value: T,
 }
@@ -866,6 +910,11 @@ impl<T> Tracked<T> {
             _origin: origin,
             value,
         }
+    }
+
+    #[cfg(debug_assertions)]
+    pub(crate) fn value(&self) -> &T {
+        &self.value
     }
 }
 
@@ -882,8 +931,7 @@ impl RuntimeComponentsBuilder {
             fn resolve_auth_scheme_options(
                 &self,
                 _: &crate::client::auth::AuthSchemeOptionResolverParams,
-            ) -> Result<std::borrow::Cow<'_, [AuthSchemeId]>, crate::box_error::BoxError>
-            {
+            ) -> Result<std::borrow::Cow<'_, [AuthSchemeId]>, BoxError> {
                 unreachable!("fake auth scheme option resolver must be overridden for this test")
             }
         }
@@ -946,8 +994,7 @@ impl RuntimeComponentsBuilder {
                 &self,
                 _: &RuntimeComponents,
                 _: &ConfigBag,
-            ) -> Result<crate::client::retries::ShouldAttempt, crate::box_error::BoxError>
-            {
+            ) -> Result<crate::client::retries::ShouldAttempt, BoxError> {
                 unreachable!("fake retry strategy must be overridden for this test")
             }
 
@@ -956,8 +1003,7 @@ impl RuntimeComponentsBuilder {
                 _: &crate::client::interceptors::context::InterceptorContext,
                 _: &RuntimeComponents,
                 _: &ConfigBag,
-            ) -> Result<crate::client::retries::ShouldAttempt, crate::box_error::BoxError>
-            {
+            ) -> Result<crate::client::retries::ShouldAttempt, BoxError> {
                 unreachable!("fake retry strategy must be overridden for this test")
             }
         }
@@ -1067,6 +1113,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let builder1 = TestRcBuilder {
             builder_name: "builder1",
             some_required_component: Some(Tracked::new("builder1", "override_me".into())),
@@ -1138,6 +1188,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let rc = TestRcBuilder::new("test").build().unwrap();
 
         // Ensure the correct types were used
@@ -1156,6 +1210,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let rc = TestRcBuilder::new("test").build().unwrap();
 
         // Ensure the correct types were used
@@ -1171,6 +1229,10 @@ mod tests {
                 _some_optional_component: Option<TestComponent>,
                 _some_optional_vec: Vec<TestComponent>,
             }
+        }
+
+        impl TestRc {
+            fn sort(&mut self) {}
         }
 
         let rc = TestRcBuilder::new("test").build().unwrap();
@@ -1201,7 +1263,7 @@ mod tests {
                 _: &'a RuntimeComponents,
                 _: &'a ConfigBag,
             ) -> IdentityFuture<'a> {
-                IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
+                IdentityFuture::ready(Ok(Identity::new("doesn't matter", None)))
             }
         }
 
@@ -1223,6 +1285,6 @@ mod tests {
                 .expect("identity should be resolved")
         });
 
-        assert_eq!(Some(&"doesntmatter"), identity.data::<&str>());
+        assert_eq!(Some(&"doesn't matter"), identity.data::<&str>());
     }
 }

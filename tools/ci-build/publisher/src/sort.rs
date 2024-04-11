@@ -5,8 +5,8 @@
 
 //! Logic for topological sorting packages by dependencies.
 
-use crate::package::{Package, PackageHandle};
 use anyhow::{anyhow, bail, Result};
+use smithy_rs_tool_common::package::{Package, PackageHandle};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Determines the dependency order of the given packages.
@@ -72,16 +72,16 @@ fn dependency_order_visit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::package::Publish;
     use semver::Version;
+    use smithy_rs_tool_common::package::Publish;
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
-            PackageHandle::new(name, Version::parse("1.0.0").unwrap()),
+            PackageHandle::new(name, Version::parse("1.0.0").ok()),
             format!("{}/Cargo.toml", name),
             dependencies
                 .iter()
-                .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
+                .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").ok()))
                 .collect(),
             Publish::Allowed,
         )

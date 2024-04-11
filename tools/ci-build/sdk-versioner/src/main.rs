@@ -11,7 +11,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use toml_edit::{Document, InlineTable, Item, Table, Value};
+use toml_edit::{DocumentMut, InlineTable, Item, Table, TableLike, Value};
 
 #[derive(Parser, Debug)]
 #[clap(
@@ -135,11 +135,11 @@ fn update_manifest(
     println!("Updating {:?}...", manifest_path);
     let crate_path = manifest_path.parent().expect("manifest has a parent");
 
-    let mut metadata: Document = String::from_utf8(
+    let mut metadata: DocumentMut = String::from_utf8(
         fs::read(manifest_path).with_context(|| format!("failed to read {manifest_path:?}"))?,
     )
     .with_context(|| format!("{manifest_path:?} has invalid UTF-8"))?
-    .parse::<Document>()
+    .parse::<DocumentMut>()
     .with_context(|| format!("failed to parse {manifest_path:?}"))?;
     let mut changed = false;
     for set in ["dependencies", "dev-dependencies", "build-dependencies"] {
@@ -152,7 +152,7 @@ fn update_manifest(
                 );
             }
             changed = update_dependencies(
-                dependencies.as_table_mut().unwrap(),
+                dependencies.as_table_like_mut().unwrap(),
                 dependency_context,
                 crate_path,
             )? || changed;
@@ -167,7 +167,7 @@ fn update_manifest(
 }
 
 fn update_dependencies(
-    dependencies: &mut Table,
+    dependencies: &mut dyn TableLike,
     dependency_context: &DependencyContext,
     crate_path: &Path,
 ) -> Result<bool> {

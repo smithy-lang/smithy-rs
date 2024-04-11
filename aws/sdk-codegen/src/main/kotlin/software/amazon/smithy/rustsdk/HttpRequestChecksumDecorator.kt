@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
+internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "http_request_checksum", visibility = Visibility.PUBCRATE,
@@ -34,6 +34,7 @@ private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
             CargoDependency.Http,
             CargoDependency.HttpBody,
             CargoDependency.Tracing,
+            AwsCargoDependency.awsRuntime(this).withFeature("http-02x"),
             CargoDependency.smithyChecksums(this),
             CargoDependency.smithyHttp(this),
             CargoDependency.smithyRuntimeApiClient(this),

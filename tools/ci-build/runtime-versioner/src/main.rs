@@ -12,8 +12,14 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
-mod audit;
-mod index;
+mod command {
+    mod audit;
+    pub use audit::audit;
+
+    mod patch;
+    pub use patch::{patch, patch_with};
+}
+
 mod repo;
 mod tag;
 mod util;
@@ -41,6 +47,61 @@ pub struct PreviousReleaseTag {
     smithy_rs_path: Option<Utf8PathBuf>,
 }
 
+#[derive(clap::Args, Clone)]
+pub struct PatchRuntime {
+    /// Path to aws-sdk-rust.
+    #[arg(long)]
+    sdk_path: Utf8PathBuf,
+    /// Path to smithy-rs. Defaults to current working directory.
+    #[arg(long)]
+    smithy_rs_path: Option<Utf8PathBuf>,
+    /// Explicitly state the previous release's tag. Discovers it if not provided.
+    #[arg(long)]
+    previous_release_tag: Option<String>,
+    /// Disable checking out the release tag in the SDK repo.
+    ///
+    /// This is useful if you need to test changes in runtime crates against
+    /// local changes in the SDK.
+    #[arg(long)]
+    no_checkout_sdk_release: bool,
+
+    /// Version number for stable crates.
+    ///
+    /// Deprecated: this argument is ignored
+    #[arg(long)]
+    stable_crate_version: Option<String>,
+    /// Version number for unstable crates.
+    ///
+    /// Deprecated: this argument is ignored
+    #[arg(long)]
+    unstable_crate_version: Option<String>,
+}
+
+#[derive(clap::Args, Clone)]
+pub struct PatchRuntimeWith {
+    /// Path to aws-sdk-rust.
+    #[arg(long)]
+    sdk_path: Utf8PathBuf,
+    /// Path(s) to runtime crates to patch in.
+    ///
+    /// Multiple paths can be passed in, for example, if patching SDK and Smithy
+    /// runtime crates that are in different directories.
+    ///
+    /// Note: this doesn't need to be a complete set of runtime crates. It will
+    /// only patch the crates included in the provided path.
+    #[arg(long)]
+    runtime_crate_path: Vec<Utf8PathBuf>,
+    /// Explicitly state the previous release's tag. Discovers it if not provided.
+    #[arg(long)]
+    previous_release_tag: Option<String>,
+    /// Disable checking out the release tag in the SDK repo.
+    ///
+    /// This is useful if you need to test changes in runtime crates against
+    /// local changes in the SDK.
+    #[arg(long)]
+    no_checkout_sdk_release: bool,
+}
+
 #[derive(clap::Parser, Clone)]
 #[clap(author, version, about)]
 enum Command {
@@ -56,6 +117,17 @@ enum Command {
 
     /// Outputs the previous release tag for the revision at HEAD.
     PreviousReleaseTag(PreviousReleaseTag),
+
+    /// Patch a previous SDK release with the latest to-be-released runtime crates.
+    ///
+    /// This will generate a runtime with the given smithy-rs repo.
+    PatchRuntime(PatchRuntime),
+
+    /// Patch a previous SDK release with a given runtime.
+    ///
+    /// This will use an existing runtime at the path provided. For example,
+    /// if you want to try a runtime from a GitHub Actions workflow.
+    PatchRuntimeWith(PatchRuntimeWith),
 }
 
 fn main() -> Result<()> {
@@ -70,7 +142,7 @@ fn main() -> Result<()> {
 
     let command = Command::parse();
     match command {
-        Command::Audit(args) => audit::audit(args),
+        Command::Audit(args) => command::audit(args),
         Command::PreviousReleaseTag(args) => {
             let repo = Repo::new(args.smithy_rs_path.as_deref())?;
             let tags = release_tags(&repo)?;
@@ -78,5 +150,7 @@ fn main() -> Result<()> {
             println!("{tag}");
             Ok(())
         }
+        Command::PatchRuntime(args) => command::patch(args),
+        Command::PatchRuntimeWith(args) => command::patch_with(args),
     }
 }

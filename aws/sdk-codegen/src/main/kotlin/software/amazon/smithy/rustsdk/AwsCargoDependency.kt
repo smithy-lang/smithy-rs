@@ -19,8 +19,6 @@ object AwsCargoDependency {
 
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-credential-types")
 
-    fun awsHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-http")
-
     fun awsRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-runtime")
 
     fun awsRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-runtime-api")
