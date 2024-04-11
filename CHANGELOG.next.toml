@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Upgraded MSRV to Rust 1.75"
+references = ["smithy-rs#3553"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Upgraded MSRV to Rust 1.75"
+references = ["smithy-rs#3553"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+author = "jdisanti"
