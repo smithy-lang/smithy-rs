@@ -16,8 +16,6 @@ use publisher::subcommand::publish::subcommand_publish;
 use publisher::subcommand::publish::PublishArgs;
 use publisher::subcommand::tag_versions_manifest::subcommand_tag_versions_manifest;
 use publisher::subcommand::tag_versions_manifest::TagVersionsManifestArgs;
-use publisher::subcommand::upgrade_runtime_crates_version::subcommand_upgrade_runtime_crates_version;
-use publisher::subcommand::upgrade_runtime_crates_version::UpgradeRuntimeCratesVersionArgs;
 use publisher::subcommand::yank_release::{subcommand_yank_release, YankReleaseArgs};
 use tracing_subscriber::fmt::format::FmtSpan;
 
@@ -26,11 +24,6 @@ use tracing_subscriber::fmt::format::FmtSpan;
 enum Args {
     /// Fixes path dependencies in manifests to also have version numbers
     FixManifests(FixManifestsArgs),
-    /// Upgrade the version of the runtime crates used by the code generator (via `gradle.properties`).
-    ///
-    /// The command will fail if you try to perform a downgrade - e.g. change the version from
-    /// `0.53.1` to `0.52.0` or `0.53.0`.
-    UpgradeRuntimeCratesVersion(UpgradeRuntimeCratesVersionArgs),
     /// Publishes crates to crates.io
     Publish(PublishArgs),
     /// Publishes an empty library crate to crates.io when a new runtime crate is introduced.
@@ -59,9 +52,6 @@ async fn main() -> Result<()> {
 
     match Args::parse() {
         Args::ClaimCrateNames(args) => subcommand_claim_crate_names(&args).await?,
-        Args::UpgradeRuntimeCratesVersion(args) => {
-            subcommand_upgrade_runtime_crates_version(&args).await?
-        }
         Args::Publish(args) => subcommand_publish(&args).await?,
         Args::FixManifests(args) => subcommand_fix_manifests(&args).await?,
         Args::YankRelease(args) => subcommand_yank_release(&args).await?,
