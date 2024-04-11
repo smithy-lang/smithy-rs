@@ -56,17 +56,32 @@ object SdkConfigCustomization {
         map: Writable?,
     ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
         val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
+        rustTemplate(
+            "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
+            "map" to mapBlock,
+        )
+    }
+
+    fun copyFieldAndCheckForServiceConfig(
+        fieldName: String,
+        map: Writable?,
+    ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+        val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
         val envKey = "AWS_${fieldName.toSnakeCase().uppercase()}".dq()
         val profileKey = fieldName.toSnakeCase().dq()
 
         rustTemplate(
             """
-            ${section.serviceConfigBuilder}.set_$fieldName(
-                ${section.sdkConfig}
-                    .service_config()
-                    .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
-                    .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
-            );
+            if ${section.sdkConfig}.get_origin("endpoint_url").is_client_config() {
+                ${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});
+            } else {
+                ${section.serviceConfigBuilder}.set_$fieldName(
+                    ${section.sdkConfig}
+                        .service_config()
+                        .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
+                        .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
+                );
+            }
             """,
             "map" to mapBlock,
         )

@@ -42,4 +42,5 @@ jobs:
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
     with:
+      run_canary: false
       run_sdk_examples: true

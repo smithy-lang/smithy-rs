@@ -10,12 +10,12 @@
 //! version numbers in addition to the dependency path.
 
 use crate::fs::Fs;
-use crate::package::{discover_manifests, parse_version};
+use crate::package::discover_manifests;
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
-use smithy_rs_tool_common::ci::running_in_ci;
+use smithy_rs_tool_common::{ci::running_in_ci, package::parse_version};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -54,7 +54,7 @@ pub async fn subcommand_fix_manifests(
         true => Mode::Check,
         false => Mode::Execute,
     };
-    let manifest_paths = discover_manifests(location.into()).await?;
+    let manifest_paths = discover_manifests(location).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 

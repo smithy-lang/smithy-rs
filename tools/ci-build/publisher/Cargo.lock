@@ -136,6 +136,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_toml"
+version = "0.19.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a98356df42a2eb1bd8f1793ae4ee4de48e384dd974ce5eac8eee802edb7492be"
+dependencies = [
+ "serde",
+ "toml 0.8.12",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -956,14 +966,14 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
- "cargo_toml",
+ "cargo_toml 0.16.3",
  "clap",
  "dialoguer",
  "fs-err",
  "handlebars",
  "once_cell",
  "pretty_assertions",
- "regex",
+ "regex-lite",
  "semver",
  "serde",
  "serde_json",
@@ -1026,6 +1036,12 @@ dependencies = [
  "memchr",
  "regex-syntax 0.8.2",
 ]
+
+[[package]]
+name = "regex-lite"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b661b2f27137bdbc16f00eda72866a92bb28af1753ffbd56744fb6e2e9cd8e"
 
 [[package]]
 name = "regex-syntax"
@@ -1278,6 +1294,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "cargo_toml 0.19.2",
  "crates-index",
  "lazy_static",
  "regex",
