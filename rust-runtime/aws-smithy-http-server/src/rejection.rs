@@ -35,7 +35,10 @@ pub mod any_rejections {
         ($name:ident, $($var:ident),+) => (
             #[derive(Debug, Error)]
             pub enum $name<$($var),*> {
-                $($var ($var),)*
+                $(
+                    #[error("{0}")]
+                    $var($var),
+                )*
             }
 
             impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
@@ -46,18 +49,6 @@ pub mod any_rejections {
                 fn into_response(self) -> http::Response<crate::body::BoxBody> {
                     match self {
                         $($name::$var ($var) => $var.into_response(),)*
-                    }
-                }
-            }
-
-            impl<$($var,)*> std::fmt::Display for $name<$($var,)*>
-            where
-                $($var: std::error::Error,)*
-            {
-                #[allow(non_snake_case)]
-                fn fmt(&self, f: &mut  std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match self {
-                        $($name::$var ($var) => std::fmt::Display::fmt(&$var, f),)*
                     }
                 }
             }
