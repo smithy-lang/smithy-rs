@@ -10,25 +10,26 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.smithy.ModelsModule
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class UnionGeneratorTest {
     @Test
     fun `generate basic unions`() {
-        val writer = generateUnion(
-            """
-            union MyUnion {
-                stringConfig: String,
-                @documentation("This *is* documentation about the member")
-                intConfig: PrimitiveInteger
-            }
-            """,
-        )
+        val writer =
+            generateUnion(
+                """
+                union MyUnion {
+                    stringConfig: String,
+                    @documentation("This *is* documentation about the member")
+                    intConfig: PrimitiveInteger
+                }
+                """,
+            )
 
         writer.compileAndTest(
             """
@@ -43,14 +44,15 @@ class UnionGeneratorTest {
 
     @Test
     fun `generate conversion helper methods`() {
-        val writer = generateUnion(
-            """
-            union MyUnion {
-                stringValue: String,
-                intValue: PrimitiveInteger
-            }
-            """,
-        )
+        val writer =
+            generateUnion(
+                """
+                union MyUnion {
+                    stringValue: String,
+                    intValue: PrimitiveInteger
+                }
+                """,
+            )
 
         writer.compileAndTest(
             """
@@ -99,7 +101,8 @@ class UnionGeneratorTest {
 
     @Test
     fun `generate deprecated unions`() {
-        val model = """namespace test
+        val model =
+            """namespace test
             union Nested {
                 foo: Foo,
                 @deprecated
@@ -112,11 +115,11 @@ class UnionGeneratorTest {
 
             @deprecated
             union Bar { x: Integer }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
-        project.withModule(ModelsModule) {
+        project.moduleFor(model.lookup("test#Nested")) {
             UnionGenerator(model, provider, this, model.lookup("test#Nested")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Foo")).render()
             UnionGenerator(model, provider, this, model.lookup("test#Bar")).render()
@@ -125,7 +128,109 @@ class UnionGeneratorTest {
         project.compileAndTest()
     }
 
-    private fun generateUnion(modelSmithy: String, unionName: String = "MyUnion", unknownVariant: Boolean = true): RustWriter {
+    @Test
+    fun `impl debug for non-sensitive union should implement the derived debug trait`() {
+        val writer =
+            generateUnion(
+                """
+                union MyUnion {
+                    foo: PrimitiveInteger
+                    bar: String,
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), "Bar(\"bar\")");
+            """,
+        )
+    }
+
+    @Test
+    fun `impl debug for sensitive union should redact text`() {
+        val writer =
+            generateUnion(
+                """
+                @sensitive
+                union MyUnion {
+                    foo: PrimitiveInteger,
+                    bar: String,
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), $REDACTION);
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
+    fun `impl debug for union should redact text for sensitive member target`() {
+        val writer =
+            generateUnion(
+                """
+                @sensitive
+                string Bar
+
+                union MyUnion {
+                    foo: PrimitiveInteger,
+                    bar: Bar,
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo(3)), "Foo(3)");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
+    fun `impl debug for union with unit target should redact text for sensitive member target`() {
+        val writer =
+            generateUnion(
+                """
+                @sensitive
+                string Bar
+
+                union MyUnion {
+                    foo: Unit,
+                    bar: Bar,
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            assert_eq!(format!("{:?}", MyUnion::Foo), "Foo");
+            assert_eq!(format!("{:?}", MyUnion::Bar("bar".to_owned())), $REDACTION);
+            """,
+        )
+    }
+
+    @Test
+    fun `unit types should not appear in generated enum`() {
+        val writer = generateUnion("union MyUnion { a: Unit, b: String }", unknownVariant = true)
+        writer.compileAndTest(
+            """
+            let a = MyUnion::A;
+            assert_eq!(Ok(()), a.as_a());
+            """,
+        )
+    }
+
+    private fun generateUnion(
+        modelSmithy: String,
+        unionName: String = "MyUnion",
+        unknownVariant: Boolean = true,
+    ): RustWriter {
         val model = "namespace test\n$modelSmithy".asSmithyModel()
         val provider: SymbolProvider = testSymbolProvider(model)
         val writer = RustWriter.forModule("model")

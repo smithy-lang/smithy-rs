@@ -35,6 +35,7 @@
 //! Macros implementation.
 
 /// Define a type that implements [`std::future::Future`].
+#[doc(hidden)]
 #[macro_export]
 macro_rules! opaque_future {
     ($(#[$m:meta])* pub type $name:ident = $actual:ty;) => {
@@ -82,21 +83,9 @@ macro_rules! opaque_future {
     };
 }
 
-pub use opaque_future;
-
 macro_rules! convert_to_request_rejection {
     ($from:ty, $to:ident) => {
         impl From<$from> for RequestRejection {
-            fn from(err: $from) -> Self {
-                Self::$to(crate::Error::new(err))
-            }
-        }
-    };
-}
-
-macro_rules! convert_to_response_rejection {
-    ($from:ty, $to:ident) => {
-        impl From<$from> for ResponseRejection {
             fn from(err: $from) -> Self {
                 Self::$to(crate::Error::new(err))
             }

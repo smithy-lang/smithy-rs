@@ -6,11 +6,15 @@
 package software.amazon.smithy.rust.codegen.core.rustlang
 
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 internal class RustTypeParametersTest {
-    private fun forInputExpectOutput(input: Any, expectedOutput: String) {
+    private fun forInputExpectOutput(
+        input: Any,
+        expectedOutput: String,
+    ) {
         val writer = RustWriter.forModule("model")
         writer.rustInlineTemplate("'")
         writer.rustInlineTemplate("#{typeParameters:W}", "typeParameters" to rustTypeParameters(input))
@@ -26,14 +30,14 @@ internal class RustTypeParametersTest {
 
     @Test
     fun `rustTypeParameters accepts Symbol`() {
-        val symbol = RuntimeType("Operation", namespace = "crate::operation", dependency = null).toSymbol()
+        val symbol = RuntimeType("crate::operation::Operation").toSymbol()
         forInputExpectOutput(symbol, "'<crate::operation::Operation>'")
     }
 
     @Test
     fun `rustTypeParameters accepts RuntimeType`() {
-        val runtimeType = RuntimeType("String", namespace = "std::string", dependency = null)
-        forInputExpectOutput(runtimeType, "'<std::string::String>'")
+        val runtimeType = RuntimeType.String
+        forInputExpectOutput(runtimeType, "'<::std::string::String>'")
     }
 
     @Test
@@ -49,18 +53,19 @@ internal class RustTypeParametersTest {
     @Test
     fun `rustTypeParameters accepts heterogeneous inputs`() {
         val writer = RustWriter.forModule("model")
-        val tps = rustTypeParameters(
-            RuntimeType("Operation", namespace = "crate::operation", dependency = null).toSymbol(),
-            RustType.Unit,
-            RuntimeType("String", namespace = "std::string", dependency = null),
-            "T",
-            RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
-        )
+        val tps =
+            rustTypeParameters(
+                RuntimeType("crate::operation::Operation").toSymbol(),
+                RustType.Unit,
+                RuntimeType.String,
+                "T",
+                RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
+            )
         writer.rustInlineTemplate("'")
         writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
         writer.rustInlineTemplate("'")
 
-        writer.toString() shouldContain "'<crate::operation::Operation, (), std::string::String, T, A, B>'"
+        writer.toString() shouldContain "'<crate::operation::Operation, (), ::std::string::String, T, A, B>'"
     }
 
     @Test
@@ -105,5 +110,14 @@ internal class RustTypeParametersTest {
             yield(writable("F"))
         }.join(writable("+"))(writer)
         writer.toString() shouldContain "A-B-CD+E+F"
+    }
+
+    @Test
+    fun `test map`() {
+        val writer = RustWriter.forModule("model")
+        val a = writable { rust("a") }
+        val b = a.map { rust("b(#T)", it) }
+        b(writer)
+        writer.toString().trim() shouldEndWith "b(a)"
     }
 }

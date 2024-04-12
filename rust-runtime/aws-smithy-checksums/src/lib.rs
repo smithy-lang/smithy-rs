@@ -3,6 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![warn(
+    // missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
 //! Checksum calculation and verification callbacks.
 
 use crate::error::UnknownChecksumAlgorithmError;
@@ -62,11 +73,11 @@ impl ChecksumAlgorithm {
     /// Return the `HttpChecksum` implementor for this algorithm
     pub fn into_impl(self) -> Box<dyn http::HttpChecksum> {
         match self {
-            Self::Crc32 => Box::new(Crc32::default()),
-            Self::Crc32c => Box::new(Crc32c::default()),
-            Self::Md5 => Box::new(Md5::default()),
-            Self::Sha1 => Box::new(Sha1::default()),
-            Self::Sha256 => Box::new(Sha256::default()),
+            Self::Crc32 => Box::<Crc32>::default(),
+            Self::Crc32c => Box::<Crc32c>::default(),
+            Self::Md5 => Box::<Md5>::default(),
+            Self::Sha1 => Box::<Sha1>::default(),
+            Self::Sha256 => Box::<Sha256>::default(),
         }
     }
 
@@ -293,6 +304,7 @@ mod tests {
     use aws_smithy_types::base64;
     use http::HeaderValue;
     use pretty_assertions::assert_eq;
+    use std::fmt::Write;
 
     const TEST_DATA: &str = r#"test data"#;
 
@@ -300,8 +312,10 @@ mod tests {
         let decoded_checksum = base64::decode(header_value.to_str().unwrap()).unwrap();
         let decoded_checksum = decoded_checksum
             .into_iter()
-            .map(|byte| format!("{:02X?}", byte))
-            .collect::<String>();
+            .fold(String::new(), |mut acc, byte| {
+                write!(acc, "{byte:02X?}").expect("string will always be writeable");
+                acc
+            });
 
         format!("0x{}", decoded_checksum)
     }
@@ -311,7 +325,7 @@ mod tests {
         let mut checksum = Crc32::default();
         checksum.update(TEST_DATA.as_bytes());
         let checksum_result = Box::new(checksum).headers();
-        let encoded_checksum = checksum_result.get(&CRC_32_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(CRC_32_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xD308AEB2";
@@ -320,14 +334,14 @@ mod tests {
     }
 
     // TODO(https://github.com/zowens/crc32c/issues/34)
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
     #[test]
     fn test_crc32c_checksum() {
         let mut checksum = Crc32c::default();
         checksum.update(TEST_DATA.as_bytes());
         let checksum_result = Box::new(checksum).headers();
-        let encoded_checksum = checksum_result.get(&CRC_32_C_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(CRC_32_C_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0x3379B4CA";
@@ -340,7 +354,7 @@ mod tests {
         let mut checksum = Sha1::default();
         checksum.update(TEST_DATA.as_bytes());
         let checksum_result = Box::new(checksum).headers();
-        let encoded_checksum = checksum_result.get(&SHA_1_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(SHA_1_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xF48DD853820860816C75D54D0F584DC863327A7C";
@@ -353,7 +367,7 @@ mod tests {
         let mut checksum = Sha256::default();
         checksum.update(TEST_DATA.as_bytes());
         let checksum_result = Box::new(checksum).headers();
-        let encoded_checksum = checksum_result.get(&SHA_256_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(SHA_256_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum =
@@ -367,7 +381,7 @@ mod tests {
         let mut checksum = Md5::default();
         checksum.update(TEST_DATA.as_bytes());
         let checksum_result = Box::new(checksum).headers();
-        let encoded_checksum = checksum_result.get(&MD5_HEADER_NAME).unwrap();
+        let encoded_checksum = checksum_result.get(MD5_HEADER_NAME).unwrap();
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0xEB733A00C0C9D336E65691A37AB54293";
@@ -379,8 +393,7 @@ mod tests {
     fn test_checksum_algorithm_returns_error_for_unknown() {
         let error = "some invalid checksum algorithm"
             .parse::<ChecksumAlgorithm>()
-            .err()
-            .expect("it should error");
+            .expect_err("it should error");
         assert_eq!(
             "some invalid checksum algorithm",
             error.checksum_algorithm()

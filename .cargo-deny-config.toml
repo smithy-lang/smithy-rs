@@ -22,6 +22,8 @@ allow = [
 confidence-threshold = 1.0
 exceptions = [
     { allow = ["OpenSSL"], name = "ring", version = "*" },
+    { allow = ["OpenSSL"], name = "aws-lc-sys", version = "*" },
+    { allow = ["OpenSSL"], name = "aws-lc-fips-sys", version = "*" },
 ]
 
 [[licenses.clarify]]
@@ -34,6 +36,20 @@ license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
 name = "ring"
 expression = "MIT AND ISC AND OpenSSL"
 license-files = [{ path = "LICENSE", hash = 0xbd0eed23 }]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "ISC"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
+
+[[licenses.clarify]]
+name = "rustls-webpki"
+expression = "ISC"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
 
 # This section is considered when running `cargo deny check bans`.
 # More documentation about the 'bans' section can be found here:

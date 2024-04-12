@@ -2,7 +2,7 @@
 
 This module defines integration tests of the code generation machinery.
 `./build.gradle.kts` will generate a `smithy-build.json` file as part of the
-build. The `rust-codegen` Smithy build plugin then invokes our codegen
+build. The `rust-client-codegen` Smithy build plugin then invokes our codegen
 machinery and generates Rust crates, one for each of the integration test
 services defined under `model/`.
 

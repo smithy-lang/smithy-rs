@@ -1,15 +1,18 @@
 # Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
 # end up in the final SDK workspace.
 [workspace]
-
+resolver = "2"
 members = [
+    "aws-credential-types",
     "aws-endpoint",
     "aws-http",
     "aws-hyper",
     "aws-inlineable",
+    "aws-runtime",
+    "aws-runtime-api",
     "aws-sig-auth",
+    "aws-sigv4",
     "aws-types",
-    "aws-sigv4"
 ]
 
 exclude = ["aws-config"]

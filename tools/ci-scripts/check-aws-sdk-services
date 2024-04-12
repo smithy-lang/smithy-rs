@@ -1,0 +1,19 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd aws-sdk
+
+# Invoking `cargo test` at the root directory implicitly checks for the validity
+# of the top-level `Cargo.toml`
+cargo test --all-features
+
+for test_dir in tests/*; do
+    if [ -f "${test_dir}/Cargo.toml" ]; then
+        echo "#### Testing ${test_dir}..."
+        cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
+    fi
+done

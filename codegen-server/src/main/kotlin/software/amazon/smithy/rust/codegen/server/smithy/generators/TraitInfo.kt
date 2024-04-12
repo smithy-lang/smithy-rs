@@ -20,7 +20,14 @@ data class TraitInfo(
     val constraintViolationVariant: Writable,
     val asValidationExceptionField: Writable,
     val validationFunctionDefinition: (constraintViolation: Symbol, unconstrainedTypeName: String) -> Writable,
-)
+    private val testCases: List<Writable> = listOf(),
+) {
+    companion object {
+        fun testCases(constraintsInfo: List<TraitInfo>): List<Writable> {
+            return constraintsInfo.flatMap { it.testCases }
+        }
+    }
+}
 
 /**
  * Render the implementation of `TryFrom` for a constrained type.
@@ -37,13 +44,14 @@ fun RustWriter.renderTryFrom(
             #{ValidationFunctions:W}
         }
         """,
-        "ValidationFunctions" to constraintsInfo.map {
-            it.validationFunctionDefinition(
-                constraintViolationError,
-                unconstrainedTypeName,
-            )
-        }
-            .join("\n"),
+        "ValidationFunctions" to
+            constraintsInfo.map {
+                it.validationFunctionDefinition(
+                    constraintViolationError,
+                    unconstrainedTypeName,
+                )
+            }
+                .join("\n"),
     )
 
     this.rustTemplate(

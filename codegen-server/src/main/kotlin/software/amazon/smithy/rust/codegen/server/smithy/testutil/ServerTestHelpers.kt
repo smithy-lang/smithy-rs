@@ -12,41 +12,63 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.implBlock
+import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
-import software.amazon.smithy.rust.codegen.server.smithy.RustCodegenServerPlugin
+import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ServerSymbolProviders
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
-val ServerTestSymbolVisitorConfig = SymbolVisitorConfig(
-    runtimeConfig = TestRuntimeConfig,
-    renameExceptions = false,
-    nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
-)
+val ServerTestRustSymbolProviderConfig =
+    RustSymbolProviderConfig(
+        runtimeConfig = TestRuntimeConfig,
+        renameExceptions = false,
+        nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+        moduleProvider = ServerModuleProvider,
+    )
 
 private fun testServiceShapeFor(model: Model) =
     model.serviceShapes.firstOrNull() ?: ServiceShape.builder().version("test").id("test#Service").build()
 
-fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
-    serverTestSymbolProviders(model, serviceShape).symbolProvider
+fun serverTestSymbolProvider(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+) = serverTestSymbolProviders(model, serviceShape).symbolProvider
 
-fun serverTestSymbolProviders(model: Model, serviceShape: ServiceShape? = null) =
-    ServerSymbolProviders.from(
-        model,
-        serviceShape ?: testServiceShapeFor(model),
-        ServerTestSymbolVisitorConfig,
-        serverTestRustSettings((serviceShape ?: testServiceShapeFor(model)).id).codegenConfig.publicConstrainedTypes,
-        RustCodegenServerPlugin::baseSymbolProvider,
-    )
+fun serverTestSymbolProviders(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+    settings: ServerRustSettings? = null,
+    decorators: List<ServerCodegenDecorator> = emptyList(),
+) = ServerSymbolProviders.from(
+    serverTestRustSettings(),
+    model,
+    serviceShape ?: testServiceShapeFor(model),
+    ServerTestRustSymbolProviderConfig,
+    (
+        settings ?: serverTestRustSettings(
+            (serviceShape ?: testServiceShapeFor(model)).id,
+        )
+    ).codegenConfig.publicConstrainedTypes,
+    CombinedServerCodegenDecorator(decorators),
+    RustServerCodegenPlugin::baseSymbolProvider,
+)
 
 fun serverTestRustSettings(
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
@@ -79,23 +101,25 @@ fun serverTestCodegenContext(
     serviceShape: ServiceShape? = null,
     settings: ServerRustSettings = serverTestRustSettings(),
     protocolShapeId: ShapeId? = null,
+    decorators: List<ServerCodegenDecorator> = emptyList(),
 ): ServerCodegenContext {
-    val service =
-        serviceShape
-            ?: model.serviceShapes.firstOrNull()
-            ?: ServiceShape.builder().version("test").id("test#Service").build()
+    val service = serviceShape ?: testServiceShapeFor(model)
     val protocol = protocolShapeId ?: ShapeId.from("test#Protocol")
-    val serverSymbolProviders = ServerSymbolProviders.from(
-        model,
-        service,
-        ServerTestSymbolVisitorConfig,
-        settings.codegenConfig.publicConstrainedTypes,
-        RustCodegenServerPlugin::baseSymbolProvider,
-    )
+    val serverSymbolProviders =
+        ServerSymbolProviders.from(
+            settings,
+            model,
+            service,
+            ServerTestRustSymbolProviderConfig,
+            settings.codegenConfig.publicConstrainedTypes,
+            CombinedServerCodegenDecorator(decorators),
+            RustServerCodegenPlugin::baseSymbolProvider,
+        )
 
     return ServerCodegenContext(
         model,
         serverSymbolProviders.symbolProvider,
+        TestModuleDocProvider,
         service,
         protocol,
         settings,
@@ -106,17 +130,36 @@ fun serverTestCodegenContext(
     )
 }
 
+fun loadServerProtocol(model: Model): ServerProtocol {
+    val codegenContext = serverTestCodegenContext(model)
+    val (_, protocolGeneratorFactory) =
+        ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(model, codegenContext.serviceShape)
+    return protocolGeneratorFactory.buildProtocolGenerator(codegenContext).protocol
+}
+
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
-fun StructureShape.serverRenderWithModelBuilder(model: Model, symbolProvider: RustSymbolProvider, writer: RustWriter) {
-    StructureGenerator(model, symbolProvider, writer, this).render(CodegenTarget.SERVER)
+fun StructureShape.serverRenderWithModelBuilder(
+    rustCrate: RustCrate,
+    model: Model,
+    symbolProvider: RustSymbolProvider,
+    writer: RustWriter,
+    protocol: ServerProtocol? = null,
+) {
+    StructureGenerator(model, symbolProvider, writer, this, emptyList(), StructSettings(false)).render()
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.
-    val modelBuilder = ServerBuilderGenerator(serverCodegenContext, this)
-    modelBuilder.render(writer)
-    writer.implBlock(this, symbolProvider) {
+    val modelBuilder =
+        ServerBuilderGenerator(
+            serverCodegenContext,
+            this,
+            SmithyValidationExceptionConversionGenerator(serverCodegenContext),
+            protocol ?: loadServerProtocol(model),
+        )
+    modelBuilder.render(rustCrate, writer)
+    writer.implBlock(symbolProvider.toSymbol(this)) {
         modelBuilder.renderConvenienceMethod(this)
     }
 }

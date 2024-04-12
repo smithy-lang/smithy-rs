@@ -5,10 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
-import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -20,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
 class ServerResponseBindingGenerator(
@@ -28,15 +30,12 @@ class ServerResponseBindingGenerator(
     private val codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
 ) {
-    private fun builderSymbol(shape: StructureShape): Symbol = shape.serverBuilderSymbol(codegenContext)
-
     private val httpBindingGenerator =
         HttpBindingGenerator(
             protocol,
             codegenContext,
             codegenContext.symbolProvider,
             operationShape,
-            ::builderSymbol,
             listOf(
                 ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(
                     codegenContext,
@@ -58,22 +57,25 @@ class ServerResponseBindingGenerator(
  */
 class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
-    override fun section(section: HttpBindingSection): Writable = when (section) {
-        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                rust("let ${section.variableName} = &${section.variableName}.0;")
-            }
-        }
+    override fun section(section: HttpBindingSection): Writable =
+        when (section) {
+            is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders ->
+                writable {
+                    if (workingWithPublicConstrainedWrapperTupleType(
+                            section.shape,
+                            codegenContext.model,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+                    ) {
+                        rust("let ${section.variableName} = &${section.variableName}.0;")
+                    }
+                }
 
-        is HttpBindingSection.BeforeRenderingHeaderValue,
-        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
-        -> emptySection
-    }
+            is HttpBindingSection.BeforeRenderingHeaderValue,
+            is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+            is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
+            -> emptySection
+        }
 }
 
 /**
@@ -82,23 +84,29 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
  */
 class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
-    override fun section(section: HttpBindingSection): Writable = when (section) {
-        is HttpBindingSection.BeforeRenderingHeaderValue -> writable {
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.context.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                if (section.context.shape.isIntegerShape) {
-                    section.context.valueExpression =
-                        ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
-                }
-            }
-        }
+    override fun section(section: HttpBindingSection): Writable =
+        when (section) {
+            is HttpBindingSection.BeforeRenderingHeaderValue ->
+                writable {
+                    val isIntegral = section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
+                    val isCollection = section.context.shape is CollectionShape
 
-        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
-        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
-        -> emptySection
-    }
+                    val workingWithPublicWrapper =
+                        workingWithPublicConstrainedWrapperTupleType(
+                            section.context.shape,
+                            codegenContext.model,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+
+                    if (workingWithPublicWrapper && (isIntegral || isCollection)) {
+                        section.context.valueExpression =
+                            ValueExpression.Reference("&${section.context.valueExpression.name.removePrefix("&")}.0")
+                    }
+                }
+
+            is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
+            is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
+            is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
+            -> emptySection
+        }
 }

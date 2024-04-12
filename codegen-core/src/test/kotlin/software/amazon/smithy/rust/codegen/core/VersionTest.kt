@@ -5,64 +5,50 @@
 
 package software.amazon.smithy.rust.codegen.core
 
-import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.shouldBe
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.MethodSource
+import org.junit.jupiter.api.Test
 
 class VersionTest {
-    @ParameterizedTest()
-    @MethodSource("versionProvider")
-    fun `parses version`(
-        content: String,
-        fullVersion: String,
-        crateVersion: String,
-    ) {
-        val version = Version.parse(content)
-        version.fullVersion shouldBe fullVersion
-        version.crateVersion shouldBe crateVersion
-    }
-
-    @ParameterizedTest()
-    @MethodSource("invalidVersionProvider")
-    fun `fails to parse version`(
-        content: String,
-    ) {
-        shouldThrowAny { Version.parse(content) }
-    }
-
-    companion object {
-        @JvmStatic
-        fun versionProvider() = listOf(
-            Arguments.of(
-                "0.47.0\n0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "0.47.0-0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "0.47.0",
-            ),
-            Arguments.of(
-                "release-2022-08-04\ndb48039065bec890ef387385773b37154b555b14",
-                "release-2022-08-04-db48039065bec890ef387385773b37154b555b14",
-                "release-2022-08-04",
-            ),
-            Arguments.of(
-                "0.30.0-alpha\na1dbbe2947de3c8bbbef9446eb442e298f83f200",
-                "0.30.0-alpha-a1dbbe2947de3c8bbbef9446eb442e298f83f200",
-                "0.30.0-alpha",
-            ),
-            Arguments.of(
-                "0.6-rc1.cargo\nc281800a185b34600b05f8b501a0322074184123",
-                "0.6-rc1.cargo-c281800a185b34600b05f8b501a0322074184123",
-                "0.6-rc1.cargo",
-            ),
-            Arguments.of(
-                "0.27.0-alpha.1\n643f2ee",
-                "0.27.0-alpha.1-643f2ee",
-                "0.27.0-alpha.1",
-            ),
-        )
-
-        @JvmStatic
-        fun invalidVersionProvider() = listOf("0.0.0", "")
+    @Test
+    fun `parse versions json`() {
+        val version =
+            Version.parse(
+                """
+                {
+                  "gitHash": "30205973b951256c4c37b998e7a6e94fee2f6ecc",
+                  "runtimeCrates": {
+                    "aws-smithy-http-server": "0.60.1",
+                    "aws-smithy-runtime-api": "1.1.1",
+                    "aws-smithy-protocol-test": "0.60.1",
+                    "aws-smithy-eventstream": "0.60.1",
+                    "aws-smithy-async": "1.1.1",
+                    "aws-smithy-http-server-python": "0.60.1",
+                    "aws-smithy-types": "1.1.1",
+                    "aws-smithy-types-convert": "0.60.1",
+                    "aws-smithy-http-auth": "0.60.1",
+                    "aws-smithy-checksums": "0.60.1",
+                    "aws-smithy-runtime": "1.1.1",
+                    "aws-smithy-query": "0.60.1",
+                    "aws-smithy-xml": "0.60.1",
+                    "aws-smithy-json": "0.60.1",
+                    "aws-smithy-http-tower": "0.60.1",
+                    "aws-smithy-http": "0.60.1",
+                    "aws-smithy-client": "0.60.1",
+                    "aws-sig-auth": "0.60.1",
+                    "aws-credential-types": "1.1.1",
+                    "aws-runtime-api": "1.1.1",
+                    "aws-types": "1.1.1",
+                    "aws-sigv4": "1.1.1",
+                    "aws-runtime": "1.1.1",
+                    "aws-http": "0.60.1",
+                    "aws-endpoint": "0.60.1",
+                    "aws-config": "1.1.1",
+                    "aws-hyper": "0.60.1"  }
+                }
+                """,
+            )
+        version.gitHash shouldBe "30205973b951256c4c37b998e7a6e94fee2f6ecc"
+        version.crates["aws-smithy-http-server"] shouldBe "0.60.1"
+        version.crates["aws-config"] shouldBe "1.1.1"
     }
 }

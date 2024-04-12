@@ -7,31 +7,72 @@
 
 //! AWS Shared Config
 //!
-//! This module contains an shared configuration representation that is agnostic from a specific service.
-
-use std::sync::Arc;
-
-use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_client::http_connector::HttpConnector;
-use aws_smithy_types::retry::RetryConfig;
-use aws_smithy_types::timeout::TimeoutConfig;
+//! This module contains a shared configuration representation that is agnostic from a specific service.
 
 use crate::app_name::AppName;
-use crate::credentials::SharedCredentialsProvider;
-use crate::endpoint::ResolveAwsEndpoint;
+use crate::docs_for;
+use crate::origin::Origin;
 use crate::region::Region;
+use crate::service_config::LoadServiceConfig;
+use aws_credential_types::provider::token::SharedTokenProvider;
+pub use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_smithy_async::rt::sleep::AsyncSleep;
+pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+use aws_smithy_runtime_api::client::http::HttpClient;
+pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
+use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+use aws_smithy_runtime_api::shared::IntoShared;
+pub use aws_smithy_types::retry::RetryConfig;
+pub use aws_smithy_types::timeout::TimeoutConfig;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Unified docstrings to keep crates in sync. Not intended for public use
+pub mod unified_docs {
+    /// A macro that generates docs for selected fields of `SdkConfig`.
+    #[macro_export]
+    macro_rules! docs_for {
+        (use_fips) => {
+"When true, send this request to the FIPS-compliant regional endpoint.
+
+If no FIPS-compliant endpoint can be determined, dispatching the request will return an error."
+        };
+        (use_dual_stack) => {
+"When true, send this request to the dual-stack endpoint.
+
+If no dual-stack endpoint is available the request MAY return an error.
+
+**Note**: Some services do not offer dual-stack as a configurable parameter (e.g. Code Catalyst). For
+these services, this setting has no effect"
+        };
+
+        (time_source) => { "The time source use to use for this client. This only needs to be required for creating deterministic tests or platforms where `SystemTime::now()` is not supported." };
+    }
+}
 
 /// AWS Shared Configuration
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
     app_name: Option<AppName>,
+    identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
+    token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
-    endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
+    time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
+    stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
+    http_client: Option<SharedHttpClient>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
+    behavior_version: Option<BehaviorVersion>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -42,13 +83,22 @@ pub struct SdkConfig {
 #[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
+    identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
+    token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
-    endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
+    endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
-    sleep_impl: Option<Arc<dyn AsyncSleep>>,
+    sleep_impl: Option<SharedAsyncSleep>,
+    time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
-    http_connector: Option<HttpConnector>,
+    stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
+    http_client: Option<SharedHttpClient>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
+    behavior_version: Option<BehaviorVersion>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
 }
 
 impl Builder {
@@ -86,48 +136,20 @@ impl Builder {
         self
     }
 
-    /// Set the endpoint resolver to use when making requests
-    ///
+    /// Set the endpoint URL to use when making requests.
     /// # Examples
     /// ```
-    /// # fn wrapper() -> Result<(), aws_smithy_http::endpoint::error::InvalidEndpointError> {
-    /// use std::sync::Arc;
     /// use aws_types::SdkConfig;
-    /// use aws_smithy_http::endpoint::Endpoint;
-    /// let config = SdkConfig::builder().endpoint_resolver(
-    ///     Endpoint::immutable("http://localhost:8080")?
-    /// ).build();
-    /// # Ok(())
-    /// # }
+    /// let config = SdkConfig::builder().endpoint_url("http://localhost:8080").build();
     /// ```
-    pub fn endpoint_resolver(
-        mut self,
-        endpoint_resolver: impl ResolveAwsEndpoint + 'static,
-    ) -> Self {
-        self.set_endpoint_resolver(Some(Arc::new(endpoint_resolver)));
+    pub fn endpoint_url(mut self, endpoint_url: impl Into<String>) -> Self {
+        self.set_endpoint_url(Some(endpoint_url.into()));
         self
     }
 
-    /// Set the endpoint resolver to use when making requests
-    ///
-    /// # Examples
-    /// ```
-    /// use std::sync::Arc;
-    /// use aws_types::SdkConfig;
-    /// use aws_types::endpoint::ResolveAwsEndpoint;
-    /// fn endpoint_resolver_override() -> Option<Arc<dyn ResolveAwsEndpoint>> {
-    ///     // ...
-    ///     # None
-    /// }
-    /// let mut config = SdkConfig::builder();
-    /// config.set_endpoint_resolver(endpoint_resolver_override());
-    /// config.build();
-    /// ```
-    pub fn set_endpoint_resolver(
-        &mut self,
-        endpoint_resolver: Option<Arc<dyn ResolveAwsEndpoint>>,
-    ) -> &mut Self {
-        self.endpoint_resolver = endpoint_resolver;
+    /// Set the endpoint URL to use when making requests.
+    pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
+        self.endpoint_url = endpoint_url;
         self
     }
 
@@ -166,7 +188,6 @@ impl Builder {
     ///
     /// let mut builder = SdkConfig::builder();
     /// disable_retries(&mut builder);
-    /// let config = builder.build();
     /// ```
     pub fn set_retry_config(&mut self, retry_config: Option<RetryConfig>) -> &mut Self {
         self.retry_config = retry_config;
@@ -228,8 +249,9 @@ impl Builder {
         self
     }
 
-    /// Set the sleep implementation for the builder. The sleep implementation is used to create
-    /// timeout futures.
+    /// Set the sleep implementation for the builder.
+    ///
+    /// The sleep implementation is used to create timeout futures.
     ///
     /// _Note:_ If you're using the Tokio runtime, a `TokioSleep` implementation is available in
     /// the `aws-smithy-async` crate.
@@ -237,8 +259,7 @@ impl Builder {
     /// # Examples
     ///
     /// ```rust
-    /// use std::sync::Arc;
-    /// use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+    /// use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
     /// use aws_types::SdkConfig;
     ///
     /// ##[derive(Debug)]
@@ -250,11 +271,11 @@ impl Builder {
     ///     }
     /// }
     ///
-    /// let sleep_impl = Arc::new(ForeverSleep);
+    /// let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
     /// let config = SdkConfig::builder().sleep_impl(sleep_impl).build();
     /// ```
-    pub fn sleep_impl(mut self, sleep_impl: Arc<dyn AsyncSleep>) -> Self {
-        self.set_sleep_impl(Some(sleep_impl));
+    pub fn sleep_impl(mut self, sleep_impl: impl AsyncSleep + 'static) -> Self {
+        self.set_sleep_impl(Some(sleep_impl.into_shared()));
         self
     }
 
@@ -266,7 +287,7 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// # use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
+    /// # use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
     /// # use aws_types::sdk_config::{Builder, SdkConfig};
     /// #[derive(Debug)]
     /// pub struct ForeverSleep;
@@ -278,7 +299,7 @@ impl Builder {
     /// }
     ///
     /// fn set_never_ending_sleep_impl(builder: &mut Builder) {
-    ///     let sleep_impl = std::sync::Arc::new(ForeverSleep);
+    ///     let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
     ///     builder.set_sleep_impl(Some(sleep_impl));
     /// }
     ///
@@ -286,8 +307,69 @@ impl Builder {
     /// set_never_ending_sleep_impl(&mut builder);
     /// let config = builder.build();
     /// ```
-    pub fn set_sleep_impl(&mut self, sleep_impl: Option<Arc<dyn AsyncSleep>>) -> &mut Self {
+    pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = sleep_impl;
+        self
+    }
+
+    /// Set the identity cache for caching credentials and SSO tokens.
+    ///
+    /// The default identity cache will wait until the first request that requires authentication
+    /// to load an identity. Once the identity is loaded, it is cached until shortly before it
+    /// expires.
+    ///
+    /// # Examples
+    /// Disabling identity caching:
+    /// ```rust
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
+    /// let config = SdkConfig::builder()
+    ///     .identity_cache(IdentityCache::no_cache())
+    ///     .build();
+    /// ```
+    /// Changing settings on the default cache implementation:
+    /// ```rust
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
+    /// use std::time::Duration;
+    ///
+    /// let config = SdkConfig::builder()
+    ///     .identity_cache(
+    ///         IdentityCache::lazy()
+    ///             .load_timeout(Duration::from_secs(10))
+    ///             .build()
+    ///     )
+    ///     .build();
+    /// ```
+    pub fn identity_cache(mut self, cache: impl ResolveCachedIdentity + 'static) -> Self {
+        self.set_identity_cache(Some(cache.into_shared()));
+        self
+    }
+
+    /// Set the identity cache for caching credentials and SSO tokens.
+    ///
+    /// The default identity cache will wait until the first request that requires authentication
+    /// to load an identity. Once the identity is loaded, it is cached until shortly before it
+    /// expires.
+    ///
+    /// # Examples
+    /// ```rust
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
+    ///
+    /// fn override_identity_cache() -> bool {
+    ///   // ...
+    ///   # true
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// if override_identity_cache() {
+    ///     builder.set_identity_cache(Some(IdentityCache::lazy().build()));
+    /// }
+    /// let config = builder.build();
+    /// ```
+    pub fn set_identity_cache(&mut self, cache: Option<SharedIdentityCache>) -> &mut Self {
+        self.identity_cache = cache;
         self
     }
 
@@ -295,11 +377,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
-    ///   # use aws_types::Credentials;
+    ///   # use aws_credential_types::Credentials;
     ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
@@ -316,11 +398,11 @@ impl Builder {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::credentials::{ProvideCredentials, SharedCredentialsProvider};
+    /// use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     /// use aws_types::SdkConfig;
     /// fn make_provider() -> impl ProvideCredentials {
     ///   // ...
-    ///   # use aws_types::Credentials;
+    ///   # use aws_credential_types::Credentials;
     ///   # Credentials::new("test", "test", None, None, "example")
     /// }
     ///
@@ -343,6 +425,55 @@ impl Builder {
         self
     }
 
+    /// Set the bearer auth token provider for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_credential_types::provider::token::{ProvideToken, SharedTokenProvider};
+    /// use aws_types::SdkConfig;
+    ///
+    /// fn make_provider() -> impl ProvideToken {
+    ///   // ...
+    ///   # aws_credential_types::Token::new("example", None)
+    /// }
+    ///
+    /// let config = SdkConfig::builder()
+    ///     .token_provider(SharedTokenProvider::new(make_provider()))
+    ///     .build();
+    /// ```
+    pub fn token_provider(mut self, provider: SharedTokenProvider) -> Self {
+        self.set_token_provider(Some(provider));
+        self
+    }
+
+    /// Set the bearer auth token provider for the builder
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_credential_types::provider::token::{ProvideToken, SharedTokenProvider};
+    /// use aws_types::SdkConfig;
+    ///
+    /// fn make_provider() -> impl ProvideToken {
+    ///   // ...
+    ///   # aws_credential_types::Token::new("example", None)
+    /// }
+    ///
+    /// fn override_provider() -> bool {
+    ///   // ...
+    ///   # true
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// if override_provider() {
+    ///     builder.set_token_provider(Some(SharedTokenProvider::new(make_provider())));
+    /// }
+    /// let config = builder.build();
+    /// ```
+    pub fn set_token_provider(&mut self, provider: Option<SharedTokenProvider>) -> &mut Self {
+        self.token_provider = provider;
+        self
+    }
+
     /// Sets the name of the app that is using the client.
     ///
     /// This _optional_ name is used to identify the application in the user agent that
@@ -361,96 +492,250 @@ impl Builder {
         self
     }
 
-    /// Sets the HTTP connector to use when making requests.
+    /// Sets the HTTP client to use when making requests.
     ///
     /// ## Examples
     /// ```no_run
     /// # #[cfg(feature = "examples")]
     /// # fn example() {
+    /// use aws_types::sdk_config::{SdkConfig, TimeoutConfig};
+    /// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
     /// use std::time::Duration;
-    /// use aws_smithy_client::{Client, hyper_ext};
-    /// use aws_smithy_client::erase::DynConnector;
-    /// use aws_smithy_client::http_connector::ConnectorSettings;
-    /// use aws_types::SdkConfig;
     ///
-    /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    /// // Create a connector that will be used to establish TLS connections
+    /// let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
     ///     .with_webpki_roots()
     ///     .https_only()
     ///     .enable_http1()
     ///     .enable_http2()
     ///     .build();
-    /// let smithy_connector = hyper_ext::Adapter::builder()
-    ///     // Optionally set things like timeouts as well
-    ///     .connector_settings(
-    ///         ConnectorSettings::builder()
+    /// // Create a HTTP client that uses the TLS connector. This client is
+    /// // responsible for creating and caching a HttpConnector when given HttpConnectorSettings.
+    /// // This hyper client will create HttpConnectors backed by hyper and the tls_connector.
+    /// let http_client = HyperClientBuilder::new().build(tls_connector);
+    /// let sdk_config = SdkConfig::builder()
+    ///     .http_client(http_client)
+    ///     // Connect/read timeouts are passed to the HTTP client when servicing a request
+    ///     .timeout_config(
+    ///         TimeoutConfig::builder()
     ///             .connect_timeout(Duration::from_secs(5))
     ///             .build()
     ///     )
-    ///     .build(https_connector);
-    /// let sdk_config = SdkConfig::builder()
-    ///     .http_connector(smithy_connector)
     ///     .build();
     /// # }
     /// ```
-    pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
-        self.set_http_connector(Some(http_connector));
+    pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
+        self.set_http_client(Some(http_client.into_shared()));
         self
     }
 
-    /// Sets the HTTP connector to use when making requests.
+    /// Sets the HTTP client to use when making requests.
     ///
     /// ## Examples
     /// ```no_run
     /// # #[cfg(feature = "examples")]
     /// # fn example() {
+    /// use aws_types::sdk_config::{Builder, SdkConfig, TimeoutConfig};
+    /// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
     /// use std::time::Duration;
-    /// use aws_smithy_client::hyper_ext;
-    /// use aws_smithy_client::http_connector::ConnectorSettings;
-    /// use aws_types::sdk_config::{SdkConfig, Builder};
     ///
-    /// fn override_http_connector(builder: &mut Builder) {
-    ///     let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    /// fn override_http_client(builder: &mut Builder) {
+    ///     // Create a connector that will be used to establish TLS connections
+    ///     let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
     ///         .with_webpki_roots()
     ///         .https_only()
     ///         .enable_http1()
     ///         .enable_http2()
     ///         .build();
-    ///     let smithy_connector = hyper_ext::Adapter::builder()
-    ///         // Optionally set things like timeouts as well
-    ///         .connector_settings(
-    ///             ConnectorSettings::builder()
-    ///                 .connect_timeout(Duration::from_secs(5))
-    ///                 .build()
-    ///         )
-    ///         .build(https_connector);
-    ///     builder.set_http_connector(Some(smithy_connector));
+    ///     // Create a HTTP client that uses the TLS connector. This client is
+    ///     // responsible for creating and caching a HttpConnector when given HttpConnectorSettings.
+    ///     // This hyper client will create HttpConnectors backed by hyper and the tls_connector.
+    ///     let http_client = HyperClientBuilder::new().build(tls_connector);
+    ///
+    ///     builder.set_http_client(Some(http_client));
     /// }
     ///
     /// let mut builder = SdkConfig::builder();
-    /// override_http_connector(&mut builder);
+    /// override_http_client(&mut builder);
     /// let config = builder.build();
     /// # }
     /// ```
-    pub fn set_http_connector(
-        &mut self,
-        http_connector: Option<impl Into<HttpConnector>>,
-    ) -> &mut Self {
-        self.http_connector = http_connector.map(|inner| inner.into());
+    pub fn set_http_client(&mut self, http_client: Option<SharedHttpClient>) -> &mut Self {
+        self.http_client = http_client;
         self
     }
 
-    /// Build a [`SdkConfig`](SdkConfig) from this builder
+    #[doc = docs_for!(use_fips)]
+    pub fn use_fips(mut self, use_fips: bool) -> Self {
+        self.set_use_fips(Some(use_fips));
+        self
+    }
+
+    #[doc = docs_for!(use_fips)]
+    pub fn set_use_fips(&mut self, use_fips: Option<bool>) -> &mut Self {
+        self.use_fips = use_fips;
+        self
+    }
+
+    #[doc = docs_for!(use_dual_stack)]
+    pub fn use_dual_stack(mut self, use_dual_stack: bool) -> Self {
+        self.set_use_dual_stack(Some(use_dual_stack));
+        self
+    }
+
+    #[doc = docs_for!(use_dual_stack)]
+    pub fn set_use_dual_stack(&mut self, use_dual_stack: Option<bool>) -> &mut Self {
+        self.use_dual_stack = use_dual_stack;
+        self
+    }
+
+    #[doc = docs_for!(time_source)]
+    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.set_time_source(Some(SharedTimeSource::new(time_source)));
+        self
+    }
+
+    #[doc = docs_for!(time_source)]
+    pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
+        self.time_source = time_source;
+        self
+    }
+
+    /// Sets the [`BehaviorVersion`] for the [`SdkConfig`]
+    pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
+        self.set_behavior_version(Some(behavior_version));
+        self
+    }
+
+    /// Sets the [`BehaviorVersion`] for the [`SdkConfig`]
+    pub fn set_behavior_version(&mut self, behavior_version: Option<BehaviorVersion>) -> &mut Self {
+        self.behavior_version = behavior_version;
+        self
+    }
+
+    /// Sets the service config provider for the [`SdkConfig`].
+    ///
+    /// This provider is used when creating a service-specific config from an
+    /// `SdkConfig` and provides access to config defined in the environment
+    /// which would otherwise be inaccessible.
+    pub fn service_config(mut self, service_config: impl LoadServiceConfig + 'static) -> Self {
+        self.set_service_config(Some(service_config));
+        self
+    }
+
+    /// Sets the service config provider for the [`SdkConfig`].
+    ///
+    /// This provider is used when creating a service-specific config from an
+    /// `SdkConfig` and provides access to config defined in the environment
+    /// which would otherwise be inaccessible.
+    pub fn set_service_config(
+        &mut self,
+        service_config: Option<impl LoadServiceConfig + 'static>,
+    ) -> &mut Self {
+        self.service_config = service_config.map(|it| Arc::new(it) as Arc<dyn LoadServiceConfig>);
+        self
+    }
+
+    /// Set the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn insert_origin(&mut self, setting: &'static str, origin: Origin) {
+        self.config_origins.insert(setting, origin);
+    }
+
+    /// Build a [`SdkConfig`] from this builder.
     pub fn build(self) -> SdkConfig {
         SdkConfig {
             app_name: self.app_name,
+            identity_cache: self.identity_cache,
             credentials_provider: self.credentials_provider,
+            token_provider: self.token_provider,
             region: self.region,
-            endpoint_resolver: self.endpoint_resolver,
+            endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
             timeout_config: self.timeout_config,
-            http_connector: self.http_connector,
+            http_client: self.http_client,
+            use_fips: self.use_fips,
+            use_dual_stack: self.use_dual_stack,
+            time_source: self.time_source,
+            behavior_version: self.behavior_version,
+            stalled_stream_protection_config: self.stalled_stream_protection_config,
+            service_config: self.service_config,
+            config_origins: self.config_origins,
         }
+    }
+}
+
+impl Builder {
+    /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
+    ///
+    /// This configures stalled stream protection. When enabled, download streams
+    /// that stall (stream no data) for longer than a configured grace period will return an error.
+    ///
+    /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
+    /// in order to work. When enabling stalled stream protection, make sure to set
+    /// - A sleep impl with [Self::sleep_impl] or [Self::set_sleep_impl].
+    /// - A time source with [Self::time_source] or [Self::set_time_source].
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// use aws_types::SdkConfig;
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+    ///
+    /// let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    ///     .grace_period(Duration::from_secs(1))
+    ///     .build();
+    /// let config = SdkConfig::builder()
+    ///     .stalled_stream_protection(stalled_stream_protection_config)
+    ///     .build();
+    /// ```
+    pub fn stalled_stream_protection(
+        mut self,
+        stalled_stream_protection_config: StalledStreamProtectionConfig,
+    ) -> Self {
+        self.set_stalled_stream_protection(Some(stalled_stream_protection_config));
+        self
+    }
+
+    /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
+    ///
+    /// This configures stalled stream protection. When enabled, download streams
+    /// that stall (stream no data) for longer than a configured grace period will return an error.
+    ///
+    /// By default, streams that transmit less than one byte per-second for five seconds will
+    /// be cancelled.
+    ///
+    /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
+    /// in order to work. When enabling stalled stream protection, make sure to set
+    /// - A sleep impl with [Self::sleep_impl] or [Self::set_sleep_impl].
+    /// - A time source with [Self::time_source] or [Self::set_time_source].
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+    ///
+    /// fn set_stalled_stream_protection(builder: &mut Builder) {
+    ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    ///         .grace_period(Duration::from_secs(1))
+    ///         .build();
+    ///     builder.set_stalled_stream_protection(Some(stalled_stream_protection_config));
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// set_stalled_stream_protection(&mut builder);
+    /// let config = builder.build();
+    /// ```
+    pub fn set_stalled_stream_protection(
+        &mut self,
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
+    ) -> &mut Self {
+        self.stalled_stream_protection_config = stalled_stream_protection_config;
+        self
     }
 }
 
@@ -460,9 +745,9 @@ impl SdkConfig {
         self.region.as_ref()
     }
 
-    /// Configured endpoint resolver
-    pub fn endpoint_resolver(&self) -> Option<Arc<dyn ResolveAwsEndpoint>> {
-        self.endpoint_resolver.clone()
+    /// Configured endpoint URL
+    pub fn endpoint_url(&self) -> Option<&str> {
+        self.endpoint_url.as_deref()
     }
 
     /// Configured retry config
@@ -475,15 +760,29 @@ impl SdkConfig {
         self.timeout_config.as_ref()
     }
 
-    #[doc(hidden)]
     /// Configured sleep implementation
-    pub fn sleep_impl(&self) -> Option<Arc<dyn AsyncSleep>> {
+    pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
         self.sleep_impl.clone()
     }
 
+    /// Configured identity cache
+    pub fn identity_cache(&self) -> Option<SharedIdentityCache> {
+        self.identity_cache.clone()
+    }
+
     /// Configured credentials provider
-    pub fn credentials_provider(&self) -> Option<&SharedCredentialsProvider> {
-        self.credentials_provider.as_ref()
+    pub fn credentials_provider(&self) -> Option<SharedCredentialsProvider> {
+        self.credentials_provider.clone()
+    }
+
+    /// Configured bearer auth token provider
+    pub fn token_provider(&self) -> Option<SharedTokenProvider> {
+        self.token_provider.clone()
+    }
+
+    /// Configured time source
+    pub fn time_source(&self) -> Option<SharedTimeSource> {
+        self.time_source.clone()
     }
 
     /// Configured app name
@@ -491,9 +790,34 @@ impl SdkConfig {
         self.app_name.as_ref()
     }
 
-    /// Configured HTTP Connector
-    pub fn http_connector(&self) -> Option<&HttpConnector> {
-        self.http_connector.as_ref()
+    /// Configured HTTP client
+    pub fn http_client(&self) -> Option<SharedHttpClient> {
+        self.http_client.clone()
+    }
+
+    /// Use FIPS endpoints
+    pub fn use_fips(&self) -> Option<bool> {
+        self.use_fips
+    }
+
+    /// Use dual-stack endpoint
+    pub fn use_dual_stack(&self) -> Option<bool> {
+        self.use_dual_stack
+    }
+
+    /// Configured stalled stream protection
+    pub fn stalled_stream_protection(&self) -> Option<StalledStreamProtectionConfig> {
+        self.stalled_stream_protection_config.clone()
+    }
+
+    /// Behavior major version configured for this client
+    pub fn behavior_version(&self) -> Option<BehaviorVersion> {
+        self.behavior_version.clone()
+    }
+
+    /// Return an immutable reference to the service config provider configured for this client.
+    pub fn service_config(&self) -> Option<&dyn LoadServiceConfig> {
+        self.service_config.as_deref()
     }
 
     /// Config builder
@@ -503,5 +827,44 @@ impl SdkConfig {
     /// configuration values.
     pub fn builder() -> Builder {
         Builder::default()
+    }
+
+    /// Convert this [`SdkConfig`] into a [`Builder`] by cloning it first
+    pub fn to_builder(&self) -> Builder {
+        self.clone().into_builder()
+    }
+
+    /// Get the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn get_origin(&self, setting: &'static str) -> Origin {
+        self.config_origins
+            .get(setting)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    /// Convert this [`SdkConfig`] back to a builder to enable modification
+    pub fn into_builder(self) -> Builder {
+        Builder {
+            app_name: self.app_name,
+            identity_cache: self.identity_cache,
+            credentials_provider: self.credentials_provider,
+            token_provider: self.token_provider,
+            region: self.region,
+            endpoint_url: self.endpoint_url,
+            retry_config: self.retry_config,
+            sleep_impl: self.sleep_impl,
+            time_source: self.time_source,
+            timeout_config: self.timeout_config,
+            http_client: self.http_client,
+            use_fips: self.use_fips,
+            use_dual_stack: self.use_dual_stack,
+            behavior_version: self.behavior_version,
+            stalled_stream_protection_config: self.stalled_stream_protection_config,
+            service_config: self.service_config,
+            config_origins: self.config_origins,
+        }
     }
 }

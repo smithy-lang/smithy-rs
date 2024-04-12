@@ -1,4 +1,0 @@
-/target
-/ci-cdk/build
-**/node_modules
-**/cdk.out

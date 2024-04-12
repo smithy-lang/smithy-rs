@@ -10,25 +10,20 @@ include(":codegen-client")
 include(":codegen-client-test")
 include(":codegen-server")
 include(":codegen-server:python")
+include(":codegen-server:typescript")
 include(":codegen-server-test")
 include(":codegen-server-test:python")
+include(":codegen-server-test:typescript")
 include(":rust-runtime")
-include(":aws:sdk-codegen")
-include(":aws:sdk-adhoc-test")
-include(":aws:sdk")
 include(":aws:rust-runtime")
+include(":aws:sdk")
+include(":aws:sdk-adhoc-test")
+include(":aws:sdk-codegen")
 
 pluginManagement {
     val smithyGradlePluginVersion: String by settings
     plugins {
-        id("software.amazon.smithy") version smithyGradlePluginVersion
-    }
-}
-
-buildscript {
-    repositories {
-        mavenLocal()
-        mavenCentral()
-        google()
+        id("software.amazon.smithy.gradle.smithy-base") version smithyGradlePluginVersion
+        id("software.amazon.smithy.gradle.smithy-jar") version smithyGradlePluginVersion
     }
 }

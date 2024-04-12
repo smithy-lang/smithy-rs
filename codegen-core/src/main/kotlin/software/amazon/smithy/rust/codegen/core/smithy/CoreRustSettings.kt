@@ -32,7 +32,7 @@ const val CODEGEN_SETTINGS = "codegen"
 /**
  * [CoreCodegenConfig] contains code-generation configuration that is _common to all_  smithy-rs plugins.
  *
- * If your configuration is specific to the `rust-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your configuration is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your configuration is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  *
  * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
@@ -41,16 +41,19 @@ const val CODEGEN_SETTINGS = "codegen"
 open class CoreCodegenConfig(
     open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     open val debugMode: Boolean = defaultDebugMode,
+    open val flattenCollectionAccessors: Boolean = defaultFlattenMode,
 ) {
     companion object {
         const val defaultFormatTimeoutSeconds = 20
         const val defaultDebugMode = false
+        const val defaultFlattenMode = false
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
-                    node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenMode),
                 )
             } else {
                 CoreCodegenConfig(
@@ -64,7 +67,7 @@ open class CoreCodegenConfig(
 /**
  * [CoreRustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
  *
- * If your setting is specific to the crate that the `rust-codegen` client plugin generates, put it in
+ * If your setting is specific to the crate that the `rust-client-codegen` client plugin generates, put it in
  * [ClientCodegenContext] instead.
  * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
  * [ServerCodegenContext] instead.
@@ -76,7 +79,6 @@ open class CoreRustSettings(
     open val moduleAuthors: List<String>,
     open val moduleDescription: String?,
     open val moduleRepository: String?,
-
     /**
      * Configuration of the runtime package:
      * - Where are the runtime crates (smithy-*) located on the file system? Or are they versioned?
@@ -88,7 +90,6 @@ open class CoreRustSettings(
     open val examplesUri: String? = null,
     open val customizationConfig: ObjectNode? = null,
 ) {
-
     /**
      * Get the corresponding [ServiceShape] from a model.
      * @return Returns the found `Service`
@@ -108,10 +109,11 @@ open class CoreRustSettings(
         // Infer the service to generate from a model.
         @JvmStatic
         protected fun inferService(model: Model): ShapeId {
-            val services = model.shapes(ServiceShape::class.java)
-                .map(Shape::getId)
-                .sorted()
-                .toList()
+            val services =
+                model.shapes(ServiceShape::class.java)
+                    .map(Shape::getId)
+                    .sorted()
+                    .toList()
 
             when {
                 services.isEmpty() -> {
@@ -141,7 +143,10 @@ open class CoreRustSettings(
          * @param config Config object to load
          * @return Returns the extracted settings
          */
-        fun from(model: Model, config: ObjectNode): CoreRustSettings {
+        fun from(
+            model: Model,
+            config: ObjectNode,
+        ): CoreRustSettings {
             val codegenSettings = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettings)
             return fromCodegenConfig(model, config, coreCodegenConfig)
@@ -155,7 +160,11 @@ open class CoreRustSettings(
          * @param coreCodegenConfig CodegenConfig object to use
          * @return Returns the extracted settings
          */
-        private fun fromCodegenConfig(model: Model, config: ObjectNode, coreCodegenConfig: CoreCodegenConfig): CoreRustSettings {
+        private fun fromCodegenConfig(
+            model: Model,
+            config: ObjectNode,
+            coreCodegenConfig: CoreCodegenConfig,
+        ): CoreRustSettings {
             config.warnIfAdditionalProperties(
                 arrayListOf(
                     SERVICE,
@@ -172,9 +181,10 @@ open class CoreRustSettings(
                 ),
             )
 
-            val service = config.getStringMember(SERVICE)
-                .map(StringNode::expectShapeId)
-                .orElseGet { inferService(model) }
+            val service =
+                config.getStringMember(SERVICE)
+                    .map(StringNode::expectShapeId)
+                    .orElseGet { inferService(model) }
 
             val runtimeConfig = config.getObjectMember(RUNTIME_CONFIG)
             return CoreRustSettings(

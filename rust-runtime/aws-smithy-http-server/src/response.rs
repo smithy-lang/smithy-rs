@@ -34,7 +34,6 @@
 
 use crate::body::BoxBody;
 
-#[doc(hidden)]
 pub type Response<T = BoxBody> = http::Response<T>;
 
 /// A protocol aware function taking `self` to [`http::Response`].

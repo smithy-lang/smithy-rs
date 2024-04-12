@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -22,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.handleOptionality
@@ -78,7 +76,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
  */
 class UnconstrainedShapeSymbolProvider(
     private val base: RustSymbolProvider,
-    private val model: Model,
     private val publicConstrainedTypes: Boolean,
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
@@ -101,12 +98,15 @@ class UnconstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape || shape is UnionShape)
 
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
-        val module = RustModule.new(
-            RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
-            visibility = Visibility.PUBCRATE,
-            parent = UnconstrainedModule,
-            inline = true,
-        )
+        val parent = shape.getParentAndInlineModuleForConstrainedMember(this, publicConstrainedTypes)?.second ?: ServerRustModule.UnconstrainedModule
+
+        val module =
+            RustModule.new(
+                RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
+                visibility = Visibility.PUBCRATE,
+                parent = parent,
+                inline = true,
+            )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
@@ -162,17 +162,17 @@ class UnconstrainedShapeSymbolProvider(
                 if (shape.targetCanReachConstrainedShape(model, base)) {
                     val targetShape = model.expectShape(shape.target)
                     val targetSymbol = this.toSymbol(targetShape)
-                    // Handle boxing first so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
+                    // Handle boxing first, so we end up with `Option<Box<_>>`, not `Box<Option<_>>`.
                     handleOptionality(
                         handleRustBoxing(targetSymbol, shape),
                         shape,
                         nullableIndex,
-                        base.config().nullabilityCheckMode,
+                        base.config.nullabilityCheckMode,
                     )
                 } else {
                     base.toSymbol(shape)
                 }
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
             }
 

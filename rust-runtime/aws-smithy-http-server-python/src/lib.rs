@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
+#![allow(clippy::derive_partial_eq_without_eq)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 //! Rust/Python bindings, runtime and utilities.
 //!
 //! This crates implements all the generic code needed to start and manage
@@ -11,11 +17,14 @@
 //!
 //! [PyO3]: https://pyo3.rs/
 
+pub mod context;
 mod error;
+pub mod lambda;
 pub mod logging;
 pub mod middleware;
 mod server;
 mod socket;
+pub mod tls;
 pub mod types;
 mod util;
 

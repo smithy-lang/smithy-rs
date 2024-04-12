@@ -5,8 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
-import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -27,12 +25,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 class Ec2QueryParserGenerator(
     codegenContext: CodegenContext,
     xmlErrors: RuntimeType,
-    builderSymbol: (shape: StructureShape) -> Symbol,
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
             codegenContext,
             xmlErrors,
-            builderSymbol,
         ) { context, inner ->
             val operationName = codegenContext.symbolProvider.toSymbol(context.shape).name
             val responseWrapperName = operationName + "Response"

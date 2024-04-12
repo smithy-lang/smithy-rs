@@ -7,7 +7,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
-    jacoco
     `maven-publish`
 }
 
@@ -19,41 +18,24 @@ group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val kotestVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
-    runtimeOnly(project(":aws:rust-runtime"))
-    implementation("org.jsoup:jsoup:1.14.3")
+    implementation("org.jsoup:jsoup:1.16.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-    testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+    implementation("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
 }
 
-val generateAwsRuntimeCrateVersion by tasks.registering {
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
-    val versionFile = file("$resourcesDir/sdk-crate-version.txt")
-    outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
-    inputs.property("crateVersion", crateVersion)
-    sourceSets.main.get().output.dir(resourcesDir)
-    doLast {
-        versionFile.writeText(crateVersion)
-    }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateAwsRuntimeCrateVersion)
-}
-
-tasks.compileTestKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 // Reusable license copySpec
@@ -78,29 +60,31 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
-tasks.test {
-    useJUnitPlatform()
-    testLogging {
-        events("passed", "skipped", "failed")
-        exceptionFormat = TestExceptionFormat.FULL
-        showCauses = true
-        showExceptions = true
-        showStackTraces = true
-        showStandardStreams = true
+val isTestingEnabled: String by project
+if (isTestingEnabled.toBoolean()) {
+    val kotestVersion: String by project
+
+    dependencies {
+        runtimeOnly(project(":aws:rust-runtime"))
+        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+    }
+
+    tasks.compileTestKotlin {
+        kotlinOptions.jvmTarget = "11"
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("failed")
+            exceptionFormat = TestExceptionFormat.FULL
+            showCauses = true
+            showExceptions = true
+            showStackTraces = true
+        }
     }
 }
-
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(false)
-        csv.required.set(false)
-        html.outputLocation.set(file("$buildDir/reports/jacoco"))
-    }
-}
-
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])
 
 publishing {
     publications {
@@ -109,5 +93,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

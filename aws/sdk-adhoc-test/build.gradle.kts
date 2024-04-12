@@ -3,31 +3,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
-extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
+extra["displayName"] = "Smithy :: Rust :: AWS-SDK :: Ad-hoc Test"
+extra["moduleName"] = "software.amazon.smithy.rust.awssdk.adhoc.test"
 
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy")
+    java
+    id("software.amazon.smithy.gradle.smithy-base")
+    id("software.amazon.smithy.gradle.smithy-jar")
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
-val pluginName = "rust-codegen"
+val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
-}
-
-buildscript {
-    val smithyVersion: String by project
-    dependencies {
-        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
-    }
+    outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
 dependencies {
@@ -35,35 +35,50 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-model:$smithyVersion")
+}
+
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
+
+fun baseTest(service: String, module: String, imports: List<String> = listOf()): CodegenTest {
+    return CodegenTest(
+        service = service,
+        module = module,
+        imports = imports,
+        extraCodegenConfig = """
+            "includeFluentClient": false,
+            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
+        """,
+    )
 }
 
 val allCodegenTests = listOf(
-    CodegenTest(
+    baseTest(
         "com.amazonaws.apigateway#BackplaneControlService",
         "apigateway",
-        extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false
-            },
-            "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false
-                }
-            }
-        """,
+        imports = listOf("models/apigateway-rules.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.testservice#TestService",
+        "endpoint-test-service",
+        imports = listOf("models/single-static-endpoint.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.testservice#RequiredValues",
+        "required-values",
+        imports = listOf("models/required-value-test.smithy"),
     ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class Ec2QueryTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         use aws.protocols#ec2Query
 
@@ -31,7 +32,7 @@ class Ec2QueryTest {
             a: String,
             b: Integer
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate an aws query service that compiles`() {

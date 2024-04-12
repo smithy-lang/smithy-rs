@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 axum = "0.5.6"
+hyper = { version = "0.14.26", features = ["full"] }
 tokio = { version = "1.20.1", features = ["full"] }
+tower = { version = "0.4", features = ["util", "filter"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
-tower = { version = "0.4", features = ["util", "filter"] }
-hyper = { version = "0.14.12", features = ["full"] }

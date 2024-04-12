@@ -9,33 +9,50 @@ import com.moandjiezana.toml.TomlWriter
 import org.intellij.lang.annotations.Language
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.build.PluginContext
-import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.EnumDefinition
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
-import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitorConfig
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
-import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.smithy.generators.CargoTomlGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.mergeDependencyFeatures
+import software.amazon.smithy.rust.codegen.core.smithy.mergeIdenticalTestDependencies
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import kotlin.io.path.absolutePathString
+import kotlin.io.path.writeText
+
+val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable =
+            writable {
+                docs("Some test documentation\n\nSome more details...")
+            }
+    }
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -54,8 +71,19 @@ private fun tempDir(directory: File? = null): File {
  * This workspace significantly improves test performance by sharing dependencies between different tests.
  */
 object TestWorkspace {
-    private val baseDir =
-        System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+    private val baseDir by lazy {
+        val appDataDir =
+            System.getProperty("APPDATA")
+                ?: System.getenv("XDG_DATA_HOME")
+                ?: System.getProperty("user.home")
+                    ?.let { Path.of(it, ".local", "share").absolutePathString() }
+                    ?.also { File(it).mkdirs() }
+        if (appDataDir != null) {
+            File(Path.of(appDataDir, "smithy-test-workspace").absolutePathString())
+        } else {
+            System.getenv("SMITHY_TEST_WORKSPACE")?.let { File(it) } ?: tempDir()
+        }
+    }
     private val subprojects = mutableListOf<String>()
 
     init {
@@ -64,13 +92,15 @@ object TestWorkspace {
 
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
-        val workspaceToml = TomlWriter().write(
-            mapOf(
-                "workspace" to mapOf(
-                    "members" to subprojects,
+        val workspaceToml =
+            TomlWriter().write(
+                mapOf(
+                    "workspace" to
+                        mapOf(
+                            "members" to subprojects,
+                        ),
                 ),
-            ),
-        )
+            )
         cargoToml.writeText(workspaceToml)
     }
 
@@ -84,6 +114,12 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent(),
             )
+            newProject.resolve("rust-toolchain.toml").writeText(
+                // help rust select the right version when we run cargo test
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
+                //  method as we do for runtime crate versions
+                "[toolchain]\nchannel = \"1.75.0\"\n",
+            )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
             newProject.resolve("src/lib.rs").writeText("")
@@ -93,27 +129,29 @@ object TestWorkspace {
         }
     }
 
-    @Suppress("NAME_SHADOWING")
-    fun testProject(symbolProvider: RustSymbolProvider? = null, debugMode: Boolean = false): TestWriterDelegator {
+    fun testProject(
+        model: Model = ModelAssembler().assemble().unwrap(),
+        codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
+    ): TestWriterDelegator = testProject(testSymbolProvider(model), codegenConfig)
+
+    fun testProject(
+        symbolProvider: RustSymbolProvider,
+        codegenConfig: CoreCodegenConfig = CoreCodegenConfig(),
+    ): TestWriterDelegator {
         val subprojectDir = subproject()
-        val symbolProvider = symbolProvider ?: object : RustSymbolProvider {
-            override fun config(): SymbolVisitorConfig {
-                PANIC("")
-            }
-
-            override fun toEnumVariantName(definition: EnumDefinition): MaybeRenamed? {
-                PANIC("")
-            }
-
-            override fun toSymbol(shape: Shape?): Symbol {
-                PANIC("")
-            }
-        }
         return TestWriterDelegator(
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
-            CoreCodegenConfig(debugMode = debugMode),
-        )
+            codegenConfig,
+        ).apply {
+            lib {
+                // If the test fails before the crate is finalized, we'll end up with a broken crate.
+                // Since all tests are generated into the same workspace (to avoid re-compilation) a broken crate
+                // breaks the workspace and all subsequent unit tests. By putting this comment in, we prevent
+                // that state from occurring.
+                rust("// touch lib.rs")
+            }
+        }
     }
 }
 
@@ -131,6 +169,7 @@ fun generatePluginContext(
     model: Model,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     addModuleToEventStreamAllowList: Boolean = false,
+    moduleVersion: String = "1.0.0",
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
@@ -139,32 +178,33 @@ fun generatePluginContext(
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
-    var settingsBuilder = Node.objectNodeBuilder()
-        .withMember("module", Node.from(moduleName))
-        .withMember("moduleVersion", Node.from("1.0.0"))
-        .withMember("moduleDescription", Node.from("test"))
-        .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
-        .letIf(service != null) { it.withMember("service", service) }
-        .withMember(
-            "runtimeConfig",
-            Node.objectNodeBuilder().withMember(
-                "relativePath",
-                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
-            ).build(),
-        )
+    var settingsBuilder =
+        Node.objectNodeBuilder()
+            .withMember("module", Node.from(moduleName))
+            .withMember("moduleVersion", Node.from(moduleVersion))
+            .withMember("moduleDescription", Node.from("test"))
+            .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
+            .letIf(service != null) { it.withMember("service", service) }
+            .withMember(
+                "runtimeConfig",
+                Node.objectNodeBuilder().withMember(
+                    "relativePath",
+                    Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
+                ).build(),
+            )
 
     if (addModuleToEventStreamAllowList) {
-        settingsBuilder = settingsBuilder.withMember(
-            "codegen",
-            Node.objectNodeBuilder().withMember(
-                "eventStreamAllowList",
-                Node.fromStrings(moduleName),
-            ).build(),
-        )
+        settingsBuilder =
+            settingsBuilder.withMember(
+                "codegen",
+                Node.objectNodeBuilder().withMember(
+                    "eventStreamAllowList",
+                    Node.fromStrings(moduleName),
+                ).build(),
+            )
     }
 
-    val settings = settingsBuilder.merge(additionalSettings)
-        .build()
+    val settings = settingsBuilder.merge(additionalSettings).build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
     return pluginContext to testPath
 }
@@ -186,10 +226,71 @@ fun RustWriter.unitTest(
 fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
+    attribute: Attribute = Attribute.Test,
+    additionalAttributes: List<Attribute> = emptyList(),
+    async: Boolean = false,
     block: Writable,
 ): RustWriter {
-    raw("#[test]")
-    return rustBlock("fn $name()", *args, block = block)
+    attribute.render(this)
+    additionalAttributes.forEach { it.render(this) }
+    if (async) {
+        rust("async")
+    }
+    return testDependenciesOnly { rustBlock("fn $name()", *args, block = block) }
+}
+
+fun RustWriter.cargoDependencies() =
+    dependencies.map { RustDependency.fromSymbolDependency(it) }
+        .filterIsInstance<CargoDependency>().distinct()
+
+fun RustWriter.assertNoNewDependencies(
+    block: Writable,
+    dependencyFilter: (CargoDependency) -> String?,
+): RustWriter {
+    val startingDependencies = cargoDependencies().toSet()
+    block(this)
+    val endingDependencies = cargoDependencies().toSet()
+    val newDeps = (endingDependencies - startingDependencies)
+    val invalidDeps =
+        newDeps.mapNotNull { dep -> dependencyFilter(dep)?.let { message -> message to dep } }.orNullIfEmpty()
+    if (invalidDeps != null) {
+        val badDeps = invalidDeps.map { it.second.rustName }
+        val writtenOut = this.toString()
+        val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
+        throw CodegenException(
+            "found invalid dependencies. ${invalidDeps.map {
+                it.first
+            }}\nHint: the following lines may be the problem.\n${
+                badLines.joinToString(
+                    separator = "\n",
+                    prefix = "   ",
+                )
+            }",
+        )
+    }
+    return this
+}
+
+fun RustWriter.testDependenciesOnly(block: Writable) =
+    assertNoNewDependencies(block) { dep ->
+        if (dep.scope != DependencyScope.Dev) {
+            "Cannot add $dep — this writer should only add test dependencies."
+        } else {
+            null
+        }
+    }
+
+fun testDependenciesOnly(block: Writable): Writable =
+    {
+        testDependenciesOnly(block)
+    }
+
+fun RustWriter.tokioTest(
+    name: String,
+    vararg args: Any,
+    block: Writable,
+) {
+    unitTest(name, attribute = Attribute.TokioTest, async = true, block = block, args = args)
 }
 
 /**
@@ -201,12 +302,8 @@ class TestWriterDelegator(
     private val fileManifest: FileManifest,
     symbolProvider: RustSymbolProvider,
     val codegenConfig: CoreCodegenConfig,
-) :
-    RustCrate(
-        fileManifest,
-        symbolProvider,
-        codegenConfig,
-    ) {
+    moduleDocProvider: ModuleDocProvider = TestModuleDocProvider,
+) : RustCrate(fileManifest, symbolProvider, codegenConfig, moduleDocProvider) {
     val baseDir: Path = fileManifest.baseDir
 
     fun printGeneratedFiles() {
@@ -215,6 +312,20 @@ class TestWriterDelegator(
 
     fun generatedFiles() = fileManifest.files.map { baseDir.relativize(it) }
 }
+
+/**
+ * Generate a new test module
+ *
+ * This should only be used in test code—the generated module name will be something like `tests_123`
+ */
+fun RustCrate.testModule(block: Writable) =
+    lib {
+        withInlineModule(
+            RustModule.inlineTests(safeName("tests")),
+            TestModuleDocProvider,
+            block,
+        )
+    }
 
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path ->
@@ -227,13 +338,17 @@ fun FileManifest.printGeneratedFiles() {
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
  */
-fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
-    val stubModel = """
+fun TestWriterDelegator.compileAndTest(
+    runClippy: Boolean = false,
+    expectFailure: Boolean = false,
+): String {
+    val stubModel =
+        """
         namespace fake
         service Fake {
             version: "123"
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
     this.finalize(
         rustSettings(),
         stubModel,
@@ -247,11 +362,31 @@ fun TestWriterDelegator.compileAndTest(runClippy: Boolean = false) {
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
-    val env = mapOf("RUSTFLAGS" to "-A dead_code")
-    "cargo test".runCommand(baseDir, env)
+
+    // Clean `RUSTFLAGS` because in CI we pass in `--deny warnings` and
+    // we still generate test code with warnings.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
+    val env = mapOf("RUSTFLAGS" to "")
+    baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
+
+    val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy".runCommand(baseDir, env)
+        "cargo clippy --all-features".runCommand(baseDir, env)
     }
+    return testOutput
+}
+
+fun Path.writeDotCargoConfigToml(rustFlags: List<String>) {
+    val dotCargoDir = this.resolve(".cargo")
+    Files.createDirectory(dotCargoDir)
+
+    dotCargoDir.resolve("config.toml")
+        .writeText(
+            """
+            [build]
+            rustflags = [${rustFlags.joinToString(",") { "\"$it\"" }}]
+            """.trimIndent(),
+        )
 }
 
 fun TestWriterDelegator.rustSettings() =
@@ -277,27 +412,36 @@ fun RustWriter.compileAndTest(
     clippy: Boolean = false,
     expectFailure: Boolean = false,
 ): String {
-    val deps = this.dependencies.map { RustDependency.fromSymbolDependency(it) }.filterIsInstance<CargoDependency>()
-    val module = if (this.namespace.contains("::")) {
-        this.namespace.split("::")[1]
-    } else {
-        "lib"
-    }
-    val tempDir = this.toString()
-        .intoCrate(deps.toSet(), module = module, main = main, strict = clippy)
+    val deps =
+        this.dependencies
+            .map { RustDependency.fromSymbolDependency(it) }
+            .filterIsInstance<CargoDependency>()
+            .distinct()
+            .mergeDependencyFeatures()
+            .mergeIdenticalTestDependencies()
+    val module =
+        if (this.namespace.contains("::")) {
+            this.namespace.split("::")[1]
+        } else {
+            "lib"
+        }
+    val tempDir =
+        this.toString()
+            .intoCrate(deps, module = module, main = main, strict = clippy)
     val mainRs = tempDir.resolve("src/main.rs")
     val testModule = tempDir.resolve("src/$module.rs")
     try {
-        val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-            "cargo test".runCommand(tempDir.toPath())
-        } else {
-            "cargo check".runCommand(tempDir.toPath())
-        }
+        val testOutput =
+            if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+                "cargo test".runCommand(tempDir.toPath())
+            } else {
+                "cargo check".runCommand(tempDir.toPath())
+            }
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
         return testOutput
-    } catch (e: CommandFailed) {
+    } catch (e: CommandError) {
         if (!expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
@@ -306,23 +450,26 @@ fun RustWriter.compileAndTest(
 }
 
 private fun String.intoCrate(
-    deps: Set<CargoDependency>,
+    deps: List<CargoDependency>,
     module: String? = null,
     main: String = "",
     strict: Boolean = false,
 ): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
-    val cargoToml = """
-        [package]
-        name = ${tempDir.nameWithoutExtension.dq()}
-        version = "0.0.1"
-        authors = ["rcoh@amazon.com"]
-        edition = "2021"
-
-        [dependencies]
-        ${deps.joinToString("\n") { it.toString() }}
-    """.trimIndent()
+    val cargoToml =
+        RustWriter.toml("Cargo.toml").apply {
+            CargoTomlGenerator(
+                moduleName = tempDir.nameWithoutExtension,
+                moduleVersion = "0.0.1",
+                moduleAuthors = listOf("Testy McTesterson"),
+                moduleDescription = null,
+                moduleLicense = null,
+                moduleRepository = null,
+                writer = this,
+                dependencies = deps,
+            ).render()
+        }.toString()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
@@ -384,13 +531,21 @@ fun String.compileAndRun(vararg strings: String) {
     binary.absolutePath.runCommand()
 }
 
-fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile("tests/$name.rs", writable)
+fun RustCrate.integrationTest(
+    name: String,
+    writable: Writable,
+) = this.withFile("tests/$name.rs", writable)
 
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {
-        unitTest(safeName("test")) {
-            test(this)
+        val name = safeName("test")
+        withInlineModule(RustModule.inlineTests(name), TestModuleDocProvider) {
+            unitTest(name) {
+                test(this)
+            }
         }
     }
     return this
 }
+
+fun String.runWithWarnings(crate: Path) = this.runCommand(crate, mapOf("RUSTFLAGS" to "-D warnings"))

@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 internal class PaginatorGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         use aws.protocols#awsJson1_1
 
@@ -23,6 +24,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.items")
         operation PaginatedList {
@@ -31,6 +33,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.mapItems")
         operation PaginatedMap {
@@ -65,14 +68,14 @@ internal class PaginatorGeneratorTest {
             key: String,
             value: Integer
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate paginators that compile`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
-                Attribute.Custom("allow(unused_imports)").render(this)
-                rust("use ${clientCodegenContext.moduleUseName()}::paginator::PaginatedListPaginator;")
+                Attribute.AllowUnusedImports.render(this)
+                rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")
             }
         }
     }

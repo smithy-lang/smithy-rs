@@ -4,12 +4,14 @@
  */
 //! Smithy Endpoint Types
 
+use crate::config_bag::{Storable, StoreReplace};
 use crate::Document;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
 type MaybeStatic = Cow<'static, str>;
 
+/* ANCHOR: endpoint */
 /// Smithy Endpoint Type
 ///
 /// Generally, this type should not be used from user code
@@ -19,6 +21,8 @@ pub struct Endpoint {
     headers: HashMap<MaybeStatic, Vec<MaybeStatic>>,
     properties: HashMap<MaybeStatic, Document>,
 }
+
+/* ANCHOR_END: endpoint */
 
 #[allow(unused)]
 impl Endpoint {
@@ -48,6 +52,10 @@ impl Endpoint {
     pub fn builder() -> Builder {
         Builder::new()
     }
+}
+
+impl Storable for Endpoint {
+    type Storer = StoreReplace<Self>;
 }
 
 #[derive(Debug, Clone)]

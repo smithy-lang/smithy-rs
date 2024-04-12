@@ -1,17 +1,22 @@
 # Note: This workspace exists so that these tests can be run without having to build the entire SDK. When you run
 # `./gradlew -Paws.fullsdk=true :aws:sdk:assemble` these tests are copied into their respective Service crates.
 [workspace]
+resolver = "2"
 members = [
+    "codecatalyst",
     "dynamodb",
     "ec2",
     "glacier",
     "iam",
     "kms",
     "lambda",
+    "no-default-features",
     "polly",
     "qldbsession",
     "s3",
     "s3control",
     "sts",
+    "timestreamquery",
     "transcribestreaming",
+    "webassembly",
 ]

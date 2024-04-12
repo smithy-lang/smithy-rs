@@ -4,14 +4,56 @@
  */
 
 use aws_config::SdkConfig;
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
-use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::credentials::SharedCredentialsProvider;
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::error::DisplayErrorContext;
+use aws_sdk_s3::Client;
+use aws_smithy_runtime::assert_str_contains;
+use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+use aws_smithy_types::body::SdkBody;
 use bytes::BytesMut;
+use http::header::CONTENT_LENGTH;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tracing::debug;
+
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/3523): Unignore this test
+#[tokio::test]
+#[should_panic]
+async fn test_too_short_body_causes_an_error() {
+    // this is almost impossible to reproduce with Hyper—you need to do stuff like run each request
+    // in its own async runtime. But there's no reason a customer couldn't run their _own_ HttpClient
+    // that was more poorly behaved, so we'll do that here.
+    let http_client = infallible_client_fn(|_req| {
+        http::Response::builder()
+            .header(CONTENT_LENGTH, 5000)
+            .body(SdkBody::from("definitely not 5000 characters"))
+            .unwrap()
+    });
+
+    let client = aws_sdk_s3::Client::from_conf(
+        aws_sdk_s3::Config::builder()
+            .with_test_defaults()
+            .region(Region::new("us-east-1"))
+            .http_client(http_client)
+            .build(),
+    );
+
+    let content = client
+        .get_object()
+        .bucket("some-test-bucket")
+        .key("test.txt")
+        .send()
+        .await
+        .unwrap()
+        .body;
+    let error = content.collect().await.expect_err("content too short");
+    assert_str_contains!(
+        format!("{}", DisplayErrorContext(error)),
+        "Invalid Content-Length: Expected 5000 bytes but 30 bytes were received"
+    );
+}
 
 // test will hang forever with the default (single-threaded) test executor
 #[tokio::test(flavor = "multi_thread")]
@@ -22,17 +64,9 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
     let _ = tokio::spawn(server);
 
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-east-1"))
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
 
     let client = Client::new(&sdk_config);
@@ -55,6 +89,8 @@ async fn test_streaming_response_fails_when_eof_comes_before_content_length_reac
             message.contains(expected),
             "Expected `{message}` to contain `{expected}`"
         );
+    } else {
+        panic!("response did not error")
     }
 }
 
@@ -111,15 +147,13 @@ Hello"#;
                 }
             }
 
-            if socket.writable().await.is_ok() {
-                if time_to_respond {
-                    // The content length is 12 but we'll only write 5 bytes
-                    socket.try_write(&response).unwrap();
-                    // We break from the R/W loop after sending a partial response in order to
-                    // close the connection early.
-                    debug!("faulty server has written partial response, now closing connection");
-                    break;
-                }
+            if socket.writable().await.is_ok() && time_to_respond {
+                // The content length is 12 but we'll only write 5 bytes
+                socket.try_write(response).unwrap();
+                // We break from the R/W loop after sending a partial response in order to
+                // close the connection early.
+                debug!("faulty server has written partial response, now closing connection");
+                break;
             }
         }
     }

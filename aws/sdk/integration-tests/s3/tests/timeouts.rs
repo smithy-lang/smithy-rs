@@ -3,41 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::SdkConfig;
-use aws_sdk_s3::model::{
+use aws_sdk_s3::config::{timeout::TimeoutConfig, Region};
+use aws_sdk_s3::error::DisplayErrorContext;
+use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::types::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
 };
-use aws_sdk_s3::{Client, Credentials, Endpoint, Region};
+use aws_sdk_s3::{Client, Config};
 use aws_smithy_async::assert_elapsed;
-use aws_smithy_async::rt::sleep::{default_async_sleep, TokioSleep};
-use aws_smithy_client::never::NeverConnector;
-use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::credentials::SharedCredentialsProvider;
+use aws_smithy_runtime::client::http::test_util::NeverClient;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::time::timeout;
 
 #[tokio::test(start_paused = true)]
-async fn test_timeout_service_ends_request_that_never_completes() {
-    let sdk_config = SdkConfig::builder()
-        .region(Region::from_static("us-east-2"))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
-        .http_connector(NeverConnector::new())
+async fn test_event_stream_request_times_out_if_server_is_unresponsive() {
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-2"))
+        .http_client(NeverClient::new())
         .timeout_config(
             TimeoutConfig::builder()
-                .operation_timeout(Duration::from_secs_f32(0.5))
+                .operation_timeout(Duration::from_millis(500))
                 .build(),
         )
-        .sleep_impl(Arc::new(TokioSleep::new()))
         .build();
-    let client = Client::new(&sdk_config);
+    let client = Client::from_conf(config);
 
     let now = tokio::time::Instant::now();
 
@@ -66,7 +60,46 @@ async fn test_timeout_service_ends_request_that_never_completes() {
         .await
         .unwrap_err();
 
-    assert_eq!("TimeoutError(TimeoutError { source: RequestTimeoutError { kind: \"operation timeout (all attempts including retries)\", duration: 500ms } })", format!("{:?}", err));
+    let expected = "operation timeout (all attempts including retries) occurred after 500ms";
+    let message = format!("{}", DisplayErrorContext(err));
+    assert!(
+        message.contains(expected),
+        "expected '{message}' to contain '{expected}'"
+    );
+    assert_elapsed!(now, Duration::from_millis(500));
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_upload_request_times_out_if_server_is_unresponsive() {
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-2"))
+        .http_client(NeverClient::new())
+        .timeout_config(
+            TimeoutConfig::builder()
+                .operation_timeout(Duration::from_millis(500))
+                .build(),
+        )
+        .build();
+    let client = Client::from_conf(config);
+
+    let now = tokio::time::Instant::now();
+
+    let err = client
+        .put_object()
+        .bucket("aws-rust-sdk")
+        .key("sample_data.csv")
+        .body(ByteStream::from_static(b"Hello world!"))
+        .send()
+        .await
+        .unwrap_err();
+
+    let expected = "operation timeout (all attempts including retries) occurred after 500ms";
+    let message = format!("{}", DisplayErrorContext(err));
+    assert!(
+        message.contains(expected),
+        "expected '{message}' to contain '{expected}'"
+    );
     assert_elapsed!(now, std::time::Duration::from_secs_f32(0.5));
 }
 
@@ -81,11 +114,10 @@ async fn test_read_timeout() {
         (
             async move {
                 while shutdown_receiver.try_recv().is_err() {
-                    if let Ok(result) = timeout(Duration::from_millis(100), listener.accept()).await
+                    if let Ok(Ok((_socket, _))) =
+                        timeout(Duration::from_millis(100), listener.accept()).await
                     {
-                        if let Ok((_socket, _)) = result {
-                            tokio::time::sleep(Duration::from_millis(1000)).await;
-                        }
+                        tokio::time::sleep(Duration::from_millis(1000)).await;
                     }
                 }
             },
@@ -97,22 +129,17 @@ async fn test_read_timeout() {
     let server_handle = tokio::spawn(server_fut);
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    let config = SdkConfig::builder()
-        .sleep_impl(default_async_sleep().unwrap())
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-1"))
         .timeout_config(
             TimeoutConfig::builder()
                 .read_timeout(Duration::from_millis(300))
                 .build(),
         )
-        .endpoint_resolver(
-            Endpoint::immutable(format!("http://{server_addr}")).expect("valid endpoint"),
-        )
-        .region(Some(Region::from_static("us-east-1")))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
+        .endpoint_url(format!("http://{server_addr}"))
         .build();
-    let client = Client::new(&config);
+    let client = Client::from_conf(config);
 
     if let Ok(result) = timeout(
         Duration::from_millis(1000),
@@ -141,26 +168,20 @@ async fn test_read_timeout() {
 
 #[tokio::test]
 async fn test_connect_timeout() {
-    let config = SdkConfig::builder()
-        .sleep_impl(default_async_sleep().unwrap())
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-1"))
         .timeout_config(
             TimeoutConfig::builder()
                 .connect_timeout(Duration::from_millis(300))
                 .build(),
         )
-        .endpoint_resolver(
-            Endpoint::immutable(
-                // Emulate a connect timeout error by hitting an unroutable IP
-                "http://172.255.255.0:18104",
-            )
-            .expect("valid endpoint"),
+        .endpoint_url(
+            // Emulate a connect timeout error by hitting an unroutable IP
+            "http://172.255.255.0:18104",
         )
-        .region(Some(Region::from_static("us-east-1")))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "test", "test", None, None, "test",
-        )))
         .build();
-    let client = Client::new(&config);
+    let client = Client::from_conf(config);
 
     if let Ok(result) = timeout(
         Duration::from_millis(1000),

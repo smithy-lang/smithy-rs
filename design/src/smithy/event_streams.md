@@ -14,7 +14,7 @@ This document describes:
 The user experience
 ----------------------------------------------
 
-Let us take [the following model](https://github.com/awslabs/smithy-rs/pull/1479/files#diff-ae332acd4a848e840d018d3b8616e40031f9e8f96ed89777dea69eb1f51a89a4R25) as an example:
+Let us take [the following model](https://github.com/smithy-lang/smithy-rs/pull/1479/files#diff-ae332acd4a848e840d018d3b8616e40031f9e8f96ed89777dea69eb1f51a89a4R25) as an example:
 ```smithy
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemonOperation {
@@ -197,7 +197,7 @@ pub struct CapturePokemonOperationInput {
 }
 ```
 Note they are similar, but the client uses an `EventStreamSender` (this is an input structure) and the server a `Receiver` (the server receives the input).
-Sender is [chosen according](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L58) to if the
+Sender is [chosen according](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L58) to if the
 generation target is the client and the union is in an input structure; or if this is a server sending from an operation's output.
 
 The error structs are generated as any operation error, where the union shape is treated as an operation:
@@ -216,7 +216,7 @@ pub enum AttemptCapturingPokemonEventError {
     MasterBallUnsuccessful(crate::error::MasterBallUnsuccessful),
 }
 ```
-The errors are similar to any operation error, but their [name](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50) is `Error` prefixed by the name of the union.
+The errors are similar to any operation error, but their [name](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50) is `Error` prefixed by the name of the union.
 The reason for splitting up errors and non-errors in the event stream union is to give a more Rust-like experience to customers,
 where they can `yield` and `match` on errors `Err(UnionError::Variant)` as a result of the event stream communication,
 rather than matching on the specific variant, `Ok(Union::Variant) => /* handle error */`.
@@ -238,8 +238,8 @@ aws_smithy_http::event_stream::Receiver<
 ```
 and errors propagated as such to terminate the stream.
 
-An [EventStreamSender](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L18) wraps an input stream
-into a [MessageStreamAdapter](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L132), which implements
+An [EventStreamSender](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L18) wraps an input stream
+into a [MessageStreamAdapter](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L132), which implements
 the [Stream](https://docs.rs/futures-core/0.3.21/futures_core/stream/trait.Stream.html) trait. At a high level, `poll_next` works by:
 1. Polling the customer stream
 2. If there is an event:
@@ -248,13 +248,13 @@ the [Stream](https://docs.rs/futures-core/0.3.21/futures_core/stream/trait.Strea
    3. Sign the marshalled data and return it
 3. Otherwise, signal to poll back later
 
-Similarly, the [Receiver](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L125) handles the receiving side of the stream.
+Similarly, the [Receiver](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L125) handles the receiving side of the stream.
 The `Receiver` has more logic to handle buffering data and possibly errors.
 
 Server and client serialize similarly. Serializing for `CapturePokemonOperation` on the server, with `serialize_capture_pokemon_operation_response`:
 1. Sets the `content-type` HTTP header to `application/vnd.amazon.eventstream`
 2. Converts the `EventStreamSender` in the event stream structure into a `MessageStreamAdapter` with a marshaller for the error and data types
-   1. [This](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L511) is where it is generated
+   1. [This](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L511) is where it is generated
 3. Gives the body back to hyper
 ```rust
 let body =
@@ -269,13 +269,13 @@ let body =
        adapter
    }));
 ```
-The signer signs the message to be sent. [NoOpSigner](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L37) returns the message as is, `SigV4Signer` signs using the AWS SigV4 protocol. SigV4 requires an empty-payload signed message to be sent before effectively terminating the stream; to keep the same interface, `SignMessage::sign_empty` returns an `Option` to signal whether signing this last empty message is required.
+The signer signs the message to be sent. [NoOpSigner](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L37) returns the message as is, `SigV4Signer` signs using the AWS SigV4 protocol. SigV4 requires an empty-payload signed message to be sent before effectively terminating the stream; to keep the same interface, `SignMessage::sign_empty` returns an `Option` to signal whether signing this last empty message is required.
 
-The marshallers set header and payload in a [Message](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L368) structure: `Message` is a structure with a vector, the headers; and bytes, the payload.
+The marshallers set header and payload in a [Message](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L368) structure: `Message` is a structure with a vector, the headers; and bytes, the payload.
 The headers are the values targeted by the `@eventHeader` trait and the payload by `@eventPayload`.
 
 At the end of the marshalling and signing processes, `MessageStreamAdapter` takes the `Message` built by the marshaller and signer
-and [writes](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L224) it as bytes into a `Vec<u8>`,
+and [writes](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-eventstream/src/frame.rs#L224) it as bytes into a `Vec<u8>`,
 in a format of a sequence of bytes: `<type, data>` where `type` indicates if the `data` is a bool, integer and so on for all types.
 
 Headers that are sent are:
@@ -288,10 +288,10 @@ The way errors are marshalled, unmarshalled and signed is the same as above.
 
 #### Generating errors
 Event stream errors in unions are generated in the same way for operation errors:
-In fact, the implementation uses the same [render](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L47) functions;
+In fact, the implementation uses the same [render](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L47) functions;
 the only difference between client and server is that the server does not generate anything unless the structure has errors,
 while the client always generates a structure for forward compatibility with at least a `Unhandled` error kind.
-This is also the reason for the default [MessageStreamError](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L52) for servers.
+This is also the reason for the default [MessageStreamError](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L52) for servers.
 
 The main differences between the EventStreamErrorMarshallerGenerator and EventStreamMarshallerGenerator are that the former:
 * takes into account the differences between client and server in how error symbols are laid out (with a `kind` member or `Kind` suffix)

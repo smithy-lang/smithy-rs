@@ -20,6 +20,10 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 and
 
 ```rust
+# extern crate tracing_subscriber;
+# extern crate tracing;
+# use tracing_subscriber::filter;
+# use tracing::Level;
 let filter = filter::Targets::new().with_target("aws_smithy_http_server", Level::DEBUG);
 ```
 
@@ -53,17 +57,41 @@ Smithy provides an out-the-box middleware which:
 - Opens a DEBUG level span, prior to request handling, including the operation name and request URI and headers.
 - Emits a DEBUG level event, after to request handling, including the response headers and status code.
 
-This is applied by default and can be enabled and disabled by filtering on `aws_smithy_http_server::instrumentation`.
+This is enabled via the `instrument` method provided by the `aws_smithy_http_server::instrumentation::InstrumentExt` trait.
+
+```rust,no_run
+# extern crate aws_smithy_http_server;
+# extern crate pokemon_service_server_sdk;
+# use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+use aws_smithy_http_server::{
+  instrumentation::InstrumentExt,
+  plugin::{IdentityPlugin, HttpPlugins}
+};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
+use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
+
+let http_plugins = HttpPlugins::new().instrument();
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+let app = PokemonService::builder(config)
+  .get_pokemon_species(handler)
+  /* ... */
+  .build()
+  .unwrap();
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
+```
 
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 
-<!-- TODO: Document use of the `InstrumentExt` after the new service builder is released. -->
-
 ### Example
 
-The Pokémon service example, located at `rust-runtime/aws-smithy-http-server/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
+The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
 ```rust
+# extern crate tracing_subscriber;
+use tracing_subscriber::{prelude::*, EnvFilter};
+
 /// Setup `tracing::subscriber` to read the log level from RUST_LOG environment variable.
 pub fn setup_tracing() {
     let format = tracing_subscriber::fmt::layer().pretty();

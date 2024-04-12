@@ -7,7 +7,7 @@
 
 use aws_smithy_http_server::{
     body::{to_boxed, BoxBody},
-    proto::{
+    protocol::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
     },
     response::IntoResponse,
@@ -39,12 +39,19 @@ impl From<PyError> for PyErr {
 ///
 /// It allows to specify a message and HTTP status code and implementing protocol specific capabilities
 /// to build a [aws_smithy_http_server::response::Response] from it.
+///
+/// :param message str:
+/// :param status_code typing.Optional\[int\]:
+/// :rtype None:
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
-#[pyo3(text_signature = "(message, status_code)")]
+#[pyo3(text_signature = "($self, message, status_code=None)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
+    /// :type str:
     #[pyo3(get, set)]
     message: String,
+
+    /// :type int:
     #[pyo3(get, set)]
     status_code: u16,
 }
@@ -79,7 +86,7 @@ impl IntoResponse<RestJson1> for PyMiddlewareException {
             .header("Content-Type", "application/json")
             .header("X-Amzn-Errortype", "MiddlewareException")
             .body(to_boxed(self.json_body()))
-            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 
@@ -89,7 +96,7 @@ impl IntoResponse<RestXml> for PyMiddlewareException {
             .status(self.status_code)
             .header("Content-Type", "application/xml")
             .body(to_boxed(self.xml_body()))
-            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 
@@ -100,7 +107,7 @@ impl IntoResponse<AwsJson1_0> for PyMiddlewareException {
             .header("Content-Type", "application/x-amz-json-1.0")
             // See https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
             .body(to_boxed(self.json_body()))
-            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 
@@ -111,7 +118,7 @@ impl IntoResponse<AwsJson1_1> for PyMiddlewareException {
             .header("Content-Type", "application/x-amz-json-1.1")
             // See https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html#empty-body-serialization
             .body(to_boxed(self.json_body()))
-            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+            .expect("invalid HTTP response for `MiddlewareException`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 

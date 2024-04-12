@@ -99,7 +99,7 @@ Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. 
 
 _View [AwsMiddleware] in GitHub_
 
-```rust
+```rust,ignore
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct AwsMiddleware;
@@ -109,7 +109,7 @@ impl<S> tower::Layer<S> for AwsMiddleware {
   fn layer(&self, inner: S) -> Self::Service {
     let credential_provider = AsyncMapRequestLayer::for_mapper(CredentialsStage::new());
     let signer = MapRequestLayer::for_mapper(SigV4SigningStage::new(SigV4Signer::new()));
-    let endpoint_resolver = MapRequestLayer::for_mapper(AwsEndpointStage);
+    let endpoint_resolver = MapRequestLayer::for_mapper(AwsAuthStage);
     let user_agent = MapRequestLayer::for_mapper(UserAgentStage::new());
     ServiceBuilder::new()
             .layer(endpoint_resolver)
@@ -127,7 +127,7 @@ The above code is only included for context. This RFC doesn't define any timeout
 
 _View [aws_smithy_client::Client::call_raw] in GitHub_
 
-```rust
+```rust,ignore
 impl<C, M, R> Client<C, M, R>
   where
           C: bounds::SmithyConnector,
@@ -175,7 +175,7 @@ The **HTTP Request Timeout For A Single Attempt** and **HTTP Request Timeout For
 
 The resulting code would look like this:
 
-```rust
+```rust,ignore
 impl<C, M, R> Client<C, M, R>
   where
           C: bounds::SmithyConnector,
@@ -261,12 +261,12 @@ Changes are broken into to sections:
 [hjr3/hyper-timeout]: https://github.com/hjr3/hyper-timeout
 [sfackler/tokio-io-timeout]: https://github.com/sfackler/tokio-io-timeout
 [tower_service::Service]: https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html
-[AwsMiddleware]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29
-[MapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
-[AsyncMapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
-[ParseResponse]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
-[DynConnect]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
+[AwsMiddleware]: https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29
+[MapRequest]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
+[AsyncMapRequest]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
+[ParseResponse]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
+[DynConnect]: https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
 [Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
 [tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
-[aws_smithy_client::Client::call_raw]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
-[Layers can produce compiler errors]: https://github.com/awslabs/smithy-rs/issues/634
+[aws_smithy_client::Client::call_raw]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
+[Layers can produce compiler errors]: https://github.com/smithy-lang/smithy-rs/issues/634

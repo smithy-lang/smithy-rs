@@ -7,39 +7,110 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.EnumDefinition
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.util.doubleQuote
+import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+
+data class EnumGeneratorContext(
+    val enumName: String,
+    val enumMeta: RustMetadata,
+    val enumTrait: EnumTrait,
+    val sortedMembers: List<EnumMemberModel>,
+)
+
+/**
+ * Type of enum to generate
+ *
+ * In codegen-core, there are only `Infallible` enums. Server adds additional enum types, which
+ * is why this class is abstract rather than sealed.
+ */
+abstract class EnumType {
+    /** Returns a writable that implements `From<&str>` and/or `TryFrom<&str>` for the enum */
+    abstract fun implFromForStr(context: EnumGeneratorContext): Writable
+
+    /** Returns a writable that implements `FromStr` for the enum */
+    abstract fun implFromStr(context: EnumGeneratorContext): Writable
+
+    /** Optionally adds additional documentation to the `enum` docs */
+    open fun additionalDocs(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally adds additional enum members */
+    open fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally adds match arms to the `as_str` match implementation for named enums */
+    open fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable = writable {}
+
+    /** Optionally add more attributes to the enum */
+    open fun additionalEnumAttributes(context: EnumGeneratorContext): List<Attribute> = emptyList()
+
+    /** Optionally add more impls to the enum */
+    open fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {}
+}
 
 /** Model that wraps [EnumDefinition] to calculate and cache values required to generate the Rust enum source. */
-class EnumMemberModel(private val definition: EnumDefinition, private val symbolProvider: RustSymbolProvider) {
+class EnumMemberModel(
+    private val parentShape: Shape,
+    private val definition: EnumDefinition,
+    private val symbolProvider: RustSymbolProvider,
+) {
+    companion object {
+        /**
+         * Return the name of a given `enum` variant. Note that this refers to `enum` in the Smithy context
+         * where enum is a trait that can be applied to [StringShape] and not in the Rust context of an algebraic data type.
+         *
+         * Ordinarily, the symbol provider would determine this name, but the enum trait doesn't allow for this.
+         *
+         * TODO(https://github.com/smithy-lang/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
+         */
+        @Deprecated("This function will go away when we handle EnumShape instead of EnumTrait")
+        fun toEnumVariantName(
+            symbolProvider: RustSymbolProvider,
+            parentShape: Shape,
+            definition: EnumDefinition,
+        ): MaybeRenamed? {
+            val name = definition.name.orNull()?.toPascalCase() ?: return null
+            // Create a fake member shape for symbol look up until we refactor to use EnumShape
+            val fakeMemberShape =
+                MemberShape.builder().id(parentShape.id.withMember(name)).target("smithy.api#String").build()
+            val symbol = symbolProvider.toSymbol(fakeMemberShape)
+            return MaybeRenamed(symbol.name, symbol.renamedFrom())
+        }
+    }
     // Because enum variants always start with an upper case letter, they will never
     // conflict with reserved words (which are always lower case), therefore, we never need
     // to fall back to raw identifiers
 
     val value: String get() = definition.value
 
-    fun name(): MaybeRenamed? = symbolProvider.toEnumVariantName(definition)
+    fun name(): MaybeRenamed? = toEnumVariantName(symbolProvider, parentShape, definition)
 
     private fun renderDocumentation(writer: RustWriter) {
         val name =
@@ -54,11 +125,11 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
 
     private fun renderDeprecated(writer: RustWriter) {
         if (definition.isDeprecated) {
-            Attribute.Custom.deprecated().render(writer)
+            Attribute.Deprecated.render(writer)
         }
     }
 
-    fun derivedName() = checkNotNull(symbolProvider.toEnumVariantName(definition)).name
+    fun derivedName() = checkNotNull(toEnumVariantName(symbolProvider, parentShape, definition)).name
 
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
@@ -67,7 +138,10 @@ class EnumMemberModel(private val definition: EnumDefinition, private val symbol
     }
 }
 
-private fun RustWriter.docWithNote(doc: String?, note: String?) {
+private fun RustWriter.docWithNote(
+    doc: String?,
+    note: String?,
+) {
     if (doc.isNullOrBlank() && note.isNullOrBlank()) {
         // If the model doesn't have any documentation for the shape, then suppress the missing docs lint
         // since the lack of documentation is a modeling issue rather than a codegen issue.
@@ -85,232 +159,171 @@ private fun RustWriter.docWithNote(doc: String?, note: String?) {
 open class EnumGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
-    private val writer: RustWriter,
-    protected val shape: StringShape,
-    protected val enumTrait: EnumTrait,
+    private val shape: StringShape,
+    private val enumType: EnumType,
 ) {
-    protected val symbol: Symbol = symbolProvider.toSymbol(shape)
-    protected val enumName: String = symbol.name
-    protected val meta = symbol.expectRustMetadata()
-    protected val sortedMembers: List<EnumMemberModel> =
-        enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(it, symbolProvider) }
-    protected open var target: CodegenTarget = CodegenTarget.CLIENT
-
     companion object {
-        /** Name of the generated unknown enum member name for enums with named members. */
-        const val UnknownVariant = "Unknown"
-
-        /** Name of the opaque struct that is inner data for the generated [UnknownVariant]. */
-        const val UnknownVariantValue = "UnknownVariantValue"
-
         /** Name of the function on the enum impl to get a vec of value names */
         const val Values = "values"
     }
 
-    open fun render() {
-        if (enumTrait.hasNames()) {
-            // pub enum Blah { V1, V2, .. }
-            renderEnum()
-            writer.insertTrailingNewline()
-            // impl From<str> for Blah { ... }
-            renderFromForStr()
-            // impl FromStr for Blah { ... }
-            renderFromStr()
-            writer.insertTrailingNewline()
-            // impl Blah { pub fn as_str(&self) -> &str
-            implBlock()
-            writer.rustBlock("impl AsRef<str> for $enumName") {
-                rustBlock("fn as_ref(&self) -> &str") {
-                    rust("self.as_str()")
-                }
-            }
-        } else {
-            renderUnnamedEnum()
-        }
-    }
-
-    private fun renderUnnamedEnum() {
-        writer.documentShape(shape, model)
-        writer.deprecatedShape(shape)
-        meta.render(writer)
-        writer.write("struct $enumName(String);")
-        writer.rustBlock("impl $enumName") {
-            docs("Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                rust("&self.0")
-            }
-
-            docs("Returns all the `&str` representations of the enum members.")
-            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.dq() }
-                    rust(memberList)
-                }
-            }
-        }
-
-        writer.rustBlock("impl <T> #T<T> for $enumName where T: #T<str>", RuntimeType.From, RuntimeType.AsRef) {
-            rustBlock("fn from(s: T) -> Self") {
-                rust("$enumName(s.as_ref().to_owned())")
-            }
-        }
-    }
-
-    private fun renderEnum() {
-        target.ifClient {
-            writer.renderForwardCompatibilityNote(enumName, sortedMembers, UnknownVariant, UnknownVariantValue)
-        }
-
-        val renamedWarning =
-            sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
-                val previousName = it.renamedFrom!!
-                "`$enumName::$previousName` has been renamed to `::${it.name}`."
-            }
-        writer.docWithNote(
-            shape.getTrait<DocumentationTrait>()?.value,
-            renamedWarning.ifBlank { null },
+    private val enumTrait: EnumTrait = shape.expectTrait()
+    private val symbol: Symbol = symbolProvider.toSymbol(shape)
+    private val context =
+        EnumGeneratorContext(
+            enumName = symbol.name,
+            enumMeta = symbol.expectRustMetadata(),
+            enumTrait = enumTrait,
+            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
         )
-        writer.deprecatedShape(shape)
 
-        meta.render(writer)
-        writer.rustBlock("enum $enumName") {
-            sortedMembers.forEach { member -> member.render(writer) }
-            target.ifClient {
-                docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
-                rust("$UnknownVariant(#T)", unknownVariantValue())
-            }
+    fun render(writer: RustWriter) {
+        enumType.additionalEnumAttributes(context).forEach { attribute ->
+            attribute.render(writer)
+        }
+        if (enumTrait.hasNames()) {
+            writer.renderNamedEnum()
+        } else {
+            writer.renderUnnamedEnum()
+        }
+        enumType.additionalEnumImpls(context)(writer)
+
+        if (shape.shouldRedact(model)) {
+            writer.renderDebugImplForSensitiveEnum()
         }
     }
 
-    private fun implBlock() {
-        writer.rustBlock("impl $enumName") {
-            rust("/// Returns the `&str` value of the enum member.")
-            rustBlock("pub fn as_str(&self) -> &str") {
-                rustBlock("match self") {
-                    sortedMembers.forEach { member ->
-                        rust("""$enumName::${member.derivedName()} => ${member.value.dq()},""")
+    private fun RustWriter.renderNamedEnum() {
+        // pub enum Blah { V1, V2, .. }
+        renderEnum()
+        insertTrailingNewline()
+        // impl From<str> for Blah { ... }
+        enumType.implFromForStr(context)(this)
+        // impl FromStr for Blah { ... }
+        enumType.implFromStr(context)(this)
+        insertTrailingNewline()
+        // impl Blah { pub fn as_str(&self) -> &str
+        implBlock(
+            asStrImpl =
+                writable {
+                    rustBlock("match self") {
+                        context.sortedMembers.forEach { member ->
+                            rust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},""")
+                        }
+                        enumType.additionalAsStrMatchArms(context)(this)
                     }
-
-                    target.ifClient {
-                        rust("$enumName::$UnknownVariant(value) => value.as_str()")
-                    }
-                }
-            }
-
-            rust("/// Returns all the `&str` values of the enum members.")
-            rustBlock("pub const fn $Values() -> &'static [&'static str]") {
-                withBlock("&[", "]") {
-                    val memberList = sortedMembers.joinToString(", ") { it.value.doubleQuote() }
-                    write(memberList)
-                }
-            }
-        }
-    }
-
-    private fun unknownVariantValue(): RuntimeType {
-        return RuntimeType.forInlineFun(UnknownVariantValue, RustModule.Types) {
-            docs(
-                """
-                Opaque struct used as inner data for the `Unknown` variant defined in enums in
-                the crate
-
-                While this is not intended to be used directly, it is marked as `pub` because it is
-                part of the enums that are public interface.
-                """.trimIndent(),
-            )
-            meta.render(this)
-            rust("struct $UnknownVariantValue(pub(crate) String);")
-            rustBlock("impl $UnknownVariantValue") {
-                // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
-                rustBlock("pub(crate) fn as_str(&self) -> &str") {
-                    rust("&self.0")
-                }
-            }
-        }
-    }
-
-    protected open fun renderFromForStr() {
-        writer.rustBlock("impl #T<&str> for $enumName", RuntimeType.From) {
-            rustBlock("fn from(s: &str) -> Self") {
-                rustBlock("match s") {
-                    sortedMembers.forEach { member ->
-                        rust("""${member.value.dq()} => $enumName::${member.derivedName()},""")
-                    }
-                    rust("other => $enumName::$UnknownVariant(#T(other.to_owned()))", unknownVariantValue())
-                }
-            }
-        }
-    }
-
-    open fun renderFromStr() {
-        writer.rust(
+                },
+        )
+        rustTemplate(
             """
-            impl std::str::FromStr for $enumName {
-                type Err = std::convert::Infallible;
-
-                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-                    Ok($enumName::from(s))
+            impl #{AsRef}<str> for ${context.enumName} {
+                fn as_ref(&self) -> &str {
+                    self.as_str()
                 }
             }
             """,
+            *preludeScope,
         )
     }
-}
 
-/**
- * Generate the rustdoc describing how to write a match expression against a generated enum in a
- * forward-compatible way.
- */
-private fun RustWriter.renderForwardCompatibilityNote(
-    enumName: String, sortedMembers: List<EnumMemberModel>,
-    unknownVariant: String, unknownVariantValue: String,
-) {
-    docs(
-        """
-        When writing a match expression against `$enumName`, it is important to ensure
-        your code is forward-compatible. That is, if a match arm handles a case for a
-        feature that is supported by the service but has not been represented as an enum
-        variant in a current version of SDK, your code should continue to work when you
-        upgrade SDK to a future version in which the enum does include a variant for that
-        feature.
-        """.trimIndent(),
-    )
-    docs("")
-    docs("Here is an example of how you can make a match expression forward-compatible:")
-    docs("")
-    docs("```text")
-    rust("/// ## let ${enumName.lowercase()} = unimplemented!();")
-    rust("/// match ${enumName.lowercase()} {")
-    sortedMembers.mapNotNull { it.name() }.forEach { member ->
-        rust("///     $enumName::${member.name} => { /* ... */ },")
+    private fun RustWriter.renderUnnamedEnum() {
+        documentShape(shape, model)
+        deprecatedShape(shape)
+        context.enumMeta.render(this)
+        rust("struct ${context.enumName}(String);")
+        implBlock(
+            asStrImpl =
+                writable {
+                    rust("&self.0")
+                },
+        )
+
+        // Add an infallible FromStr implementation for uniformity
+        rustTemplate(
+            """
+            impl ::std::str::FromStr for ${context.enumName} {
+                type Err = ::std::convert::Infallible;
+
+                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
+                    #{Ok}(${context.enumName}::from(s))
+                }
+            }
+            """,
+            *preludeScope,
+        )
+
+        rustTemplate(
+            """
+            impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
+                fn from(s: T) -> Self {
+                    ${context.enumName}(s.as_ref().to_owned())
+                }
+            }
+
+            """,
+            *preludeScope,
+        )
     }
-    rust("""///     other @ _ if other.as_str() == "NewFeature" => { /* handles a case for `NewFeature` */ },""")
-    rust("///     _ => { /* ... */ },")
-    rust("/// }")
-    docs("```")
-    docs(
-        """
-        The above code demonstrates that when `${enumName.lowercase()}` represents
-        `NewFeature`, the execution path will lead to the second last match arm,
-        even though the enum does not contain a variant `$enumName::NewFeature`
-        in the current version of SDK. The reason is that the variable `other`,
-        created by the `@` operator, is bound to
-        `$enumName::$unknownVariant($unknownVariantValue("NewFeature".to_owned()))`
-        and calling `as_str` on it yields `"NewFeature"`.
-        This match expression is forward-compatible when executed with a newer
-        version of SDK where the variant `$enumName::NewFeature` is defined.
-        Specifically, when `${enumName.lowercase()}` represents `NewFeature`,
-        the execution path will hit the second last match arm as before by virtue of
-        calling `as_str` on `$enumName::NewFeature` also yielding `"NewFeature"`.
-        """.trimIndent(),
-    )
-    docs("")
-    docs(
-        """
-        Explicitly matching on the `$unknownVariant` variant should
-        be avoided for two reasons:
-        - The inner data `$unknownVariantValue` is opaque, and no further information can be extracted.
-        - It might inadvertently shadow other intended match arms.
-        """.trimIndent(),
-    )
+
+    private fun RustWriter.renderEnum() {
+        enumType.additionalDocs(context)(this)
+
+        val renamedWarning =
+            context.sortedMembers.mapNotNull { it.name() }.filter { it.renamedFrom != null }.joinToString("\n") {
+                val previousName = it.renamedFrom!!
+                "`${context.enumName}::$previousName` has been renamed to `::${it.name}`."
+            }
+        docWithNote(
+            shape.getTrait<DocumentationTrait>()?.value,
+            renamedWarning.ifBlank { null },
+        )
+        deprecatedShape(shape)
+
+        context.enumMeta.render(this)
+        rustBlock("enum ${context.enumName}") {
+            context.sortedMembers.forEach { member -> member.render(this) }
+            enumType.additionalEnumMembers(context)(this)
+        }
+    }
+
+    private fun RustWriter.implBlock(asStrImpl: Writable) {
+        rustTemplate(
+            """
+            impl ${context.enumName} {
+                /// Returns the `&str` value of the enum member.
+                pub fn as_str(&self) -> &str {
+                    #{asStrImpl:W}
+                }
+                /// Returns all the `&str` representations of the enum members.
+                pub const fn $Values() -> &'static [&'static str] {
+                    &[#{Values:W}]
+                }
+            }
+            """,
+            "asStrImpl" to asStrImpl,
+            "Values" to
+                writable {
+                    rust(context.sortedMembers.joinToString(", ") { it.value.dq() })
+                },
+        )
+    }
+
+    /**
+     * Manually implement the `Debug` trait for the enum if marked as sensitive.
+     *
+     * It prints the redacted text regardless of the variant it is asked to print.
+     */
+    private fun RustWriter.renderDebugImplForSensitiveEnum() {
+        rustTemplate(
+            """
+            impl #{Debug} for ${context.enumName} {
+                fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
+                    ::std::write!(f, $REDACTION)
+                }
+            }
+            """,
+            "Debug" to RuntimeType.Debug,
+            "StdFmt" to RuntimeType.stdFmt,
+        )
+    }
 }

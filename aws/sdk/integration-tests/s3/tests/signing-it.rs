@@ -3,54 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::SdkConfig;
-use aws_http::user_agent::AwsUserAgent;
-use aws_sdk_s3::{Client, Credentials, Region};
-use aws_smithy_client::test_connection::TestConnection;
-use aws_smithy_http::body::SdkBody;
-use aws_types::credentials::SharedCredentialsProvider;
-use std::convert::Infallible;
-use std::time::{Duration, UNIX_EPOCH};
+#![cfg(feature = "test-util")]
+
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::{Client, Config};
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_types::body::SdkBody;
 
 #[tokio::test]
 async fn test_signer() {
-    let conn = TestConnection::new(vec![(
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
-            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=6233614b69271e15db079287874a654183916e509909b5719b00cd8d5f31299e")
-            .uri("https://s3.us-east-1.amazonaws.com/test-bucket?list-type=2&prefix=prefix~")
+            .header("authorization", "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-user-agent, Signature=27e3f59ec3cffaa10e4f1c92112e8fb62d468a04cd32be39e68215f830404dbb")
+            .uri("https://test-bucket.s3.us-east-1.amazonaws.com/?list-type=2&prefix=prefix~")
             .body(SdkBody::empty())
             .unwrap(),
-        http::Response::builder().status(200).body("").unwrap(),
+        http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
     )]);
-    let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
-            "ANOTREAL",
-            "notrealrnrELgWzOk3IfjzDKtFBhDby",
-            Some("notarealsessiontoken".to_string()),
-            None,
-            "test",
-        )))
+    let config = Config::builder()
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
+        .with_test_defaults()
         .build();
-    let client = Client::new(&sdk_config);
+    let client = Client::from_conf(config);
     let _ = client
         .list_objects_v2()
         .bucket("test-bucket")
         .prefix("prefix~")
-        .customize()
-        .await
-        .unwrap()
-        .map_operation(|mut op| {
-            op.properties_mut()
-                .insert(UNIX_EPOCH + Duration::from_secs(1624036048));
-            op.properties_mut().insert(AwsUserAgent::for_tests());
-
-            Result::Ok::<_, Infallible>(op)
-        })
-        .unwrap()
         .send()
         .await;
 
-    conn.assert_requests_match(&[]);
+    http_client.assert_requests_match(&[]);
 }

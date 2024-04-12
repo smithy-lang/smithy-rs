@@ -10,7 +10,12 @@ import software.amazon.smithy.codegen.core.Symbol
 
 class UseDeclarations(private val namespace: String) : ImportContainer {
     private val imports: MutableSet<UseStatement> = mutableSetOf()
-    fun addImport(moduleName: String, symbolName: String, alias: String = symbolName) {
+
+    fun addImport(
+        moduleName: String,
+        symbolName: String,
+        alias: String = symbolName,
+    ) {
         imports.add(UseStatement(moduleName, symbolName, alias))
     }
 
@@ -18,7 +23,10 @@ class UseDeclarations(private val namespace: String) : ImportContainer {
         return imports.map { it.toString() }.sorted().joinToString(separator = "\n")
     }
 
-    override fun importSymbol(symbol: Symbol, alias: String?) {
+    override fun importSymbol(
+        symbol: Symbol,
+        alias: String?,
+    ) {
         if (symbol.namespace.isNotEmpty() && symbol.namespace != namespace) {
             addImport(symbol.namespace, symbol.name, alias ?: symbol.name)
         }

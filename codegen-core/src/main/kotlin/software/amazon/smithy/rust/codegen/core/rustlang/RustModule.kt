@@ -5,6 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
+
 /**
  * RustModule system.
  *
@@ -12,7 +16,6 @@ package software.amazon.smithy.rust.codegen.core.rustlang
  * - There is no guarantee _which_ module will be rendered.
  */
 sealed class RustModule {
-
     /** lib.rs */
     object LibRs : RustModule()
 
@@ -27,9 +30,11 @@ sealed class RustModule {
     data class LeafModule(
         val name: String,
         val rustMetadata: RustMetadata,
-        val documentation: String? = null,
         val parent: RustModule = LibRs,
         val inline: Boolean = false,
+        // module is a cfg(test) module
+        val tests: Boolean = false,
+        val documentationOverride: String? = null,
     ) : RustModule() {
         init {
             check(!name.contains("::")) {
@@ -43,78 +48,107 @@ sealed class RustModule {
                 "Module `$name` cannot be a module name—it is a reserved word."
             }
         }
+
+        /** Convert a module into a module gated with `#[cfg(test)]` */
+        fun cfgTest(): LeafModule =
+            this.copy(
+                rustMetadata = rustMetadata.copy(additionalAttributes = rustMetadata.additionalAttributes + Attribute.CfgTest),
+                tests = true,
+            )
     }
 
     companion object {
-
         /** Creates a new module with the specified visibility */
         fun new(
             name: String,
             visibility: Visibility,
-            documentation: String? = null,
             inline: Boolean = false,
             parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
+            documentationOverride: String? = null,
         ): LeafModule {
             return LeafModule(
                 RustReservedWords.escapeIfNeeded(name),
-                RustMetadata(visibility = visibility),
-                documentation,
+                RustMetadata(visibility = visibility, additionalAttributes = additionalAttributes),
                 inline = inline,
                 parent = parent,
+                documentationOverride = documentationOverride,
             )
         }
 
         /** Creates a new public module */
-        fun public(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PUBLIC, documentation = documentation, inline = false, parent = parent)
+        fun public(
+            name: String,
+            parent: RustModule = LibRs,
+            documentationOverride: String? = null,
+            additionalAttributes: List<Attribute> = emptyList(),
+        ): LeafModule =
+            new(
+                name,
+                visibility = Visibility.PUBLIC,
+                inline = false,
+                parent = parent,
+                documentationOverride = documentationOverride,
+                additionalAttributes = additionalAttributes,
+            )
 
         /** Creates a new private module */
-        fun private(name: String, documentation: String? = null, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PRIVATE, documentation = documentation, inline = false, parent = parent)
+        fun private(
+            name: String,
+            parent: RustModule = LibRs,
+        ): LeafModule = new(name, visibility = Visibility.PRIVATE, inline = false, parent = parent)
 
-        /* Common modules used across client, server and tests */
-        val Config = public("config", documentation = "Configuration for the service.")
-        val Error = public("error", documentation = "All error types that operations can return.")
-        val Model = public("model", documentation = "Data structures used by operation inputs/outputs.")
-        val Input = public("input", documentation = "Input structures for operations.")
-        val Output = public("output", documentation = "Output structures for operations.")
-        val Types = public("types", documentation = "Data primitives referenced by other data types.")
-
-        /**
-         * Helper method to generate the `operation` Rust module.
-         * Its visibility depends on the generation context (client or server).
-         */
-        fun operation(visibility: Visibility): RustModule =
+        fun pubCrate(
+            name: String,
+            parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = emptyList(),
+        ): LeafModule =
             new(
-                "operation",
-                visibility = visibility,
-                documentation = "All operations that this crate can perform.",
+                name, visibility = Visibility.PUBCRATE,
+                inline = false,
+                parent = parent,
+                additionalAttributes = additionalAttributes,
             )
+
+        fun inlineTests(
+            name: String = "test",
+            parent: RustModule = LibRs,
+            additionalAttributes: List<Attribute> = listOf(),
+        ) = new(
+            name,
+            Visibility.PRIVATE,
+            inline = true,
+            additionalAttributes = additionalAttributes,
+            parent = parent,
+        ).cfgTest()
     }
 
-    fun isInline(): Boolean = when (this) {
-        is LibRs -> false
-        is LeafModule -> this.inline
-    }
+    fun isInline(): Boolean =
+        when (this) {
+            is LibRs -> false
+            is LeafModule -> this.inline
+        }
 
     /**
      * Fully qualified path to this module, e.g. `crate::grandparent::parent::child`
      */
-    fun fullyQualifiedPath(): String = when (this) {
-        is LibRs -> "crate"
-        is LeafModule -> parent.fullyQualifiedPath() + "::" + name
-    }
+    fun fullyQualifiedPath(): String =
+        when (this) {
+            is LibRs -> "crate"
+            is LeafModule -> parent.fullyQualifiedPath() + "::" + name
+        }
 
     /**
      * The file this module is homed in, e.g. `src/grandparent/parent/child.rs`
      */
-    fun definitionFile(): String = when (this) {
-        is LibRs -> "src/lib.rs"
-        is LeafModule -> {
-            val path = fullyQualifiedPath().split("::").drop(1).joinToString("/")
-            "src/$path.rs"
+    fun definitionFile(): String =
+        when (this) {
+            is LibRs -> "src/lib.rs"
+            is LeafModule -> {
+                val path = fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                "src/$path.rs"
+            }
         }
-    }
 
     /**
      * Renders the usage statement, approximately:
@@ -123,10 +157,16 @@ sealed class RustModule {
      * pub mod my_module_name
      * ```
      */
-    fun renderModStatement(writer: RustWriter) {
+    fun renderModStatement(
+        writer: RustWriter,
+        moduleDocProvider: ModuleDocProvider,
+    ) {
         when (this) {
             is LeafModule -> {
-                documentation?.let { docs -> writer.docs(docs) }
+                if (name.startsWith("r#")) {
+                    PANIC("Something went wrong with module name escaping (module named '$name'). This is a bug.")
+                }
+                ModuleDocProvider.writeDocs(moduleDocProvider, this, writer)
                 rustMetadata.render(writer)
                 writer.write("mod $name;")
             }
@@ -134,4 +174,7 @@ sealed class RustModule {
             else -> {}
         }
     }
+
+    /** Converts this [RustModule] into a [RuntimeType] */
+    fun toType(): RuntimeType = RuntimeType(fullyQualifiedPath())
 }

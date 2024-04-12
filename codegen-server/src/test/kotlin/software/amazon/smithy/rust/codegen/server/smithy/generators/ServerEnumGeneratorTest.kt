@@ -12,10 +12,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerEnumGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         @enum([
             {
@@ -32,7 +34,7 @@ class ServerEnumGeneratorTest {
             },
         ])
         string InstanceType
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     private val codegenContext = serverTestCodegenContext(model)
     private val writer = RustWriter.forModule("model")
@@ -40,7 +42,11 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates TryFrom, FromStr and errors for enums`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.compileAndTest(
             """
             use std::str::FromStr;
@@ -53,10 +59,14 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without the unknown variant`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.compileAndTest(
             """
-            // check no unknown
+            // Check no `Unknown` variant.
             let instance = InstanceType::T2Micro;
             match instance {
                 InstanceType::T2Micro => (),
@@ -68,7 +78,11 @@ class ServerEnumGeneratorTest {
 
     @Test
     fun `it generates enums without non_exhaustive`() {
-        ServerEnumGenerator(codegenContext, writer, shape).render()
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+        ).render(writer)
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
 }

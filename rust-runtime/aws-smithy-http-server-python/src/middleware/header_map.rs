@@ -132,7 +132,7 @@ assert headers.get("host") == None
 assert len(headers) == 2
 
 assert set(headers.items()) == set([
-    ("content-length", "45"), 
+    ("content-length", "45"),
     ("content-encoding", "application/json")
 ])
 "#
