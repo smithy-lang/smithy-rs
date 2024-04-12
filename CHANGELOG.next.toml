@@ -22,3 +22,9 @@ message = "Upgraded MSRV to Rust 1.75"
 references = ["smithy-rs#3553"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Change some credentials related info log messages to debug."
+references = ["smithy-rs#3546"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "orf"
