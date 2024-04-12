@@ -21,7 +21,7 @@ pub fn put_get_delete(c: &mut Criterion) {
     println!(
         "measuring {number_of_iterations} sequences of \
             PutObject -> GetObject -> DeleteObject against \
-            {buckets:#?}, switching buckets on every sequence of operations\n"
+            {buckets:#?}, switching buckets on every sequence of operations if more than one bucket is specified\n"
     );
 
     let client = Runtime::new().unwrap().block_on(async {
@@ -30,7 +30,6 @@ pub fn put_get_delete(c: &mut Criterion) {
     });
 
     let mut group = c.benchmark_group("put_get_delete");
-    group.sample_size(10).confidence_level(0.99);
 
     const KB: usize = 1024;
     for size in [64 * KB, KB * KB].iter() {
