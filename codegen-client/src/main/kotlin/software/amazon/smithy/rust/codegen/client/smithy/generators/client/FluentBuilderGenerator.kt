@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
@@ -48,6 +49,25 @@ class FluentBuilderGenerator(
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
 
+    private val scope =
+        arrayOf(
+            *preludeScope,
+            "CustomizableOperation" to
+                ClientRustModule.Client.customize.toType()
+                    .resolve("CustomizableOperation"),
+            "HttpResponse" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::orchestrator::HttpResponse"),
+            "Operation" to operationType,
+            "OperationError" to errorType,
+            "OperationOutput" to outputType,
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+            "SendResult" to
+                ClientRustModule.Client.customize.toType()
+                    .resolve("internal::SendResult"),
+        )
+
     fun render(writer: RustWriter) {
         writer.renderInner()
     }
@@ -65,7 +85,7 @@ class FluentBuilderGenerator(
                     #{OperationOutput},
                     #{SdkError}<
                         #{OperationError},
-                        #{RawResponseType}
+                        #{HttpResponse}
                     >
                 > {
                     let mut fluent_builder = client.$fnName();
@@ -73,12 +93,7 @@ class FluentBuilderGenerator(
                     fluent_builder.send().await
                 }
                 """,
-                *RuntimeType.preludeScope,
-                "RawResponseType" to
-                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                *scope,
             )
         }
 
@@ -98,8 +113,8 @@ class FluentBuilderGenerator(
                 handle: #{Arc}<crate::client::Handle>,
                 inner: #{Inner},
                 """,
+                *scope,
                 "Inner" to inputBuilderType,
-                "Arc" to RuntimeType.Arc,
             )
             rustTemplate("config_override: #{Option}<crate::config::Builder>,", *RuntimeType.preludeScope)
         }
@@ -125,10 +140,7 @@ class FluentBuilderGenerator(
                 }
             }
             """,
-            *RuntimeType.preludeScope,
-            "OperationError" to errorType,
-            "OperationOutput" to outputType,
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            *scope,
         )
 
         rustBlock("impl $builderName") {
@@ -136,14 +148,14 @@ class FluentBuilderGenerator(
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
                 "}",
-                "Arc" to RuntimeType.Arc,
+                *scope,
             ) {
                 withBlockTemplate(
                     "Self {",
                     "}",
                 ) {
-                    rustTemplate("handle, inner: #{Default}::default(),", *RuntimeType.preludeScope)
-                    rustTemplate("config_override: #{None},", *RuntimeType.preludeScope)
+                    rustTemplate("handle, inner: #{Default}::default(),", *scope)
+                    rustTemplate("config_override: #{None},", *scope)
                 }
             }
 
@@ -155,24 +167,6 @@ class FluentBuilderGenerator(
                 write("&self.inner")
             }
 
-            val orchestratorScope =
-                arrayOf(
-                    *RuntimeType.preludeScope,
-                    "CustomizableOperation" to
-                        ClientRustModule.Client.customize.toType()
-                            .resolve("CustomizableOperation"),
-                    "HttpResponse" to
-                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                            .resolve("client::orchestrator::HttpResponse"),
-                    "Operation" to operationType,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                    "SendResult" to
-                        ClientRustModule.Client.customize.toType()
-                            .resolve("internal::SendResult"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                )
             rustTemplate(
                 """
                 /// Sends the request and returns the response.
@@ -200,27 +194,28 @@ class FluentBuilderGenerator(
                     #{CustomizableOperation}::new(self)
                 }
                 """,
-                *orchestratorScope,
+                *scope,
             )
 
             rustTemplate(
                 """
                 pub(crate) fn config_override(
                     mut self,
-                    config_override: impl Into<crate::config::Builder>,
+                    config_override: impl #{Into}<crate::config::Builder>,
                 ) -> Self {
-                    self.set_config_override(Some(config_override.into()));
+                    self.set_config_override(#{Some}(config_override.into()));
                     self
                 }
 
                 pub(crate) fn set_config_override(
                     &mut self,
-                    config_override: Option<crate::config::Builder>,
+                    config_override: #{Option}<crate::config::Builder>,
                 ) -> &mut Self {
                     self.config_override = config_override;
                     self
                 }
                 """,
+                *scope,
             )
 
             PaginatorGenerator.paginatorType(codegenContext, operation)
@@ -239,10 +234,7 @@ class FluentBuilderGenerator(
                 }
             writeCustomizations(
                 customizations,
-                FluentClientSection.FluentBuilderImpl(
-                    operation,
-                    symbolProvider.symbolForOperationError(operation),
-                ),
+                FluentClientSection.FluentBuilderImpl(operation, errorType),
             )
             inputShape.members().forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
