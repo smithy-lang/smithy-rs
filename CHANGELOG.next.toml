@@ -10,53 +10,30 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[smithy-rs]]
-message = """
-Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
-
-```rust
-let config = my_service::Config::builder()
-    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
-    // ...
-    .build();
-```
-"""
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
-message = """
-Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
-
-```rust
-let config = aws_config::defaults(BehaviorVersion::latest())
-    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
-    .load()
-    .await;
-```
-"""
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
+message = "Upgraded MSRV to Rust 1.75"
+references = ["smithy-rs#3553"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-authors = ["jdisanti"]
-
-[[aws-sdk-rust]]
-message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "Upgraded MSRV to Rust 1.75"
+references = ["smithy-rs#3553"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
 author = "jdisanti"
 
-[[smithy-rs]]
-message = "Unions with unit target member shape are now fully supported"
-references = ["smithy-rs#2546"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
-author = "drganjoo"
+[[aws-sdk-rust]]
+message = "Make `SigningSettings` and its fields implement `Clone` and `Copy`"
+references = ["smithy-rs#3533"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "avandesa"
+
+[[aws-sdk-rust]]
+message = "Change some credentials related info log messages to debug."
+references = ["smithy-rs#3546"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "orf"
 
 [[smithy-rs]]
 message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by updating."
@@ -69,4 +46,3 @@ message = "Stalled stream protection on uploads is now enabled by default behind
 references = ["smithy-rs#3527"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "jdisanti"
->>>>>>> e6ee18941 (Add changelog entries)
