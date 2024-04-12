@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPubl
  * If [unconstrainedSymbol] is provided, the `MaybeConstrained` trait is implemented for the constrained type, using the
  * [unconstrainedSymbol]'s associated type as the associated type for the trait.
  *
- * [`length` trait]: https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+ * [`length` trait]: https://smithy.io/2.0/spec/constraint-traits.html#length-trait
  */
 class ConstrainedMapGenerator(
     val codegenContext: ServerCodegenContext,

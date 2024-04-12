@@ -214,7 +214,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     /*
      * Generation of `from_request` and `into_response`.
      * For non-streaming request bodies, that is, models without streaming traits
-     * (https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html)
+     * (https://smithy.io/2.0/spec/streaming.html#streaming-trait)
      * we require the HTTP body to be fully read in memory before parsing or deserialization.
      * From a server perspective we need a way to parse an HTTP request from `Bytes` and serialize
      * an HTTP response to `Bytes`.
