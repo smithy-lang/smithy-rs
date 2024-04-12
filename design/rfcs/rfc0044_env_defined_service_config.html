@@ -1,0 +1,589 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0044: Environment-defined service configuration - Smithy Rust</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li><li class="chapter-item expanded "><a href="../transport/connector.html"><strong aria-hidden="true">4.3.</strong> TLS Connector</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0035_collection_defaults.html"><strong aria-hidden="true">8.35.</strong> RFC-0035: Collection Defaults</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0036_http_dep_elimination.html"><strong aria-hidden="true">8.36.</strong> RFC-0036: HTTP Dependency Exposure</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0037_http_wrapper.html"><strong aria-hidden="true">8.37.</strong> RFC-0037: The HTTP Wrapper</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0038_retry_classifier_customization.html"><strong aria-hidden="true">8.38.</strong> RFC-0038: User-configurable retry classification</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0039_forward_compatible_errors.html"><strong aria-hidden="true">8.39.</strong> RFC-0039: Forward Compatible Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0040_behavior_versions.html"><strong aria-hidden="true">8.40.</strong> RFC-0040: Behavior Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0041_improve_client_error_ergonomics.html"><strong aria-hidden="true">8.41.</strong> RFC-0041: Improve client error ergonomics</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0042_file_per_change_changelog.html"><strong aria-hidden="true">8.42.</strong> RFC-0042: File-per-change changelog</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0043_identity_cache_partitions.html"><strong aria-hidden="true">8.43.</strong> RFC-0043: Identity Cache Partitions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0044_env_defined_service_config.html" class="active"><strong aria-hidden="true">8.44.</strong> RFC-0044: Environment-defined service configuration</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Smithy Rust</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="rfc-environment-defined-service-configuration"><a class="header" href="#rfc-environment-defined-service-configuration">RFC: Environment-defined service configuration</a></h1>
+<blockquote>
+<p>Status: RFC</p>
+<p>Applies to: client</p>
+</blockquote>
+<p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes
+Checklist</a> section.</p>
+<p>In the AWS SDK for Rust today, customers are limited to setting global
+configuration variables in their environment; They cannot set service-specific
+variables. Other SDKs and the AWS CLI do allow for setting service-specific
+variables.</p>
+<p>This RFC proposes an implementation that would enable users to set
+service-specific variables in their environment.</p>
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<ul>
+<li><strong>Global configuration</strong>: configuration which will be used for requests to any
+service. May be overridden by service-specific configuration.</li>
+<li><strong>Service-specific configuration</strong>: configuration which will be used for
+requests only to a specific service.</li>
+<li><strong>Configuration variable</strong>: A key-value pair that defines configuration e.g.
+<code>key = value</code>, <code>key: value</code>, <code>KEY=VALUE</code>, etc.
+<ul>
+<li>Key and value as used in this RFC refer to each half of a configuration
+variable.</li>
+</ul>
+</li>
+<li><strong>Sub-properties</strong>: When parsing config variables from a profile file,
+sub-properties are a newline-delimited list of key-value pairs in an indented
+block following a <code>&lt;service name&gt;=\n</code> line. <em>For an example, see the <strong>Profile
+File Configuration</strong> section of this RFC where sub-properties are declared for
+two different services.</em></li>
+</ul>
+<h2 id="the-user-experience-if-this-rfc-is-implemented"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented">The user experience if this RFC is implemented</a></h2>
+<p>While users can already set global configuration in their environment, this RFC
+proposes two new ways to set service-specific configuration in their
+environment.</p>
+<h3 id="environment-variables"><a class="header" href="#environment-variables">Environment Variables</a></h3>
+<p>When defining service-specific configuration with an environment variable, all
+keys are formatted like so:</p>
+<pre><code class="language-sh">"AWS" + "_" + "&lt;config key in CONST_CASE&gt;" + "_" + "&lt;service ID in CONST_CASE&gt;"
+</code></pre>
+<p>As an example, setting an endpoint URL for different services would look like
+this:</p>
+<pre><code class="language-sh">export AWS_ENDPOINT_URL=http://localhost:4444
+export AWS_ENDPOINT_URL_ELASTICBEANSTALK=http://localhost:5555
+export AWS_ENDPOINT_URL_DYNAMODB=http://localhost:6666
+</code></pre>
+<p>The first variable sets a global endpoint URL. The second variable overrides the
+first variable, but only for the Elastic Beanstalk service. The third variable
+overrides the first variable, but only for the DynamoDB service.</p>
+<h3 id="profile-file-configuration"><a class="header" href="#profile-file-configuration">Profile File Configuration</a></h3>
+<p>When defining service-specific configuration in a profile file, it looks like
+this:</p>
+<pre><code class="language-ignore">[profile dev]
+services = testing-s3-and-eb
+endpoint_url = http://localhost:9000
+
+[services testing-s3-and-eb]
+s3 =
+  endpoint_url = http://localhost:4567
+elasticbeanstalk =
+  endpoint_url = http://localhost:8000
+</code></pre>
+<p>When <code>dev</code> is the active profile, all services will use the
+<code>http://localhost:9000</code> endpoint URL except where it is overridden. Because the
+<code>dev</code> profile references the <code>testing-s3-and-eb</code> services, and because two
+service-specific endpoint URLs are set, those URLs will override the
+<code>http://localhost:9000</code> endpoint URL when making requests to S3
+(<code>http://localhost:4567</code>) and Elastic Beanstalk (<code>http://localhost:8000</code>).</p>
+<h3 id="configuration-precedence"><a class="header" href="#configuration-precedence">Configuration Precedence</a></h3>
+<p>When configuration is set in multiple places, the value used is determined in
+this order of precedence:</p>
+<p><em>highest precedence</em></p>
+<ol>
+<li><em>EXISTING</em> Programmatic client configuration</li>
+<li><em>NEW</em> Service-specific environment variables</li>
+<li><em>EXISTING</em> Global environment variables</li>
+<li><em>NEW</em> Service-specific profile file variables in the active profile</li>
+<li><em>EXISTING</em> Global profile file variables in the active profile</li>
+</ol>
+<p><em>lowest precedence</em></p>
+<h2 id="how-to-actually-implement-this-rfc"><a class="header" href="#how-to-actually-implement-this-rfc">How to actually implement this RFC</a></h2>
+<p>This RFC may be implemented in several steps which are detailed below.</p>
+<h3 id="sourcing-service-specific-config-from-the-environment-and-profile"><a class="header" href="#sourcing-service-specific-config-from-the-environment-and-profile">Sourcing service-specific config from the environment and profile</a></h3>
+<p><code>aws_config::profile::parser::ProfileSet</code> is responsible for storing the active
+profile and all profile configuration data. Currently, it only tracks
+<code>sso_session</code> and <code>profile</code> sections, so it must be updated to store arbitrary
+sections, their properties, and sub-properties. These sections will be publicly
+accessible via a new method <code>ProfileSet::other_sections</code> which returns a ref to
+a <code>Properties</code> struct.</p>
+<p>The <code>Properties</code> struct is defined as follows:</p>
+<pre><code class="language-rust ignore">type SectionKey = String;
+type SectionName = String;
+type PropertyName = String;
+type SubPropertyName = String;
+type PropertyValue = String;
+
+/// A key for to a property value.
+///
+/// ```txt
+/// # An example AWS profile config section with properties and sub-properties
+/// [section-key section-name]
+/// property-name = property-value
+/// property-name =
+///   sub-property-name = property-value
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PropertiesKey {
+    section_key: SectionKey,
+    section_name: SectionName,
+    property_name: PropertyName,
+    sub_property_name: Option&lt;SubPropertyName&gt;,
+}
+
+impl PropertiesKey {
+    /// Create a new builder for a `PropertiesKey`.
+    pub fn builder() -&gt; Builder {
+        Default::default()
+    }
+}
+
+// The builder code is omitted from this RFC. It allows users to set each field
+// individually and then build a PropertiesKey
+
+/// A map of [`PropertiesKey`]s to property values.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Properties {
+    inner: HashMap&lt;PropertiesKey, PropertyValue&gt;,
+}
+
+impl Properties {
+    /// Create a new empty [`Properties`].
+    pub fn new() -&gt; Self {
+        Default::default()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_from_slice(slice: &amp;[(PropertiesKey, PropertyValue)]) -&gt; Self {
+        let mut properties = Self::new();
+        for (key, value) in slice {
+            properties.insert(key.clone(), value.clone());
+        }
+        properties
+    }
+
+    /// Insert a new key/value pair into this map.
+    pub fn insert(&amp;mut self, properties_key: PropertiesKey, value: PropertyValue) {
+        let _ = self
+            .inner
+            // If we don't clone then we don't get to log a useful warning for a value getting overwritten.
+            .entry(properties_key.clone())
+            .and_modify(|v| {
+                tracing::trace!("overwriting {properties_key}: was {v}, now {value}");
+                *v = value.clone();
+            })
+            .or_insert(value);
+    }
+
+    /// Given a [`PropertiesKey`], return the corresponding value, if any.
+    pub fn get(&amp;self, properties_key: &amp;PropertiesKey) -&gt; Option&lt;&amp;PropertyValue&gt; {
+        self.inner.get(properties_key)
+    }
+}</code></pre>
+<p>The <code>aws_config::env</code> module remains unchanged. It already provides all the
+necessary functionality.</p>
+<h3 id="exposing-valid-service-configuration-during-serviceconfig-construction"><a class="header" href="#exposing-valid-service-configuration-during-serviceconfig-construction">Exposing valid service configuration during <code>&lt;service&gt;::Config</code> construction</a></h3>
+<p>Environment variables <em>(from <code>Env</code>)</em> and profile variables <em>(from
+<code>EnvConfigSections</code>)</em> must be available during the conversion of <code>SdkConfig</code> to
+<code>&lt;service&gt;::Config</code>. To accomplish this, we'll define a new trait
+<code>LoadServiceConfig</code> and implement it for <code>EnvServiceConfig</code>  which will be
+stored in the <code>SdkConfig</code> struct.</p>
+<pre><code class="language-rust ignore">/// A struct used with the [`LoadServiceConfig`] trait to extract service config from the user's environment.
+// [profile active-profile]
+// services = dev
+//
+// [services dev]
+// service-id =
+//   config-key = config-value
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ServiceConfigKey&lt;'a&gt; {
+    service_id: &amp;'a str,
+    profile: &amp;'a str,
+    env: &amp;'a str,
+}
+
+impl&lt;'a&gt; ServiceConfigKey&lt;'a&gt; {
+    /// Create a new [`ServiceConfigKey`] builder struct.
+    pub fn builder() -&gt; builder::Builder&lt;'a&gt; {
+        Default::default()
+    }
+    /// Get the service ID.
+    pub fn service_id(&amp;self) -&gt; &amp;'a str {
+        self.service_id
+    }
+    /// Get the profile key.
+    pub fn profile(&amp;self) -&gt; &amp;'a str {
+        self.profile
+    }
+    /// Get the environment key.
+    pub fn env(&amp;self) -&gt; &amp;'a str {
+        self.env
+    }
+}
+
+/// Implementers of this trait can provide service config defined in a user's environment.
+pub trait LoadServiceConfig: fmt::Debug + Send + Sync {
+    /// Given a [`ServiceConfigKey`], return the value associated with it.
+    fn load_config(&amp;self, key: ServiceConfigKey&lt;'_&gt;) -&gt; Option&lt;String&gt;;
+}
+
+#[derive(Debug)]
+pub(crate) struct EnvServiceConfig {
+    pub(crate) env: Env,
+    pub(crate) env_config_sections: EnvConfigSections,
+}
+
+impl LoadServiceConfig for EnvServiceConfig {
+    fn load_config(&amp;self, key: ServiceConfigKey&lt;'_&gt;) -&gt; Option&lt;String&gt; {
+        let (value, _source) = EnvConfigValue::new()
+            .env(key.env())
+            .profile(key.profile())
+            .service_id(key.service_id())
+            .load(&amp;self.env, Some(&amp;self.env_config_sections))?;
+
+        Some(value.to_string())
+    }
+}</code></pre>
+<h3 id="code-generation"><a class="header" href="#code-generation">Code generation</a></h3>
+<p>We require two things to check for when constructing the service config:</p>
+<ul>
+<li>The service's ID</li>
+<li>The service's supported configuration variables</li>
+</ul>
+<p>We <strong>only</strong> have this information once we get to the service level. Because of
+that, we must use code generation to define:</p>
+<ul>
+<li>What config to look for in the environment</li>
+<li>How to validate that config</li>
+</ul>
+<p>Codegen for configuration must be updated for all config variables that we want
+to support. For an example, here's how we'd update the <code>RegionDecorator</code> to check
+for service-specific regions:</p>
+<pre><code class="language-java">class RegionDecorator : ClientCodegenDecorator {
+    // ...
+    override fun extraSections(codegenContext: ClientCodegenContext): List&lt;AdHocCustomization&gt; {
+        return usesRegion(codegenContext).thenSingletonListOf {
+            adhocCustomization&lt;SdkConfigSection.CopySdkConfigToClientConfig&gt; { section -&gt;
+                rust(
+                    """
+                    ${section.serviceConfigBuilder}.set_region(
+                        ${section.sdkConfig}
+                            .service_config()
+                            .and_then(|conf| {
+                                conf.load_config(service_config_key($envKey, $profileKey))
+                                    .map(Region::new)
+                            })
+                            .or_else(|| ${section.sdkConfig}.region().cloned()),
+                    );
+                    """,
+                )
+            }
+        }
+    }
+    // ...
+</code></pre>
+<p>To construct the keys necessary to locate the service-specific configuration, we
+generate a <code>service_config_key</code> function for each service crate:</p>
+<pre><code class="language-java">class ServiceEnvConfigDecorator : ClientCodegenDecorator {
+    override val name: String = "ServiceEnvConfigDecorator"
+    override val order: Byte = 10
+
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val rc = codegenContext.runtimeConfig
+        val serviceId = codegenContext.serviceShape.sdkId().toSnakeCase().dq()
+        rustCrate.withModule(ClientRustModule.config) {
+            Attribute.AllowDeadCode.render(this)
+            rustTemplate(
+                """
+                fn service_config_key&lt;'a&gt;(
+                    env: &amp;'a str,
+                    profile: &amp;'a str,
+                ) -&gt; aws_types::service_config::ServiceConfigKey&lt;'a&gt; {
+                    #{ServiceConfigKey}::builder()
+                        .service_id($serviceId)
+                        .env(env)
+                        .profile(profile)
+                        .build()
+                        .expect("all field sets explicitly, can't fail")
+                }
+                """,
+                "ServiceConfigKey" to AwsRuntimeType.awsTypes(rc).resolve("service_config::ServiceConfigKey"),
+            )
+        }
+    }
+}
+</code></pre>
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
+<ul>
+<li>In <code>aws-types</code>:
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add new <code>service_config: Option&lt;Arc&lt;dyn LoadServiceConfig&gt;&gt;</code> field to <code>SdkConfig</code> and builder.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add setters and getters for the new <code>service_config</code> field.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add a new <code>service_config</code> module.
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Add new <code>ServiceConfigKey</code> struct and builder.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add new <code>LoadServiceConfig</code> trait.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>In <code>aws-config</code>:
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Move profile parsing out of <code>aws-config</code> into <code>aws-runtime</code>.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Deprecate the <code>aws-config</code> reëxports and direct users to <code>aws-runtime</code>.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add a new <code>EnvServiceConfig</code> struct and implement <code>LoadServiceConfig</code> for it.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update <code>ConfigLoader</code> to set the <code>service_config</code> field in <code>SdkConfig</code>.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update all default providers to use the new of the <code>EnvConfigValue::validate</code> method.</li>
+</ul>
+</li>
+<li>In <code>aws-runtime</code>:
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Rename all profile-related code moved from <code>aws-config</code> to <code>aws-runtime</code> so that it's easier to understand in light of the API changes we're making.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add a new struct <code>PropertiesKey</code> and <code>Properties</code> to store profile data.</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Add an integration test that ensures service-specific config has the expected precedence.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update codegen to generate a method to easily construct <code>ServiceConfigKey</code>s.</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update codegen to generate code that loads service-specific config from the environment for a limited initial set of config variables:
+<ul>
+<li>Region</li>
+<li>Endpoint URL</li>
+<li>Endpoint-related "built-ins" like <code>use_arn_region</code> and <code>disable_multi_region_access_points</code>.</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Write a <a href="https://github.com/smithy-lang/smithy-rs/discussions/3537">guide</a> for users.
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Explain to users how they can determine a service's ID.</li>
+</ul>
+</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0043_identity_cache_partitions.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../contributing/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0043_identity_cache_partitions.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../contributing/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>
