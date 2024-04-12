@@ -118,16 +118,15 @@ pub mod identity {
 #[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cfg(test)]
-mod test_case;
-
-mod fs_util;
 mod http_credential_provider;
 mod json_credentials;
+#[cfg(test)]
+mod test_case;
 
 pub mod credential_process;
 pub mod default_provider;
 pub mod ecs;
+mod env_service_config;
 pub mod environment;
 pub mod imds;
 pub mod meta;
@@ -138,7 +137,6 @@ mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
 pub mod stalled_stream_protection;
-pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
@@ -208,12 +206,7 @@ pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
 }
 
 mod loader {
-    use crate::default_provider::use_dual_stack::use_dual_stack_provider;
-    use crate::default_provider::use_fips::use_fips_provider;
-    use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
-    use crate::meta::region::ProvideRegion;
-    use crate::profile::profile_file::ProfileFiles;
-    use crate::provider_config::ProviderConfig;
+    use crate::env_service_config::EnvServiceConfig;
     use aws_credential_types::provider::{
         token::{ProvideToken, SharedTokenProvider},
         ProvideCredentials, SharedCredentialsProvider,
@@ -230,9 +223,19 @@ mod loader {
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
+    use aws_types::origin::Origin;
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
+
+    use crate::default_provider::{
+        app_name, credentials, endpoint_url, ignore_configured_endpoint_urls as ignore_ep, region,
+        retry_config, timeout_config, use_dual_stack, use_fips,
+    };
+    use crate::meta::region::ProvideRegion;
+    #[allow(deprecated)]
+    use crate::profile::profile_file::ProfileFiles;
+    use crate::provider_config::ProviderConfig;
 
     #[derive(Default, Debug)]
     enum CredentialsProviderOption {
@@ -265,6 +268,7 @@ mod loader {
         provider_config: Option<ProviderConfig>,
         http_client: Option<SharedHttpClient>,
         profile_name_override: Option<String>,
+        #[allow(deprecated)]
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
@@ -569,6 +573,7 @@ mod loader {
         ///     .load()
         ///     .await;
         /// # }
+        #[allow(deprecated)]
         pub fn profile_files(mut self, profile_files: ProfileFiles) -> Self {
             self.profile_files_override = Some(profile_files);
             self
@@ -601,7 +606,6 @@ mod loader {
         ///
         /// ```no_run
         /// use aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};
-        /// use aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};
         ///
         /// # async fn example() {
         /// let sdk_config = aws_config::from_env()
@@ -620,8 +624,8 @@ mod loader {
         /// exists to set a static endpoint for tools like `LocalStack`. When sending requests to
         /// production AWS services, this method should only be used for service-specific behavior.
         ///
-        /// When this method is used, the [`Region`](aws_types::region::Region) is only used for
-        /// signing; it is not used to route the request.
+        /// When this method is used, the [`Region`](aws_types::region::Region) is only used for signing;
+        /// It is **not** used to route the request.
         ///
         /// # Examples
         ///
@@ -726,13 +730,13 @@ mod loader {
             let use_fips = if let Some(use_fips) = self.use_fips {
                 Some(use_fips)
             } else {
-                use_fips_provider(&conf).await
+                use_fips::use_fips_provider(&conf).await
             };
 
             let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
                 Some(use_dual_stack)
             } else {
-                use_dual_stack_provider(&conf).await
+                use_dual_stack::use_dual_stack_provider(&conf).await
             };
 
             let conf = conf
@@ -805,11 +809,44 @@ mod loader {
                 }
             };
 
+            let profiles = conf.profile().await;
+            let service_config = EnvServiceConfig {
+                env: conf.env(),
+                env_config_sections: profiles.cloned().unwrap_or_default(),
+            };
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .time_source(time_source);
+                .time_source(time_source)
+                .service_config(service_config);
+
+            // If an endpoint URL is set programmatically, then our work is done.
+            let endpoint_url = if self.endpoint_url.is_some() {
+                builder.insert_origin("endpoint_url", Origin::shared_config());
+                self.endpoint_url
+            } else {
+                // Otherwise, check to see if we should ignore EP URLs set in the environment.
+                let ignore_configured_endpoint_urls =
+                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                        .await
+                        .unwrap_or_default();
+
+                if ignore_configured_endpoint_urls {
+                    // If yes, log a trace and return `None`.
+                    tracing::trace!(
+                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                        NOTE: Endpoint URLs set programmatically WILL still be respected"
+                    );
+                    None
+                } else {
+                    // Otherwise, attempt to resolve one.
+                    let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
+                    builder.insert_origin("endpoint_url", origin);
+                    v
+                }
+            };
+            builder.set_endpoint_url(endpoint_url);
 
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
@@ -818,7 +855,6 @@ mod loader {
             builder.set_credentials_provider(credentials_provider);
             builder.set_token_provider(token_provider);
             builder.set_sleep_impl(sleep_impl);
-            builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
@@ -841,6 +877,7 @@ mod loader {
 
     #[cfg(test)]
     mod test {
+        #[allow(deprecated)]
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
         use crate::BehaviorVersion;
@@ -848,15 +885,16 @@ mod loader {
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
+        use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
         use aws_types::app_name::AppName;
+        use aws_types::origin::Origin;
         use aws_types::os_shim_internal::{Env, Fs};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use tracing_test::traced_test;
 
         #[tokio::test]
-        #[traced_test]
         async fn provider_config_used() {
+            let (_guard, logs_rx) = capture_test_logs();
             let env = Env::from_slice(&[
                 ("AWS_MAX_ATTEMPTS", "10"),
                 ("AWS_REGION", "us-west-4"),
@@ -872,8 +910,13 @@ mod loader {
                 .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
+                    #[allow(deprecated)]
                     ProfileFiles::builder()
-                        .with_file(ProfileFileKind::Config, "test_config")
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
                         .build(),
                 )
                 .load()
@@ -891,27 +934,96 @@ mod loader {
                     .access_key_id(),
             );
             assert_eq!(Some(&AppName::new("correct").unwrap()), loader.app_name());
-            logs_assert(|lines| {
-                let num_config_loader_logs = lines
-                    .iter()
-                    .filter(|l| l.contains("provider_config_used"))
-                    .filter(|l| l.contains("config file loaded"))
-                    .count();
-                match num_config_loader_logs {
-                    0 => Err("no config file logs found!".to_string()),
-                    1 => Ok(()),
-                    more => Err(format!(
-                        "the config file was parsed more than once! (parsed {})",
-                        more
-                    )),
-                }
-            });
+
+            let num_config_loader_logs = logs_rx.contents()
+                .lines()
+                // The logger uses fancy formatting, so we have to account for that.
+                .filter(|l| l.contains("config file loaded \u{1b}[3mpath\u{1b}[0m\u{1b}[2m=\u{1b}[0mSome(\"test_config\") \u{1b}[3msize\u{1b}[0m\u{1b}[2m=\u{1b}"))
+                .count();
+
+            match num_config_loader_logs {
+                0 => panic!("no config file logs found!"),
+                1 => (),
+                more => panic!("the config file was parsed more than once! (parsed {more})",),
+            };
         }
 
         fn base_conf() -> ConfigLoader {
             defaults(BehaviorVersion::latest())
                 .sleep_impl(InstantSleep)
                 .http_client(no_traffic_client())
+        }
+
+        #[tokio::test]
+        async fn test_origin_programmatic() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let loader = base_conf()
+                .test_credentials()
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_contents(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "[profile custom]\nendpoint_url = http://localhost:8989",
+                        )
+                        .build(),
+                )
+                .endpoint_url("http://localhost:1111")
+                .load()
+                .await;
+            assert_eq!(Origin::shared_config(), loader.get_origin("endpoint_url"));
+        }
+
+        #[tokio::test]
+        async fn test_origin_env() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://localhost:7878")]);
+            let loader = base_conf()
+                .test_credentials()
+                .env(env)
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_contents(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "[profile custom]\nendpoint_url = http://localhost:8989",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(
+                Origin::shared_environment_variable(),
+                loader.get_origin("endpoint_url")
+            );
+        }
+
+        #[tokio::test]
+        async fn test_origin_fs() {
+            let _ = tracing_subscriber::fmt::try_init();
+            let loader = base_conf()
+                .test_credentials()
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_contents(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "[profile custom]\nendpoint_url = http://localhost:8989",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(
+                Origin::shared_profile_file(),
+                loader.get_origin("endpoint_url")
+            );
         }
 
         #[tokio::test]
@@ -969,6 +1081,119 @@ mod loader {
                 .expect_err("did not expect credentials to be loaded—no traffic is allowed");
             let num_requests = num_requests.load(Ordering::Relaxed);
             assert!(num_requests > 0, "{}", num_requests);
+        }
+
+        #[tokio::test]
+        async fn endpoint_urls_may_be_ignored_from_env() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nendpoint_url = http://profile",
+            )]);
+            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+
+            let conf = base_conf().use_dual_stack(false).load().await;
+            assert_eq!(Some(false), conf.use_dual_stack());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.use_dual_stack());
+
+            // Check that we get nothing back because the env said we should ignore endpoints
+            let config = base_conf()
+                .fs(fs.clone())
+                .env(env)
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(None, config.endpoint_url());
+
+            // Check that without the env, we DO get something back
+            let config = base_conf()
+                .fs(fs)
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(Some("http://profile"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn endpoint_urls_may_be_ignored_from_profile() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nignore_configured_endpoint_urls = true",
+            )]);
+            let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://environment")]);
+
+            // Check that we get nothing back because the profile said we should ignore endpoints
+            let config = base_conf()
+                .fs(fs)
+                .env(env.clone())
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(None, config.endpoint_url());
+
+            // Check that without the profile, we DO get something back
+            let config = base_conf().env(env).load().await;
+            assert_eq!(Some("http://environment"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn programmatic_endpoint_urls_may_not_be_ignored() {
+            let fs = Fs::from_slice(&[(
+                "test_config",
+                "[profile custom]\nignore_configured_endpoint_urls = true",
+            )]);
+            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+
+            // Check that we get something back because we explicitly set the loader's endpoint URL
+            let config = base_conf()
+                .fs(fs)
+                .env(env)
+                .endpoint_url("http://localhost")
+                .profile_name("custom")
+                .profile_files(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "test_config",
+                        )
+                        .build(),
+                )
+                .load()
+                .await;
+            assert_eq!(Some("http://localhost"), config.endpoint_url());
         }
     }
 }

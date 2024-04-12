@@ -29,21 +29,21 @@ jobs:
     - name: Stop nginx
       run: sudo systemctl stop nginx
     - name: Checkout smithy-rs
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: ./smithy-rs
     - name: Checkout trytls
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: ouspg/trytls
         path: ./trytls
     - name: Checkout badtls
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: wbond/badtls.io
         path: ./badtls.io
     - name: Checkout badssl
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: chromium/badssl.com
         path: ./badssl.com

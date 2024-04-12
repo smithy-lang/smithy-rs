@@ -153,15 +153,42 @@ impl Options {
                 lambda_execution_role_arn: String,
             }
             #[derive(Deserialize)]
-            struct Outer {
+            enum Outer {
                 #[serde(rename = "aws-sdk-rust-canary-stack")]
-                inner: Inner,
+                AwsSdkRust {
+                    #[serde(flatten)]
+                    aws_sdk_rust_canary_stack: Inner,
+                },
+                #[serde(rename = "smithy-rs-canary-stack")]
+                SmithyRs {
+                    #[serde(flatten)]
+                    smithy_rs_canary_stack: Inner,
+                },
+            }
+            impl Outer {
+                fn into_inner(self) -> Inner {
+                    match self {
+                        Outer::AwsSdkRust {
+                            aws_sdk_rust_canary_stack,
+                        } => aws_sdk_rust_canary_stack,
+                        Outer::SmithyRs {
+                            smithy_rs_canary_stack,
+                        } => smithy_rs_canary_stack,
+                    }
+                }
             }
 
             let value: Outer = serde_json::from_reader(
                 std::fs::File::open(cdk_output).context("open cdk output")?,
             )
             .context("read cdk output")?;
+            let Inner {
+                lambda_code_s3_bucket_name,
+                lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn,
+                lambda_test_s3_express_bucket_name,
+                lambda_execution_role_arn,
+            } = value.into_inner();
             Ok(Options {
                 rust_version: run_opt.rust_version,
                 sdk_release_tag: run_opt.sdk_release_tag,
@@ -171,11 +198,11 @@ impl Options {
                 lambda_function_memory_size_in_mb: run_opt
                     .lambda_function_memory_size_in_mb
                     .unwrap_or(DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB),
-                lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
-                lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
-                lambda_test_s3_mrap_bucket_arn: value.inner.lambda_test_s3_mrap_bucket_arn,
-                lambda_test_s3_express_bucket_name: value.inner.lambda_test_s3_express_bucket_name,
-                lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
+                lambda_code_s3_bucket_name,
+                lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn,
+                lambda_test_s3_express_bucket_name,
+                lambda_execution_role_arn,
             })
         } else {
             Ok(Options {
@@ -372,7 +399,7 @@ async fn create_lambda_fn(
 ) -> Result<()> {
     use lambda::types::*;
 
-    let mut env_builder = match &options.expected_speech_text_by_transcribe {
+    let env_builder = match &options.expected_speech_text_by_transcribe {
         Some(expected_speech_text_by_transcribe) => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
@@ -402,11 +429,6 @@ async fn create_lambda_fn(
                 &options.lambda_test_s3_express_bucket_name,
             ),
     };
-
-    // TODO(Post S3Express release): Delete this once S3 Express has been released and its canary is on by default
-    if let Ok(value) = env::var("ENABLE_S3_EXPRESS_CANARY") {
-        env_builder = env_builder.variables("ENABLE_S3_EXPRESS_CANARY", value);
-    }
 
     lambda_client
         .create_function()

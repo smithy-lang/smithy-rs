@@ -16,25 +16,32 @@ import {
     BucketEncryption,
     CfnMultiRegionAccessPoint,
 } from "aws-cdk-lib/aws-s3";
-import { aws_s3express as s3express } from 'aws-cdk-lib';
-import {
-    CfnDirectoryBucket
-} from "aws-cdk-lib/aws-s3express";
+import { CfnDirectoryBucket } from "aws-cdk-lib/aws-s3express";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { GitHubOidcRole } from "../constructs/github-oidc-role";
+import { GitHubOidcRole } from "./constructs/github-oidc-role";
+
+export interface OidcProps {
+    roleId: string;
+    roleName: string;
+    roleGithubOrg: string;
+    roleGithubRepo: string;
+    provider: OpenIdConnectProvider;
+}
 
 export interface Properties extends StackProps {
-    githubActionsOidcProvider?: OpenIdConnectProvider;
+    lambdaExecutionRole: string;
+    oidcProps?: OidcProps;
 }
 
 export class CanaryStack extends Stack {
-    public readonly awsSdkRustOidcRole?: GitHubOidcRole;
+    public readonly githubOidcRole?: GitHubOidcRole;
     public readonly lambdaExecutionRole: Role;
     public readonly canaryCodeBucket: Bucket;
     public readonly canaryTestBucket: Bucket;
     public readonly canaryTestMrap: CfnMultiRegionAccessPoint;
     public readonly canaryTestExpressBucket: CfnDirectoryBucket;
+    public readonly canaryCdkOutputsBucket: Bucket;
 
     public readonly lambdaExecutionRoleArn: CfnOutput;
     public readonly canaryCodeBucketName: CfnOutput;
@@ -48,16 +55,16 @@ export class CanaryStack extends Stack {
         // Tag the resources created by this stack to make identifying resources easier
         Tags.of(this).add("stack", id);
 
-        if (props.githubActionsOidcProvider) {
-            this.awsSdkRustOidcRole = new GitHubOidcRole(this, "aws-sdk-rust", {
-                name: "aws-sdk-rust-canary",
-                githubOrg: "awslabs",
-                githubRepo: "aws-sdk-rust",
-                oidcProvider: props.githubActionsOidcProvider,
+        if (props.oidcProps) {
+            this.githubOidcRole = new GitHubOidcRole(this, props.oidcProps.roleId, {
+                name: props.oidcProps.roleName,
+                githubOrg: props.oidcProps.roleGithubOrg,
+                githubRepo: props.oidcProps.roleGithubRepo,
+                oidcProvider: props.oidcProps.provider,
             });
 
             // Grant permission to create/invoke/delete a canary Lambda
-            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+            this.githubOidcRole.oidcRole.addToPolicy(
                 new PolicyStatement({
                     actions: [
                         "lambda:CreateFunction",
@@ -72,7 +79,7 @@ export class CanaryStack extends Stack {
             );
 
             // Grant permission to put metric data to CloudWatch
-            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+            this.githubOidcRole.oidcRole.addToPolicy(
                 new PolicyStatement({
                     actions: ["cloudwatch:PutMetricData"],
                     effect: Effect.ALLOW,
@@ -104,9 +111,21 @@ export class CanaryStack extends Stack {
         });
 
         // Allow the OIDC role to GetObject and PutObject to the code bucket
-        if (this.awsSdkRustOidcRole) {
-            this.canaryCodeBucket.grantRead(this.awsSdkRustOidcRole.oidcRole);
-            this.canaryCodeBucket.grantWrite(this.awsSdkRustOidcRole.oidcRole);
+        if (this.githubOidcRole) {
+            this.canaryCodeBucket.grantRead(this.githubOidcRole.oidcRole);
+            this.canaryCodeBucket.grantWrite(this.githubOidcRole.oidcRole);
+        }
+
+        this.canaryCdkOutputsBucket = new Bucket(this, "canary-cdk-outputs-bucket", {
+            blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
+            encryption: BucketEncryption.S3_MANAGED,
+            versioned: false,
+            removalPolicy: RemovalPolicy.DESTROY,
+        });
+
+        // Allow the OIDC role to GetObject from the cdk outputs bucket
+        if (this.githubOidcRole) {
+            this.canaryCdkOutputsBucket.grantRead(this.githubOidcRole.oidcRole);
         }
 
         // Create S3 bucket for the canaries to talk to
@@ -149,10 +168,10 @@ export class CanaryStack extends Stack {
             });
         }
 
-        this.canaryTestExpressBucket = new CfnDirectoryBucket(this, 'canary-test-express-bucket', {
-              dataRedundancy: 'SingleAvailabilityZone',
-              locationName: "usw2-az1",
-            });
+        this.canaryTestExpressBucket = new CfnDirectoryBucket(this, "canary-test-express-bucket", {
+            dataRedundancy: "SingleAvailabilityZone",
+            locationName: "usw2-az1",
+        });
 
         // Output the bucket name to make it easier to invoke the canary runner
         this.canaryTestExpressBucketName = new CfnOutput(this, "canary-test-express-bucket-name", {
@@ -163,7 +182,7 @@ export class CanaryStack extends Stack {
 
         // Create a role for the canary Lambdas to assume
         this.lambdaExecutionRole = new Role(this, "lambda-execution-role", {
-            roleName: "aws-sdk-rust-canary-lambda-exec-role",
+            roleName: props.lambdaExecutionRole,
             assumedBy: new ServicePrincipal("lambda.amazonaws.com"),
         });
 
@@ -186,11 +205,13 @@ export class CanaryStack extends Stack {
         // Allow canaries to talk to their test bucket
         this.canaryTestBucket.grantReadWrite(this.lambdaExecutionRole);
 
-        this.lambdaExecutionRole.addToPolicy(new PolicyStatement({
-            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-            effect: Effect.ALLOW,
-            resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
-        }));
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                effect: Effect.ALLOW,
+                resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
+            }),
+        );
 
         // Allow canaries to perform operations on test express bucket
         // Unlike S3, no need to grant separate permissions for GetObject, PutObject, and so on because
@@ -198,19 +219,19 @@ export class CanaryStack extends Stack {
         // https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-express-security-iam.html#s3-express-security-iam-actions
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ['s3express:CreateSession'],
+                actions: ["s3express:CreateSession"],
                 effect: Effect.ALLOW,
                 resources: [`${this.canaryTestExpressBucket.attrArn}`],
-            })
+            }),
         );
 
         // Allow canaries to list directory buckets
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ['s3express:ListAllMyDirectoryBuckets'],
+                actions: ["s3express:ListAllMyDirectoryBuckets"],
                 effect: Effect.ALLOW,
                 resources: ["*"],
-            })
+            }),
         );
 
         // Allow canaries to call Transcribe's StartStreamTranscription
@@ -232,8 +253,8 @@ export class CanaryStack extends Stack {
         );
 
         // Allow the OIDC role to pass the Lambda execution role to Lambda
-        if (this.awsSdkRustOidcRole) {
-            this.awsSdkRustOidcRole.oidcRole.addToPolicy(
+        if (this.githubOidcRole) {
+            this.githubOidcRole.oidcRole.addToPolicy(
                 new PolicyStatement({
                     actions: ["iam:PassRole"],
                     effect: Effect.ALLOW,

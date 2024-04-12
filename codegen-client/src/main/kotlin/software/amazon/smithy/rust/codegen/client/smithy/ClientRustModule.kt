@@ -102,6 +102,8 @@ object ClientRustModule {
         /** crate::types::error */
         val Error = RustModule.public("error", parent = self)
     }
+
+    val waiters = RustModule.pubCrate("waiters")
 }
 
 class ClientModuleDocProvider(

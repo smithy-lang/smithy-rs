@@ -1,5 +1,5 @@
 {
-  "app": "npx ts-node --prefer-ts-exts bin/ci-cdk.ts",
+  "app": "npx ts-node --prefer-ts-exts bin/smithy-rs/ci-cdk.ts",
   "watch": {
     "include": [
       "**"

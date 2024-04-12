@@ -205,19 +205,6 @@ pub async fn s3_express_canary(
     client: s3::Client,
     s3_express_bucket_name: String,
 ) -> anyhow::Result<()> {
-    // TODO(Post S3Express release): Delete this once S3 Express has been released and its canary is on by default
-    match std::env::var("ENABLE_S3_EXPRESS_CANARY") {
-        Ok(value) if value.eq_ignore_ascii_case("true") => {
-            println!(
-                "`ENABLE_S3_EXPRESS_CANARY` is set to `true`, proceeding with s3 express canary"
-            );
-        }
-        _ => {
-            println!("`ENABLE_S3_EXPRESS_CANARY` is not set to `true`, skipping s3 express canary");
-            return Ok(());
-        }
-    }
-
     let test_key = Uuid::new_v4().as_u128().to_string();
 
     // Test a directory bucket exists

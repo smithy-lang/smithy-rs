@@ -9,6 +9,11 @@ name: Test
 on:
   workflow_call:
     inputs:
+      run_canary:
+        description: Whether to run the canary or not.
+        required: false
+        default: true
+        type: boolean
       run_sdk_examples:
         description: Whether to run the SDK example checks or not.
         required: false
@@ -27,9 +32,13 @@ on:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
         required: false
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: false
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: false
 
 env:
-  rust_version: 1.74.1
+  rust_version: 1.75.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -51,17 +60,17 @@ jobs:
         - action: generate-aws-sdk-smoketest
         - action: generate-smithy-rs-release
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
     # The models from aws-sdk-rust are needed to generate the full SDK for CI
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
     # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: awsdocs/aws-doc-sdk-examples
         path: aws-doc-sdk-examples
@@ -116,7 +125,7 @@ jobs:
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -126,6 +135,26 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+
+  # Separate from the main checks above because it uses aws-sdk-rust from GitHub
+  check-semver-hazards:
+    name: Check for semver hazards
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
@@ -155,7 +184,7 @@ jobs:
         - action: check-aws-sdk-standalone-integration-tests
           runner: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -175,11 +204,11 @@ jobs:
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
-      # Pinned to the commit hash of v2.1.0
-    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: |
@@ -212,33 +241,33 @@ jobs:
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
     env:
       CROSS_CONFIG: Cross.toml
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
-      # Pinned to the commit hash of v2.1.0
-    - uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
         workspaces: |
@@ -295,6 +324,49 @@ jobs:
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
+  # Run the canary against generated SDKs
+  #
+  # In addition to Matrix Success, this job will also be required to pass for merge.
+  # CI execution from forked repositories will skip this job, and when it does
+  # this skipped job will report its status as "Success".
+  # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
+  canary:
+    name: Canary
+    if: ${{ inputs.run_canary }}
+    needs: generate
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+
+  # This is always a failing job since forked repositories do not have necessary repository secrets
+  # to run the PR bot workflow or the canary workflow
+  ask-maintainer-to-run-pr-bot-and-canary:
+    name: Ask maintainer to run the PR bot and canary workflows
+    if: ${{ !inputs.run_canary }}
+    runs-on: ubuntu-latest
+    steps:
+    - run: |
+        echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
+        exit 1
+
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
@@ -302,7 +374,7 @@ jobs:
     needs: generate
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
@@ -318,6 +390,7 @@ jobs:
     needs:
     - generate
     - test-codegen
+    - check-semver-hazards
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support

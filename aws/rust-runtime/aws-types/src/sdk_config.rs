@@ -7,12 +7,13 @@
 
 //! AWS Shared Config
 //!
-//! This module contains an shared configuration representation that is agnostic from a specific service.
+//! This module contains a shared configuration representation that is agnostic from a specific service.
 
 use crate::app_name::AppName;
 use crate::docs_for;
+use crate::origin::Origin;
 use crate::region::Region;
-
+use crate::service_config::LoadServiceConfig;
 use aws_credential_types::provider::token::SharedTokenProvider;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
@@ -26,6 +27,8 @@ pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStream
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Unified docstrings to keep crates in sync. Not intended for public use
 pub mod unified_docs {
@@ -68,6 +71,8 @@ pub struct SdkConfig {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -92,6 +97,8 @@ pub struct Builder {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
+    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
 }
 
 impl Builder {
@@ -606,6 +613,37 @@ impl Builder {
         self
     }
 
+    /// Sets the service config provider for the [`SdkConfig`].
+    ///
+    /// This provider is used when creating a service-specific config from an
+    /// `SdkConfig` and provides access to config defined in the environment
+    /// which would otherwise be inaccessible.
+    pub fn service_config(mut self, service_config: impl LoadServiceConfig + 'static) -> Self {
+        self.set_service_config(Some(service_config));
+        self
+    }
+
+    /// Sets the service config provider for the [`SdkConfig`].
+    ///
+    /// This provider is used when creating a service-specific config from an
+    /// `SdkConfig` and provides access to config defined in the environment
+    /// which would otherwise be inaccessible.
+    pub fn set_service_config(
+        &mut self,
+        service_config: Option<impl LoadServiceConfig + 'static>,
+    ) -> &mut Self {
+        self.service_config = service_config.map(|it| Arc::new(it) as Arc<dyn LoadServiceConfig>);
+        self
+    }
+
+    /// Set the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn insert_origin(&mut self, setting: &'static str, origin: Origin) {
+        self.config_origins.insert(setting, origin);
+    }
+
     /// Build a [`SdkConfig`] from this builder.
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -624,6 +662,8 @@ impl Builder {
             time_source: self.time_source,
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
+            service_config: self.service_config,
+            config_origins: self.config_origins,
         }
     }
 }
@@ -775,6 +815,11 @@ impl SdkConfig {
         self.behavior_version.clone()
     }
 
+    /// Return an immutable reference to the service config provider configured for this client.
+    pub fn service_config(&self) -> Option<&dyn LoadServiceConfig> {
+        self.service_config.as_deref()
+    }
+
     /// Config builder
     ///
     /// _Important:_ Using the `aws-config` crate to configure the SDK is preferred to invoking this
@@ -787,6 +832,17 @@ impl SdkConfig {
     /// Convert this [`SdkConfig`] into a [`Builder`] by cloning it first
     pub fn to_builder(&self) -> Builder {
         self.clone().into_builder()
+    }
+
+    /// Get the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn get_origin(&self, setting: &'static str) -> Origin {
+        self.config_origins
+            .get(setting)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Convert this [`SdkConfig`] back to a builder to enable modification
@@ -807,6 +863,8 @@ impl SdkConfig {
             use_dual_stack: self.use_dual_stack,
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
+            service_config: self.service_config,
+            config_origins: self.config_origins,
         }
     }
 }

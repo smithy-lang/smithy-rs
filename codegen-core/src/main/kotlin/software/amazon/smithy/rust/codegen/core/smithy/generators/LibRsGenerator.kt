@@ -51,6 +51,7 @@ class LibRsGenerator(
     fun render(writer: RustWriter) {
         writer.first {
             customizations.forEach { it.section(LibRsSection.Attributes)(this) }
+            rust("##![forbid(unsafe_code)]")
             if (requireDocs) {
                 rust("##![warn(missing_docs)]")
             }
