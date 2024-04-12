@@ -1,4 +1,21 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 11th, 2024
+================
+**New this release:**
+- :tada: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+    ```rust
+    let config = my_service::Config::builder()
+        .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+        // ...
+        .build();
+    ```
+- :bug: (all, [smithy-rs#3427](https://github.com/smithy-lang/smithy-rs/issues/3427)) `SharedIdentityResolver` now respects an existing cache partition when the `ResolveIdentity` implementation
+    provides one already.
+- :bug: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit.
+- :bug: (all, [smithy-rs#2546](https://github.com/smithy-lang/smithy-rs/issues/2546)) Unions with unit target member shape are now fully supported
+
+
 April 2nd, 2024
 ===============
 **Breaking Changes:**

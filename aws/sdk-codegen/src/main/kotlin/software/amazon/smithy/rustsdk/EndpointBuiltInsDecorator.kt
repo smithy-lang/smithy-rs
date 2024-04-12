@@ -114,7 +114,12 @@ fun Model.sdkConfigSetter(
             ParameterType.STRING -> writable { rust("|s|s.to_string()") }
             ParameterType.BOOLEAN -> null
         }
-    return SdkConfigCustomization.copyField(fieldName, map)
+
+    return if (fieldName == "endpoint_url") {
+        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
+    } else {
+        SdkConfigCustomization.copyField(fieldName, map)
+    }
 }
 
 /**

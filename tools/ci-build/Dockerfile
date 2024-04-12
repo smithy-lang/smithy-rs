@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.74.1
+ARG rust_stable_version=1.75.0
 ARG rust_nightly_version=nightly-2024-02-07
 
 FROM ${base_image} AS bare_base_image
@@ -167,12 +167,14 @@ RUN set -eux; \
         python3-pip \
         shadow-utils \
         cmake \
-        tar; \
+        tar \
+        unzip; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \
     useradd -m -g build build; \
     chmod 775 /home/build;
+RUN set -eux; cd /tmp; curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && unzip awscliv2.zip && ./aws/install
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
 COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
 COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
