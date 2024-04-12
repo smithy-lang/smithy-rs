@@ -5,15 +5,17 @@ This directory contains S3 Express One Zone benchmarks that measure end-to-end t
 Performance numbers will vary depending on the benchmarking environment, but relative performance should still be accurate (i.e. regular S3 bucket vs. S3 Express bucket or comparing with a previous release of the Rust SDK).
 
 ## Benchmark targets
+- `get_object`: Invoke `GetObject` the specified number of times (20 by default) against a given set of buckets, using both 64KB and 1MB objects.
+- `put_object`: Invoke `PutObject` the specified number of times (20 by default) against a given set of buckets, using both 64KB and 1MB objects.
 - `put_get_delete`: `PutObject`, `GetObject`, and `DeleteObject` using sequential invocations (20 by default) of operations across different buckets, switching buckets on every request and using both 64KB and 1MB objects.
 - `concurrent_put_get`: Schedule the equal number of async tasks of `PutObject` (20 by default) to different buckets, wait for completion, then schedule the equal number of async tasks of `GetObject` to different buckets, and wait for completion, using the 64KB objects.
 
 ## Running benchmarks
-Example of running the `put_get_delete` benchmark in local dev environment:
+Example of running the `put_object` benchmark in local dev environment:
 
 ```bash
 export BUCKETS=test0--usw2-az1--x-s3,test1--usw2-az1--x-s3
-cargo bench --bench put_get_delete
+cargo bench --bench put_object
 ```
 To configure how the benchmark is run, set the following environment variables:
 #### required
