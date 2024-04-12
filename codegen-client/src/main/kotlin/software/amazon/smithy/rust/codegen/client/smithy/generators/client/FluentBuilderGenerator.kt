@@ -4,6 +4,7 @@
  */
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -11,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -45,8 +47,6 @@ class FluentBuilderGenerator(
     private val outputType = symbolProvider.toSymbol(operation.outputShape(model))
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
-
-    private val core = FluentClientCore(model)
 
     fun render(writer: RustWriter) {
         writer.renderInner()
@@ -250,18 +250,95 @@ class FluentBuilderGenerator(
                 val memberSymbol = symbolProvider.toSymbol(member)
                 val outerType = memberSymbol.rustType()
                 when (val coreType = outerType.stripOuter<RustType.Option>()) {
-                    is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
-                    is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
-                    else -> with(core) { renderInputHelper(member, memberName, coreType) }
+                    is RustType.Vec -> renderVecHelper(member, memberName, coreType)
+                    is RustType.HashMap -> renderMapHelper(member, memberName, coreType)
+                    else -> renderInputHelper(member, memberName, coreType)
                 }
                 // pure setter
                 val setterName = member.setterName()
                 val optionalInputType = outerType.asOptional()
-                with(core) { renderInputHelper(member, setterName, optionalInputType) }
+                renderInputHelper(member, setterName, optionalInputType)
 
                 val getterName = member.getterName()
-                with(core) { renderGetterHelper(member, getterName, optionalInputType) }
+                renderGetterHelper(member, getterName, optionalInputType)
             }
+        }
+    }
+
+    /** Generate and write Rust code for a builder method that sets a Vec<T> */
+    private fun RustWriter.renderVecHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.Vec,
+    ) {
+        docs("Appends an item to `${member.memberName}`.")
+        rust("///")
+        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        rust("///")
+        val input = coreType.member.asArgument("input")
+
+        documentShape(member, model)
+        deprecatedShape(member)
+        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
+            write("self.inner = self.inner.$memberName(${input.value});")
+            write("self")
+        }
+    }
+
+    /** Generate and write Rust code for a builder method that sets a HashMap<K,V> */
+    private fun RustWriter.renderMapHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.HashMap,
+    ) {
+        docs("Adds a key-value pair to `${member.memberName}`.")
+        rust("///")
+        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        rust("///")
+        val k = coreType.key.asArgument("k")
+        val v = coreType.member.asArgument("v")
+
+        documentShape(member, model)
+        deprecatedShape(member)
+        rustBlock("pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self") {
+            write("self.inner = self.inner.$memberName(${k.value}, ${v.value});")
+            write("self")
+        }
+    }
+
+    /**
+     * Generate and write Rust code for a builder method that sets an input. Can be used for setter methods as well e.g.
+     *
+     * `renderInputHelper(memberShape, "foo", RustType.String)` -> `pub fn foo(mut self, input: impl Into<String>) -> Self { ... }`
+     * `renderInputHelper(memberShape, "set_bar", RustType.Option)` -> `pub fn set_bar(mut self, input: Option<String>) -> Self { ... }`
+     */
+    private fun RustWriter.renderInputHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType,
+    ) {
+        val functionInput = coreType.asArgument("input")
+
+        documentShape(member, model)
+        deprecatedShape(member)
+        rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
+            write("self.inner = self.inner.$memberName(${functionInput.value});")
+            write("self")
+        }
+    }
+
+    /**
+     * Generate and write Rust code for a getter method that returns a reference to the inner data.
+     */
+    private fun RustWriter.renderGetterHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType,
+    ) {
+        documentShape(member, model)
+        deprecatedShape(member)
+        withBlockTemplate("pub fn $memberName(&self) -> &#{CoreType} {", "}", "CoreType" to coreType) {
+            write("self.inner.$memberName()")
         }
     }
 }
