@@ -22,3 +22,9 @@ message = "Upgraded MSRV to Rust 1.75"
 references = ["smithy-rs#3553"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `SigningSettings` and its fields implement `Clone` and `Copy`"
+references = ["smithy-rs#3533"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "avandesa"
