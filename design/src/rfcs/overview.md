@@ -53,5 +53,4 @@
 - [RFC-0041: Improve client error ergonomics](./rfc0041_improve_client_error_ergonomics.md)
 - [RFC-0042: File-per-change changelog](./rfc0042_file_per_change_changelog.md)
 - [RFC-0043: Identity Cache Partitions](./rfc0043_identity_cache_partitions.md)
-
->>>>>>> 4a8757c23 (add RFC to fix identity cache partitioning and default cache behaviors)
+- [RFC-0044: Disable payload signing](./rfc0044_disable_payload_signing.md)
