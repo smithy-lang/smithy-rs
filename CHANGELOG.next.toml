@@ -75,6 +75,7 @@ author = "jdisanti"
 message = "Unions with unit target member shape are now fully supported"
 references = ["smithy-rs#2546"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "drganjoo"
 
 [[smithy-rs]]
 message = "Implement `std::error::Error` for `ConstraintViolation`"
