@@ -19,10 +19,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -90,43 +88,43 @@ class FluentBuilderGenerator(
         documentShape(operation, model, autoSuppressMissingDocs = false)
         deprecatedShape(operation)
         Attribute(Attribute.derive(derives.toSet())).render(this)
-        rustBlockTemplate("pub struct $builderName") {
-            rustTemplate(
-                """
+        rustTemplate(
+            """
+            pub struct $builderName {
                 handle: #{Arc}<crate::client::Handle>,
-                inner: #{Inner},
-                """,
-                *scope,
-                "Inner" to inputBuilderType,
-            )
-            rustTemplate("config_override: #{Option}<crate::config::Builder>,", *RuntimeType.preludeScope)
-        }
+                inner: #{InputBuilder},
+                config_override: #{Option}<crate::config::Builder>,
+            }
+            """,
+            *scope,
+        )
     }
 
     private fun RustWriter.renderImpl() {
         rustBlock("impl $builderName") {
-            rust("/// Creates a new `${operationType.name}`.")
-            withBlockTemplate(
-                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
-                "}",
-                *scope,
-            ) {
-                withBlockTemplate(
-                    "Self {",
-                    "}",
-                ) {
-                    rustTemplate("handle, inner: #{Default}::default(),", *scope)
-                    rustTemplate("config_override: #{None},", *scope)
+            rustTemplate(
+                """
+                /// Creates a new `${operationType.name}`.
+                pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
+                    Self {
+                        handle,
+                        inner: #{Default}::default(),
+                        config_override: #{None},
+                    }
                 }
-            }
+                """,
+                *scope,
+            )
 
-            rust("/// Access the ${operationType.name} as a reference.\n")
-            withBlockTemplate(
-                "pub fn as_input(&self) -> &#{Inner} {", "}",
-                "Inner" to inputBuilderType,
-            ) {
-                write("&self.inner")
-            }
+            rustTemplate(
+                """
+                /// Access the ${operationType.name} as a reference.\n
+                pub fn as_input(&self) -> &#{InputBuilder} {
+                    &self.inner
+                }
+                """,
+                *scope,
+            )
 
             rustTemplate(
                 """
@@ -193,10 +191,12 @@ class FluentBuilderGenerator(
                         "Paginator" to paginatorType,
                     )
                 }
+
             writeCustomizations(
                 customizations,
                 FluentClientSection.FluentBuilderImpl(operation, errorType),
             )
+
             inputShape.members().forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 // All fields in the builder are optional
@@ -274,17 +274,24 @@ class FluentBuilderGenerator(
         memberName: String,
         coreType: RustType.Vec,
     ) {
-        docs("Appends an item to `${member.memberName}`.")
-        rust("///")
-        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
-        rust("///")
-        val input = coreType.member.asArgument("input")
+        docs(
+            """
+            Appends an item to `${member.memberName}`.
 
+            To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).
+            """,
+        )
         documentShape(member, model)
         deprecatedShape(member)
-        rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
-            write("self.inner = self.inner.$memberName(${input.value});")
-            write("self")
+        coreType.member.asArgument("input").also { input ->
+            rust(
+                """
+                pub fn $memberName(mut self, ${input.argument}) -> Self {
+                    self.inner = self.inner.$memberName(${input.value});
+                    self
+                }
+                """,
+            )
         }
     }
 
@@ -294,19 +301,26 @@ class FluentBuilderGenerator(
         memberName: String,
         coreType: RustType.HashMap,
     ) {
-        docs("Adds a key-value pair to `${member.memberName}`.")
-        rust("///")
-        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
-        rust("///")
         val k = coreType.key.asArgument("k")
         val v = coreType.member.asArgument("v")
 
+        docs(
+            """
+            Adds a key-value pair to `${member.memberName}`.
+
+            To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).
+            """,
+        )
         documentShape(member, model)
         deprecatedShape(member)
-        rustBlock("pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self") {
-            write("self.inner = self.inner.$memberName(${k.value}, ${v.value});")
-            write("self")
-        }
+        rust(
+            """
+            pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self {
+                self.inner = self.inner.$memberName(${k.value}, ${v.value});
+                self
+            }
+            """,
+        )
     }
 
     /**
@@ -324,10 +338,14 @@ class FluentBuilderGenerator(
 
         documentShape(member, model)
         deprecatedShape(member)
-        rustBlock("pub fn $memberName(mut self, ${functionInput.argument}) -> Self") {
-            write("self.inner = self.inner.$memberName(${functionInput.value});")
-            write("self")
-        }
+        rust(
+            """
+            pub fn $memberName(mut self, ${functionInput.argument}) -> Self {
+                self.inner = self.inner.$memberName(${functionInput.value});
+                self
+            }
+            """,
+        )
     }
 
     /**
@@ -340,8 +358,13 @@ class FluentBuilderGenerator(
     ) {
         documentShape(member, model)
         deprecatedShape(member)
-        withBlockTemplate("pub fn $memberName(&self) -> &#{CoreType} {", "}", "CoreType" to coreType) {
-            write("self.inner.$memberName()")
-        }
+        rustTemplate(
+            """
+            pub fn $memberName(&self) -> &#{CoreType} {
+                self.inner.$memberName()
+            }
+            """,
+            "CoreType" to coreType,
+        )
     }
 }
