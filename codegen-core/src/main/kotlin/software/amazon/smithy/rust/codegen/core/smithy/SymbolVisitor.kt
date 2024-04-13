@@ -103,7 +103,7 @@ fun SymbolProvider.toOptional(
     }
 
 /**
- * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
+ * Services can rename their contained shapes. See https://smithy.io/2.0/spec/service-types.html
  * specifically, `rename`
  */
 fun Shape.contextName(serviceShape: ServiceShape?): String {

@@ -9,10 +9,8 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 [dependencies]
-aws-config = "0.55.3"
-aws-sdk-s3 = "0.28.0"
-aws-smithy-http = "0.55.3"
-aws-smithy-client= { version = "0.55.3", features = ["client-hyper"] }
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1"
 clap = { version = "4.3.2", default-features = false, features = ["derive", "std", "help"] }
 tokio = { version = "1.28.2", features = ["full"] }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
