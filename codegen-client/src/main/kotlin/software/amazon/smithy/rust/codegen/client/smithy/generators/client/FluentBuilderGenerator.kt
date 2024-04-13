@@ -17,9 +17,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
-import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
@@ -49,15 +49,19 @@ class FluentBuilderGenerator(
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
 
+    private val builderName = operation.fluentBuilderType(symbolProvider).name
+
     private val scope =
         arrayOf(
             *preludeScope,
+            "Arc" to RuntimeType.Arc,
             "CustomizableOperation" to
                 ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
             "HttpResponse" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
+            "InputBuilder" to inputBuilderType,
             "Operation" to operationType,
             "OperationError" to errorType,
             "OperationOutput" to outputType,
@@ -69,45 +73,24 @@ class FluentBuilderGenerator(
         )
 
     fun render(writer: RustWriter) {
-        writer.renderInner()
+        writer.renderInputBuilderImpls()
+        writer.renderStruct()
+        writer.renderImpl()
+        writer.renderTraitImpls()
     }
 
-    private fun RustWriter.renderInner() {
-        val baseDerives = symbolProvider.toSymbol(inputShape).expectRustMetadata().derives
-        // Filter out any derive that isn't Clone. Then add a Debug derive
-        // input name
-        val fnName = FluentClientGenerator.clientOperationFnName(operation, symbolProvider)
-        implBlock(inputBuilderType) {
-            rustTemplate(
-                """
-                /// Sends a request with this input using the given client.
-                pub async fn send_with(self, client: &crate::Client) -> #{Result}<
-                    #{OperationOutput},
-                    #{SdkError}<
-                        #{OperationError},
-                        #{HttpResponse}
-                    >
-                > {
-                    let mut fluent_builder = client.$fnName();
-                    fluent_builder.inner = self;
-                    fluent_builder.send().await
-                }
-                """,
-                *scope,
-            )
-        }
+    private fun RustWriter.renderStruct() {
+        // Filter out any derive that isn't Clone. Then add a Debug derive input name
+        val derives =
+            symbolProvider.toSymbol(inputShape).expectRustMetadata().derives.let { baseDerives ->
+                baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
+            }
 
-        val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
         docs("Fluent builder constructing a request to `${operationType.name}`.\n")
-
-        val builderName = operation.fluentBuilderType(symbolProvider).name
         documentShape(operation, model, autoSuppressMissingDocs = false)
         deprecatedShape(operation)
         Attribute(Attribute.derive(derives.toSet())).render(this)
-        withBlockTemplate(
-            "pub struct $builderName {",
-            "}",
-        ) {
+        rustBlockTemplate("pub struct $builderName") {
             rustTemplate(
                 """
                 handle: #{Arc}<crate::client::Handle>,
@@ -118,31 +101,9 @@ class FluentBuilderGenerator(
             )
             rustTemplate("config_override: #{Option}<crate::config::Builder>,", *RuntimeType.preludeScope)
         }
+    }
 
-        rustTemplate(
-            """
-            impl
-                crate::client::customize::internal::CustomizableSend<
-                    #{OperationOutput},
-                    #{OperationError},
-                > for $builderName
-            {
-                fn send(
-                    self,
-                    config_override: crate::config::Builder,
-                ) -> crate::client::customize::internal::BoxFuture<
-                    crate::client::customize::internal::SendResult<
-                        #{OperationOutput},
-                        #{OperationError},
-                    >,
-                > {
-                    #{Box}::pin(async move { self.config_override(config_override).send().await })
-                }
-            }
-            """,
-            *scope,
-        )
-
+    private fun RustWriter.renderImpl() {
         rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationType.name}`.")
             withBlockTemplate(
@@ -254,6 +215,56 @@ class FluentBuilderGenerator(
                 val getterName = member.getterName()
                 renderGetterHelper(member, getterName, optionalInputType)
             }
+        }
+    }
+
+    private fun RustWriter.renderTraitImpls() {
+        rustTemplate(
+            """
+            impl
+                crate::client::customize::internal::CustomizableSend<
+                    #{OperationOutput},
+                    #{OperationError},
+                > for $builderName
+            {
+                fn send(
+                    self,
+                    config_override: crate::config::Builder,
+                ) -> crate::client::customize::internal::BoxFuture<
+                    crate::client::customize::internal::SendResult<
+                        #{OperationOutput},
+                        #{OperationError},
+                    >,
+                > {
+                    #{Box}::pin(async move { self.config_override(config_override).send().await })
+                }
+            }
+            """,
+            *scope,
+        )
+    }
+
+    private fun RustWriter.renderInputBuilderImpls() {
+        FluentClientGenerator.clientOperationFnName(operation, symbolProvider).also { fnName ->
+            rustTemplate(
+                """
+                impl #{InputBuilder} {
+                    /// Sends a request with this input using the given client.
+                    pub async fn send_with(self, client: &crate::Client) -> #{Result}<
+                        #{OperationOutput},
+                        #{SdkError}<
+                            #{OperationError},
+                            #{HttpResponse}
+                        >
+                    > {
+                        let mut fluent_builder = client.$fnName();
+                        fluent_builder.inner = self;
+                        fluent_builder.send().await
+                    }
+                }
+                """,
+                *scope,
+            )
         }
     }
 
