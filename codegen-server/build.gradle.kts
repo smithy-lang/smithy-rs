@@ -4,10 +4,12 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.jreleaser.model.Active
 
 plugins {
     kotlin("jvm")
     `maven-publish`
+    id("org.jreleaser") version "1.11.0"
 }
 
 description = "Generates Rust server-side code from Smithy models"
@@ -83,6 +85,11 @@ if (isTestingEnabled.toBoolean()) {
     }
 }
 
+
+// JReleaser publishes artifacts from a local staging repository, rather than maven local.
+// https://jreleaser.org/guide/latest/examples/maven/staging-artifacts.html#_gradle
+val stagingDirectory = layout.buildDirectory.dir("staging")
+
 publishing {
     publications {
         create<MavenPublication>("default") {
@@ -90,5 +97,63 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
+    repositories {
+        maven {
+            name = "staging"
+            url = uri(stagingDirectory)
+        }
+    }
+}
+
+jreleaser {
+    dryrun = false
+    gitRootSearch = true
+
+    project {
+        website = "https://smithy-lang.github.io/smithy-rs/"
+        authors = listOf("Smithy")
+        vendor = "Smithy"
+        license = "Apache-2.0"
+        description = "Smithy code generator for Rust that generates server code"
+        copyright = "2020"
+    }
+
+    // Creates a generic release, which won't publish anything (we are only interested in publishing the jar)
+    // https://jreleaser.org/guide/latest/reference/release/index.html
+    release {
+        generic {
+            enabled = true
+            skipRelease = true
+        }
+    }
+
+    // Used to announce a release to configured announcers.
+    // https://jreleaser.org/guide/latest/reference/announce/index.html
+    announce {
+        active = Active.ALWAYS
+    }
+
+    // Signing configuration.
+    // https://jreleaser.org/guide/latest/reference/signing.html
+    signing {
+        active = Active.ALWAYS
+        armored = true
+    }
+
+    // Configuration for deploying to Maven Central.
+    // https://jreleaser.org/guide/latest/examples/maven/maven-central.html#_gradle
+    deploy {
+        maven {
+            nexus2 {
+                create("maven-central") {
+                    active = Active.ALWAYS
+                    url = "https://aws.oss.sonatype.org/service/local"
+                    snapshotUrl = "https://aws.oss.sonatype.org/content/repositories/snapshots"
+                    closeRepository = true
+                    releaseRepository = true
+                    stagingRepository(stagingDirectory.get().toString())
+                }
+            }
+        }
+    }
 }
