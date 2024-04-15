@@ -1,6 +1,6 @@
 # S3 Express Benchmark
 
-This directory contains S3 Express One Zone benchmarks that measure end-to-end throughput when using the AWS Rust SDK to put, get, and delete objects to/from S3 Express One Zone buckets. We use [`Criterion`](https://github.com/bheisler/criterion.rs) for benchmarks.
+This directory contains S3 Express One Zone benchmarks that measure end-to-end throughput when using the AWS Rust SDK to put, get, and delete objects to/from S3 Express One Zone buckets. We use [`Criterion`](https://github.com/bheisler/criterion.rs) for benchmarks. A sibling directory `s3-throughput` also measures throughput to put and get objects to/from S3 but currently does not support generating benchmark results with a given confidence interval, which is why we have this separate benchmark suite.
 
 Performance numbers will vary depending on the benchmarking environment, but relative performance should still be accurate (i.e. regular S3 bucket vs. S3 Express bucket or comparing with a previous release of the Rust SDK).
 
