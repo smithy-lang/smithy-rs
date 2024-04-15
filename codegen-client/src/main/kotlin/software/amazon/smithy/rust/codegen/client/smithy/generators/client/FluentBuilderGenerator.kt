@@ -118,7 +118,7 @@ class FluentBuilderGenerator(
 
             rustTemplate(
                 """
-                /// Access the ${operationType.name} as a reference.\n
+                /// Access the ${operationType.name} as a reference.
                 pub fn as_input(&self) -> &#{InputBuilder} {
                     &self.inner
                 }
