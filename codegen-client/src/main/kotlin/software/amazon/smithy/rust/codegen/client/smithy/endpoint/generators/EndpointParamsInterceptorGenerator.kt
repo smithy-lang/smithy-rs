@@ -94,8 +94,11 @@ class EndpointParamsInterceptorGenerator(
 
                     #{endpoint_prefix:W}
 
-                    let params = #{Params}::builder()
-                        #{param_setters}
+                    let builder = #{Params}::builder()
+                        #{param_setters};
+                    cfg.interceptor_state().store_put(builder.clone());
+
+                    let params = builder
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
                     cfg.interceptor_state().store_put(#{EndpointResolverParams}::new(params));

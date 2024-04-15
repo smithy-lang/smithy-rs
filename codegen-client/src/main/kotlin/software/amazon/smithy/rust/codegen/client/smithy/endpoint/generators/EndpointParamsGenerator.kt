@@ -230,7 +230,9 @@ internal class EndpointParamsGenerator(
 
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
-        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(rustWriter)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(
+            rustWriter,
+        )
         rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
@@ -238,6 +240,16 @@ internal class EndpointParamsGenerator(
                 rust("$name: #T,", type)
             }
         }
+
+        rustWriter.rustTemplate(
+            """
+            impl #{Storable} for ParamsBuilder {
+                type Storer = #{StoreReplace}<Self>;
+            }
+            """,
+            "Storable" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::Storable"),
+            "StoreReplace" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::StoreReplace"),
+        )
 
         rustWriter.rustBlock("impl ParamsBuilder") {
             docs("Consume this builder, creating [`Params`].")

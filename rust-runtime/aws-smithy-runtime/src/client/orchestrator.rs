@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::auth::orchestrate_auth;
+use self::auth::{resolve_identity, sign_request};
 use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
     http::body::minimum_throughput::MaybeUploadThroughputCheckFuture,
-    orchestrator::endpoints::orchestrate_endpoint,
+    orchestrator::endpoints::{orchestrate_endpoint, resolve_endpoint},
 };
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -349,14 +349,18 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    // Resolve an endpoint (but without applying it to the request yet) so we can obtain auth schemes
+    // associated with the endpoint.
+    halt_on_err!([ctx] => resolve_endpoint(runtime_components, cfg).await.map_err(OrchestratorError::other));
+    let scheme_id = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         modify_before_signing(ctx, runtime_components, cfg);
         read_before_signing(ctx, runtime_components, cfg);
     });
 
-    halt_on_err!([ctx] => orchestrate_auth(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => sign_request(scheme_id, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         read_after_signing(ctx, runtime_components, cfg);
