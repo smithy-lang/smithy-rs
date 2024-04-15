@@ -52,7 +52,7 @@ jobs:
     name: Acquire Base Image
     needs: save-docker-login-token
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
