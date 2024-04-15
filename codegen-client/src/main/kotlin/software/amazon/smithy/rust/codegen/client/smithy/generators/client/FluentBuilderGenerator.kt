@@ -73,8 +73,8 @@ class FluentBuilderGenerator(
     fun render(writer: RustWriter) {
         writer.renderInputBuilderImpls()
         writer.renderStruct()
-        writer.renderImpl()
         writer.renderTraitImpls()
+        writer.renderImpl()
     }
 
     private fun RustWriter.renderStruct() {
