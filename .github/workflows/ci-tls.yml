@@ -19,6 +19,7 @@ jobs:
   verify-tls-config:
     name: Verify TLS configuration
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - name: Install packages
       shell: bash
