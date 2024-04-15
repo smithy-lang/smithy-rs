@@ -385,8 +385,6 @@ fun <T : AbstractCodeWriter<T>> T.docs(
     setNewlinePrefix(newlinePrefix)
     val cleaned =
         text.lines()
-            // Remove leading empty line (frequently occurs with Kotlin block quotes)
-            .filterIndexed { index, line -> index != 0 || line.isNotBlank() }
             .joinToString("\n") {
                 when (trimStart) {
                     true -> it.trimStart()
