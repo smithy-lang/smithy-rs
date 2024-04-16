@@ -66,6 +66,7 @@ service RestJsonExtras {
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
         QueryPrecedence,
+        ContentTypeParameters,
     ],
     errors: [ExtraError]
 }
@@ -349,3 +350,34 @@ structure EmptyStructWithContentOnWireOpOutput {
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
 }
+
+@http(uri: "/content-type-parameters", method: "POST")
+@httpRequestTests([
+    {
+        id: "RestJsonContentTypeParameters",
+        documentation: "A server should ignore parameters added to the content type",
+        uri: "/content-type-parameters",
+        method: "POST",
+        protocol: "aws.protocols#restJson1",
+        body: "{\"value\":5}",
+        headers: { "Content-Type": "application/json; charset=utf-8" },
+        params: {
+            value: 5,
+        },
+        appliesTo: "server",
+    },
+])
+operation ContentTypeParameters {
+    input: ContentTypeParametersInput,
+    output: ContentTypeParametersOutput,
+}
+
+@input
+structure ContentTypeParametersInput {
+    value: CTInt,
+}
+
+integer CTInt
+
+@output
+structure ContentTypeParametersOutput {}

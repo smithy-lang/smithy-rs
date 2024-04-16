@@ -92,6 +92,21 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
+        CodegenTest(
+            "aws.protocoltests.json10#JsonRpc10Extras",
+            "aws_json10_extras",
+            imports = listOf("$commonModels/aws-json1-0-extras.smithy"),
+        ),
+        CodegenTest(
+            "aws.protocoltests.json#JsonProtocolExtras",
+            "aws_json11_extras",
+            imports = listOf("$commonModels/aws-json1-1-extras.smithy"),
+        ),
+        CodegenTest(
+            "aws.protocoltests.restxml#RestXmlExtras",
+            "rest_xml_extras",
+            imports = listOf("$commonModels/rest-xml-extras.smithy"),
+        ),
     )
 }
 
