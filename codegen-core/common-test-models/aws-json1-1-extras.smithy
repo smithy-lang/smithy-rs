@@ -48,10 +48,8 @@ operation ContentTypeParameters {
 
 @input
 structure ContentTypeParametersInput {
-	value: CTInt,
+	value: Integer,
 }
-
-integer CTInt
 
 @output
 structure ContentTypeParametersOutput {}

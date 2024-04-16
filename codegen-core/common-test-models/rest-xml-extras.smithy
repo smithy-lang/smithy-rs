@@ -47,7 +47,5 @@ structure ContentTypeParametersInput {
 	value: Integer,
 }
 
-integer CTInt
-
 @output
 structure ContentTypeParametersOutput {}
