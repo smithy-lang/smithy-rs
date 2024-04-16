@@ -13,7 +13,7 @@
 
 [[smithy-rs]]
 message = """
-Content-Type header validation now ignores parameter portion of media types.
+`Content-Type` header validation now ignores parameter portion of media types.
 """
 references = ["smithy-rs#3471","smithy-rs#3576"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, target = "server" }
