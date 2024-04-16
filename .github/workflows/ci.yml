@@ -38,7 +38,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.74.1
+  rust_version: 1.75.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -48,6 +48,7 @@ jobs:
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
+    timeout-minutes: 25
     runs-on: smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -84,6 +85,7 @@ jobs:
   test-codegen:
     name: Test Codegen
     runs-on: ${{ matrix.test.runner }}
+    timeout-minutes: 30
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -140,6 +142,7 @@ jobs:
   check-semver-hazards:
     name: Check for semver hazards
     runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
       with:
@@ -162,6 +165,7 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
+    timeout-minutes: 20
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -193,11 +197,10 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
-
-
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
+    timeout-minutes: 20
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -232,6 +235,7 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -335,6 +339,7 @@ jobs:
     if: ${{ inputs.run_canary }}
     needs: generate
     runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 20
     permissions:
       id-token: write
       contents: read
@@ -373,6 +378,7 @@ jobs:
     if: ${{ inputs.run_sdk_examples }}
     needs: generate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
       with:

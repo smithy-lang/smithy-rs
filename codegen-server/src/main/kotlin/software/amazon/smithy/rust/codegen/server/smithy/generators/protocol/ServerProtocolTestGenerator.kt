@@ -627,7 +627,7 @@ class ServerProtocolTestGenerator(
         if (testCase.body.isEmpty) return
 
         val httpMalformedResponseBodyDefinition = testCase.body.get()
-        // From https://awslabs.github.io/smithy/1.0/spec/http-protocol-compliance-tests.html?highlight=httpresponsetest#httpmalformedresponsebodyassertion
+        // From https://smithy.io/2.0/additional-specs/http-protocol-compliance-tests.html#httpmalformedresponsebodyassertion
         //
         //     A union describing the assertion to run against the response body. As it is a union, exactly one
         //     member must be set.

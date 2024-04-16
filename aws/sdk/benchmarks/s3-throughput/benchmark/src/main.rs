@@ -202,7 +202,7 @@ async fn benchmark_get_object(client: &SdkConfig, args: &Args) -> Result<Latenci
         type Setup = Client;
 
         async fn prepare(&self, conf: &SdkConfig) -> Self::Setup {
-            Client::new(&conf)
+            Client::new(conf)
         }
 
         async fn do_get(
