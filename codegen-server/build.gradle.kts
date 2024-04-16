@@ -61,6 +61,13 @@ val sourcesJar by tasks.creating(Jar::class) {
     from(sourceSets.getByName("main").allSource)
 }
 
+val javadocJar by tasks.creating(Jar::class) {
+    group = "publishing"
+    description = "Assembles Kotlin javadoc jar"
+    archiveClassifier.set("javadoc")
+    from(tasks.javadoc)
+}
+
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
     val kotestVersion: String by project
@@ -95,12 +102,43 @@ publishing {
         create<MavenPublication>("default") {
             from(components["java"])
             artifact(sourcesJar)
+            artifact(javadocJar)
         }
     }
     repositories {
         maven {
             name = "staging"
             url = uri(stagingDirectory)
+        }
+    }
+
+    // Add license spec to all maven publications
+    publications.withType<MavenPublication>() {
+        project.afterEvaluate {
+            pom {
+                name.set(project.name)
+                description.set(project.description)
+                url.set("https://github.com/smithy-lang/smithy-rs")
+                licenses {
+                    license {
+                        name.set("Apache License 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        distribution.set("repo")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("smithy")
+                        name.set("Smithy")
+                        organization.set("Amazon Web Services")
+                        organizationUrl.set("https://aws.amazon.com")
+                        roles.add("developer")
+                    }
+                }
+                scm {
+                    url.set("https://github.com/smithy-lang/smithy-rs.git")
+                }
+            }
         }
     }
 }
