@@ -14,6 +14,10 @@ sed -i '/"examples\//d' Cargo.toml
 
 cargo check --all-targets --all-features
 
+echo "## Checking the wasm32-unknown-unknown and wasm32-wasi targets..."
+cargo check --target wasm32-unknown-unknown --no-default-features
+cargo check --target wasm32-wasi --no-default-features
+
 for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then
         echo "#### Checking ${test_dir}..."
