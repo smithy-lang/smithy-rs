@@ -15,10 +15,10 @@ COMMIT_AUTHOR_EMAIL = "generated-code-action@github.com"
 
 CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
-target_codegen_client = 'codegen-client-test'
-target_codegen_server = 'codegen-server-test'
-target_codegen_server_python = 'codegen-server-test:python'
-target_codegen_server_typescript = 'codegen-server-test:typescript'
+target_codegen_client = 'smithy-rust-codegen-client-test'
+target_codegen_server = 'smithy-rust-codegen-server-test'
+target_codegen_server_python = 'smithy-rust-codegen-server-python-test'
+target_codegen_server_typescript = 'smithy-rust-codegen-server-typescript-test'
 target_aws_sdk = 'aws:sdk'
 
 
@@ -73,22 +73,22 @@ def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
 
     # Clean up the client-test folder
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-client-test/source")
-    run(f"find {OUTPUT_PATH}/codegen-client-test | "
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/smithy-rust-codegen-client-test/source")
+    run(f"find {OUTPUT_PATH}/smithy-rust-codegen-client-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
     # Clean up the server-test folder
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-typescript/source")
-    run(f"find {OUTPUT_PATH}/codegen-server-test | "
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/smithy-rust-codegen-server-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/smithy-rust-codegen-server-python-test/source")
+    get_cmd_output(f"rm -rf {OUTPUT_PATH}/smithy-rust-codegen-server-typescript-test/source")
+    run(f"find {OUTPUT_PATH}/smithy-rust-codegen-server-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
+    run(f"find {OUTPUT_PATH}/smithy-rust-codegen-server-python-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-typescript | "
+    run(f"find {OUTPUT_PATH}/smithy-rust-codegen-server-typescript-test | "
         f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
         f"xargs rm -f", shell=True)
 
@@ -137,21 +137,21 @@ def make_diffs(base_commit_sha, head_commit_sha):
                        head_commit_sha, "aws-sdk", whitespace=True)
     sdk_nows = make_diff("AWS SDK", f"{OUTPUT_PATH}/aws-sdk", base_commit_sha, head_commit_sha,
                          "aws-sdk-ignore-whitespace", whitespace=False)
-    client_ws = make_diff("Client Test", f"{OUTPUT_PATH}/codegen-client-test", base_commit_sha,
+    client_ws = make_diff("Client Test", f"{OUTPUT_PATH}/smithy-rust-codegen-client-test", base_commit_sha,
                           head_commit_sha, "client-test", whitespace=True)
-    client_nows = make_diff("Client Test", f"{OUTPUT_PATH}/codegen-client-test", base_commit_sha,
+    client_nows = make_diff("Client Test", f"{OUTPUT_PATH}/smithy-rust-codegen-client-test", base_commit_sha,
                             head_commit_sha, "client-test-ignore-whitespace", whitespace=False)
-    server_ws = make_diff("Server Test", f"{OUTPUT_PATH}/codegen-server-test", base_commit_sha,
+    server_ws = make_diff("Server Test", f"{OUTPUT_PATH}/smithy-rust-codegen-server-test", base_commit_sha,
                           head_commit_sha, "server-test", whitespace=True)
-    server_nows = make_diff("Server Test", f"{OUTPUT_PATH}/codegen-server-test", base_commit_sha,
+    server_nows = make_diff("Server Test", f"{OUTPUT_PATH}/smithy-rust-codegen-server-test", base_commit_sha,
                             head_commit_sha, "server-test-ignore-whitespace", whitespace=False)
-    server_ws_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/codegen-server-test-python", base_commit_sha,
+    server_ws_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/smithy-rust-codegen-server-python-test", base_commit_sha,
                                  head_commit_sha, "server-test-python", whitespace=True)
-    server_nows_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/codegen-server-test-python", base_commit_sha,
+    server_nows_python = make_diff("Server Test Python", f"{OUTPUT_PATH}/smithy-rust-codegen-server-python-test", base_commit_sha,
                                    head_commit_sha, "server-test-python-ignore-whitespace", whitespace=False)
-    server_ws_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/codegen-server-test-typescript", base_commit_sha,
+    server_ws_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/smithy-rust-codegen-server-typescript-test", base_commit_sha,
                                      head_commit_sha, "server-test-typescript", whitespace=True)
-    server_nows_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/codegen-server-test-typescript", base_commit_sha,
+    server_nows_typescript = make_diff("Server Test Typescript", f"{OUTPUT_PATH}/smithy-rust-codegen-server-typescript-test", base_commit_sha,
                                        head_commit_sha, "server-test-typescript-ignore-whitespace", whitespace=False)
 
     sdk_links = diff_link('AWS SDK', 'No codegen difference in the AWS SDK',

@@ -1,0 +1,186 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.core.protocols
+
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.pattern.UriPattern
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ToShapeId
+import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.CodegenContext
+import software.amazon.smithy.rust.codegen.core.RuntimeType
+import software.amazon.smithy.rust.codegen.core.generators.serializationError
+import software.amazon.smithy.rust.codegen.core.protocols.parse.JsonParserGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.serialize.JsonSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
+
+sealed class AwsJsonVersion {
+    abstract val value: String
+
+    object Json10 : AwsJsonVersion() {
+        override val value = "1.0"
+    }
+
+    object Json11 : AwsJsonVersion() {
+        override val value = "1.1"
+    }
+}
+
+class AwsJsonHttpBindingResolver(
+    private val model: Model,
+    private val awsJsonVersion: AwsJsonVersion,
+) : HttpBindingResolver {
+    private val httpTrait =
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/"))
+            .build()
+
+    private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
+        val members = shape.let { model.expectShape(it.toShapeId()) }.members()
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
+        if (members.size > 1 && members.any { it.isStreaming(model) }) {
+            throw CodegenException(
+                "We only support one payload member if that payload contains a streaming member." +
+                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
+            )
+        }
+
+        return members.map {
+            if (it.isStreaming(model)) {
+                HttpBindingDescriptor(it, HttpLocation.PAYLOAD, "document")
+            } else {
+                HttpBindingDescriptor(it, HttpLocation.DOCUMENT, "document")
+            }
+        }
+            .toList()
+    }
+
+    override fun httpTrait(operationShape: OperationShape): HttpTrait = httpTrait
+
+    override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.inputShape)
+
+    override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
+        bindings(operationShape.outputShape)
+
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
+
+    override fun requestContentType(operationShape: OperationShape): String =
+        "application/x-amz-json-${awsJsonVersion.value}"
+
+    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
+}
+
+/**
+ * AwsJson requires all empty inputs to be sent across as `{}`. This class
+ * customizes wraps [JsonSerializerGenerator] to add this functionality.
+ */
+class AwsJsonSerializerGenerator(
+    private val codegenContext: CodegenContext,
+    httpBindingResolver: HttpBindingResolver,
+    private val jsonSerializerGenerator: JsonSerializerGenerator =
+        JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName),
+) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val codegenScope =
+        arrayOf(
+            "Error" to runtimeConfig.serializationError(),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
+
+    override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
+        var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
+        if (serializer == null) {
+            val inputShape = operationShape.inputShape(codegenContext.model)
+            serializer =
+                protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
+                    rustBlockTemplate(
+                        "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                        *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
+                    ) {
+                        rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
+                    }
+                }
+        }
+        return serializer
+    }
+}
+
+open class AwsJson(
+    val codegenContext: CodegenContext,
+    val awsJsonVersion: AwsJsonVersion,
+) : Protocol {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
+
+    val version: AwsJsonVersion get() = awsJsonVersion
+
+    override val httpBindingResolver: HttpBindingResolver =
+        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion)
+
+    override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
+
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        JsonParserGenerator(
+            codegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+        )
+
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
+
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+            rustTemplate(
+                """
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    #{json_errors}::parse_error_metadata(response_body, response_headers)
+                }
+                """,
+                *errorScope,
+            )
+        }
+
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            rustTemplate(
+                """
+                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                    // Note: HeaderMap::new() doesn't allocate
+                    #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
+                }
+                """,
+                *errorScope,
+            )
+        }
+}
+
+fun awsJsonFieldName(member: MemberShape): String = member.memberName

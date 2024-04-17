@@ -18,7 +18,7 @@ The Python implementation of the service can be found inside
 ## Build
 
 Since this example requires both the server and client SDK to be code-generated
-from their [model](/codegen-server-test/model/pokemon.smithy), a Makefile is
+from their [model](/codegen/smithy-rust-codegen-server-test/model/pokemon.smithy), a Makefile is
 provided to build and run the service. Just run `make build` to prepare the first
 build.
 

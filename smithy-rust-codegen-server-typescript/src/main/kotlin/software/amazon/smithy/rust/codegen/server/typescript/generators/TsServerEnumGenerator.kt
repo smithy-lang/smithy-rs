@@ -1,0 +1,53 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.server.typescript.generators
+
+import software.amazon.smithy.model.shapes.StringShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.generators.EnumGenerator
+import software.amazon.smithy.rust.codegen.core.generators.EnumGeneratorContext
+import software.amazon.smithy.rust.codegen.server.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.generators.ConstrainedEnum
+import software.amazon.smithy.rust.codegen.server.generators.ValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.typescript.TsServerCargoDependency
+
+/**
+ * To share enums defined in Rust with Typescript, `napi-rs` provides the `napi` trait.
+ * This class generates enums definitions and implements the `napi` trait.
+ */
+class TsConstrainedEnum(
+    codegenContext: ServerCodegenContext,
+    shape: StringShape,
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+) : ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator) {
+    private val napiDerive = TsServerCargoDependency.NapiDerive.toType()
+
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable =
+        writable {
+            this.rust("use napi::bindgen_prelude::ToNapiValue;")
+        }
+
+    override fun additionalEnumAttributes(context: EnumGeneratorContext): List<Attribute> =
+        listOf(Attribute(napiDerive.resolve("napi")))
+}
+
+class TsServerEnumGenerator(
+    codegenContext: ServerCodegenContext,
+    shape: StringShape,
+    validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+) : EnumGenerator(
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        shape,
+        TsConstrainedEnum(
+            codegenContext,
+            shape,
+            validationExceptionConversionGenerator,
+        ),
+    )

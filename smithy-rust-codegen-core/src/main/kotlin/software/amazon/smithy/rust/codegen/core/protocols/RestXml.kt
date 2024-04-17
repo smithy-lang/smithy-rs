@@ -1,0 +1,69 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.rust.codegen.core.protocols
+
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.CodegenContext
+import software.amazon.smithy.rust.codegen.core.RuntimeType
+import software.amazon.smithy.rust.codegen.core.protocols.parse.RestXmlParserGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.protocols.serialize.XmlBindingTraitSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
+
+open class RestXml(val codegenContext: CodegenContext) : Protocol {
+    private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
+
+    protected val restXmlErrors: RuntimeType =
+        when (restXml.isNoErrorWrapping) {
+            true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
+            false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
+        }
+
+    override val httpBindingResolver: HttpBindingResolver =
+        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
+
+    override val defaultTimestampFormat: TimestampFormatTrait.Format =
+        TimestampFormatTrait.Format.DATE_TIME
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        RestXmlParserGenerator(codegenContext, restXmlErrors)
+
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        XmlBindingTraitSerializerGenerator(codegenContext, httpBindingResolver)
+
+    override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                *errorScope,
+            ) {
+                rust("#T::parse_error_metadata(response_body)", restXmlErrors)
+            }
+        }
+
+    override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                *errorScope,
+            ) {
+                rust("#T::parse_error_metadata(payload.as_ref())", restXmlErrors)
+            }
+        }
+}

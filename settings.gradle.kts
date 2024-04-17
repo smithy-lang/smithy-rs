@@ -3,22 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
+rootProject.name = "smithy-rs"
 
-include(":codegen-core")
-include(":codegen-client")
-include(":codegen-client-test")
-include(":codegen-server")
-include(":codegen-server:python")
-include(":codegen-server:typescript")
-include(":codegen-server-test")
-include(":codegen-server-test:python")
-include(":codegen-server-test:typescript")
+include(":smithy-rust-codegen-core")
+include(":smithy-rust-codegen-client")
+include(":smithy-rust-codegen-client-test")
+include(":smithy-rust-codegen-server")
+include(":smithy-rust-codegen-server-test")
+include(":smithy-rust-codegen-server-python")
+include(":smithy-rust-codegen-server-python-test")
+include(":smithy-rust-codegen-server-typescript")
+include(":smithy-rust-codegen-server-typescript-test")
+include(":smithy-aws-rust-codegen")
 include(":rust-runtime")
 include(":aws:rust-runtime")
 include(":aws:sdk")
 include(":aws:sdk-adhoc-test")
-include(":aws:sdk-codegen")
 
 pluginManagement {
     val smithyGradlePluginVersion: String by settings

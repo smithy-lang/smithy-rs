@@ -42,7 +42,7 @@ val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
 
 dependencies {
-    implementation(project(":aws:sdk-codegen"))
+    implementation(project(":smithy-aws-rust-codegen"))
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")

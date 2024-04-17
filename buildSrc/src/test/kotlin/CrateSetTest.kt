@@ -61,16 +61,16 @@ class CrateSetTest {
 
     @Test
     fun `aws runtime stabilities should match those in manifest files`() {
-        crateSetStabilitiesMatchManifestStabilities(AWS_SDK_RUNTIME, "../aws/rust-runtime")
+        crateSetStabilitiesMatchManifestStabilities(AWS_SDK_RUNTIME, "../../aws/rust-runtime")
     }
 
     @Test
     fun `common smithy runtime stabilities should match those in manifest files`() {
-        crateSetStabilitiesMatchManifestStabilities(SMITHY_RUNTIME_COMMON, "../rust-runtime")
+        crateSetStabilitiesMatchManifestStabilities(SMITHY_RUNTIME_COMMON, "../../rust-runtime")
     }
 
     @Test
     fun `server smithy runtime stabilities should match those in manifest files`() {
-        crateSetStabilitiesMatchManifestStabilities(SERVER_SMITHY_RUNTIME, "../rust-runtime")
+        crateSetStabilitiesMatchManifestStabilities(SERVER_SMITHY_RUNTIME, "../../rust-runtime")
     }
 }

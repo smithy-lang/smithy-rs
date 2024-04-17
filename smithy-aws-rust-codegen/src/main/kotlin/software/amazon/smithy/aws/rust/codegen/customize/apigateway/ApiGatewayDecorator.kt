@@ -1,0 +1,52 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package software.amazon.smithy.aws.rust.codegen.customize.apigateway
+
+import software.amazon.smithy.rust.codegen.client.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.generators.ServiceRuntimePluginSection
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.RuntimeType
+import software.amazon.smithy.aws.rust.codegen.InlineAwsDependency
+
+class ApiGatewayDecorator : ClientCodegenDecorator {
+    override val name: String = "ApiGateway"
+    override val order: Byte = 0
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations + ApiGatewayAcceptHeaderInterceptorCustomization(codegenContext)
+}
+
+private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegenContext: ClientCodegenContext) :
+    ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rustTemplate(
+                        "#{Interceptor}::default()",
+                        "Interceptor" to
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile(
+                                    "apigateway_interceptors",
+                                    additionalDependency =
+                                        arrayOf(
+                                            CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
+                                        ),
+                                ),
+                            ).resolve("AcceptHeaderInterceptor"),
+                    )
+                }
+            }
+        }
+}

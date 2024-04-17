@@ -6,4 +6,4 @@
 
 set -eux
 cd smithy-rs
-./gradlew aws:sdk-codegen:test
+./gradlew smithy-aws-rust-codegen:test
