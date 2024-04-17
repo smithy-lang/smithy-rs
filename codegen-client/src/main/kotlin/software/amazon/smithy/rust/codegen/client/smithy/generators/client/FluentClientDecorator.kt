@@ -22,6 +22,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
+/**
+ * Generates the client via codegen decorator.
+ *
+ * > Why is this a decorator instead of a normal generator that gets called from the codegen visitor?
+ *
+ * The AWS SDK needs to make significant changes from what smithy-rs generates for generic clients,
+ * and the easiest way to do that is to completely replace the client generator. With this as
+ * a decorator, it can be excluded entirely and replaced in the sdk-codegen plugin.
+ */
 class FluentClientDecorator : ClientCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0

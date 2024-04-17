@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 /**
  * This [HttpBindingResolver] implementation mostly delegates to the [HttpTraitHttpBindingResolver] class, since the
  * RestJson1 protocol can be almost entirely described by Smithy's HTTP binding traits
- * (https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html).
+ * (https://smithy.io/2.0/spec/http-bindings.html).
  * The only protocol-specific behavior that is truly custom is the response `Content-Type` header, which defaults to
  * `application/json` if not overridden.
  */
