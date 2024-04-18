@@ -116,12 +116,12 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "11"
+    kotlinOptions.jvmTarget = "17"
     dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
@@ -158,7 +158,7 @@ if (isTestingEnabled.toBoolean()) {
     }
 
     tasks.compileTestKotlin {
-        kotlinOptions.jvmTarget = "11"
+        kotlinOptions.jvmTarget = "17"
     }
 
     tasks.test {
