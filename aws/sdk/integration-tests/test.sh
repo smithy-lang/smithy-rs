@@ -16,7 +16,7 @@ for f in *; do
       else
          # The webassembly tests use a custom runner set in config.toml that
          # is not picked up when running the tests outside of the package
-         cd webassembly && cargo component test --all-features --all-targets && cd ..
+         cd webassembly && cargo component test --all-features --target wasm32-wasi && cd ..
       fi
    fi
 done
