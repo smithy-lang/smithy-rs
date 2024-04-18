@@ -16,6 +16,9 @@ for f in *; do
       else
          # The webassembly tests use a custom runner set in config.toml that
          # is not picked up when running the tests outside of the package
+         # The tests are written for `wasm32-wasi` but the manifest config also specifies
+         # `wasm32-unknown-unknown` so we can ensure the test build on that platform as well.
+         # For executing the tests, however, we explicitly choose a target `wasm32-wasi`.
          cd webassembly && cargo component test --all-features --target wasm32-wasi && cd ..
       fi
    fi
