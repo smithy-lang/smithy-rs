@@ -16,7 +16,7 @@ cargo check --all-targets --all-features
 
 echo "## Checking the wasm32-unknown-unknown and wasm32-wasi targets for SDKs"
 for dir in sdk/*; do
-    if [[ "$(basename "${dir}")" == aws-sdk-* ]]; then
+    if [[ "$(basename "${dir}")" != aws-* ]]; then
         echo "#### Checking ${dir}..."
         cargo check --target wasm32-unknown-unknown --no-default-features --manifest-path "${dir}/Cargo.toml"
         cargo check --target wasm32-wasi --no-default-features --manifest-path "${dir}/Cargo.toml"
