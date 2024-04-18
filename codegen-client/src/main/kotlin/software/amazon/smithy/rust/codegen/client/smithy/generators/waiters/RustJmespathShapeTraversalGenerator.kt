@@ -805,13 +805,7 @@ private fun RustType.isNumber(): Boolean = this.dereference().let { it is RustTy
 
 private fun RustType.isBool(): Boolean = this.dereference() is RustType.Bool
 
-private fun RustType.isDoubleReference(): Boolean = this.refCount() > 1
-
-private fun RustType.refCount(): Int =
-    when {
-        this is RustType.Reference -> 1 + this.member.refCount()
-        else -> 0
-    }
+private fun RustType.isDoubleReference(): Boolean = this is RustType.Reference && this.member is RustType.Reference
 
 private fun RustType.collectionValue(): RustType =
     when (this) {
