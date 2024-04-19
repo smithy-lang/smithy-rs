@@ -158,7 +158,7 @@ RUN set -eux; \
         git \
         glibc-langpack-en \
         go \
-        java-11-amazon-corretto-headless \
+        java-17-amazon-corretto-headless \
         make \
         openssl-devel \
         pkgconfig \
@@ -194,7 +194,7 @@ ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    JAVA_HOME=/usr/lib/jvm/java-11-amazon-corretto.x86_64 \
+    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \

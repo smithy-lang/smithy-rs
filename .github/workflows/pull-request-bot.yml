@@ -28,7 +28,7 @@ concurrency:
 
 env:
   apt_dependencies: libssl-dev gnuplot jq
-  java_version: 11
+  java_version: 17
   rust_toolchain_components: clippy,rustfmt
   rust_nightly_version: nightly-2024-02-07
 
