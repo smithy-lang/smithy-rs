@@ -103,7 +103,7 @@ object ClientRustModule {
         val Error = RustModule.public("error", parent = self)
     }
 
-    val waiters = RustModule.pubCrate("waiters")
+    val waiters = RustModule.public("waiters")
 }
 
 class ClientModuleDocProvider(
@@ -129,6 +129,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Primitives.EventStream -> strDoc("Event stream related primitives such as `Message` or `Header`.")
             ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
             ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
+            ClientRustModule.waiters -> strDoc("Supporting types for waiters.\n\nNote: to use waiters, import the [`Waiters`](crate::client::Waiters) trait, which adds methods prefixed with `wait_for` to the client.")
             else -> TODO("Document this module: $module")
         }
     }
@@ -142,6 +143,7 @@ class ClientModuleDocProvider(
 
             writeClientConstructionDocs(this)
             FluentClientDocs.clientUsageDocs(codegenContext)(this)
+            FluentClientDocs.waiterDocs(codegenContext)(this)
         }
 
     private fun customizeModuleDoc(): Writable =

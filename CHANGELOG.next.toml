@@ -35,7 +35,6 @@ references = ["smithy-rs#3546"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "orf"
 
-
 [[aws-sdk-rust]]
 message = "Fix an S3 crate's dependency on `ahash` so the crate can be compiled for `wasm32-unknown-unknown`."
 references = ["smithy-rs#3590", "aws-sdk-rust#1131"]
@@ -47,3 +46,45 @@ message = "Implement `std::error::Error` for `ConstraintViolation`"
 references = ["smithy-rs#3430"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
+
+[[aws-sdk-rust]]
+message = """
+Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+some methods prefixed with `wait_for` to the existing clients. These can be used to, for example
+in S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to
+have the status OK.
+
+Using a waiter looks like the following example for EC2:
+```rust
+use aws_sdk_ec2::client::Waiters;
+
+let result = ec2_client.wait_for_instance_status_ok()
+    .instance_ids("some-instance-id")
+    .wait(Duration::from_secs(300))
+    .await;
+```
+"""
+references = ["aws-sdk-rust#400", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+some methods prefixed with `wait_for` to the existing clients.
+
+For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
+that waiter would look as follows:
+
+```rust
+use my_generated_client::client::Waiters;
+
+let result = client.wait_for_thing()
+    .thing_id("someId")
+    .wait(Duration::from_secs(120))
+    .await;
+```
+"""
+references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"

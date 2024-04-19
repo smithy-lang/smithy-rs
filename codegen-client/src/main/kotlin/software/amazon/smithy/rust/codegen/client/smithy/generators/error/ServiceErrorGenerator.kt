@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -33,6 +32,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.waiters.WaitableTrait
 
 /**
  * Each service defines its own "top-level" error combining all possible errors that a service can emit.
@@ -76,6 +77,30 @@ class ServiceErrorGenerator(
             operations.forEach { operationShape ->
                 // operation errors
                 renderImplFrom(symbolProvider.symbolForOperationError(operationShape), operationShape.errors)
+            }
+            // Every waiter error can be converted into service::Error
+            if (operations.any { it.hasTrait<WaitableTrait>() }) {
+                rustTemplate(
+                    """
+                    impl<O, E> #{From}<#{WaiterError}<O, E>> for Error
+                    where
+                        O: #{Debug} + #{Send} + #{Sync} + 'static,
+                        E: #{StdError} + #{Send} + #{Sync} + 'static,
+                    {
+                        fn from(err: #{WaiterError}<O, E>) -> Self {
+                            Error::Unhandled(#{Unhandled} {
+                                meta: #{Default}::default(),
+                                source: err.into(),
+                            })
+                        }
+                    }
+                    """,
+                    *preludeScope,
+                    "Debug" to RuntimeType.Debug,
+                    "StdError" to RuntimeType.StdError,
+                    "WaiterError" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::waiters::error::WaiterError"),
+                    "Unhandled" to unhandledError(codegenContext.runtimeConfig),
+                )
             }
             // event stream errors
             operations.map { it.eventStreamErrors(codegenContext.model) }
@@ -145,52 +170,54 @@ class ServiceErrorGenerator(
         errorSymbol: Symbol,
         errors: List<ShapeId>,
     ) {
-        if (errors.isNotEmpty() || CodegenTarget.CLIENT == codegenContext.target) {
-            val operationErrors = errors.map { model.expectShape(it) }
-            rustBlock(
-                "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
-                sdkError,
-                errorSymbol,
+        if (errors.isEmpty()) {
+            return
+        }
+
+        val operationErrors = errors.map { model.expectShape(it) }
+        rustBlock(
+            "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
+            sdkError,
+            errorSymbol,
+        ) {
+            rustBlockTemplate(
+                "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
+                "SdkError" to sdkError,
+                "OpError" to errorSymbol,
             ) {
-                rustBlockTemplate(
-                    "fn from(err: #{SdkError}<#{OpError}, R>) -> Self",
-                    "SdkError" to sdkError,
-                    "OpError" to errorSymbol,
-                ) {
-                    rustBlock("match err") {
-                        rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
-                        rustTemplate(
-                            """
-                            _ => Error::Unhandled(
-                                #{Unhandled} {
-                                    meta: #{ProvideErrorMetadata}::meta(&err).clone(),
-                                    source: err.into(),
-                                }
-                            ),
-                            """,
-                            "Unhandled" to unhandledError(codegenContext.runtimeConfig),
-                            "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig),
-                        )
-                    }
+                rustBlock("match err") {
+                    rust("#T::ServiceError(context) => Self::from(context.into_err()),", sdkError)
+                    rustTemplate(
+                        """
+                        _ => Error::Unhandled(
+                            #{Unhandled} {
+                                meta: #{ProvideErrorMetadata}::meta(&err).clone(),
+                                source: err.into(),
+                            }
+                        ),
+                        """,
+                        "Unhandled" to unhandledError(codegenContext.runtimeConfig),
+                        "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig),
+                    )
                 }
             }
+        }
 
-            rustBlock("impl From<#T> for Error", errorSymbol) {
-                rustBlock("fn from(err: #T) -> Self", errorSymbol) {
-                    rustBlock("match err") {
-                        operationErrors.forEach { errorShape ->
-                            val errSymbol = symbolProvider.toSymbol(errorShape)
-                            rust(
-                                "#T::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
-                                errorSymbol,
-                            )
-                        }
-                        rustTemplate(
-                            "#{errorSymbol}::Unhandled(inner) => Error::Unhandled(inner),",
-                            "errorSymbol" to errorSymbol,
-                            "unhandled" to unhandledError(codegenContext.runtimeConfig),
+        rustBlock("impl From<#T> for Error", errorSymbol) {
+            rustBlock("fn from(err: #T) -> Self", errorSymbol) {
+                rustBlock("match err") {
+                    operationErrors.forEach { errorShape ->
+                        val errSymbol = symbolProvider.toSymbol(errorShape)
+                        rust(
+                            "#T::${errSymbol.name}(inner) => Error::${errSymbol.name}(inner),",
+                            errorSymbol,
                         )
                     }
+                    rustTemplate(
+                        "#{errorSymbol}::Unhandled(inner) => Error::Unhandled(inner),",
+                        "errorSymbol" to errorSymbol,
+                        "unhandled" to unhandledError(codegenContext.runtimeConfig),
+                    )
                 }
             }
         }
