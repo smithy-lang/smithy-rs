@@ -35,7 +35,7 @@ java {
 }
 
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "17"
+    kotlinOptions.jvmTarget = "11"
 }
 
 // Reusable license copySpec
@@ -71,7 +71,7 @@ if (isTestingEnabled.toBoolean()) {
     }
 
     tasks.compileTestKotlin {
-        kotlinOptions.jvmTarget = "17"
+        kotlinOptions.jvmTarget = "11"
     }
 
     tasks.test {
