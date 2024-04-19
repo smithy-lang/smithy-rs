@@ -41,3 +41,9 @@ message = "Fix an S3 crate's dependency on `ahash` so the crate can be compiled 
 references = ["smithy-rs#3590", "aws-sdk-rust#1131"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Implement `std::error::Error` for `ConstraintViolation`"
+references = ["smithy-rs#3430"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
