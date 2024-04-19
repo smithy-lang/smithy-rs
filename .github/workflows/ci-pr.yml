@@ -113,9 +113,9 @@ jobs:
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
 
   semver-checks:
-    name: check the semver status of this PR
+    name: Check PR semver compliance
     runs-on: smithy_ubuntu-latest_8-core
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs:
     - save-docker-login-token
     - acquire-base-image
@@ -153,6 +153,6 @@ jobs:
       with:
         action: check-semver
         action-arguments: ${{ github.event.pull_request.base.sha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
-    - name: print help message
+    - name: Print help message
       if: failure()
-      run: echo "::error::This pull request contains breaking changes. Please add the `breaking-changes` label and a changelog entry"
+      run: echo "::error::This pull request either contains breaking changes, or has cross-crate changes that may be backwards compatible, but that cargo-semver-checks cannot verify. Please scrutinize the change for backwards compatibility."
