@@ -115,7 +115,7 @@ jobs:
   semver-checks:
     name: Check PR semver compliance
     runs-on: smithy_ubuntu-latest_8-core
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs:
     - save-docker-login-token
     - acquire-base-image
