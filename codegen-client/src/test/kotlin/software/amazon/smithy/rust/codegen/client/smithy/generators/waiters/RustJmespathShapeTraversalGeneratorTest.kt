@@ -323,6 +323,9 @@ class RustJmespathShapeTraversalGeneratorTest {
             rust("assert_eq!(1, result.len());")
             rust("assert_eq!(\"test\", result[0]);")
         }
+        test("nested_flattens", "lists.structs[].subStructs[].subStructPrimitives.string") {
+            // it should compile
+        }
 
         invalid("primitives.integer[]", "Left side of the flatten")
     }

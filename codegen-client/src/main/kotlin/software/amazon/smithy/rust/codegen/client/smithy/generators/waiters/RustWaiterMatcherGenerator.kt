@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.SafeNamer
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.replaceLifetimes
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -30,9 +31,15 @@ import software.amazon.smithy.waiters.Matcher.InputOutputMember
 import software.amazon.smithy.waiters.Matcher.OutputMember
 import software.amazon.smithy.waiters.Matcher.SuccessMember
 import software.amazon.smithy.waiters.PathComparator
+import software.amazon.smithy.waiters.Waiter
 import java.security.MessageDigest
 
 private typealias Scope = Array<Pair<String, Any>>
+
+/** True if the waiter requires the operation input in its matcher implementation */
+fun Waiter.requiresInput(): Boolean = acceptors.any { it.matcher.requiresInput() }
+
+fun Matcher<*>.requiresInput(): Boolean = this is InputOutputMember
 
 /**
  * Generates the Rust code for the Smithy waiter "matcher union".
@@ -63,8 +70,16 @@ class RustWaiterMatcherGenerator(
                 "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
             )
         return RuntimeType.forInlineFun(fnName, module) {
+            val inputArg =
+                when {
+                    matcher.requiresInput() -> "_input: &#{Input}, "
+                    else -> ""
+                }
             docs("Matcher union: " + Node.printJson(matcher.toNode()))
-            rustBlockTemplate("pub(crate) fn $fnName(_input: &#{Input}, _result: &#{Result}<#{Output}, #{Error}>) -> bool", *scope) {
+            rustBlockTemplate(
+                "pub(crate) fn $fnName(${inputArg}_result: #{Result}<&#{Output}, &#{Error}>) -> bool",
+                *scope,
+            ) {
                 when (matcher) {
                     is OutputMember -> generateOutputMember(outputShape, matcher, scope)
                     is InputOutputMember -> generateInputOutputMember(matcher, scope)
@@ -88,7 +103,13 @@ class RustWaiterMatcherGenerator(
                 listOf(TraversalBinding.Global("_output", outputShape)),
             )
 
-        generatePathTraversalMatcher(pathTraversal, matcher.value.expected, matcher.value.comparator, scope)
+        generatePathTraversalMatcher(
+            pathTraversal,
+            matcher.value.expected,
+            matcher.value.comparator,
+            scope,
+            matcher.requiresInput(),
+        )
     }
 
     private fun RustWriter.generateInputOutputMember(
@@ -105,7 +126,13 @@ class RustWaiterMatcherGenerator(
                 ),
             )
 
-        generatePathTraversalMatcher(pathTraversal, matcher.value.expected, matcher.value.comparator, scope)
+        generatePathTraversalMatcher(
+            pathTraversal,
+            matcher.value.expected,
+            matcher.value.comparator,
+            scope,
+            matcher.requiresInput(),
+        )
     }
 
     private fun RustWriter.generatePathTraversalMatcher(
@@ -113,34 +140,74 @@ class RustWaiterMatcherGenerator(
         expected: String,
         comparatorKind: PathComparator,
         scope: Scope,
+        requiresInput: Boolean,
     ) {
         val comparator =
             writable {
-                rust(
+                val leftIsIterString = listOf(PathComparator.ALL_STRING_EQUALS, PathComparator.ANY_STRING_EQUALS).contains(comparatorKind)
+                val left =
+                    GeneratedExpression(
+                        identifier = "value",
+                        outputType =
+                            when {
+                                leftIsIterString -> RustType.Reference(null, RustType.String)
+                                else -> pathTraversal.outputType
+                            },
+                        outputShape = pathTraversal.outputShape,
+                        output = writable {},
+                    )
+                val rightIsString = PathComparator.BOOLEAN_EQUALS != comparatorKind
+                val right =
+                    GeneratedExpression(
+                        identifier = "right",
+                        outputType =
+                            when {
+                                rightIsString -> RustType.Reference(null, RustType.Opaque("str"))
+                                else -> RustType.Bool
+                            },
+                        output =
+                            writable {
+                                rust(
+                                    "let right = " +
+                                        when {
+                                            rightIsString -> expected.dq()
+                                            else -> expected
+                                        } + ";",
+                                )
+                            },
+                    )
+                rustTemplate(
                     when (comparatorKind) {
-                        PathComparator.ALL_STRING_EQUALS -> "value.iter().all(|s| s == ${expected.dq()})"
-                        PathComparator.ANY_STRING_EQUALS -> "value.iter().any(|s| s == ${expected.dq()})"
-                        PathComparator.STRING_EQUALS -> "value == ${expected.dq()}"
-                        PathComparator.BOOLEAN_EQUALS ->
-                            when (pathTraversal.outputType is RustType.Reference) {
-                                true -> "*value == $expected"
-                                else -> "value == $expected"
-                            }
+                        PathComparator.ALL_STRING_EQUALS -> "!value.is_empty() && value.iter().all(|value| { #{comparison} })"
+                        PathComparator.ANY_STRING_EQUALS -> "value.iter().any(|value| { #{comparison} })"
+                        PathComparator.STRING_EQUALS -> "#{comparison}"
+                        PathComparator.BOOLEAN_EQUALS -> "#{comparison}"
                         else -> throw CodegenException("Unknown path matcher comparator: $comparatorKind")
                     },
+                    "comparison" to
+                        writable {
+                            val compare = generateCompare(SafeNamer(), left, right, "==")
+                            compare.output(this)
+                            rust(compare.identifier)
+                        },
                 )
             }
 
+        val (inputArgDecl, inputArg) =
+            when {
+                requiresInput -> "_input: &'a #{Input}, " to "_input, "
+                else -> "" to ""
+            }
         rustTemplate(
             """
-            fn path_traversal<'a>(_input: &'a #{Input}, _output: &'a #{Output}) -> #{Option}<#{TraversalOutput}> {
+            fn path_traversal<'a>(${inputArgDecl}_output: &'a #{Output}) -> #{Option}<#{TraversalOutput}> {
                 #{traversal}
                 #{Some}(${pathTraversal.identifier})
             }
             _result.as_ref()
                 .ok()
-                .and_then(|output| path_traversal(_input, output))
-                .map(|value| #{comparator})
+                .and_then(|output| path_traversal(${inputArg}output))
+                .map(|value| { #{comparator} })
                 .unwrap_or_default()
             """,
             *scope,

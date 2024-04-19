@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -78,10 +79,10 @@ data class GeneratedExpression(
     val output: Writable,
 ) {
     /** True if the type is a String, &str, or the shape is an enum shape. */
-    fun isStringOrEnum(): Boolean = outputType.isString() || outputShape?.isEnumShape == true
+    internal fun isStringOrEnum(): Boolean = outputType.isString() || outputShape?.isEnumShape == true
 
     /** Dereferences this expression if it is a reference. */
-    fun dereference(namer: SafeNamer): GeneratedExpression =
+    internal fun dereference(namer: SafeNamer): GeneratedExpression =
         if (outputType is RustType.Reference) {
             namer.safeName("_tmp").let { tmp ->
                 copy(
@@ -99,7 +100,7 @@ data class GeneratedExpression(
         }
 
     /** Converts this expression into a &str. */
-    fun convertToStrRef(namer: SafeNamer): GeneratedExpression =
+    internal fun convertToStrRef(namer: SafeNamer): GeneratedExpression =
         if (outputType is RustType.Reference && outputType.member is RustType.Reference) {
             dereference(namer).convertToStrRef(namer)
         } else if (!outputType.isString()) {
@@ -131,7 +132,7 @@ data class GeneratedExpression(
         }
 
     /** Converts a number expression into a specific number type */
-    fun convertToNumberPrimitive(
+    internal fun convertToNumberPrimitive(
         namer: SafeNamer,
         desiredPrimitive: RustType,
     ): GeneratedExpression {
@@ -272,49 +273,8 @@ class RustJmespathShapeTraversalGenerator(
     ): GeneratedExpression {
         val left = generate(expr.left, bindings)
         val right = generate(expr.right, bindings)
-        return generateCompare(left, right, expr.comparator.toString())
+        return generateCompare(safeNamer, left, right, expr.comparator.toString())
     }
-
-    private fun generateCompare(
-        left: GeneratedExpression,
-        right: GeneratedExpression,
-        op: String,
-    ): GeneratedExpression =
-        if (left.outputType.isDoubleReference()) {
-            generateCompare(left.dereference(safeNamer), right, op)
-        } else if (right.outputType.isDoubleReference()) {
-            generateCompare(left, right.dereference(safeNamer), op)
-        } else {
-            safeNamer.safeName("_cmp").let { ident ->
-                return GeneratedExpression(
-                    identifier = ident,
-                    outputType = RustType.Bool,
-                    output =
-                        if (left.isStringOrEnum() && right.isStringOrEnum()) {
-                            writable {
-                                val leftStr = left.convertToStrRef(safeNamer).also { it.output(this) }
-                                val rightStr = right.convertToStrRef(safeNamer).also { it.output(this) }
-                                rust("let $ident = ${leftStr.identifier} $op ${rightStr.identifier};")
-                            }
-                        } else if (left.outputType.isNumber() && right.outputType.isNumber()) {
-                            writable {
-                                val leftPrim =
-                                    left.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
-                                val rightPrim =
-                                    right.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
-                                rust("let $ident = ${leftPrim.identifier} $op ${rightPrim.identifier};")
-                            }
-                        } else if (left.outputType.isBool() && right.outputType.isBool()) {
-                            left.output + right.output +
-                                writable {
-                                    rust("let $ident = ${left.identifier} $op ${right.identifier};")
-                                }
-                        } else {
-                            throw UnsupportedJmesPathException("Comparison of ${left.outputType.render()} with ${right.outputType.render()} is not supported by smithy-rs")
-                        },
-                )
-            }
-        }
 
     private fun generateFunction(
         expr: FunctionExpression,
@@ -382,6 +342,7 @@ class RustJmespathShapeTraversalGenerator(
                                     withBlockTemplate("let $ident = ${left.identifier}.iter().any(|_v| {", "});") {
                                         val compare =
                                             generateCompare(
+                                                safeNamer,
                                                 GeneratedExpression(
                                                     identifier = "_v",
                                                     outputShape =
@@ -604,7 +565,14 @@ class RustJmespathShapeTraversalGenerator(
         }
 
         val right = generate(expr.right, listOf(TraversalBinding.Global("v", leftTarget)))
-        val projectionType = RustType.Vec(right.outputType.asRef())
+
+        // If the right expression results in a collection type, then the resulting vec will need to get flattened.
+        // Otherwise, you'll get `Vec<&Vec<T>>` instead of `Vec<&T>`, which causes later projections to fail to compile.
+        val (projectionType, flattenNeeded) =
+            when {
+                right.outputType.isCollection() -> right.outputType.stripOuter<RustType.Reference>() to true
+                else -> RustType.Vec(right.outputType.asRef()) to false
+            }
 
         return safeNamer.safeName("_prj").let { ident ->
             GeneratedExpression(
@@ -614,7 +582,8 @@ class RustJmespathShapeTraversalGenerator(
                 output =
                     left.output +
                         writable {
-                            rustBlock("let $ident = ${left.identifier}.iter().flat_map(") {
+                            rust("let $ident = ${left.identifier}.iter()")
+                            withBlock(".flat_map(|v| {", "})") {
                                 rustBlockTemplate(
                                     "fn map(v: &#{Left}) -> #{Option}<#{Right}>",
                                     *preludeScope,
@@ -624,9 +593,12 @@ class RustJmespathShapeTraversalGenerator(
                                     right.output(this)
                                     rustTemplate("#{Some}(${right.identifier})", *preludeScope)
                                 }
-                                rust("map")
+                                rust("map(v)")
                             }
-                            rustTemplate(").collect::<#{Vec}<_>>();", *preludeScope)
+                            if (flattenNeeded) {
+                                rust(".flatten()")
+                            }
+                            rustTemplate(".collect::<#{Vec}<_>>();", *preludeScope)
                         },
             )
         }
@@ -766,6 +738,49 @@ class RustJmespathShapeTraversalGenerator(
         )
     }
 }
+
+internal fun generateCompare(
+    safeNamer: SafeNamer,
+    left: GeneratedExpression,
+    right: GeneratedExpression,
+    op: String,
+): GeneratedExpression =
+    if (left.outputType.isDoubleReference()) {
+        generateCompare(safeNamer, left.dereference(safeNamer), right, op)
+    } else if (right.outputType.isDoubleReference()) {
+        generateCompare(safeNamer, left, right.dereference(safeNamer), op)
+    } else {
+        safeNamer.safeName("_cmp").let { ident ->
+            return GeneratedExpression(
+                identifier = ident,
+                outputType = RustType.Bool,
+                output =
+                    if (left.isStringOrEnum() && right.isStringOrEnum()) {
+                        writable {
+                            val leftStr = left.convertToStrRef(safeNamer).also { it.output(this) }
+                            val rightStr = right.convertToStrRef(safeNamer).also { it.output(this) }
+                            rust("let $ident = ${leftStr.identifier} $op ${rightStr.identifier};")
+                        }
+                    } else if (left.outputType.isNumber() && right.outputType.isNumber()) {
+                        writable {
+                            val leftPrim =
+                                left.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
+                            val rightPrim =
+                                right.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
+                            rust("let $ident = ${leftPrim.identifier} $op ${rightPrim.identifier};")
+                        }
+                    } else if (left.outputType.isBool() && right.outputType.isBool()) {
+                        writable {
+                            val leftPrim = left.dereference(safeNamer).also { it.output(this) }
+                            val rightPrim = right.dereference(safeNamer).also { it.output(this) }
+                            rust("let $ident = ${leftPrim.identifier} $op ${rightPrim.identifier};")
+                        }
+                    } else {
+                        throw UnsupportedJmesPathException("Comparison of ${left.outputType.render()} with ${right.outputType.render()} is not supported by smithy-rs")
+                    },
+            )
+        }
+    }
 
 private fun RustType.dereference(): RustType =
     if (this is RustType.Reference) {
