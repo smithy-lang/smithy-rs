@@ -38,3 +38,25 @@ The resulting flamegraph `flamegraph.svg` should be generated in the current dir
 
 ## Limitation
 Benchmarks currently measure end-to-end throughput of operations, including both the Rust SDK latency and the server side latency. To detect regressions in the Rust SDK reliably, we should only capture the time taken before sending a request and after receiving a response.
+
+## Baseline
+As of b172a1e, here are performance numbers for the targets `get_object` and `put_object` run against a single express bucket within the `us-west-2` region (showing additional outputs to display config parameters). The benchmarks are measured on Amazon Linux 2 x86_64 5.10 Kernel with a host type c5.4xlarge.
+```
+[src/lib.rs:30] sample_size = 10
+[src/lib.rs:14] confidence_level = 0.99
+[src/lib.rs:23] number_of_iterations = 20
+measuring 20 of GetObject against [
+    "s3express-rust-sdk-benchmark--usw2-az1--x-s3",
+], switching buckets on every operation if more than one bucket is specified
+get_object/size/65536   time:   [304.20 ms 311.62 ms 317.62 ms]
+get_object/size/1048576 time:   [283.94 ms 289.16 ms 293.42 ms]
+
+[src/lib.rs:30] sample_size = 10
+[src/lib.rs:14] confidence_level = 0.99
+[src/lib.rs:23] number_of_iterations = 20
+measuring 20 of PutObject against [
+    "s3express-rust-sdk-benchmark--usw2-az1--x-s3",
+], switching buckets on every operation if more than one bucket is specified
+put_object/size/65536   time:   [163.01 ms 172.76 ms 185.16 ms]
+put_object/size/1048576 time:   [356.49 ms 368.64 ms 383.51 ms]
+```
