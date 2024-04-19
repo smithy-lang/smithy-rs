@@ -34,3 +34,10 @@ message = "Change some credentials related info log messages to debug."
 references = ["smithy-rs#3546"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "orf"
+
+
+[[aws-sdk-rust]]
+message = "Fix an S3 crate's dependency on `ahash` so the crate can be compiled for `wasm32-unknown-unknown`."
+references = ["smithy-rs#3590", "aws-sdk-rust#1131"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
