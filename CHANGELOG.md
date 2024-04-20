@@ -1,4 +1,11 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 19th, 2024
+================
+**New this release:**
+- :tada: (server, [smithy-rs#3430](https://github.com/smithy-lang/smithy-rs/issues/3430)) Implement `std::error::Error` for `ConstraintViolation`
+- (all, [smithy-rs#3553](https://github.com/smithy-lang/smithy-rs/issues/3553)) Upgraded MSRV to Rust 1.75
+
+
 April 11th, 2024
 ================
 **New this release:**
