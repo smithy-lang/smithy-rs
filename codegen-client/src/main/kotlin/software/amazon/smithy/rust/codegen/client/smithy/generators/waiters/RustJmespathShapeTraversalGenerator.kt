@@ -25,11 +25,16 @@ import software.amazon.smithy.jmespath.ast.OrExpression
 import software.amazon.smithy.jmespath.ast.ProjectionExpression
 import software.amazon.smithy.jmespath.ast.SliceExpression
 import software.amazon.smithy.jmespath.ast.Subexpression
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
-import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MapShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.SafeNamer
@@ -49,8 +54,48 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.text.NumberFormat
+
+/**
+ * This needs to exist since there are computed values where there is no modeled
+ * shape for the result of the evaluated expression. For example, the multi-select
+ * list `['foo', 'baz']` is a list of string, but it isn't modeled anywhere,
+ * so there is no Smithy shape to represent it. However, information is still
+ * needed about the original shape in order to correctly generate code.
+ */
+sealed class TraversedShape {
+    abstract val shape: Shape?
+
+    data class Array(override val shape: Shape?, val member: TraversedShape) : TraversedShape()
+
+    data class Object(override val shape: Shape?) : TraversedShape()
+
+    data class Bool(override val shape: Shape?) : TraversedShape()
+
+    data class Enum(override val shape: Shape?) : TraversedShape()
+
+    data class Number(override val shape: Shape?) : TraversedShape()
+
+    data class String(override val shape: Shape?) : TraversedShape()
+
+    companion object {
+        fun from(
+            model: Model,
+            shape: Shape,
+        ): TraversedShape =
+            when {
+                shape is MapShape || shape is StructureShape -> Object(shape)
+                shape is CollectionShape -> Array(shape, from(model, model.expectShape(shape.member.target)))
+                shape is BooleanShape -> Bool(shape)
+                shape is EnumShape || shape.hasTrait<EnumTrait>() -> Enum(shape)
+                shape is NumberShape -> Number(shape)
+                shape is StringShape -> String(shape)
+                else -> TODO()
+            }
+    }
+}
 
 /**
  * Contains information about the output of a visited [JmespathExpression].
@@ -58,15 +103,8 @@ import java.text.NumberFormat
 data class GeneratedExpression(
     /** The name of the identifier that this expression's evaluation is placed into */
     val identifier: String,
-    /**
-     * The Smithy shape for the output of the expression evaluation.
-     *
-     * This will be null for any computed values where there is no modeled shape
-     * for the result of the evaluated expression. For example, the multi-select
-     * list `['foo', 'baz']` is a list of string, but it isn't modeled anywhere,
-     * so there is no Smithy shape to represent it.
-     */
-    val outputShape: Shape? = null,
+    /** The TraversedShape for the output of the expression evaluation. */
+    val outputShape: TraversedShape,
     /**
      * The Rust type for the evaluated expression.
      *
@@ -78,8 +116,17 @@ data class GeneratedExpression(
     /** Writable to output this expression's generated code. */
     val output: Writable,
 ) {
-    /** True if the type is a String, &str, or the shape is an enum shape. */
-    internal fun isStringOrEnum(): Boolean = outputType.isString() || outputShape?.isEnumShape == true
+    internal fun isArray(): Boolean = outputShape is TraversedShape.Array
+
+    internal fun isBool(): Boolean = outputShape is TraversedShape.Bool
+
+    internal fun isEnum(): Boolean = outputShape is TraversedShape.Enum
+
+    internal fun isNumber(): Boolean = outputShape is TraversedShape.Number
+
+    internal fun isString(): Boolean = outputShape is TraversedShape.String
+
+    internal fun isStringOrEnum(): Boolean = isString() || isEnum()
 
     /** Dereferences this expression if it is a reference. */
     internal fun dereference(namer: SafeNamer): GeneratedExpression =
@@ -101,13 +148,27 @@ data class GeneratedExpression(
 
     /** Converts this expression into a &str. */
     internal fun convertToStrRef(namer: SafeNamer): GeneratedExpression =
-        if (outputType is RustType.Reference && outputType.member is RustType.Reference) {
+        if (outputType.isDoubleReference()) {
             dereference(namer).convertToStrRef(namer)
+        } else if (isEnum()) {
+            namer.safeName("_tmp").let { tmp ->
+                GeneratedExpression(
+                    identifier = tmp,
+                    outputType = RustType.Reference(null, RustType.Opaque("str")),
+                    outputShape = TraversedShape.String(null),
+                    output =
+                        output +
+                            writable {
+                                rust("let $tmp = $identifier.as_str();")
+                            },
+                ).convertToStrRef(namer)
+            }
         } else if (!outputType.isString()) {
             namer.safeName("_tmp").let { tmp ->
                 GeneratedExpression(
                     identifier = tmp,
                     outputType = RustType.String,
+                    outputShape = TraversedShape.String(null),
                     output =
                         output +
                             writable {
@@ -120,6 +181,7 @@ data class GeneratedExpression(
                 GeneratedExpression(
                     identifier = tmp,
                     outputType = RustType.Reference(null, RustType.Opaque("str")),
+                    outputShape = TraversedShape.String(null),
                     output =
                         output +
                             writable {
@@ -136,7 +198,7 @@ data class GeneratedExpression(
         namer: SafeNamer,
         desiredPrimitive: RustType,
     ): GeneratedExpression {
-        check(outputType.isNumber() && desiredPrimitive.isNumber()) {
+        check(isNumber() && desiredPrimitive.isNumber()) {
             "this function only works on number types"
         }
 
@@ -148,6 +210,7 @@ data class GeneratedExpression(
                     GeneratedExpression(
                         identifier = tmp,
                         outputType = desiredPrimitive,
+                        outputShape = this.outputShape,
                         output =
                             output +
                                 writable {
@@ -155,6 +218,7 @@ data class GeneratedExpression(
                                 },
                     )
                 }
+
             else -> this
         }
     }
@@ -168,12 +232,12 @@ sealed class TraversalBinding {
     abstract val rustName: String
 
     /** The Smithy shape behind this binding */
-    abstract val shape: Shape
+    abstract val shape: TraversedShape
 
     /** Binds the given shape to the global namespace such that all its members are globally available */
     data class Global(
         override val rustName: String,
-        override val shape: Shape,
+        override val shape: TraversedShape,
     ) : TraversalBinding()
 
     /** Binds a shape to a name */
@@ -181,7 +245,7 @@ sealed class TraversalBinding {
         /** What this binding is referred to in JmesPath expressions */
         val jmespathName: String,
         override val rustName: String,
-        override val shape: Shape,
+        override val shape: TraversedShape,
     ) : TraversalBinding()
 }
 
@@ -191,13 +255,13 @@ typealias TraversalBindings = List<TraversalBinding>
  * Indicates a feature that's part of the JmesPath spec, but that we explicitly decided
  * not to support in smithy-rs due to the complexity of code generating it for Rust.
  */
-data class UnsupportedJmesPathException(private val msg: String) : RuntimeException(msg)
+class UnsupportedJmesPathException(msg: String?, what: Throwable? = null) : RuntimeException(msg, what)
 
 /** Code can't be generated for the combination of the Smithy shape and the JmesPath expression. */
-data class InvalidJmesPathTraversalException(private val msg: String) : RuntimeException(msg)
+class InvalidJmesPathTraversalException(msg: String?, what: Throwable? = null) : RuntimeException(msg, what)
 
 /** This indicates a bug in the code generator itself that should be fixed. */
-data class JmesPathTraversalCodegenBugException(private val msg: String) : RuntimeException(msg)
+class JmesPathTraversalCodegenBugException(msg: String?, what: Throwable? = null) : RuntimeException(msg, what)
 
 /**
  * Generates code from a JmesPath expression to traverse generated Smithy shapes.
@@ -227,6 +291,8 @@ class RustJmespathShapeTraversalGenerator(
         expr: JmespathExpression,
         bindings: TraversalBindings,
     ): GeneratedExpression {
+        fun String.attachExpression(expression: JmespathExpression) =
+            this.substringBefore("\nExpression:") + "\nExpression: ${ExpressionSerializer().serialize(expr)}"
         try {
             val result =
                 when (expr) {
@@ -259,11 +325,11 @@ class RustJmespathShapeTraversalGenerator(
                     },
             )
         } catch (ex: UnsupportedJmesPathException) {
-            throw ex.copy(msg = "${ex.message}\nExpression: ${ExpressionSerializer().serialize(expr)}")
+            throw UnsupportedJmesPathException(ex.message?.attachExpression(expr), ex)
         } catch (ex: InvalidJmesPathTraversalException) {
-            throw ex.copy(msg = "${ex.message}\nExpression: ${ExpressionSerializer().serialize(expr)}")
+            throw InvalidJmesPathTraversalException(ex.message?.attachExpression(expr), ex)
         } catch (ex: JmesPathTraversalCodegenBugException) {
-            throw ex.copy(msg = "${ex.message}\nExpression: ${ExpressionSerializer().serialize(expr)}")
+            throw JmesPathTraversalCodegenBugException(ex.message?.attachExpression(expr), ex)
         }
     }
 
@@ -287,12 +353,13 @@ class RustJmespathShapeTraversalGenerator(
                     throw InvalidJmesPathTraversalException("Length function takes exactly one argument")
                 }
                 val arg = generate(expr.arguments[0], bindings)
-                if (!arg.outputType.isCollection() && !arg.outputType.isString()) {
+                if (!arg.isArray() && !arg.isString()) {
                     throw InvalidJmesPathTraversalException("Argument to `length` function must be a collection or string type")
                 }
                 GeneratedExpression(
                     identifier = ident,
                     outputType = RustType.Integer(64),
+                    outputShape = TraversedShape.Number(null),
                     output =
                         writable {
                             arg.output(this)
@@ -306,36 +373,33 @@ class RustJmespathShapeTraversalGenerator(
                     throw InvalidJmesPathTraversalException("Contains function takes exactly two arguments")
                 }
                 val left = generate(expr.arguments[0], bindings)
-                if (!left.outputType.isCollection() && !left.outputType.isString()) {
+                if (!left.isArray() && !left.isString()) {
                     throw InvalidJmesPathTraversalException("First argument to `contains` function must be a collection or string type")
                 }
                 if (expr.arguments[1].isLiteralNull()) {
                     throw UnsupportedJmesPathException("Checking for null with `contains` is not supported in smithy-rs")
                 }
                 val right = generate(expr.arguments[1], bindings)
-                if (!right.outputType.isNumber() && !right.outputType.isString() && right.outputShape?.isEnumShape != true) {
+                if (!right.isNumber() && !right.isString() && !right.isEnum()) {
                     throw UnsupportedJmesPathException("Checking for anything other than numbers, strings, or enums in the `contains` function is not supported in smithy-rs")
                 }
-                if (left.outputType.isString()) {
+                if (left.isString()) {
                     return GeneratedExpression(
                         identifier = ident,
                         outputType = RustType.Bool,
+                        outputShape = TraversedShape.Bool(null),
                         output =
-                            left.output + right.output +
+                            left.output +
                                 writable {
-                                    if (right.outputType.isString()) {
-                                        rust("let $ident = ${left.identifier}.contains(${right.identifier});")
-                                    } else {
-                                        val tmp = safeNamer.safeName("_tmp")
-                                        rust("let $tmp = ${right.identifier}.to_string();")
-                                        rust("let $ident = ${left.identifier}.contains(&$tmp);")
-                                    }
+                                    val rightStr = right.convertToStrRef(safeNamer).also { it.output(this) }
+                                    rust("let $ident = ${left.identifier}.contains(${rightStr.identifier});")
                                 },
                     )
                 } else {
                     return GeneratedExpression(
                         identifier = ident,
                         outputType = RustType.Bool,
+                        outputShape = TraversedShape.Bool(null),
                         output =
                             left.output + right.output +
                                 writable {
@@ -345,12 +409,7 @@ class RustJmespathShapeTraversalGenerator(
                                                 safeNamer,
                                                 GeneratedExpression(
                                                     identifier = "_v",
-                                                    outputShape =
-                                                        (left.outputShape as? CollectionShape)?.member?.target?.let {
-                                                            model.expectShape(
-                                                                it,
-                                                            )
-                                                        },
+                                                    outputShape = (left.outputShape as TraversedShape.Array).member,
                                                     outputType =
                                                         RustType.Reference(
                                                             lifetime = null,
@@ -380,19 +439,19 @@ class RustJmespathShapeTraversalGenerator(
     ): GeneratedExpression {
         val globalBinding = bindings.find { it is TraversalBinding.Global }
         val namedBinding = bindings.find { it is TraversalBinding.Named && it.jmespathName == expr.name }
-        if (namedBinding != null && namedBinding.shape is StructureShape) {
+        if (namedBinding != null && namedBinding.shape is TraversedShape.Object) {
             // If there's a named binding that matches, then immediately return it
             return GeneratedExpression(
                 identifier = namedBinding.rustName,
                 outputShape = namedBinding.shape,
-                outputType = symbolProvider.toSymbol(namedBinding.shape).rustType().asRef(),
+                outputType = symbolProvider.toSymbol(namedBinding.shape.shape!!).rustType().asRef(),
                 output = writable { },
             )
-        } else if (globalBinding != null && globalBinding.shape is StructureShape) {
+        } else if (globalBinding != null && globalBinding.shape is TraversedShape.Object) {
             // Otherwise, look in the global binding (if available)
             val member =
-                globalBinding.shape.getMember(expr.name).orNull()
-                    ?: throw InvalidJmesPathTraversalException("Member `${expr.name}` doesn't exist on ${globalBinding.shape.id}")
+                globalBinding.shape.shape?.getMember(expr.name)?.orNull()
+                    ?: throw InvalidJmesPathTraversalException("Member `${expr.name}` doesn't exist on ${globalBinding.shape.shape?.id}")
             val memberSym = symbolProvider.toSymbol(member)
 
             val target = model.expectShape(member.target)
@@ -401,7 +460,7 @@ class RustJmespathShapeTraversalGenerator(
             val ident = safeNamer.safeName("_fld")
             return GeneratedExpression(
                 identifier = ident,
-                outputShape = target,
+                outputShape = TraversedShape.from(model, target),
                 outputType = targetSym.rustType().asRef(),
                 output =
                     writable {
@@ -422,11 +481,23 @@ class RustJmespathShapeTraversalGenerator(
     }
 
     private fun generateLiteral(expr: LiteralExpression): GeneratedExpression {
-        val outputType =
+        val (outputShape, outputType) =
             when (expr.value) {
-                is Boolean -> RustType.Reference(lifetime = null, member = RustType.Bool)
-                is Double -> RustType.Reference(lifetime = null, member = RustType.Float(64))
-                is String -> RustType.Reference(lifetime = null, member = RustType.Opaque("str"))
+                is Boolean -> TraversedShape.Bool(null) to RustType.Reference(lifetime = null, member = RustType.Bool)
+                is Double ->
+                    TraversedShape.Number(null) to
+                        RustType.Reference(
+                            lifetime = null,
+                            member = RustType.Float(64),
+                        )
+
+                is String ->
+                    TraversedShape.String(null) to
+                        RustType.Reference(
+                            lifetime = null,
+                            member = RustType.Opaque("str"),
+                        )
+
                 null -> throw UnsupportedJmesPathException("Literal nulls are not supported by smithy-rs")
                 else -> throw UnsupportedJmesPathException("Literal expression '${ExpressionSerializer().serialize(expr)}' is not supported by smithy-rs")
             }
@@ -438,6 +509,7 @@ class RustJmespathShapeTraversalGenerator(
             GeneratedExpression(
                 identifier = ident,
                 outputType = outputType,
+                outputShape = outputShape,
                 output =
                     writable {
                         when (val value = expr.value) {
@@ -474,6 +546,7 @@ class RustJmespathShapeTraversalGenerator(
             GeneratedExpression(
                 identifier = ident,
                 outputType = RustType.Vec(expressions[0].outputType),
+                outputShape = TraversedShape.Array(null, expressions[0].outputShape),
                 output =
                     writable {
                         expressions.forEach { it.output(this) }
@@ -500,7 +573,7 @@ class RustJmespathShapeTraversalGenerator(
     ): GeneratedExpression {
         val left = generate(expr.left, bindings)
         val right = generate(expr.right, bindings)
-        if (!left.outputType.isBool() || !right.outputType.isBool()) {
+        if (!left.isBool() || !right.isBool()) {
             throw UnsupportedJmesPathException("Applying the `$op` operation doesn't support non-boolean types in smithy-rs")
         }
 
@@ -508,6 +581,7 @@ class RustJmespathShapeTraversalGenerator(
             GeneratedExpression(
                 identifier = ident,
                 outputType = RustType.Bool,
+                outputShape = TraversedShape.Bool(null),
                 output =
                     writable {
                         val leftBool = left.dereference(safeNamer).also { it.output(this) }
@@ -523,7 +597,7 @@ class RustJmespathShapeTraversalGenerator(
         bindings: TraversalBindings,
     ): GeneratedExpression {
         val inner = generate(expr.expression, bindings)
-        if (!inner.outputType.isBool()) {
+        if (!inner.isBool()) {
             throw UnsupportedJmesPathException("Negation of a non-boolean type is not supported by smithy-rs")
         }
 
@@ -531,6 +605,7 @@ class RustJmespathShapeTraversalGenerator(
             GeneratedExpression(
                 identifier = ident,
                 outputType = RustType.Bool,
+                outputShape = TraversedShape.Bool(null),
                 output =
                     inner.output +
                         writable {
@@ -553,14 +628,14 @@ class RustJmespathShapeTraversalGenerator(
         }
         val left = generate(maybeFlatten.expression, bindings)
         val leftTarget =
-            when (val outputShape = left.outputShape) {
-                is ListShape -> model.expectShape(outputShape.member.target)
-                else -> throw InvalidJmesPathTraversalException("Left side of the flatten projection MUST resolve to a list or set shape")
-            }
-        val leftTargetSym = symbolProvider.toSymbol(leftTarget)
+            (
+                left.outputShape as? TraversedShape.Array
+                    ?: throw InvalidJmesPathTraversalException("Left side of the flatten projection MUST resolve to a list or set shape")
+            ).member
+        val leftTargetSym = symbolProvider.toSymbol(leftTarget.shape)
 
         // Short-circuit in the case where the projection is unnecessary
-        if (left.outputType.isCollection() && expr.right is CurrentExpression) {
+        if (left.isArray() && expr.right is CurrentExpression) {
             return left
         }
 
@@ -570,7 +645,7 @@ class RustJmespathShapeTraversalGenerator(
         // Otherwise, you'll get `Vec<&Vec<T>>` instead of `Vec<&T>`, which causes later projections to fail to compile.
         val (projectionType, flattenNeeded) =
             when {
-                right.outputType.isCollection() -> right.outputType.stripOuter<RustType.Reference>() to true
+                right.isArray() -> right.outputType.stripOuter<RustType.Reference>() to true
                 else -> RustType.Vec(right.outputType.asRef()) to false
             }
 
@@ -609,12 +684,12 @@ class RustJmespathShapeTraversalGenerator(
         bindings: TraversalBindings,
     ): GeneratedExpression {
         val left = generate(expr.left, bindings)
-        if (!left.outputType.isList() && !left.outputType.isSet()) {
+        if (!left.isArray()) {
             throw UnsupportedJmesPathException("Filter projections can only be done on lists or sets in smithy-rs")
         }
 
-        val leftTarget = model.expectShape((left.outputShape as ListShape).member.target)
-        val leftTargetSym = symbolProvider.toSymbol(leftTarget)
+        val leftTarget = (left.outputShape as TraversedShape.Array).member
+        val leftTargetSym = symbolProvider.toSymbol(leftTarget.shape)
 
         val right =
             if (expr.right is CurrentExpression) {
@@ -627,21 +702,25 @@ class RustJmespathShapeTraversalGenerator(
             }
 
         val comparison = generate(expr.comparison, listOf(TraversalBinding.Global("_v", leftTarget)))
-        if (!comparison.outputType.isBool()) {
+        if (!comparison.isBool()) {
             throw InvalidJmesPathTraversalException("The filter expression comparison must result in a boolean")
         }
 
         return safeNamer.safeName("_fprj").let { ident ->
             GeneratedExpression(
                 identifier = ident,
-                outputShape = null,
+                outputShape = TraversedShape.Array(null, right.outputShape),
                 outputType = RustType.Vec(right.outputType),
                 output =
                     left.output +
                         writable {
                             rust("let $ident = ${left.identifier}.iter()")
                             withBlock(".filter({", "})") {
-                                rustBlockTemplate("fn filter(_v: &#{Arg}) -> #{Option}<bool>", "Arg" to leftTargetSym, *preludeScope) {
+                                rustBlockTemplate(
+                                    "fn filter(_v: &#{Arg}) -> #{Option}<bool>",
+                                    "Arg" to leftTargetSym,
+                                    *preludeScope,
+                                ) {
                                     val toBool = comparison.dereference(safeNamer).also { it.output(this) }
                                     rustTemplate("#{Some}(${toBool.identifier})", *preludeScope)
                                 }
@@ -678,11 +757,11 @@ class RustJmespathShapeTraversalGenerator(
         if (!left.outputType.isMap()) {
             throw UnsupportedJmesPathException("Object projection is only supported on map types in smithy-rs")
         }
-        if (left.outputShape == null) {
+        if (left.outputShape.shape == null) {
             throw UnsupportedJmesPathException("Object projection cannot be done on computed maps in smithy-rs")
         }
 
-        val leftTarget = model.expectShape((left.outputShape as MapShape).value.target)
+        val leftTarget = model.expectShape((left.outputShape.shape as MapShape).value.target)
         val leftTargetSym = symbolProvider.toSymbol(leftTarget)
 
         val right =
@@ -692,13 +771,13 @@ class RustJmespathShapeTraversalGenerator(
                     output = writable {},
                 )
             } else {
-                generate(expr.right, listOf(TraversalBinding.Global("_v", leftTarget)))
+                generate(expr.right, listOf(TraversalBinding.Global("_v", TraversedShape.from(model, leftTarget))))
             }
 
         val ident = safeNamer.safeName("_oprj")
         return GeneratedExpression(
             identifier = ident,
-            outputShape = null,
+            outputShape = TraversedShape.Array(null, right.outputShape),
             outputType = RustType.Vec(right.outputType),
             output =
                 left.output +
@@ -729,7 +808,7 @@ class RustJmespathShapeTraversalGenerator(
         bindings: TraversalBindings,
     ): GeneratedExpression {
         val left = generate(expr.left, bindings)
-        val right = generate(expr.right, listOf(TraversalBinding.Global(left.identifier, left.outputShape!!)))
+        val right = generate(expr.right, listOf(TraversalBinding.Global(left.identifier, left.outputShape)))
         return GeneratedExpression(
             identifier = right.identifier,
             outputShape = right.outputShape,
@@ -754,6 +833,7 @@ internal fun generateCompare(
             return GeneratedExpression(
                 identifier = ident,
                 outputType = RustType.Bool,
+                outputShape = TraversedShape.Bool(null),
                 output =
                     if (left.isStringOrEnum() && right.isStringOrEnum()) {
                         writable {
@@ -761,7 +841,7 @@ internal fun generateCompare(
                             val rightStr = right.convertToStrRef(safeNamer).also { it.output(this) }
                             rust("let $ident = ${leftStr.identifier} $op ${rightStr.identifier};")
                         }
-                    } else if (left.outputType.isNumber() && right.outputType.isNumber()) {
+                    } else if (left.isNumber() && right.isNumber()) {
                         writable {
                             val leftPrim =
                                 left.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
@@ -769,7 +849,7 @@ internal fun generateCompare(
                                 right.convertToNumberPrimitive(safeNamer, left.outputType).also { it.output(this) }
                             rust("let $ident = ${leftPrim.identifier} $op ${rightPrim.identifier};")
                         }
-                    } else if (left.outputType.isBool() && right.outputType.isBool()) {
+                    } else if (left.isBool() && right.isBool()) {
                         writable {
                             val leftPrim = left.dereference(safeNamer).also { it.output(this) }
                             val rightPrim = right.dereference(safeNamer).also { it.output(this) }
@@ -789,21 +869,13 @@ private fun RustType.dereference(): RustType =
         this
     }
 
-private fun RustType.isList(): Boolean = this.dereference() is RustType.Vec
-
-private fun RustType.isSet(): Boolean = this.dereference() is RustType.HashSet
-
 private fun RustType.isMap(): Boolean = this.dereference() is RustType.HashMap
-
-private fun RustType.isCollection(): Boolean = isList() || isSet() || isMap()
 
 private fun RustType.isString(): Boolean = this.dereference().let { it is RustType.String || it.isStr() }
 
 private fun RustType.isStr(): Boolean = this.dereference().let { it is RustType.Opaque && it.name == "str" }
 
 private fun RustType.isNumber(): Boolean = this.dereference().let { it is RustType.Integer || it is RustType.Float }
-
-private fun RustType.isBool(): Boolean = this.dereference() is RustType.Bool
 
 private fun RustType.isDoubleReference(): Boolean = this is RustType.Reference && this.member is RustType.Reference
 

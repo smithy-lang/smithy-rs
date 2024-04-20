@@ -49,6 +49,7 @@ class RustWaiterMatcherGenerator(
     private val inputShape: Shape,
     private val outputShape: Shape,
 ) {
+    private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val module =
         RustModule.pubCrate(
@@ -107,7 +108,7 @@ class RustWaiterMatcherGenerator(
         val pathTraversal =
             RustJmespathShapeTraversalGenerator(codegenContext).generate(
                 pathExpression,
-                listOf(TraversalBinding.Global("_output", outputShape)),
+                listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape))),
             )
 
         generatePathTraversalMatcher(
@@ -128,8 +129,8 @@ class RustWaiterMatcherGenerator(
             RustJmespathShapeTraversalGenerator(codegenContext).generate(
                 pathExpression,
                 listOf(
-                    TraversalBinding.Named("input", "_input", inputShape),
-                    TraversalBinding.Named("output", "_output", outputShape),
+                    TraversalBinding.Named("input", "_input", TraversedShape.from(model, inputShape)),
+                    TraversalBinding.Named("output", "_output", TraversedShape.from(model, outputShape)),
                 ),
             )
 
@@ -161,7 +162,11 @@ class RustWaiterMatcherGenerator(
                                 leftIsIterString -> RustType.Reference(null, RustType.String)
                                 else -> pathTraversal.outputType
                             },
-                        outputShape = pathTraversal.outputShape,
+                        outputShape =
+                            when {
+                                leftIsIterString -> (pathTraversal.outputShape as? TraversedShape.Array)?.member ?: pathTraversal.outputShape
+                                else -> pathTraversal.outputShape
+                            },
                         output = writable {},
                     )
                 val rightIsString = PathComparator.BOOLEAN_EQUALS != comparatorKind
@@ -172,6 +177,11 @@ class RustWaiterMatcherGenerator(
                             when {
                                 rightIsString -> RustType.Reference(null, RustType.Opaque("str"))
                                 else -> RustType.Bool
+                            },
+                        outputShape =
+                            when {
+                                rightIsString -> TraversedShape.String(null)
+                                else -> TraversedShape.Bool(null)
                             },
                         output =
                             writable {
