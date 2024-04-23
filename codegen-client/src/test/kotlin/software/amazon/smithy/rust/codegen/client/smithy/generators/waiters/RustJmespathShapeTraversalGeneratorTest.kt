@@ -97,6 +97,7 @@ class RustJmespathShapeTraversalGeneratorTest {
                             #{Output}::builder()
                                 .primitives(primitives.clone())
                                 .lists(#{EntityLists}::builder()
+                                    .booleans(true)
                                     .shorts(1).shorts(2)
                                     .integers(3).integers(4)
                                     .longs(5).longs(6)
@@ -371,6 +372,9 @@ class RustJmespathShapeTraversalGeneratorTest {
 
         test("strings_contains_false", "contains(lists.strings, 'foo')", expectFalse)
         test("strings_contains_true", "contains(lists.strings, 'two')", expectTrue)
+
+        test("bools_contains_false", "contains(lists.booleans, `false`)", expectFalse)
+        test("bools_contains_true", "contains(lists.booleans, `true`)", expectTrue)
 
         test("i16s_contains_false", "contains(lists.shorts, `0`)", expectFalse)
         test("i16s_contains_true", "contains(lists.shorts, `1`)", expectTrue)

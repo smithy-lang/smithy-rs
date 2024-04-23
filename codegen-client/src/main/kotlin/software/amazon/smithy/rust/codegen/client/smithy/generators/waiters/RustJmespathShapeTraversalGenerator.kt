@@ -291,7 +291,7 @@ class RustJmespathShapeTraversalGenerator(
         expr: JmespathExpression,
         bindings: TraversalBindings,
     ): GeneratedExpression {
-        fun String.attachExpression(expression: JmespathExpression) =
+        fun String.attachExpression() =
             this.substringBefore("\nExpression:") + "\nExpression: ${ExpressionSerializer().serialize(expr)}"
         try {
             val result =
@@ -325,11 +325,11 @@ class RustJmespathShapeTraversalGenerator(
                     },
             )
         } catch (ex: UnsupportedJmesPathException) {
-            throw UnsupportedJmesPathException(ex.message?.attachExpression(expr), ex)
+            throw UnsupportedJmesPathException(ex.message?.attachExpression(), ex)
         } catch (ex: InvalidJmesPathTraversalException) {
-            throw InvalidJmesPathTraversalException(ex.message?.attachExpression(expr), ex)
-        } catch (ex: JmesPathTraversalCodegenBugException) {
-            throw JmesPathTraversalCodegenBugException(ex.message?.attachExpression(expr), ex)
+            throw InvalidJmesPathTraversalException(ex.message?.attachExpression(), ex)
+        } catch (ex: Exception) {
+            throw JmesPathTraversalCodegenBugException(ex.message?.attachExpression(), ex)
         }
     }
 
@@ -380,8 +380,8 @@ class RustJmespathShapeTraversalGenerator(
                     throw UnsupportedJmesPathException("Checking for null with `contains` is not supported in smithy-rs")
                 }
                 val right = generate(expr.arguments[1], bindings)
-                if (!right.isNumber() && !right.isString() && !right.isEnum()) {
-                    throw UnsupportedJmesPathException("Checking for anything other than numbers, strings, or enums in the `contains` function is not supported in smithy-rs")
+                if (!right.isBool() && !right.isNumber() && !right.isString() && !right.isEnum()) {
+                    throw UnsupportedJmesPathException("Checking for anything other than booleans, numbers, strings, or enums in the `contains` function is not supported in smithy-rs")
                 }
                 if (left.isString()) {
                     return GeneratedExpression(
@@ -632,7 +632,7 @@ class RustJmespathShapeTraversalGenerator(
                 left.outputShape as? TraversedShape.Array
                     ?: throw InvalidJmesPathTraversalException("Left side of the flatten projection MUST resolve to a list or set shape")
             ).member
-        val leftTargetSym = symbolProvider.toSymbol(leftTarget.shape)
+        val leftTargetSym: Any = (leftTarget.shape?.let { symbolProvider.toSymbol(it) }) ?: left.outputType
 
         // Short-circuit in the case where the projection is unnecessary
         if (left.isArray() && expr.right is CurrentExpression) {
