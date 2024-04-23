@@ -12,42 +12,6 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Upgraded MSRV to Rust 1.75"
-references = ["smithy-rs#3553"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Upgraded MSRV to Rust 1.75"
-references = ["smithy-rs#3553"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Make `SigningSettings` and its fields implement `Clone` and `Copy`"
-references = ["smithy-rs#3533"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "avandesa"
-
-[[aws-sdk-rust]]
-message = "Change some credentials related info log messages to debug."
-references = ["smithy-rs#3546"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "orf"
-
-[[aws-sdk-rust]]
-message = "Fix an S3 crate's dependency on `ahash` so the crate can be compiled for `wasm32-unknown-unknown`."
-references = ["smithy-rs#3590", "aws-sdk-rust#1131"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Implement `std::error::Error` for `ConstraintViolation`"
-references = ["smithy-rs#3430"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
-author = "drganjoo"
-
-[[aws-sdk-rust]]
 message = """
 Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
 some methods prefixed with `wait_for` to the existing clients. These can be used to, for example
