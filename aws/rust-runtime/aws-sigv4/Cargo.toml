@@ -29,7 +29,7 @@ hmac = "0.12"
 http0 = { version = "0.2", optional = true, package = "http" }
 http = { version = "1", optional = true }
 once_cell = "1.8"
-p256 = { version = "0.11", features = ["ecdsa"], optional = true }
+p256 = { version = "0.10", features = ["ecdsa"], optional = true }
 percent-encoding = { version = "2.1", optional = true }
 ring = { version = "0.17.5", optional = true }
 sha2 = "0.10"
