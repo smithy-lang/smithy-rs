@@ -170,10 +170,6 @@ class ServiceErrorGenerator(
         errorSymbol: Symbol,
         errors: List<ShapeId>,
     ) {
-        if (errors.isEmpty()) {
-            return
-        }
-
         val operationErrors = errors.map { model.expectShape(it) }
         rustBlock(
             "impl<R> From<#T<#T, R>> for Error where R: Send + Sync + std::fmt::Debug + 'static",
