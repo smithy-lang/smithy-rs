@@ -14,10 +14,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -26,30 +23,22 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgumentType
-import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docLink
-import software.amazon.smithy.rust.codegen.core.rustlang.docs
-import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.featureGatedBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
-import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -87,7 +76,6 @@ class FluentClientGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val core = FluentClientCore(model)
 
     fun render(crate: RustCrate) {
         renderFluentClient(crate)
@@ -95,7 +83,7 @@ class FluentClientGenerator(
         val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
-                renderFluentBuilder(operation)
+                FluentBuilderGenerator(codegenContext, operation, customizations).render(this)
             }
         }
 
@@ -243,225 +231,6 @@ class FluentClientGenerator(
                         "FluentBuilder" to operation.fluentBuilderType(symbolProvider),
                     )
                 }
-            }
-        }
-    }
-
-    private fun RustWriter.renderFluentBuilder(operation: OperationShape) {
-        val outputType = symbolProvider.toSymbol(operation.outputShape(model))
-        val errorType = symbolProvider.symbolForOperationError(operation)
-        val operationSymbol = symbolProvider.toSymbol(operation)
-
-        val input = operation.inputShape(model)
-        val baseDerives = symbolProvider.toSymbol(input).expectRustMetadata().derives
-        // Filter out any derive that isn't Clone. Then add a Debug derive
-        // input name
-        val fnName = clientOperationFnName(operation, symbolProvider)
-        implBlock(symbolProvider.symbolForBuilder(input)) {
-            rustTemplate(
-                """
-                /// Sends a request with this input using the given client.
-                pub async fn send_with(self, client: &crate::Client) -> #{Result}<
-                    #{OperationOutput},
-                    #{SdkError}<
-                        #{OperationError},
-                        #{RawResponseType}
-                    >
-                > {
-                    let mut fluent_builder = client.$fnName();
-                    fluent_builder.inner = self;
-                    fluent_builder.send().await
-                }
-                """,
-                *preludeScope,
-                "RawResponseType" to
-                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
-                "Operation" to operationSymbol,
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            )
-        }
-
-        val derives = baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
-        docs("Fluent builder constructing a request to `${operationSymbol.name}`.\n")
-
-        val builderName = operation.fluentBuilderType(symbolProvider).name
-        documentShape(operation, model, autoSuppressMissingDocs = false)
-        deprecatedShape(operation)
-        Attribute(derive(derives.toSet())).render(this)
-        withBlockTemplate(
-            "pub struct $builderName {",
-            "}",
-        ) {
-            rustTemplate(
-                """
-                handle: #{Arc}<crate::client::Handle>,
-                inner: #{Inner},
-                """,
-                "Inner" to symbolProvider.symbolForBuilder(input),
-                "Arc" to RuntimeType.Arc,
-            )
-            rustTemplate("config_override: #{Option}<crate::config::Builder>,", *preludeScope)
-        }
-
-        rustTemplate(
-            """
-            impl
-                crate::client::customize::internal::CustomizableSend<
-                    #{OperationOutput},
-                    #{OperationError},
-                > for $builderName
-            {
-                fn send(
-                    self,
-                    config_override: crate::config::Builder,
-                ) -> crate::client::customize::internal::BoxFuture<
-                    crate::client::customize::internal::SendResult<
-                        #{OperationOutput},
-                        #{OperationError},
-                    >,
-                > {
-                    #{Box}::pin(async move { self.config_override(config_override).send().await })
-                }
-            }
-            """,
-            *preludeScope,
-            "OperationError" to errorType,
-            "OperationOutput" to outputType,
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        )
-
-        rustBlock("impl $builderName") {
-            rust("/// Creates a new `${operationSymbol.name}`.")
-            withBlockTemplate(
-                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
-                "}",
-                "Arc" to RuntimeType.Arc,
-            ) {
-                withBlockTemplate(
-                    "Self {",
-                    "}",
-                ) {
-                    rustTemplate("handle, inner: #{Default}::default(),", *preludeScope)
-                    rustTemplate("config_override: #{None},", *preludeScope)
-                }
-            }
-
-            rust("/// Access the ${operationSymbol.name} as a reference.\n")
-            withBlockTemplate(
-                "pub fn as_input(&self) -> &#{Inner} {", "}",
-                "Inner" to symbolProvider.symbolForBuilder(input),
-            ) {
-                write("&self.inner")
-            }
-
-            val orchestratorScope =
-                arrayOf(
-                    *preludeScope,
-                    "CustomizableOperation" to
-                        ClientRustModule.Client.customize.toType()
-                            .resolve("CustomizableOperation"),
-                    "HttpResponse" to
-                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                            .resolve("client::orchestrator::HttpResponse"),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                    "SendResult" to
-                        ClientRustModule.Client.customize.toType()
-                            .resolve("internal::SendResult"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                )
-            rustTemplate(
-                """
-                /// Sends the request and returns the response.
-                ///
-                /// If an error occurs, an `SdkError` will be returned with additional details that
-                /// can be matched against.
-                ///
-                /// By default, any retryable failures will be retried twice. Retry behavior
-                /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                /// set when configuring the client.
-                pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                    let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                    let runtime_plugins = #{Operation}::operation_runtime_plugins(
-                        self.handle.runtime_plugins.clone(),
-                        &self.handle.conf,
-                        self.config_override,
-                    );
-                    #{Operation}::orchestrate(&runtime_plugins, input).await
-                }
-
-                /// Consumes this builder, creating a customizable operation that can be modified before being sent.
-                pub fn customize(
-                    self,
-                ) -> #{CustomizableOperation}<#{OperationOutput}, #{OperationError}, Self> {
-                    #{CustomizableOperation}::new(self)
-                }
-                """,
-                *orchestratorScope,
-            )
-
-            rustTemplate(
-                """
-                pub(crate) fn config_override(
-                    mut self,
-                    config_override: impl Into<crate::config::Builder>,
-                ) -> Self {
-                    self.set_config_override(Some(config_override.into()));
-                    self
-                }
-
-                pub(crate) fn set_config_override(
-                    &mut self,
-                    config_override: Option<crate::config::Builder>,
-                ) -> &mut Self {
-                    self.config_override = config_override;
-                    self
-                }
-                """,
-            )
-
-            PaginatorGenerator.paginatorType(codegenContext, operation)
-                ?.also { paginatorType ->
-                    rustTemplate(
-                        """
-                        /// Create a paginator for this request
-                        ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
-                        pub fn into_paginator(self) -> #{Paginator} {
-                            #{Paginator}::new(self.handle, self.inner)
-                        }
-                        """,
-                        "Paginator" to paginatorType,
-                    )
-                }
-            writeCustomizations(
-                customizations,
-                FluentClientSection.FluentBuilderImpl(
-                    operation,
-                    symbolProvider.symbolForOperationError(operation),
-                ),
-            )
-            input.members().forEach { member ->
-                val memberName = symbolProvider.toMemberName(member)
-                // All fields in the builder are optional
-                val memberSymbol = symbolProvider.toSymbol(member)
-                val outerType = memberSymbol.rustType()
-                when (val coreType = outerType.stripOuter<RustType.Option>()) {
-                    is RustType.Vec -> with(core) { renderVecHelper(member, memberName, coreType) }
-                    is RustType.HashMap -> with(core) { renderMapHelper(member, memberName, coreType) }
-                    else -> with(core) { renderInputHelper(member, memberName, coreType) }
-                }
-                // pure setter
-                val setterName = member.setterName()
-                val optionalInputType = outerType.asOptional()
-                with(core) { renderInputHelper(member, setterName, optionalInputType) }
-
-                val getterName = member.getterName()
-                with(core) { renderGetterHelper(member, getterName, optionalInputType) }
             }
         }
     }

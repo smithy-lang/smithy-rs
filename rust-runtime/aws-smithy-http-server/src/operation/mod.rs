@@ -158,7 +158,7 @@
 //! The [`UpgradePlugin`], being a [`Plugin`](crate::plugin::Plugin), is parameterized by a protocol. This allows for
 //! upgrading to `Service<http::Request, Response = http::Response, Error = Infallible>` to be protocol dependent.
 //!
-//! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
+//! [Smithy operation]: https://smithy.io/2.0/spec/service-types.html#operation
 
 mod handler;
 mod operation_service;
