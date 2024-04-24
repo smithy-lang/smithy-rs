@@ -42,7 +42,7 @@ async fn waiters_success() {
         .unwrap();
 
     let waiter_task = tokio::spawn(
-        ec2.wait_for_instance_status_ok()
+        ec2.wait_until_instance_status_ok()
             .instance_ids("i-09fb4224219ac6902")
             .wait(Duration::from_secs(300)),
     );
@@ -66,7 +66,7 @@ async fn waiters_exceed_max_wait_time() {
         .unwrap();
 
     let waiter_task = tokio::spawn(
-        ec2.wait_for_instance_status_ok()
+        ec2.wait_until_instance_status_ok()
             .instance_ids("i-09fb4224219ac6902")
             .wait(Duration::from_secs(30)),
     );

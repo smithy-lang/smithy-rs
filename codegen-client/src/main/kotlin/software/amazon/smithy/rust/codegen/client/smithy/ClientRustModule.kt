@@ -129,7 +129,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Primitives.EventStream -> strDoc("Event stream related primitives such as `Message` or `Header`.")
             ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
             ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
-            ClientRustModule.waiters -> strDoc("Supporting types for waiters.\n\nNote: to use waiters, import the [`Waiters`](crate::client::Waiters) trait, which adds methods prefixed with `wait_for` to the client.")
+            ClientRustModule.waiters -> strDoc("Supporting types for waiters.\n\nNote: to use waiters, import the [`Waiters`](crate::client::Waiters) trait, which adds methods prefixed with `wait_until` to the client.")
             else -> TODO("Document this module: $module")
         }
     }

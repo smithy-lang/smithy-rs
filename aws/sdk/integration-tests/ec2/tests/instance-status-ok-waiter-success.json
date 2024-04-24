@@ -583,6 +583,6 @@
       }
     }
   ],
-  "docs": "traffic recording of EC2 start_instance followed by EC2 wait_for_instance_status_ok being successful",
+  "docs": "traffic recording of EC2 start_instance followed by EC2 wait_until_instance_status_ok being successful",
   "version": "V0"
 }

@@ -73,7 +73,7 @@ class WaitableGenerator(
                 """
                 Waiter functions for the client.
 
-                Import this trait to get `wait_for` methods on the client.
+                Import this trait to get `wait_until` methods on the client.
                 """,
             )
             rustBlockTemplate("pub trait Waiters") {
@@ -102,7 +102,7 @@ class WaitableGenerator(
     }
 
     private fun RustWriter.renderWaiterFnDeclaration(spec: WaiterSpec) {
-        val fnName = "wait_for_${spec.waiterName.toSnakeCase()}"
+        val fnName = "wait_until_${spec.waiterName.toSnakeCase()}"
         rustTemplate(
             "fn $fnName(&self) -> #{FluentBuilder}",
             "FluentBuilder" to spec.fluentBuilder,
@@ -181,7 +181,7 @@ private class WaiterFluentBuilderConfig(
 
                 Construct this fluent builder using the client by importing the
                 [`Waiters`](crate::client::Waiters) trait and calling the methods
-                prefixed with `wait_for`.
+                prefixed with `wait_until`.
                 """,
             )
         }
@@ -249,7 +249,7 @@ private class WaiterFluentBuilderConfig(
         }
 
     private fun waiterErrorTypeAlias(): RuntimeType =
-        "WaitFor${waiterName.toPascalCase()}Error".let { name ->
+        "WaitUntil${waiterName.toPascalCase()}Error".let { name ->
             RuntimeType.forInlineFun(name, waiterModule) {
                 docs("Error type for the `${waiterName.toSnakeCase()}` waiter.")
                 rustTemplate("pub type $name = #{WaiterError}<#{OperationOutput}, #{OperationError}>;", *scope)
