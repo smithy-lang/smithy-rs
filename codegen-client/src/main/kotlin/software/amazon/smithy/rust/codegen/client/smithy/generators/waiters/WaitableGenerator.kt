@@ -31,6 +31,12 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.waiters.WaitableTrait
 import software.amazon.smithy.waiters.Waiter
 
+/**
+ * Generates waiters for the Smithy @waitable trait.
+ *
+ * This will place waiter-specific fluent builders into individual waiter submodules of the `crate::waiter` module,
+ * and place a `Waiters` trait in the client module that can be imported to initiate waiters.
+ */
 class WaitableGenerator(
     private val codegenContext: ClientCodegenContext,
     allOperations: List<OperationShape>,

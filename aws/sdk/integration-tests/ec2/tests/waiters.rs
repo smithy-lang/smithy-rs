@@ -47,6 +47,9 @@ async fn waiters_success() {
             .wait(Duration::from_secs(300)),
     );
 
+    // The responses in the test data will make the waiter poll a few times, so it will take some time
+    // to complete. If successful, it shouldn't take a full 300 seconds. However, in the event it isn't successful,
+    // waiting the full 300 seconds will result in a max time exceeded error instead of a never ending test.
     time_source.tick(Duration::from_secs(305)).await;
     waiter_task.await.unwrap().unwrap();
 
