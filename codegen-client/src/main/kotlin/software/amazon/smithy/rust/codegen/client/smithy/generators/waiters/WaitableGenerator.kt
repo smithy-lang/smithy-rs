@@ -169,6 +169,7 @@ private class WaiterFluentBuilderConfig(
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::waiters::error::WaiterError"),
             "WaiterOrchestrator" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::waiters::WaiterOrchestrator"),
+            "attach_waiter_tracing_span" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::waiters::attach_waiter_tracing_span"),
         )
 
     override fun includeConfigOverride(): Boolean = false
@@ -230,7 +231,7 @@ private class WaiterFluentBuilderConfig(
                         .acceptor(acceptor)
                         .operation(operation)
                         .build();
-                    orchestrator.orchestrate().await
+                    #{attach_waiter_tracing_span}(orchestrator.orchestrate()).await
                 }
                 """,
                 *scope,

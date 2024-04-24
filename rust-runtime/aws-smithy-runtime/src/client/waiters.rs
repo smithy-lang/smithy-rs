@@ -269,6 +269,18 @@ impl<AcceptorFn> WaiterOrchestratorBuilder<AcceptorFn, ()> {
     }
 }
 
+/// Attaches a tracing span with a semi-unique waiter ID number so that all the operations
+/// made by the waiter can be correlated together in logs.
+pub fn attach_waiter_tracing_span<O, E>(
+    future: impl Future<Output = Result<FinalPoll<O, SdkError<E, HttpResponse>>, WaiterError<O, E>>>,
+) -> impl Future<Output = Result<FinalPoll<O, SdkError<E, HttpResponse>>, WaiterError<O, E>>> {
+    use tracing::Instrument;
+
+    // Create a random seven-digit ID for the waiter so that it can be correlated in the logs.
+    let span = tracing::debug_span!("waiter", waiter_id = fastrand::u32(1_000_000..10_000_000));
+    future.instrument(span)
+}
+
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
