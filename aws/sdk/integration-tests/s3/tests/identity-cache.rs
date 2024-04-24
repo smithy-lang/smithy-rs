@@ -67,6 +67,7 @@ async fn test_identity_cache_reused_by_default() {
 //     assert_eq!(2, provider.invoke_count.load(Ordering::SeqCst));
 // }
 
+#[allow(deprecated)] // intentionally testing an old behavior version
 #[tokio::test]
 async fn test_identity_cache_ga_behavior_version() {
     let http_client =
