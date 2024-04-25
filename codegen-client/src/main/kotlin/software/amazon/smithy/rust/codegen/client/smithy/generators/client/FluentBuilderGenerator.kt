@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -31,10 +33,43 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
+/**
+ * Codegen configuration for the fluent builder generator.
+ *
+ * Null values indicate "use the default", and defaults are oriented towards
+ * the main fluent builders used by the client.
+ *
+ * These can be overridden for secondary fluent builders, such as used by
+ * waiters.
+ */
+interface FluentBuilderConfig {
+    /** Top-level documentation for the builder struct */
+    fun documentBuilder(): Writable? = null
+
+    /** `send()` (and friends) method  on the builder */
+    fun sendMethods(): Writable? = null
+
+    /** Whether to include paginators or not */
+    fun includePaginators(): Boolean = true
+
+    /** Whether to include config override or not */
+    fun includeConfigOverride(): Boolean = true
+}
+
+private fun FluentBuilderConfig.sendOverridden(): Boolean = sendMethods() != null
+
+/** Default fluent builder generator config */
+class DefaultFluentBuilderConfig : FluentBuilderConfig
+
+/**
+ * Generates the fluent builders returned by the generated client.
+ */
 class FluentBuilderGenerator(
     private val codegenContext: ClientCodegenContext,
     private val operation: OperationShape,
     private val customizations: List<FluentClientCustomization> = emptyList(),
+    private val builderName: String = operation.fluentBuilderType(codegenContext.symbolProvider).name,
+    private val config: FluentBuilderConfig = DefaultFluentBuilderConfig(),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
@@ -46,8 +81,6 @@ class FluentBuilderGenerator(
     private val outputType = symbolProvider.toSymbol(operation.outputShape(model))
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
-
-    private val builderName = operation.fluentBuilderType(symbolProvider).name
 
     private val scope =
         arrayOf(
@@ -71,61 +104,24 @@ class FluentBuilderGenerator(
         )
 
     fun render(writer: RustWriter) {
-        writer.renderInputBuilderImpls()
+        if (!config.sendOverridden()) {
+            writer.renderInputBuilderImpls()
+        }
         writer.renderStruct()
-        writer.renderTraitImpls()
+        if (!config.sendOverridden()) {
+            writer.renderTraitImpls()
+        }
         writer.renderImpl()
     }
 
-    private fun RustWriter.renderStruct() {
-        // Filter out any derive that isn't Clone. Then add a Debug derive input name
-        val derives =
-            symbolProvider.toSymbol(inputShape).expectRustMetadata().derives.let { baseDerives ->
-                baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
-            }
+    private fun defaultDocumentBuilder(): Writable =
+        writable {
+            docs("Fluent builder constructing a request to `${operationType.name}`.\n")
+            documentShape(operation, model, autoSuppressMissingDocs = false)
+        }
 
-        docs("Fluent builder constructing a request to `${operationType.name}`.\n")
-        documentShape(operation, model, autoSuppressMissingDocs = false)
-        deprecatedShape(operation)
-        Attribute(Attribute.derive(derives.toSet())).render(this)
-        rustTemplate(
-            """
-            pub struct $builderName {
-                handle: #{Arc}<crate::client::Handle>,
-                inner: #{InputBuilder},
-                config_override: #{Option}<crate::config::Builder>,
-            }
-            """,
-            *scope,
-        )
-    }
-
-    private fun RustWriter.renderImpl() {
-        rustBlock("impl $builderName") {
-            rustTemplate(
-                """
-                /// Creates a new `${operationType.name}`.
-                pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
-                    Self {
-                        handle,
-                        inner: #{Default}::default(),
-                        config_override: #{None},
-                    }
-                }
-                """,
-                *scope,
-            )
-
-            rustTemplate(
-                """
-                /// Access the ${operationType.name} as a reference.
-                pub fn as_input(&self) -> &#{InputBuilder} {
-                    &self.inner
-                }
-                """,
-                *scope,
-            )
-
+    private fun defaultSend(): Writable =
+        writable {
             rustTemplate(
                 """
                 /// Sends the request and returns the response.
@@ -155,42 +151,106 @@ class FluentBuilderGenerator(
                 """,
                 *scope,
             )
+        }
 
+    private fun RustWriter.renderStruct() {
+        // Filter out any derive that isn't Clone. Then add a Debug derive input name
+        val derives =
+            symbolProvider.toSymbol(inputShape).expectRustMetadata().derives.let { baseDerives ->
+                baseDerives.filter { it == RuntimeType.Clone } + RuntimeType.Debug
+            }
+
+        (config.documentBuilder() ?: defaultDocumentBuilder())()
+        deprecatedShape(operation)
+        Attribute(Attribute.derive(derives.toSet())).render(this)
+        val configOverride =
+            when (config.includeConfigOverride()) {
+                true -> "\nconfig_override: #{Option}<crate::config::Builder>,"
+                else -> ""
+            }
+        rustTemplate(
+            """
+            pub struct $builderName {
+                handle: #{Arc}<crate::client::Handle>,
+                inner: #{InputBuilder},$configOverride
+            }
+            """,
+            *scope,
+        )
+    }
+
+    private fun RustWriter.renderImpl() {
+        rustBlock("impl $builderName") {
+            val configOverride =
+                when (config.includeConfigOverride()) {
+                    true -> "\nconfig_override: #{None},"
+                    else -> ""
+                }
             rustTemplate(
                 """
-                pub(crate) fn config_override(
-                    mut self,
-                    config_override: impl #{Into}<crate::config::Builder>,
-                ) -> Self {
-                    self.set_config_override(#{Some}(config_override.into()));
-                    self
-                }
-
-                pub(crate) fn set_config_override(
-                    &mut self,
-                    config_override: #{Option}<crate::config::Builder>,
-                ) -> &mut Self {
-                    self.config_override = config_override;
-                    self
+                /// Creates a new `$builderName`.
+                pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
+                    Self {
+                        handle,
+                        inner: #{Default}::default(),$configOverride
+                    }
                 }
                 """,
                 *scope,
             )
 
-            PaginatorGenerator.paginatorType(codegenContext, operation)
-                ?.also { paginatorType ->
-                    rustTemplate(
-                        """
-                        /// Create a paginator for this request
-                        ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
-                        pub fn into_paginator(self) -> #{Paginator} {
-                            #{Paginator}::new(self.handle, self.inner)
-                        }
-                        """,
-                        "Paginator" to paginatorType,
-                    )
+            rustTemplate(
+                """
+                /// Access the ${operationType.name} as a reference.
+                pub fn as_input(&self) -> &#{InputBuilder} {
+                    &self.inner
                 }
+                """,
+                *scope,
+            )
+
+            // Output the send method
+            (config.sendMethods() ?: defaultSend())()
+
+            if (config.includeConfigOverride()) {
+                rustTemplate(
+                    """
+                    pub(crate) fn config_override(
+                        mut self,
+                        config_override: impl #{Into}<crate::config::Builder>,
+                    ) -> Self {
+                        self.set_config_override(#{Some}(config_override.into()));
+                        self
+                    }
+
+                    pub(crate) fn set_config_override(
+                        &mut self,
+                        config_override: #{Option}<crate::config::Builder>,
+                    ) -> &mut Self {
+                        self.config_override = config_override;
+                        self
+                    }
+                    """,
+                    *scope,
+                )
+            }
+
+            if (config.includePaginators()) {
+                PaginatorGenerator.paginatorType(codegenContext, operation)
+                    ?.also { paginatorType ->
+                        rustTemplate(
+                            """
+                            /// Create a paginator for this request
+                            ///
+                            /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
+                            pub fn into_paginator(self) -> #{Paginator} {
+                                #{Paginator}::new(self.handle, self.inner)
+                            }
+                            """,
+                            "Paginator" to paginatorType,
+                        )
+                    }
+            }
 
             writeCustomizations(
                 customizations,

@@ -542,6 +542,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
+        val AllowClippyNeedlessLifetimes = Attribute(allow("clippy::needless_lifetimes"))
         val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
