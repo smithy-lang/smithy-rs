@@ -15,6 +15,7 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
+import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.WaitableGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -88,6 +89,8 @@ class FluentClientGenerator(
         }
 
         customizableOperationGenerator.render(crate)
+
+        WaitableGenerator(codegenContext, operations).render(crate)
     }
 
     private fun renderFluentClient(crate: RustCrate) {

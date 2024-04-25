@@ -155,10 +155,11 @@ private class AwsFluentClientDocs(private val codegenContext: ClientCodegenConte
                         /// Client for $serviceName
                         ///
                         /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
-                    /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service.""",
+                        /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service.""",
                     )
                     AwsDocs.clientConstructionDocs(codegenContext)(this)
                     FluentClientDocs.clientUsageDocs(codegenContext)(this)
+                    FluentClientDocs.waiterDocs(codegenContext)(this)
                 }
 
             else -> emptySection
