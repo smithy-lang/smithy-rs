@@ -116,6 +116,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
                         "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0",
+                        "minimumSupportedRustVersion": "${getRustMSRV()}",
                         "customizationConfig": {
                             "awsSdk": {
                                 "awsSdkBuild": true,

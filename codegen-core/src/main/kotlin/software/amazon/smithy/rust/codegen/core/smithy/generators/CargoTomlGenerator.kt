@@ -49,6 +49,7 @@ class CargoTomlGenerator(
     private val moduleDescription: String?,
     private val moduleLicense: String?,
     private val moduleRepository: String?,
+    private val minimumSupportedRustVersion: String?,
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations = emptyMap(),
     private val dependencies: List<CargoDependency> = emptyList(),
@@ -67,6 +68,7 @@ class CargoTomlGenerator(
         settings.moduleDescription,
         settings.license,
         settings.moduleRepository,
+        settings.minimumSupportedRustVersion,
         writer,
         manifestCustomizations,
         dependencies,
@@ -90,6 +92,7 @@ class CargoTomlGenerator(
                         "edition" to "2021",
                         "license" to moduleLicense,
                         "repository" to moduleRepository,
+                        "rust-version" to minimumSupportedRustVersion,
                         "metadata" to
                             listOfNotNull(
                                 "smithy" to

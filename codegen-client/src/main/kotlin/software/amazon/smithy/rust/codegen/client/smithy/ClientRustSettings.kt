@@ -37,6 +37,7 @@ data class ClientRustSettings(
     override val codegenConfig: ClientCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
+    override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
         service,
@@ -49,6 +50,7 @@ data class ClientRustSettings(
         codegenConfig,
         license,
         examplesUri,
+        minimumSupportedRustVersion,
         customizationConfig,
     ) {
     companion object {
@@ -70,6 +72,7 @@ data class ClientRustSettings(
                 codegenConfig = ClientCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
+                minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
             )
         }
