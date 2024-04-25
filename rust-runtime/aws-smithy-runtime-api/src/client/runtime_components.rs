@@ -905,7 +905,7 @@ impl RuntimeComponentsBuilder {
     }
 }
 
-/// Time-related subset of components that can be extracted directly from [`RuntimeComponentBuilder`] prior to validation.
+/// Time-related subset of components that can be extracted directly from [`RuntimeComponentsBuilder`] prior to validation.
 #[derive(Debug)]
 pub struct TimeComponents {
     sleep_impl: Option<SharedAsyncSleep>,
