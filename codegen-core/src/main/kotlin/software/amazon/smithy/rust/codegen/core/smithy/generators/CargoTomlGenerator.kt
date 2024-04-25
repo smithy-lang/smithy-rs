@@ -92,7 +92,7 @@ class CargoTomlGenerator(
                         "edition" to "2021",
                         "license" to moduleLicense,
                         "repository" to moduleRepository,
-                        "rust-version" to minimumSupportedRustVersion,
+                        minimumSupportedRustVersion?.let { "rust-version" to it },
                         "metadata" to
                             listOfNotNull(
                                 "smithy" to
