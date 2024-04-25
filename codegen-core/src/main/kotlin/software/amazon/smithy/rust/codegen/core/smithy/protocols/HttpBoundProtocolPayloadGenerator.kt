@@ -197,7 +197,6 @@ class HttpBoundProtocolPayloadGenerator(
         if (operationShape.isInputEventStream(model) && target == CodegenTarget.CLIENT) {
             val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
             writer.serializeViaEventStream(
-                operationShape,
                 payloadMember,
                 serializerGenerator,
                 shapeName,
@@ -206,7 +205,6 @@ class HttpBoundProtocolPayloadGenerator(
         } else if (operationShape.isOutputEventStream(model) && target == CodegenTarget.SERVER) {
             val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
             writer.serializeViaEventStream(
-                operationShape,
                 payloadMember,
                 serializerGenerator,
                 "output",
@@ -239,7 +237,6 @@ class HttpBoundProtocolPayloadGenerator(
     }
 
     private fun RustWriter.serializeViaEventStream(
-        operationShape: OperationShape,
         memberShape: MemberShape,
         serializerGenerator: StructuredDataSerializerGenerator,
         outerName: String,
@@ -248,11 +245,10 @@ class HttpBoundProtocolPayloadGenerator(
         val memberName = symbolProvider.toMemberName(memberShape)
         val unionShape = model.expectShape(memberShape.target, UnionShape::class.java)
 
-        val contentType =
-            when (target) {
-                CodegenTarget.CLIENT -> httpBindingResolver.requestContentType(operationShape)
-                CodegenTarget.SERVER -> httpBindingResolver.responseContentType(operationShape)
-            }
+        val payloadContentType =
+            httpBindingResolver.eventStreamMessageContentType(memberShape)
+                ?: throw CodegenException("event streams must set a content type")
+
         val errorMarshallerConstructorFn =
             EventStreamErrorMarshallerGenerator(
                 model,
@@ -261,7 +257,7 @@ class HttpBoundProtocolPayloadGenerator(
                 symbolProvider,
                 unionShape,
                 serializerGenerator,
-                contentType ?: throw CodegenException("event streams must set a content type"),
+                payloadContentType,
             ).render()
         val marshallerConstructorFn =
             EventStreamMarshallerGenerator(
@@ -271,7 +267,7 @@ class HttpBoundProtocolPayloadGenerator(
                 symbolProvider,
                 unionShape,
                 serializerGenerator,
-                contentType,
+                payloadContentType,
             ).render()
 
         // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the

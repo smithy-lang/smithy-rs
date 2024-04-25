@@ -91,11 +91,11 @@ private fun fillInBaseModel(
     """
 
 object EventStreamTestModels {
-    private fun restJson1(): Model = fillInBaseModel("restJson1").asSmithyModel()
+    fun restJson1(): Model = fillInBaseModel("restJson1").asSmithyModel()
 
-    private fun restXml(): Model = fillInBaseModel("restXml").asSmithyModel()
+    fun restXml(): Model = fillInBaseModel("restXml").asSmithyModel()
 
-    private fun awsJson11(): Model = fillInBaseModel("awsJson1_1").asSmithyModel()
+    fun awsJson11(): Model = fillInBaseModel("awsJson1_1").asSmithyModel()
 
     private fun awsQuery(): Model =
         fillInBaseModel("awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
