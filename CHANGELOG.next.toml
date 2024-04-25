@@ -52,3 +52,10 @@ let result = client.wait_until_thing()
 references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+
+[[smithy-rs]]
+message = "Fix event stream `:content-type` message headers for struct messages."
+references = ["smithy-rs#3603"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
