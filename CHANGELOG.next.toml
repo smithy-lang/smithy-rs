@@ -52,3 +52,9 @@ let result = client.wait_until_thing()
 references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version."
+references = ["smithy-rs#3601"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
