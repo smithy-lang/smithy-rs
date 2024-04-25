@@ -905,9 +905,7 @@ impl RuntimeComponentsBuilder {
     }
 }
 
-// TODO(waiters): Decide if this is the right approach for extracting sleep_impl/time_source
-// from config outside of the orchestrator. If so, fill in docs.
-#[allow(missing_docs)]
+/// Time-related subset of components that can be extracted directly from [`RuntimeComponentBuilder`] prior to validation.
 #[derive(Debug)]
 pub struct TimeComponents {
     sleep_impl: Option<SharedAsyncSleep>,

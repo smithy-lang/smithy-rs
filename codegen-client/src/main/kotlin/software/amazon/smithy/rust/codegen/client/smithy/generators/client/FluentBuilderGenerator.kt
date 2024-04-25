@@ -188,7 +188,7 @@ class FluentBuilderGenerator(
                 }
             rustTemplate(
                 """
-                /// Creates a new `${operationType.name}`.
+                /// Creates a new `$builderName`.
                 pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {
                     Self {
                         handle,
