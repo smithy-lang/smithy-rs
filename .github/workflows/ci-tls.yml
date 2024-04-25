@@ -25,8 +25,13 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update
-        sudo apt-get -y install gcc make python3-pip nginx git ruby openjdk-17-jre pkg-config libssl-dev faketime
+        sudo apt-get -y install gcc make python3-pip nginx git ruby pkg-config libssl-dev faketime
         pip3 install certbuilder crlbuilder
+    - name: Configure JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: corretto
+        java-version: 17
     - name: Stop nginx
       run: sudo systemctl stop nginx
     - name: Checkout smithy-rs
