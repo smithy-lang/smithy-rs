@@ -258,7 +258,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
-        identity_cache: TriStateOption<SharedIdentityCache>,
+        identity_cache: Option<SharedIdentityCache>,
         credentials_provider: TriStateOption<SharedCredentialsProvider>,
         token_provider: Option<SharedTokenProvider>,
         endpoint_url: Option<String>,
@@ -440,29 +440,7 @@ mod loader {
             mut self,
             identity_cache: impl ResolveCachedIdentity + 'static,
         ) -> Self {
-            self.identity_cache = TriStateOption::Set(identity_cache.into_shared());
-            self
-        }
-
-        /// Do not configure a default identity cache.
-        ///
-        /// Starting with [`BehaviorVersion::v2024_03_28`] a default cache is
-        /// set if not provided. This can be disabled which will result in each
-        /// client using their own cache.
-        ///
-        /// # Examples
-        ///
-        /// Turn off creating a default identity cache:
-        /// ```no_run
-        /// # async fn create_config() {
-        /// let config = aws_config::from_env()
-        ///     .no_identity_cache()
-        ///     .load()
-        ///     .await;
-        /// # }
-        /// ```
-        pub fn no_identity_cache(mut self) -> Self {
-            self.identity_cache = TriStateOption::ExplicitlyUnset;
+            self.identity_cache = Some(identity_cache.into_shared());
             self
         }
 
@@ -875,14 +853,13 @@ mod loader {
             builder.set_app_name(app_name);
 
             let identity_cache = match self.identity_cache {
-                TriStateOption::NotSet => match self.behavior_version {
+                None => match self.behavior_version {
                     Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
                         Some(IdentityCache::lazy().build())
                     }
                     _ => None,
                 },
-                TriStateOption::ExplicitlyUnset => None,
-                TriStateOption::Set(user_cache) => Some(user_cache),
+                Some(user_cache) => Some(user_cache),
             };
 
             builder.set_identity_cache(identity_cache);
@@ -1097,16 +1074,6 @@ mod loader {
             let config = defaults(BehaviorVersion::latest()).load().await;
 
             assert!(config.identity_cache().is_some());
-        }
-
-        #[tokio::test]
-        async fn identity_cache_disabled() {
-            let config = defaults(BehaviorVersion::latest())
-                .no_identity_cache()
-                .load()
-                .await;
-
-            assert!(config.identity_cache().is_none());
         }
 
         #[allow(deprecated)]

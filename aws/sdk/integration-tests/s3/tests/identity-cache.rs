@@ -39,30 +39,6 @@ async fn test_identity_cache_reused_by_default() {
     assert_eq!(1, provider.invoke_count.load(Ordering::SeqCst));
 }
 
-#[tokio::test]
-async fn test_identity_cache_explicit_unset() {
-    let http_client =
-        infallible_client_fn(|_req| http::Response::builder().status(200).body("OK!").unwrap());
-
-    let provider = TestCredProvider::new();
-
-    let config = aws_config::defaults(BehaviorVersion::latest())
-        .http_client(http_client)
-        .credentials_provider(provider.clone())
-        .region(Region::new("us-west-2"))
-        .no_identity_cache()
-        .load()
-        .await;
-
-    let c1 = Client::new(&config);
-    let _ = c1.list_buckets().send().await;
-    assert_eq!(1, provider.invoke_count.load(Ordering::SeqCst));
-
-    let c2 = Client::new(&config);
-    let _ = c2.list_buckets().send().await;
-    assert_eq!(2, provider.invoke_count.load(Ordering::SeqCst));
-}
-
 #[allow(deprecated)] // intentionally testing an old behavior version
 #[tokio::test]
 async fn test_identity_cache_ga_behavior_version() {
