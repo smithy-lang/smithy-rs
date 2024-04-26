@@ -1069,6 +1069,7 @@ mod loader {
             assert!(config.credentials_provider().is_none());
         }
 
+        #[cfg(feature = "rustls")]
         #[tokio::test]
         async fn identity_cache_defaulted() {
             let config = defaults(BehaviorVersion::latest()).load().await;
@@ -1076,6 +1077,7 @@ mod loader {
             assert!(config.identity_cache().is_some());
         }
 
+        #[cfg(feature = "rustls")]
         #[allow(deprecated)]
         #[tokio::test]
         async fn identity_cache_old_behavior_version() {
