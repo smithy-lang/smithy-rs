@@ -11,6 +11,7 @@ env:
 
 name: Verify client TLS configuration
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
