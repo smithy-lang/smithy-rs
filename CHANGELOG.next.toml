@@ -58,3 +58,9 @@ message = "SDK crates now set the `rust-version` property in their Cargo.toml fi
 references = ["smithy-rs#3601"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws_config::default_provider::use_dual_stack_provider` is now public instead of `pub(crate)`"
+references = ["aws-sdk-rust#879", "smithy-rs#3611"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
