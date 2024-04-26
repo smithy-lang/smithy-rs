@@ -10,7 +10,7 @@ publish = false
 
 
 [dependencies]
-aws-sdk-s3 = "1.22.0"
+aws-sdk-s3 = { version = "1.22.0", features = ["behavior-version-latest", "test-util"] }
 aws-smithy-http = "0.60.7"
 tracing = "0.1"
 async-trait = "0.1.80"
@@ -28,3 +28,4 @@ async-channel = "2.2.1"
 aws-config = { version = "1.2.0", features = ["behavior-version-latest"] }
 clap = { version = "4.5.4", default-features = false, features = ["derive", "std", "help"] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+aws-smithy-mocks-experimental = "0.2.1"

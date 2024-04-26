@@ -84,8 +84,10 @@ pub(super) async fn discover_obj(
         }
         ObjectDiscoveryStrategy::RangedGet(range) => {
             let byte_range = match range.as_ref() {
-                Some(r) => ByteRange::Inclusive(*r.start(), *r.start() + handle.target_part_size),
-                None => ByteRange::Inclusive(0, handle.target_part_size),
+                Some(r) => {
+                    ByteRange::Inclusive(*r.start(), *r.start() + handle.target_part_size - 1)
+                }
+                None => ByteRange::Inclusive(0, handle.target_part_size - 1),
             };
             let r = request
                 .input
@@ -153,9 +155,10 @@ async fn discover_obj_with_get(
 
     let meta: ObjectMetadata = resp.into();
 
+    // TODO - check content size matches range
     let remaining = match range {
         Some(range) => (*range.start() + data.remaining() as u64 + 1)..=*range.end(),
-        None => (data.remaining() as u64 + 1)..=meta.total_size(),
+        None => (data.remaining() as u64)..=meta.total_size(),
     };
 
     Ok(ObjectDiscovery {
@@ -167,11 +170,30 @@ async fn discover_obj_with_get(
 
 #[cfg(test)]
 mod tests {
-    use crate::download::discovery::discover_obj_with_head;
-    use crate::download::discovery::ObjectDiscoveryStrategy;
-    use crate::download::handle::DownloadHandle;
-    use crate::download::header::ByteRange;
-    use aws_sdk_s3::operation::get_object::GetObjectInput;
+    use std::ops::RangeInclusive;
+
+    use crate::{
+        download::{
+            discovery::{
+                discover_obj, discover_obj_with_get, discover_obj_with_head,
+                ObjectDiscoveryStrategy,
+            },
+            handle::DownloadHandle,
+            header::ByteRange,
+        },
+        MIN_PART_SIZE,
+    };
+    use aws_sdk_s3::{
+        operation::{
+            get_object::{GetObjectInput, GetObjectOutput},
+            head_object::HeadObjectOutput,
+        },
+        Client,
+    };
+    use aws_smithy_mocks_experimental::{mock, mock_client};
+    use aws_smithy_types::byte_stream::ByteStream;
+
+    use super::ObjectDiscovery;
 
     fn strategy_from_range(range: Option<&str>) -> ObjectDiscoveryStrategy {
         let req = GetObjectInput::builder()
@@ -201,11 +223,76 @@ mod tests {
         );
     }
 
-    // TODO
-    // #[tokio::test]
-    // async fn test_discover_obj_with_head() {
-    //     let handle = DownloadHandle {};
-    //     let request = GetObjectInput::builder().into();
-    //     let discovery = discover_obj_with_head(&handle, &request, None).await.unwrap();
-    // }
+    async fn get_discovery_from_head(range: Option<ByteRange>) -> ObjectDiscovery {
+        let head_obj_rule = mock!(Client::head_object)
+            .then_output(|| HeadObjectOutput::builder().content_length(500).build());
+        let client = mock_client!(aws_sdk_s3, &[&head_obj_rule]);
+
+        let handle = DownloadHandle {
+            client,
+            target_part_size: MIN_PART_SIZE,
+        };
+        let request = GetObjectInput::builder()
+            .bucket("test-bucket")
+            .key("test-key")
+            .into();
+
+        discover_obj_with_head(&handle, &request, range)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_discover_obj_with_head() {
+        assert_eq!(0..=500, get_discovery_from_head(None).await.remaining);
+        assert_eq!(
+            10..=100,
+            get_discovery_from_head(Some(ByteRange::Inclusive(10, 100)))
+                .await
+                .remaining
+        );
+        assert_eq!(
+            100..=500,
+            get_discovery_from_head(Some(ByteRange::AllFrom(100)))
+                .await
+                .remaining
+        );
+        assert_eq!(
+            401..=500,
+            get_discovery_from_head(Some(ByteRange::Last(100)))
+                .await
+                .remaining
+        );
+    }
+
+    #[tokio::test]
+    async fn test_discover_obj_with_get_full_range() {
+        let target_part_size = 500;
+        let bytes = &[0u8; 500];
+        let get_obj_rule = mock!(Client::get_object)
+            .match_requests(|r| r.range() == Some("bytes=0-499"))
+            .then_output(|| {
+                GetObjectOutput::builder()
+                    .content_length(700)
+                    .content_range("0-499/700")
+                    .body(ByteStream::from_static(bytes))
+                    .build()
+            });
+        let client = mock_client!(aws_sdk_s3, &[&get_obj_rule]);
+
+        let handle = DownloadHandle {
+            client,
+            target_part_size,
+        };
+
+        let request = GetObjectInput::builder()
+            .bucket("test-bucket")
+            .key("test-key")
+            .into();
+
+        let discovery = discover_obj(&handle, &request).await.unwrap();
+        assert_eq!(500..=700, discovery.remaining);
+    }
+
+    // FIXME - leftoff needing to test sub range (should cover part size with remainging and without)
 }
