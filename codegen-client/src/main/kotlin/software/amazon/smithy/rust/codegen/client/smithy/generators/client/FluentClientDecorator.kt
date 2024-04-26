@@ -110,6 +110,7 @@ class GenericFluentClient(private val codegenContext: ClientCodegenContext) : Fl
                     )
                     FluentClientDocs.clientConstructionDocs(codegenContext)(this)
                     FluentClientDocs.clientUsageDocs(codegenContext)(this)
+                    FluentClientDocs.waiterDocs(codegenContext)(this)
                 }
             else -> emptySection
         }

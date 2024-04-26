@@ -11,6 +11,7 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -31,14 +32,11 @@ import software.amazon.smithy.waiters.Matcher.InputOutputMember
 import software.amazon.smithy.waiters.Matcher.OutputMember
 import software.amazon.smithy.waiters.Matcher.SuccessMember
 import software.amazon.smithy.waiters.PathComparator
-import software.amazon.smithy.waiters.Waiter
 import java.security.MessageDigest
 
 private typealias Scope = Array<Pair<String, Any>>
 
-/** True if the waiter requires the operation input in its matcher implementation */
-fun Waiter.requiresInput(): Boolean = acceptors.any { it.matcher.requiresInput() }
-
+/** True if the waiter matcher requires the operation input in its implementation */
 fun Matcher<*>.requiresInput(): Boolean = this is InputOutputMember
 
 /**
@@ -51,8 +49,18 @@ class RustWaiterMatcherGenerator(
     private val inputShape: Shape,
     private val outputShape: Shape,
 ) {
+    private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val module = RustModule.pubCrate("matchers", ClientRustModule.waiters)
+    private val module =
+        RustModule.pubCrate(
+            "matchers",
+            ClientRustModule.waiters,
+            additionalAttributes =
+                listOf(
+                    Attribute.AllowClippyNeedlessLifetimes,
+                    Attribute.AllowClippyLetAndReturn,
+                ),
+        )
     private val inputSymbol = codegenContext.symbolProvider.toSymbol(inputShape)
     private val outputSymbol = codegenContext.symbolProvider.toSymbol(outputShape)
 
@@ -100,7 +108,7 @@ class RustWaiterMatcherGenerator(
         val pathTraversal =
             RustJmespathShapeTraversalGenerator(codegenContext).generate(
                 pathExpression,
-                listOf(TraversalBinding.Global("_output", outputShape)),
+                listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape))),
             )
 
         generatePathTraversalMatcher(
@@ -121,8 +129,8 @@ class RustWaiterMatcherGenerator(
             RustJmespathShapeTraversalGenerator(codegenContext).generate(
                 pathExpression,
                 listOf(
-                    TraversalBinding.Named("input", "_input", inputShape),
-                    TraversalBinding.Named("output", "_output", outputShape),
+                    TraversalBinding.Named("input", "_input", TraversedShape.from(model, inputShape)),
+                    TraversalBinding.Named("output", "_output", TraversedShape.from(model, outputShape)),
                 ),
             )
 
@@ -144,7 +152,8 @@ class RustWaiterMatcherGenerator(
     ) {
         val comparator =
             writable {
-                val leftIsIterString = listOf(PathComparator.ALL_STRING_EQUALS, PathComparator.ANY_STRING_EQUALS).contains(comparatorKind)
+                val leftIsIterString =
+                    listOf(PathComparator.ALL_STRING_EQUALS, PathComparator.ANY_STRING_EQUALS).contains(comparatorKind)
                 val left =
                     GeneratedExpression(
                         identifier = "value",
@@ -153,7 +162,11 @@ class RustWaiterMatcherGenerator(
                                 leftIsIterString -> RustType.Reference(null, RustType.String)
                                 else -> pathTraversal.outputType
                             },
-                        outputShape = pathTraversal.outputShape,
+                        outputShape =
+                            when {
+                                leftIsIterString -> (pathTraversal.outputShape as? TraversedShape.Array)?.member ?: pathTraversal.outputShape
+                                else -> pathTraversal.outputShape
+                            },
                         output = writable {},
                     )
                 val rightIsString = PathComparator.BOOLEAN_EQUALS != comparatorKind
@@ -164,6 +177,11 @@ class RustWaiterMatcherGenerator(
                             when {
                                 rightIsString -> RustType.Reference(null, RustType.Opaque("str"))
                                 else -> RustType.Bool
+                            },
+                        outputShape =
+                            when {
+                                rightIsString -> TraversedShape.String(null)
+                                else -> TraversedShape.Bool(null)
                             },
                         output =
                             writable {
