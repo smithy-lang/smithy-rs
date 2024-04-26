@@ -39,10 +39,11 @@ tasks.compileKotlin {
 }
 
 // Reusable license copySpec
-val licenseSpec = copySpec {
-    from("${project.rootDir}/LICENSE")
-    from("${project.rootDir}/NOTICE")
-}
+val licenseSpec =
+    copySpec {
+        from("${project.rootDir}/LICENSE")
+        from("${project.rootDir}/NOTICE")
+    }
 
 // Configure jars to include license related info
 tasks.jar {

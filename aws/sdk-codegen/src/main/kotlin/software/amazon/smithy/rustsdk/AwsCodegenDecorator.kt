@@ -59,6 +59,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             RemoveDefaultsDecorator(),
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
+            HttpRequestCompressionDecorator(),
         ),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),

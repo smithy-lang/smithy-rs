@@ -40,7 +40,11 @@ dependencies {
 
 fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
-fun baseTest(service: String, module: String, imports: List<String> = listOf()): CodegenTest {
+fun baseTest(
+    service: String,
+    module: String,
+    imports: List<String> = listOf(),
+): CodegenTest {
     return CodegenTest(
         service = service,
         module = module,
@@ -52,23 +56,24 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
     )
 }
 
-val allCodegenTests = listOf(
-    baseTest(
-        "com.amazonaws.apigateway#BackplaneControlService",
-        "apigateway",
-        imports = listOf("models/apigateway-rules.smithy"),
-    ),
-    baseTest(
-        "com.amazonaws.testservice#TestService",
-        "endpoint-test-service",
-        imports = listOf("models/single-static-endpoint.smithy"),
-    ),
-    baseTest(
-        "com.amazonaws.testservice#RequiredValues",
-        "required-values",
-        imports = listOf("models/required-value-test.smithy"),
-    ),
-)
+val allCodegenTests =
+    listOf(
+        baseTest(
+            "com.amazonaws.apigateway#BackplaneControlService",
+            "apigateway",
+            imports = listOf("models/apigateway-rules.smithy"),
+        ),
+        baseTest(
+            "com.amazonaws.testservice#TestService",
+            "endpoint-test-service",
+            imports = listOf("models/single-static-endpoint.smithy"),
+        ),
+        baseTest(
+            "com.amazonaws.testservice#RequiredValues",
+            "required-values",
+            imports = listOf("models/required-value-test.smithy"),
+        ),
+    )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

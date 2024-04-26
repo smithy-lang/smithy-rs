@@ -15,9 +15,10 @@ repositories {
 }
 
 // Load properties manually to avoid hard coding smithy version
-val props = Properties().apply {
-    file("../gradle.properties").inputStream().use { load(it) }
-}
+val props =
+    Properties().apply {
+        file("../gradle.properties").inputStream().use { load(it) }
+    }
 
 val smithyVersion = props["smithyVersion"]
 

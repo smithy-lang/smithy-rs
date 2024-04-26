@@ -18,7 +18,7 @@ allprojects {
     val allowLocalDeps: String by project
     repositories {
         if (allowLocalDeps.toBoolean()) {
-         mavenLocal()
+            mavenLocal()
         }
         mavenCentral()
         google()
@@ -70,11 +70,11 @@ tasks.register<JavaExec>("ktlintPreCommit") {
     group = LifecycleBasePlugin.VERIFICATION_GROUP
     classpath = ktlint
     mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--log-level=warn", "--color", "--relative", "--format", "--") +
-        System.getProperty("ktlintPreCommitArgs").let { args ->
-            check(args.isNotBlank()) { "need to pass in -DktlintPreCommitArgs=<some file paths to check>" }
-            args.split(" ")
-        }
+    args = listOf("--log-level=warn", "--color", "--relative", "--format", "--")
+    System.getProperty("ktlintPreCommitArgs").let { args ->
+        check(args.isNotBlank()) { "need to pass in -DktlintPreCommitArgs=<some file paths to check>" }
+        args.split(" ")
+    }
     // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }

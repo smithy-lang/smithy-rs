@@ -21,6 +21,7 @@ aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
+aws-smithy-compression = { path = "../../../rust-runtime/aws-smithy-compression" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }

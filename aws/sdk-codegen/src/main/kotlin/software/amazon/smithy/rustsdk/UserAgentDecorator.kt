@@ -147,7 +147,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
                 is ServiceConfig.BuilderFromConfigBag ->
                     writable {
-                        rustTemplate("${section.builder}.set_app_name(${section.config_bag}.load::<#{AppName}>().cloned());", *codegenScope)
+                        rustTemplate("${section.builder}.set_app_name(${section.configBag}.load::<#{AppName}>().cloned());", *codegenScope)
                     }
 
                 is ServiceConfig.BuilderBuild ->

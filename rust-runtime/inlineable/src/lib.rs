@@ -35,6 +35,9 @@ mod endpoint_lib;
 #[allow(unused)]
 mod auth_plugin;
 
+#[allow(unused)]
+mod client_request_compression;
+
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]

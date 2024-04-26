@@ -79,7 +79,10 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
         // Version format must be kept in sync with `software.amazon.smithy.rust.codegen.core.Version`
         versionsFile.asFile.writeText(
             StringBuilder().append("{\n").also { json ->
-                fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
+                fun StringBuilder.keyVal(
+                    key: String,
+                    value: String,
+                ) = append("\"$key\": \"$value\"")
 
                 json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
                 json.append("  \"runtimeCrates\": {\n")
@@ -97,14 +100,15 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
                             val stable = manifestLines.any { line -> line == "stable = true" }
                             val versionLine = manifestLines.first { line -> line.startsWith("version = \"") }
                             val maybeVersion = versionLine.slice(("version = \"".length)..(versionLine.length - 2))
-                            val version = if (maybeVersion == "0.0.0-smithy-rs-head") {
-                                when (stable) {
-                                    true -> stableCrateVersion
-                                    else -> unstableCrateVersion
+                            val version =
+                                if (maybeVersion == "0.0.0-smithy-rs-head") {
+                                    when (stable) {
+                                        true -> stableCrateVersion
+                                        else -> unstableCrateVersion
+                                    }
+                                } else {
+                                    maybeVersion
                                 }
-                            } else {
-                                maybeVersion
-                            }
                             "    \"$name\": \"$version\""
                         }
                         .joinToString(",\n"),
@@ -126,10 +130,11 @@ tasks.compileKotlin {
 }
 
 // Reusable license copySpec
-val licenseSpec = copySpec {
-    from("${project.rootDir}/LICENSE")
-    from("${project.rootDir}/NOTICE")
-}
+val licenseSpec =
+    copySpec {
+        from("${project.rootDir}/LICENSE")
+        from("${project.rootDir}/NOTICE")
+    }
 
 // Configure jars to include license related info
 tasks.jar {
