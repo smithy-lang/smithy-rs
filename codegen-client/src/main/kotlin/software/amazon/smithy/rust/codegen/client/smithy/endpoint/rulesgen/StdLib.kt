@@ -55,6 +55,7 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
         arrayOf(
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
             "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
+            "tracing" to RuntimeType.Tracing,
         )
 
     override fun structFieldInit() =
@@ -70,7 +71,19 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
                             // Loading the partition JSON is expensive since it involves many regex compilations,
                             // so cache the result so that it only need to be paid for the first constructed client.
                             pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
-                                #{Lazy}::new(|| #{PartitionResolver}::new_from_json(b$json).expect("valid JSON"));
+                                #{Lazy}::new(|| {
+                                    match std::env::var("SMITHY_CLIENT_SDK_CUSTOM_PARTITION") {
+                                        Ok(partitions) => {
+                                            #{tracing}::debug!("loading custom partitions located at {partitions}");
+                                            let partition_dot_json = std::fs::read_to_string(partitions).expect("should be able to read a custom partition JSON");
+                                            #{PartitionResolver}::new_from_json(partition_dot_json.as_bytes()).expect("valid JSON")
+                                        },
+                                        _ => {
+                                            #{tracing}::debug!("loading default partitions");
+                                            #{PartitionResolver}::new_from_json(b$json).expect("valid JSON")
+                                        }
+                                    }
+                                });
                             """,
                             *codegenScope,
                         )
