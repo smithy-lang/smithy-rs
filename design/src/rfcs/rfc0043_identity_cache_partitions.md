@@ -1,7 +1,7 @@
 RFC: Identity Cache Partitions
 ===============================
 
-> Status: Accepted
+> Status: Implemented
 >
 > Applies to: AWS SDK for Rust
 
@@ -286,10 +286,10 @@ shares a cache partition or not.
 Changes checklist
 -----------------
 
-- [ ] Add new `cache_partition()` method to `ResolveIdentity`
-- [ ] Update `SharedIdentityResolver::new` to use the new `cache_partition()` method on the `resolver` to determine if a new cache partition should be created or not
-- [ ] Claim a cache partition when `SharedCredentialsProvider` is created and override the new `ResolveIdentity` method
-- [ ] Claim a cache partition when `SharedTokenProvider` is created and override the new `ResolveIdentity` method
-- [ ] Introduce new behavior version
-- [ ] Conditionally (gated on behavior version) create a new default `IdentityCache` on `SdkConfig` if not explicitly configured
-- [ ] Add a new `no_identity_cache()` method to `ConfigLoader` that marks the identity cache as explicitly unset
+- [x] Add new `cache_partition()` method to `ResolveIdentity`
+- [x] Update `SharedIdentityResolver::new` to use the new `cache_partition()` method on the `resolver` to determine if a new cache partition should be created or not
+- [x] Claim a cache partition when `SharedCredentialsProvider` is created and override the new `ResolveIdentity` method
+- [x] Claim a cache partition when `SharedTokenProvider` is created and override the new `ResolveIdentity` method
+- [x] Introduce new behavior version
+- [x] Conditionally (gated on behavior version) create a new default `IdentityCache` on `SdkConfig` if not explicitly configured
+- [x] Add a new `no_identity_cache()` method to `ConfigLoader` that marks the identity cache as explicitly unset
