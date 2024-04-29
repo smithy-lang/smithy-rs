@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Errors that can occur when using this crate.
+
 use std::error::Error;
 use std::fmt;
 

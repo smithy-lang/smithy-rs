@@ -19,6 +19,10 @@ pub mod compress {
     use std::task::{Context, Poll};
 
     pin_project! {
+        /// A `Body` that may compress its data with a `RequestCompressor`.
+        ///
+        /// Compression options may disable request compression for small data payload, or entirely.
+        /// Additionally, some services may not support compression.
         pub struct CompressedBody<InnerBody> {
             #[pin]
             body: InnerBody,

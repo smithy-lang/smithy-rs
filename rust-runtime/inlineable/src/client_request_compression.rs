@@ -68,42 +68,6 @@ impl Storable for RequestCompressionInterceptorState {
     type Storer = StoreReplace<Self>;
 }
 
-type CustomDefaultFn = Box<
-    dyn Fn(Option<CompressionAlgorithm>) -> Option<CompressionAlgorithm> + Send + Sync + 'static,
->;
-
-pub(crate) struct DefaultRequestCompressionOverride {
-    custom_default: CustomDefaultFn,
-}
-
-impl fmt::Debug for DefaultRequestCompressionOverride {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("DefaultRequestCompressionOverride").finish()
-    }
-}
-
-impl Storable for DefaultRequestCompressionOverride {
-    type Storer = StoreReplace<Self>;
-}
-
-impl DefaultRequestCompressionOverride {
-    pub(crate) fn new<F>(custom_default: F) -> Self
-    where
-        F: Fn(Option<CompressionAlgorithm>) -> Option<CompressionAlgorithm> + Send + Sync + 'static,
-    {
-        Self {
-            custom_default: Box::new(custom_default),
-        }
-    }
-
-    pub(crate) fn custom_default(
-        &self,
-        original: Option<CompressionAlgorithm>,
-    ) -> Option<CompressionAlgorithm> {
-        (self.custom_default)(original)
-    }
-}
-
 /// Interceptor for Smithy [`@requestCompression`][spec].
 ///
 /// [spec]: https://smithy.io/2.0/spec/behavior-traits.html#requestcompression-trait
@@ -132,10 +96,17 @@ impl Intercept for RequestCompressionInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let options = cfg
-            .load::<CompressionOptions>()
+        let disable_request_compression = cfg
+            .load::<DisableRequestCompression>()
             .cloned()
             .unwrap_or_default();
+        let request_min_compression_size_bytes = cfg
+            .load::<RequestMinCompressionSizeBytes>()
+            .cloned()
+            .unwrap_or_default();
+        let options = CompressionOptions::default()
+            .with_min_compression_size_bytes(request_min_compression_size_bytes.0)?
+            .with_disabled(disable_request_compression.0);
 
         let mut layer = Layer::new("RequestCompressionInterceptor");
         layer.store_put(RequestCompressionInterceptorState {
@@ -157,23 +128,11 @@ impl Intercept for RequestCompressionInterceptor {
             .expect("set in `read_before_serialization`");
 
         let options = state.options.clone().unwrap();
-        let algorithm = incorporate_custom_default(Some(CompressionAlgorithm::Gzip), cfg);
-        if let Some(algorithm) = algorithm {
-            let request = context.request_mut();
-            wrap_request_body_in_compressed_body(request, algorithm, &options)?;
-        }
+        let request = context.request_mut();
+        wrap_request_body_in_compressed_body(request, CompressionAlgorithm::Gzip, &options)?;
 
         Ok(())
     }
-}
-
-fn incorporate_custom_default(
-    algorithm: Option<CompressionAlgorithm>,
-    cfg: &ConfigBag,
-) -> Option<CompressionAlgorithm> {
-    cfg.load::<DefaultRequestCompressionOverride>()
-        .and_then(|it| it.custom_default(algorithm))
-        .or(algorithm)
 }
 
 fn wrap_request_body_in_compressed_body(
@@ -203,6 +162,38 @@ fn wrap_request_body_in_compressed_body(
     mem::swap(request.body_mut(), &mut body);
 
     Ok(())
+}
+
+#[derive(Debug, Copy, Clone, Default)]
+struct DisableRequestCompression(bool);
+
+impl From<bool> for DisableRequestCompression {
+    fn from(value: bool) -> Self {
+        DisableRequestCompression(value)
+    }
+}
+
+impl Storable for DisableRequestCompression {
+    type Storer = StoreReplace<Self>;
+}
+
+#[derive(Debug, Copy, Clone)]
+struct RequestMinCompressionSizeBytes(u32);
+
+impl Default for RequestMinCompressionSizeBytes {
+    fn default() -> Self {
+        RequestMinCompressionSizeBytes(10240)
+    }
+}
+
+impl From<u32> for RequestMinCompressionSizeBytes {
+    fn from(value: u32) -> Self {
+        RequestMinCompressionSizeBytes(value)
+    }
+}
+
+impl Storable for RequestMinCompressionSizeBytes {
+    type Storer = StoreReplace<Self>;
 }
 
 #[cfg(test)]

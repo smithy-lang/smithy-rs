@@ -129,39 +129,6 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                     )
                 }
 
-                ServiceConfig.Extras -> {
-                    rustTemplate(
-                        """
-                        ##[derive(Debug, Copy, Clone)]
-                        struct DisableRequestCompression(bool);
-
-                        impl From<bool> for DisableRequestCompression {
-                            fn from(value: bool) -> Self {
-                                DisableRequestCompression(value)
-                            }
-                        }
-
-                        impl #{Storable} for DisableRequestCompression {
-                            type Storer = #{StoreReplace}<Self>;
-                        }
-
-                        ##[derive(Debug, Copy, Clone)]
-                        struct RequestMinCompressionSizeBytes(u32);
-
-                        impl From<u32> for RequestMinCompressionSizeBytes {
-                            fn from(value: u32) -> Self {
-                                RequestMinCompressionSizeBytes(value)
-                            }
-                        }
-
-                        impl #{Storable} for RequestMinCompressionSizeBytes {
-                            type Storer = #{StoreReplace}<Self>;
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
-
                 else -> emptySection
             }
         }

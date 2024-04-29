@@ -8,7 +8,7 @@
 /* End of automatically managed default lints */
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
-    // missing_docs,
+    missing_docs,
     rustdoc::missing_crate_level_docs,
     unreachable_pub,
     rust_2018_idioms
@@ -28,6 +28,7 @@ mod gzip;
 pub mod http;
 
 // Valid compression algorithm names
+/// The name of the `gzip` algorithm.
 pub const GZIP_NAME: &str = "gzip";
 
 /// Types implementing this trait can compress data.
@@ -42,12 +43,14 @@ pub trait Compression: Send + Sync {
     fn compress_bytes(&mut self, bytes: &[u8], writer: &mut dyn Write) -> Result<(), BoxError>;
 }
 
+/// Options for configuring request compression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct CompressionOptions {
     /// Valid values are 0-9 with lower values configuring less (but faster) compression
     level: u32,
     min_compression_size_bytes: u32,
+    disabled: bool,
 }
 
 impl Default for CompressionOptions {
@@ -55,24 +58,46 @@ impl Default for CompressionOptions {
         Self {
             level: 6,
             min_compression_size_bytes: 10240,
+            disabled: false,
         }
     }
 }
 
 impl CompressionOptions {
+    /// The compression level to use.
     pub fn level(&self) -> u32 {
         self.level
     }
 
+    /// The minimum size of data to compress.
+    ///
+    /// Data smaller than this will not be compressed.
     pub fn min_compression_size_bytes(&self) -> u32 {
         self.min_compression_size_bytes
     }
 
+    /// Whether compression is disabled.
+    pub fn is_disabled(&self) -> bool {
+        self.disabled
+    }
+
+    /// Set whether compression is disabled.
+    pub fn with_disabled(self, disabled: bool) -> Self {
+        Self { disabled, ..self }
+    }
+
+    /// Set the compression level.
+    ///
+    /// Valid values are `0..=9` with lower values configuring less _(but faster)_ compression
     pub fn with_level(self, level: u32) -> Result<Self, BoxError> {
         Self::validate_level(level)?;
         Ok(Self { level, ..self })
     }
 
+    /// Set the minimum size of data to compress.
+    ///
+    /// Data smaller than this will not be compressed.
+    /// Valid values are `0..=10_485_760`. The default is `10_240`.
     pub fn with_min_compression_size_bytes(
         self,
         min_compression_size_bytes: u32,
@@ -87,7 +112,7 @@ impl CompressionOptions {
     fn validate_level(level: u32) -> Result<(), BoxError> {
         if level > 9 {
             return Err(format!(
-                "compression level `{}` is invalid, valid values are 0-9",
+                "compression level `{}` is invalid, valid values are 0..=9",
                 level
             )
             .into());
@@ -100,7 +125,7 @@ impl CompressionOptions {
     ) -> Result<(), BoxError> {
         if min_compression_size_bytes > 10485760 {
             return Err(format!(
-                "min compression size `{}` is invalid, valid values are 0-10485760",
+                "min compression size `{}` is invalid, valid values are 0..=10_485_760",
                 min_compression_size_bytes
             )
             .into());
@@ -113,9 +138,10 @@ impl Storable for CompressionOptions {
     type Storer = StoreReplace<Self>;
 }
 
-/// We only support compression calculation and validation for these compression algorithms.
+/// An enum encompassing all supported compression algorithms.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CompressionAlgorithm {
+    /// The [gzip](https://en.wikipedia.org/wiki/Gzip) compression algorithm
     Gzip,
 }
 
