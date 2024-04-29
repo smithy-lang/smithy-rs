@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use crate::http::RequestCompressor;
 use crate::{Compression, CompressionOptions};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -33,7 +38,6 @@ impl RequestCompressor for Gzip {
     }
 }
 
-// TODO Is there a better way to define these From impls?
 impl From<&CompressionOptions> for Gzip {
     fn from(options: &CompressionOptions) -> Self {
         Gzip {

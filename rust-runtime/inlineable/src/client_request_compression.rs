@@ -87,8 +87,6 @@ impl Storable for DefaultRequestCompressionOverride {
 }
 
 impl DefaultRequestCompressionOverride {
-    // TODO What should I do with this?
-    #[allow(dead_code)]
     pub(crate) fn new<F>(custom_default: F) -> Self
     where
         F: Fn(Option<CompressionAlgorithm>) -> Option<CompressionAlgorithm> + Send + Sync + 'static,
@@ -134,11 +132,15 @@ impl Intercept for RequestCompressionInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        // TODO get options from the bag
-        let options = Some(CompressionOptions::default());
+        let options = cfg
+            .load::<CompressionOptions>()
+            .cloned()
+            .unwrap_or_default();
 
         let mut layer = Layer::new("RequestCompressionInterceptor");
-        layer.store_put(RequestCompressionInterceptorState { options });
+        layer.store_put(RequestCompressionInterceptorState {
+            options: Some(options),
+        });
         cfg.push_layer(layer);
 
         Ok(())

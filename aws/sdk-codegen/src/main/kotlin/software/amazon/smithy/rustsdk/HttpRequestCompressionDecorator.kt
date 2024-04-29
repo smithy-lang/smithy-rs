@@ -1,9 +1,13 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.traits.RequestCompressionTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.AtLeastOneServiceOperationUsesTraitIndex
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -19,11 +23,8 @@ class HttpRequestCompressionDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestCompression"
     override val order: Byte = 0
 
-    // Services that have at least one operation that supports request compression.
-    private fun usesRequestCompression(codegenContext: ClientCodegenContext): Boolean {
-        val traitIdx = AtLeastOneServiceOperationUsesTraitIndex(codegenContext.model)
-        return traitIdx.usesTrait(RequestCompressionTrait.ID)
-    }
+    private fun usesRequestCompression(codegenContext: ClientCodegenContext): Boolean =
+        codegenContext.model.isTraitApplied(RequestCompressionTrait::class.java)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -41,9 +42,9 @@ class HttpRequestCompressionDecorator : ClientCodegenDecorator {
                 rust(
                     """
                     ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}
-                        .disable_request_compression(${section.sdkConfig}.disable_request_compression().clone());
+                        .disable_request_compression(${section.sdkConfig}.disable_request_compression());
                     ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}
-                        .request_min_compression_size_bytes(${section.sdkConfig}.request_min_compression_size_bytes().clone());
+                        .request_min_compression_size_bytes(${section.sdkConfig}.request_min_compression_size_bytes());
                     """,
                 )
             }
@@ -66,12 +67,12 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                 ServiceConfig.ConfigImpl -> {
                     rustTemplate(
                         """
-                        /// Returns the TODO, if it was provided
+                        /// Returns the `disable request compression` setting, if it was provided.
                         pub fn disable_request_compression(&self) -> #{Option}<bool> {
                             self.config.load::<DisableRequestCompression>().map(|it| it.0)
                         }
 
-                        /// Returns the TODO, if it was provided.
+                        /// Returns the `request minimum compression size in bytes`, if it was provided.
                         pub fn request_min_compression_size_bytes(&self) -> #{Option}<u32> {
                             self.config.load::<RequestMinCompressionSizeBytes>().map(|it| it.0)
                         }
@@ -83,13 +84,13 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                 ServiceConfig.BuilderImpl -> {
                     rustTemplate(
                         """
-                        /// Sets the TODO when making requests.
+                        /// Sets the `disable request compression` used when making requests.
                         pub fn disable_request_compression(mut self, disable_request_compression: impl #{Into}<#{Option}<bool>>) -> Self {
                             self.set_disable_request_compression(disable_request_compression.into());
                             self
                         }
 
-                        /// Sets the TODO when making requests.
+                        /// Sets the `request minimum compression size in bytes` used when making requests.
                         pub fn request_min_compression_size_bytes(mut self, request_min_compression_size_bytes: impl #{Into}<#{Option}<u32>>) -> Self {
                             self.set_request_min_compression_size_bytes(request_min_compression_size_bytes.into());
                             self
@@ -100,13 +101,13 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
 
                     rustTemplate(
                         """
-                        /// Sets the Todo to use when making requests.
+                        /// Sets the `disable request compression` used when making requests.
                         pub fn set_disable_request_compression(&mut self, disable_request_compression: #{Option}<bool>) -> &mut Self {
                             self.config.store_or_unset::<DisableRequestCompression>(disable_request_compression.map(Into::into));
                             self
                         }
 
-                        /// Sets the Todo to use when making requests.
+                        /// Sets the `request minimum compression size in bytes` used when making requests.
                         pub fn set_request_min_compression_size_bytes(&mut self, request_min_compression_size_bytes: #{Option}<u32>) -> &mut Self {
                             self.config.store_or_unset::<RequestMinCompressionSizeBytes>(request_min_compression_size_bytes.map(Into::into));
                             self
