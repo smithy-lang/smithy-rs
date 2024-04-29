@@ -83,6 +83,9 @@ class AwsJsonHttpBindingResolver(
         "application/x-amz-json-${awsJsonVersion.value}"
 
     override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
+
+    override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
+        ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/json")
 }
 
 /**
