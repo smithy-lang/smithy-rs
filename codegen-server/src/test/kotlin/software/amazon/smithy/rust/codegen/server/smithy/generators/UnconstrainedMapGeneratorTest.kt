@@ -110,7 +110,7 @@ class UnconstrainedMapGeneratorTest {
 
                         let actual_err = crate::constrained::map_a_constrained::MapAConstrained::try_from(map_a_unconstrained).unwrap_err();
                         assert!(actual_err == missing_string_expected_err || actual_err == missing_int_expected_err);
-                        
+
                         is_display(&actual_err);
                         is_error(&actual_err);
 

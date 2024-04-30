@@ -18,16 +18,16 @@ class UnionWithUnitTest {
             namespace com.example
             use aws.protocols#restJson1
             use smithy.framework#ValidationException
-            
-            @restJson1 @title("Test Service") 
-            service TestService { 
-                version: "0.1", 
-                operations: [ 
+
+            @restJson1 @title("Test Service")
+            service TestService {
+                version: "0.1",
+                operations: [
                     TestOperation
                     TestSimpleUnionWithUnit
-                ] 
+                ]
             }
-            
+
             @http(uri: "/testunit", method: "POST")
             operation TestSimpleUnionWithUnit {
                 input := {
@@ -41,10 +41,10 @@ class UnionWithUnitTest {
                     ValidationException
                 ]
             }
-            
+
             @length(min: 13)
             string StringRestricted
-            
+
             union SomeUnionWithUnit {
                 Option1: Unit
                 Option2: StringRestricted
@@ -59,16 +59,16 @@ class UnionWithUnitTest {
                 },
                 errors: [ValidationException]
             }
-            
+
             @streaming
             union TestEvent {
                 KeepAlive: Unit,
                 Response: TestResponseEvent,
             }
-            
-            structure TestResponseEvent { 
-                data: String 
-            }            
+
+            structure TestResponseEvent {
+                data: String
+            }
             """.asSmithyModel()
 
         // Ensure the generated SDK compiles.

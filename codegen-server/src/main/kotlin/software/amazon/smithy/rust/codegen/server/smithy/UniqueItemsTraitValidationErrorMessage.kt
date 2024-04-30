@@ -15,6 +15,6 @@ fun UniqueItemsTrait.validationErrorMessage() =
 
 fun UniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     """
-    Value with repeated values at indices {:?} provided for '${shape.id}' 
+    Value with repeated values at indices {:?} provided for '${shape.id}'
     failed to satisfy constraint: Member must have unique values
     """.trimIndent().replace("\n", "")

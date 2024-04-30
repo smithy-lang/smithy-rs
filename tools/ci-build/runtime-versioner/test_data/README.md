@@ -1,8 +1,8 @@
 Test base archive
 =================
 
-The `test_base.git.tar.gz` is an archived test git repository that looks like a 
-smithy-rs repo (with only the runtime crates), with some version numbers and 
+The `test_base.git.tar.gz` is an archived test git repository that looks like a
+smithy-rs repo (with only the runtime crates), with some version numbers and
 release tags.
 
 It is a bare git repository (no working tree). To modify it, use the Makefile in

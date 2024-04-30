@@ -109,7 +109,7 @@ class ConstrainedMapGeneratorTest {
                     let map = build_invalid_map();
                     let constrained_res: Result<ConstrainedMap, _> = map.try_into();
                     let error = constrained_res.unwrap_err();
-    
+
                     is_display(&error);
                     is_error(&error);
                 """,
@@ -165,12 +165,12 @@ class ConstrainedMapGeneratorTest {
         val model =
             """
             ${'$'}version: "2"
-            
+
             namespace test
-            
+
             use aws.protocols#restJson1
             use smithy.framework#ValidationException
-            
+
             // The `ConstraintViolation` code generated for a constrained map that is not reachable from an
             // operation does not have the `Key`, or `Value` variants. Hence, we need to define a service
             // and an operation that uses the constrained map.
@@ -181,7 +181,7 @@ class ConstrainedMapGeneratorTest {
                     MyOperation,
                 ]
             }
-            
+
             @http(method: "POST", uri: "/echo")
             operation MyOperation {
                 input:= {
@@ -192,7 +192,7 @@ class ConstrainedMapGeneratorTest {
                 output:= {},
                 errors : [ValidationException]
             }
-            
+
             @length(min: 2, max: 69)
             map ConstrainedMapWithConstrainedKey {
                 key: ConstrainedKey,
@@ -242,7 +242,7 @@ class ConstrainedMapGeneratorTest {
                 fn build_invalid_constrained_map_with_constrained_key() -> #{HashMap}<ConstrainedKey, String> {
                     let mut m = ::std::collections::HashMap::new();
                     m.insert(ConstrainedKey("1".to_string()), "Y".to_string());
-                    m    
+                    m
                 }
                 fn build_invalid_constrained_map_with_constrained_key_and_value() -> std::collections::HashMap<ConstrainedKey, ConstrainedValue> {
                     let mut m = ::std::collections::HashMap::new();
@@ -254,8 +254,8 @@ class ConstrainedMapGeneratorTest {
                     m.insert("1".to_string(), ConstrainedValue("Y".to_string()));
                     m
                 }
-                
-                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps, 
+
+                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps,
                 // and the complete SDK generation process, which would generate it, is not invoked as part of the test.
                 pub struct ValidationExceptionField {
                     pub message: String,

@@ -148,7 +148,7 @@ class ConstrainedNumberGenerator(
                         write!(f, "${rangeInfo.rangeTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}")
                     }
                 }
-                    
+
                 impl #{Error} for ${constraintViolation.name} {}
                 """,
                 "Error" to RuntimeType.StdError,

@@ -310,12 +310,12 @@ class ConstrainedCollectionGeneratorTest {
         val model =
             """
             ${'$'}version: "1.0"
-            
+
             namespace test
-            
+
             use aws.protocols#restJson1
             use smithy.framework#ValidationException
-            
+
             // The `ConstraintViolation` code generated for a constrained map that is not reachable from an
             // operation does not have the `Key`, or `Value` variants. Hence, we need to define a service
             // and an operation that uses the constrained map.
@@ -326,18 +326,18 @@ class ConstrainedCollectionGeneratorTest {
                     MyOperation,
                 ]
             }
-            
+
             @http(method: "POST", uri: "/echo")
             operation MyOperation {
                 input: MyOperationInput
                 errors : [ValidationException]
             }
-            
+
             @input
             structure MyOperationInput {
                     member1: ConstrainedList,
                     member2: ConstrainedSet,
-            }            
+            }
 
             @length(min: 2, max: 69)
             list ConstrainedList {
@@ -367,7 +367,7 @@ class ConstrainedCollectionGeneratorTest {
 
             rustTemplate(
                 """
-                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps, 
+                // Define `ValidationExceptionField` since it is required by the `ConstraintViolation` code for constrained maps,
                 // and the complete SDK generation process, which would generate it, is not invoked as part of the test.
                 pub struct ValidationExceptionField {
                     pub message: String,
@@ -389,7 +389,7 @@ class ConstrainedCollectionGeneratorTest {
                     let error = crate::model::constrained_list::ConstraintViolation::Member(0, constrained_error);
                     is_error(&error);
                     is_display(&error);
-                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+", 
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+",
                         error.to_string());
                 """,
             )
@@ -400,7 +400,7 @@ class ConstrainedCollectionGeneratorTest {
                     let error = crate::model::constrained_set::ConstraintViolation::Member(0, constrained_error);
                     is_error(&error);
                     is_display(&error);
-                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+", 
+                    assert_eq!("Value at index 0 failed to satisfy constraint. Value provided for `test#ConstrainedString` failed to satisfy the constraint: Member must match the regular expression pattern: #\\d+",
                         error.to_string());
                 """,
             )

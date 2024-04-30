@@ -51,7 +51,7 @@ open class ConstrainedEnum(
                     """
                     ##[derive(Debug, PartialEq)]
                     pub struct $constraintViolationName(pub(crate) #{String});
-                    
+
                     impl #{Display} for $constraintViolationName {
                         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                             write!(f, r##"${context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"##)

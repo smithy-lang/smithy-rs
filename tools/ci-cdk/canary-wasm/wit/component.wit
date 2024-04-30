@@ -4,12 +4,11 @@
  */
 
 package aws:component;
- 
+
 interface canary-interface {
     run-canary: func() -> result<list<string>, string>;
 }
- 
+
 world canary-world {
     export canary-interface;
 }
-     

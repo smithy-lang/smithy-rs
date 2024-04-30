@@ -82,7 +82,7 @@ class CollectionConstraintViolationGenerator(
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}
                 }
-                
+
                 impl #{Display} for $constraintViolationName {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         let message = match self {
@@ -91,7 +91,7 @@ class CollectionConstraintViolationGenerator(
                         write!(f, "{message}")
                     }
                 }
-                
+
                 impl #{Error} for $constraintViolationName {}
                 """,
                 "ConstraintViolationVariants" to constraintViolationVariants.join(",\n"),
