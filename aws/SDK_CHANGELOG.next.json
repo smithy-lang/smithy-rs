@@ -6,81 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "EKS Pod Identity is now supported as part of the default ECS credential provider.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jackkleeman",
-      "references": [
-        "smithy-rs#3416"
-      ],
-      "since-commit": "c9786d6f56357348714e6c85f3f345a30d8674d8",
-      "age": 5
-    },
-    {
-      "message": "Add support for Lambda's `InvokeWithResponseStreaming` and Bedrock Agent Runtime's `InvokeAgent` operations.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "aws-sdk-rust#1075",
-        "aws-sdk-rust#1080",
-        "smithy-rs#3451"
-      ],
-      "since-commit": "c9786d6f56357348714e6c85f3f345a30d8674d8",
-      "age": 5
-    },
-    {
-      "message": "Added support for SSO bearer token authentication. The aws-sdk-codecatalyst crate can now send requests without erroring.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "aws-sdk-rust#703",
-        "smithy-rs#3453"
-      ],
-      "since-commit": "c9786d6f56357348714e6c85f3f345a30d8674d8",
-      "age": 5
-    },
-    {
-      "message": "Add support for S3 Express One Zone. See [the user guide](https://github.com/awslabs/aws-sdk-rust/discussions/1091) for more details.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "ysaito1001",
-      "references": [
-        "aws-sdk-rust#992",
-        "smithy-rs#3465"
-      ],
-      "since-commit": "c9786d6f56357348714e6c85f3f345a30d8674d8",
-      "age": 5
-    },
-    {
-      "message": "`aws_sigv4::http_request::settigns::SigningSettings` adds a new setting `session_token_name_override` to allow for an alternative session token name for SigV4 signing.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3465",
-        "smithy-rs#3477"
-      ],
-      "since-commit": "c9786d6f56357348714e6c85f3f345a30d8674d8",
-      "age": 5
-    },
-    {
       "message": "`DefaultS3ExpressIdentityProvider` now uses `BehaviorVersion` threaded through from the outer S3 client, instead of always creating `BehaviorVersion::latest()` on the fly.",
       "meta": {
         "bug": true,
@@ -92,7 +17,7 @@
         "smithy-rs#3478"
       ],
       "since-commit": "2561e01afca63a28b5034a99c610373f84545721",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Users may now set an endpoint URL from the env or profile file:\n\n- env: `AWS_ENDPOINT_URL=\"http://localhost\"`\n- profile: `endpoint_url = http://localhost`\n\nUsers may also ignore endpoint URLs sourced from the env and profile files:\n\n- env: `AWS_IGNORE_CONFIGURED_ENDPOINT_URLS=\"true\"`\n- profile: `ignore_configured_endpoint_urls = true`\n",
@@ -106,7 +31,7 @@
         "smithy-rs#3488"
       ],
       "since-commit": "2561e01afca63a28b5034a99c610373f84545721",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix a bug where a `sigv4-s3express` auth scheme was incorrectly positioned at the front of `auth_scheme_options` and was used when no auth schemes were available for an endpoint.",
@@ -120,7 +45,7 @@
         "smithy-rs#3498"
       ],
       "since-commit": "2561e01afca63a28b5034a99c610373f84545721",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Ability to add an inline policy or a list of policy ARNs to the `WebIdentityTokenCredentialsProvider` builder.",
@@ -134,7 +59,7 @@
         "smithy-rs#3506"
       ],
       "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax.",
@@ -149,7 +74,7 @@
         "smithy-rs#3513"
       ],
       "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Users may now set service-specific configuration in the environment. For more information, see [this discussion topic](https://github.com/smithy-lang/smithy-rs/discussions/3537).",
@@ -163,7 +88,7 @@
         "smithy-rs#3493"
       ],
       "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 3
+      "age": 4
     },
     {
       "message": "All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed.",
@@ -177,7 +102,7 @@
         "smithy-rs#3389"
       ],
       "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).\n\nPlease note that support for Hyper 1.0 remains experimental.",
@@ -191,7 +116,7 @@
         "smithy-rs#3539"
       ],
       "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fixes the identity resolver types (`credentials_provider()` and `token_provider()`) from `SdkConfig` to have\na consistent identity cache partition when re-used across different clients.\n",
@@ -205,7 +130,7 @@
         "smithy-rs#3427"
       ],
       "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:\n\n```rust\nlet config = aws_config::defaults(BehaviorVersion::latest())\n    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())\n    .load()\n    .await;\n```\n",
@@ -219,7 +144,7 @@
         "smithy-rs#3485"
       ],
       "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit.",
@@ -233,7 +158,7 @@
         "smithy-rs#3485"
       ],
       "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Upgraded MSRV to Rust 1.75",
@@ -247,7 +172,7 @@
         "smithy-rs#3553"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Make `SigningSettings` and its fields implement `Clone` and `Copy`",
@@ -261,7 +186,7 @@
         "smithy-rs#3533"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Change some credentials related info log messages to debug.",
@@ -275,7 +200,7 @@
         "smithy-rs#3546"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix an S3 crate's dependency on `ahash` so the crate can be compiled for `wasm32-unknown-unknown`.",
@@ -290,6 +215,54 @@
         "aws-sdk-rust#1131"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
+      "age": 2
+    },
+    {
+      "message": "Added support for waiters. Services that model waiters now have a `Waiters` trait that adds\nsome methods prefixed with `wait_until` to the existing clients. These can be used to, for example\nin S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to\nhave the status OK.\n\nUsing a waiter looks like the following example for EC2:\n```rust\nuse aws_sdk_ec2::client::Waiters;\n\nlet result = ec2_client.wait_until_instance_status_ok()\n    .instance_ids(\"some-instance-id\")\n    .wait(Duration::from_secs(300))\n    .await;\n```\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#400",
+        "smithy-rs#3595",
+        "smithy-rs#3593",
+        "smithy-rs#3585",
+        "smithy-rs#3571",
+        "smithy-rs#3569"
+      ],
+      "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
+      "age": 1
+    },
+    {
+      "message": "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#3601"
+      ],
+      "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
+      "age": 1
+    },
+    {
+      "message": "`aws_config::default_provider::use_dual_stack_provider` is now public instead of `pub(crate)`",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#879",
+        "smithy-rs#3611"
+      ],
+      "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
       "age": 1
     }
   ],
