@@ -1,7 +1,8 @@
 # Smithy Rust Server SDK examples
 
-This folder contains some example services showcasing Smithy Rust Server SDK,
-also known as the Rust service framework, capabilities and to run benchmarks.
+This folder contains:
+- example services showcasing Smithy Rust Server SDK, also known as the Rust service framework,
+- benchmarking tooling
 
 Three server implementations are available:
 
@@ -20,7 +21,7 @@ a suitable choice for implementing your web service.
 
 ## Pre-requisites
 
-You will need install Java 11 to run the smithy-rs code generator and an
+You will need install Java 17 to run the smithy-rs code generator and an
 installation of Rust, including `cargo`, to compile the generated code.
 
 (Optional) The [Cargo Lambda](https://cargo-lambda.info/) sub-command for

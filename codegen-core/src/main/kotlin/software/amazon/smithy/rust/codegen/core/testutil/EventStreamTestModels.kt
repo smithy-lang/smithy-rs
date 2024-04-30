@@ -109,6 +109,7 @@ object EventStreamTestModels {
         val mediaType: String,
         val requestContentType: String,
         val responseContentType: String,
+        val eventStreamMessageContentType: String,
         val validTestStruct: String,
         val validMessageWithNoHeaderPayloadTraits: String,
         val validTestUnion: String,
@@ -130,6 +131,7 @@ object EventStreamTestModels {
                 mediaType = "application/json",
                 requestContentType = "application/vnd.amazon.eventstream",
                 responseContentType = "application/json",
+                eventStreamMessageContentType = "application/json",
                 validTestStruct = """{"someString":"hello","someInt":5}""",
                 validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                 validTestUnion = """{"Foo":"hello"}""",
@@ -145,6 +147,7 @@ object EventStreamTestModels {
                 mediaType = "application/x-amz-json-1.1",
                 requestContentType = "application/x-amz-json-1.1",
                 responseContentType = "application/x-amz-json-1.1",
+                eventStreamMessageContentType = "application/json",
                 validTestStruct = """{"someString":"hello","someInt":5}""",
                 validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
                 validTestUnion = """{"Foo":"hello"}""",
@@ -160,6 +163,7 @@ object EventStreamTestModels {
                 mediaType = "application/xml",
                 requestContentType = "application/vnd.amazon.eventstream",
                 responseContentType = "application/xml",
+                eventStreamMessageContentType = "application/xml",
                 validTestStruct =
                     """
                     <TestStruct>

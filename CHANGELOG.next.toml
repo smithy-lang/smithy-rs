@@ -10,50 +10,63 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[smithy-rs]]
-message = """
-Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
-
-```rust
-let config = my_service::Config::builder()
-    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
-    // ...
-    .build();
-```
-"""
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
 message = """
-Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+some methods prefixed with `wait_until` to the existing clients. These can be used to, for example
+in S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to
+have the status OK.
 
+Using a waiter looks like the following example for EC2:
 ```rust
-let config = aws_config::defaults(BehaviorVersion::latest())
-    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
-    .load()
+use aws_sdk_ec2::client::Waiters;
+
+let result = ec2_client.wait_until_instance_status_ok()
+    .instance_ids("some-instance-id")
+    .wait(Duration::from_secs(300))
     .await;
 ```
 """
-references = ["smithy-rs#3485"]
+references = ["aws-sdk-rust#400", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-authors = ["jdisanti"]
+message = """
+Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+some methods prefixed with `wait_until` to the existing clients.
+
+For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
+that waiter would look as follows:
+
+```rust
+use my_generated_client::client::Waiters;
+
+let result = client.wait_until_thing()
+    .thing_id("someId")
+    .wait(Duration::from_secs(120))
+    .await;
+```
+"""
+references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit."
-references = ["smithy-rs#3485"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version."
+references = ["smithy-rs#3601"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "Unions with unit target member shape are now fully supported"
-references = ["smithy-rs#2546"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
-author = "drganjoo"
+message = "Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request."
+references = ["smithy-rs#3603"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`aws_config::default_provider::use_dual_stack_provider` is now public instead of `pub(crate)`"
+references = ["aws-sdk-rust#879", "smithy-rs#3611"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"

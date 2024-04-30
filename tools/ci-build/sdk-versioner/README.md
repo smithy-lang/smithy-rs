@@ -7,17 +7,4 @@ within that directory, and modifies dependency lines that point to the AWS Rust 
 or its supporting crates. These dependencies can be updated to be based on file-system
 path, crates.io version, or both.
 
-Example updating SDK examples to use SDK version 0.5.0 with Smithy version 0.35.0:
-```bash
-$ sdk-versioner \
-  --sdk-version 0.5.0 \
-  --smithy-version 0.35.0 \
-  path/to/aws-doc-sdk-examples/rustv1
-```
-
-Example updating SDK examples to refer to local generated code:
-```bash
-$ sdk-versioner \
-  --sdk-path path/to/smithy-rs/aws/sdk/build/aws-sdk/sdk \
-  path/to/aws-doc-sdk-examples/rustv1
-```
+This tool is currently used to update all the dependencies of all examples to refer to the latest SDK version. See [aws/sdk/build.gradle.kts](../../../aws/sdk/build.gradle.kts) for more context.
