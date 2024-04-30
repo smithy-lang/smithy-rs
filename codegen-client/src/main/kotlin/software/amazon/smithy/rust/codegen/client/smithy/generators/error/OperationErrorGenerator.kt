@@ -289,7 +289,7 @@ class OperationErrorGenerator(
     }
 
     sealed class VariantMatch(name: String) : Section(name) {
-        object Unhandled : VariantMatch("Unhandled")
+        data object Unhandled : VariantMatch("Unhandled")
 
         data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
     }
@@ -311,7 +311,7 @@ class OperationErrorGenerator(
      *
      *  The field will always be bound as `_inner`.
      */
-    fun RustWriter.delegateToVariants(
+    private fun RustWriter.delegateToVariants(
         errors: List<StructureShape>,
         handler: (VariantMatch) -> Writable,
     ) {

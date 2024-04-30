@@ -59,11 +59,10 @@ class ServiceErrorGenerator(
     private val model = codegenContext.model
 
     private val allErrors =
-        operations.flatMap {
-            it.allErrors(model)
-        }.map { it.id }.distinctBy { it.getName(codegenContext.serviceShape) }
+        operations.asSequence().flatMap { it.allErrors(model) }.map { it.id }
+            .distinctBy { it.getName(codegenContext.serviceShape) }
             .map { codegenContext.model.expectShape(it, StructureShape::class.java) }
-            .sortedBy { it.id.getName(codegenContext.serviceShape) }
+            .sortedBy { it.id.getName(codegenContext.serviceShape) }.toList()
 
     private val sdkError = RuntimeType.sdkError(codegenContext.runtimeConfig)
 
@@ -98,15 +97,15 @@ class ServiceErrorGenerator(
                     *preludeScope,
                     "Debug" to RuntimeType.Debug,
                     "StdError" to RuntimeType.StdError,
-                    "WaiterError" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::waiters::error::WaiterError"),
+                    "WaiterError" to
+                        RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                            .resolve("client::waiters::error::WaiterError"),
                     "Unhandled" to unhandledError(codegenContext.runtimeConfig),
                 )
             }
             // event stream errors
-            operations.map { it.eventStreamErrors(codegenContext.model) }
-                .flatMap { it.entries }
-                .associate { it.key to it.value }
-                .forEach { (unionShape, errors) ->
+            operations.map { it.eventStreamErrors(codegenContext.model) }.flatMap { it.entries }
+                .associate { it.key to it.value }.forEach { (unionShape, errors) ->
                     renderImplFrom(
                         symbolProvider.symbolForEventStreamError(unionShape),
                         errors.map { it.id },

@@ -33,16 +33,16 @@ class RustWaiterMatcherGeneratorTest {
         private val rustCrate: RustCrate,
         matcherJson: String,
     ) {
-        val operationShape = codegenContext.model.lookup<OperationShape>("test#TestOperation")
-        val inputShape = operationShape.inputShape(codegenContext.model)
-        val outputShape = operationShape.outputShape(codegenContext.model)
-        val errorShape = codegenContext.model.lookup<StructureShape>("test#SomeError")
-        val inputSymbol = codegenContext.symbolProvider.toSymbol(inputShape)
-        val outputSymbol = codegenContext.symbolProvider.toSymbol(outputShape)
-        val errorSymbol = codegenContext.symbolProvider.toSymbol(errorShape)
+        private val operationShape = codegenContext.model.lookup<OperationShape>("test#TestOperation")
+        private val inputShape = operationShape.inputShape(codegenContext.model)
+        private val outputShape = operationShape.outputShape(codegenContext.model)
+        private val errorShape = codegenContext.model.lookup<StructureShape>("test#SomeError")
+        private val inputSymbol = codegenContext.symbolProvider.toSymbol(inputShape)
+        private val outputSymbol = codegenContext.symbolProvider.toSymbol(outputShape)
+        private val errorSymbol = codegenContext.symbolProvider.toSymbol(errorShape)
 
-        val matcher = SuccessMember.fromNode(Node.parse(matcherJson))
-        val matcherFn =
+        private val matcher = SuccessMember.fromNode(Node.parse(matcherJson))
+        private val matcherFn =
             RustWaiterMatcherGenerator(codegenContext, "TestOperation", inputShape, outputShape)
                 .generate(errorSymbol, matcher)
 

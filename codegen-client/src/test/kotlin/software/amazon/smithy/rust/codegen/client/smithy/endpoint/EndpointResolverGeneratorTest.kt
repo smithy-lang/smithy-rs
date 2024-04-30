@@ -36,7 +36,7 @@ class EndpointResolverGeneratorTest {
     }
 
     @Test
-    fun `test`() {
+    fun test() {
         `generate all rulesets`(testSuites()[0])
     }
 

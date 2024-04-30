@@ -271,7 +271,7 @@ class RustWaiterMatcherGenerator(
         // a nice side-effect of de-duplicating identical matchers within a given operation.
         val jsonValue = Node.printJson(matcher.toNode())
         val bytes = MessageDigest.getInstance("SHA-256").digest(jsonValue.toByteArray())
-        val hex = bytes.map { byte -> String.format("%02x", byte) }.joinToString("")
+        val hex = bytes.joinToString("") { byte -> String.format("%02x", byte) }
         return "match_${operationName.toSnakeCase()}_${hex.substring(0..16)}"
     }
 }

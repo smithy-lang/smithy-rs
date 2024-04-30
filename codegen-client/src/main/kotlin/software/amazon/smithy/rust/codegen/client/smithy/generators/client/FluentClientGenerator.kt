@@ -393,10 +393,9 @@ private fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: RustSymbo
  */
 internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
-    val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()
     // We generate Vec/HashMap helpers
     val renderedType =
-        when (outerType) {
+        when (val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()) {
             is RustType.Vec -> listOf(outerType.member)
             is RustType.HashMap -> listOf(outerType.key, outerType.member)
             else -> listOf(outerType)

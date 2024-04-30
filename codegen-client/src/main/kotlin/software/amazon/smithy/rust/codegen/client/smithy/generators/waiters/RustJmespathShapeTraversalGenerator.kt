@@ -151,18 +151,7 @@ data class GeneratedExpression(
         if (outputType.isDoubleReference()) {
             dereference(namer).convertToStrRef(namer)
         } else if (isEnum()) {
-            namer.safeName("_tmp").let { tmp ->
-                GeneratedExpression(
-                    identifier = tmp,
-                    outputType = RustType.Reference(null, RustType.Opaque("str")),
-                    outputShape = TraversedShape.String(null),
-                    output =
-                        output +
-                            writable {
-                                rust("let $tmp = $identifier.as_str();")
-                            },
-                ).convertToStrRef(namer)
-            }
+            exprToStrRef(namer)
         } else if (!outputType.isString()) {
             namer.safeName("_tmp").let { tmp ->
                 GeneratedExpression(
@@ -177,20 +166,23 @@ data class GeneratedExpression(
                 ).convertToStrRef(namer)
             }
         } else if (!outputType.isStr()) {
-            namer.safeName("_tmp").let { tmp ->
-                GeneratedExpression(
-                    identifier = tmp,
-                    outputType = RustType.Reference(null, RustType.Opaque("str")),
-                    outputShape = TraversedShape.String(null),
-                    output =
-                        output +
-                            writable {
-                                rust("let $tmp = $identifier.as_str();")
-                            },
-                ).convertToStrRef(namer)
-            }
+            exprToStrRef(namer)
         } else {
             this
+        }
+
+    private fun exprToStrRef(namer: SafeNamer): GeneratedExpression =
+        namer.safeName("_tmp").let { tmp ->
+            GeneratedExpression(
+                identifier = tmp,
+                outputType = RustType.Reference(null, RustType.Opaque("str")),
+                outputShape = TraversedShape.String(null),
+                output =
+                    output +
+                        writable {
+                            rust("let $tmp = $identifier.as_str();")
+                        },
+            ).convertToStrRef(namer)
         }
 
     /** Converts a number expression into a specific number type */
@@ -550,7 +542,7 @@ class RustJmespathShapeTraversalGenerator(
                 output =
                     writable {
                         expressions.forEach { it.output(this) }
-                        rust("let $ident = vec![${expressions.map { it.identifier }.joinToString(", ")}];")
+                        rust("let $ident = vec![${expressions.joinToString(", ") { it.identifier }}];")
                     },
             )
         }

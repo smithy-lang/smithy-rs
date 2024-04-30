@@ -6,15 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 sealed class Ownership {
-    object Borrowed : Ownership() {
-        override fun toString(): String {
-            return "Borrowed"
-        }
-    }
+    data object Borrowed : Ownership()
 
-    object Owned : Ownership() {
-        override fun toString(): String {
-            return "Owned"
-        }
-    }
+    data object Owned : Ownership()
 }

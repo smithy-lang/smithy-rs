@@ -564,9 +564,9 @@ class DefaultProtocolTestGenerator(
 
     companion object {
         sealed class Action {
-            object Request : Action()
+            data object Request : Action()
 
-            object Response : Action()
+            data object Response : Action()
         }
 
         data class FailingTest(val service: String, val id: String, val action: Action)
@@ -575,14 +575,14 @@ class DefaultProtocolTestGenerator(
         // These could be configured via runtime configuration, but since this won't be long-lasting,
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
-        private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private val RestJson = "aws.protocoltests.restjson#RestJson"
-        private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val AwsQuery = "aws.protocoltests.query#AwsQuery"
-        private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
+        private const val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
+        private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestXml = "aws.protocoltests.restxml#RestXml"
+        private const val AwsQuery = "aws.protocoltests.query#AwsQuery"
+        private const val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
         private val ExpectFail =
-            setOf<FailingTest>(
+            setOf(
                 // Failing because we don't serialize default values if they match the default
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
@@ -593,7 +593,7 @@ class DefaultProtocolTestGenerator(
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests =
-            setOf<String>(
+            setOf(
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
                 "SDKAppendedGzipAfterProvidedEncoding_restJson1",
                 "SDKAppendedGzipAfterProvidedEncoding_restXml",

@@ -9,5 +9,5 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 
 sealed class CustomizableOperationSection(name: String) : AdHocSection(name) {
     /** Write custom code into a customizable operation's impl block */
-    object CustomizableOperationImpl : CustomizableOperationSection("CustomizableOperationImpl")
+    data object CustomizableOperationImpl : CustomizableOperationSection("CustomizableOperationImpl")
 }

@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.testutil.BasicTestModels
@@ -25,11 +24,6 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class ServiceConfigGeneratorTest {
-    private fun codegenScope(rc: RuntimeConfig): Array<Pair<String, Any>> =
-        arrayOf(
-            "ConfigBag" to RuntimeType.configBag(rc),
-        )
-
     @Test
     fun `idempotency token when used`() {
         fun model(trait: String) =
@@ -134,7 +128,7 @@ internal class ServiceConfigGeneratorTest {
                         writable {
                             rustTemplate(
                                 """
-                                ${section.builder} = ${section.builder}.config_field(${section.config_bag}.load::<#{T}>().map(|u| u.0).unwrap());
+                                ${section.builder} = ${section.builder}.config_field(${section.configBag}.load::<#{T}>().map(|u| u.0).unwrap());
                                 """,
                                 "T" to
                                     configParamNewtype(
@@ -162,7 +156,7 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        clientIntegrationTest(BasicTestModels.AwsJson10TestModel, additionalDecorators = listOf(serviceDecorator)) { ctx, rustCrate ->
+        clientIntegrationTest(BasicTestModels.AwsJson10TestModel, additionalDecorators = listOf(serviceDecorator)) { _, rustCrate ->
             rustCrate.withModule(ClientRustModule.config) {
                 unitTest(
                     "set_config_fields",
