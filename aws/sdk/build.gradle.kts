@@ -155,6 +155,9 @@ fun generateSmithyBuild(services: AwsServices): String {
     """
 }
 
+/**
+ * Task to generate smithyBuild.json dynamically
+ */
 tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
@@ -165,6 +168,7 @@ tasks.register("generateSmithyBuild") {
     doFirst {
         layout.buildDirectory.file("smithy-build.json").get().asFile.writeText(generateSmithyBuild(awsServices))
     }
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3599)
     outputs.upToDateWhen { false }
 }
 

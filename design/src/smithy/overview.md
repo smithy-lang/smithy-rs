@@ -1,7 +1,7 @@
 # Smithy
 The Rust SDK uses Smithy models and code generation tooling to generate an SDK. Smithy is an open source IDL (interface design language) developed by Amazon. Although the Rust SDK uses Smithy models for AWS services, smithy-rs and Smithy models in general are not AWS specific.
 
-Design documentation here covers both our implementation of Smithy Primitives (e.g. simple shape) as well as more complex Smithy traits like [Endpoint](./endpoint.md).
+Design documentation here covers both our implementation of Smithy Primitives (e.g. simple shape) as well as more complex Smithy traits like `Endpoint`.
 
 ## Internals
 Smithy introduces a few concepts that are defined here:
