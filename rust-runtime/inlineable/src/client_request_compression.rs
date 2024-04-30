@@ -198,11 +198,10 @@ impl Storable for RequestMinCompressionSizeBytes {
 
 #[cfg(test)]
 mod tests {
-    use http_body::Body;
-
     use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_types::body::SdkBody;
+    use http_body::Body;
 
     use super::wrap_request_body_in_compressed_body;
 
