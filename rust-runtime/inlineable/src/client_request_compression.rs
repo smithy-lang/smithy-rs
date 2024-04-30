@@ -165,7 +165,7 @@ fn wrap_request_body_in_compressed_body(
 }
 
 #[derive(Debug, Copy, Clone, Default)]
-pub(crate) struct DisableRequestCompression(bool);
+pub(crate) struct DisableRequestCompression(pub(crate) bool);
 
 impl From<bool> for DisableRequestCompression {
     fn from(value: bool) -> Self {
@@ -178,7 +178,7 @@ impl Storable for DisableRequestCompression {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub(crate) struct RequestMinCompressionSizeBytes(u32);
+pub(crate) struct RequestMinCompressionSizeBytes(pub(crate) u32);
 
 impl Default for RequestMinCompressionSizeBytes {
     fn default() -> Self {

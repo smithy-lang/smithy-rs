@@ -56,6 +56,8 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
+            "DisableRequestCompression" to RuntimeType.clientRequestCompression(runtimeConfig).resolve("DisableRequestCompression"),
+            "RequestMinCompressionSizeBytes" to RuntimeType.clientRequestCompression(runtimeConfig).resolve("RequestMinCompressionSizeBytes"),
             "Storable" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Storable"),
             "StoreReplace" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::StoreReplace"),
             *preludeScope,
@@ -69,12 +71,12 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                         """
                         /// Returns the `disable request compression` setting, if it was provided.
                         pub fn disable_request_compression(&self) -> #{Option}<bool> {
-                            self.config.load::<DisableRequestCompression>().map(|it| it.0)
+                            self.config.load::<#{DisableRequestCompression}>().map(|it| it.0)
                         }
 
                         /// Returns the `request minimum compression size in bytes`, if it was provided.
                         pub fn request_min_compression_size_bytes(&self) -> #{Option}<u32> {
-                            self.config.load::<RequestMinCompressionSizeBytes>().map(|it| it.0)
+                            self.config.load::<#{RequestMinCompressionSizeBytes}>().map(|it| it.0)
                         }
                         """,
                         *codegenScope,
@@ -103,13 +105,13 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                         """
                         /// Sets the `disable request compression` used when making requests.
                         pub fn set_disable_request_compression(&mut self, disable_request_compression: #{Option}<bool>) -> &mut Self {
-                            self.config.store_or_unset::<DisableRequestCompression>(disable_request_compression.map(Into::into));
+                            self.config.store_or_unset::<#{DisableRequestCompression}>(disable_request_compression.map(Into::into));
                             self
                         }
 
                         /// Sets the `request minimum compression size in bytes` used when making requests.
                         pub fn set_request_min_compression_size_bytes(&mut self, request_min_compression_size_bytes: #{Option}<u32>) -> &mut Self {
-                            self.config.store_or_unset::<RequestMinCompressionSizeBytes>(request_min_compression_size_bytes.map(Into::into));
+                            self.config.store_or_unset::<#{RequestMinCompressionSizeBytes}>(request_min_compression_size_bytes.map(Into::into));
                             self
                         }
                         """,
@@ -121,9 +123,9 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                     rustTemplate(
                         """
                         ${section.builder}.set_disable_request_compression(
-                            ${section.configBag}.load::<DisableRequestCompression>().cloned().map(|it| it.0));
+                            ${section.configBag}.load::<#{DisableRequestCompression}>().cloned().map(|it| it.0));
                         ${section.builder}.set_request_min_compression_size_bytes(
-                            ${section.configBag}.load::<RequestMinCompressionSizeBytes>().cloned().map(|it| it.0));
+                            ${section.configBag}.load::<#{RequestMinCompressionSizeBytes}>().cloned().map(|it| it.0));
                         """,
                         *codegenScope,
                     )
