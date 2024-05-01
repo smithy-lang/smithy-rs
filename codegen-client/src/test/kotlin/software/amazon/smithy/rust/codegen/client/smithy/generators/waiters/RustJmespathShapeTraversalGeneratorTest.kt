@@ -97,6 +97,7 @@ class RustJmespathShapeTraversalGeneratorTest {
                             #{Output}::builder()
                                 .primitives(primitives.clone())
                                 .lists(#{EntityLists}::builder()
+                                    .booleans(true)
                                     .shorts(1).shorts(2)
                                     .integers(3).integers(4)
                                     .longs(5).longs(6)
@@ -143,10 +144,11 @@ class RustJmespathShapeTraversalGeneratorTest {
                 when {
                     dualBinding ->
                         listOf(
-                            TraversalBinding.Named("input", "_input", inputShape),
-                            TraversalBinding.Named("output", "_output", outputShape),
+                            TraversalBinding.Named("input", "_input", TraversedShape.from(model, inputShape)),
+                            TraversalBinding.Named("output", "_output", TraversedShape.from(model, outputShape)),
                         )
-                    else -> listOf(TraversalBinding.Global("_output", outputShape))
+
+                    else -> listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape)))
                 }
             val generated = generator.generate(parsed, bindings)
             rustCrate.unitTest(testName) {
@@ -186,10 +188,11 @@ class RustJmespathShapeTraversalGeneratorTest {
                     when {
                         dualBinding ->
                             listOf(
-                                TraversalBinding.Named("input", "_input", inputShape),
-                                TraversalBinding.Named("output", "_output", outputShape),
+                                TraversalBinding.Named("input", "_input", TraversedShape.from(model, inputShape)),
+                                TraversalBinding.Named("output", "_output", TraversedShape.from(model, outputShape)),
                             )
-                        else -> listOf(TraversalBinding.Global("_output", outputShape))
+
+                        else -> listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape)))
                     }
                 generator.generate(parsed, bindings).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown InvalidJmesPathTraversalException")
@@ -205,7 +208,10 @@ class RustJmespathShapeTraversalGeneratorTest {
             try {
                 val generator = RustJmespathShapeTraversalGenerator(codegenContext)
                 val parsed = JmespathExpression.parse(expression)
-                generator.generate(parsed, listOf(TraversalBinding.Global("_output", outputShape))).output(RustWriter.forModule("unsupported"))
+                generator.generate(
+                    parsed,
+                    listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape))),
+                ).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown UnsupportedJmesPathException")
             } catch (ex: UnsupportedJmesPathException) {
                 ex.message shouldContain contains
@@ -306,7 +312,11 @@ class RustJmespathShapeTraversalGeneratorTest {
         test("input_and_output_bool_true", "input.trueBool && output.primitives.boolean", expectTrue)
         test("input_and_output_bool_false", "input.falseBool && output.primitives.boolean", expectFalse)
 
-        invalid("input.doesNotExist && output.primitives.boolean", "Member `doesNotExist` doesn't exist", dualBinding = true)
+        invalid(
+            "input.doesNotExist && output.primitives.boolean",
+            "Member `doesNotExist` doesn't exist",
+            dualBinding = true,
+        )
     }
 
     private fun TestCase.flattenExpressions() {
@@ -362,6 +372,9 @@ class RustJmespathShapeTraversalGeneratorTest {
 
         test("strings_contains_false", "contains(lists.strings, 'foo')", expectFalse)
         test("strings_contains_true", "contains(lists.strings, 'two')", expectTrue)
+
+        test("bools_contains_false", "contains(lists.booleans, `false`)", expectFalse)
+        test("bools_contains_true", "contains(lists.booleans, `true`)", expectTrue)
 
         test("i16s_contains_false", "contains(lists.shorts, `0`)", expectFalse)
         test("i16s_contains_true", "contains(lists.shorts, `1`)", expectTrue)

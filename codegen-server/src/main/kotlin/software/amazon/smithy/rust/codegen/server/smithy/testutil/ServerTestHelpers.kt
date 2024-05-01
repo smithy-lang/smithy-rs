@@ -81,6 +81,7 @@ fun serverTestRustSettings(
     codegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
+    minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
 ) = ServerRustSettings(
     service,
@@ -93,6 +94,7 @@ fun serverTestRustSettings(
     codegenConfig,
     license,
     examplesUri,
+    minimumSupportedRustVersion,
     customizationConfig,
 )
 

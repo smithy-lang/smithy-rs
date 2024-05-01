@@ -36,6 +36,7 @@ fun testClientRustSettings(
     codegenConfig: ClientCodegenConfig = ClientCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
+    minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
 ) = ClientRustSettings(
     service,
@@ -48,6 +49,7 @@ fun testClientRustSettings(
     codegenConfig,
     license,
     examplesUri,
+    minimumSupportedRustVersion,
     customizationConfig,
 )
 

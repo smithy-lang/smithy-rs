@@ -111,7 +111,7 @@ object EventStreamMarshallTestCases {
                 let headers = headers_to_map(message.headers());
                 assert_eq!(&str_header("event"), *headers.get(":message-type").unwrap());
                 assert_eq!(&str_header("MessageWithStruct"), *headers.get(":event-type").unwrap());
-                assert_eq!(&str_header(${testCase.requestContentType.dq()}), *headers.get(":content-type").unwrap());
+                assert_eq!(&str_header(${testCase.eventStreamMessageContentType.dq()}), *headers.get(":content-type").unwrap());
 
                 validate_body(
                     message.payload(),
@@ -146,7 +146,7 @@ object EventStreamMarshallTestCases {
                 let headers = headers_to_map(message.headers());
                 assert_eq!(&str_header("event"), *headers.get(":message-type").unwrap());
                 assert_eq!(&str_header("MessageWithUnion"), *headers.get(":event-type").unwrap());
-                assert_eq!(&str_header(${testCase.requestContentType.dq()}), *headers.get(":content-type").unwrap());
+                assert_eq!(&str_header(${testCase.eventStreamMessageContentType.dq()}), *headers.get(":content-type").unwrap());
 
                 validate_body(
                     message.payload(),
@@ -236,7 +236,7 @@ object EventStreamMarshallTestCases {
                 let headers = headers_to_map(message.headers());
                 assert_eq!(&str_header("event"), *headers.get(":message-type").unwrap());
                 assert_eq!(&str_header("MessageWithNoHeaderPayloadTraits"), *headers.get(":event-type").unwrap());
-                assert_eq!(&str_header(${testCase.requestContentType.dq()}), *headers.get(":content-type").unwrap());
+                assert_eq!(&str_header(${testCase.eventStreamMessageContentType.dq()}), *headers.get(":content-type").unwrap());
 
                 validate_body(
                     message.payload(),

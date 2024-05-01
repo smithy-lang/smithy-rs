@@ -74,7 +74,15 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         )
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/json", "application/json", "application/vnd.amazon.eventstream"))
+        RestJsonHttpBindingResolver(
+            codegenContext.model,
+            ProtocolContentTypes(
+                requestDocument = "application/json",
+                responseDocument = "application/json",
+                eventStreamContentType = "application/vnd.amazon.eventstream",
+                eventStreamMessageContentType = "application/json",
+            ),
+        )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 

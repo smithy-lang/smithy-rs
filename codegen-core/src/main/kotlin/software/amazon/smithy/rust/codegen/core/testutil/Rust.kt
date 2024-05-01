@@ -466,6 +466,7 @@ private fun String.intoCrate(
                 moduleDescription = null,
                 moduleLicense = null,
                 moduleRepository = null,
+                minimumSupportedRustVersion = null,
                 writer = this,
                 dependencies = deps,
             ).render()
