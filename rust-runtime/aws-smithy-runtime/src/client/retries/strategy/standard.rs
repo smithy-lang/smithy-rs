@@ -147,7 +147,15 @@ impl StandardRetryStrategy {
                         // The initial attempt shouldn't count towards backoff calculations, so we subtract it
                         request_attempts - 1,
                     );
-                    Ok(Duration::from_secs_f64(backoff).min(retry_cfg.max_backoff()))
+                    match Duration::try_from_secs_f64(backoff) {
+                        Ok(duration) => Ok(duration.min(retry_cfg.max_backoff())),
+                        Err(e) => {
+                            tracing::warn!(
+                                "could not create `Duration` for exponential backoff: {e}"
+                            );
+                            Err(ShouldAttempt::No)
+                        }
+                    }
                 }
             }
             RetryAction::RetryForbidden | RetryAction::NoActionIndicated => {
@@ -417,6 +425,21 @@ mod tests {
             RetryConfig::standard()
                 .with_use_static_exponential_base(true)
                 .with_max_attempts(max_attempts),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        assert_eq!(ShouldAttempt::No, actual);
+    }
+
+    #[test]
+    fn should_not_panic_when_exponential_backoff_duration_could_not_be_created() {
+        let (ctx, rc, cfg) = set_up_cfg_and_context(
+            ErrorKind::TransientError,
+            // Greater than 32 when subtracted by 1 in `calculate_backoff`, causing overflow in `calculate_exponential_backoff`
+            33,
+            RetryConfig::standard().with_max_attempts(100), // Any value greater than 33 will do
         );
         let strategy = StandardRetryStrategy::new();
         let actual = strategy
