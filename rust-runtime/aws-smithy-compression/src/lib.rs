@@ -164,8 +164,21 @@ impl FromStr for CompressionAlgorithm {
 }
 
 impl CompressionAlgorithm {
-    /// Return the `HttpChecksum` implementor for this algorithm
-    pub fn into_impl(self, options: &CompressionOptions) -> Box<dyn http::RequestCompressor> {
+    /// Return the `HttpChecksum` implementor for this algorithm.
+    pub fn into_impl_http_body_0_4_x(
+        self,
+        options: &CompressionOptions,
+    ) -> Box<dyn http::http_body_0_4_x::RequestCompressor> {
+        match self {
+            Self::Gzip => Box::new(gzip::Gzip::from(options)),
+        }
+    }
+
+    /// Return the `HttpChecksum` implementor for this algorithm.
+    pub fn into_impl_http_body_1_x(
+        self,
+        options: &CompressionOptions,
+    ) -> Box<dyn http::http_body_1_x::RequestCompressor> {
         match self {
             Self::Gzip => Box::new(gzip::Gzip::from(options)),
         }

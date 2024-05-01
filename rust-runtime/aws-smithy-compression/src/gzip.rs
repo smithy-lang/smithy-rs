@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::http::RequestCompressor;
 use crate::{Compression, CompressionOptions};
 use aws_smithy_runtime_api::box_error::BoxError;
 use flate2::write::GzEncoder;
-use http::HeaderValue;
 use std::fmt;
 use std::io::prelude::*;
 
@@ -32,9 +30,19 @@ impl Compression for Gzip {
     }
 }
 
-impl RequestCompressor for Gzip {
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        HeaderValue::from_static("gzip")
+mod http_body_0_4_x {
+    impl crate::http::http_body_0_4_x::RequestCompressor for super::Gzip {
+        fn header_value(self: Box<Self>) -> http_0_2::HeaderValue {
+            http_0_2::HeaderValue::from_static("gzip")
+        }
+    }
+}
+
+mod http_body_1_x {
+    impl crate::http::http_body_1_x::RequestCompressor for super::Gzip {
+        fn header_value(self: Box<Self>) -> http_1_0::HeaderValue {
+            http_1_0::HeaderValue::from_static("gzip")
+        }
     }
 }
 
