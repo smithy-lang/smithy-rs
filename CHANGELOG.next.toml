@@ -17,7 +17,7 @@ or newer. If you're using `BehaviorVersion::latest()`, you will get this change 
 allows clients created from `SdkConfig` to use the same cache instance by default resulting in fewer cache misses
 when using multiple clients.
 """
-references = ["smithy-rs#3485"]
+references = ["smithy-rs#3427"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "aajtodd"
 
