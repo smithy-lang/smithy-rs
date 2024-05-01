@@ -10,3 +10,10 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+
+[[smithy-rs]]
+message = "Implement Debug for DateTime"
+references = ["smithy-rs#3161"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "mnissenb"
