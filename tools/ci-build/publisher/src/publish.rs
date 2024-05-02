@@ -4,36 +4,25 @@
  */
 
 use crate::cargo;
-use crate::package::PackageHandle;
-use crates_io_api::{AsyncClient, Error};
-use once_cell::sync::Lazy;
-use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
-use smithy_rs_tool_common::shell::ShellOperation;
-use std::path::Path;
+use anyhow::Result;
+use smithy_rs_tool_common::{
+    index::CratesIndex,
+    retry::{run_with_retry, BoxError, ErrorClass},
+};
+use smithy_rs_tool_common::{package::PackageHandle, shell::ShellOperation};
 use std::time::Duration;
+use std::{path::Path, sync::Arc};
 use tracing::info;
 
-pub static CRATES_IO_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
-    AsyncClient::new(
-        "AWS_RUST_SDK_PUBLISHER (aws-sdk-rust@amazon.com)",
-        Duration::from_secs(1),
-    )
-    .expect("valid client")
-});
-
-/// Return `true` if there is at least one version published on crates.io associated with
-/// the specified crate name.
-#[tracing::instrument]
-pub async fn has_been_published_on_crates_io(crate_name: &str) -> anyhow::Result<bool> {
-    match CRATES_IO_CLIENT.get_crate(crate_name).await {
-        Ok(_) => Ok(true),
-        Err(Error::NotFound(_)) => Ok(false),
-        Err(e) => Err(e.into()),
-    }
+pub async fn is_published(index: Arc<CratesIndex>, crate_name: &str) -> Result<bool> {
+    let crate_name = crate_name.to_string();
+    let versions =
+        tokio::task::spawn_blocking(move || index.published_versions(&crate_name)).await??;
+    Ok(!versions.is_empty())
 }
 
 #[tracing::instrument]
-pub async fn publish(handle: &PackageHandle, crate_path: &Path) -> anyhow::Result<()> {
+pub async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
         &format!("Publishing `{}`", handle),

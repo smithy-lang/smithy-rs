@@ -57,7 +57,7 @@
 //! # }
 //! ```
 //!
-//! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
+//! [sensitive trait]: https://smithy.io/2.0/spec/documentation-traits.html#sensitive-trait
 
 mod plugin;
 pub mod sensitivity;

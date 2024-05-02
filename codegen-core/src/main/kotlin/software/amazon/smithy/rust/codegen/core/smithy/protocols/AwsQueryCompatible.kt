@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
@@ -38,6 +39,9 @@ class AwsQueryCompatibleHttpBindingResolver(
 
     override fun responseContentType(operationShape: OperationShape): String =
         awsJsonHttpBindingResolver.requestContentType(operationShape)
+
+    override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
+        awsJsonHttpBindingResolver.eventStreamMessageContentType(memberShape)
 }
 
 class AwsQueryCompatible(

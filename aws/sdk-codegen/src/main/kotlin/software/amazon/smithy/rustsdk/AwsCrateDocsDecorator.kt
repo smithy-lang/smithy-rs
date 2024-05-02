@@ -127,7 +127,6 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             check(moduleVersion.isNotEmpty() && moduleVersion[0].isDigit())
 
             val moduleName = codegenContext.settings.moduleName
-            val stableVersion = !moduleVersion.startsWith("0.")
             val description =
                 normalizeDescription(
                     codegenContext.moduleName,
@@ -138,18 +137,6 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             if (includeHeader) {
                 template(asComments, escape("# $moduleName\n"))
-            }
-
-            // TODO(PostGA): Remove warning banner conditionals.
-            // NOTE: when you change this, you must also change SDK_README.md.hb
-            if (!stableVersion) {
-                template(
-                    asComments,
-                    """
-                    **Please Note: The SDK is currently released as a developer preview, without support or assistance for use
-                    on production workloads. Any use in production is at your own risk.**${"\n"}
-                    """.trimIndent(),
-                )
             }
 
             if (description.isNotBlank()) {

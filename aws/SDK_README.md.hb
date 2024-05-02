@@ -5,7 +5,6 @@ It gets instantiated and copied into the build artifacts by the `aws:sdk:assembl
 Available template arguments:
 - `{{sdk_version_<crate_name_in_snake_case>}}` (e.g., `{{sdk_version_aws_config}}` for the `aws-config` crate): the version number of the given crate (just the number, no `v` prefix)
 - `{{msrv}}`: The MSRV Rust compiler version (just the number, no `v` prefix)
-- `{{warning_banner}}`: Show the production warning banner
 --}}
 <!--
 IMPORTANT:
@@ -16,10 +15,6 @@ To update it, edit the `aws/SDK_README.md.hb` Handlebars template in that reposi
 # The AWS SDK for Rust [![Docs](https://img.shields.io/badge/docs-blue)](https://awslabs.github.io/aws-sdk-rust/) ![MSRV](https://img.shields.io/badge/msrv-{{msrv}}-red) [![Usage Guide](https://img.shields.io/badge/Developer_Guide-blue)](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)
 
 This repo contains the AWS SDK for Rust and its [public roadmap](https://github.com/orgs/awslabs/projects/50/views/1).
-
-{{#if warning_banner}}
-**Please Note**: The SDK is currently released as a developer preview, without support or assistance for use on production workloads. Any use in production is at your own risk.
-{{/if}}
 
 The SDK is code generated from [Smithy models](https://smithy.io/2.0/index.html) that represent each AWS service.
 The code used to generate the SDK can be found in [smithy-rs](https://github.com/smithy-lang/smithy-rs).
@@ -97,7 +92,10 @@ If you are interested in contributing to the SDK, please take a look at [CONTRIB
 
 ## Supported Rust Versions (MSRV)
 
-The SDK currently requires a minimum of Rust {{msrv}}, and is not guaranteed to build on compiler versions earlier than that. While we are still in alpha, we will be keeping the minimum compiler version two releases behind the latest stable release where possible (so if the latest stable were 1.55, we would be on 1.53). However, we are not making any guarantees around this at present. Increases in minimum required Rust version will be called out in the Release Notes for new releases of the SDK.
+The SDK currently requires a minimum of Rust {{msrv}}, and is not guaranteed to build on compiler versions
+earlier than that. We keep the minimum compiler version two releases behind the latest stable release where
+possible (so if the latest stable were 1.55, we would support 1.53). Increases in minimum required Rust
+version will be called out in the Release Notes for new releases of the SDK.
 
 ## Additional Resources
 

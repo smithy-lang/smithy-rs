@@ -52,8 +52,12 @@ class S3Decorator : ClientCodegenDecorator {
     private val logger: Logger = Logger.getLogger(javaClass.name)
     private val invalidXmlRootAllowList =
         setOf(
+            // To work around https://github.com/awslabs/aws-sdk-rust/issues/991
+            ShapeId.from("com.amazonaws.s3#CreateSessionOutput"),
             // API returns GetObjectAttributes_Response_ instead of Output
             ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
+            // API returns ListAllMyDirectoryBucketsResult instead of ListDirectoryBucketsOutput
+            ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
         )
 
     override fun protocols(

@@ -22,6 +22,7 @@ jobs:
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     name: Save a docker login token
+    timeout-minutes: 10
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
@@ -31,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Attempt to load a docker login password
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -51,6 +52,7 @@ jobs:
     name: Acquire Base Image
     needs: save-docker-login-token
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -58,7 +60,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
     - name: Acquire base image
@@ -67,7 +69,7 @@ jobs:
         DOCKER_BUILDKIT: 1
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Acquire credentials
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -91,3 +93,5 @@ jobs:
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}

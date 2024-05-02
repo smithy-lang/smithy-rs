@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
+internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "http_request_checksum", visibility = Visibility.PUBCRATE,
@@ -34,6 +34,7 @@ private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
             CargoDependency.Http,
             CargoDependency.HttpBody,
             CargoDependency.Tracing,
+            AwsCargoDependency.awsRuntime(this).withFeature("http-02x"),
             CargoDependency.smithyChecksums(this),
             CargoDependency.smithyHttp(this),
             CargoDependency.smithyRuntimeApiClient(this),
@@ -105,7 +106,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 }
 
 // This generator was implemented based on this spec:
-// https://smithy-lang.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
+// https://smithy.io/2.0/aws/aws-core.html#http-request-checksums
 class HttpRequestChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,

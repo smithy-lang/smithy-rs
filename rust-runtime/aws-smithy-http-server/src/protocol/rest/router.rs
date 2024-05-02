@@ -95,10 +95,7 @@ where
 impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (RequestSpec, S)>>(iter: T) -> Self {
-        let mut routes: Vec<(RequestSpec, S)> = iter
-            .into_iter()
-            .map(|(request_spec, svc)| (request_spec, svc))
-            .collect();
+        let mut routes: Vec<(RequestSpec, S)> = iter.into_iter().collect();
 
         // Sort them once by specificity, with the more specific routes sorted before the less
         // specific ones, so that when routing a request we can simply iterate through the routes
@@ -167,10 +164,7 @@ mod tests {
         ];
 
         // Test both RestJson1 and RestXml routers.
-        let router: RestRouter<_> = request_specs
-            .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
-            .collect();
+        let router: RestRouter<_> = request_specs.into_iter().collect();
 
         let hits = vec![
             ("A", Method::GET, "/a/b/c"),
@@ -255,10 +249,7 @@ mod tests {
             ),
         ];
 
-        let router: RestRouter<_> = request_specs
-            .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
-            .collect();
+        let router: RestRouter<_> = request_specs.into_iter().collect();
 
         let hits = vec![
             ("A1", Method::GET, "/a/foo"),

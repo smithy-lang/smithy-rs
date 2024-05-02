@@ -64,12 +64,14 @@ object CrateSet {
             "aws-smithy-http-tower",
             "aws-smithy-json",
             "aws-smithy-mocks-experimental",
+            "aws-smithy-experimental",
             "aws-smithy-protocol-test",
             "aws-smithy-query",
             "aws-smithy-runtime",
             "aws-smithy-runtime-api",
             "aws-smithy-types",
             "aws-smithy-types-convert",
+            "aws-smithy-wasm",
             "aws-smithy-xml",
         ).map { Crate(it, version(it)) }
 

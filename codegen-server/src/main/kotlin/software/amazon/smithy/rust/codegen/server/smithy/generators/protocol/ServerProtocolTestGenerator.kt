@@ -627,7 +627,7 @@ class ServerProtocolTestGenerator(
         if (testCase.body.isEmpty) return
 
         val httpMalformedResponseBodyDefinition = testCase.body.get()
-        // From https://awslabs.github.io/smithy/1.0/spec/http-protocol-compliance-tests.html?highlight=httpresponsetest#httpmalformedresponsebodyassertion
+        // From https://smithy.io/2.0/additional-specs/http-protocol-compliance-tests.html#httpmalformedresponsebodyassertion
         //
         //     A union describing the assertion to run against the response body. As it is a union, exactly one
         //     member must be set.
@@ -805,6 +805,7 @@ class ServerProtocolTestGenerator(
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
         private const val AwsJson10 = "aws.protocoltests.json10#JsonRpc10"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
+        private const val RestJsonExtras = "aws.protocoltests.restjson#RestJsonExtras"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -910,61 +911,9 @@ class ServerProtocolTestGenerator(
                 // RestXml S3 tests that fail to compile
                 "S3EscapeObjectKeyInUriLabel",
                 "S3EscapePathObjectKeyInUriLabel",
+                "S3PreservesLeadingDotSegmentInUriLabel",
+                "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
-
-        private fun fixRestJsonAllQueryStringTypes(
-            testCase: HttpRequestTestCase,
-            @Suppress("UNUSED_PARAMETER")
-            operationShape: OperationShape,
-        ): HttpRequestTestCase =
-            testCase.toBuilder().params(
-                Node.parse(
-                    """
-                    {
-                        "queryString": "Hello there",
-                        "queryStringList": ["a", "b", "c"],
-                        "queryStringSet": ["a", "b", "c"],
-                        "queryByte": 1,
-                        "queryShort": 2,
-                        "queryInteger": 3,
-                        "queryIntegerList": [1, 2, 3],
-                        "queryIntegerSet": [1, 2, 3],
-                        "queryLong": 4,
-                        "queryFloat": 1.1,
-                        "queryDouble": 1.1,
-                        "queryDoubleList": [1.1, 2.1, 3.1],
-                        "queryBoolean": true,
-                        "queryBooleanList": [true, false, true],
-                        "queryTimestamp": 1,
-                        "queryTimestampList": [1, 2, 3],
-                        "queryEnum": "Foo",
-                        "queryIntegerEnum": 1,
-                        "queryIntegerEnumList": [1,2,3],
-                        "queryEnumList": ["Foo", "Baz", "Bar"],
-                        "queryParamsMapOfStringList": {
-                            "String": ["Hello there"],
-                            "StringList": ["a", "b", "c"],
-                            "StringSet": ["a", "b", "c"],
-                            "Byte": ["1"],
-                            "Short": ["2"],
-                            "Integer": ["3"],
-                            "IntegerList": ["1", "2", "3"],
-                            "IntegerSet": ["1", "2", "3"],
-                            "Long": ["4"],
-                            "Float": ["1.1"],
-                            "Double": ["1.1"],
-                            "DoubleList": ["1.1", "2.1", "3.1"],
-                            "Boolean": ["true"],
-                            "BooleanList": ["true", "false", "true"],
-                            "Timestamp": ["1970-01-01T00:00:01Z"],
-                            "TimestampList": ["1970-01-01T00:00:01Z", "1970-01-01T00:00:02Z", "1970-01-01T00:00:03Z"],
-                            "Enum": ["Foo"],
-                            "EnumList": ["Foo", "Baz", "Bar"]
-                        }
-                    }
-                    """.trimMargin(),
-                ).asObjectNode().get(),
-            ).build()
 
         // TODO(https://github.com/awslabs/smithy/issues/1506)
         private fun fixRestJsonMalformedPatternReDOSString(

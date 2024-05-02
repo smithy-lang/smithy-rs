@@ -102,6 +102,31 @@ data class InfallibleEnumType(
                     *preludeScope,
                     "UnknownVariantError" to unknownVariantError(),
                 )
+
+                rustTemplate(
+                    """
+                    impl #{Display} for ${context.enumName} {
+                        fn fmt(&self, f: &mut #{Fmt}::Formatter) -> #{Fmt}::Result {
+                            match self {
+                                #{matchArms}
+                            }
+                        }
+                    }
+                    """,
+                    "Display" to RuntimeType.Display,
+                    "Fmt" to RuntimeType.stdFmt,
+                    "matchArms" to
+                        writable {
+                            context.sortedMembers.forEach { member ->
+                                rust(
+                                    """
+                                    ${context.enumName}::${member.derivedName()} => write!(f, ${member.value.dq()}),
+                                    """,
+                                )
+                            }
+                            rust("""${context.enumName}::Unknown(value) => write!(f, "{}", value)""")
+                        },
+                )
             }
         }
 
@@ -144,6 +169,17 @@ data class InfallibleEnumType(
                     rust("&self.0")
                 }
             }
+            rustTemplate(
+                """
+                impl #{Display} for $UnknownVariantValue {
+                    fn fmt(&self, f: &mut #{Fmt}::Formatter) -> #{Fmt}::Result {
+                        write!(f, "{}", self.0)
+                    }
+                }
+                """,
+                "Display" to RuntimeType.Display,
+                "Fmt" to RuntimeType.stdFmt,
+            )
         }
     }
 
