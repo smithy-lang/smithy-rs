@@ -10,63 +10,31 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
 [[aws-sdk-rust]]
 message = """
-Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
-some methods prefixed with `wait_until` to the existing clients. These can be used to, for example
-in S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to
-have the status OK.
-
-Using a waiter looks like the following example for EC2:
-```rust
-use aws_sdk_ec2::client::Waiters;
-
-let result = ec2_client.wait_until_instance_status_ok()
-    .instance_ids("some-instance-id")
-    .wait(Duration::from_secs(300))
-    .await;
-```
+`aws-config::loader::ConfigLoader` now creates an `IdentityCache` by default when using `BehaviorVersion::v2024_03_28()`
+or newer. If you're using `BehaviorVersion::latest()`, you will get this change automatically when updating. This
+allows clients created from `SdkConfig` to use the same cache instance by default resulting in fewer cache misses
+when using multiple clients.
 """
-references = ["aws-sdk-rust#400", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
+references = ["smithy-rs#3427"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "aajtodd"
+
+[[smithy-rs]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
+
+[[aws-sdk-rust]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`. Updating your SDK is not necessary, this change will happen when a new version of the client libraries are consumed."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = """
-Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
-some methods prefixed with `wait_until` to the existing clients.
-
-For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
-that waiter would look as follows:
-
-```rust
-use my_generated_client::client::Waiters;
-
-let result = client.wait_until_thing()
-    .thing_id("someId")
-    .wait(Duration::from_secs(120))
-    .await;
-```
-"""
-references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version."
-references = ["smithy-rs#3601"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request."
-references = ["smithy-rs#3603"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "`aws_config::default_provider::use_dual_stack_provider` is now public instead of `pub(crate)`"
-references = ["aws-sdk-rust#879", "smithy-rs#3611"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
+message = "Implement Debug for DateTime"
+references = ["smithy-rs#3161"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "mnissenb"
