@@ -32,3 +32,9 @@ message = "Stalled stream protection on uploads is now enabled by default behind
 references = ["smithy-rs#3527"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Implement Debug for DateTime"
+references = ["smithy-rs#3161"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "mnissenb"
