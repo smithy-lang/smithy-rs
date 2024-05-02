@@ -365,7 +365,7 @@ pub struct BigDecimal(String);
 /// The [`aws-smithy-types-convert`](https://crates.io/crates/aws-smithy-types-convert) crate
 /// can be used for conversions to/from other libraries, such as
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
     pub(crate) seconds: i64,
     /// Subsecond nanos always advances the wallclock time, even for times where seconds is negative
@@ -13736,7 +13736,7 @@ Dry-run test against the SDK release process.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-identity-cache-partitions"><a class="header" href="#rfc-identity-cache-partitions">RFC: Identity Cache Partitions</a></h1>
 <blockquote>
-<p>Status: Accepted</p>
+<p>Status: Implemented</p>
 <p>Applies to: AWS SDK for Rust</p>
 </blockquote>
 <h2 id="motivation"><a class="header" href="#motivation">Motivation</a></h2>
@@ -13959,19 +13959,19 @@ and confusion as well as the chance for using the type wrong.</li>
 shares a cache partition or not.</p>
 <h2 id="changes-checklist-35"><a class="header" href="#changes-checklist-35">Changes checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Add new <code>cache_partition()</code> method to <code>ResolveIdentity</code></li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Update <code>SharedIdentityResolver::new</code> to use the new <code>cache_partition()</code> method on the <code>resolver</code> to determine if a new cache partition should be created or not</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Claim a cache partition when <code>SharedCredentialsProvider</code> is created and override the new <code>ResolveIdentity</code> method</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Claim a cache partition when <code>SharedTokenProvider</code> is created and override the new <code>ResolveIdentity</code> method</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Introduce new behavior version</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Conditionally (gated on behavior version) create a new default <code>IdentityCache</code> on <code>SdkConfig</code> if not explicitly configured</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Add a new <code>no_identity_cache()</code> method to <code>ConfigLoader</code> that marks the identity cache as explicitly unset</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-environment-defined-service-configuration"><a class="header" href="#rfc-environment-defined-service-configuration">RFC: Environment-defined service configuration</a></h1>
