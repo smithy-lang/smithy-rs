@@ -17,7 +17,7 @@ anyhow = "1.0"
 clap = { version = "~3.1.18", features = ["derive"] }
 pathdiff = "0.2.1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
-toml_edit = { version = "0.19.6" }
+toml_edit = { version = "0.22" }
 
 [dev-dependencies]
 pretty_assertions = "1.3"

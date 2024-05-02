@@ -207,19 +207,12 @@ pub(crate) fn parse_credential_process_json_credentials(
 }
 
 fn parse_expiration(expiration: impl AsRef<str>) -> Result<SystemTime, InvalidJsonCredentials> {
-    SystemTime::try_from(
-        OffsetDateTime::parse(expiration.as_ref(), &Rfc3339).map_err(|err| {
-            InvalidJsonCredentials::InvalidField {
-                field: "Expiration",
-                err: err.into(),
-            }
-        })?,
-    )
-    .map_err(|_| {
-        InvalidJsonCredentials::Other(
-            "credential expiration time cannot be represented by a DateTime".into(),
-        )
-    })
+    OffsetDateTime::parse(expiration.as_ref(), &Rfc3339)
+        .map(SystemTime::from)
+        .map_err(|err| InvalidJsonCredentials::InvalidField {
+            field: "Expiration",
+            err: err.into(),
+        })
 }
 
 #[cfg(test)]
@@ -231,7 +224,9 @@ mod test {
     use time::OffsetDateTime;
     use tokio::time::timeout;
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
+    #[cfg_attr(windows, ignore)]
     async fn test_credential_process() {
         let provider = CredentialProcessProvider::new(String::from(
             r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "SessionToken": "TESTSESSIONTOKEN", "Expiration": "2022-05-02T18:36:00+00:00" }'"#,
@@ -252,7 +247,9 @@ mod test {
         );
     }
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
+    #[cfg_attr(windows, ignore)]
     async fn test_credential_process_no_expiry() {
         let provider = CredentialProcessProvider::new(String::from(
             r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY" }'"#,

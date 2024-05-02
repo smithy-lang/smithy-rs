@@ -291,7 +291,7 @@ class RequestBindingGenerator(
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_string"))
-                "&$func(&$targetName)"
+                "&$func($targetName)"
             }
 
             target.isTimestampShape -> {

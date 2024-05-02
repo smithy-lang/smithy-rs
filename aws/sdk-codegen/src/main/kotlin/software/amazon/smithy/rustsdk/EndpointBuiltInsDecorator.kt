@@ -114,7 +114,12 @@ fun Model.sdkConfigSetter(
             ParameterType.STRING -> writable { rust("|s|s.to_string()") }
             ParameterType.BOOLEAN -> null
         }
-    return SdkConfigCustomization.copyField(fieldName, map)
+
+    return if (fieldName == "endpoint_url") {
+        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
+    } else {
+        SdkConfigCustomization.copyField(fieldName, map)
+    }
 }
 
 /**
@@ -148,7 +153,6 @@ fun decoratorForBuiltIn(
                 standardConfigParam(
                     clientParamBuilder?.toConfigParam(builtIn, codegenContext.runtimeConfig) ?: ConfigParam.Builder()
                         .toConfigParam(builtIn, codegenContext.runtimeConfig),
-                    codegenContext,
                 )
             }
         }

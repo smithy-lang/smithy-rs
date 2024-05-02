@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStre
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 open class EventStreamMarshallerGenerator(
@@ -107,7 +108,15 @@ open class EventStreamMarshallerGenerator(
                 rustBlock("let payload = match input") {
                     for (member in unionShape.members()) {
                         val eventType = member.memberName // must be the original name, not the Rust-safe name
-                        rustBlock("Self::Input::${symbolProvider.toMemberName(member)}(inner) => ") {
+                        // Union members targeting the Smithy `Unit` type do not have associated data in the
+                        // Rust enum generated for the type.
+                        val mayHaveInner =
+                            if (!member.isTargetUnit()) {
+                                "(inner)"
+                            } else {
+                                ""
+                            }
+                        rustBlock("Self::Input::${symbolProvider.toMemberName(member)}$mayHaveInner => ") {
                             addStringHeader(":event-type", "${eventType.dq()}.into()")
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             renderMarshallEvent(member, target)
@@ -147,7 +156,15 @@ open class EventStreamMarshallerGenerator(
             renderMarshallEventPayload("inner.$memberName", payloadMember, target, serializerFn)
         } else if (headerMembers.isEmpty()) {
             val serializerFn = serializerGenerator.payloadSerializer(unionMember)
-            renderMarshallEventPayload("inner", unionMember, eventStruct, serializerFn)
+            // Union members targeting the Smithy `Unit` type do not have associated data in the
+            // Rust enum generated for the type. For these, we need to pass the `crate::model::Unit` data type.
+            val inner =
+                if (unionMember.isTargetUnit()) {
+                    "crate::model::Unit::builder().build()"
+                } else {
+                    "inner"
+                }
+            renderMarshallEventPayload(inner, unionMember, eventStruct, serializerFn)
         } else {
             rust("Vec::new()")
         }
@@ -180,7 +197,7 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    // Event stream header types: https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html#eventheader-trait
+    // Event stream header types: https://smithy.io/2.0/spec/streaming.html#eventheader-trait
     // Note: there are no floating point header types for Event Stream.
     private fun headerValue(
         inputName: String,

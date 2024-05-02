@@ -220,10 +220,10 @@ fn write_line<W: Write>(mut w: W, line: &Line) -> Result<()> {
         "<td class=\"lineno\"><pre>{:>5}  {:>5}  {}</pre></td>",
         line.source_line_no
             .map(|n| n.to_string())
-            .unwrap_or_else(|| "".to_string()),
+            .unwrap_or_default(),
         line.target_line_no
             .map(|n| n.to_string())
-            .unwrap_or_else(|| "".to_string()),
+            .unwrap_or_default(),
         line.line_type
     )?;
     writeln!(

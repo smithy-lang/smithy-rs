@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -37,6 +38,7 @@ private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>>
     val authHttp = smithyRuntime.resolve("client::auth::http")
     val authHttpApi = smithyRuntimeApi.resolve("client::auth::http")
     return arrayOf(
+        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Token" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Token")),
         "Login" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Login")),
         "ResolveIdentity" to configReexport(smithyRuntimeApi.resolve("client::identity::ResolveIdentity")),
@@ -229,7 +231,7 @@ private class HttpAuthConfigCustomization(
                             pub fn api_key_resolver(mut self, api_key_resolver: impl #{ResolveIdentity} + 'static) -> Self {
                                 self.runtime_components.set_identity_resolver(
                                     #{HTTP_API_KEY_AUTH_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new(api_key_resolver)
+                                    #{IntoShared}::<#{SharedIdentityResolver}>::into_shared(api_key_resolver)
                                 );
                                 self
                             }
@@ -249,7 +251,7 @@ private class HttpAuthConfigCustomization(
                             pub fn bearer_token_resolver(mut self, bearer_token_resolver: impl #{ResolveIdentity} + 'static) -> Self {
                                 self.runtime_components.set_identity_resolver(
                                     #{HTTP_BEARER_AUTH_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new(bearer_token_resolver)
+                                    #{IntoShared}::<#{SharedIdentityResolver}>::into_shared(bearer_token_resolver)
                                 );
                                 self
                             }
@@ -269,7 +271,7 @@ private class HttpAuthConfigCustomization(
                             pub fn basic_auth_login_resolver(mut self, basic_auth_resolver: impl #{ResolveIdentity} + 'static) -> Self {
                                 self.runtime_components.set_identity_resolver(
                                     #{HTTP_BASIC_AUTH_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new(basic_auth_resolver)
+                                    #{IntoShared}::<#{SharedIdentityResolver}>::into_shared(basic_auth_resolver)
                                 );
                                 self
                             }
@@ -289,7 +291,7 @@ private class HttpAuthConfigCustomization(
                             pub fn digest_auth_login_resolver(mut self, digest_auth_resolver: impl #{ResolveIdentity} + 'static) -> Self {
                                 self.runtime_components.set_identity_resolver(
                                     #{HTTP_DIGEST_AUTH_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new(digest_auth_resolver)
+                                    #{IntoShared}::<#{SharedIdentityResolver}>::into_shared(digest_auth_resolver)
                                 );
                                 self
                             }

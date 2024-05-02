@@ -1,0 +1,6 @@
+# Generated Rust file
+/src/bindings.rs
+
+# The Cargo.toml should be generated every time it's needed
+/Cargo.toml
+/Cargo.lock
