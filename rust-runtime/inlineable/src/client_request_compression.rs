@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::{fmt, mem};
 
 use http::HeaderValue;
+use http_body::Body;
 
 use aws_smithy_compression::body::compress::CompressedBody;
 use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
@@ -140,6 +141,22 @@ fn wrap_request_body_in_compressed_body(
     compression_algorithm: CompressionAlgorithm,
     compression_options: &CompressionOptions,
 ) -> Result<(), BuildError> {
+    // Don't wrap a body if compression is disabled.
+    if compression_options.is_disabled() {
+        tracing::trace!("request compression is disabled and will not be applied");
+        return Ok(());
+    }
+    // Don't wrap a body if it's below the minimum size
+    //
+    // Because compressing small amounts of data can actually increase its size,
+    // we check to see if the data is big enough to make compression worthwhile.
+    if let Some(known_size) = request.body().size_hint().exact() {
+        if known_size < compression_options.min_compression_size_bytes() as u64 {
+            tracing::trace!("request body is below minimum size and will not be compressed");
+            return Ok(());
+        }
+    }
+
     let mut body = {
         let body = mem::replace(request.body_mut(), SdkBody::taken());
 
@@ -201,10 +218,11 @@ impl Storable for RequestMinCompressionSizeBytes {
 
 #[cfg(test)]
 mod tests {
+    use http_body::Body;
+
     use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_types::body::SdkBody;
-    use http_body::Body;
 
     use super::wrap_request_body_in_compressed_body;
 
@@ -234,7 +252,9 @@ mod tests {
         assert_eq!(UNCOMPRESSED_INPUT, body_data);
 
         let compression_algorithm = CompressionAlgorithm::Gzip;
-        let compression_options = CompressionOptions::default();
+        let compression_options = CompressionOptions::default()
+            .with_min_compression_size_bytes(0)
+            .unwrap();
         wrap_request_body_in_compressed_body(
             &mut request,
             compression_algorithm,

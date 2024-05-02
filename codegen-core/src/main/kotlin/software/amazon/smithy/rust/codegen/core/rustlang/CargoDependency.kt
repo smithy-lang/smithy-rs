@@ -129,6 +129,7 @@ class InlineDependency(
                 CargoDependency.HttpBody,
                 CargoDependency.Tracing,
                 CargoDependency.Flate2,
+                CargoDependency.Tracing,
                 CargoDependency.Tokio.toDevDependency(),
                 CargoDependency.smithyCompression(runtimeConfig),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
@@ -258,10 +259,10 @@ data class CargoDependency(
         // Forces AHash to be a later version that avoids
         // https://github.com/tkaitchuck/aHash/issues/200
         val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"))
-        val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
+        val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.4.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
-        val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.17"))
+        val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.30"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))

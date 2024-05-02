@@ -29,10 +29,10 @@ http-body-1-x = [
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-bytes = "1"
-flate2 = "1"
+bytes = "1.4.0"
+flate2 = "1.0.30"
 pin-project-lite = "0.2.14"
-tracing = "0.1"
+tracing = "0.1.40"
 http-0-2 = { package = "http", version = "0.2.9", optional = true }
 http-1-0 = { package = "http", version = "1", optional = true }
 http-body-0-4 = { package = "http-body", version = "0.4.5", optional = true }
