@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::package::PackageHandle;
 use anyhow::Result;
-use smithy_rs_tool_common::shell::{capture_error, output_text, ShellOperation};
+use smithy_rs_tool_common::{
+    package::PackageHandle,
+    shell::{capture_error, output_text, ShellOperation},
+};
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::info;
@@ -18,6 +20,10 @@ pub struct Publish {
 
 impl Publish {
     pub fn new(package_handle: PackageHandle, package_path: impl Into<PathBuf>) -> Publish {
+        assert!(
+            package_handle.version.is_some(),
+            "crate version number required; given {package_handle}"
+        );
         Publish {
             program: "cargo",
             package_handle,
@@ -42,12 +48,12 @@ impl ShellOperation for Publish {
             let (stdout, stderr) = output_text(&output);
             let already_uploaded_msg = format!(
                 "error: crate version `{}` is already uploaded",
-                self.package_handle.version
+                self.package_handle.expect_version()
             );
             if stdout.contains(&already_uploaded_msg) || stderr.contains(&already_uploaded_msg) {
                 info!(
-                    "{}-{} has already been published to crates.io.",
-                    self.package_handle.name, self.package_handle.version
+                    "{} has already been published to crates.io.",
+                    self.package_handle
                 );
             } else {
                 return Err(capture_error("cargo publish", &output));
@@ -69,7 +75,7 @@ mod tests {
             program: "./fake_cargo/cargo_success",
             package_handle: PackageHandle::new(
                 "aws-sdk-dynamodb",
-                Version::parse("0.0.22-alpha").unwrap(),
+                Version::parse("0.0.22-alpha").ok(),
             ),
             package_path: env::current_dir().unwrap(),
         }
@@ -82,10 +88,7 @@ mod tests {
     async fn publish_fails() {
         let result = Publish {
             program: "./fake_cargo/cargo_fails",
-            package_handle: PackageHandle::new(
-                "something",
-                Version::parse("0.0.22-alpha").unwrap(),
-            ),
+            package_handle: PackageHandle::new("something", Version::parse("0.0.22-alpha").ok()),
             package_path: env::current_dir().unwrap(),
         }
         .spawn()
@@ -106,7 +109,7 @@ mod tests {
             program: "./fake_cargo/cargo_publish_already_published",
             package_handle: PackageHandle::new(
                 "aws-sdk-dynamodb",
-                Version::parse("0.0.22-alpha").unwrap(),
+                Version::parse("0.0.22-alpha").ok(),
             ),
             package_path: env::current_dir().unwrap(),
         }

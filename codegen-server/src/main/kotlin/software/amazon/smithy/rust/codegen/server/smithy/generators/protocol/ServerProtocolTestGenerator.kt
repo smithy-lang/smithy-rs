@@ -627,7 +627,7 @@ class ServerProtocolTestGenerator(
         if (testCase.body.isEmpty) return
 
         val httpMalformedResponseBodyDefinition = testCase.body.get()
-        // From https://awslabs.github.io/smithy/1.0/spec/http-protocol-compliance-tests.html?highlight=httpresponsetest#httpmalformedresponsebodyassertion
+        // From https://smithy.io/2.0/additional-specs/http-protocol-compliance-tests.html#httpmalformedresponsebodyassertion
         //
         //     A union describing the assertion to run against the response body. As it is a union, exactly one
         //     member must be set.
@@ -813,10 +813,6 @@ class ServerProtocolTestGenerator(
                 FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
                 FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
                 FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2167): BEGIN Remove this failing test once it's fixed in Smithy
-                FailingTest(RestJson, "RestJsonZeroAndFalseQueryValues", TestType.Request),
-                FailingTest(RestJsonExtras, "RestJsonZeroAndFalseQueryValues", TestType.Request),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2167): END Remove this failing test once it's fixed in Smithy
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
@@ -915,6 +911,8 @@ class ServerProtocolTestGenerator(
                 // RestXml S3 tests that fail to compile
                 "S3EscapeObjectKeyInUriLabel",
                 "S3EscapePathObjectKeyInUriLabel",
+                "S3PreservesLeadingDotSegmentInUriLabel",
+                "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
 
         // TODO(https://github.com/awslabs/smithy/issues/1506)

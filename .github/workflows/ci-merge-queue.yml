@@ -22,6 +22,7 @@ jobs:
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     name: Save a docker login token
+    timeout-minutes: 10
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
@@ -51,6 +52,7 @@ jobs:
     name: Acquire Base Image
     needs: save-docker-login-token
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -91,3 +93,5 @@ jobs:
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}

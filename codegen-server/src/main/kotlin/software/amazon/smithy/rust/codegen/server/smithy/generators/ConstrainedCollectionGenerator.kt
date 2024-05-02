@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -16,19 +17,23 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedCollectionConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -315,6 +320,16 @@ sealed class CollectionTraitInfo {
                     }
                 },
             )
+
+        override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+            writable {
+                rustTemplate(
+                    """
+                    Self::UniqueItems { duplicate_indices, .. } =>
+                        format!("${uniqueItemsTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", &duplicate_indices),
+                    """,
+                )
+            }
     }
 
     data class Length(val lengthTrait: LengthTrait) : CollectionTraitInfo() {
@@ -354,6 +369,17 @@ sealed class CollectionTraitInfo {
                     }
                 },
             )
+
+        override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+            writable {
+                rustTemplate(
+                    """
+                    Self::Length(length) => {
+                        format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                    },
+                    """,
+                )
+            }
     }
 
     companion object {
@@ -386,4 +412,6 @@ sealed class CollectionTraitInfo {
     }
 
     abstract fun toTraitInfo(): TraitInfo
+
+    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
 }

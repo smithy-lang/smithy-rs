@@ -5,7 +5,7 @@
 
 //! HTTP routing that adheres to the [Smithy specification].
 //!
-//! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+//! [Smithy specification]: https://smithy.io/2.0/spec/http-bindings.html
 
 mod into_make_service;
 mod into_make_service_with_connect_info;

@@ -23,6 +23,7 @@ jobs:
   acquire-base-image:
     runs-on: smithy_ubuntu-latest_8-core
     name: Acquire Base Image
+    timeout-minutes: 60
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:
@@ -68,3 +69,5 @@ jobs:
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.acquire-base-image.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}

@@ -1,4 +1,65 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 30th, 2024
+================
+**New this release:**
+- :tada: (client, [smithy-rs#119](https://github.com/smithy-lang/smithy-rs/issues/119), [smithy-rs#3595](https://github.com/smithy-lang/smithy-rs/issues/3595), [smithy-rs#3593](https://github.com/smithy-lang/smithy-rs/issues/3593), [smithy-rs#3585](https://github.com/smithy-lang/smithy-rs/issues/3585), [smithy-rs#3571](https://github.com/smithy-lang/smithy-rs/issues/3571), [smithy-rs#3569](https://github.com/smithy-lang/smithy-rs/issues/3569)) Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+    some methods prefixed with `wait_until` to the existing clients.
+
+    For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
+    that waiter would look as follows:
+
+    ```rust
+    use my_generated_client::client::Waiters;
+
+    let result = client.wait_until_thing()
+        .thing_id("someId")
+        .wait(Duration::from_secs(120))
+        .await;
+    ```
+- :bug: (all, [smithy-rs#3603](https://github.com/smithy-lang/smithy-rs/issues/3603)) Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request.
+
+
+April 19th, 2024
+================
+**New this release:**
+- :tada: (server, [smithy-rs#3430](https://github.com/smithy-lang/smithy-rs/issues/3430)) Implement `std::error::Error` for `ConstraintViolation`
+- (all, [smithy-rs#3553](https://github.com/smithy-lang/smithy-rs/issues/3553)) Upgraded MSRV to Rust 1.75
+
+
+April 11th, 2024
+================
+**New this release:**
+- :tada: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+    ```rust
+    let config = my_service::Config::builder()
+        .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+        // ...
+        .build();
+    ```
+- :bug: (all, [smithy-rs#3427](https://github.com/smithy-lang/smithy-rs/issues/3427)) `SharedIdentityResolver` now respects an existing cache partition when the `ResolveIdentity` implementation
+    provides one already.
+- :bug: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit.
+- :bug: (all, [smithy-rs#2546](https://github.com/smithy-lang/smithy-rs/issues/2546)) Unions with unit target member shape are now fully supported
+
+
+April 2nd, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (client, [aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513), @Ten0) Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax.
+
+**New this release:**
+- :tada: (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).
+
+    Please note that support for Hyper 1.0 remains experimental.
+- (all, [smithy-rs#3389](https://github.com/smithy-lang/smithy-rs/issues/3389)) All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed.
+- (all, [smithy-rs#3539](https://github.com/smithy-lang/smithy-rs/issues/3539)) Fix bug in Hyper 1.0 support where https URLs returned an error
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Ten0 ([aws-sdk-rust#1111](https://github.com/awslabs/aws-sdk-rust/issues/1111), [smithy-rs#3513](https://github.com/smithy-lang/smithy-rs/issues/3513))
+
+
 March 25th, 2024
 ================
 **New this release:**
