@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.eventStre
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 open class EventStreamMarshallerGenerator(
@@ -56,13 +57,14 @@ open class EventStreamMarshallerGenerator(
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
-    private val codegenScope = arrayOf(
-        "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
-        "Message" to smithyTypes.resolve("event_stream::Message"),
-        "Header" to smithyTypes.resolve("event_stream::Header"),
-        "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
-        "Error" to smithyEventStream.resolve("error::Error"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
+            "Message" to smithyTypes.resolve("event_stream::Message"),
+            "Header" to smithyTypes.resolve("event_stream::Header"),
+            "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
+            "Error" to smithyEventStream.resolve("error::Error"),
+        )
 
     open fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
@@ -73,7 +75,10 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderMarshaller(marshallerType: RuntimeType, unionSymbol: Symbol) {
+    private fun RustWriter.renderMarshaller(
+        marshallerType: RuntimeType,
+        unionSymbol: Symbol,
+    ) {
         rust(
             """
             ##[non_exhaustive]
@@ -103,7 +108,15 @@ open class EventStreamMarshallerGenerator(
                 rustBlock("let payload = match input") {
                     for (member in unionShape.members()) {
                         val eventType = member.memberName // must be the original name, not the Rust-safe name
-                        rustBlock("Self::Input::${symbolProvider.toMemberName(member)}(inner) => ") {
+                        // Union members targeting the Smithy `Unit` type do not have associated data in the
+                        // Rust enum generated for the type.
+                        val mayHaveInner =
+                            if (!member.isTargetUnit()) {
+                                "(inner)"
+                            } else {
+                                ""
+                            }
+                        rustBlock("Self::Input::${symbolProvider.toMemberName(member)}$mayHaveInner => ") {
                             addStringHeader(":event-type", "${eventType.dq()}.into()")
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             renderMarshallEvent(member, target)
@@ -125,7 +138,10 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
+    private fun RustWriter.renderMarshallEvent(
+        unionMember: MemberShape,
+        eventStruct: StructureShape,
+    ) {
         val headerMembers = eventStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
         val payloadMember = eventStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
         for (member in headerMembers) {
@@ -140,13 +156,25 @@ open class EventStreamMarshallerGenerator(
             renderMarshallEventPayload("inner.$memberName", payloadMember, target, serializerFn)
         } else if (headerMembers.isEmpty()) {
             val serializerFn = serializerGenerator.payloadSerializer(unionMember)
-            renderMarshallEventPayload("inner", unionMember, eventStruct, serializerFn)
+            // Union members targeting the Smithy `Unit` type do not have associated data in the
+            // Rust enum generated for the type. For these, we need to pass the `crate::model::Unit` data type.
+            val inner =
+                if (unionMember.isTargetUnit()) {
+                    "crate::model::Unit::builder().build()"
+                } else {
+                    "inner"
+                }
+            renderMarshallEventPayload(inner, unionMember, eventStruct, serializerFn)
         } else {
             rust("Vec::new()")
         }
     }
 
-    protected fun RustWriter.renderMarshallEventHeader(memberName: String, member: MemberShape, target: Shape) {
+    protected fun RustWriter.renderMarshallEventHeader(
+        memberName: String,
+        member: MemberShape,
+        target: Shape,
+    ) {
         val headerName = member.memberName
         handleOptional(
             symbolProvider.toSymbol(member).isOptional(),
@@ -156,7 +184,11 @@ open class EventStreamMarshallerGenerator(
         )
     }
 
-    private fun RustWriter.renderAddHeader(headerName: String, inputName: String, target: Shape) {
+    private fun RustWriter.renderAddHeader(
+        headerName: String,
+        inputName: String,
+        target: Shape,
+    ) {
         withBlock("headers.push(", ");") {
             rustTemplate(
                 "#{Header}::new(${headerName.dq()}, #{HeaderValue}::${headerValue(inputName, target)})",
@@ -165,19 +197,23 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    // Event stream header types: https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html#eventheader-trait
+    // Event stream header types: https://smithy.io/2.0/spec/streaming.html#eventheader-trait
     // Note: there are no floating point header types for Event Stream.
-    private fun headerValue(inputName: String, target: Shape): String = when (target) {
-        is BooleanShape -> "Bool($inputName)"
-        is ByteShape -> "Byte($inputName)"
-        is ShortShape -> "Int16($inputName)"
-        is IntegerShape -> "Int32($inputName)"
-        is LongShape -> "Int64($inputName)"
-        is BlobShape -> "ByteArray($inputName.into_inner().into())"
-        is StringShape -> "String($inputName.into())"
-        is TimestampShape -> "Timestamp($inputName)"
-        else -> throw IllegalStateException("unsupported event stream header shape type: $target")
-    }
+    private fun headerValue(
+        inputName: String,
+        target: Shape,
+    ): String =
+        when (target) {
+            is BooleanShape -> "Bool($inputName)"
+            is ByteShape -> "Byte($inputName)"
+            is ShortShape -> "Int16($inputName)"
+            is IntegerShape -> "Int32($inputName)"
+            is LongShape -> "Int64($inputName)"
+            is BlobShape -> "ByteArray($inputName.into_inner().into())"
+            is StringShape -> "String($inputName.into())"
+            is TimestampShape -> "Timestamp($inputName)"
+            else -> throw IllegalStateException("unsupported event stream header shape type: $target")
+        }
 
     protected fun RustWriter.renderMarshallEventPayload(
         inputExpr: String,
@@ -189,11 +225,12 @@ open class EventStreamMarshallerGenerator(
         if (target is BlobShape || target is StringShape) {
             data class PayloadContext(val conversionFn: String, val contentType: String)
 
-            val ctx = when (target) {
-                is BlobShape -> PayloadContext("into_inner", "application/octet-stream")
-                is StringShape -> PayloadContext("into_bytes", "text/plain")
-                else -> throw IllegalStateException("unreachable")
-            }
+            val ctx =
+                when (target) {
+                    is BlobShape -> PayloadContext("into_inner", "application/octet-stream")
+                    is StringShape -> PayloadContext("into_bytes", "text/plain")
+                    else -> throw IllegalStateException("unreachable")
+                }
             addStringHeader(":content-type", "${ctx.contentType.dq()}.into()")
             handleOptional(
                 optional,
@@ -245,7 +282,10 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    protected fun RustWriter.addStringHeader(name: String, valueExpr: String) {
+    protected fun RustWriter.addStringHeader(
+        name: String,
+        valueExpr: String,
+    ) {
         rustTemplate("headers.push(#{Header}::new(${name.dq()}, #{HeaderValue}::String($valueExpr)));", *codegenScope)
     }
 

@@ -97,85 +97,92 @@ enum class EscapeFor {
 }
 
 object RustReservedWords : ReservedWords {
-    private val RustKeywords = setOf(
-        "as",
-        "break",
-        "const",
-        "continue",
-        "crate",
-        "else",
-        "enum",
-        "extern",
-        "false",
-        "fn",
-        "for",
-        "if",
-        "impl",
-        "in",
-        "let",
-        "loop",
-        "match",
-        "mod",
-        "move",
-        "mut",
-        "pub",
-        "ref",
-        "return",
-        "self",
-        "Self",
-        "static",
-        "struct",
-        "super",
-        "trait",
-        "true",
-        "type",
-        "unsafe",
-        "use",
-        "where",
-        "while",
-
-        "async",
-        "await",
-        "dyn",
-
-        "abstract",
-        "become",
-        "box",
-        "do",
-        "final",
-        "macro",
-        "override",
-        "priv",
-        "typeof",
-        "unsized",
-        "virtual",
-        "yield",
-        "try",
-    )
+    private val RustKeywords =
+        setOf(
+            "as",
+            "break",
+            "const",
+            "continue",
+            "crate",
+            "else",
+            "enum",
+            "extern",
+            "false",
+            "fn",
+            "for",
+            "if",
+            "impl",
+            "in",
+            "let",
+            "loop",
+            "match",
+            "mod",
+            "move",
+            "mut",
+            "pub",
+            "ref",
+            "return",
+            "self",
+            "Self",
+            "static",
+            "struct",
+            "super",
+            "trait",
+            "true",
+            "type",
+            "unsafe",
+            "use",
+            "where",
+            "while",
+            "async",
+            "await",
+            "dyn",
+            "abstract",
+            "become",
+            "box",
+            "do",
+            "final",
+            "macro",
+            "override",
+            "priv",
+            "typeof",
+            "unsized",
+            "virtual",
+            "yield",
+            "try",
+        )
 
     // Some things can't be used as a raw identifier, so we can't use the normal escaping strategy
     // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
-    private val keywordEscapingMap = mapOf(
-        "crate" to "crate_",
-        "super" to "super_",
-        "self" to "self_",
-        "Self" to "SelfValue",
-        // Real models won't end in `_` so it's safe to stop here
-        "SelfValue" to "SelfValue_",
-    )
+    private val keywordEscapingMap =
+        mapOf(
+            "crate" to "crate_",
+            "super" to "super_",
+            "self" to "self_",
+            "Self" to "SelfValue",
+            // Real models won't end in `_` so it's safe to stop here
+            "SelfValue" to "SelfValue_",
+        )
 
     override fun escape(word: String): String = doEscape(word, EscapeFor.TypeName)
 
-    private fun doEscape(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+    private fun doEscape(
+        word: String,
+        escapeFor: EscapeFor = EscapeFor.TypeName,
+    ): String =
         when (val mapped = keywordEscapingMap[word]) {
-            null -> when (escapeFor) {
-                EscapeFor.TypeName -> "r##$word"
-                EscapeFor.ModuleName -> "${word}_"
-            }
+            null ->
+                when (escapeFor) {
+                    EscapeFor.TypeName -> "r##$word"
+                    EscapeFor.ModuleName -> "${word}_"
+                }
             else -> mapped
         }
 
-    fun escapeIfNeeded(word: String, escapeFor: EscapeFor = EscapeFor.TypeName): String =
+    fun escapeIfNeeded(
+        word: String,
+        escapeFor: EscapeFor = EscapeFor.TypeName,
+    ): String =
         when (isReserved(word)) {
             true -> doEscape(word, escapeFor)
             else -> word

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -18,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -26,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -47,9 +50,10 @@ class ConstrainedBlobGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
-    private val blobConstraintsInfo: List<BlobLength> = listOf(LengthTrait::class.java)
-        .mapNotNull { shape.getTrait(it).orNull() }
-        .map { BlobLength(it) }
+    private val blobConstraintsInfo: List<BlobLength> =
+        listOf(LengthTrait::class.java)
+            .mapNotNull { shape.getTrait(it).orNull() }
+            .map { BlobLength(it) }
     private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
@@ -116,15 +120,33 @@ class ConstrainedBlobGenerator(
         }
     }
 
-    private fun renderConstraintViolationEnum(writer: RustWriter, shape: BlobShape, constraintViolation: Symbol) {
+    private fun renderConstraintViolationEnum(
+        writer: RustWriter,
+        shape: BlobShape,
+        constraintViolation: Symbol,
+    ) {
         writer.rustTemplate(
             """
             ##[derive(Debug, PartialEq)]
             pub enum ${constraintViolation.name} {
               #{Variants:W}
             }
+
+            impl #{Display} for ${constraintViolation.name} {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let message = match self {
+                        #{VariantDisplayMessages:W}
+                    };
+                    write!(f, "{message}")
+                }
+            }
+
+            impl #{Error} for ${constraintViolation.name} {}
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+            "Error" to RuntimeType.StdError,
+            "Display" to RuntimeType.Display,
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant(),
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -138,44 +160,74 @@ class ConstrainedBlobGenerator(
             )
         }
     }
+
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            blobConstraintsInfo.forEach {
+                it.shapeConstraintViolationDisplayMessage(shape).invoke(this)
+            }
+        }
 }
 
-data class BlobLength(val lengthTrait: LengthTrait) {
-    fun toTraitInfo(): TraitInfo = TraitInfo(
-        { rust("Self::check_length(&value)?;") },
-        {
-            docs("Error when a blob doesn't satisfy its `@length` requirements.")
-            rust("Length(usize)")
-        },
-        {
-            rust(
-                """
-                Self::Length(length) => crate::model::ValidationExceptionField {
-                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                    path,
-                },""",
-            )
-        },
-        this::renderValidationFunction,
-    )
+// Each type of constraint that can be put on a Blob must implement the BlobConstraintGenerator
+// interface. This allows the
+interface BlobConstraintGenerator {
+    fun shapeConstraintViolationDisplayMessage(shape: Shape): Writable
+}
+
+data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
+    fun toTraitInfo(): TraitInfo =
+        TraitInfo(
+            { rust("Self::check_length(&value)?;") },
+            {
+                docs("Error when a blob doesn't satisfy its `@length` requirements.")
+                rust("Length(usize)")
+            },
+            {
+                rust(
+                    """
+                    Self::Length(length) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                        path,
+                    },
+                    """,
+                )
+            },
+            this::renderValidationFunction,
+        )
 
     /**
      * Renders a `check_length` function to validate the blob matches the
      * required length indicated by the `@length` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
-        rust(
-            """
-            fn check_length(blob: &$unconstrainedTypeName) -> Result<(), $constraintViolation> {
-                let length = blob.as_ref().len();
+    private fun renderValidationFunction(
+        constraintViolation: Symbol,
+        unconstrainedTypeName: String,
+    ): Writable =
+        {
+            rust(
+                """
+                fn check_length(blob: &$unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                    let length = blob.as_ref().len();
 
-                if ${lengthTrait.rustCondition("length")} {
-                    Ok(())
-                } else {
-                    Err($constraintViolation::Length(length))
+                    if ${lengthTrait.rustCondition("length")} {
+                        Ok(())
+                    } else {
+                        Err($constraintViolation::Length(length))
+                    }
                 }
-            }
-            """,
-        )
-    }
+                """,
+            )
+        }
+
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
+        writable {
+            rustTemplate(
+                """
+                Self::Length(length) => {
+                    format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                },
+                """,
+            )
+        }
 }

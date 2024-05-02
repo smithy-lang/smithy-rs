@@ -70,7 +70,7 @@ pub async fn subcommand_generate_version_manifest(
         (None, Some(output_location)) => output_location,
         _ => bail!("Only one of `--location` or `--output-location` should be provided"),
     };
-    let packages = discover_packages(Fs::Real, input_location.into())
+    let packages = discover_packages(Fs::Real, input_location)
         .await
         .context("read packages")?;
 
@@ -94,11 +94,12 @@ pub async fn subcommand_generate_version_manifest(
             matches!(package.category, PackageCategory::AwsSdk) == model_hash.is_some(),
             "all generated SDK crates should have a model hash"
         );
+        let version = package.handle.expect_version().to_string();
         crates.insert(
             package.handle.name,
             CrateVersion {
                 category: package.category,
-                version: package.handle.version.to_string(),
+                version,
                 source_hash: hash_crate(&package.crate_path).context("hash crate")?,
                 model_hash,
             },

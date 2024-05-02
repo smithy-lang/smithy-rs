@@ -29,20 +29,21 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            // Track the latency between client and server.
-            section.registerInterceptor(this) {
-                rust(
-                    "#T::new()",
-                    awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
-                )
-            }
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                // Track the latency between client and server.
+                section.registerInterceptor(this) {
+                    rust(
+                        "#T::new()",
+                        awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
+                    )
+                }
 
-            // Add request metadata to outgoing requests. Sets a header.
-            section.registerInterceptor(this) {
-                rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
+                // Add request metadata to outgoing requests. Sets a header.
+                section.registerInterceptor(this) {
+                    rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
+                }
             }
         }
-    }
 }

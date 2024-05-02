@@ -1,0 +1,32 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow performs a production smithy-rs release. It will cut a release tag in GitHub and publish to crates.io.
+# It is idempotent (e.g. won't publish the same crates to crates.io twice), so we can run it repeatedly until it succeeds.
+
+name: Smithy-rs prod release
+run-name: ${{ github.workflow }} (${{ inputs.commit_sha }})
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: |
+          Commit SHA: The SHA of the git commit that you want to release.
+          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
+          Alternatively, you can use the name of a branch.
+        required: true
+        type: string
+
+jobs:
+  smithy-rs-prod-release:
+    name: Prod release
+    uses: ./.github/workflows/release.yml
+    with:
+      commit_sha: ${{ inputs.commit_sha }}
+      dry_run: false
+      skip_ci: false
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}

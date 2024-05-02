@@ -26,8 +26,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 import java.util.stream.Stream
 
 class ConstrainedNumberGeneratorTest {
-
     data class TestCaseInputs(val constraintAnnotation: String, val validValue: Int, val invalidValue: Int)
+
     data class TestCase(val model: Model, val validValue: Int, val invalidValue: Int, val shapeName: String)
 
     class ConstrainedNumberGeneratorTestProvider : ArgumentsProvider {
@@ -73,6 +73,9 @@ class ConstrainedNumberGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             ConstrainedNumberGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -91,7 +94,9 @@ class ConstrainedNumberGeneratorTest {
                 name = "try_from_fail",
                 test = """
                     let constrained_res: Result<${testCase.shapeName}, _> = ${testCase.invalidValue}.try_into();
-                    constrained_res.unwrap_err();
+                    let error = constrained_res.unwrap_err();
+                    is_error(&error);
+                    is_display(&error);
                 """,
             )
             unitTest(
@@ -129,12 +134,13 @@ class ConstrainedNumberGeneratorTest {
     @ArgumentsSource(NoStructuralConstructorTestProvider::class)
     fun `type should not be constructable without using a constructor`(args: Triple<String, String, String>) {
         val (smithyType, shapeName, rustType) = args
-        val model = """
+        val model =
+            """
             namespace test
 
             @range(min: -1, max: 5)
             $smithyType $shapeName
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedShape = model.lookup<NumberShape>("test#$shapeName")
 
         val codegenContext = serverTestCodegenContext(model)

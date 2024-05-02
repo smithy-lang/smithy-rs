@@ -22,14 +22,16 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
 class ServerHttpSensitivityGeneratorTest {
-    private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(TestRuntimeConfig).toType(),
-        "Http" to CargoDependency.Http.toType(),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(TestRuntimeConfig).toType(),
+            "Http" to CargoDependency.Http.toType(),
+        )
 
     @Test
     fun `query closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -48,7 +50,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpQuery("query_b")
                 queryB: SensitiveString
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -77,7 +79,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `query params closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -95,7 +98,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpQueryParams()
                 params: StringMap,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -123,7 +126,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `query params key closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -144,7 +148,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: String
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -171,7 +175,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `query params value closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -192,7 +197,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: SensitiveValue
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -219,7 +224,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `query params none`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -237,7 +243,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: String
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -250,7 +256,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `header closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -269,7 +276,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpHeader("header-b")
                 headerB: SensitiveString
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -299,7 +306,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `prefix header closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -318,7 +326,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: String
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -349,7 +357,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `prefix header none`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -367,7 +376,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: String
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -379,7 +388,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `prefix headers key closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -399,7 +409,7 @@ class ServerHttpSensitivityGeneratorTest {
                 value: String
             }
 
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -432,7 +442,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `prefix headers value closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             operation Secret {
@@ -452,7 +463,7 @@ class ServerHttpSensitivityGeneratorTest {
                 key: String,
                 value: SensitiveValue
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -486,7 +497,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `uri closure`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @http(method: "GET", uri: "/secret/{labelA}/{labelB}")
@@ -505,7 +517,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpLabel
                 labelB: SensitiveString,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 
@@ -535,7 +547,8 @@ class ServerHttpSensitivityGeneratorTest {
 
     @Test
     fun `uri greedy`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @http(method: "GET", uri: "/secret/{labelA}/{labelB+}/labelC")
@@ -554,7 +567,7 @@ class ServerHttpSensitivityGeneratorTest {
                 @httpLabel
                 labelB: SensitiveString,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
         val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
 

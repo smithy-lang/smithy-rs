@@ -82,7 +82,10 @@ class PythonServerOperationHandlerGenerator(
         )
     }
 
-    private fun renderPyFunction(name: String, output: String): Writable =
+    private fun renderPyFunction(
+        name: String,
+        output: String,
+    ): Writable =
         writable {
             rustTemplate(
                 """
@@ -101,7 +104,10 @@ class PythonServerOperationHandlerGenerator(
             )
         }
 
-    private fun renderPyCoroutine(name: String, output: String): Writable =
+    private fun renderPyCoroutine(
+        name: String,
+        output: String,
+    ): Writable =
         writable {
             rustTemplate(
                 """

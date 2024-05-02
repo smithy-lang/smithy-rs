@@ -108,7 +108,7 @@ impl FromStr for Reference {
             ),
             Some((repo, number)) => {
                 let number = number.parse::<usize>()?;
-                if !matches!(repo, "smithy-rs" | "aws-sdk-rust") {
+                if !matches!(repo, "smithy-rs" | "aws-sdk-rust" | "aws-sdk") {
                     bail!("unexpected repo: {}", repo);
                 }
                 Ok(Reference {
@@ -120,11 +120,68 @@ impl FromStr for Reference {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(untagged)]
+enum AuthorsInner {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "AuthorsInner", into = "AuthorsInner")]
+pub struct Authors(pub(super) Vec<String>);
+
+impl From<AuthorsInner> for Authors {
+    fn from(value: AuthorsInner) -> Self {
+        match value {
+            AuthorsInner::Single(author) => Authors(vec![author]),
+            AuthorsInner::Multiple(authors) => Authors(authors),
+        }
+    }
+}
+
+impl From<Authors> for AuthorsInner {
+    fn from(mut value: Authors) -> Self {
+        match value.0.len() {
+            0 => Self::Single("".to_string()),
+            1 => Self::Single(value.0.pop().unwrap()),
+            _ => Self::Multiple(value.0),
+        }
+    }
+}
+
+impl Authors {
+    pub fn iter(&self) -> impl Iterator<Item = &String> {
+        self.0.iter()
+    }
+
+    // Checks whether the number of authors is 0 or any author has a empty name.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty() || self.iter().any(String::is_empty)
+    }
+
+    pub fn validate_usernames(&self) -> Result<()> {
+        fn validate_username(author: &str) -> Result<()> {
+            if !author.chars().all(|c| c.is_alphanumeric() || c == '-') {
+                bail!("Author, \"{author}\", is not a valid GitHub username: [a-zA-Z0-9\\-]")
+            }
+            Ok(())
+        }
+        for author in self.iter() {
+            validate_username(author)?
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HandAuthoredEntry {
     pub message: String,
     pub meta: Meta,
-    pub author: String,
+    // Retain singular field named "author" for backwards compatibility,
+    // but also accept plural "authors".
+    #[serde(rename = "author", alias = "authors")]
+    pub authors: Authors,
     #[serde(default)]
     pub references: Vec<Reference>,
     /// Optional commit hash to indicate "since when" these changes were made
@@ -140,10 +197,14 @@ pub struct HandAuthoredEntry {
 impl HandAuthoredEntry {
     /// Validate a changelog entry to ensure it follows standards
     pub fn validate(&self, validation_set: ValidationSet) -> Result<()> {
-        if self.author.is_empty() {
+        if self.authors.iter().any(|author| author.trim().is_empty()) {
             bail!("Author must be set (was empty)");
         }
-        if !self.author.chars().all(|c| c.is_alphanumeric() || c == '-') {
+        if !self
+            .authors
+            .iter()
+            .any(|author| author.chars().all(|c| c.is_alphanumeric() || c == '-'))
+        {
             bail!("Author must be valid GitHub username: [a-zA-Z0-9\\-]")
         }
         if validation_set == ValidationSet::Development && self.references.is_empty() {
@@ -211,9 +272,9 @@ impl Changelog {
     }
 
     pub fn merge(&mut self, other: Changelog) {
-        self.smithy_rs.extend(other.smithy_rs.into_iter());
-        self.aws_sdk_rust.extend(other.aws_sdk_rust.into_iter());
-        self.sdk_models.extend(other.sdk_models.into_iter());
+        self.smithy_rs.extend(other.smithy_rs);
+        self.aws_sdk_rust.extend(other.aws_sdk_rust);
+        self.sdk_models.extend(other.sdk_models);
     }
 
     pub fn parse_str(value: &str) -> Result<Changelog> {
@@ -291,7 +352,7 @@ impl Changelog {
 
 #[cfg(test)]
 mod tests {
-    use super::{Changelog, HandAuthoredEntry, SdkAffected, ValidationSet};
+    use super::*;
     use anyhow::Context;
 
     #[test]
@@ -519,6 +580,35 @@ mod tests {
                 .context("String should have parsed as it has none meta.sdk")
                 .unwrap();
             assert_eq!(value.meta.target, None);
+        }
+        // single author
+        let value = r#"
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            author = "rcoh"
+        "#;
+        {
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed with multiple authors")
+                .unwrap();
+            assert_eq!(value.authors, Authors(vec!["rcoh".to_string()]));
+        }
+        // multiple authors
+        let value = r#"
+            message = "Fix typos in module documentation for generated crates"
+            references = ["smithy-rs#920"]
+            meta = { "breaking" = false, "tada" = false, "bug" = false }
+            authors = ["rcoh", "crisidev"]
+        "#;
+        {
+            let value: HandAuthoredEntry = toml::from_str(value)
+                .context("String should have parsed with multiple authors")
+                .unwrap();
+            assert_eq!(
+                value.authors,
+                Authors(vec!["rcoh".to_string(), "crisidev".to_string()])
+            );
         }
     }
 }

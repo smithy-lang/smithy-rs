@@ -12,7 +12,7 @@ use aws_config::SdkConfig;
 use tracing::{info_span, Instrument};
 
 use crate::current_canary::paginator_canary;
-use crate::current_canary::{s3_canary, transcribe_canary};
+use crate::current_canary::{s3_canary, transcribe_canary, wasm_canary};
 
 #[macro_export]
 macro_rules! mk_canary {
@@ -21,6 +21,7 @@ macro_rules! mk_canary {
             sdk_config: &aws_config::SdkConfig,
             env: &CanaryEnv,
         ) -> Option<(&'static str, $crate::canary::CanaryFuture)> {
+            #[allow(clippy::redundant_closure_call)]
             Some(($name, Box::pin($run_canary(sdk_config, env))))
         }
     };
@@ -34,6 +35,7 @@ pub fn get_canaries_to_run(
         paginator_canary::mk_canary(&sdk_config, &env),
         s3_canary::mk_canary(&sdk_config, &env),
         transcribe_canary::mk_canary(&sdk_config, &env),
+        wasm_canary::mk_canary(&sdk_config, &env),
     ];
 
     canaries
@@ -48,9 +50,11 @@ pub fn get_canaries_to_run(
         .collect()
 }
 
+#[derive(Clone)]
 pub struct CanaryEnv {
     pub(crate) s3_bucket_name: String,
     pub(crate) s3_mrap_bucket_arn: String,
+    pub(crate) s3_express_bucket_name: String,
     pub(crate) expected_transcribe_result: String,
     #[allow(dead_code)]
     pub(crate) page_size: usize,
@@ -61,6 +65,7 @@ impl fmt::Debug for CanaryEnv {
         f.debug_struct("CanaryEnv")
             .field("s3_bucket_name", &"*** redacted ***")
             .field("s3_mrap_bucket_arn", &"*** redacted ***")
+            .field("s3_express_bucket_name", &"*** redacted ***")
             .field(
                 "expected_transcribe_result",
                 &self.expected_transcribe_result,
@@ -77,13 +82,16 @@ impl CanaryEnv {
         // S3 MRAP bucket name to test against
         let s3_mrap_bucket_arn =
             env::var("CANARY_S3_MRAP_BUCKET_ARN").expect("CANARY_S3_MRAP_BUCKET_ARN must be set");
+        // S3 Express bucket name to test against
+        let s3_express_bucket_name = env::var("CANARY_S3_EXPRESS_BUCKET_NAME")
+            .expect("CANARY_S3_EXPRESS_BUCKET_NAME must be set");
 
         // Expected transcription from Amazon Transcribe from the embedded audio file.
         // This is an environment variable so that the code doesn't need to be changed if
         // Amazon Transcribe starts returning different output for the same audio.
         let expected_transcribe_result = env::var("CANARY_EXPECTED_TRANSCRIBE_RESULT")
             .unwrap_or_else(|_| {
-                "Good day to you transcribe. This is Polly talking to you from the Rust S. D. K."
+                "Good day to you transcribe. This is Polly talking to you from the Rust SDK."
                     .to_string()
             });
 
@@ -95,6 +103,7 @@ impl CanaryEnv {
         Self {
             s3_bucket_name,
             s3_mrap_bucket_arn,
+            s3_express_bucket_name,
             expected_transcribe_result,
             page_size,
         }

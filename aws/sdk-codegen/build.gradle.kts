@@ -7,7 +7,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     kotlin("jvm")
-    jacoco
     `maven-publish`
 }
 
@@ -30,8 +29,13 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 // Reusable license copySpec
@@ -67,7 +71,7 @@ if (isTestingEnabled.toBoolean()) {
     }
 
     tasks.compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "11"
     }
 
     tasks.test {
@@ -80,18 +84,6 @@ if (isTestingEnabled.toBoolean()) {
             showStackTraces = true
         }
     }
-
-    // Configure jacoco (code coverage) to generate an HTML report
-    tasks.jacocoTestReport {
-        reports {
-            xml.required.set(false)
-            csv.required.set(false)
-            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
-        }
-    }
-
-    // Always run the jacoco test report after testing.
-    tasks["test"].finalizedBy(tasks["jacocoTestReport"])
 }
 
 publishing {

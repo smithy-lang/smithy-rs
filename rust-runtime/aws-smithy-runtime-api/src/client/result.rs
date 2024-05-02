@@ -56,7 +56,7 @@ pub mod builders {
     source_only_error_builder!(TimeoutError, TimeoutErrorBuilder, BoxError);
     source_only_error_builder!(DispatchFailure, DispatchFailureBuilder, ConnectorError);
 
-    /// Builder for [`ResponseError`](super::ResponseError).
+    /// Builder for [`ResponseError`].
     #[derive(Debug)]
     pub struct ResponseErrorBuilder<R> {
         source: Option<BoxError>,
@@ -111,7 +111,7 @@ pub mod builders {
         }
     }
 
-    /// Builder for [`ServiceError`](super::ServiceError).
+    /// Builder for [`ServiceError`].
     #[derive(Debug)]
     pub struct ServiceErrorBuilder<E, R> {
         source: Option<E>,
@@ -170,7 +170,7 @@ pub mod builders {
 /// Error context for [`SdkError::ConstructionFailure`]
 #[derive(Debug)]
 pub struct ConstructionFailure {
-    source: BoxError,
+    pub(crate) source: BoxError,
 }
 
 impl ConstructionFailure {
@@ -314,7 +314,7 @@ pub trait CreateUnhandledError {
 /// When logging an error from the SDK, it is recommended that you either wrap the error in
 /// [`DisplayErrorContext`](aws_smithy_types::error::display::DisplayErrorContext), use another
 /// error reporter library that visits the error's cause/source chain, or call
-/// [`Error::source`](std::error::Error::source) for more details about the underlying cause.
+/// [`Error::source`] for more details about the underlying cause.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum SdkError<E, R> {
@@ -409,6 +409,36 @@ impl<E, R> SdkError<E, R> {
         match self {
             Self::ServiceError(context) => context.source,
             _ => E::create_unhandled_error(self.into(), None),
+        }
+    }
+
+    /// Returns a reference underlying service error `E` if there is one
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use aws_smithy_runtime_api::client::result::SdkError;
+    /// # #[derive(Debug)] enum GetObjectError { NoSuchKey(()), Other(()) }
+    /// # impl std::fmt::Display for GetObjectError {
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { unimplemented!() }
+    /// # }
+    /// # impl std::error::Error for GetObjectError {}
+    /// # impl GetObjectError {
+    /// #   fn is_not_found(&self) -> bool { true }
+    /// # }
+    /// # fn example() -> Result<(), GetObjectError> {
+    /// # let sdk_err = SdkError::service_error(GetObjectError::NoSuchKey(()), ());
+    /// if sdk_err.as_service_error().map(|e|e.is_not_found()) == Some(true) {
+    ///     println!("the object doesn't exist");
+    ///     // return None, or handle this error specifically
+    /// }
+    /// // ... handle other error cases, happy path, etc.
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn as_service_error(&self) -> Option<&E> {
+        match self {
+            Self::ServiceError(err) => Some(&err.source),
+            _ => None,
         }
     }
 

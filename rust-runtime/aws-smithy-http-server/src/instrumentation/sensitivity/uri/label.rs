@@ -26,7 +26,7 @@ use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 /// println!("{uri}");
 /// ```
 ///
-/// [httpLabel trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait
+/// [httpLabel trait]: https://smithy.io/2.0/spec/http-bindings.html#httplabel-trait
 #[allow(missing_debug_implementations)]
 #[derive(Clone)]
 pub struct Label<'a, F> {
@@ -81,6 +81,8 @@ where
         if let Some(greedy_label) = &self.greedy_label {
             // Calculate the byte index of the start of the greedy label and whether it was reached while writing the
             // normal labels.
+            // TODO(clippy): Switch from fold to try_fold
+            #[allow(clippy::manual_try_fold)]
             let (greedy_start, greedy_hit) = self
                 .path
                 .split('/')

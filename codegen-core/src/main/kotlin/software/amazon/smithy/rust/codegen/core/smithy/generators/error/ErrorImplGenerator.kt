@@ -108,21 +108,22 @@ class ErrorImplGenerator(
                 val messageSymbol = symbolProvider.toSymbol(messageShape).mapRustType { t -> t.asDeref() }
                 val messageType = messageSymbol.rustType()
                 val memberName = symbolProvider.toMemberName(messageShape)
-                val (returnType, message) = if (messageType.stripOuter<RustType.Option>() is RustType.Opaque) {
-                    // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
-                    if (messageSymbol.isOptional()) {
-                        "Option<&${messageType.stripOuter<RustType.Option>().render()}>" to
-                            "self.$memberName.as_ref()"
+                val (returnType, message) =
+                    if (messageType.stripOuter<RustType.Option>() is RustType.Opaque) {
+                        // The string shape has a constraint trait that makes its symbol be a wrapper tuple struct.
+                        if (messageSymbol.isOptional()) {
+                            "Option<&${messageType.stripOuter<RustType.Option>().render()}>" to
+                                "self.$memberName.as_ref()"
+                        } else {
+                            "&${messageType.render()}" to "&self.$memberName"
+                        }
                     } else {
-                        "&${messageType.render()}" to "&self.$memberName"
+                        if (messageSymbol.isOptional()) {
+                            messageType.render() to "self.$memberName.as_deref()"
+                        } else {
+                            messageType.render() to "self.$memberName.as_ref()"
+                        }
                     }
-                } else {
-                    if (messageSymbol.isOptional()) {
-                        messageType.render() to "self.$memberName.as_deref()"
-                    } else {
-                        messageType.render() to "self.$memberName.as_ref()"
-                    }
-                }
 
                 rust(
                     """
@@ -153,9 +154,10 @@ class ErrorImplGenerator(
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 // If the error id and the Rust name don't match, print the actual error id for easy debugging
                 // Note: Exceptions cannot be renamed so it is OK to not call `getName(service)` here
-                val errorDesc = symbol.name.letIf(symbol.name != shape.id.name) { symbolName ->
-                    "$symbolName [${shape.id.name}]"
-                }
+                val errorDesc =
+                    symbol.name.letIf(symbol.name != shape.id.name) { symbolName ->
+                        "$symbolName [${shape.id.name}]"
+                    }
                 write("::std::write!(f, ${errorDesc.dq()})?;")
                 messageShape?.let {
                     if (it.shouldRedact(model)) {

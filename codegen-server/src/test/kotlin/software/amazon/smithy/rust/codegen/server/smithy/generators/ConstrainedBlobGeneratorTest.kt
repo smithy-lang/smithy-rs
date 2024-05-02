@@ -32,27 +32,28 @@ class ConstrainedBlobGeneratorTest {
     data class TestCase(val model: Model, val validBlob: String, val invalidBlob: String)
 
     class ConstrainedBlobGeneratorTestProvider : ArgumentsProvider {
-        private val testCases = listOf(
-            // Min and max.
-            Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
-            // Min equal to max.
-            Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
-            // Only min.
-            Triple("@length(min: 11)", "validString", ""),
-            // Only max.
-            Triple("@length(max: 11)", "", "invalidString"),
-        ).map {
-            TestCase(
-                """
-                namespace test
+        private val testCases =
+            listOf(
+                // Min and max.
+                Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
+                // Min equal to max.
+                Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
+                // Only min.
+                Triple("@length(min: 11)", "validString", ""),
+                // Only max.
+                Triple("@length(max: 11)", "", "invalidString"),
+            ).map {
+                TestCase(
+                    """
+                    namespace test
 
-                ${it.first}
-                blob ConstrainedBlob
-                """.asSmithyModel(),
-                "aws_smithy_types::Blob::new(Vec::from(${it.second.dq()}))",
-                "aws_smithy_types::Blob::new(Vec::from(${it.third.dq()}))",
-            )
-        }
+                    ${it.first}
+                    blob ConstrainedBlob
+                    """.asSmithyModel(),
+                    "aws_smithy_types::Blob::new(Vec::from(${it.second.dq()}))",
+                    "aws_smithy_types::Blob::new(Vec::from(${it.third.dq()}))",
+                )
+            }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             testCases.map { Arguments.of(it) }.stream()
@@ -118,12 +119,13 @@ class ConstrainedBlobGeneratorTest {
 
     @Test
     fun `type should not be constructable without using a constructor`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @length(min: 1, max: 70)
             blob ConstrainedBlob
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedBlobShape = model.lookup<BlobShape>("test#ConstrainedBlob")
 
         val codegenContext = serverTestCodegenContext(model)

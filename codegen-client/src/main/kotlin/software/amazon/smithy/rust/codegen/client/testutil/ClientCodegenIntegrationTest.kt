@@ -18,21 +18,26 @@ import java.nio.file.Path
 
 fun clientIntegrationTest(
     model: Model,
-    params: IntegrationTestParams = IntegrationTestParams(cargoCommand = "cargo test --features behavior-version-latest"),
+    params: IntegrationTestParams =
+        IntegrationTestParams(cargoCommand = "cargo test --features behavior-version-latest"),
     additionalDecorators: List<ClientCodegenDecorator> = listOf(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ): Path {
     fun invokeRustCodegenPlugin(ctx: PluginContext) {
-        val codegenDecorator = object : ClientCodegenDecorator {
-            override val name: String = "Add tests"
-            override val order: Byte = 0
+        val codegenDecorator =
+            object : ClientCodegenDecorator {
+                override val name: String = "Add tests"
+                override val order: Byte = 0
 
-            override fun classpathDiscoverable(): Boolean = false
+                override fun classpathDiscoverable(): Boolean = false
 
-            override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-                test(codegenContext, rustCrate)
+                override fun extras(
+                    codegenContext: ClientCodegenContext,
+                    rustCrate: RustCrate,
+                ) {
+                    test(codegenContext, rustCrate)
+                }
             }
-        }
         RustClientCodegenPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     }
     return codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)

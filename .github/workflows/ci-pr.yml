@@ -21,6 +21,7 @@ jobs:
   # The login password is encrypted with the repo secret DOCKER_LOGIN_TOKEN_PASSPHRASE
   save-docker-login-token:
     name: Save a docker login token
+    timeout-minutes: 10
     if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
@@ -31,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Attempt to load a docker login password
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -50,6 +51,7 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
+    timeout-minutes: 60
     needs: save-docker-login-token
     if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
     runs-on: smithy_ubuntu-latest_8-core
@@ -60,7 +62,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
     - name: Acquire base image
@@ -69,7 +71,7 @@ jobs:
         DOCKER_BUILDKIT: 1
       run: ./smithy-rs/.github/scripts/acquire-build-image
     - name: Acquire credentials
-      uses: aws-actions/configure-aws-credentials@v2.2.0
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
@@ -93,6 +95,8 @@ jobs:
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
 
   # The PR bot requires a Docker build image, so make it depend on the `acquire-base-image` job.
   pr_bot:
@@ -109,8 +113,9 @@ jobs:
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
 
   semver-checks:
-    name: check the semver status of this PR
+    name: Check PR semver compliance
     runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 20
     needs:
     - save-docker-login-token
     - acquire-base-image
@@ -121,13 +126,13 @@ jobs:
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
     - name: Get PR info
       id: check-breaking-label
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           const response = await github.rest.pulls.get({
@@ -148,6 +153,6 @@ jobs:
       with:
         action: check-semver
         action-arguments: ${{ github.event.pull_request.base.sha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
-    - name: print help message
+    - name: Print help message
       if: failure()
-      run: echo "::error::This pull request contains breaking changes. Please add the `breaking-changes` label and a changelog entry"
+      run: echo "::error::This pull request either contains breaking changes, or has cross-crate changes that may be backwards compatible, but that cargo-semver-checks cannot verify. Please scrutinize the change for backwards compatibility."

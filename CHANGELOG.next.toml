@@ -10,90 +10,31 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
 [[aws-sdk-rust]]
-message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
-references = ["smithy-rs#3262"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
-references = ["smithy-rs#3262"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = """Client creation now takes microseconds instead of milliseconds.
-Previously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.
-For applications that used several clients, this would increase start-up time in cases where it really matters,
-such as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the
-result of the compilation."""
-references = ["aws-sdk-rust#975", "smithy-rs#3269"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = """Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:
-
-```rust
-async fn main() {
-    let conf = aws_config::defaults(BehaviorVersion::latest())
-        .test_credentials()
-        .await;
-}
-```
-
-This is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.
+message = """
+`aws-config::loader::ConfigLoader` now creates an `IdentityCache` by default when using `BehaviorVersion::v2024_03_28()`
+or newer. If you're using `BehaviorVersion::latest()`, you will get this change automatically when updating. This
+allows clients created from `SdkConfig` to use the same cache instance by default resulting in fewer cache misses
+when using multiple clients.
 """
+references = ["smithy-rs#3427"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-references = ["smithy-rs#3279", "aws-sdk-rust#971"]
+author = "aajtodd"
+
+[[smithy-rs]]
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+authors = ["jdisanti"]
 
 [[aws-sdk-rust]]
-message = "Improve the error messages for when auth fails to select an auth scheme for a request."
-references = ["aws-sdk-rust#979", "smithy-rs#3277"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`. Updating your SDK is not necessary, this change will happen when a new version of the client libraries are consumed."
+references = ["smithy-rs#3527"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = "Improve the error messages for when auth fails to select an auth scheme for a request."
-references = ["smithy-rs#3277"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
-references = ["aws-sdk-rust#986", "smithy-rs#3282"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
-references = ["smithy-rs#3282"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Expose local socket address from ConnectionMetadata."
-references = ["aws-sdk-rust#990"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "declanvk"
-
-[[smithy-rs]]
-message = "All generated docs now include docsrs labels when features are required"
-references = ["smithy-rs#3121", "smithy-rs#3295"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "All generated docs now include docsrs labels when features are required"
-references = ["smithy-rs#3121", "smithy-rs#3295"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-
-[[smithy-rs]]
-message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/enum.Number.html) `TryInto` implementations now succesfully convert from `f64` to numeric types when no precision is lost. This fixes some deserialization issues where numbers like `25.0` were sent when `Byte` fields were expected."
-references = ["smithy-rs#3294"]
+message = "Implement Debug for DateTime"
+references = ["smithy-rs#3161"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-author = "rcoh"
+author = "mnissenb"

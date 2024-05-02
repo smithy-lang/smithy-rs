@@ -29,7 +29,12 @@ dependencies {
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
 }
 
-tasks.compileKotlin { kotlinOptions.jvmTarget = "1.8" }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+tasks.compileKotlin { kotlinOptions.jvmTarget = "11" }
 
 // Reusable license copySpec
 val licenseSpec = copySpec {
@@ -60,7 +65,7 @@ if (isTestingEnabled.toBoolean()) {
         testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
     }
 
-    tasks.compileTestKotlin { kotlinOptions.jvmTarget = "1.8" }
+    tasks.compileTestKotlin { kotlinOptions.jvmTarget = "11" }
 
     tasks.test {
         useJUnitPlatform()

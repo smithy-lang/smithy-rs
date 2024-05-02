@@ -89,7 +89,7 @@ impl Check for CrateLicense {
 fn check_crate_license(package: Package, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
     let mut errors = vec![];
     match package.license {
-        Some(license) if license == "Apache-2.0" => {}
+        Some(license) if license.as_ref().unwrap() == "Apache-2.0" => {}
         incorrect_license => errors.push(LintError::new(format!(
             "invalid license: {:?}",
             incorrect_license
@@ -145,7 +145,13 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
     } else {
         RUST_SDK_TEAM
     };
-    if !package.authors.iter().any(|s| s == expected_author) {
+    if !package
+        .authors
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|s| s == expected_author)
+    {
         errors.push(LintError::new(format!(
             "missing `{}` in package author list ({:?})",
             expected_author, package.authors
@@ -211,6 +217,7 @@ fn check_docs_rs(package: &Package<DocsRsMetadata>) -> Vec<LintError> {
 const DEFAULT_DOCS_RS_SECTION: &str = r#"
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 "#;
 

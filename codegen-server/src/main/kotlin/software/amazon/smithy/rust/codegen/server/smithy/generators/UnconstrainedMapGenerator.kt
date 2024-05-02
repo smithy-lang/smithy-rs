@@ -60,11 +60,12 @@ class UnconstrainedMapGenerator(
         }
     private val constraintViolationSymbol = constraintViolationSymbolProvider.toSymbol(shape)
     private val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
-    private val constrainedSymbol = if (shape.isDirectlyConstrained(symbolProvider)) {
-        constrainedShapeSymbolProvider.toSymbol(shape)
-    } else {
-        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
-    }
+    private val constrainedSymbol =
+        if (shape.isDirectlyConstrained(symbolProvider)) {
+            constrainedShapeSymbolProvider.toSymbol(shape)
+        } else {
+            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape)
+        }
     private val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
     private val valueShape = model.expectShape(shape.value.target)
 
@@ -107,74 +108,80 @@ class UnconstrainedMapGenerator(
                             !valueShape.isDirectlyConstrained(symbolProvider) &&
                             valueShape !is StructureShape &&
                             valueShape !is UnionShape
-                    val constrainedMemberValueSymbol = if (resolvesToNonPublicConstrainedValueType) {
-                        pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
-                    } else {
-                        constrainedShapeSymbolProvider.toSymbol(shape.value)
-                    }
-                    val constrainedValueSymbol = if (resolvesToNonPublicConstrainedValueType) {
-                        pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
-                    } else {
-                        constrainedShapeSymbolProvider.toSymbol(valueShape)
-                    }
+                    val constrainedMemberValueSymbol =
+                        if (resolvesToNonPublicConstrainedValueType) {
+                            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
+                        } else {
+                            constrainedShapeSymbolProvider.toSymbol(shape.value)
+                        }
+                    val constrainedValueSymbol =
+                        if (resolvesToNonPublicConstrainedValueType) {
+                            pubCrateConstrainedShapeSymbolProvider.toSymbol(valueShape)
+                        } else {
+                            constrainedShapeSymbolProvider.toSymbol(valueShape)
+                        }
 
                     val constrainedKeySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
                     val epilogueWritable = writable { rust("Ok((k, v))") }
-                    val constrainKeyWritable = writable {
-                        rustTemplate(
-                            "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;",
-                            "ConstrainedKeySymbol" to constrainedKeySymbol,
-                        )
-                    }
-                    val constrainValueWritable = writable {
-                        val boxErr = if (shape.value.hasTrait<ConstraintViolationRustBoxTrait>()) {
-                            ".map_err(Box::new)"
-                        } else {
-                            ""
-                        }
-                        if (constrainedMemberValueSymbol.isOptional()) {
-                            // The map is `@sparse`.
-                            rustBlock("match v") {
-                                rust("None => Ok((k, None)),")
-                                withBlock("Some(v) =>", ",") {
-                                    // DRYing this up with the else branch below would make this less understandable.
-                                    rustTemplate(
-                                        """
-                                        match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
-                                            Ok(v) => Ok((k, Some(v))),
-                                            Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
-                                        }
-                                        """,
-                                        "ConstrainedValueSymbol" to constrainedValueSymbol,
-                                    )
-                                }
-                            }
-                        } else {
+                    val constrainKeyWritable =
+                        writable {
                             rustTemplate(
-                                """
-                                match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
-                                    Ok(v) => #{Epilogue:W},
-                                    Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
-                                }
-                                """,
-                                "ConstrainedValueSymbol" to constrainedValueSymbol,
-                                "Epilogue" to epilogueWritable,
+                                "let k: #{ConstrainedKeySymbol} = k.try_into().map_err(Self::Error::Key)?;",
+                                "ConstrainedKeySymbol" to constrainedKeySymbol,
                             )
                         }
-                    }
+                    val constrainValueWritable =
+                        writable {
+                            val boxErr =
+                                if (shape.value.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                                    ".map_err(Box::new)"
+                                } else {
+                                    ""
+                                }
+                            if (constrainedMemberValueSymbol.isOptional()) {
+                                // The map is `@sparse`.
+                                rustBlock("match v") {
+                                    rust("None => Ok((k, None)),")
+                                    withBlock("Some(v) =>", ",") {
+                                        // DRYing this up with the else branch below would make this less understandable.
+                                        rustTemplate(
+                                            """
+                                            match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
+                                                Ok(v) => Ok((k, Some(v))),
+                                                Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                                            }
+                                            """,
+                                            "ConstrainedValueSymbol" to constrainedValueSymbol,
+                                        )
+                                    }
+                                }
+                            } else {
+                                rustTemplate(
+                                    """
+                                    match #{ConstrainedValueSymbol}::try_from(v)$boxErr {
+                                        Ok(v) => #{Epilogue:W},
+                                        Err(inner_constraint_violation) => Err(Self::Error::Value(k, inner_constraint_violation)),
+                                    }
+                                    """,
+                                    "ConstrainedValueSymbol" to constrainedValueSymbol,
+                                    "Epilogue" to epilogueWritable,
+                                )
+                            }
+                        }
 
-                    val constrainKVWritable = if (
-                        isKeyConstrained(keyShape, symbolProvider) &&
-                        isValueConstrained(valueShape, model, symbolProvider)
-                    ) {
-                        listOf(constrainKeyWritable, constrainValueWritable).join("\n")
-                    } else if (isKeyConstrained(keyShape, symbolProvider)) {
-                        listOf(constrainKeyWritable, epilogueWritable).join("\n")
-                    } else if (isValueConstrained(valueShape, model, symbolProvider)) {
-                        constrainValueWritable
-                    } else {
-                        epilogueWritable
-                    }
+                    val constrainKVWritable =
+                        if (
+                            isKeyConstrained(keyShape, symbolProvider) &&
+                            isValueConstrained(valueShape, model, symbolProvider)
+                        ) {
+                            listOf(constrainKeyWritable, constrainValueWritable).join("\n")
+                        } else if (isKeyConstrained(keyShape, symbolProvider)) {
+                            listOf(constrainKeyWritable, epilogueWritable).join("\n")
+                        } else if (isValueConstrained(valueShape, model, symbolProvider)) {
+                            constrainValueWritable
+                        } else {
+                            epilogueWritable
+                        }
 
                     rustTemplate(
                         """

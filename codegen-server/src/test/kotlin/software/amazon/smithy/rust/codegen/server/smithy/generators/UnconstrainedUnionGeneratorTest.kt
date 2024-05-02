@@ -59,6 +59,9 @@ class UnconstrainedUnionGeneratorTest {
         }
 
         project.withModule(ServerRustModule.UnconstrainedModule) unconstrainedModuleWriter@{
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             project.withModule(ServerRustModule.Model) modelsModuleWriter@{
                 UnconstrainedUnionGenerator(codegenContext, project.createInlineModuleCreator(), this@modelsModuleWriter, unionShape).render()
 
@@ -71,11 +74,13 @@ class UnconstrainedUnionGeneratorTest {
                         let expected_err = crate::model::union::ConstraintViolation::Structure(
                             crate::model::structure::ConstraintViolation::MissingRequiredMember,
                         );
-
+                        let err = crate::model::Union::try_from(union_unconstrained).unwrap_err();
                         assert_eq!(
-                            expected_err,
-                            crate::model::Union::try_from(union_unconstrained).unwrap_err()
+                            expected_err, err
                         );
+                        is_display(&err);
+                        is_error(&err);
+                        assert_eq!(err.to_string(), "`required_member` was not provided but it is required when building `Structure`");
                     """,
                 )
 

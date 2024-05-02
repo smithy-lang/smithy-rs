@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http::header::{AUTHORIZATION, USER_AGENT};
+use http0::header::{AUTHORIZATION, USER_AGENT};
 use std::borrow::Cow;
 use std::time::Duration;
 
 const HEADER_NAME_X_RAY_TRACE_ID: &str = "x-amzn-trace-id";
 
 /// HTTP-specific signing settings
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct SigningSettings {
     /// Specifies how to encode the request URL when signing. Some services do not decode
@@ -37,11 +37,15 @@ pub struct SigningSettings {
     /// canonical request. Other services require only it to be added after
     /// calculating the signature.
     pub session_token_mode: SessionTokenMode,
+
+    /// Some services require an alternative session token header or query param instead of
+    /// `x-amz-security-token` or `X-Amz-Security-Token`.
+    pub session_token_name_override: Option<&'static str>,
 }
 
 /// HTTP payload checksum type
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PayloadChecksumKind {
     /// Add x-amz-checksum-sha256 to the canonical request
     ///
@@ -60,7 +64,7 @@ pub enum PayloadChecksumKind {
 /// do not decode the path prior to checking the signature, requiring clients to actually
 /// _double-encode_ the URI in creating the canonical request in order to pass a signature check.
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PercentEncodingMode {
     /// Re-encode the resulting URL (e.g. %30 becomes `%2530)
     Double,
@@ -74,7 +78,7 @@ pub enum PercentEncodingMode {
 ///
 /// URI path normalization is performed based on <https://www.rfc-editor.org/rfc/rfc3986>.
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UriPathNormalizationMode {
     /// Normalize the URI path according to RFC3986
     Enabled,
@@ -96,7 +100,7 @@ impl From<bool> for UriPathNormalizationMode {
 /// Config value to specify whether X-Amz-Security-Token should be part of the canonical request.
 /// <http://docs.aws.amazon.com/general/latest/gr/sigv4-add-signature-to-request.html#temporary-security-credentials>
 #[non_exhaustive]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SessionTokenMode {
     /// Include in the canonical request before calculating the signature.
     Include,
@@ -133,6 +137,7 @@ impl Default for SigningSettings {
             excluded_headers,
             uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
             session_token_mode: SessionTokenMode::Include,
+            session_token_name_override: None,
         }
     }
 }

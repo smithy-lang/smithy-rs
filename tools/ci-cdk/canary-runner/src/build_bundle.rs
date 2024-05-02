@@ -19,6 +19,90 @@ use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::handle_failure;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 
+struct RequiredDependency {
+    name: &'static str,
+    features: Option<Vec<&'static str>>,
+    disable_default_feature: bool,
+}
+
+impl RequiredDependency {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            features: None,
+            disable_default_feature: false,
+        }
+    }
+    fn with_features(mut self, features: impl IntoIterator<Item = &'static str>) -> Self {
+        self.features = Some(features.into_iter().collect());
+        self
+    }
+    fn with_default_feature_disabled(mut self) -> Self {
+        self.disable_default_feature = true;
+        self
+    }
+    fn to_string(&self, crate_source: &CrateSource) -> Result<String> {
+        match crate_source {
+            CrateSource::Path(path) => {
+                let path_name = match self.name.strip_prefix("aws-sdk-") {
+                    Some(path) => path,
+                    None => self.name,
+                };
+                let crate_path = path.join(path_name);
+                let mut result = format!(
+                    r#"{name} = {{ path = "{path}""#,
+                    name = self.name,
+                    path = crate_path.to_string_lossy(),
+                );
+                if let Some(features) = &self.features {
+                    self.write_features(features, &mut result);
+                }
+                if self.disable_default_feature {
+                    result.push_str(", default-features = false");
+                }
+                result.push_str(" }");
+                Ok(result)
+            }
+            CrateSource::VersionsManifest {
+                versions,
+                release_tag,
+            } => match versions.crates.get(self.name) {
+                Some(version) => {
+                    let mut result = format!(
+                        r#"{name} = {{ version = "{version}""#,
+                        name = self.name,
+                        version = version.version,
+                    );
+                    if let Some(features) = &self.features {
+                        self.write_features(features, &mut result);
+                    }
+                    if self.disable_default_feature {
+                        result.push_str(", default-features = false");
+                    }
+                    result.push_str(" }");
+                    Ok(result)
+                }
+                None => {
+                    bail!(
+                        "Couldn't find `{name}` in versions.toml for `{release_tag}`",
+                        name = self.name,
+                    )
+                }
+            },
+        }
+    }
+    fn write_features(&self, features: &[&'static str], output: &mut String) {
+        output.push_str(&format!(
+            r#", features = [{features}]"#,
+            features = features
+                .iter()
+                .map(|feature| format!(r#""{feature}""#))
+                .collect::<Vec<_>>()
+                .join(","),
+        ));
+    }
+}
+
 const BASE_MANIFEST: &str = r#"
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
@@ -54,14 +138,58 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
 "#;
 
-const REQUIRED_SDK_CRATES: &[&str] = &[
-    "aws-config",
-    "aws-sdk-s3",
-    "aws-sdk-ec2",
-    "aws-sdk-transcribestreaming",
-];
+lazy_static! {
+    static ref REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
+        RequiredDependency::new("aws-config").with_features(["behavior-version-latest"]),
+        RequiredDependency::new("aws-sdk-s3"),
+        RequiredDependency::new("aws-sdk-ec2"),
+        RequiredDependency::new("aws-sdk-transcribestreaming"),
+        RequiredDependency::new("aws-smithy-wasm"),
+    ];
+}
+
+const WASM_BASE_MANIFEST: &str = r#"
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
+[package]
+name = "aws-sdk-rust-lambda-canary-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+# metadata used by cargo-component to identify which wit world to embed in the binary
+[package.metadata.component]
+package = "aws:component"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+"#;
+
+lazy_static! {
+    static ref WASM_REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
+        RequiredDependency::new("aws-config")
+            .with_features(["behavior-version-latest"])
+            .with_default_feature_disabled(),
+        RequiredDependency::new("aws-sdk-s3").with_default_feature_disabled(),
+        RequiredDependency::new("aws-smithy-async")
+            .with_features(["rt-tokio"])
+            .with_default_feature_disabled(),
+        RequiredDependency::new("aws-smithy-wasm"),
+    ];
+}
 
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
@@ -106,6 +234,7 @@ pub struct BuildBundleArgs {
     pub manifest_only: bool,
 }
 
+#[derive(Clone)]
 enum CrateSource {
     Path(PathBuf),
     VersionsManifest {
@@ -130,7 +259,7 @@ fn enabled_feature(crate_source: &CrateSource) -> String {
 
 fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     let mut output = BASE_MANIFEST.to_string();
-    write_dependencies(REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
+    write_dependencies(&REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
     write!(output, "\n[features]\n").unwrap();
     writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
@@ -151,40 +280,12 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
 }
 
 fn write_dependencies(
-    required_crates: &[&str],
+    required_crates: &[RequiredDependency],
     output: &mut String,
     crate_source: &CrateSource,
 ) -> Result<()> {
-    for &required_crate in required_crates {
-        match &crate_source {
-            CrateSource::Path(path) => {
-                let path_name = match required_crate.strip_prefix("aws-sdk-") {
-                    Some(path) => path,
-                    None => required_crate,
-                };
-                let crate_path = path.join(path_name);
-                writeln!(
-                    output,
-                    r#"{required_crate} = {{ path = "{path}" }}"#,
-                    path = crate_path.to_string_lossy()
-                )
-                .unwrap()
-            }
-            CrateSource::VersionsManifest {
-                versions,
-                release_tag,
-            } => match versions.crates.get(required_crate) {
-                Some(version) => writeln!(
-                    output,
-                    r#"{required_crate} = "{version}""#,
-                    version = version.version
-                )
-                .unwrap(),
-                None => {
-                    bail!("Couldn't find `{required_crate}` in versions.toml for `{release_tag}`")
-                }
-            },
-        }
+    for required_crate in required_crates {
+        writeln!(output, "{}", required_crate.to_string(crate_source)?).unwrap();
     }
     Ok(())
 }
@@ -239,8 +340,25 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
     // Generate the canary Lambda's Cargo.toml
     let manifest_path = canary_path.join("Cargo.toml");
-    let crate_manifest_content = generate_crate_manifest(crate_source)?;
-    fs::write(&manifest_path, crate_manifest_content).context("failed to write Cargo.toml")?;
+    let crate_manifest_content = generate_crate_manifest(crate_source.clone())?;
+    fs::write(&manifest_path, crate_manifest_content)
+        .context(format!("failed to write Cargo.toml in {manifest_path:?}"))?;
+
+    // Generate the canary-wasm's Cargo.toml
+    let wasm_manifest_path = canary_path.join("../canary-wasm/Cargo.toml");
+    let mut wasm_crate_manifest_content = WASM_BASE_MANIFEST.to_string();
+    write_dependencies(
+        &WASM_REQUIRED_SDK_CRATES,
+        &mut wasm_crate_manifest_content,
+        &crate_source,
+    )?;
+    fs::write(&wasm_manifest_path, wasm_crate_manifest_content).context(format!(
+        "failed to write Cargo.toml in {wasm_manifest_path:?}"
+    ))?;
+
+    let wasm_manifest_path = std::env::current_dir()
+        .expect("Current dir")
+        .join("../canary-wasm/Cargo.toml");
 
     if !opt.manifest_only {
         // Compile the canary Lambda
@@ -255,6 +373,16 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         }
         handle_failure("cargo build", &command.output()?)?;
 
+        // Compile the wasm canary to a .wasm binary
+        let mut wasm_command = Command::new("cargo");
+        wasm_command
+            .arg("component")
+            .arg("build")
+            .arg("--release")
+            .arg("--manifest-path")
+            .arg(&wasm_manifest_path);
+        handle_failure("cargo component build", &wasm_command.output()?)?;
+
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
         let target_path = {
@@ -263,6 +391,14 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
                 path = path.join("x86_64-unknown-linux-musl");
             }
             path.join("release")
+        };
+        let wasm_bin_path = {
+            repository_root
+                .join("tools")
+                .join("target")
+                .join("wasm32-wasi")
+                .join("release")
+                .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
         let bin_path = target_path.join("bootstrap");
         let bundle_path = target_path.join(name_bundle(
@@ -273,12 +409,22 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
+        //Write the canary bin to the zip
         zip.start_file(
             "bootstrap",
             zip::write::FileOptions::default().unix_permissions(0o755),
         )
         .context(here!())?;
         zip.write_all(&fs::read(&bin_path).context(here!("read target"))?)
+            .context(here!())?;
+
+        // Write the wasm bin to the zip
+        zip.start_file(
+            "aws_sdk_rust_lambda_canary_wasm.wasm",
+            zip::write::FileOptions::default().unix_permissions(0o644),
+        )
+        .context(here!())?;
+        zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
             .context(here!())?;
         zip.finish().context(here!())?;
 
@@ -302,6 +448,18 @@ mod tests {
     use crate::Args;
 
     use super::*;
+
+    fn crate_version(name: &str, version: &str) -> (String, CrateVersion) {
+        (
+            name.to_string(),
+            CrateVersion {
+                category: PackageCategory::AwsRuntime, // doesn't matter for this test
+                version: version.into(),
+                source_hash: "some-hash".into(),
+                model_hash: None,
+            },
+        )
+    }
 
     #[test]
     fn test_arg_parsing() {
@@ -436,10 +594,16 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-config = { path = "some/sdk/path/aws-config" }
+edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
+aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
+aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
 
 [features]
 latest = []
@@ -452,18 +616,6 @@ default = ["latest"]
 
     #[test]
     fn test_generate_crate_manifest_with_release_tag() {
-        fn crate_version(name: &str, version: &str) -> (String, CrateVersion) {
-            (
-                name.to_string(),
-                CrateVersion {
-                    category: PackageCategory::AwsRuntime, // doesn't matter for this test
-                    version: version.into(),
-                    source_hash: "some-hash".into(),
-                    model_hash: None,
-                },
-            )
-        }
-
         pretty_assertions::assert_str_eq!(
             r#"
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
@@ -500,10 +652,16 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-config = "0.46.0"
-aws-sdk-s3 = "0.20.0"
-aws-sdk-ec2 = "0.19.0"
-aws-sdk-transcribestreaming = "0.16.0"
+edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
+wasmtime-wasi-http = "17.0.1"
+aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
+aws-sdk-s3 = { version = "0.20.0" }
+aws-sdk-ec2 = { version = "0.19.0" }
+aws-sdk-transcribestreaming = { version = "0.16.0" }
+aws-smithy-wasm = { version = "0.1.0" }
 
 [features]
 latest = []
@@ -520,6 +678,7 @@ default = ["latest"]
                         crate_version("aws-sdk-s3", "0.20.0"),
                         crate_version("aws-sdk-ec2", "0.19.0"),
                         crate_version("aws-sdk-transcribestreaming", "0.16.0"),
+                        crate_version("aws-smithy-wasm", "0.1.0"),
                     ]
                     .into_iter()
                     .collect(),
@@ -528,6 +687,96 @@ default = ["latest"]
                 release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
             })
             .expect("success")
+        );
+    }
+
+    #[test]
+    fn test_generate_canary_wasm_crate_manifest_with_paths() {
+        let mut output = WASM_BASE_MANIFEST.to_string();
+        let crate_source = CrateSource::Path("some/sdk/path".into());
+        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
+
+        pretty_assertions::assert_str_eq!(
+            r#"
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
+[package]
+name = "aws-sdk-rust-lambda-canary-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+# metadata used by cargo-component to identify which wit world to embed in the binary
+[package.metadata.component]
+package = "aws:component"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
+aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
+aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", features = ["rt-tokio"], default-features = false }
+aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
+"#,
+            output,
+        );
+    }
+
+    #[test]
+    fn test_generate_canary_wasm_crate_manifest_with_release_tag() {
+        let mut output = WASM_BASE_MANIFEST.to_string();
+        let crate_source = CrateSource::VersionsManifest {
+            versions: VersionsManifest {
+                smithy_rs_revision: "some-revision-smithy-rs".into(),
+                aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+                manual_interventions: Default::default(),
+                crates: [
+                    crate_version("aws-config", "0.46.0"),
+                    crate_version("aws-sdk-s3", "0.20.0"),
+                    crate_version("aws-smithy-async", "0.46.0"),
+                    crate_version("aws-smithy-wasm", "0.1.0"),
+                ]
+                .into_iter()
+                .collect(),
+                release: None,
+            },
+            release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
+        };
+        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
+
+        pretty_assertions::assert_str_eq!(
+            r#"
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
+[package]
+name = "aws-sdk-rust-lambda-canary-wasm"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+# metadata used by cargo-component to identify which wit world to embed in the binary
+[package.metadata.component]
+package = "aws:component"
+
+[dependencies]
+tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+aws-config = { version = "0.46.0", features = ["behavior-version-latest"], default-features = false }
+aws-sdk-s3 = { version = "0.20.0", default-features = false }
+aws-smithy-async = { version = "0.46.0", features = ["rt-tokio"], default-features = false }
+aws-smithy-wasm = { version = "0.1.0" }
+"#,
+            output
         );
     }
 

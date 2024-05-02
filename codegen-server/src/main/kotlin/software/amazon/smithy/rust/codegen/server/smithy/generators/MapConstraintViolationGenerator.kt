@@ -10,12 +10,16 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
@@ -63,11 +67,12 @@ class MapConstraintViolationGenerator(
         }
         val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
 
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constraintViolationVisibility =
+            if (publicConstrainedTypes) {
+                Visibility.PUBLIC
+            } else {
+                Visibility.PUBCRATE
+            }
 
         inlineModuleCreator(constraintViolationSymbol) {
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
@@ -83,8 +88,23 @@ class MapConstraintViolationGenerator(
                     ${if (keyConstraintViolationExists) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
                     ${if (valueConstraintViolationExists) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
                 }
+                
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            ${if (shape.hasTrait<LengthTrait>()) "#{LengthMatchingArm}" else ""}
+                            ${if (keyConstraintViolationExists) """Self::Key(key_constraint_violation) => write!(f, "{}", key_constraint_violation),""" else ""}
+                            ${if (valueConstraintViolationExists) """Self::Value(_, value_constraint_violation) => write!(f, "{}", value_constraint_violation),""" else ""}
+                        }
+                    }
+                }
+                
+                impl #{Error} for $constraintViolationName {}
                 """,
                 *constraintViolationCodegenScope,
+                "LengthMatchingArm" to lengthMatchingArm(),
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
             )
 
             if (shape.isReachableFromOperationInput()) {
@@ -94,15 +114,29 @@ class MapConstraintViolationGenerator(
                         #{MapShapeConstraintViolationImplBlock}
                     }
                     """,
-                    "MapShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
-                        shape,
-                        keyShape,
-                        valueShape,
-                        symbolProvider,
-                        model,
-                    ),
+                    "MapShapeConstraintViolationImplBlock" to
+                        validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
+                            shape,
+                            keyShape,
+                            valueShape,
+                            symbolProvider,
+                            model,
+                        ),
                 )
             }
         }
     }
+
+    private fun lengthMatchingArm() =
+        writable {
+            shape.getTrait<LengthTrait>()?.let {
+                rustTemplate(
+                    """
+                    Self::Length(length) => {
+                        write!(f, "${it.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}", length)
+                    },
+                    """,
+                )
+            }
+        }
 }

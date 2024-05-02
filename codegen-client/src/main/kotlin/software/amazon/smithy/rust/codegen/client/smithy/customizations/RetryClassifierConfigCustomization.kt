@@ -24,25 +24,27 @@ class RetryClassifierConfigCustomization(codegenContext: ClientCodegenContext) :
 
     private val retries = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries")
     private val classifiers = retries.resolve("classifiers")
-    private val codegenScope = arrayOf(
-        "ClassifyRetry" to classifiers.resolve("ClassifyRetry"),
-        "RetryStrategy" to retries.resolve("RetryStrategy"),
-        "SharedRetryClassifier" to classifiers.resolve("SharedRetryClassifier"),
-        "RetryClassifierPriority" to classifiers.resolve("RetryClassifierPriority"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "ClassifyRetry" to classifiers.resolve("ClassifyRetry"),
+            "RetryStrategy" to retries.resolve("RetryStrategy"),
+            "SharedRetryClassifier" to classifiers.resolve("SharedRetryClassifier"),
+            "RetryClassifierPriority" to classifiers.resolve("RetryClassifierPriority"),
+        )
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                ServiceConfig.ConfigImpl -> rustTemplate(
-                    """
-                    /// Returns retry classifiers currently registered by the user.
-                    pub fn retry_classifiers(&self) -> impl Iterator<Item = #{SharedRetryClassifier}> + '_ {
-                        self.runtime_components.retry_classifiers()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                ServiceConfig.ConfigImpl ->
+                    rustTemplate(
+                        """
+                        /// Returns retry classifiers currently registered by the user.
+                        pub fn retry_classifiers(&self) -> impl Iterator<Item = #{SharedRetryClassifier}> + '_ {
+                            self.runtime_components.retry_classifiers()
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
@@ -243,20 +245,21 @@ class RetryClassifierServiceRuntimePluginCustomization(codegenContext: ClientCod
     private val runtimeConfig = codegenContext.runtimeConfig
     private val retries = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries")
 
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                section.registerRetryClassifier(this) {
-                    rustTemplate(
-                        "#{HttpStatusCodeClassifier}::default()",
-                        "HttpStatusCodeClassifier" to retries.resolve("classifiers::HttpStatusCodeClassifier"),
-                    )
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            when (section) {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                    section.registerRetryClassifier(this) {
+                        rustTemplate(
+                            "#{HttpStatusCodeClassifier}::default()",
+                            "HttpStatusCodeClassifier" to retries.resolve("classifiers::HttpStatusCodeClassifier"),
+                        )
+                    }
                 }
-            }
 
-            else -> emptySection
+                else -> emptySection
+            }
         }
-    }
 }
 
 class RetryClassifierOperationCustomization(
@@ -266,32 +269,34 @@ class RetryClassifierOperationCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
 
-    override fun section(section: OperationSection): Writable = writable {
-        val classifiers = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::classifiers")
+    override fun section(section: OperationSection): Writable =
+        writable {
+            val classifiers = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::classifiers")
 
-        val codegenScope = arrayOf(
-            *RuntimeType.preludeScope,
-            "TransientErrorClassifier" to classifiers.resolve("TransientErrorClassifier"),
-            "ModeledAsRetryableClassifier" to classifiers.resolve("ModeledAsRetryableClassifier"),
-            "OperationError" to symbolProvider.symbolForOperationError(operation),
-        )
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "TransientErrorClassifier" to classifiers.resolve("TransientErrorClassifier"),
+                    "ModeledAsRetryableClassifier" to classifiers.resolve("ModeledAsRetryableClassifier"),
+                    "OperationError" to symbolProvider.symbolForOperationError(operation),
+                )
 
-        when (section) {
-            is OperationSection.RetryClassifiers -> {
-                section.registerRetryClassifier(this) {
-                    rustTemplate(
-                        "#{TransientErrorClassifier}::<#{OperationError}>::new()",
-                        *codegenScope,
-                    )
+            when (section) {
+                is OperationSection.RetryClassifiers -> {
+                    section.registerRetryClassifier(this) {
+                        rustTemplate(
+                            "#{TransientErrorClassifier}::<#{OperationError}>::new()",
+                            *codegenScope,
+                        )
+                    }
+                    section.registerRetryClassifier(this) {
+                        rustTemplate(
+                            "#{ModeledAsRetryableClassifier}::<#{OperationError}>::new()",
+                            *codegenScope,
+                        )
+                    }
                 }
-                section.registerRetryClassifier(this) {
-                    rustTemplate(
-                        "#{ModeledAsRetryableClassifier}::<#{OperationError}>::new()",
-                        *codegenScope,
-                    )
-                }
+                else -> emptySection
             }
-            else -> emptySection
         }
-    }
 }

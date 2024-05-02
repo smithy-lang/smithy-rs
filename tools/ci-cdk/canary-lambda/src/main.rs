@@ -123,7 +123,7 @@ async fn lambda_main(sdk_config: SdkConfig) -> Result<Value, Error> {
 }
 
 async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), String> {
-    match timeout(Duration::from_secs(20), handle).await {
+    match timeout(Duration::from_secs(180), handle).await {
         Err(_timeout) => Err("canary timed out".into()),
         Ok(Ok(result)) => match result {
             Ok(_) => Ok(()),

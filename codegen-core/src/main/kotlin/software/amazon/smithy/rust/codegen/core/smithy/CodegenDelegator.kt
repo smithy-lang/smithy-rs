@@ -31,7 +31,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustom
 /** Provider of documentation for generated Rust modules */
 interface ModuleDocProvider {
     companion object {
-        fun writeDocs(provider: ModuleDocProvider?, module: RustModule.LeafModule, writer: RustWriter) {
+        fun writeDocs(
+            provider: ModuleDocProvider?,
+            module: RustModule.LeafModule,
+            writer: RustWriter,
+        ) {
             check(
                 provider != null ||
                     module.documentationOverride != null ||
@@ -90,7 +94,10 @@ open class RustCrate(
     /**
      * Write into the module that this shape is [locatedIn]
      */
-    fun useShapeWriter(shape: Shape, f: Writable) {
+    fun useShapeWriter(
+        shape: Shape,
+        f: Writable,
+    ) {
         val module = symbolProvider.toSymbol(shape).module()
         check(!module.isInline()) {
             "Cannot use useShapeWriter with inline modules—use [RustWriter.withInlineModule] instead"
@@ -191,9 +198,10 @@ open class RustCrate(
                 } else {
                     // Create a dependency which adds the mod statement for this module. This will be added to the writer
                     // so that _usage_ of this module will generate _exactly one_ `mod <name>` with the correct modifiers.
-                    val modStatement = RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
-                        module.renderModStatement(this, moduleDocProvider)
-                    }
+                    val modStatement =
+                        RuntimeType.forInlineFun("mod_" + module.fullyQualifiedPath(), module.parent) {
+                            module.renderModStatement(this, moduleDocProvider)
+                        }
                     val path = module.fullyQualifiedPath().split("::").drop(1).joinToString("/")
                     inner.useFileWriter("src/$path.rs", module.fullyQualifiedPath()) { writer ->
                         moduleWriter(writer)
@@ -208,13 +216,18 @@ open class RustCrate(
     /**
      * Returns the module for a given Shape.
      */
-    fun moduleFor(shape: Shape, moduleWriter: Writable): RustCrate =
-        withModule((symbolProvider as RustSymbolProvider).moduleForShape(shape), moduleWriter)
+    fun moduleFor(
+        shape: Shape,
+        moduleWriter: Writable,
+    ): RustCrate = withModule((symbolProvider as RustSymbolProvider).moduleForShape(shape), moduleWriter)
 
     /**
      * Create a new file directly
      */
-    fun withFile(filename: String, fileWriter: Writable) {
+    fun withFile(
+        filename: String,
+        fileWriter: Writable,
+    ) {
         inner.useFileWriter(filename) {
             fileWriter(it)
         }
@@ -227,7 +240,11 @@ open class RustCrate(
      * @param symbol: The symbol of the thing being rendered, which will be re-exported. This symbol
      * should be the public-facing symbol rather than the private symbol.
      */
-    fun inPrivateModuleWithReexport(privateModule: RustModule.LeafModule, symbol: Symbol, writer: Writable) {
+    fun inPrivateModuleWithReexport(
+        privateModule: RustModule.LeafModule,
+        symbol: Symbol,
+        writer: Writable,
+    ) {
         withModule(privateModule, writer)
         privateModule.toType().resolve(symbol.name).toSymbol().also { privateSymbol ->
             withModule(symbol.module()) {
@@ -264,13 +281,14 @@ fun WriterDelegator<RustWriter>.finalize(
             .mergeDependencyFeatures()
             .mergeIdenticalTestDependencies()
     this.useFileWriter("Cargo.toml") {
-        val cargoToml = CargoTomlGenerator(
-            settings,
-            it,
-            manifestCustomizations,
-            cargoDependencies,
-            features,
-        )
+        val cargoToml =
+            CargoTomlGenerator(
+                settings,
+                it,
+                manifestCustomizations,
+                cargoDependencies,
+                features,
+            )
         cargoToml.render()
     }
     flushWriters()

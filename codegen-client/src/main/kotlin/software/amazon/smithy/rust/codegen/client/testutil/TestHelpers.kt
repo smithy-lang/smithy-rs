@@ -36,6 +36,7 @@ fun testClientRustSettings(
     codegenConfig: ClientCodegenConfig = ClientCodegenConfig(),
     license: String? = null,
     examplesUri: String? = null,
+    minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
 ) = ClientRustSettings(
     service,
@@ -48,22 +49,27 @@ fun testClientRustSettings(
     codegenConfig,
     license,
     examplesUri,
+    minimumSupportedRustVersion,
     customizationConfig,
 )
 
-val TestClientRustSymbolProviderConfig = RustSymbolProviderConfig(
-    runtimeConfig = TestRuntimeConfig,
-    renameExceptions = true,
-    nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
-    moduleProvider = ClientModuleProvider,
-)
+val TestClientRustSymbolProviderConfig =
+    RustSymbolProviderConfig(
+        runtimeConfig = TestRuntimeConfig,
+        renameExceptions = true,
+        nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+        moduleProvider = ClientModuleProvider,
+    )
 
 private class ClientTestCodegenDecorator : ClientCodegenDecorator {
     override val name = "test"
     override val order: Byte = 0
 }
 
-fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSymbolProvider =
+fun testSymbolProvider(
+    model: Model,
+    serviceShape: ServiceShape? = null,
+): RustSymbolProvider =
     RustClientCodegenPlugin.baseSymbolProvider(
         testClientRustSettings(),
         model,
@@ -78,19 +84,22 @@ fun testClientCodegenContext(
     serviceShape: ServiceShape? = null,
     settings: ClientRustSettings = testClientRustSettings(),
     rootDecorator: ClientCodegenDecorator? = null,
-): ClientCodegenContext = ClientCodegenContext(
-    model,
-    symbolProvider ?: testSymbolProvider(model),
-    TestModuleDocProvider,
-    serviceShape
-        ?: model.serviceShapes.firstOrNull()
-        ?: ServiceShape.builder().version("test").id("test#Service").build(),
-    ShapeId.from("test#Protocol"),
-    settings,
-    rootDecorator ?: CombinedClientCodegenDecorator(emptyList()),
-)
+): ClientCodegenContext =
+    ClientCodegenContext(
+        model,
+        symbolProvider ?: testSymbolProvider(model),
+        TestModuleDocProvider,
+        serviceShape
+            ?: model.serviceShapes.firstOrNull()
+            ?: ServiceShape.builder().version("test").id("test#Service").build(),
+        ShapeId.from("test#Protocol"),
+        settings,
+        rootDecorator ?: CombinedClientCodegenDecorator(emptyList()),
+    )
 
-fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(enableUserConfigurableRuntimePlugins: Boolean): ClientCodegenContext =
+fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(
+    enableUserConfigurableRuntimePlugins: Boolean,
+): ClientCodegenContext =
     copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableUserConfigurableRuntimePlugins = enableUserConfigurableRuntimePlugins)))
 
 fun TestWriterDelegator.clientRustSettings() =
@@ -100,4 +109,5 @@ fun TestWriterDelegator.clientRustSettings() =
         codegenConfig = codegenConfig as ClientCodegenConfig,
     )
 
-fun TestWriterDelegator.clientCodegenContext(model: Model) = testClientCodegenContext(model, settings = clientRustSettings())
+fun TestWriterDelegator.clientCodegenContext(model: Model) =
+    testClientCodegenContext(model, settings = clientRustSettings())

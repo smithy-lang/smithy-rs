@@ -22,6 +22,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
+/**
+ * Generates the client via codegen decorator.
+ *
+ * > Why is this a decorator instead of a normal generator that gets called from the codegen visitor?
+ *
+ * The AWS SDK needs to make significant changes from what smithy-rs generates for generic clients,
+ * and the easiest way to do that is to completely replace the client generator. With this as
+ * a decorator, it can be excluded entirely and replaced in the sdk-codegen plugin.
+ */
 class FluentClientDecorator : ClientCodegenDecorator {
     override val name: String = "FluentClient"
     override val order: Byte = 0
@@ -29,7 +38,10 @@ class FluentClientDecorator : ClientCodegenDecorator {
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
         codegenContext.settings.codegenConfig.includeFluentClient
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         if (!applies(codegenContext)) {
             return
         }
@@ -50,14 +62,17 @@ class FluentClientDecorator : ClientCodegenDecorator {
             return baseCustomizations
         }
 
-        return baseCustomizations + object : LibRsCustomization() {
-            override fun section(section: LibRsSection) = when (section) {
-                is LibRsSection.Body -> writable {
-                    rust("pub use client::Client;")
-                }
-                else -> emptySection
+        return baseCustomizations +
+            object : LibRsCustomization() {
+                override fun section(section: LibRsSection) =
+                    when (section) {
+                        is LibRsSection.Body ->
+                            writable {
+                                rust("pub use client::Client;")
+                            }
+                        else -> emptySection
+                    }
             }
-        }
     }
 }
 
@@ -70,6 +85,10 @@ sealed class FluentClientSection(name: String) : Section(name) {
 
     /** Write custom code into the docs */
     data class FluentClientDocs(val serviceShape: ServiceShape) : FluentClientSection("FluentClientDocs")
+
+    /** Write custom code for adding additional client plugins to base_client_runtime_plugins */
+    data class AdditionalBaseClientPlugins(val plugins: String, val config: String) :
+        FluentClientSection("AdditionalBaseClientPlugins")
 }
 
 abstract class FluentClientCustomization : NamedCustomization<FluentClientSection>()
@@ -77,20 +96,22 @@ abstract class FluentClientCustomization : NamedCustomization<FluentClientSectio
 class GenericFluentClient(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
-            is FluentClientSection.FluentClientDocs -> writable {
-                val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
-                docs(
-                    """
-                    An ergonomic client for $serviceName.
+            is FluentClientSection.FluentClientDocs ->
+                writable {
+                    val serviceName = codegenContext.serviceShape.serviceNameOrDefault("the service")
+                    docs(
+                        """
+                        An ergonomic client for $serviceName.
 
-                    This client allows ergonomic access to $serviceName.
-                    Each method corresponds to an API defined in the service's Smithy model,
-                    and the request and response shapes are auto-generated from that same model.
-                    """,
-                )
-                FluentClientDocs.clientConstructionDocs(codegenContext)(this)
-                FluentClientDocs.clientUsageDocs(codegenContext)(this)
-            }
+                        This client allows ergonomic access to $serviceName.
+                        Each method corresponds to an API defined in the service's Smithy model,
+                        and the request and response shapes are auto-generated from that same model.
+                        """,
+                    )
+                    FluentClientDocs.clientConstructionDocs(codegenContext)(this)
+                    FluentClientDocs.clientUsageDocs(codegenContext)(this)
+                    FluentClientDocs.waiterDocs(codegenContext)(this)
+                }
             else -> emptySection
         }
     }

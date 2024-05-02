@@ -11,7 +11,10 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 internal class RustTypeParametersTest {
-    private fun forInputExpectOutput(input: Any, expectedOutput: String) {
+    private fun forInputExpectOutput(
+        input: Any,
+        expectedOutput: String,
+    ) {
         val writer = RustWriter.forModule("model")
         writer.rustInlineTemplate("'")
         writer.rustInlineTemplate("#{typeParameters:W}", "typeParameters" to rustTypeParameters(input))
@@ -50,13 +53,14 @@ internal class RustTypeParametersTest {
     @Test
     fun `rustTypeParameters accepts heterogeneous inputs`() {
         val writer = RustWriter.forModule("model")
-        val tps = rustTypeParameters(
-            RuntimeType("crate::operation::Operation").toSymbol(),
-            RustType.Unit,
-            RuntimeType.String,
-            "T",
-            RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
-        )
+        val tps =
+            rustTypeParameters(
+                RuntimeType("crate::operation::Operation").toSymbol(),
+                RustType.Unit,
+                RuntimeType.String,
+                "T",
+                RustGenerics(GenericTypeArg("A"), GenericTypeArg("B")),
+            )
         writer.rustInlineTemplate("'")
         writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
         writer.rustInlineTemplate("'")

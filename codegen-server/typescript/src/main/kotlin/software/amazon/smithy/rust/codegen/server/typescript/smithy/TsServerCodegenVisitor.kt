@@ -49,7 +49,6 @@ class TsServerCodegenVisitor(
     context: PluginContext,
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
-
     init {
         val symbolVisitorConfig =
             RustSymbolProviderConfig(
@@ -84,17 +83,19 @@ class TsServerCodegenVisitor(
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
             codegenDecorator: ServerCodegenDecorator,
-        ) = RustServerCodegenTsPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
+        ) =
+            RustServerCodegenTsPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
 
-        val serverSymbolProviders = ServerSymbolProviders.from(
-            settings,
-            model,
-            service,
-            symbolVisitorConfig,
-            settings.codegenConfig.publicConstrainedTypes,
-            codegenDecorator,
-            ::baseSymbolProviderFactory,
-        )
+        val serverSymbolProviders =
+            ServerSymbolProviders.from(
+                settings,
+                model,
+                service,
+                symbolVisitorConfig,
+                settings.codegenConfig.publicConstrainedTypes,
+                codegenDecorator,
+                ::baseSymbolProviderFactory,
+            )
 
         // Override `codegenContext` which carries the various symbol providers.
         codegenContext =
@@ -111,18 +112,21 @@ class TsServerCodegenVisitor(
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
 
-        codegenContext = codegenContext.copy(
-            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
-                codegenContext,
-                TsServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
-            ),
-        )
+        codegenContext =
+            codegenContext.copy(
+                moduleDocProvider =
+                    codegenDecorator.moduleDocumentationCustomization(
+                        codegenContext,
+                        TsServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+                    ),
+            )
 
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(
-            context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        rustCrate =
+            RustCrate(
+                context.fileManifest, codegenContext.symbolProvider, settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -164,8 +168,10 @@ class TsServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun tsServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
-            TsServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+        fun tsServerEnumGeneratorFactory(
+            codegenContext: ServerCodegenContext,
+            shape: StringShape,
+        ) = TsServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::tsServerEnumGeneratorFactory)
     }
 

@@ -68,20 +68,22 @@ open class StructureGenerator(
 ) {
     companion object {
         /** Reserved struct member names */
-        val structureMemberNameMap: Map<String, String> = mapOf(
-            "build" to "build_value",
-            "builder" to "builder_value",
-            "default" to "default_value",
-        )
+        val structureMemberNameMap: Map<String, String> =
+            mapOf(
+                "build" to "build_value",
+                "builder" to "builder_value",
+                "default" to "default_value",
+            )
     }
 
     private val errorTrait = shape.getTrait<ErrorTrait>()
     protected val members: List<MemberShape> = shape.allMembers.values.toList()
-    private val accessorMembers: List<MemberShape> = when (errorTrait) {
-        null -> members
-        // Let the ErrorGenerator render the error message accessor if this is an error struct
-        else -> members.filter { "message" != symbolProvider.toMemberName(it) }
-    }
+    private val accessorMembers: List<MemberShape> =
+        when (errorTrait) {
+            null -> members
+            // Let the ErrorGenerator render the error message accessor if this is an error struct
+            else -> members.filter { "message" != symbolProvider.toMemberName(it) }
+        }
     protected val name: String = symbolProvider.toSymbol(shape).name
 
     fun render() {
@@ -129,18 +131,19 @@ open class StructureGenerator(
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()
                 var unwrapOrDefault = false
-                val returnType = when {
-                    // Automatically flatten vecs
-                    structSettings.flattenVecAccessors && memberType is RustType.Option && memberType.stripOuter<RustType.Option>() is RustType.Vec -> {
-                        unwrapOrDefault = true
-                        memberType.stripOuter<RustType.Option>().asDeref().asRef()
-                    }
+                val returnType =
+                    when {
+                        // Automatically flatten vecs
+                        structSettings.flattenVecAccessors && memberType is RustType.Option && memberType.stripOuter<RustType.Option>() is RustType.Vec -> {
+                            unwrapOrDefault = true
+                            memberType.stripOuter<RustType.Option>().asDeref().asRef()
+                        }
 
-                    memberType.isCopy() -> memberType
-                    memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
-                    memberType.isDeref() -> memberType.asDeref().asRef()
-                    else -> memberType.asRef()
-                }
+                        memberType.isCopy() -> memberType
+                        memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
+                        memberType.isDeref() -> memberType.asDeref().asRef()
+                        else -> memberType.asRef()
+                    }
                 writer.renderMemberDoc(member, memberSymbol)
                 if (unwrapOrDefault) {
                     // Add a newline
@@ -164,7 +167,12 @@ open class StructureGenerator(
         }
     }
 
-    open fun renderStructureMember(writer: RustWriter, member: MemberShape, memberName: String, memberSymbol: Symbol) {
+    open fun renderStructureMember(
+        writer: RustWriter,
+        member: MemberShape,
+        memberName: String,
+        memberSymbol: Symbol,
+    ) {
         writer.renderMemberDoc(member, memberSymbol)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
@@ -204,12 +212,16 @@ open class StructureGenerator(
         }
     }
 
-    private fun RustWriter.renderMemberDoc(member: MemberShape, memberSymbol: Symbol) {
+    private fun RustWriter.renderMemberDoc(
+        member: MemberShape,
+        memberSymbol: Symbol,
+    ) {
         documentShape(
             member,
             model,
-            note = memberSymbol.renamedFrom()
-                ?.let { oldName -> "This member has been renamed from `$oldName`." },
+            note =
+                memberSymbol.renamedFrom()
+                    ?.let { oldName -> "This member has been renamed from `$oldName`." },
         )
     }
 }
@@ -219,10 +231,11 @@ open class StructureGenerator(
  * e.g. `<'a, 'b>`
  */
 fun StructureShape.lifetimeDeclaration(symbolProvider: RustSymbolProvider): String {
-    val lifetimes = this.members()
-        .mapNotNull { symbolProvider.toSymbol(it).rustType().innerReference()?.let { it as RustType.Reference } }
-        .mapNotNull { it.lifetime }
-        .toSet().sorted()
+    val lifetimes =
+        this.members()
+            .mapNotNull { symbolProvider.toSymbol(it).rustType().innerReference()?.let { it as RustType.Reference } }
+            .mapNotNull { it.lifetime }
+            .toSet().sorted()
     return if (lifetimes.isNotEmpty()) {
         "<${lifetimes.joinToString { "'$it" }}>"
     } else {

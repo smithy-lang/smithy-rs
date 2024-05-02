@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -62,14 +64,18 @@ interface HttpBindingResolver {
     /**
      * Returns a list of member shapes bound to a given request [location] for a given [operationShape]
      */
-    fun requestMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        requestBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun requestMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = requestBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Returns a list of member shapes bound to a given response [location] for a given [operationShape]
      */
-    fun responseMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        responseBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun responseMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = responseBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Determine the timestamp format based on the input parameters.
@@ -94,6 +100,11 @@ interface HttpBindingResolver {
      * Determines the response content type for given [operationShape].
      */
     fun responseContentType(operationShape: OperationShape): String?
+
+    /**
+     * Determines the value of the event stream `:content-type` header based on union member
+     */
+    fun eventStreamMessageContentType(memberShape: MemberShape): String?
 }
 
 /**
@@ -104,12 +115,30 @@ data class ProtocolContentTypes(
     val requestDocument: String? = null,
     /** Response content type override for when the shape is a Document */
     val responseDocument: String? = null,
-    /** EventStream content type */
+    /** EventStream content type initial request/response content-type */
     val eventStreamContentType: String? = null,
+    /** EventStream content type for struct message shapes (for `:content-type`) */
+    val eventStreamMessageContentType: String? = null,
 ) {
     companion object {
         /** Create an instance of [ProtocolContentTypes] where all content types are the same */
-        fun consistent(type: String) = ProtocolContentTypes(type, type, type)
+        fun consistent(type: String) = ProtocolContentTypes(type, type, type, type)
+
+        /**
+         * Returns the event stream message `:content-type` for the given event stream union member shape.
+         *
+         * The `protocolContentType` is the content-type to use for non-string/non-blob shapes.
+         */
+        fun eventStreamMemberContentType(
+            model: Model,
+            memberShape: MemberShape,
+            protocolContentType: String?,
+        ): String? =
+            when (model.expectShape(memberShape.target)) {
+                is StringShape -> "text/plain"
+                is BlobShape -> "application/octet-stream"
+                else -> protocolContentType
+            }
     }
 }
 
@@ -117,7 +146,7 @@ data class ProtocolContentTypes(
  * An [HttpBindingResolver] that relies on the HttpTrait data in the Smithy models.
  */
 open class HttpTraitHttpBindingResolver(
-    model: Model,
+    private val model: Model,
     private val contentTypes: ProtocolContentTypes,
 ) : HttpBindingResolver {
     private val httpIndex: HttpBindingIndex = HttpBindingIndex.of(model)
@@ -138,8 +167,7 @@ open class HttpTraitHttpBindingResolver(
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
         model: Model,
-    ): TimestampFormatTrait.Format =
-        httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
+    ): TimestampFormatTrait.Format = httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String? =
         httpIndex.determineRequestContentType(
@@ -155,6 +183,9 @@ open class HttpTraitHttpBindingResolver(
             contentTypes.eventStreamContentType,
         ).orNull()
 
+    override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
+        ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, contentTypes.eventStreamMessageContentType)
+
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
         bindings.values.map(::HttpBindingDescriptor).sortedBy { it.memberName }
@@ -169,6 +200,7 @@ open class StaticHttpBindingResolver(
     private val httpTrait: HttpTrait,
     private val requestContentType: String,
     private val responseContentType: String,
+    private val eventStreamMessageContentType: String? = null,
 ) : HttpBindingResolver {
     private fun bindings(shape: ToShapeId?) =
         shape?.let { model.expectShape(it.toShapeId()) }?.members()
@@ -184,10 +216,12 @@ open class StaticHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
         bindings(operationShape.output.orNull())
 
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
 
     override fun responseContentType(operationShape: OperationShape): String = responseContentType
+
+    override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
+        ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, eventStreamMessageContentType)
 }

@@ -75,8 +75,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
             constrainedTypes: Boolean = true,
             includeConstrainedShapeProvider: Boolean = true,
             codegenDecorator: ServerCodegenDecorator,
-        ) =
-            // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
+        ) = // Rename a set of symbols that do not implement `PyClass` and have been wrapped in
             // `aws_smithy_http_server_python::types`.
             PythonServerSymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
                 // Generate public constrained types for directly constrained shapes.

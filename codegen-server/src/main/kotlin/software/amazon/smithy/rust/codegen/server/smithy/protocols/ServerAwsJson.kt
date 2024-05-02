@@ -51,12 +51,12 @@ class ServerAwsJsonFactory(
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
-            /* Client support */
+            // Client support
             requestSerialization = false,
             requestBodySerialization = false,
             responseDeserialization = false,
             errorDeserialization = false,
-            /* Server support */
+            // Server support
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
@@ -78,30 +78,33 @@ class ServerAwsJsonFactory(
  * > field named __type
  */
 class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonSerializerCustomization() {
-    override fun section(section: JsonSerializerSection): Writable = when (section) {
-        is JsonSerializerSection.ServerError -> writable {
-            if (section.structureShape.hasTrait<ErrorTrait>()) {
-                val typeId = when (awsJsonVersion) {
-                    // AwsJson 1.0 wants the whole shape ID (namespace#Shape).
-                    // https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
-                    AwsJsonVersion.Json10 -> section.structureShape.id.toString()
-                    // AwsJson 1.1 wants only the shape name (Shape).
-                    // https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_1-protocol.html#operation-error-serialization
-                    AwsJsonVersion.Json11 -> section.structureShape.id.name.toString()
+    override fun section(section: JsonSerializerSection): Writable =
+        when (section) {
+            is JsonSerializerSection.ServerError ->
+                writable {
+                    if (section.structureShape.hasTrait<ErrorTrait>()) {
+                        val typeId =
+                            when (awsJsonVersion) {
+                                // AwsJson 1.0 wants the whole shape ID (namespace#Shape).
+                                // https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#operation-error-serialization
+                                AwsJsonVersion.Json10 -> section.structureShape.id.toString()
+                                // AwsJson 1.1 wants only the shape name (Shape).
+                                // https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html#operation-error-serialization
+                                AwsJsonVersion.Json11 -> section.structureShape.id.name.toString()
+                            }
+                        rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
+                    }
                 }
-                rust("""${section.jsonObject}.key("__type").string("${escape(typeId)}");""")
-            }
-        }
 
-        else -> emptySection
-    }
+            else -> emptySection
+        }
 }
 
 /**
  * AwsJson requires operation errors to be serialized in server response with an additional `__type` field. This class
  * customizes [JsonSerializerGenerator] to add this functionality.
  *
- * https://awslabs.github.io/smithy/1.0/spec/aws/aws-json-1_0-protocol.html#operation-error-serialization
+ * https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#operation-error-serialization
  */
 class ServerAwsJsonSerializerGenerator(
     private val codegenContext: ServerCodegenContext,
@@ -112,10 +115,11 @@ class ServerAwsJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
-            customizations = listOf(
-                ServerAwsJsonError(awsJsonVersion),
-                BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
-                BeforeSerializingMemberJsonCustomization(codegenContext),
-            ),
+            customizations =
+                listOf(
+                    ServerAwsJsonError(awsJsonVersion),
+                    BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
+                    BeforeSerializingMemberJsonCustomization(codegenContext),
+                ),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator

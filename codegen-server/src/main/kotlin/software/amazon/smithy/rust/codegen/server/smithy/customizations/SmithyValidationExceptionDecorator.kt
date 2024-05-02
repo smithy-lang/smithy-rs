@@ -53,72 +53,76 @@ class SmithyValidationExceptionDecorator : ServerCodegenDecorator {
     override val order: Byte
         get() = 69
 
-    override fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator =
-        SmithyValidationExceptionConversionGenerator(codegenContext)
+    override fun validationExceptionConversion(
+        codegenContext: ServerCodegenContext,
+    ): ValidationExceptionConversionGenerator = SmithyValidationExceptionConversionGenerator(codegenContext)
 }
 
 class SmithyValidationExceptionConversionGenerator(private val codegenContext: ServerCodegenContext) :
     ValidationExceptionConversionGenerator {
-
     // Define a companion object so that we can refer to this shape id globally.
     companion object {
         val SHAPE_ID: ShapeId = ShapeId.from("smithy.framework#ValidationException")
     }
+
     override val shapeId: ShapeId = SHAPE_ID
 
-    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable = writable {
-        rustTemplate(
-            """
-            impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(constraint_violation: ConstraintViolation) -> Self {
-                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
-                    let validation_exception = crate::error::ValidationException {
-                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
-                        field_list: Some(vec![first_validation_exception_field]),
-                    };
-                    Self::ConstraintViolation(
-                        crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-                    )
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
+        writable {
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
+                        let validation_exception = crate::error::ValidationException {
+                            message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                            field_list: Some(vec![first_validation_exception_field]),
+                        };
+                        Self::ConstraintViolation(
+                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                        )
+                    }
                 }
-            }
-            """,
-            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-            "From" to RuntimeType.From,
-        )
-    }
+                """,
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "From" to RuntimeType.From,
+            )
+        }
 
-    override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable = writable {
-        val constraintsInfo: List<TraitInfo> = stringConstraintsInfo.map(StringTraitInfo::toTraitInfo)
+    override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable =
+        writable {
+            val constraintsInfo: List<TraitInfo> = stringConstraintsInfo.map(StringTraitInfo::toTraitInfo)
 
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    #{ValidationExceptionFields:W}
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        #{ValidationExceptionFields:W}
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-            "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+            )
+        }
 
-    override fun blobShapeConstraintViolationImplBlock(blobConstraintsInfo: Collection<BlobLength>): Writable = writable {
-        val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map(BlobLength::toTraitInfo)
+    override fun blobShapeConstraintViolationImplBlock(blobConstraintsInfo: Collection<BlobLength>): Writable =
+        writable {
+            val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map(BlobLength::toTraitInfo)
 
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    #{ValidationExceptionFields:W}
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        #{ValidationExceptionFields:W}
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-            "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to constraintsInfo.map { it.asValidationExceptionField }.join("\n"),
+            )
+        }
 
     override fun mapShapeConstraintViolationImplBlock(
         shape: MapShape,
@@ -155,63 +159,65 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
         }
     }
 
-    override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) = writable {
-        val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-        val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                crate::model::ValidationExceptionField {
-                    message: format!(r##"$message"##, &path),
-                    path,
+    override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) =
+        writable {
+            val message = enumTrait.validationErrorMessage()
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    crate::model::ValidationExceptionField {
+                        message: format!(r##"$message"##, &path),
+                        path,
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+            )
+        }
 
-    override fun numberShapeConstraintViolationImplBlock(rangeInfo: Range) = writable {
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    #{ValidationExceptionFields:W}
+    override fun numberShapeConstraintViolationImplBlock(rangeInfo: Range) =
+        writable {
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        #{ValidationExceptionFields:W}
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-            "ValidationExceptionFields" to rangeInfo.toTraitInfo().asValidationExceptionField,
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to rangeInfo.toTraitInfo().asValidationExceptionField,
+            )
+        }
 
-    override fun builderConstraintViolationImplBlock(constraintViolations: Collection<ConstraintViolation>) = writable {
-        rustBlock("match self") {
-            constraintViolations.forEach {
-                if (it.hasInner()) {
-                    rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
-                } else {
-                    rust(
-                        """
-                        ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                            message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
-                            path: path + "/${it.forMember.memberName}",
-                        },
-                        """,
-                    )
+    override fun builderConstraintViolationImplBlock(constraintViolations: Collection<ConstraintViolation>) =
+        writable {
+            rustBlock("match self") {
+                constraintViolations.forEach {
+                    if (it.hasInner()) {
+                        rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
+                    } else {
+                        rust(
+                            """
+                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
+                                message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                path: path + "/${it.forMember.memberName}",
+                            },
+                            """,
+                        )
+                    }
                 }
             }
         }
-    }
 
     override fun collectionShapeConstraintViolationImplBlock(
-        collectionConstraintsInfo:
-        Collection<CollectionTraitInfo>,
+        collectionConstraintsInfo: Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ) = writable {
-        val validationExceptionFields = collectionConstraintsInfo.map {
-            it.toTraitInfo().asValidationExceptionField
-        }.toMutableList()
+        val validationExceptionFields =
+            collectionConstraintsInfo.map {
+                it.toTraitInfo().asValidationExceptionField
+            }.toMutableList()
         if (isMemberConstrained) {
             validationExceptionFields += {
                 rust(

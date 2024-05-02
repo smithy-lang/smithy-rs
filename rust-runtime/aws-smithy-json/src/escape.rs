@@ -176,10 +176,7 @@ fn read_codepoint(rest: &[u8]) -> Result<u16, EscapeError> {
         std::str::from_utf8(&rest[2..6]).map_err(|_| EscapeErrorKind::InvalidUtf8)?;
 
     // Error on characters `u16::from_str_radix` would otherwise accept, such as `+`
-    if codepoint_str
-        .bytes()
-        .any(|byte| !matches!(byte, b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F'))
-    {
+    if codepoint_str.bytes().any(|byte| !byte.is_ascii_hexdigit()) {
         return Err(EscapeErrorKind::InvalidUnicodeEscape(codepoint_str.into()).into());
     }
     Ok(u16::from_str_radix(codepoint_str, 16).expect("hex string is valid 16-bit value"))
@@ -225,10 +222,10 @@ mod test {
         assert_eq!("foo", escape_string("foo").as_ref());
         assert_eq!("foo\\r\\n", escape_string("foo\r\n").as_ref());
         assert_eq!("foo\\r\\nbar", escape_string("foo\r\nbar").as_ref());
-        assert_eq!(r#"foo\\bar"#, escape_string(r#"foo\bar"#).as_ref());
-        assert_eq!(r#"\\foobar"#, escape_string(r#"\foobar"#).as_ref());
+        assert_eq!(r"foo\\bar", escape_string(r"foo\bar").as_ref());
+        assert_eq!(r"\\foobar", escape_string(r"\foobar").as_ref());
         assert_eq!(
-            r#"\bf\fo\to\r\n"#,
+            r"\bf\fo\to\r\n",
             escape_string("\u{08}f\u{0C}o\to\r\n").as_ref()
         );
         assert_eq!("\\\"test\\\"", escape_string("\"test\"").as_ref());
@@ -247,7 +244,7 @@ mod test {
     fn unescape() {
         assert_eq!(
             "\x08f\x0Co\to\r\n",
-            unescape_string(r#"\bf\fo\to\r\n"#).unwrap()
+            unescape_string(r"\bf\fo\to\r\n").unwrap()
         );
         assert_eq!("\"test\"", unescape_string(r#"\"test\""#).unwrap());
         assert_eq!("\x00", unescape_string("\\u0000").unwrap());

@@ -11,8 +11,7 @@ use crate::imds::client::error::{BuildError, ImdsError, InnerImdsError, InvalidE
 use crate::imds::client::token::TokenRuntimePlugin;
 use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
-use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
-use aws_runtime::user_agent::UserAgentInterceptor;
+use aws_runtime::user_agent::{ApiMetadata, AwsUserAgent, UserAgentInterceptor};
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -983,6 +982,8 @@ pub(crate) mod test {
         http_client.assert_requests_match(&[]);
     }
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
+    #[cfg_attr(windows, ignore)]
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]
     #[cfg(feature = "rustls")]

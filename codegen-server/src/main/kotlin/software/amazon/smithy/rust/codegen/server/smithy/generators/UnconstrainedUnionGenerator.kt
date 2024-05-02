@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
@@ -86,10 +87,16 @@ class UnconstrainedUnionGenerator(
                 """,
             ) {
                 sortedMembers.forEach { member ->
-                    rust(
-                        "${unconstrainedShapeSymbolProvider.toMemberName(member)}(#T),",
-                        unconstrainedShapeSymbolProvider.toSymbol(member),
-                    )
+                    if (member.isTargetUnit()) {
+                        rust(
+                            "${unconstrainedShapeSymbolProvider.toMemberName(member)},",
+                        )
+                    } else {
+                        rust(
+                            "${unconstrainedShapeSymbolProvider.toMemberName(member)}(#T),",
+                            unconstrainedShapeSymbolProvider.toSymbol(member),
+                        )
+                    }
                 }
             }
 
@@ -128,11 +135,12 @@ class UnconstrainedUnionGenerator(
             "UnconstrainedSymbol" to symbol,
         )
 
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constraintViolationVisibility =
+            if (publicConstrainedTypes) {
+                Visibility.PUBLIC
+            } else {
+                Visibility.PUBCRATE
+            }
 
         inlineModuleCreator(
             constraintViolationSymbol,
@@ -145,6 +153,23 @@ class UnconstrainedUnionGenerator(
             ) {
                 constraintViolations().forEach { renderConstraintViolation(this, it) }
             }
+
+            rustTemplate(
+                """
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            #{ConstraintVariants:W}
+                        }
+                    }
+                }
+
+                impl #{Error} for $constraintViolationName {}
+                """,
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
+                "ConstraintVariants" to generateDisplayMessageForEachVariant(),
+            )
 
             if (shape.isReachableFromOperationInput()) {
                 rustBlock("impl $constraintViolationName") {
@@ -163,6 +188,17 @@ class UnconstrainedUnionGenerator(
         }
     }
 
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            constraintViolations().forEach {
+                rustTemplate(
+                    """
+                    Self::${it.name()}(inner) => write!(f, "{inner}"),
+                    """,
+                )
+            }
+        }
+
     data class ConstraintViolation(val forMember: MemberShape) {
         fun name() = forMember.memberName.toPascalCase()
     }
@@ -172,7 +208,10 @@ class UnconstrainedUnionGenerator(
             .filter { it.targetCanReachConstrainedShape(model, symbolProvider) }
             .map { ConstraintViolation(it) }
 
-    private fun renderConstraintViolation(writer: RustWriter, constraintViolation: ConstraintViolation) {
+    private fun renderConstraintViolation(
+        writer: RustWriter,
+        constraintViolation: ConstraintViolation,
+    ) {
         val targetShape = model.expectShape(constraintViolation.forMember.target)
 
         val constraintViolationSymbol =
@@ -188,68 +227,86 @@ class UnconstrainedUnionGenerator(
         )
     }
 
-    private fun generateTryFromUnconstrainedUnionImpl() = writable {
-        withBlock("Ok(", ")") {
-            withBlock("match value {", "}") {
-                sortedMembers.forEach { member ->
-                    val memberName = unconstrainedShapeSymbolProvider.toMemberName(member)
-                    withBlockTemplate(
-                        "#{UnconstrainedUnion}::$memberName(unconstrained) => Self::$memberName(",
-                        "),",
-                        "UnconstrainedUnion" to symbol,
-                    ) {
-                        if (!member.canReachConstrainedShape(model, symbolProvider)) {
-                            rust("unconstrained")
+    private fun generateTryFromUnconstrainedUnionImpl() =
+        writable {
+            withBlock("Ok(", ")") {
+                withBlock("match value {", "}") {
+                    sortedMembers.forEach { member ->
+                        val memberName = unconstrainedShapeSymbolProvider.toMemberName(member)
+                        if (member.isTargetUnit()) {
+                            // Unit type within Unions do not have associated data.
+                            rustTemplate(
+                                """
+                                #{UnconstrainedUnion}::$memberName => Self::$memberName,
+                                """,
+                                "UnconstrainedUnion" to symbol,
+                            )
                         } else {
-                            val targetShape = model.expectShape(member.target)
-                            val resolveToNonPublicConstrainedType =
-                                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
-                                    (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
-
-                            val (unconstrainedVar, boxIt) = if (member.hasTrait<RustBoxTrait>()) {
-                                "(*unconstrained)" to ".map(Box::new)"
-                            } else {
-                                "unconstrained" to ""
-                            }
-                            val boxErr = if (member.hasTrait<ConstraintViolationRustBoxTrait>()) {
-                                ".map_err(Box::new)"
-                            } else {
-                                ""
-                            }
-
-                            if (resolveToNonPublicConstrainedType) {
-                                val constrainedSymbol =
-                                    if (!publicConstrainedTypes && targetShape.isDirectlyConstrained(symbolProvider)) {
-                                        codegenContext.constrainedShapeSymbolProvider.toSymbol(targetShape)
-                                    } else {
-                                        pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
-                                    }
-                                rustTemplate(
-                                    """
-                                    {
-                                        let constrained: #{ConstrainedSymbol} = $unconstrainedVar
-                                            .try_into()$boxIt$boxErr
-                                            .map_err(Self::Error::${ConstraintViolation(member).name()})?;
-                                        constrained.into()
-                                    }
-                                    """,
-                                    "ConstrainedSymbol" to constrainedSymbol,
-                                )
-                            } else {
-                                rust(
-                                    """
-                                    $unconstrainedVar
-                                        .try_into()
-                                        $boxIt
-                                        $boxErr
-                                        .map_err(Self::Error::${ConstraintViolation(member).name()})?
-                                    """,
-                                )
+                            withBlockTemplate(
+                                "#{UnconstrainedUnion}::$memberName(unconstrained) => Self::$memberName(",
+                                "),",
+                                "UnconstrainedUnion" to symbol,
+                            ) {
+                                if (!member.canReachConstrainedShape(model, symbolProvider)) {
+                                    rust("unconstrained")
+                                } else {
+                                    generateTryFromImplForReachableConstrainedShape(member).invoke(this)
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
+
+    private fun generateTryFromImplForReachableConstrainedShape(member: MemberShape) =
+        writable {
+            val targetShape = model.expectShape(member.target)
+            val resolveToNonPublicConstrainedType =
+                targetShape !is StructureShape && targetShape !is UnionShape && !targetShape.hasTrait<EnumTrait>() &&
+                    (!publicConstrainedTypes || !targetShape.isDirectlyConstrained(symbolProvider))
+
+            val (unconstrainedVar, boxIt) =
+                if (member.hasTrait<RustBoxTrait>()) {
+                    "(*unconstrained)" to ".map(Box::new)"
+                } else {
+                    "unconstrained" to ""
+                }
+            val boxErr =
+                if (member.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                    ".map_err(Box::new)"
+                } else {
+                    ""
+                }
+
+            if (resolveToNonPublicConstrainedType) {
+                val constrainedSymbol =
+                    if (!publicConstrainedTypes && targetShape.isDirectlyConstrained(symbolProvider)) {
+                        codegenContext.constrainedShapeSymbolProvider.toSymbol(targetShape)
+                    } else {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(targetShape)
+                    }
+                rustTemplate(
+                    """
+                    {
+                        let constrained: #{ConstrainedSymbol} = $unconstrainedVar
+                            .try_into()$boxIt$boxErr
+                            .map_err(Self::Error::${ConstraintViolation(member).name()})?;
+                        constrained.into()
+                    }
+                    """,
+                    "ConstrainedSymbol" to constrainedSymbol,
+                )
+            } else {
+                rust(
+                    """
+                    $unconstrainedVar
+                        .try_into()
+                        $boxIt
+                        $boxErr
+                        .map_err(Self::Error::${ConstraintViolation(member).name()})?
+                    """,
+                )
+            }
+        }
 }

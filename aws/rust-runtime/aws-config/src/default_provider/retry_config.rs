@@ -5,7 +5,7 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::retry::error::{RetryConfigError, RetryConfigErrorKind};
-use crate::standard_property::{PropertyResolutionError, StandardProperty};
+use aws_runtime::env_config::{EnvConfigError, EnvConfigValue};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::{RetryConfig, RetryMode};
 use std::str::FromStr;
@@ -81,7 +81,7 @@ impl Builder {
         self
     }
 
-    /// Attempt to create a [RetryConfig](aws_smithy_types::retry::RetryConfig) from following sources in order:
+    /// Attempt to create a [`RetryConfig`] from following sources in order:
     /// 1. Environment variables: `AWS_MAX_ATTEMPTS` & `AWS_RETRY_MODE`
     /// 2. Profile file: `max_attempts` and `retry_mode`
     /// 3. [RetryConfig::standard()](aws_smithy_types::retry::RetryConfig::standard)
@@ -101,29 +101,31 @@ impl Builder {
 
     pub(crate) async fn try_retry_config(
         self,
-    ) -> Result<RetryConfig, PropertyResolutionError<RetryConfigError>> {
-        // Both of these can return errors due to invalid config settings and we want to surface those as early as possible
+    ) -> Result<RetryConfig, EnvConfigError<RetryConfigError>> {
+        let env = self.provider_config.env();
+        let profiles = self.provider_config.profile().await;
+        // Both of these can return errors due to invalid config settings, and we want to surface those as early as possible
         // hence, we'll panic if any config values are invalid (missing values are OK though)
-        // We match this instead of unwrapping so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses
+        // We match this instead of unwrapping, so we can print the error with the `Display` impl instead of the `Debug` impl that unwrap uses
         let mut retry_config = RetryConfig::standard();
-        let max_attempts = StandardProperty::new()
+        let max_attempts = EnvConfigValue::new()
             .env(env::MAX_ATTEMPTS)
             .profile(profile_keys::MAX_ATTEMPTS)
-            .validate(&self.provider_config, validate_max_attempts);
+            .validate(&env, profiles, validate_max_attempts);
 
-        let retry_mode = StandardProperty::new()
+        let retry_mode = EnvConfigValue::new()
             .env(env::RETRY_MODE)
             .profile(profile_keys::RETRY_MODE)
-            .validate(&self.provider_config, |s| {
+            .validate(&env, profiles, |s| {
                 RetryMode::from_str(s)
                     .map_err(|err| RetryConfigErrorKind::InvalidRetryMode { source: err }.into())
             });
 
-        if let Some(max_attempts) = max_attempts.await? {
+        if let Some(max_attempts) = max_attempts? {
             retry_config = retry_config.with_max_attempts(max_attempts);
         }
 
-        if let Some(retry_mode) = retry_mode.await? {
+        if let Some(retry_mode) = retry_mode? {
             retry_config = retry_config.with_retry_mode(retry_mode);
         }
 
@@ -133,9 +135,7 @@ impl Builder {
 
 fn validate_max_attempts(max_attempts: &str) -> Result<u32, RetryConfigError> {
     match max_attempts.parse::<u32>() {
-        Ok(max_attempts) if max_attempts == 0 => {
-            Err(RetryConfigErrorKind::MaxAttemptsMustNotBeZero.into())
-        }
+        Ok(0) => Err(RetryConfigErrorKind::MaxAttemptsMustNotBeZero.into()),
         Ok(max_attempts) => Ok(max_attempts),
         Err(source) => Err(RetryConfigErrorKind::FailedToParseMaxAttempts { source }.into()),
     }
@@ -148,12 +148,12 @@ mod test {
     use crate::retry::{
         error::RetryConfigError, error::RetryConfigErrorKind, RetryConfig, RetryMode,
     };
-    use crate::standard_property::PropertyResolutionError;
+    use aws_runtime::env_config::EnvConfigError;
     use aws_types::os_shim_internal::{Env, Fs};
 
     async fn test_provider(
         vars: &[(&str, &str)],
-    ) -> Result<RetryConfig, PropertyResolutionError<RetryConfigError>> {
+    ) -> Result<RetryConfig, EnvConfigError<RetryConfigError>> {
         super::Builder::default()
             .configure(&ProviderConfig::no_configuration().with_env(Env::from_slice(vars)))
             .try_retry_config()
@@ -175,8 +175,8 @@ mod test {
         let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config);
-        // This is redundant but it's really important to make sure that
-        // we're setting these exact values by default so we check twice
+        // This is redundant, but it's really important to make sure that
+        // we're setting these exact values by default, so we check twice
         assert_eq!(actual_retry_config.max_attempts(), 3);
         assert_eq!(actual_retry_config.mode(), RetryMode::Standard);
     }
@@ -257,7 +257,7 @@ retry_mode = standard
     }
 
     #[tokio::test]
-    #[should_panic = "failed to parse max attempts. source: profile `default`, key: `max_attempts`: invalid digit found in string"]
+    #[should_panic = "failed to parse max attempts. source: global profile (`default`) key: `max_attempts`: invalid digit found in string"]
     async fn test_invalid_profile_retry_config_panics() {
         let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
         let fs = Fs::from_slice(&[(
@@ -298,7 +298,7 @@ max_attempts = potato
             test_provider(&[(env::MAX_ATTEMPTS, "not an integer")])
                 .await
                 .unwrap_err()
-                .err,
+                .err(),
             RetryConfigError {
                 kind: RetryConfigErrorKind::FailedToParseMaxAttempts { .. }
             }
@@ -329,8 +329,8 @@ max_attempts = potato
     async fn disallow_zero_max_attempts() {
         let err = test_provider(&[(env::MAX_ATTEMPTS, "0")])
             .await
-            .unwrap_err()
-            .err;
+            .unwrap_err();
+        let err = err.err();
         assert!(matches!(
             err,
             RetryConfigError {

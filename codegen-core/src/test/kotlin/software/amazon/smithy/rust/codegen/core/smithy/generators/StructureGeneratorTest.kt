@@ -88,14 +88,20 @@ class StructureGeneratorTest {
         val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
         val error = model.lookup<StructureShape>("com.test#MyError")
 
-        val rustReservedWordConfig: RustReservedWordConfig = RustReservedWordConfig(
-            structureMemberMap = StructureGenerator.structureMemberNameMap,
-            enumMemberMap = emptyMap(),
-            unionMemberMap = emptyMap(),
-        )
+        val rustReservedWordConfig: RustReservedWordConfig =
+            RustReservedWordConfig(
+                structureMemberMap = StructureGenerator.structureMemberNameMap,
+                enumMemberMap = emptyMap(),
+                unionMemberMap = emptyMap(),
+            )
     }
 
-    private fun structureGenerator(model: Model, provider: RustSymbolProvider, writer: RustWriter, shape: StructureShape) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
+    private fun structureGenerator(
+        model: Model,
+        provider: RustSymbolProvider,
+        writer: RustWriter,
+        shape: StructureShape,
+    ) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
 
     @Test
     fun `generate basic structures`() {
@@ -214,7 +220,8 @@ class StructureGeneratorTest {
 
     @Test
     fun `attach docs to everything`() {
-        val model = """
+        val model =
+            """
             namespace com.test
             @documentation("inner doc")
             structure Inner { }
@@ -260,7 +267,8 @@ class StructureGeneratorTest {
 
     @Test
     fun `deprecated trait with message and since`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @deprecated
@@ -274,7 +282,7 @@ class StructureGeneratorTest {
 
             @deprecated(message: "Fly, you fools!", since: "1.2.3")
             structure Qux {}
-        """.asSmithyModel()
+            """.asSmithyModel()
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
@@ -291,7 +299,8 @@ class StructureGeneratorTest {
 
     @Test
     fun `nested deprecated trait`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure Nested {
@@ -307,7 +316,7 @@ class StructureGeneratorTest {
 
             @deprecated
             structure Bar {}
-        """.asSmithyModel()
+            """.asSmithyModel()
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
@@ -405,7 +414,8 @@ class StructureGeneratorTest {
 
     @Test
     fun `fields are NOT doc-hidden`() {
-        val model = """
+        val model =
+            """
             namespace com.test
             structure MyStruct {
                foo: String,
@@ -414,7 +424,7 @@ class StructureGeneratorTest {
                ts: Timestamp,
                byteValue: Byte,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
@@ -426,11 +436,12 @@ class StructureGeneratorTest {
 
     @Test
     fun `streaming fields are NOT doc-hidden`() {
-        val model = """
+        val model =
+            """
             namespace com.test
             @streaming blob SomeStreamingThing
             structure MyStruct { foo: SomeStreamingThing }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)

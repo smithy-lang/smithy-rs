@@ -3,16 +3,11 @@
 - [Design Overview](./overview.md)
 - [Tenets](./tenets.md)
 - [Design FAQ](./faq.md)
-- [Transport](transport/overview.md)
-  - [HTTP Operations](transport/operation.md)
-  - [HTTP Middleware](transport/middleware.md)
-  - [TLS Connector](transport/connector.md)
 
 - [Smithy](./smithy/overview.md)
   - [Simple Shapes](./smithy/simple_shapes.md)
   - [Recursive Shapes](./smithy/recursive_shapes.md)
   - [Aggregate Shapes](./smithy/aggregate_shapes.md)
-  - [Endpoint Resolution](smithy/endpoint.md)
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
 - [Client](./client/overview.md)
@@ -67,6 +62,9 @@
   - [RFC-0038: User-configurable retry classification](./rfcs/rfc0038_retry_classifier_customization.md)
   - [RFC-0039: Forward Compatible Errors](./rfcs/rfc0039_forward_compatible_errors.md)
   - [RFC-0040: Behavior Versions](./rfcs/rfc0040_behavior_versions.md)
-
+  - [RFC-0041: Improve client error ergonomics](./rfcs/rfc0041_improve_client_error_ergonomics.md)
+  - [RFC-0042: File-per-change changelog](./rfcs/rfc0042_file_per_change_changelog.md)
+  - [RFC-0043: Identity Cache Partitions](./rfcs/rfc0043_identity_cache_partitions.md)
+  - [RFC-0044: Environment-defined service configuration](./rfcs/rfc0044_env_defined_service_config.md)
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

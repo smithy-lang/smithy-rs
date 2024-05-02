@@ -44,8 +44,8 @@ pub struct HeaderMarker {
 /// println!("{headers:?}");
 /// ```
 ///
-/// [httpPrefixHeaders trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpprefixheaders-trait
-/// [httpHeader trait]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httpheader-trait
+/// [httpPrefixHeaders trait]: https://smithy.io/2.0/spec/http-bindings.html#httpprefixheaders-trait
+/// [httpHeader trait]: https://smithy.io/2.0/spec/http-bindings.html#httpheader-trait
 pub struct SensitiveHeaders<'a, F> {
     headers: &'a HeaderMap,
     marker: F,
@@ -164,7 +164,7 @@ mod tests {
 
     impl Debug for TestDebugMap {
         fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-            f.debug_map().entries(self.0.into_iter()).finish()
+            f.debug_map().entries(self.0).finish()
         }
     }
 

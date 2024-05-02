@@ -46,6 +46,7 @@ object ClientRustModule {
 
     /** crate::client */
     val client = Client.self
+
     object Client {
         /** crate::client */
         val self = RustModule.public("client")
@@ -56,6 +57,7 @@ object ClientRustModule {
 
     /** crate::config */
     val config = Config.self
+
     object Config {
         /** crate::client */
         val self = RustModule.public("config")
@@ -81,6 +83,7 @@ object ClientRustModule {
 
     /** crate::primitives */
     val primitives = Primitives.self
+
     object Primitives {
         /** crate::primitives */
         val self = RustModule.public("primitives")
@@ -91,6 +94,7 @@ object ClientRustModule {
 
     /** crate::types */
     val types = Types.self
+
     object Types {
         /** crate::types */
         val self = RustModule.public("types")
@@ -98,6 +102,8 @@ object ClientRustModule {
         /** crate::types::error */
         val Error = RustModule.public("error", parent = self)
     }
+
+    val waiters = RustModule.public("waiters")
 }
 
 class ClientModuleDocProvider(
@@ -123,74 +129,85 @@ class ClientModuleDocProvider(
             ClientRustModule.Primitives.EventStream -> strDoc("Event stream related primitives such as `Message` or `Header`.")
             ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
             ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
+            ClientRustModule.waiters -> strDoc("Supporting types for waiters.\n\nNote: to use waiters, import the [`Waiters`](crate::client::Waiters) trait, which adds methods prefixed with `wait_until` to the client.")
             else -> TODO("Document this module: $module")
         }
     }
 
-    private fun clientModuleDoc(): Writable = writable {
-        val genericClientConstructionDocs = FluentClientDocs.clientConstructionDocs(codegenContext)
-        val writeClientConstructionDocs = codegenContext.rootDecorator
-            .clientConstructionDocs(codegenContext, genericClientConstructionDocs)
+    private fun clientModuleDoc(): Writable =
+        writable {
+            val genericClientConstructionDocs = FluentClientDocs.clientConstructionDocs(codegenContext)
+            val writeClientConstructionDocs =
+                codegenContext.rootDecorator
+                    .clientConstructionDocs(codegenContext, genericClientConstructionDocs)
 
-        writeClientConstructionDocs(this)
-        FluentClientDocs.clientUsageDocs(codegenContext)(this)
-    }
-
-    private fun customizeModuleDoc(): Writable = writable {
-        val model = codegenContext.model
-        docs("Operation customization and supporting types.\n")
-        if (codegenContext.serviceShape.operations.isNotEmpty()) {
-            val opFnName = FluentClientGenerator.clientOperationFnName(
-                codegenContext.serviceShape.operations.minOf { it }
-                    .let { model.expectShape(it, OperationShape::class.java) },
-                codegenContext.symbolProvider,
-            )
-            val moduleUseName = codegenContext.moduleUseName()
-            docsTemplate(
-                """
-                The underlying HTTP requests made during an operation can be customized
-                by calling the `customize()` method on the builder returned from a client
-                operation call. For example, this can be used to add an additional HTTP header:
-
-                ```ignore
-                ## async fn wrapper() -> #{Result}<(), $moduleUseName::Error> {
-                ## let client: $moduleUseName::Client = unimplemented!();
-                use #{http}::header::{HeaderName, HeaderValue};
-
-                let result = client.$opFnName()
-                    .customize()
-                    .mutate_request(|req| {
-                        // Add `x-example-header` with value
-                        req.headers_mut()
-                            .insert(
-                                HeaderName::from_static("x-example-header"),
-                                HeaderValue::from_static("1"),
-                            );
-                    })
-                    .send()
-                    .await;
-                ## }
-                ```
-                """.trimIndent(),
-                *RuntimeType.preludeScope,
-                "http" to CargoDependency.Http.toDevDependency().toType(),
-            )
+            writeClientConstructionDocs(this)
+            FluentClientDocs.clientUsageDocs(codegenContext)(this)
+            FluentClientDocs.waiterDocs(codegenContext)(this)
         }
-    }
+
+    private fun customizeModuleDoc(): Writable =
+        writable {
+            val model = codegenContext.model
+            docs("Operation customization and supporting types.\n")
+            if (codegenContext.serviceShape.operations.isNotEmpty()) {
+                val opFnName =
+                    FluentClientGenerator.clientOperationFnName(
+                        codegenContext.serviceShape.operations.minOf { it }
+                            .let { model.expectShape(it, OperationShape::class.java) },
+                        codegenContext.symbolProvider,
+                    )
+                val moduleUseName = codegenContext.moduleUseName()
+                docsTemplate(
+                    """
+                    The underlying HTTP requests made during an operation can be customized
+                    by calling the `customize()` method on the builder returned from a client
+                    operation call. For example, this can be used to add an additional HTTP header:
+
+                    ```ignore
+                    ## async fn wrapper() -> #{Result}<(), $moduleUseName::Error> {
+                    ## let client: $moduleUseName::Client = unimplemented!();
+                    use #{http}::header::{HeaderName, HeaderValue};
+
+                    let result = client.$opFnName()
+                        .customize()
+                        .mutate_request(|req| {
+                            // Add `x-example-header` with value
+                            req.headers_mut()
+                                .insert(
+                                    HeaderName::from_static("x-example-header"),
+                                    HeaderValue::from_static("1"),
+                                );
+                        })
+                        .send()
+                        .await;
+                    ## }
+                    ```
+                    """.trimIndent(),
+                    *RuntimeType.preludeScope,
+                    "http" to CargoDependency.Http.toDevDependency().toType(),
+                )
+            }
+        }
 }
 
 object ClientModuleProvider : ModuleProvider {
-    override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule = when (shape) {
-        is OperationShape -> perOperationModule(context, shape)
-        is StructureShape -> when {
-            shape.hasTrait<ErrorTrait>() -> ClientRustModule.Types.Error
-            shape.hasTrait<SyntheticInputTrait>() -> perOperationModule(context, shape)
-            shape.hasTrait<SyntheticOutputTrait>() -> perOperationModule(context, shape)
+    override fun moduleForShape(
+        context: ModuleProviderContext,
+        shape: Shape,
+    ): RustModule.LeafModule =
+        when (shape) {
+            is OperationShape -> perOperationModule(context, shape)
+            is StructureShape ->
+                when {
+                    shape.hasTrait<ErrorTrait>() -> ClientRustModule.Types.Error
+                    shape.hasTrait<SyntheticInputTrait>() -> perOperationModule(context, shape)
+                    shape.hasTrait<SyntheticOutputTrait>() -> perOperationModule(context, shape)
+                    else -> ClientRustModule.types
+                }
+
             else -> ClientRustModule.types
         }
-
-        else -> ClientRustModule.types
-    }
 
     override fun moduleForOperationError(
         context: ModuleProviderContext,
@@ -202,7 +219,11 @@ object ClientModuleProvider : ModuleProvider {
         eventStream: UnionShape,
     ): RustModule.LeafModule = ClientRustModule.Types.Error
 
-    override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule =
+    override fun moduleForBuilder(
+        context: ModuleProviderContext,
+        shape: Shape,
+        symbol: Symbol,
+    ): RustModule.LeafModule =
         RustModule.public("builders", parent = symbol.module(), documentationOverride = "Builders")
 
     private fun Shape.findOperation(model: Model): OperationShape {
@@ -216,7 +237,10 @@ object ClientModuleProvider : ModuleProvider {
         }
     }
 
-    private fun perOperationModule(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule {
+    private fun perOperationModule(
+        context: ModuleProviderContext,
+        shape: Shape,
+    ): RustModule.LeafModule {
         val operationShape = shape.findOperation(context.model)
         val contextName = operationShape.contextName(context.serviceShape)
         val operationModuleName =

@@ -32,42 +32,44 @@ class ConstrainedStringGeneratorTest {
     data class TestCase(val model: Model, val validString: String, val invalidString: String)
 
     class ConstrainedStringGeneratorTestProvider : ArgumentsProvider {
-        private val testCases = listOf(
-            // Min and max.
-            Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
-            // Min equal to max.
-            Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
-            // Only min.
-            Triple("@length(min: 11)", "validString", ""),
-            // Only max.
-            Triple("@length(max: 11)", "", "invalidString"),
-            // Count Unicode scalar values, not `.len()`.
-            Triple(
-                "@length(min: 3, max: 3)",
-                "👍👍👍", // These three emojis are three Unicode scalar values.
-                "👍👍👍👍",
-            ),
-            Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
-            Triple(
-                """
-                @length(min: 3, max: 10)
-                @pattern("^a string$")
-                """,
-                "a string", "an invalid string",
-            ),
-            Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
-        ).map {
-            TestCase(
-                """
-                namespace test
+        private val testCases =
+            listOf(
+                // Min and max.
+                Triple("@length(min: 11, max: 12)", "validString", "invalidString"),
+                // Min equal to max.
+                Triple("@length(min: 11, max: 11)", "validString", "invalidString"),
+                // Only min.
+                Triple("@length(min: 11)", "validString", ""),
+                // Only max.
+                Triple("@length(max: 11)", "", "invalidString"),
+                // Count Unicode scalar values, not `.len()`.
+                Triple(
+                    "@length(min: 3, max: 3)",
+                    // These three emojis are three Unicode scalar values.
+                    "👍👍👍",
+                    "👍👍👍👍",
+                ),
+                Triple("@pattern(\"^[a-z]+$\")", "valid", "123 invalid"),
+                Triple(
+                    """
+                    @length(min: 3, max: 10)
+                    @pattern("^a # string$")
+                    """,
+                    "a # string", "an invalid string",
+                ),
+                Triple("@pattern(\"123\")", "some pattern 123 in the middle", "no pattern at all"),
+            ).map {
+                TestCase(
+                    """
+                    namespace test
 
-                ${it.first}
-                string ConstrainedString
-                """.asSmithyModel(),
-                it.second,
-                it.third,
-            )
-        }
+                    ${it.first}
+                    string ConstrainedString
+                    """.asSmithyModel(),
+                    it.second,
+                    it.third,
+                )
+            }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             testCases.map { Arguments.of(it) }.stream()
@@ -84,6 +86,9 @@ class ConstrainedStringGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
 
         project.withModule(ServerRustModule.Model) {
+            TestUtility.generateIsDisplay().invoke(this)
+            TestUtility.generateIsError().invoke(this)
+
             ConstrainedStringGenerator(
                 codegenContext,
                 this.createTestInlineModuleCreator(),
@@ -104,7 +109,9 @@ class ConstrainedStringGeneratorTest {
                 test = """
                     let string = "${testCase.invalidString}".to_owned();
                     let constrained_res: Result<ConstrainedString, _> = string.try_into();
-                    constrained_res.unwrap_err();
+                    let error = constrained_res.unwrap_err();
+                    is_error(&error);
+                    is_display(&error);
                 """,
             )
             unitTest(
@@ -132,12 +139,13 @@ class ConstrainedStringGeneratorTest {
 
     @Test
     fun `type should not be constructable without using a constructor`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @length(min: 1, max: 69)
             string ConstrainedString
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
 
         val codegenContext = serverTestCodegenContext(model)
@@ -158,7 +166,8 @@ class ConstrainedStringGeneratorTest {
 
     @Test
     fun `Display implementation`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @length(min: 1, max: 69)
@@ -167,7 +176,7 @@ class ConstrainedStringGeneratorTest {
             @sensitive
             @length(min: 1, max: 78)
             string SensitiveConstrainedString
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedStringShape = model.lookup<StringShape>("test#ConstrainedString")
         val sensitiveConstrainedStringShape = model.lookup<StringShape>("test#SensitiveConstrainedString")
 
@@ -216,12 +225,13 @@ class ConstrainedStringGeneratorTest {
 
     @Test
     fun `A regex that is accepted by Smithy but not by the regex crate causes tests to fail`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @pattern("import (?!static).+")
             string PatternStringWithLookahead
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val constrainedStringShape = model.lookup<StringShape>("test#PatternStringWithLookahead")
         val codegenContext = serverTestCodegenContext(model)
