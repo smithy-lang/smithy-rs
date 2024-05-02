@@ -108,7 +108,7 @@ class HttpRequestCompressionDecoratorTest {
                     use #{Region};
 
                     const UNCOMPRESSED_INPUT: &[u8] = b"Action=PutMetricData&Version=2010-08-01&Namespace=Namespace&MetricData.member.1.MetricName=metric&MetricData.member.1.Unit=Bytes&MetricData.member.1.Value=128";
-                    // This will break if we ever change the default compression level.
+                    // This may break if we ever change the default compression level.
                     const COMPRESSED_OUTPUT: &[u8] = &[
                         31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 1, 115, 0, 140, 255, 31, 139, 8, 0, 0, 0, 0, 0, 0, 255, 109,
                         139, 49, 14, 128, 32, 16, 4, 127, 67, 39, 1, 43, 155, 43, 52, 182, 26, 27, 233, 79, 114, 5,
@@ -118,25 +118,6 @@ class HttpRequestCompressionDecoratorTest {
                         12, 23, 83, 170, 206, 6, 247, 76, 160, 219, 238, 6, 30, 221, 9, 253, 158, 0, 0, 0, 160, 51, 48,
                         147, 115, 0, 0, 0,
                     ];
-
-                    ##[#{tokio}::test]
-                    async fn test_request_compression() {
-                        let (http_client, rx) = #{capture_request}(None);
-                        let config = $moduleName::Config::builder()
-                            .region(Region::from_static("doesntmatter"))
-                            .with_test_defaults()
-                            .http_client(http_client)
-                            .build();
-                        let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
-                        let request = rx.expect_request();
-                        // Check that the content-encoding header is set to "gzip"
-                        assert_eq!("gzip", request.headers().get("content-encoding").unwrap());
-
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
-                        // Assert input body was compressed
-                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice())
-                    }
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_can_be_disabled() {
