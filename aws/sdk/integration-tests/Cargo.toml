@@ -2,7 +2,7 @@
 # `./gradlew -Paws.fullsdk=true :aws:sdk:assemble` these tests are copied into their respective Service crates.
 [workspace]
 resolver = "2"
-members = [ "cloudwatch",
+members = [
     "codecatalyst",
     "dynamodb",
     "ec2",
