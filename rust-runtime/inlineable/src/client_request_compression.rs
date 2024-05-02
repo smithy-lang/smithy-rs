@@ -145,7 +145,10 @@ fn wrap_request_body_in_compressed_body(
 
         let options = compression_options.clone();
         body.map(move |body| {
-            let body = CompressedBody::new(body, compression_algorithm.into_impl(&options));
+            let body = CompressedBody::new(
+                body,
+                compression_algorithm.into_impl_http_body_0_4_x(&options),
+            );
 
             SdkBody::from_body_0_4(body)
         })

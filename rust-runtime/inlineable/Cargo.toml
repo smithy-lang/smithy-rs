@@ -22,7 +22,7 @@ aws-smithy-compression = { path = "../aws-smithy-compression" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
 fastrand = "2.0.0"
