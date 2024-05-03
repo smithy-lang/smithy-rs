@@ -208,11 +208,11 @@ pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
 mod loader {
     use crate::env_service_config::EnvServiceConfig;
     use aws_credential_types::provider::{
-        token::{ProvideToken, SharedTokenProvider},
-        ProvideCredentials, SharedCredentialsProvider,
+        ProvideCredentials,
+        SharedCredentialsProvider, token::{ProvideToken, SharedTokenProvider},
     };
     use aws_credential_types::Credentials;
-    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
+    use aws_smithy_async::rt::sleep::{AsyncSleep, default_async_sleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime::client::identity::IdentityCache;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
@@ -237,6 +237,7 @@ mod loader {
     #[allow(deprecated)]
     use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
+    use crate::default_provider::transfer::Settings;
 
     #[derive(Default, Debug)]
     enum TriStateOption<T> {
@@ -278,6 +279,7 @@ mod loader {
         env: Option<Env>,
         fs: Option<Fs>,
         behavior_version: Option<BehaviorVersion>,
+        transfer_config: Option<Settings>,
     }
 
     impl ConfigLoader {
@@ -687,6 +689,20 @@ mod loader {
             self
         }
 
+        /// Override stream transfer settings
+        ///
+        /// Configures the many aspects of a binary transfer:
+        ///
+        /// TODO: Enumerate transfer.rs attributes
+        ///
+        pub fn transfer(
+            mut self,
+            transfer_settings: Settings,
+        ) -> Self {
+            self.transfer_config = Some(transfer_settings);
+            self
+        }
+
         /// Load the default configuration chain
         ///
         /// If fields have been overridden during builder construction, the override values will be used.
@@ -869,6 +885,7 @@ mod loader {
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
+            builder.set_transfer_settings(self.transfer_settings);
             builder.build()
         }
     }
@@ -890,9 +907,9 @@ mod loader {
     mod test {
         #[allow(deprecated)]
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
-        use crate::test_case::{no_traffic_client, InstantSleep};
+        use crate::test_case::{InstantSleep, no_traffic_client};
         use crate::BehaviorVersion;
-        use crate::{defaults, ConfigLoader};
+        use crate::{ConfigLoader, defaults};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};

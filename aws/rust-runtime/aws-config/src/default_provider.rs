@@ -57,3 +57,6 @@ pub mod ignore_configured_endpoint_urls;
 
 /// Default endpoint URL provider chain
 pub mod endpoint_url;
+
+/// Default transfer settings
+pub mod transfer;
