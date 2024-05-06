@@ -31,6 +31,9 @@ pub mod http;
 /// The name of the `gzip` algorithm.
 pub const GZIP_NAME: &str = "gzip";
 
+/// The maximum-allowable value per internal standards is 10 Megabytes.
+const MAX_MIN_COMPRESSION_SIZE_BYTES: u32 = 10_485_760;
+
 /// Types implementing this trait can compress data.
 ///
 /// Compression algorithms are used reduce the size of data. This trait
@@ -123,7 +126,7 @@ impl CompressionOptions {
     fn validate_min_compression_size_bytes(
         min_compression_size_bytes: u32,
     ) -> Result<(), BoxError> {
-        if min_compression_size_bytes > 10485760 {
+        if min_compression_size_bytes > MAX_MIN_COMPRESSION_SIZE_BYTES {
             return Err(format!(
                 "min compression size `{}` is invalid, valid values are 0..=10_485_760",
                 min_compression_size_bytes
