@@ -30,6 +30,7 @@ impl Compression for Gzip {
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 mod http_body_0_4_x {
     impl crate::http::http_body_0_4_x::RequestCompressor for super::Gzip {
         fn header_value(self: Box<Self>) -> http_0_2::HeaderValue {
@@ -38,6 +39,7 @@ mod http_body_0_4_x {
     }
 }
 
+#[cfg(feature = "http-body-1-x")]
 mod http_body_1_x {
     impl crate::http::http_body_1_x::RequestCompressor for super::Gzip {
         fn header_value(self: Box<Self>) -> http_1_0::HeaderValue {
@@ -83,7 +85,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
-#[cfg(test)]
+// Windows line-endings will cause the compression test to fail.
+#[cfg(all(test, not(windows)))]
 mod tests {
     use super::Gzip;
     use crate::CompressionOptions;
