@@ -3,12 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::borrow::Cow;
-use std::{fmt, mem};
-
-use http::HeaderValue;
-use http_body::Body;
-
 use aws_smithy_compression::body::compress::CompressedBody;
 use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -24,6 +18,9 @@ use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::error::operation::BuildError;
+use http::HeaderValue;
+use std::borrow::Cow;
+use std::{fmt, mem};
 
 #[derive(Debug)]
 pub(crate) struct RequestCompressionRuntimePlugin {
@@ -47,18 +44,6 @@ impl RuntimePlugin for RequestCompressionRuntimePlugin {
         Cow::Borrowed(&self.runtime_components)
     }
 }
-
-/// Errors related to constructing compression-validated HTTP requests
-#[derive(Debug)]
-pub(crate) enum Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error during request compression")
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[derive(Debug)]
 struct RequestCompressionInterceptorState {
@@ -150,11 +135,13 @@ fn wrap_request_body_in_compressed_body(
     //
     // Because compressing small amounts of data can actually increase its size,
     // we check to see if the data is big enough to make compression worthwhile.
-    if let Some(known_size) = request.body().size_hint().exact() {
-        if known_size < compression_options.min_compression_size_bytes() as u64 {
+    if let Some(known_size) = request.body().bytes().map(|b| b.len()) {
+        if known_size < compression_options.min_compression_size_bytes() as usize {
             tracing::trace!("request body is below minimum size and will not be compressed");
             return Ok(());
         }
+    } else {
+        tracing::trace!("compressing streaming request body...");
     }
 
     let mut body = {
@@ -218,13 +205,11 @@ impl Storable for RequestMinCompressionSizeBytes {
 
 #[cfg(test)]
 mod tests {
-    use http_body::Body;
-
+    use super::wrap_request_body_in_compressed_body;
     use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_types::body::SdkBody;
-
-    use super::wrap_request_body_in_compressed_body;
+    use http_body::Body;
 
     const UNCOMPRESSED_INPUT: &[u8] = b"hello world";
     const COMPRESSED_OUTPUT: &[u8] = &[
