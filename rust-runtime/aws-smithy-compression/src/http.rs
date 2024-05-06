@@ -12,7 +12,7 @@ pub mod http_body_0_4_x {
     use http_0_2::header::{HeaderMap, HeaderName, HeaderValue};
 
     /// Implementors of this trait can be used to compress HTTP requests.
-    pub trait RequestCompressor: Compression + Send + Sync {
+    pub trait RequestCompressor: Compression {
         /// Return a map of headers that must be included when a request is compressed.
         fn headers(self: Box<Self>) -> HeaderMap<HeaderValue> {
             let mut header_map = HeaderMap::new();
@@ -38,7 +38,7 @@ pub mod http_body_1_x {
     use http_1_0::header::{HeaderMap, HeaderName, HeaderValue};
 
     /// Implementors of this trait can be used to compress HTTP requests.
-    pub trait RequestCompressor: Compression + Send + Sync {
+    pub trait RequestCompressor: Compression {
         /// Return a map of headers that must be included when a request is compressed.
         fn headers(self: Box<Self>) -> HeaderMap<HeaderValue> {
             let mut header_map = HeaderMap::new();
