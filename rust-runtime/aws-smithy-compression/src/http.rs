@@ -28,7 +28,7 @@ pub mod http_body_0_4_x {
     /// Enables CompressRequest implementors to be cloned.
     pub trait CloneCompressRequest {
         /// Clone this request compressor.
-        fn clone_request_compressor<'a>(&self) -> Box<dyn CompressRequest>;
+        fn clone_request_compressor(&self) -> Box<dyn CompressRequest>;
     }
 
     impl<T> CloneCompressRequest for T
@@ -70,7 +70,7 @@ pub mod http_body_1_x {
     /// Enables CompressRequest implementors to be cloned.
     pub trait CloneCompressRequest {
         /// Clone this request compressor.
-        fn clone_request_compressor<'a>(&self) -> Box<dyn CompressRequest>;
+        fn clone_request_compressor(&self) -> Box<dyn CompressRequest>;
     }
 
     impl<T> CloneCompressRequest for T
