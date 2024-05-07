@@ -6,7 +6,6 @@
 use crate::{Compress, CompressionOptions};
 use aws_smithy_runtime_api::box_error::BoxError;
 use flate2::write::GzEncoder;
-use std::fmt;
 use std::io::prelude::*;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -15,7 +14,7 @@ pub(crate) struct Gzip {
 }
 
 impl Gzip {
-    fn compress_bytes(&self, bytes: &[u8], writer: impl Write) -> Result<(), Error> {
+    fn compress_bytes(&self, bytes: &[u8], writer: impl Write) -> Result<(), BoxError> {
         let mut encoder = GzEncoder::new(writer, self.compression);
         encoder.write_all(bytes)?;
         encoder.try_finish()?;
@@ -72,27 +71,6 @@ impl From<CompressionOptions> for Gzip {
     fn from(options: CompressionOptions) -> Self {
         Gzip {
             compression: flate2::Compression::new(options.level),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct Error {
-    message: String,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "compression failed: {}", self.message)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error {
-            message: err.to_string(),
         }
     }
 }

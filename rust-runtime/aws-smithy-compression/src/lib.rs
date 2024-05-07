@@ -16,14 +16,12 @@
 
 //! Compression-related code.
 
-use crate::error::UnknownCompressionAlgorithmError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::io::Write;
 use std::str::FromStr;
 
 pub mod body;
-pub mod error;
 mod gzip;
 pub mod http;
 
@@ -150,7 +148,7 @@ pub enum CompressionAlgorithm {
 }
 
 impl FromStr for CompressionAlgorithm {
-    type Err = UnknownCompressionAlgorithmError;
+    type Err = BoxError;
 
     /// Create a new `CompressionAlgorithm` from an algorithm name.
     ///
@@ -162,7 +160,7 @@ impl FromStr for CompressionAlgorithm {
         if compression_algorithm.eq_ignore_ascii_case(GZIP_NAME) {
             Ok(Self::Gzip)
         } else {
-            Err(UnknownCompressionAlgorithmError::new(compression_algorithm))
+            Err(format!("unknown compression algorithm `{compression_algorithm}`").into())
         }
     }
 }
@@ -209,8 +207,8 @@ mod tests {
             .parse::<CompressionAlgorithm>()
             .expect_err("it should error");
         assert_eq!(
-            "some unknown compression algorithm",
-            error.compression_algorithm()
+            "unknown compression algorithm `some unknown compression algorithm`",
+            error.to_string()
         );
     }
 
