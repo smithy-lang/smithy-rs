@@ -13,23 +13,23 @@ pub mod compress {
     use pin_project_lite::pin_project;
 
     pin_project! {
-        /// A `Body` that may compress its data with a `RequestCompressor`.
+        /// A `Body` that may compress its data with a `CompressRequest` implementor.
         ///
         /// Compression options may disable request compression for small data payload, or entirely.
         /// Additionally, some services may not support compression.
         pub struct CompressedBody<InnerBody, CompressionImpl> {
             #[pin]
             body: InnerBody,
-            request_compressor: CompressionImpl,
+            compress_request: CompressionImpl,
         }
     }
 
     impl<RC> CompressedBody<SdkBody, RC> {
-        /// Given an [`SdkBody`] and a `Box<dyn RequestCompressor>`, create a new `CompressedBody<SdkBody, RC>`.
-        pub fn new(body: SdkBody, request_compressor: RC) -> Self {
+        /// Given an [`SdkBody`] and a `Box<dyn CompressRequest>`, create a new `CompressedBody<SdkBody, RC>`.
+        pub fn new(body: SdkBody, compress_request: RC) -> Self {
             Self {
                 body,
-                request_compressor,
+                compress_request,
             }
         }
     }
@@ -38,14 +38,14 @@ pub mod compress {
     #[cfg(feature = "http-body-0-4-x")]
     pub mod http_body_0_4_x {
         use super::CompressedBody;
-        use crate::http::http_body_0_4_x::RequestCompressor;
+        use crate::http::http_body_0_4_x::CompressRequest;
         use aws_smithy_types::body::SdkBody;
         use http_0_2::HeaderMap;
         use http_body_0_4::{Body, SizeHint};
         use std::pin::Pin;
         use std::task::{Context, Poll};
 
-        impl Body for CompressedBody<SdkBody, Box<dyn RequestCompressor>> {
+        impl Body for CompressedBody<SdkBody, Box<dyn CompressRequest>> {
             type Data = bytes::Bytes;
             type Error = aws_smithy_types::body::Error;
 
@@ -57,8 +57,7 @@ pub mod compress {
                 match this.body.poll_data(cx)? {
                     Poll::Ready(Some(data)) => {
                         let mut out = Vec::new();
-                        this.request_compressor
-                            .compress_bytes(&data[..], &mut out)?;
+                        this.compress_request.compress_bytes(&data[..], &mut out)?;
                         Poll::Ready(Some(Ok(out.into())))
                     }
                     Poll::Ready(None) => Poll::Ready(None),
@@ -88,13 +87,13 @@ pub mod compress {
     #[cfg(feature = "http-body-1-x")]
     pub mod http_body_1_x {
         use super::CompressedBody;
-        use crate::http::http_body_1_x::RequestCompressor;
+        use crate::http::http_body_1_x::CompressRequest;
         use aws_smithy_types::body::SdkBody;
         use http_body_1_0::{Body, Frame, SizeHint};
         use std::pin::Pin;
         use std::task::{ready, Context, Poll};
 
-        impl Body for CompressedBody<SdkBody, Box<dyn RequestCompressor>> {
+        impl Body for CompressedBody<SdkBody, Box<dyn CompressRequest>> {
             type Data = bytes::Bytes;
             type Error = aws_smithy_types::body::Error;
 
@@ -108,7 +107,7 @@ pub mod compress {
                         if f.is_data() {
                             let d = f.into_data().expect("we checked for data first");
                             let mut out = Vec::new();
-                            this.request_compressor.compress_bytes(&d, &mut out)?;
+                            this.compress_request.compress_bytes(&d, &mut out)?;
                             Some(Ok(Frame::data(out.into())))
                         } else if f.is_trailers() {
                             // Trailers don't get compressed.
@@ -156,10 +155,10 @@ mod test {
         let compression_options = CompressionOptions::default()
             .with_min_compression_size_bytes(0)
             .unwrap();
-        let request_compressor =
+        let compress_request =
             compression_algorithm.into_impl_http_body_0_4_x(&compression_options);
         let body = SdkBody::from(UNCOMPRESSED_INPUT);
-        let mut compressed_body = CompressedBody::new(body, request_compressor);
+        let mut compressed_body = CompressedBody::new(body, compress_request);
 
         let mut output = SegmentedBuf::new();
         while let Some(buf) = compressed_body.data().await {
@@ -190,10 +189,9 @@ mod test {
         let compression_options = CompressionOptions::default()
             .with_min_compression_size_bytes(0)
             .unwrap();
-        let request_compressor =
-            compression_algorithm.into_impl_http_body_1_x(&compression_options);
+        let compress_request = compression_algorithm.into_impl_http_body_1_x(&compression_options);
         let body = SdkBody::from(UNCOMPRESSED_INPUT);
-        let mut compressed_body = CompressedBody::new(body, request_compressor);
+        let mut compressed_body = CompressedBody::new(body, compress_request);
 
         let mut output = SegmentedBuf::new();
 

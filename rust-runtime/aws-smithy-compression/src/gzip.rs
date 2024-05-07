@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{Compression, CompressionOptions};
+use crate::{Compress, CompressionOptions};
 use aws_smithy_runtime_api::box_error::BoxError;
 use flate2::write::GzEncoder;
 use std::fmt;
@@ -24,7 +24,7 @@ impl Gzip {
     }
 }
 
-impl Compression for Gzip {
+impl Compress for Gzip {
     fn compress_bytes(&mut self, bytes: &[u8], writer: &mut dyn Write) -> Result<(), BoxError> {
         Gzip::compress_bytes(self, bytes, writer).map_err(Into::into)
     }
@@ -32,8 +32,14 @@ impl Compression for Gzip {
 
 #[cfg(feature = "http-body-0-4-x")]
 mod http_body_0_4_x {
-    impl crate::http::http_body_0_4_x::RequestCompressor for super::Gzip {
-        fn header_value(self: Box<Self>) -> http_0_2::HeaderValue {
+    use crate::http::http_body_0_4_x::CompressRequest;
+
+    impl CompressRequest for super::Gzip {
+        fn box_clone(&self) -> Box<dyn CompressRequest> {
+            Box::new(self.clone())
+        }
+
+        fn header_value(&self) -> http_0_2::HeaderValue {
             http_0_2::HeaderValue::from_static("gzip")
         }
     }
@@ -41,8 +47,14 @@ mod http_body_0_4_x {
 
 #[cfg(feature = "http-body-1-x")]
 mod http_body_1_x {
-    impl crate::http::http_body_1_x::RequestCompressor for super::Gzip {
-        fn header_value(self: Box<Self>) -> http_1_0::HeaderValue {
+    use crate::http::http_body_1_x::CompressRequest;
+
+    impl CompressRequest for super::Gzip {
+        fn box_clone(&self) -> Box<dyn CompressRequest> {
+            Box::new(self.clone())
+        }
+
+        fn header_value(&self) -> http_1_0::HeaderValue {
             http_1_0::HeaderValue::from_static("gzip")
         }
     }

@@ -39,7 +39,7 @@ const MAX_MIN_COMPRESSION_SIZE_BYTES: u32 = 10_485_760;
 /// Compression algorithms are used reduce the size of data. This trait
 /// requires Send + Sync because trait implementors are often used in an
 /// async context.
-pub trait Compression: Send + Sync {
+pub trait Compress: Send + Sync {
     /// Given a slice of bytes, and a [Write] implementor, compress and write
     /// bytes to the writer until done.
     // I wanted to use `impl Write` but that's not object-safe
@@ -143,6 +143,7 @@ impl Storable for CompressionOptions {
 
 /// An enum encompassing all supported compression algorithms.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CompressionAlgorithm {
     /// The [gzip](https://en.wikipedia.org/wiki/Gzip) compression algorithm
     Gzip,
@@ -172,7 +173,7 @@ impl CompressionAlgorithm {
     pub fn into_impl_http_body_0_4_x(
         self,
         options: &CompressionOptions,
-    ) -> Box<dyn http::http_body_0_4_x::RequestCompressor> {
+    ) -> Box<dyn http::http_body_0_4_x::CompressRequest> {
         match self {
             Self::Gzip => Box::new(gzip::Gzip::from(options)),
         }
@@ -183,7 +184,7 @@ impl CompressionAlgorithm {
     pub fn into_impl_http_body_1_x(
         self,
         options: &CompressionOptions,
-    ) -> Box<dyn http::http_body_1_x::RequestCompressor> {
+    ) -> Box<dyn http::http_body_1_x::CompressRequest> {
         match self {
             Self::Gzip => Box::new(gzip::Gzip::from(options)),
         }
