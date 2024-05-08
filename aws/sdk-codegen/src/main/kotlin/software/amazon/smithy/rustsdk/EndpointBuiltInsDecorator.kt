@@ -109,10 +109,12 @@ fun Model.sdkConfigSetter(
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
+    val builtinType = builtIn.type!!
     val map =
-        when (builtIn.type!!) {
+        when (builtinType) {
             ParameterType.STRING -> writable { rust("|s|s.to_string()") }
             ParameterType.BOOLEAN -> null
+            else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
         }
 
     return if (fieldName == "endpoint_url") {
