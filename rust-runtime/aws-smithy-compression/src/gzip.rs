@@ -34,10 +34,6 @@ mod http_body_0_4_x {
     use crate::http::http_body_0_4_x::CompressRequest;
 
     impl CompressRequest for super::Gzip {
-        fn box_clone(&self) -> Box<dyn CompressRequest> {
-            Box::new(self.clone())
-        }
-
         fn header_value(&self) -> http_0_2::HeaderValue {
             http_0_2::HeaderValue::from_static("gzip")
         }
@@ -49,10 +45,6 @@ mod http_body_1_x {
     use crate::http::http_body_1_x::CompressRequest;
 
     impl CompressRequest for super::Gzip {
-        fn box_clone(&self) -> Box<dyn CompressRequest> {
-            Box::new(self.clone())
-        }
-
         fn header_value(&self) -> http_1_0::HeaderValue {
             http_1_0::HeaderValue::from_static("gzip")
         }

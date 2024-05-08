@@ -24,9 +24,9 @@ pub mod compress {
         }
     }
 
-    impl<RC> CompressedBody<SdkBody, RC> {
-        /// Given an [`SdkBody`] and a `Box<dyn CompressRequest>`, create a new `CompressedBody<SdkBody, RC>`.
-        pub fn new(body: SdkBody, compress_request: RC) -> Self {
+    impl<CR> CompressedBody<SdkBody, CR> {
+        /// Given an [`SdkBody`] and a `Box<dyn CompressRequest>`, create a new `CompressedBody<SdkBody, CR>`.
+        pub fn new(body: SdkBody, compress_request: CR) -> Self {
             Self {
                 body,
                 compress_request,

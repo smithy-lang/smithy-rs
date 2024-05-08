@@ -13,9 +13,6 @@ pub mod http_body_0_4_x {
 
     /// Implementors of this trait can be used to compress HTTP requests.
     pub trait CompressRequest: Compress + CloneCompressRequest {
-        /// Clone this request compressor.
-        fn box_clone(&self) -> Box<dyn CompressRequest>;
-
         /// Return the header name for the content-encoding header.
         fn header_name(&self) -> HeaderName {
             HeaderName::from_static("content-encoding")
@@ -55,9 +52,6 @@ pub mod http_body_1_x {
 
     /// Implementors of this trait can be used to compress HTTP requests.
     pub trait CompressRequest: Compress + CloneCompressRequest {
-        /// Clone this request compressor.
-        fn box_clone(&self) -> Box<dyn CompressRequest>;
-
         /// Return the header name for the content-encoding header.
         fn header_name(&self) -> HeaderName {
             HeaderName::from_static("content-encoding")
