@@ -51,7 +51,7 @@ pub struct CompressionOptions {
     /// Valid values are 0-9 with lower values configuring less (but faster) compression
     level: u32,
     min_compression_size_bytes: u32,
-    disabled: bool,
+    enabled: bool,
 }
 
 impl Default for CompressionOptions {
@@ -59,7 +59,7 @@ impl Default for CompressionOptions {
         Self {
             level: 6,
             min_compression_size_bytes: 10240,
-            disabled: false,
+            enabled: true,
         }
     }
 }
@@ -77,14 +77,14 @@ impl CompressionOptions {
         self.min_compression_size_bytes
     }
 
-    /// Whether compression is disabled.
-    pub fn is_disabled(&self) -> bool {
-        self.disabled
+    /// Whether compression is enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
     }
 
-    /// Set whether compression is disabled.
-    pub fn with_disabled(self, disabled: bool) -> Self {
-        Self { disabled, ..self }
+    /// Set whether compression is enabled.
+    pub fn with_enabled(self, enabled: bool) -> Self {
+        Self { enabled, ..self }
     }
 
     /// Set the compression level.
