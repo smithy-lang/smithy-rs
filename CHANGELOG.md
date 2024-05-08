@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 8th, 2024
+=============
+**Breaking Changes:**
+- :warning::tada: (all, [smithy-rs#3527](https://github.com/smithy-lang/smithy-rs/issues/3527)) Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`.
+
+**New this release:**
+- (all, [smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161), @mnissenb) Implement Debug for DateTime
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mnissenb ([smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161))
+
+
 April 30th, 2024
 ================
 **New this release:**
