@@ -57,6 +57,7 @@ object CrateSet {
         listOf(
             "aws-smithy-async",
             "aws-smithy-checksums",
+            "aws-smithy-compression",
             "aws-smithy-client",
             "aws-smithy-eventstream",
             "aws-smithy-http",
