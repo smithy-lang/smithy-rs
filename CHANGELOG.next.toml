@@ -10,31 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[aws-sdk-rust]]
-message = """
-`aws-config::loader::ConfigLoader` now creates an `IdentityCache` by default when using `BehaviorVersion::v2024_03_28()`
-or newer. If you're using `BehaviorVersion::latest()`, you will get this change automatically when updating. This
-allows clients created from `SdkConfig` to use the same cache instance by default resulting in fewer cache misses
-when using multiple clients.
-"""
-references = ["smithy-rs#3427"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "aajtodd"
-
-[[smithy-rs]]
-message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`."
-references = ["smithy-rs#3527"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
-authors = ["jdisanti"]
-
-[[aws-sdk-rust]]
-message = "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`. Updating your SDK is not necessary, this change will happen when a new version of the client libraries are consumed."
-references = ["smithy-rs#3527"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Implement Debug for DateTime"
-references = ["smithy-rs#3161"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-author = "mnissenb"
