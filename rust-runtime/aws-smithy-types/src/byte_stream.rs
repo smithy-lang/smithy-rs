@@ -492,6 +492,11 @@ impl From<Vec<u8>> for ByteStream {
 pub struct AggregatedBytes(SegmentedBuf<Bytes>);
 
 impl AggregatedBytes {
+    /// Construct a new instance from a segmented buffer of `Bytes`.
+    pub fn from_segmented(segments: SegmentedBuf<Bytes>) -> Self {
+        Self(segments)
+    }
+
     /// Convert this buffer into [`Bytes`].
     ///
     /// # Why does this consume `self`?
