@@ -265,7 +265,7 @@ private fun baseClientRuntimePluginsFn(
                         .with_client_plugins(#{default_plugins}(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
-                                .with_behavior_version(config.behavior_version.clone().expect(${behaviorVersionError.dq()}))
+                                .with_behavior_version(config.behavior_version.expect(${behaviorVersionError.dq()}))
                         ))
                         // user config
                         .with_client_plugin(
