@@ -26,15 +26,16 @@ pub fn previous_release_tag(
         }
         let previous_release_commit = commit_for_tag(repo, &ancestor_tag)?;
         let previous_release_override_commit = commit_for_tag(repo, &tag_override)?;
-        // Most of the time, the first guard is enough; The previous release override should be an
-        // ancestor of the `HEAD` of a branch. However, we need the second guard handling a case
-        // where we `git merge main` into a branch, but the main branch now contains a new smithy-rs
-        // release that the `HEAD` of the branch doesn't know about.
+        // The first guard says that whenever we override a previous release tag, `HEAD` of our branch
+        // should be ahead of that override.
+        // The second guard handles a case where our branch is now behind w.r.t the latest smithy-rs
+        // release. This can happen when we `git merge main` into the branch, but the main branch
+        // now contains a new smithy-rs release that the `HEAD` of the branch doesn't know about.
         // In that case, we want to teach the tool that the previous release should now be the new
         // release. However, specifying the new release for `previous_release_override_commit` fails
         // with the first guard because `HEAD` doesn't know about the new release. The second guard
         // provides an escape hatch where if `previous_release_commit` (the latest release currently
-        // `HEAD` does not about) is the ancestor to the specified previous release override.
+        // `HEAD` does know about) is the ancestor to the specified previous release override.
         if !is_ancestor(repo, &previous_release_override_commit, "HEAD")?
             && !is_ancestor(
                 repo,
