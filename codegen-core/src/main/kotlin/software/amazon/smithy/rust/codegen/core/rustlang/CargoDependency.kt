@@ -122,6 +122,19 @@ class InlineDependency(
                 CargoDependency.Http,
             )
 
+        fun clientRequestCompression(runtimeConfig: RuntimeConfig) =
+            forInlineableRustFile(
+                "client_request_compression",
+                CargoDependency.Http,
+                CargoDependency.HttpBody,
+                CargoDependency.Tracing,
+                CargoDependency.Flate2,
+                CargoDependency.Tokio.toDevDependency(),
+                CargoDependency.smithyCompression(runtimeConfig).withFeature("http-body-0-4-x"),
+                CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+                CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
+            )
+
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "idempotency_token",
@@ -244,12 +257,11 @@ data class CargoDependency(
     companion object {
         // Forces AHash to be a later version that avoids
         // https://github.com/tkaitchuck/aHash/issues/200
-        val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"), defaultFeatures = false)
-        val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
-        val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
-        val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
+        val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"))
+        val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.4.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
+        val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.30"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
@@ -259,6 +271,7 @@ data class CargoDependency(
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.12.2"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
+        val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.16"))
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2.0.0"))
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
         val RegexLite: CargoDependency = CargoDependency("regex-lite", CratesIo("0.1.5"))
@@ -267,6 +280,7 @@ data class CargoDependency(
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
+        val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
 
         // Test-only dependencies
         val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
@@ -314,6 +328,8 @@ data class CargoDependency(
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
+
+        fun smithyCompression(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-compression")
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
 
