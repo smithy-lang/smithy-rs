@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymb
 class PubCrateConstrainedShapeSymbolProviderTest {
     private val model =
         """
-        $baseModelString
+        $BASE_MODEL_STRING
 
         structure NonTransitivelyConstrainedStructureShape {
             constrainedString: ConstrainedString,

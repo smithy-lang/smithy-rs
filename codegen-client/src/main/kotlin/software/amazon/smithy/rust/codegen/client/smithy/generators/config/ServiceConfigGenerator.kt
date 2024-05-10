@@ -58,12 +58,12 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /**
      * Additional documentation comments for the `Config` struct.
      */
-    object ConfigStructAdditionalDocs : ServiceConfig("ConfigStructAdditionalDocs")
+    data object ConfigStructAdditionalDocs : ServiceConfig("ConfigStructAdditionalDocs")
 
     /**
      * Struct definition of `Config`. Fields should end with `,` (e.g. `foo: Box<u64>,`)
      */
-    object ConfigStruct : ServiceConfig("ConfigStruct")
+    data object ConfigStruct : ServiceConfig("ConfigStruct")
 
     /**
      * impl block of `Config`. (e.g. to add functions)
@@ -72,13 +72,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
      * rust("pub fn is_cross_region() -> bool { true }")
      * ```
      */
-    object ConfigImpl : ServiceConfig("ConfigImpl")
+    data object ConfigImpl : ServiceConfig("ConfigImpl")
 
     /** Struct definition of `ConfigBuilder` **/
-    object BuilderStruct : ServiceConfig("BuilderStruct")
+    data object BuilderStruct : ServiceConfig("BuilderStruct")
 
     /** impl block of `ConfigBuilder` **/
-    object BuilderImpl : ServiceConfig("BuilderImpl")
+    data object BuilderImpl : ServiceConfig("BuilderImpl")
 
     // It is important to ensure through type system that each field added to config implements this injection,
     // tracked by smithy-rs#3419
@@ -90,7 +90,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  rust("""builder.set_field(config_bag.load::<FieldType>().cloned())""")
      *  ```
      */
-    data class BuilderFromConfigBag(val builder: String, val config_bag: String) : ServiceConfig("BuilderFromConfigBag")
+    data class BuilderFromConfigBag(val builder: String, val configBag: String) : ServiceConfig("BuilderFromConfigBag")
 
     /**
      * Convert from a field in the builder to the final field in config
@@ -99,7 +99,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  rust("""my_field: my_field.unwrap_or_else(||"default")""")
      *  ```
      */
-    object BuilderBuild : ServiceConfig("BuilderBuild")
+    data object BuilderBuild : ServiceConfig("BuilderBuild")
 
     /**
      * A section for setting up a field to be used by ConfigOverrideRuntimePlugin
@@ -109,7 +109,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /**
      * A section for extra functionality that needs to be defined with the config module
      */
-    object Extras : ServiceConfig("Extras")
+    data object Extras : ServiceConfig("Extras")
 
     /**
      * The set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
@@ -243,7 +243,7 @@ fun standardConfigParam(param: ConfigParam): ConfigCustomization =
                     writable {
                         rustTemplate(
                             """
-                            ${section.builder}.set_${param.name}(${section.config_bag}.#{load_from_config_bag});
+                            ${section.builder}.set_${param.name}(${section.configBag}.#{load_from_config_bag});
                             """,
                             "load_from_config_bag" to loadFromConfigBag(param.type.name, param.newtype!!),
                         )
@@ -335,7 +335,7 @@ class ServiceConfigGenerator(
                 customizations.forEach {
                     it.section(ServiceConfig.BuilderFromConfigBag(builderVar, configBagVar))(this)
                 }
-                rust("$builderVar")
+                rust(builderVar)
             }
         }
 

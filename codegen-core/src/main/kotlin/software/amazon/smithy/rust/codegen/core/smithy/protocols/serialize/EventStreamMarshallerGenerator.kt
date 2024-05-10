@@ -125,7 +125,7 @@ open class EventStreamMarshallerGenerator(
                     if (target.renderUnknownVariant()) {
                         rustTemplate(
                             """
-                            Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
+                            Self::Input::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(
                                 #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
