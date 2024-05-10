@@ -23,7 +23,7 @@ mod profile_key {
 /// 2. The profile key `disable_request_compression=true/false`
 ///
 /// If invalid values are found, the provider will return None and an error will be logged.
-pub async fn disable_request_compression_provider(
+pub(crate) async fn disable_request_compression_provider(
     provider_config: &ProviderConfig,
 ) -> Option<bool> {
     let env = provider_config.env();
@@ -86,6 +86,33 @@ mod test {
             .with_fs(Fs::from_slice(&[(
                 "conf",
                 "[default]\ndisable_request_compression = false",
+            )]));
+        assert_eq!(
+            disable_request_compression_provider(&conf).await,
+            Some(true)
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn profile_config_works() {
+        let conf = ProviderConfig::empty()
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\ndisable_request_compression = true",
             )]));
         assert_eq!(
             disable_request_compression_provider(&conf).await,

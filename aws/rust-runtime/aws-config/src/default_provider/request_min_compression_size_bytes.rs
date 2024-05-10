@@ -25,7 +25,7 @@ mod profile_key {
 /// 2. The profile key `request_min_compression_size_bytes=10240`
 ///
 /// If invalid values are found, the provider will return None and an error will be logged.
-pub async fn request_min_compression_size_bytes_provider(
+pub(crate) async fn request_min_compression_size_bytes_provider(
     provider_config: &ProviderConfig,
 ) -> Option<u32> {
     let env = provider_config.env();
@@ -95,6 +95,33 @@ mod test {
         assert_eq!(
             request_min_compression_size_bytes_provider(&conf).await,
             Some(99)
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn profile_config_works() {
+        let conf = ProviderConfig::empty()
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\nrequest_min_compression_size_bytes = 22",
+            )]));
+        assert_eq!(
+            request_min_compression_size_bytes_provider(&conf).await,
+            Some(22)
         );
     }
 }
