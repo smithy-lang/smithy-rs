@@ -24,8 +24,25 @@ pub fn previous_release_tag(
         if !release_tags.contains(&tag_override) {
             bail!("specified tag '{tag_override}' doesn't exist");
         }
-        if !tag_is_ancestor(repo, &tag_override)? {
-            bail!("specified tag '{tag_override}' is not an ancestor to HEAD");
+        let previous_release_commit = commit_for_tag(repo, &ancestor_tag)?;
+        let previous_release_override_commit = commit_for_tag(repo, &tag_override)?;
+        // Most of the time, the first guard is enough; The previous release override should be an
+        // ancestor of the `HEAD` of a branch. However, we need the second guard handling a case
+        // where we `git merge main` into a branch, but the main branch now contains a new smithy-rs
+        // release that the `HEAD` of the branch doesn't know about.
+        // In that case, we want to teach the tool that the previous release should now be the new
+        // release. However, specifying the new release for `previous_release_override_commit` fails
+        // with the first guard because `HEAD` doesn't know about the new release. The second guard
+        // provides an escape hatch where if `previous_release_commit` (the latest release currently
+        // `HEAD` does not about) is the ancestor to the specified previous release override.
+        if !is_ancestor(repo, &previous_release_override_commit, "HEAD")?
+            && !is_ancestor(
+                repo,
+                &previous_release_commit,
+                &previous_release_override_commit,
+            )?
+        {
+            bail!("specified tag '{tag_override}' is neither the ancestor of HEAD nor a descendant of {ancestor_tag}");
         }
         if tag_override != ancestor_tag {
             warn!(
@@ -83,12 +100,19 @@ pub fn release_tags(repo: &Repo) -> Result<Vec<ReleaseTag>> {
     Ok(tags)
 }
 
-/// True if the given tag is an ancestor to HEAD.
-fn tag_is_ancestor(repo: &Repo, tag: &ReleaseTag) -> Result<bool> {
-    let commit = commit_for_tag(repo, tag)?;
+/// True if the given `ancestor_commit` is an ancestor to `descendant_commit`
+fn is_ancestor(repo: &Repo, ancestor_commit: &str, descendant_commit: &str) -> Result<bool> {
     let status = repo
-        .git(["merge-base", "--is-ancestor", &commit, "HEAD"])
-        .expect_status_one_of("determine if a tag is the ancestor to HEAD", [0, 1])?;
+        .git([
+            "merge-base",
+            "--is-ancestor",
+            ancestor_commit,
+            descendant_commit,
+        ])
+        .expect_status_one_of(
+            "determine if {ancestor_commit} is the ancestor to {descendant_commit}",
+            [0, 1],
+        )?;
     Ok(status == 0)
 }
 
@@ -96,6 +120,7 @@ fn tag_is_ancestor(repo: &Repo, tag: &ReleaseTag) -> Result<bool> {
 fn commit_for_tag(repo: &Repo, tag: &ReleaseTag) -> Result<String> {
     repo.git(["rev-list", "-n1", tag.as_str()])
         .expect_success_output("retrieve commit hash for tag")
+        .map(|result| result.trim().to_string())
 }
 
 #[cfg(test)]

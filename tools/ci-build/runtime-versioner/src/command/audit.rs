@@ -21,6 +21,8 @@ use std::{
     process::Command,
 };
 
+const AUDIT_PREVIOUS_RELEASE_TAG_OVERRIDE: &str = "AUDIT_PREVIOUS_RELEASE_TAG_OVERRIDE";
+
 pub fn audit(args: Audit) -> Result<()> {
     let repo = Repo::new(args.smithy_rs_path.as_deref())?;
     if !args.no_fetch {
@@ -29,10 +31,16 @@ pub fn audit(args: Audit) -> Result<()> {
     }
 
     let release_tags = release_tags(&repo)?;
+    let release_tag_override = match args.previous_release_tag {
+        overrid @ Some(_) => overrid,
+        None => std::env::var(AUDIT_PREVIOUS_RELEASE_TAG_OVERRIDE).ok(),
+    };
     let previous_release_tag =
-        previous_release_tag(&repo, &release_tags, args.previous_release_tag.as_deref())?;
+        previous_release_tag(&repo, &release_tags, release_tag_override.as_deref())?;
     if release_tags.first() != Some(&previous_release_tag) {
-        tracing::warn!("there are newer releases since '{previous_release_tag}'");
+        tracing::warn!("there are newer releases since '{previous_release_tag}'. \
+            Consider specifying a more recent release tag using the `--previous-release-tag` command-line argument or \
+            the `AUDIT_PREVIOUS_RELEASE_TAG_OVERRIDE` environment variable if audit fails.");
     }
 
     let next_crates = discover_runtime_crates(&repo.root).context("next")?;
