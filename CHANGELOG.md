@@ -1,4 +1,37 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 8th, 2024
+=============
+**Breaking Changes:**
+- :warning::tada: (all, [smithy-rs#3527](https://github.com/smithy-lang/smithy-rs/issues/3527)) Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`.
+
+**New this release:**
+- (all, [smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161), @mnissenb) Implement Debug for DateTime
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mnissenb ([smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161))
+
+
+April 30th, 2024
+================
+**New this release:**
+- :tada: (client, [smithy-rs#119](https://github.com/smithy-lang/smithy-rs/issues/119), [smithy-rs#3595](https://github.com/smithy-lang/smithy-rs/issues/3595), [smithy-rs#3593](https://github.com/smithy-lang/smithy-rs/issues/3593), [smithy-rs#3585](https://github.com/smithy-lang/smithy-rs/issues/3585), [smithy-rs#3571](https://github.com/smithy-lang/smithy-rs/issues/3571), [smithy-rs#3569](https://github.com/smithy-lang/smithy-rs/issues/3569)) Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+    some methods prefixed with `wait_until` to the existing clients.
+
+    For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
+    that waiter would look as follows:
+
+    ```rust
+    use my_generated_client::client::Waiters;
+
+    let result = client.wait_until_thing()
+        .thing_id("someId")
+        .wait(Duration::from_secs(120))
+        .await;
+    ```
+- :bug: (all, [smithy-rs#3603](https://github.com/smithy-lang/smithy-rs/issues/3603)) Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request.
+
+
 April 19th, 2024
 ================
 **New this release:**
