@@ -611,7 +611,7 @@ class JsonParserGenerator(
                                                 """
                                                 _ => {
                                                   #{skip_value}(tokens)?;
-                                                  Some(#{Union}::${UnionGenerator.UnknownVariantName})
+                                                  Some(#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME})
                                                 }
                                                 """,
                                                 "Union" to returnSymbolToParse.symbol,

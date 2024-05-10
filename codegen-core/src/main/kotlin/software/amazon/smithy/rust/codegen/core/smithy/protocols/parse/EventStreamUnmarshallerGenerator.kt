@@ -163,7 +163,7 @@ class EventStreamUnmarshallerGenerator(
                 when (codegenTarget.renderUnknownVariant()) {
                     true ->
                         rustTemplate(
-                            "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
+                            "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UNKNOWN_VARIANT_NAME}))",
                             "Output" to unionSymbol,
                             *codegenScope,
                         )

@@ -86,32 +86,32 @@ data class ClientRustSettings(
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
  */
 data class ClientCodegenConfig(
-    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
-    override val debugMode: Boolean = defaultDebugMode,
-    override val flattenCollectionAccessors: Boolean = defaultFlattenAccessors,
+    override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+    override val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    override val flattenCollectionAccessors: Boolean = DEFAULT_FLATTEN_ACCESSORS,
     val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
-    val renameExceptions: Boolean = defaultRenameExceptions,
-    val includeFluentClient: Boolean = defaultIncludeFluentClient,
-    val addMessageToErrors: Boolean = defaultAddMessageToErrors,
+    val renameExceptions: Boolean = DEFAULT_RENAME_EXCEPTIONS,
+    val includeFluentClient: Boolean = DEFAULT_INCLUDE_FLUENT_CLIENT,
+    val addMessageToErrors: Boolean = DEFAULT_ADD_MESSAGE_TO_ERRORS,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
+    val eventStreamAllowList: Set<String> = DEFAULT_EVENT_STREAM_ALLOW_LIST,
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
-    val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
-    val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
+    val includeEndpointUrlConfig: Boolean = DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG,
+    val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
 ) : CoreCodegenConfig(
-        formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
+        formatTimeoutSeconds, debugMode, DEFAULT_FLATTEN_ACCESSORS,
     ) {
     companion object {
-        private const val defaultRenameExceptions = true
-        private const val defaultIncludeFluentClient = true
-        private const val defaultAddMessageToErrors = true
-        private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private const val defaultIncludeEndpointUrlConfig = true
-        private const val defaultEnableUserConfigurableRuntimePlugins = true
-        private const val defaultNullabilityCheckMode = "CLIENT"
+        private const val DEFAULT_RENAME_EXCEPTIONS = true
+        private const val DEFAULT_INCLUDE_FLUENT_CLIENT = true
+        private const val DEFAULT_ADD_MESSAGE_TO_ERRORS = true
+        private val DEFAULT_EVENT_STREAM_ALLOW_LIST: Set<String> = emptySet()
+        private const val DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG = true
+        private const val DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS = true
+        private const val DEFAULT_NULLABILITY_CHECK_MODE = "CLIENT"
 
         // Note: only clients default to true, servers default to false
-        private const val defaultFlattenAccessors = true
+        private const val DEFAULT_FLATTEN_ACCESSORS = true
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -119,26 +119,26 @@ data class ClientCodegenConfig(
         ) = if (node.isPresent) {
             ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
+                flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_ACCESSORS),
                 debugMode = coreCodegenConfig.debugMode,
                 eventStreamAllowList =
                     node.get().getArrayMember("eventStreamAllowList").map { array ->
                         array.toList().mapNotNull { node ->
                             node.asStringNode().orNull()?.value
                         }
-                    }.orNull()?.toSet() ?: defaultEventStreamAllowList,
-                renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
-                includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
-                addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
-                enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
-                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
+                    }.orNull()?.toSet() ?: DEFAULT_EVENT_STREAM_ALLOW_LIST,
+                renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", DEFAULT_RENAME_EXCEPTIONS),
+                includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", DEFAULT_INCLUDE_FLUENT_CLIENT),
+                addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", DEFAULT_ADD_MESSAGE_TO_ERRORS),
+                includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG),
+                enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS),
+                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", DEFAULT_NULLABILITY_CHECK_MODE)),
             )
         } else {
             ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
-                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
+                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(DEFAULT_NULLABILITY_CHECK_MODE),
             )
         }
     }
