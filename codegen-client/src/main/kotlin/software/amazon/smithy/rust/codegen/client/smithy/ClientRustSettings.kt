@@ -86,8 +86,8 @@ data class ClientRustSettings(
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
  */
 data class ClientCodegenConfig(
-    override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
-    override val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
     override val flattenCollectionAccessors: Boolean = defaultFlattenAccessors,
     val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
     val renameExceptions: Boolean = defaultRenameExceptions,

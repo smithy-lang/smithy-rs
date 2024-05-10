@@ -85,8 +85,8 @@ data class ServerRustSettings(
  * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  */
 data class ServerCodegenConfig(
-    override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
-    override val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    override val debugMode: Boolean = defaultDebugMode,
     val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
     val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
     /**

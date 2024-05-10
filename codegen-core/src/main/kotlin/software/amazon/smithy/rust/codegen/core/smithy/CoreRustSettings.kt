@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
-import kotlin.streams.toList
 
 private const val SERVICE = "service"
 private const val MODULE_NAME = "module"
@@ -33,35 +32,33 @@ const val CODEGEN_SETTINGS = "codegen"
 /**
  * [CoreCodegenConfig] contains code-generation configuration that is _common to all_  smithy-rs plugins.
  *
- * If your setting is specific to the crate that the `rust-client-codegen` client plugin generates, put it in
- * [ClientCodegenContext][software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext] instead.
- * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
- * [ServerCodegenContext][software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext] instead.
+ * If your configuration is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
+ * If your configuration is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  *
  * [formatTimeoutSeconds]: Timeout for running cargo fmt at the end of code generation
  * [debugMode]: Generate comments in the generated code indicating where code was generated from
  */
 open class CoreCodegenConfig(
-    open val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
-    open val debugMode: Boolean = DEFAULT_DEBUG_MODE,
-    open val flattenCollectionAccessors: Boolean = DEFAULT_FLATTEN_MODE,
+    open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
+    open val debugMode: Boolean = defaultDebugMode,
+    open val flattenCollectionAccessors: Boolean = defaultFlattenMode,
 ) {
     companion object {
-        const val DEFAULT_FORMAT_TIMEOUT_SECONDS = 20
-        const val DEFAULT_DEBUG_MODE = false
-        const val DEFAULT_FLATTEN_MODE = false
+        const val defaultFormatTimeoutSeconds = 20
+        const val defaultDebugMode = false
+        const val defaultFlattenMode = false
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", DEFAULT_FORMAT_TIMEOUT_SECONDS).toInt(),
-                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", DEFAULT_DEBUG_MODE),
-                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_MODE),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenMode),
                 )
             } else {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = DEFAULT_FORMAT_TIMEOUT_SECONDS,
-                    debugMode = DEFAULT_DEBUG_MODE,
+                    formatTimeoutSeconds = defaultFormatTimeoutSeconds,
+                    debugMode = defaultDebugMode,
                 )
             }
     }
@@ -71,9 +68,9 @@ open class CoreCodegenConfig(
  * [CoreRustSettings] contains crate settings that are _common to all_  smithy-rs plugins.
  *
  * If your setting is specific to the crate that the `rust-client-codegen` client plugin generates, put it in
- * [ClientCodegenContext][software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext] instead.
+ * [ClientCodegenContext] instead.
  * If your setting is specific to the crate that the `rust-server-codegen` server plugin generates, put it in
- * [ServerCodegenContext][software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext] instead.
+ * [ServerCodegenContext] instead.
  */
 open class CoreRustSettings(
     open val service: ShapeId,
