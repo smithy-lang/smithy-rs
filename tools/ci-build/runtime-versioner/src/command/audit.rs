@@ -21,9 +21,6 @@ use std::{
     process::Command,
 };
 
-const SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG: &str =
-    "SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG";
-
 pub fn audit(args: Audit) -> Result<()> {
     let repo = Repo::new(args.smithy_rs_path.as_deref())?;
     if !args.no_fetch {
@@ -32,12 +29,8 @@ pub fn audit(args: Audit) -> Result<()> {
     }
 
     let release_tags = release_tags(&repo)?;
-    let release_tag_override = match args.previous_release_tag {
-        overrid @ Some(_) => overrid,
-        None => std::env::var(SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG).ok(),
-    };
     let previous_release_tag =
-        previous_release_tag(&repo, &release_tags, release_tag_override.as_deref())?;
+        previous_release_tag(&repo, &release_tags, args.previous_release_tag.as_deref())?;
     if release_tags.first() != Some(&previous_release_tag) {
         tracing::warn!("there are newer releases since '{previous_release_tag}'. \
             Consider specifying a more recent release tag using the `--previous-release-tag` command-line argument or \
