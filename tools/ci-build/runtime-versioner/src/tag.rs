@@ -35,7 +35,8 @@ pub fn previous_release_tag(
         // release. However, specifying the new release for `previous_release_override_commit` fails
         // with the first guard because `HEAD` doesn't know about the new release. The second guard
         // provides an escape hatch where if `previous_release_commit` (the latest release currently
-        // `HEAD` does know about) is the ancestor to the specified previous release override.
+        // `HEAD` does know about) is the ancestor to the specified previous release override, then
+        // we can now treat the previous release override as a legitimate previous release.
         if !is_ancestor(repo, &previous_release_override_commit, "HEAD")?
             && !is_ancestor(
                 repo,
