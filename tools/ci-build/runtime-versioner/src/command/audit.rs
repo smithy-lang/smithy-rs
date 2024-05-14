@@ -32,7 +32,9 @@ pub fn audit(args: Audit) -> Result<()> {
     let previous_release_tag =
         previous_release_tag(&repo, &release_tags, args.previous_release_tag.as_deref())?;
     if release_tags.first() != Some(&previous_release_tag) {
-        tracing::warn!("there are newer releases since '{previous_release_tag}'");
+        tracing::warn!("there are newer releases since '{previous_release_tag}'. \
+            Consider specifying a more recent release tag using the `--previous-release-tag` command-line argument or \
+            the `SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG` environment variable if audit fails.");
     }
 
     let next_crates = discover_runtime_crates(&repo.root).context("next")?;

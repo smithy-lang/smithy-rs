@@ -10,3 +10,30 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+
+[[aws-sdk-rust]]
+message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
+references = ["aws-sdk-rust#1133"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
+references = ["aws-sdk-rust#1133"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
+
+
