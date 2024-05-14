@@ -37,9 +37,6 @@ tokio = { version = "1.32.0", features = ["macros", "rt"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
-# We depend on this (normally transitive dependency) directly because otherwise
-# a WASM-incompatible version will be used, causing compilation to fail.
-getrandom = { version = "0.2.15", features = ["js"] }
 
 [lib]
 crate-type = ["cdylib"]

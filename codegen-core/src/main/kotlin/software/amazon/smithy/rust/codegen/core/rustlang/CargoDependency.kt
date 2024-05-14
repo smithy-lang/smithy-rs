@@ -257,7 +257,7 @@ data class CargoDependency(
     companion object {
         // Forces AHash to be a later version that avoids
         // https://github.com/tkaitchuck/aHash/issues/200
-        val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"))
+        val AHash: CargoDependency = CargoDependency("ahash", CratesIo("0.8.11"), defaultFeatures = false)
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.4.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
