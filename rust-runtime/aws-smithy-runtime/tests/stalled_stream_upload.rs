@@ -88,7 +88,7 @@ async fn upload_too_slow() {
 async fn upload_stalls() {
     let _logs = show_test_logs();
 
-    let (server, time, sleep) = stalling_server();
+    let (server, time, sleep) = stalling_server(None);
     let op = operation(server, time.clone(), sleep);
 
     let (body, body_sender) = channel_body();
@@ -107,27 +107,57 @@ async fn upload_stalls() {
     expect_timeout(result.await.expect("no panics"));
 }
 
-/// Scenario: All the request data is either uploaded to the server or buffered in the
-///           HTTP client, but the response doesn't start coming through within the grace period.
-/// Expected: MUST timeout after the grace period completes.
+/// Scenario: Request does not have a body. Server response doesn't start coming through
+///           until after the grace period.
+/// Expected: MUST NOT timeout.
 #[tokio::test]
-async fn complete_upload_no_response() {
+async fn empty_request_body_delayed_response() {
     let _logs = show_test_logs();
 
-    let (server, time, sleep) = stalling_server();
+    let (server, time, sleep) = stalling_server(Some(Duration::from_secs(6)));
+    let op = operation(server, time.clone(), sleep);
+
+    let result = tokio::spawn(async move { op.invoke(SdkBody::empty()).await });
+
+    let _advance = tokio::spawn(async move {
+        for _ in 0..6 {
+            tick!(time, Duration::from_secs(1));
+        }
+    });
+
+    assert_eq!(200, result.await.unwrap().expect("success").as_u16());
+}
+
+// TODO(fix-stalled-stream-upload) - expand coverage to include hitting the grace period and then completing the upload
+
+/// Scenario: All the request data is either uploaded to the server or buffered in the
+///           HTTP client, but the response doesn't start coming through within the grace period.
+/// Expected: MUST NOT timeout, upload throughput should only apply up until the request body has
+/// been read completely and handed off to the HTTP client.
+#[tokio::test]
+async fn complete_upload_delayed_response() {
+    let _logs = show_test_logs();
+
+    let (server, time, sleep) = stalling_server(Some(Duration::from_secs(6)));
     let op = operation(server, time.clone(), sleep);
 
     let (body, body_sender) = channel_body();
     let result = tokio::spawn(async move { op.invoke(body).await });
 
     let _streamer = tokio::spawn(async move {
+        info!("send data");
         body_sender.send(NEAT_DATA).await.unwrap();
         tick!(time, Duration::from_secs(1));
+        info!("body send complete; dropping");
         drop(body_sender);
-        time.tick(Duration::from_secs(6)).await;
+        // advance by the grace period
+        tick!(time, Duration::from_secs(5));
+        info!("body stream task complete");
+        // advance to unblock the stalled server
+        tick!(time, Duration::from_secs(2));
     });
 
-    expect_timeout(result.await.expect("no panics"));
+    assert_eq!(200, result.await.unwrap().expect("success").as_u16());
 }
 
 // Scenario: The server stops asking for data, the client maxes out its send buffer,
@@ -189,6 +219,8 @@ async fn user_provides_data_too_slowly() {
 
 use upload_test_tools::*;
 mod upload_test_tools {
+    use aws_smithy_async::rt::sleep::AsyncSleep;
+
     use crate::stalled_stream_common::*;
 
     pub fn successful_response() -> HttpResponse {
@@ -285,24 +317,43 @@ mod upload_test_tools {
         fake_server!(FakeServerConnector, fake_server, bool, advance_time)
     }
 
-    /// Fake server/connector that reads some data, and then stalls.
-    pub fn stalling_server() -> (SharedHttpConnector, TickAdvanceTime, TickAdvanceSleep) {
+    /// Fake server/connector that reads some data, and then stalls for the given time before
+    /// returning a response. If `None` is given the server will stall indefinitely.
+    pub fn stalling_server(
+        respond_after: Option<Duration>,
+    ) -> (SharedHttpConnector, TickAdvanceTime, TickAdvanceSleep) {
         async fn fake_server(
             mut body: Pin<&mut SdkBody>,
             _time: TickAdvanceTime,
-            _sleep: TickAdvanceSleep,
-            _: (),
+            sleep: TickAdvanceSleep,
+            respond_after: Option<Duration>,
         ) -> HttpResponse {
             let mut times = 5;
             while times > 0 && poll_fn(|cx| body.as_mut().poll_data(cx)).await.is_some() {
                 times -= 1;
             }
-            // never awake after this
-            tracing::info!("stalling indefinitely");
-            std::future::pending::<()>().await;
-            unreachable!()
+
+            match respond_after {
+                Some(delay) => {
+                    tracing::info!("stalling for {} seconds", delay.as_secs());
+                    sleep.sleep(delay).await;
+                    tracing::info!("returning delayed response");
+                    successful_response()
+                }
+                None => {
+                    // never awake after this
+                    tracing::info!("stalling indefinitely");
+                    std::future::pending::<()>().await;
+                    unreachable!()
+                }
+            }
         }
-        fake_server!(FakeServerConnector, fake_server)
+        fake_server!(
+            FakeServerConnector,
+            fake_server,
+            Option<Duration>,
+            respond_after
+        )
     }
 
     /// Fake server/connector that polls data after each period of time in the given
