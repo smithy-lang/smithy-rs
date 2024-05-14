@@ -273,6 +273,8 @@ class HttpRequestCompressionDecoratorTest {
                             .with_test_defaults()
                             .http_client(http_client)
                             .disable_request_compression(false)
+                            // Since our streaming body is sized, we have to set this.
+                            .request_min_compression_size_bytes(128)
                             .build();
 
                             let client = $moduleName::Client::from_conf(config);
@@ -284,6 +286,7 @@ class HttpRequestCompressionDecoratorTest {
                             let body = ByteStream::read_from()
                                 .path(file.path())
                                 .buffer_size(1024)
+                                .length(#{Length}::Exact(UNCOMPRESSED_INPUT.len() as u64))
                                 .build()
                                 .await
                                 .unwrap();
@@ -311,6 +314,7 @@ class HttpRequestCompressionDecoratorTest {
                     "capture_request" to RuntimeType.captureRequest(rc),
                     "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),
                     "tempfile" to CargoDependency.TempFile.toType(),
+                    "Length" to RuntimeType.smithyTypes(rc).resolve("byte_stream::Length"),
                 )
             }
         }
