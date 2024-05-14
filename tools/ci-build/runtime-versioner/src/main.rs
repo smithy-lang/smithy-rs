@@ -30,7 +30,7 @@ pub struct Audit {
     #[arg(long)]
     no_fetch: bool,
     /// Explicitly state the previous release's tag. Discovers it if not provided.
-    #[arg(long)]
+    #[arg(long, env = "SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG")]
     previous_release_tag: Option<String>,
     /// Path to smithy-rs. Defaults to current working directory.
     #[arg(long)]
