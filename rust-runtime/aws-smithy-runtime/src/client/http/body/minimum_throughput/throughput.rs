@@ -4,7 +4,6 @@
  */
 
 use std::fmt;
-use std::sync::atomic;
 use std::time::{Duration, SystemTime};
 
 /// Throughput representation for use when configuring [`super::MinimumThroughputBody`]

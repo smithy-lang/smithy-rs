@@ -37,3 +37,14 @@ meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
 
 
+[[aws-sdk-rust]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "aajtodd"
+
+[[smithy-rs]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "aajtodd"
