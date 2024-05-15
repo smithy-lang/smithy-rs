@@ -469,7 +469,7 @@ class XmlBindingTraitSerializerGenerator(
 
                         if (codegenTarget.renderUnknownVariant()) {
                             rustTemplate(
-                                "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                                "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                                 "Union" to unionSymbol,
                                 *codegenScope,
                             )

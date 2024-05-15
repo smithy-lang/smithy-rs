@@ -37,15 +37,15 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
                 .builder()
                 .packageName(name).version(version())
                 // We rely on retrieving the structured dependency from the symbol later
-                .putProperty(PropertyKey, this).build(),
+                .putProperty(PROPERTY_KEY, this).build(),
         ) + dependencies().flatMap { it.dependencies }
     }
 
     companion object {
-        private const val PropertyKey = "rustdep"
+        private const val PROPERTY_KEY = "rustdep"
 
         fun fromSymbolDependency(symbolDependency: SymbolDependency) =
-            symbolDependency.getProperty(PropertyKey, RustDependency::class.java).get()
+            symbolDependency.getProperty(PROPERTY_KEY, RustDependency::class.java).get()
     }
 }
 
