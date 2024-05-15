@@ -123,9 +123,9 @@ class HttpRequestCompressionConfigCustomization(codegenContext: ClientCodegenCon
                     rustTemplate(
                         """
                         ${section.builder}.set_disable_request_compression(
-                            ${section.config_bag}.load::<#{DisableRequestCompression}>().cloned().map(|it| it.0));
+                            ${section.configBag}.load::<#{DisableRequestCompression}>().cloned().map(|it| it.0));
                         ${section.builder}.set_request_min_compression_size_bytes(
-                            ${section.config_bag}.load::<#{RequestMinCompressionSizeBytes}>().cloned().map(|it| it.0));
+                            ${section.configBag}.load::<#{RequestMinCompressionSizeBytes}>().cloned().map(|it| it.0));
                         """,
                         *codegenScope,
                     )
