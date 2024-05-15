@@ -351,7 +351,7 @@ impl ThroughputLogs {
     /// idempotent operation -- subsequent invocations of this function have no effect
     /// and return false.
     ///
-    /// After marking a stream complete [report] will forever more return
+    /// After marking a stream complete [report](#method.report) will forever more return
     /// [ThroughputReport::Complete]
     pub(super) fn complete(&mut self) -> bool {
         let prev = self.stream_complete;
