@@ -164,7 +164,7 @@ open class EnumGenerator(
 ) {
     companion object {
         /** Name of the function on the enum impl to get a vec of value names */
-        const val Values = "values"
+        const val VALUES = "values"
     }
 
     private val enumTrait: EnumTrait = shape.expectTrait()
@@ -295,7 +295,7 @@ open class EnumGenerator(
                     #{asStrImpl:W}
                 }
                 /// Returns all the `&str` representations of the enum members.
-                pub const fn $Values() -> &'static [&'static str] {
+                pub const fn $VALUES() -> &'static [&'static str] {
                     &[#{Values:W}]
                 }
             }

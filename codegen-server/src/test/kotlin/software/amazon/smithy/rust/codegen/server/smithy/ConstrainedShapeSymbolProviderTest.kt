@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.util.stream.Stream
 
-const val baseModelString =
+const val BASE_MODEL_STRING =
     """
     namespace test
 
@@ -87,7 +87,7 @@ const val baseModelString =
     """
 
 class ConstrainedShapeSymbolProviderTest {
-    private val model = baseModelString.asSmithyModel()
+    private val model = BASE_MODEL_STRING.asSmithyModel()
     private val serviceShape = model.lookup<ServiceShape>("test#TestService")
     private val symbolProvider = serverTestSymbolProvider(model, serviceShape)
     private val constrainedShapeSymbolProvider = ConstrainedShapeSymbolProvider(symbolProvider, serviceShape, true)

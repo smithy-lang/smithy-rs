@@ -158,8 +158,8 @@ internal class EndpointResolverGenerator(
     private val context = Context(registry, runtimeConfig)
 
     companion object {
-        const val DiagnosticCollector = "_diagnostic_collector"
-        private const val ParamsName = "_params"
+        const val DIAGNOSTIC_COLLECTOR = "_diagnostic_collector"
+        private const val PARAMS_NAME = "_params"
     }
 
     /**
@@ -224,7 +224,7 @@ internal class EndpointResolverGenerator(
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
-                pub(super) fn resolve_endpoint($ParamsName: &#{Params}, $DiagnosticCollector: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
+                pub(super) fn resolve_endpoint($PARAMS_NAME: &#{Params}, $DIAGNOSTIC_COLLECTOR: &mut #{DiagnosticCollector}, #{additional_args}) -> #{endpoint}::Result {
                   #{body:W}
                 }
 
@@ -241,7 +241,7 @@ internal class EndpointResolverGenerator(
         writable {
             endpointRuleSet.parameters.toList().forEach {
                 Attribute.AllowUnusedVariables.render(this)
-                rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
+                rust("let ${it.memberName()} = &$PARAMS_NAME.${it.memberName()};")
             }
             generateRulesList(endpointRuleSet.rules)(this)
         }
@@ -256,7 +256,7 @@ internal class EndpointResolverGenerator(
                 // it's hard to figure out if these are always needed or not
                 Attribute.AllowUnreachableCode.render(this)
                 rustTemplate(
-                    """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
+                    """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $PARAMS_NAME)));""",
                     *codegenScope,
                 )
             }
