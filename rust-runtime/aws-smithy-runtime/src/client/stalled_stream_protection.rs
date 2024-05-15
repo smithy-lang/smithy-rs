@@ -66,7 +66,6 @@ impl Intercept for StalledStreamProtectionInterceptor {
         if let Some(sspcfg) = cfg.load::<StalledStreamProtectionConfig>().cloned() {
             if sspcfg.upload_enabled() {
                 if let Some(0) = context.request().body().content_length() {
-                    // skip enabling stalled stream protection to zero length body
                     tracing::trace!(
                         "skipping stalled stream protection for zero length request body"
                     );
