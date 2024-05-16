@@ -581,9 +581,11 @@ impl Inner {
 
 #[cfg(test)]
 mod tests {
+    use super::{ByteStream, Inner};
     use crate::body::SdkBody;
-    use crate::byte_stream::Inner;
     use bytes::Bytes;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn read_from_string_body() {
@@ -601,7 +603,6 @@ mod tests {
     #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn bytestream_into_async_read() {
-        use super::ByteStream;
         use tokio::io::AsyncBufReadExt;
 
         let byte_stream = ByteStream::from_static(b"data 1\ndata 2\ndata 3");
@@ -613,5 +614,44 @@ mod tests {
         assert_eq!(lines.next_line().await.unwrap(), Some("data 2".to_owned()));
         assert_eq!(lines.next_line().await.unwrap(), Some("data 3".to_owned()));
         assert_eq!(lines.next_line().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn valid_size_hint() {
+        assert_eq!(ByteStream::from_static(b"hello").size_hint().1, Some(5));
+        assert_eq!(ByteStream::from_static(b"").size_hint().1, Some(0));
+
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"hello").unwrap();
+        let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.size_hint().1, Some(5));
+
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"").unwrap();
+        let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.size_hint().1, Some(0));
+    }
+
+    #[allow(clippy::bool_assert_comparison)]
+    #[tokio::test]
+    async fn valid_eos() {
+        assert_eq!(
+            ByteStream::from_static(b"hello").inner.body.is_end_stream(),
+            false
+        );
+        assert_eq!(
+            ByteStream::from_static(b"").inner.body.is_end_stream(),
+            true
+        );
+
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"hello").unwrap();
+        let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.body.is_end_stream(), false);
+
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"").unwrap();
+        let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.body.is_end_stream(), true);
     }
 }

@@ -7,7 +7,7 @@ use super::Throughput;
 use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use std::time::Duration;
 
-/// A collection of options for configuring a [`MinimumThroughputBody`](super::MinimumThroughputBody).
+/// A collection of options for configuring a [`MinimumThroughputBody`](super::MinimumThroughputDownloadBody).
 #[derive(Debug, Clone)]
 pub struct MinimumThroughputBodyOptions {
     /// The minimum throughput that is acceptable.
@@ -87,7 +87,7 @@ pub struct MinimumThroughputBodyOptionsBuilder {
     grace_period: Option<Duration>,
 }
 
-const DEFAULT_GRACE_PERIOD: Duration = Duration::from_secs(0);
+const DEFAULT_GRACE_PERIOD: Duration = Duration::from_secs(20);
 const DEFAULT_MINIMUM_THROUGHPUT: Throughput = Throughput {
     bytes_read: 1,
     per_time_elapsed: Duration::from_secs(1),
