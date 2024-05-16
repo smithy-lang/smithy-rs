@@ -83,6 +83,7 @@ private fun generateCargoWorkspace(
 ) = (
     """
     [workspace]
+    resolver = "2"
     members = [
         ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
     ]

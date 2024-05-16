@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.traits.RequestCompressionTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -23,8 +24,11 @@ class HttpRequestCompressionDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestCompression"
     override val order: Byte = 0
 
-    private fun usesRequestCompression(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.model.isTraitApplied(RequestCompressionTrait::class.java)
+    private fun usesRequestCompression(codegenContext: ClientCodegenContext): Boolean {
+        val index = TopDownIndex.of(codegenContext.model)
+        val ops = index.getContainedOperations(codegenContext.serviceShape.id)
+        return ops.any { it.hasTrait(RequestCompressionTrait.ID) }
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
