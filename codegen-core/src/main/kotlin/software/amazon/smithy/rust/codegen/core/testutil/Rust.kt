@@ -97,6 +97,7 @@ object TestWorkspace {
                 mapOf(
                     "workspace" to
                         mapOf(
+                            "resolver" to "2",
                             "members" to subprojects,
                         ),
                 ),
