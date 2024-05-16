@@ -36,4 +36,8 @@ references = ["aws-sdk-rust#1079"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
 
-
+[[aws-sdk-rust]]
+message = "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`."
+references = ["smithy-rs#3645"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "landonxjames"
