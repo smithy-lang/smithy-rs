@@ -128,8 +128,6 @@ async fn empty_request_body_delayed_response() {
     assert_eq!(200, result.await.unwrap().expect("success").as_u16());
 }
 
-// TODO(fix-stalled-stream-upload) - expand coverage to include hitting the grace period and then completing the upload
-
 /// Scenario: All the request data is either uploaded to the server or buffered in the
 ///           HTTP client, but the response doesn't start coming through within the grace period.
 /// Expected: MUST NOT timeout, upload throughput should only apply up until the request body has
@@ -154,6 +152,36 @@ async fn complete_upload_delayed_response() {
         tick!(time, Duration::from_secs(5));
         info!("body stream task complete");
         // advance to unblock the stalled server
+        tick!(time, Duration::from_secs(2));
+    });
+
+    assert_eq!(200, result.await.unwrap().expect("success").as_u16());
+}
+
+/// Scenario: Upload all request data and never poll again once content-length has
+///           been reached. Hyper will stop polling once it detects end of stream so we can't rely
+///           on reaching `Poll:Ready(None)` to detect end of stream.
+///
+///           ref: https://github.com/hyperium/hyper/issues/1545
+///           ref: https://github.com/hyperium/hyper/issues/1521
+///
+/// Expected: MUST NOT timeout, upload throughput should only apply up until the request body has
+/// been read completely. Once no more data is expected we should stop checking for throughput
+/// violations.
+#[tokio::test]
+async fn complete_upload_stop_polling() {
+    let _logs = show_test_logs();
+
+    let (server, time, sleep) = limited_read_server(NEAT_DATA.len(), Some(Duration::from_secs(7)));
+    let op = operation(server, time.clone(), sleep.clone());
+
+    let body = SdkBody::from(NEAT_DATA);
+    let result = tokio::spawn(async move { op.invoke(body).await });
+
+    tokio::spawn(async move {
+        // advance past the grace period
+        tick!(time, Duration::from_secs(6));
+        // unblock server
         tick!(time, Duration::from_secs(2));
     });
 
@@ -380,6 +408,57 @@ mod upload_test_tools {
             fake_server,
             Vec<u64>,
             time_sequence.into_iter().collect()
+        )
+    }
+
+    /// Fake server/connector that polls data only up to the content-length. Optionally delays
+    /// sending the response by the given duration.
+    pub fn limited_read_server(
+        content_len: usize,
+        respond_after: Option<Duration>,
+    ) -> (SharedHttpConnector, TickAdvanceTime, TickAdvanceSleep) {
+        async fn fake_server(
+            mut body: Pin<&mut SdkBody>,
+            _time: TickAdvanceTime,
+            sleep: TickAdvanceSleep,
+            params: (usize, Option<Duration>),
+        ) -> HttpResponse {
+            let mut remaining = params.0;
+            loop {
+                match poll_fn(|cx| body.as_mut().poll_data(cx)).await {
+                    Some(res) => {
+                        let rc = res.unwrap().len();
+                        remaining -= rc;
+                        tracing::info!("read {rc} bytes; remaining: {remaining}");
+                        if remaining == 0 {
+                            tracing::info!("read reported content-length data, stopping polling");
+                            break;
+                        };
+                    }
+                    None => {
+                        tracing::info!(
+                            "read until poll_data() returned None, no data left, stopping polling"
+                        );
+                        break;
+                    }
+                }
+            }
+
+            let respond_after = params.1;
+            if let Some(delay) = respond_after {
+                tracing::info!("stalling for {} seconds", delay.as_secs());
+                sleep.sleep(delay).await;
+                tracing::info!("returning delayed response");
+            }
+
+            successful_response()
+        }
+
+        fake_server!(
+            FakeServerConnector,
+            fake_server,
+            (usize, Option<Duration>),
+            (content_len, respond_after)
         )
     }
 

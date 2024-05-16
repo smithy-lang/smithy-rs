@@ -9,7 +9,6 @@ use crate::client::http::body::minimum_throughput::{
 };
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use http_body_0_4::Body;
-use std::borrow::BorrowMut;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::task::{Context, Poll};
@@ -182,9 +181,11 @@ where
                 // (e.g. when content-length amount of data has been consumed) which means
                 // we may never get to `Poll:Ready(None)`. Check for same condition and
                 // attempt to stop checking throughput violations _now_ as we may never
-                // get polled again.
+                // get polled again. The caveat here is that it depends on `Body` implementations
+                // implementing `is_end_stream()` correctly. Users can also disable SSP as an
+                // alternative for such fringe use cases.
                 if self.is_end_stream() {
-                    tracing::trace!("stream reported end of stream before Poll::Ready(None) reached marking stream complete");
+                    tracing::trace!("stream reported end of stream before Poll::Ready(None) reached; marking stream complete");
                     self.throughput.complete();
                 }
                 Poll::Ready(Some(Ok(bytes)))
