@@ -48,7 +48,7 @@ class ServiceGenerator(
                 )
             serviceConfigGenerator.render(this)
 
-            // Enable users to opt in to the test-utils in the runtime crate
+            // Enable users to opt in to the `test-util` feature in the runtime crate
             rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
 
             ServiceRuntimePluginGenerator(codegenContext)

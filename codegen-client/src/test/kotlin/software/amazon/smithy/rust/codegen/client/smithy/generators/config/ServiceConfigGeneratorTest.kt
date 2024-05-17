@@ -134,7 +134,7 @@ internal class ServiceConfigGeneratorTest {
                         writable {
                             rustTemplate(
                                 """
-                                ${section.builder} = ${section.builder}.config_field(${section.config_bag}.load::<#{T}>().map(|u| u.0).unwrap());
+                                ${section.builder} = ${section.builder}.config_field(${section.configBag}.load::<#{T}>().map(|u| u.0).unwrap());
                                 """,
                                 "T" to
                                     configParamNewtype(

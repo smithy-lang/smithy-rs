@@ -39,26 +39,26 @@ const val CODEGEN_SETTINGS = "codegen"
  * [debugMode]: Generate comments in the generated code indicating where code was generated from
  */
 open class CoreCodegenConfig(
-    open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
-    open val debugMode: Boolean = defaultDebugMode,
-    open val flattenCollectionAccessors: Boolean = defaultFlattenMode,
+    open val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+    open val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    open val flattenCollectionAccessors: Boolean = DEFAULT_FLATTEN_MODE,
 ) {
     companion object {
-        const val defaultFormatTimeoutSeconds = 20
-        const val defaultDebugMode = false
-        const val defaultFlattenMode = false
+        const val DEFAULT_FORMAT_TIMEOUT_SECONDS = 20
+        const val DEFAULT_DEBUG_MODE = false
+        const val DEFAULT_FLATTEN_MODE = false
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
-                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
-                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenMode),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", DEFAULT_FORMAT_TIMEOUT_SECONDS).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", DEFAULT_DEBUG_MODE),
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_MODE),
                 )
             } else {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = defaultFormatTimeoutSeconds,
-                    debugMode = defaultDebugMode,
+                    formatTimeoutSeconds = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+                    debugMode = DEFAULT_DEBUG_MODE,
                 )
             }
     }

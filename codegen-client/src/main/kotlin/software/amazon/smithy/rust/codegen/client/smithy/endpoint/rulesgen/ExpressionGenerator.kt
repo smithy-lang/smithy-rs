@@ -130,7 +130,7 @@ class ExpressionGenerator(
                 val expressionGenerator = ExpressionGenerator(Ownership.Borrowed, context)
                 val argWritables = args.map { expressionGenerator.generate(it) }
                 rustTemplate(
-                    "#{fn}(#{args}, ${EndpointResolverGenerator.DiagnosticCollector})",
+                    "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
                     "fn" to fnDefinition.usage(),
                     "args" to argWritables.join(","),
                 )
