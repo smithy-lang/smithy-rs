@@ -38,6 +38,6 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = "Add `aws-lambda` as a feature to server generated SDK"
-references = ["smithy-rs#3463"]
+references = ["smithy-rs#3643"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "drganjoo"
