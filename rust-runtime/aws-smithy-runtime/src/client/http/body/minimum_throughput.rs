@@ -136,7 +136,7 @@ impl UploadThroughput {
         self.logs.lock().unwrap().push_bytes_transferred(now, bytes);
     }
 
-    pub(crate) fn complete(&self) -> bool {
+    pub(crate) fn mark_complete(&self) -> bool {
         self.logs.lock().unwrap().mark_complete()
     }
 
