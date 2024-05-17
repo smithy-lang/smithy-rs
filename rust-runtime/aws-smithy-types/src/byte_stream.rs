@@ -642,7 +642,7 @@ mod tests {
         f.write_all(b"hello").unwrap();
         let body = ByteStream::from_path(f.path()).await.unwrap();
         assert_eq!(body.inner.body.content_length(), Some(5));
-        assert_eq!(body.inner.body.is_end_stream(), false);
+        assert!(!body.inner.body.is_end_stream());
 
         assert_eq!(
             ByteStream::from_static(b"").inner.body.is_end_stream(),
@@ -652,6 +652,6 @@ mod tests {
         f.write_all(b"").unwrap();
         let body = ByteStream::from_path(f.path()).await.unwrap();
         assert_eq!(body.inner.body.content_length(), Some(0));
-        assert_eq!(body.inner.body.is_end_stream(), true);
+        assert!(body.inner.body.is_end_stream());
     }
 }
