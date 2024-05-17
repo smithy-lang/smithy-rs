@@ -36,4 +36,8 @@ references = ["aws-sdk-rust#1079"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
 
-
+[[smithy-rs]]
+message = "Add `aws-lambda` as a feature to server generated SDK"
+references = ["smithy-rs#3463"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "drganjoo"
