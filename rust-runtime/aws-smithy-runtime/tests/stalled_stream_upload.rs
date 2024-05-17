@@ -148,8 +148,7 @@ async fn complete_upload_delayed_response() {
         tick!(time, Duration::from_secs(1));
         info!("body send complete; dropping");
         drop(body_sender);
-        // advance by the grace period
-        tick!(time, Duration::from_secs(5));
+        tick!(time, DEFAULT_GRACE_PERIOD);
         info!("body stream task complete");
         // advance to unblock the stalled server
         tick!(time, Duration::from_secs(2));
