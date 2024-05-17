@@ -137,7 +137,7 @@ impl UploadThroughput {
     }
 
     pub(crate) fn complete(&self) -> bool {
-        self.logs.lock().unwrap().complete()
+        self.logs.lock().unwrap().mark_complete()
     }
 
     pub(crate) fn report(&self, now: SystemTime) -> ThroughputReport {

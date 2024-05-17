@@ -353,7 +353,7 @@ impl ThroughputLogs {
     ///
     /// After marking a stream complete [report](#method.report) will forever more return
     /// [ThroughputReport::Complete]
-    pub(super) fn complete(&mut self) -> bool {
+    pub(super) fn mark_complete(&mut self) -> bool {
         let prev = self.stream_complete;
         self.stream_complete = true;
         !prev
