@@ -253,7 +253,6 @@ impl http_body_0_4::Body for PathBody {
             match self.state {
                 State::Unloaded(ref path_buf) => {
                     let buf = path_buf.clone();
-                    tracing::trace!("PathBody transitioning to Loading state");
                     self.state = State::Loading(Box::pin(async move {
                         let mut file = File::open(&buf).await?;
 
@@ -267,7 +266,6 @@ impl http_body_0_4::Body for PathBody {
                 State::Loading(ref mut future) => {
                     match futures_core::ready!(Pin::new(future).poll(cx)) {
                         Ok(file) => {
-                            tracing::trace!("PathBody transitioning to Loaded state");
                             self.state = State::Loaded {
                                 stream: ReaderStream::with_capacity(
                                     file.take(self.length),
@@ -287,11 +285,6 @@ impl http_body_0_4::Body for PathBody {
                     return match futures_core::ready!(Pin::new(stream).poll_next(cx)) {
                         Some(Ok(bytes)) => {
                             *bytes_left -= bytes.len() as u64;
-                            tracing::trace!(
-                                "read {} bytes from PathBody, {} bytes left",
-                                bytes.len(),
-                                bytes_left
-                            );
                             Poll::Ready(Some(Ok(bytes)))
                         }
                         None => Poll::Ready(None),
@@ -311,7 +304,7 @@ impl http_body_0_4::Body for PathBody {
 
     fn is_end_stream(&self) -> bool {
         match self.state {
-            State::Unloaded(_) | State::Loading(_) => false,
+            State::Unloaded(_) | State::Loading(_) => self.length == 0,
             State::Loaded { bytes_left, .. } => bytes_left == 0,
         }
     }

@@ -635,23 +635,26 @@ mod tests {
     #[allow(clippy::bool_assert_comparison)]
     #[tokio::test]
     async fn valid_eos() {
+        tracing_subscriber::fmt::init();
+
         assert_eq!(
             ByteStream::from_static(b"hello").inner.body.is_end_stream(),
             false
         );
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(b"hello").unwrap();
+        let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.body.content_length(), Some(5));
+        assert_eq!(body.inner.body.is_end_stream(), false);
+
         assert_eq!(
             ByteStream::from_static(b"").inner.body.is_end_stream(),
             true
         );
-
-        let mut f = NamedTempFile::new().unwrap();
-        f.write_all(b"hello").unwrap();
-        let body = ByteStream::from_path(f.path()).await.unwrap();
-        assert_eq!(body.inner.body.is_end_stream(), false);
-
         let mut f = NamedTempFile::new().unwrap();
         f.write_all(b"").unwrap();
         let body = ByteStream::from_path(f.path()).await.unwrap();
+        assert_eq!(body.inner.body.content_length(), Some(0));
         assert_eq!(body.inner.body.is_end_stream(), true);
     }
 }
