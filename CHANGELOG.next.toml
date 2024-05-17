@@ -37,6 +37,18 @@ meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd", "Velfi"]
+
+[[smithy-rs]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd", "Velfi"]
+
+[[aws-sdk-rust]]
 message = "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`."
 references = ["smithy-rs#3645"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
