@@ -186,7 +186,7 @@ where
                 // alternative for such fringe use cases.
                 if self.is_end_stream() {
                     tracing::trace!("stream reported end of stream before Poll::Ready(None) reached; marking stream complete");
-                    self.throughput.complete();
+                    self.throughput.mark_complete();
                 }
                 Poll::Ready(Some(Ok(bytes)))
             }
@@ -197,7 +197,7 @@ where
             }
             // If we've read all the data or an error occurred, then return that result.
             res => {
-                if this.throughput.complete() {
+                if this.throughput.mark_complete() {
                     tracing::trace!("stream completed: {:?}", res);
                 }
                 res

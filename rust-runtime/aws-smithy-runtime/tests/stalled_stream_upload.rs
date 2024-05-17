@@ -7,6 +7,8 @@
 
 #[macro_use]
 mod stalled_stream_common;
+
+use aws_smithy_runtime_api::client::stalled_stream_protection::DEFAULT_GRACE_PERIOD;
 use stalled_stream_common::*;
 
 /// Scenario: Successful upload at a rate above the minimum throughput.
@@ -179,7 +181,7 @@ async fn complete_upload_stop_polling() {
 
     tokio::spawn(async move {
         // advance past the grace period
-        tick!(time, Duration::from_secs(6));
+        tick!(time, DEFAULT_GRACE_PERIOD + Duration::from_secs(1));
         // unblock server
         tick!(time, Duration::from_secs(2));
     });
