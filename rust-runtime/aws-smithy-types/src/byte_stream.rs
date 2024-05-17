@@ -579,7 +579,7 @@ impl Inner {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rt-tokio"))]
 mod tests {
     use super::{ByteStream, Inner};
     use crate::body::SdkBody;
@@ -600,7 +600,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "rt-tokio")]
     #[tokio::test]
     async fn bytestream_into_async_read() {
         use tokio::io::AsyncBufReadExt;
@@ -635,8 +634,6 @@ mod tests {
     #[allow(clippy::bool_assert_comparison)]
     #[tokio::test]
     async fn valid_eos() {
-        tracing_subscriber::fmt::init();
-
         assert_eq!(
             ByteStream::from_static(b"hello").inner.body.is_end_stream(),
             false

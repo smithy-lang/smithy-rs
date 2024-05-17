@@ -46,7 +46,6 @@ pin-project-lite = "0.2.9"
 pin-utils = "0.1.0"
 ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
-tracing = "0.1.40"
 
 # ByteStream internals
 futures-core = { version = "0.3.29", optional = true }
@@ -54,7 +53,6 @@ tokio = { version = "1.23.1", optional = true }
 tokio-util = { version = "0.7", optional = true }
 
 [dev-dependencies]
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 base64 = "0.13.0"
 ciborium = { version = "0.2.1" }
 lazy_static = "1.4"
@@ -69,6 +67,7 @@ tokio = { version = "1.23.1", features = [
     "fs",
     "io-util",
 ] }
+# This is used in a doctest, don't listen to udeps.
 tokio-stream = "0.1.5"
 tempfile = "3.2.0"
 
