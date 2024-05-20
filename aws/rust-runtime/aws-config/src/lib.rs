@@ -535,8 +535,15 @@ mod loader {
 
         /// Override the name of the app used to build [`SdkConfig`].
         ///
-        /// This _optional_ name is used to identify the application in the user agent that
+        /// This _optional_ name is used to identify the application in the user agent header that
         /// gets sent along with requests.
+        ///
+        /// The app name is selected from an ordered list of sources:
+        /// 1. This override.
+        /// 2. The value of the `AWS_SDK_UA_APP_ID` environment variable.
+        /// 3. Profile files from the key `sdk_ua_app_id`
+        ///
+        /// If none of those sources are set the value is `None` and it is not added to the user agent header.
         ///
         /// # Examples
         /// ```no_run
