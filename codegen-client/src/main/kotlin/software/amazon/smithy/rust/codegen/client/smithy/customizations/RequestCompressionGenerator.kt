@@ -49,11 +49,6 @@ class RequestCompressionGenerator(
                             rust("#T::new()", compression.resolve("RequestCompressionRuntimePlugin"))
                         }
 
-                    is OperationSection.AdditionalInterceptors ->
-                        section.registerInterceptor(runtimeConfig, this) {
-                            rust("#T::new()", compression.resolve("RequestCompressionInterceptor"))
-                        }
-
                     else -> {}
                 }
             }
