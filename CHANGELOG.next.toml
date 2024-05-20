@@ -43,7 +43,7 @@ meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "landonxjames"
 
 [[smithy-rs]]
-message = "Add `aws-lambda` as a feature to server generated SDK"
+message = "A feature, `aws-lambda`, is added to the generated SDK to re-export types required for Lambda deployment."
 references = ["smithy-rs#3643"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "drganjoo"
