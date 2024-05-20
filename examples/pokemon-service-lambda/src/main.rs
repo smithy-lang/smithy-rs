@@ -12,7 +12,9 @@ use pokemon_service_common::{
     setup_tracing, stream_pokemon_radio, State,
 };
 use pokemon_service_lambda::get_storage_lambda;
-use pokemon_service_server_sdk::{server::routing::LambdaHandler, PokemonService, PokemonServiceConfig};
+use pokemon_service_server_sdk::{
+    server::routing::LambdaHandler, PokemonService, PokemonServiceConfig,
+};
 
 #[tokio::main]
 pub async fn main() {
