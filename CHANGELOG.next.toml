@@ -54,6 +54,18 @@ references = ["smithy-rs#3645"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "landonxjames"
 
+[[aws-sdk-rust]]
+message = "Update MSRV to `1.76.0`"
+references = ["smithy-rs#3653"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Update MSRV to `1.76.0`"
+references = ["smithy-rs#3653"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "landonxjames"
+
 [[smithy-rs]]
 message = "A feature, `aws-lambda`, is added to the generated SDK to re-export types required for Lambda deployment."
 references = ["smithy-rs#3643"]
