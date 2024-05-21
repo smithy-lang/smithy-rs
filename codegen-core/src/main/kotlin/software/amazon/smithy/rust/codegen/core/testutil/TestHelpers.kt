@@ -143,11 +143,11 @@ fun testRustSettings(
     examplesUri,
 )
 
-private const val SmithyVersion = "1.0"
+private const val SMITHY_VERSION = "1.0"
 
 fun String.asSmithyModel(
     sourceLocation: String? = null,
-    smithyVersion: String = SmithyVersion,
+    smithyVersion: String = SMITHY_VERSION,
     disableValidation: Boolean = false,
 ): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }

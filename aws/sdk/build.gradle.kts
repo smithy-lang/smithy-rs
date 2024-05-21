@@ -445,8 +445,12 @@ tasks["assemble"].apply {
 project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
-tasks["test"].dependsOn("assemble")
-tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
+//The task name "test" is already registered by one of our plugins
+tasks.register("sdkTest") {
+    description = "Run Cargo clippy/test/docs against the generated SDK."
+    dependsOn("assemble")
+    finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
+}
 
 tasks.register<Delete>("deleteSdk") {
     delete(

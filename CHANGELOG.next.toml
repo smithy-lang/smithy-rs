@@ -11,56 +11,77 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+
 [[aws-sdk-rust]]
-message = """
-Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
-some methods prefixed with `wait_until` to the existing clients. These can be used to, for example
-in S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to
-have the status OK.
+message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
+references = ["aws-sdk-rust#1133"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
 
-Using a waiter looks like the following example for EC2:
-```rust
-use aws_sdk_ec2::client::Waiters;
+[[smithy-rs]]
+message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
+references = ["aws-sdk-rust#1133"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
 
-let result = ec2_client.wait_until_instance_status_ok()
-    .instance_ids("some-instance-id")
-    .wait(Duration::from_secs(300))
-    .await;
-```
-"""
-references = ["aws-sdk-rust#400", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "jdisanti"
+[[smithy-rs]]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
+references = ["aws-sdk-rust#1079"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd", "Velfi"]
+
+[[smithy-rs]]
+message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
+references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+authors = ["aajtodd", "Velfi"]
+
+[[aws-sdk-rust]]
+message = "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`."
+references = ["smithy-rs#3645"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "landonxjames"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to `1.76.0`"
+references = ["smithy-rs#3653"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Update MSRV to `1.76.0`"
+references = ["smithy-rs#3653"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
+author = "landonxjames"
 
 [[smithy-rs]]
 message = """
-Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
-some methods prefixed with `wait_until` to the existing clients.
+Compression is now supported for operations modeled with the `@requestCompression` trait.
 
-For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
-that waiter would look as follows:
-
-```rust
-use my_generated_client::client::Waiters;
-
-let result = client.wait_until_thing()
-    .thing_id("someId")
-    .wait(Duration::from_secs(120))
-    .await;
-```
+[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
 """
-references = ["smithy-rs#119", "smithy-rs#3595", "smithy-rs#3593", "smithy-rs#3585", "smithy-rs#3571", "smithy-rs#3569"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
-author = "jdisanti"
+references = ["smithy-rs#2891"]
+meta = { "breaking" = false, "bug" = false, "tada" = true, "target" = "client" }
+author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version."
-references = ["smithy-rs#3601"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "jdisanti"
+message = """
+Compression is now supported for operations modeled with the `@requestCompression` trait.
 
-[[smithy-rs]]
-message = "Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request."
-references = ["smithy-rs#3603"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
-author = "jdisanti"
+[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
+"""
+references = ["smithy-rs#2891"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "Velfi"

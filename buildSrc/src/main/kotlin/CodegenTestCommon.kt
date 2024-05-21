@@ -83,6 +83,7 @@ private fun generateCargoWorkspace(
 ) = (
     """
     [workspace]
+    resolver = "2"
     members = [
         ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
     ]
@@ -174,7 +175,7 @@ fun Project.registerGenerateSmithyBuildTask(
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
-            project.extra[previousBuildHashesKey] =
+            project.extra[PREVIOUS_BUILD_HASHES_KEY] =
                 project.buildDir.walk()
                     .filter { it.isFile }
                     .map {
@@ -217,7 +218,7 @@ fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
     }
 }
 
-const val previousBuildHashesKey = "previousBuildHashes"
+const val PREVIOUS_BUILD_HASHES_KEY = "previousBuildHashes"
 
 fun Project.registerModifyMtimeTask() {
     // Cargo uses `mtime` (among other factors) to determine whether a compilation unit needs a rebuild. While developing,
@@ -232,11 +233,11 @@ fun Project.registerModifyMtimeTask() {
         dependsOn("generateSmithyBuild")
 
         doFirst {
-            if (!project.extra.has(previousBuildHashesKey)) {
+            if (!project.extra.has(PREVIOUS_BUILD_HASHES_KEY)) {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
                 @Suppress("UNCHECKED_CAST")
-                val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
+                val previousBuildHashes: Map<String, Long> = project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }

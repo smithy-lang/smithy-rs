@@ -32,7 +32,7 @@ jobs:
         git config --local user.name "AWS SDK Rust Bot"
         git config --local user.email "aws-sdk-rust-primary@amazon.com"
 
-        git fetch
+        git fetch --unshallow
         git checkout origin/main
         backport_branch="merge-${{ env.release_branch }}-to-main-$(date +%s)"
         git checkout -b "${backport_branch}"

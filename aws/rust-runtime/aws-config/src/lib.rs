@@ -214,6 +214,7 @@ mod loader {
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_runtime::client::identity::IdentityCache;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
@@ -229,7 +230,8 @@ mod loader {
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
-        app_name, credentials, endpoint_url, ignore_configured_endpoint_urls as ignore_ep, region,
+        app_name, credentials, disable_request_compression, endpoint_url,
+        ignore_configured_endpoint_urls as ignore_ep, region, request_min_compression_size_bytes,
         retry_config, timeout_config, use_dual_stack, use_fips,
     };
     use crate::meta::region::ProvideRegion;
@@ -238,14 +240,14 @@ mod loader {
     use crate::provider_config::ProviderConfig;
 
     #[derive(Default, Debug)]
-    enum CredentialsProviderOption {
-        /// No provider was set by the user. We can set up the default credentials provider chain.
+    enum TriStateOption<T> {
+        /// No option was set by the user. We can set up the default.
         #[default]
         NotSet,
-        /// The credentials provider was explicitly unset. Do not set up a default chain.
+        /// The option was explicitly unset. Do not set up a default.
         ExplicitlyUnset,
-        /// Use the given credentials provider.
-        Set(SharedCredentialsProvider),
+        /// Use the given user provided option.
+        Set(T),
     }
 
     /// Load a cross-service [`SdkConfig`] from the environment
@@ -258,7 +260,7 @@ mod loader {
     pub struct ConfigLoader {
         app_name: Option<AppName>,
         identity_cache: Option<SharedIdentityCache>,
-        credentials_provider: CredentialsProviderOption,
+        credentials_provider: TriStateOption<SharedCredentialsProvider>,
         token_provider: Option<SharedTokenProvider>,
         endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
@@ -273,6 +275,8 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        disable_request_compression: Option<bool>,
+        request_min_compression_size_bytes: Option<u32>,
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
@@ -464,9 +468,8 @@ mod loader {
             mut self,
             credentials_provider: impl ProvideCredentials + 'static,
         ) -> Self {
-            self.credentials_provider = CredentialsProviderOption::Set(
-                SharedCredentialsProvider::new(credentials_provider),
-            );
+            self.credentials_provider =
+                TriStateOption::Set(SharedCredentialsProvider::new(credentials_provider));
             self
         }
 
@@ -492,7 +495,7 @@ mod loader {
         /// # }
         /// ```
         pub fn no_credentials(mut self) -> Self {
-            self.credentials_provider = CredentialsProviderOption::ExplicitlyUnset;
+            self.credentials_provider = TriStateOption::ExplicitlyUnset;
             self
         }
 
@@ -532,8 +535,15 @@ mod loader {
 
         /// Override the name of the app used to build [`SdkConfig`].
         ///
-        /// This _optional_ name is used to identify the application in the user agent that
+        /// This _optional_ name is used to identify the application in the user agent header that
         /// gets sent along with requests.
+        ///
+        /// The app name is selected from an ordered list of sources:
+        /// 1. This override.
+        /// 2. The value of the `AWS_SDK_UA_APP_ID` environment variable.
+        /// 3. Profile files from the key `sdk_ua_app_id`
+        ///
+        /// If none of those sources are set the value is `None` and it is not added to the user agent header.
         ///
         /// # Examples
         /// ```no_run
@@ -654,6 +664,18 @@ mod loader {
             self
         }
 
+        #[doc = docs_for!(disable_request_compression)]
+        pub fn disable_request_compression(mut self, disable_request_compression: bool) -> Self {
+            self.disable_request_compression = Some(disable_request_compression);
+            self
+        }
+
+        #[doc = docs_for!(request_min_compression_size_bytes)]
+        pub fn request_min_compression_size_bytes(mut self, size: u32) -> Self {
+            self.request_min_compression_size_bytes = Some(size);
+            self
+        }
+
         /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`].
         ///
         /// This configures stalled stream protection. When enabled, download streams
@@ -771,6 +793,22 @@ mod loader {
                     .await
             };
 
+            let disable_request_compression = if self.disable_request_compression.is_some() {
+                self.disable_request_compression
+            } else {
+                disable_request_compression::disable_request_compression_provider(&conf).await
+            };
+
+            let request_min_compression_size_bytes =
+                if self.request_min_compression_size_bytes.is_some() {
+                    self.request_min_compression_size_bytes
+                } else {
+                    request_min_compression_size_bytes::request_min_compression_size_bytes_provider(
+                        &conf,
+                    )
+                    .await
+                };
+
             let base_config = timeout_config::default_provider()
                 .configure(&conf)
                 .timeout_config()
@@ -781,14 +819,14 @@ mod loader {
             timeout_config.take_defaults_from(&base_config);
 
             let credentials_provider = match self.credentials_provider {
-                CredentialsProviderOption::Set(provider) => Some(provider),
-                CredentialsProviderOption::NotSet => {
+                TriStateOption::Set(provider) => Some(provider),
+                TriStateOption::NotSet => {
                     let mut builder =
                         credentials::DefaultCredentialsChain::builder().configure(conf.clone());
                     builder.set_region(region.clone());
                     Some(SharedCredentialsProvider::new(builder.build().await))
                 }
-                CredentialsProviderOption::ExplicitlyUnset => None,
+                TriStateOption::ExplicitlyUnset => None,
             };
 
             let token_provider = match self.token_provider {
@@ -846,17 +884,30 @@ mod loader {
                     v
                 }
             };
-            builder.set_endpoint_url(endpoint_url);
 
+            builder.set_endpoint_url(endpoint_url);
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
-            builder.set_identity_cache(self.identity_cache);
+
+            let identity_cache = match self.identity_cache {
+                None => match self.behavior_version {
+                    Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
+                        Some(IdentityCache::lazy().build())
+                    }
+                    _ => None,
+                },
+                Some(user_cache) => Some(user_cache),
+            };
+
+            builder.set_identity_cache(identity_cache);
             builder.set_credentials_provider(credentials_provider);
             builder.set_token_provider(token_provider);
             builder.set_sleep_impl(sleep_impl);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_disable_request_compression(disable_request_compression);
+            builder.set_request_min_compression_size_bytes(request_min_compression_size_bytes);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
@@ -1027,7 +1078,7 @@ mod loader {
         }
 
         #[tokio::test]
-        async fn load_fips() {
+        async fn load_use_fips() {
             let conf = base_conf().use_fips(true).load().await;
             assert_eq!(Some(true), conf.use_fips());
         }
@@ -1039,6 +1090,27 @@ mod loader {
 
             let conf = base_conf().load().await;
             assert_eq!(None, conf.use_dual_stack());
+        }
+
+        #[tokio::test]
+        async fn load_disable_request_compression() {
+            let conf = base_conf().disable_request_compression(true).load().await;
+            assert_eq!(Some(true), conf.disable_request_compression());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.disable_request_compression());
+        }
+
+        #[tokio::test]
+        async fn load_request_min_compression_size_bytes() {
+            let conf = base_conf()
+                .request_min_compression_size_bytes(99)
+                .load()
+                .await;
+            assert_eq!(Some(99), conf.request_min_compression_size_bytes());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.request_min_compression_size_bytes());
         }
 
         #[tokio::test]
@@ -1055,8 +1127,24 @@ mod loader {
                 .no_credentials()
                 .load()
                 .await;
-            assert!(config.identity_cache().is_none());
             assert!(config.credentials_provider().is_none());
+        }
+
+        #[cfg(feature = "rustls")]
+        #[tokio::test]
+        async fn identity_cache_defaulted() {
+            let config = defaults(BehaviorVersion::latest()).load().await;
+
+            assert!(config.identity_cache().is_some());
+        }
+
+        #[cfg(feature = "rustls")]
+        #[allow(deprecated)]
+        #[tokio::test]
+        async fn identity_cache_old_behavior_version() {
+            let config = defaults(BehaviorVersion::v2023_11_09()).load().await;
+
+            assert!(config.identity_cache().is_none());
         }
 
         #[tokio::test]

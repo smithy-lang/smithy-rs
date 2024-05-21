@@ -802,28 +802,27 @@ class ServerProtocolTestGenerator(
         // These could be configured via runtime configuration, but since this won't be long-lasting,
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private const val AwsJson10 = "aws.protocoltests.json10#JsonRpc10"
-        private const val RestJson = "aws.protocoltests.restjson#RestJson"
-        private const val RestJsonExtras = "aws.protocoltests.restjson#RestJsonExtras"
-        private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
+        private const val AWS_JSON11 = "aws.protocoltests.json#JsonProtocol"
+        private const val AWS_JSON10 = "aws.protocoltests.json10#JsonRpc10"
+        private const val REST_JSON = "aws.protocoltests.restjson#RestJson"
+        private const val REST_JSON_VALIDATION = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> =
             setOf(
                 // Endpoint trait is not implemented yet, see https://github.com/smithy-lang/smithy-rs/issues/950.
-                FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
-                FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
-                FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
+                FailingTest(REST_JSON, "RestJsonEndpointTrait", TestType.Request),
+                FailingTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
+                FailingTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
                 // Tests involving floating point shapes and the `@range` trait; see https://github.com/smithy-lang/smithy-rs/issues/2007
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloatOverride", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeMinFloatOverride", TestType.MalformedRequest),
                 // Some tests for the S3 service (restXml).
                 FailingTest("com.amazonaws.s3#AmazonS3", "GetBucketLocationUnwrappedOutput", TestType.Response),
                 FailingTest("com.amazonaws.s3#AmazonS3", "S3DefaultAddressing", TestType.Request),
@@ -838,56 +837,56 @@ class ServerProtocolTestGenerator(
                 FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTraitWithHostLabel", TestType.Request),
                 FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTrait", TestType.Request),
                 // AwsJson1.1 failing tests.
-                FailingTest(AwsJson11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
-                FailingTest(AwsJson11, "AwsJson11EndpointTrait", TestType.Request),
-                FailingTest(AwsJson11, "parses_the_request_id_from_the_response", TestType.Response),
+                FailingTest(AWS_JSON11, "AwsJson11EndpointTraitWithHostLabel", TestType.Request),
+                FailingTest(AWS_JSON11, "AwsJson11EndpointTrait", TestType.Request),
+                FailingTest(AWS_JSON11, "parses_the_request_id_from_the_response", TestType.Response),
                 // TODO(https://github.com/awslabs/smithy/issues/1683): This has been marked as failing until resolution of said issue
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBlobList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBooleanList_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsBooleanList_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsStringList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsByteList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsShortList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsIntegerList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsLongList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsTimestampList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsDateTimeList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsBlobList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsBooleanList_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsBooleanList_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsStringList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsByteList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsShortList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsIntegerList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsLongList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsTimestampList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsDateTimeList", TestType.MalformedRequest),
                 FailingTest(
-                    RestJsonValidation,
+                    REST_JSON_VALIDATION,
                     "RestJsonMalformedUniqueItemsHttpDateList_case0",
                     TestType.MalformedRequest,
                 ),
                 FailingTest(
-                    RestJsonValidation,
+                    REST_JSON_VALIDATION,
                     "RestJsonMalformedUniqueItemsHttpDateList_case1",
                     TestType.MalformedRequest,
                 ),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsEnumList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsIntEnumList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsListList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsStructureList", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsEnumList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsIntEnumList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsListList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsStructureList", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsUnionList_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedUniqueItemsUnionList_case1", TestType.MalformedRequest),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2472): We don't respect the `@internal` trait
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapValue_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumString_case1", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumUnion_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumMapKey_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumMapValue_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumMapValue_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumString_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumString_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumUnion_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumUnion_case1", TestType.MalformedRequest),
                 // TODO(https://github.com/awslabs/smithy/issues/1737): Specs on @internal, @tags, and enum values need to be clarified
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumTraitString_case0", TestType.MalformedRequest),
-                FailingTest(RestJsonValidation, "RestJsonMalformedEnumTraitString_case1", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumTraitString_case0", TestType.MalformedRequest),
+                FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumTraitString_case1", TestType.MalformedRequest),
                 // These tests are broken because they are missing a target header
-                FailingTest(AwsJson10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody", TestType.Request),
-                FailingTest(AwsJson10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody", TestType.Request),
+                FailingTest(AWS_JSON10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody", TestType.Request),
+                FailingTest(AWS_JSON10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody", TestType.Request),
                 // Response defaults are not set when builders are not used https://github.com/smithy-lang/smithy-rs/issues/3339
-                FailingTest(AwsJson10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams", TestType.Response),
-                FailingTest(AwsJson10, "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams", TestType.Response),
+                FailingTest(AWS_JSON10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams", TestType.Response),
+                FailingTest(AWS_JSON10, "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams", TestType.Response),
             )
         private val RunOnly: Set<String>? = null
 
@@ -949,7 +948,7 @@ class ServerProtocolTestGenerator(
             // TODO(https://github.com/awslabs/smithy/issues/1506)
             mapOf(
                 Pair(
-                    RestJsonValidation,
+                    REST_JSON_VALIDATION,
                     "RestJsonMalformedPatternReDOSString",
                 ) to ::fixRestJsonMalformedPatternReDOSString,
             )
