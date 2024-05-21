@@ -65,3 +65,23 @@ message = "Update MSRV to `1.76.0`"
 references = ["smithy-rs#3653"]
 meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
 author = "landonxjames"
+
+[[smithy-rs]]
+message = """
+Compression is now supported for operations modeled with the `@requestCompression` trait.
+
+[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
+"""
+references = ["smithy-rs#2891"]
+meta = { "breaking" = false, "bug" = false, "tada" = true, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Compression is now supported for operations modeled with the `@requestCompression` trait.
+
+[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
+"""
+references = ["smithy-rs#2891"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "Velfi"
