@@ -57,7 +57,7 @@ async fn test_content_length_enforcement_get_request_short() {
     // This will fail with a content-length mismatch error.
     let content_length_err = output.body.collect().await.unwrap_err();
 
-    http_client.full_validate("").await.unwrap();
+    http_client.full_validate("application/text").await.unwrap();
     assert_eq!(
         DisplayErrorContext(content_length_err).to_string(),
         "streaming error: Invalid Content-Length: Expected 9999 bytes but 10000 bytes were received (Error { kind: StreamingError(ContentLengthError { expected: 9999, received: 10000 }) })"
@@ -91,7 +91,7 @@ async fn test_content_length_enforcement_get_request_long() {
     // This will fail with a content-length mismatch error.
     let content_length_err = output.body.collect().await.unwrap_err();
 
-    http_client.full_validate("").await.unwrap();
+    http_client.full_validate("application/text").await.unwrap();
     assert_eq!(
         DisplayErrorContext(content_length_err).to_string(),
         "streaming error: Invalid Content-Length: Expected 10001 bytes but 10000 bytes were received (Error { kind: StreamingError(ContentLengthError { expected: 10001, received: 10000 }) })"
