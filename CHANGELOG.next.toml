@@ -10,3 +10,7 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[smithy-rs]]
+message = "Fix server README"
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
+author = "drganjoo"
