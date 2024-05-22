@@ -5,6 +5,9 @@
 
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
+use crate::client::invocation_id::{
+    GenerateInvocationId, InvocationId, SharedInvocationIdGenerator,
+};
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
@@ -32,7 +35,7 @@ use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use std::mem;
-use tracing::{debug, debug_span, instrument, trace, Instrument};
+use tracing::{debug, debug_span, instrument, trace, warn, Instrument};
 
 mod auth;
 
@@ -152,6 +155,20 @@ pub async fn invoke_with_stop_point(
         let operation_timeout_config =
             MaybeTimeoutConfig::new(&runtime_components, cfg, TimeoutKind::Operation);
         trace!(operation_timeout_config = ?operation_timeout_config);
+
+        let invocation_id = match cfg.load::<SharedInvocationIdGenerator>() {
+            Some(gen) => gen.generate()
+                .unwrap_or_else(|_| {
+                    warn!("failed to generate invocation ID but that should not stop the operation from being invoked");
+                    None
+                }),
+            None => None,
+        };
+        if let Some(invocation_id) = &invocation_id {
+            cfg.interceptor_state()
+                .store_put::<InvocationId>(invocation_id.clone());
+        }
+
         async {
             // If running the pre-execution interceptors failed, then we skip running the op and run the
             // final interceptors instead.
@@ -166,6 +183,7 @@ pub async fn invoke_with_stop_point(
             }
         }
         .maybe_timeout(operation_timeout_config)
+        .instrument(debug_span!("with", id = ?invocation_id))
         .await
     }
     .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name))

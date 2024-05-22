@@ -11,6 +11,7 @@
 
 use crate::client::http::body::content_length_enforcement::EnforceContentLengthRuntimePlugin;
 use crate::client::identity::IdentityCache;
+use crate::client::invocation_id::{DefaultInvocationIdGenerator, SharedInvocationIdGenerator};
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
@@ -236,6 +237,21 @@ fn validate_stalled_stream_protection_config(
     }
 }
 
+fn default_invocation_id_generator_plugin() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin(
+            "default_invocation_id_generator_plugin",
+            std::convert::identity,
+        )
+        .with_config(layer("default_invocation_id_generator_plugin", |layer| {
+            layer.store_put(SharedInvocationIdGenerator::new(
+                DefaultInvocationIdGenerator::default(),
+            ));
+        }))
+        .into_shared(),
+    )
+}
+
 /// Arguments for the [`default_plugins`] method.
 ///
 /// This is a struct to enable adding new parameters in the future without breaking the API.
@@ -286,6 +302,7 @@ pub fn default_plugins(
         default_timeout_config_plugin(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
+        default_invocation_id_generator_plugin(),
     ]
     .into_iter()
     .flatten()

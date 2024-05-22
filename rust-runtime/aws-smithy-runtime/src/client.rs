@@ -18,6 +18,9 @@ pub mod endpoint;
 /// for more information about clients and connectors.
 pub mod http;
 
+/// Client operation invocation ID.
+pub mod invocation_id;
+
 /// Utility to simplify config building for config and config overrides.
 pub mod config_override;
 
