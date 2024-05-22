@@ -9,17 +9,24 @@ use std::sync::{Arc, Mutex};
 use fastrand::Rng;
 use http::{HeaderName, HeaderValue};
 
+use aws_smithy_runtime::client::invocation_id::{
+    GenerateInvocationId, InvocationId as GenericClientInvocationId,
+};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 #[cfg(feature = "test-util")]
-pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
+pub use test_util::PredefinedInvocationIdGenerator;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
 
+// We have a trait `aws_smithy_runtime::client::invocation_id::GenerateInvocationId` to
+// represent effectively the same concept, but this pub trait was defined first, making it
+// challenging to promote it to the `aws_smithy_runtime` crate. We keep this trait here to avoid
+// breaking existing users.
 /// A generator for returning new invocation IDs on demand.
 pub trait InvocationIdGenerator: Debug + Send + Sync {
     /// Call this function to receive a new [`InvocationId`] or an error explaining why one couldn't
@@ -44,16 +51,28 @@ impl InvocationIdGenerator for SharedInvocationIdGenerator {
     }
 }
 
+impl GenerateInvocationId for SharedInvocationIdGenerator {
+    fn generate(&self) -> Result<Option<GenericClientInvocationId>, BoxError> {
+        InvocationIdGenerator::generate(self)
+            .map(|id| id.map(|id| GenericClientInvocationId::new(id.0)))
+    }
+}
+
 impl Storable for SharedInvocationIdGenerator {
     type Storer = StoreReplace<Self>;
 }
 
 /// An invocation ID generator that uses random UUIDs for the invocation ID.
+#[deprecated(
+    since = "1.2.3",
+    note = "This struct was meant to be used internally. Do not use."
+)]
 #[derive(Debug, Default)]
 pub struct DefaultInvocationIdGenerator {
     rng: Mutex<Rng>,
 }
 
+#[allow(deprecated)]
 impl DefaultInvocationIdGenerator {
     /// Creates a new [`DefaultInvocationIdGenerator`].
     pub fn new() -> Self {
@@ -68,6 +87,7 @@ impl DefaultInvocationIdGenerator {
     }
 }
 
+#[allow(deprecated)]
 impl InvocationIdGenerator for DefaultInvocationIdGenerator {
     fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
         let mut rng = self.rng.lock().unwrap();
@@ -82,9 +102,7 @@ impl InvocationIdGenerator for DefaultInvocationIdGenerator {
 /// This interceptor generates a UUID and attaches it to all request attempts made as part of this operation.
 #[non_exhaustive]
 #[derive(Debug, Default)]
-pub struct InvocationIdInterceptor {
-    default: DefaultInvocationIdGenerator,
-}
+pub struct InvocationIdInterceptor {}
 
 impl InvocationIdInterceptor {
     /// Creates a new `InvocationIdInterceptor`
@@ -98,23 +116,6 @@ impl Intercept for InvocationIdInterceptor {
         "InvocationIdInterceptor"
     }
 
-    fn modify_before_retry_loop(
-        &self,
-        _ctx: &mut BeforeTransmitInterceptorContextMut<'_>,
-        _runtime_components: &RuntimeComponents,
-        cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        let gen = cfg
-            .load::<SharedInvocationIdGenerator>()
-            .map(|gen| gen as &dyn InvocationIdGenerator)
-            .unwrap_or(&self.default);
-        if let Some(id) = gen.generate()? {
-            cfg.interceptor_state().store_put::<InvocationId>(id);
-        }
-
-        Ok(())
-    }
-
     fn modify_before_transmit(
         &self,
         ctx: &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -122,8 +123,11 @@ impl Intercept for InvocationIdInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let headers = ctx.request_mut().headers_mut();
-        if let Some(id) = cfg.load::<InvocationId>() {
-            headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
+        if let Some(id) = cfg.load::<GenericClientInvocationId>() {
+            headers.append(
+                AMZ_SDK_INVOCATION_ID,
+                HeaderValue::try_from(id.to_string())?,
+            );
         }
         Ok(())
     }
@@ -131,18 +135,12 @@ impl Intercept for InvocationIdInterceptor {
 
 /// InvocationId provides a consistent ID across retries
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InvocationId(HeaderValue);
+pub struct InvocationId(String);
 
 impl InvocationId {
     /// Create an invocation ID with the given value.
-    ///
-    /// # Panics
-    /// This constructor will panic if the given invocation ID is not a valid HTTP header value.
     pub fn new(invocation_id: String) -> Self {
-        Self(
-            HeaderValue::try_from(invocation_id)
-                .expect("invocation ID must be a valid HTTP header value"),
-        )
+        Self(invocation_id)
     }
 }
 
@@ -159,7 +157,7 @@ mod test_util {
     impl InvocationId {
         /// Create a new invocation ID from a `&'static str`.
         pub fn new_from_str(uuid: &'static str) -> Self {
-            InvocationId(HeaderValue::from_static(uuid))
+            Self(uuid.to_owned())
         }
     }
 
@@ -193,23 +191,6 @@ mod test_util {
             ))
         }
     }
-
-    /// A "generator" that always returns `None`.
-    #[derive(Debug, Default)]
-    pub struct NoInvocationIdGenerator;
-
-    impl NoInvocationIdGenerator {
-        /// Create a new [`NoInvocationIdGenerator`].
-        pub fn new() -> Self {
-            Self
-        }
-    }
-
-    impl InvocationIdGenerator for NoInvocationIdGenerator {
-        fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
-            Ok(None)
-        }
-    }
 }
 
 #[cfg(test)]
@@ -231,36 +212,11 @@ mod tests {
         context.request().headers().get(header_name).unwrap()
     }
 
-    #[test]
-    fn default_id_generator() {
-        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
-        ctx.enter_serialization_phase();
-        ctx.set_request(HttpRequest::empty());
-        let _ = ctx.take_input();
-        ctx.enter_before_transmit_phase();
-
-        let mut cfg = ConfigBag::base();
-        let interceptor = InvocationIdInterceptor::new();
-        let mut ctx = Into::into(&mut ctx);
-        interceptor
-            .modify_before_retry_loop(&mut ctx, &rc, &mut cfg)
-            .unwrap();
-        interceptor
-            .modify_before_transmit(&mut ctx, &rc, &mut cfg)
-            .unwrap();
-
-        let expected = cfg.load::<InvocationId>().expect("invocation ID was set");
-        let header = expect_header(&ctx, "amz-sdk-invocation-id");
-        assert_eq!(expected.0, header, "the invocation ID in the config bag must match the invocation ID in the request header");
-        // UUID should include 32 chars and 4 dashes
-        assert_eq!(header.len(), 36);
-    }
-
     #[cfg(feature = "test-util")]
     #[test]
     fn custom_id_generator() {
         use aws_smithy_types::config_bag::Layer;
+
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
@@ -270,18 +226,16 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         let mut layer = Layer::new("test");
-        layer.store_put(SharedInvocationIdGenerator::new(
-            PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
-                "the-best-invocation-id".into(),
-            )]),
+        let gen = PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
+            "the-best-invocation-id".into(),
+        )]);
+        layer.store_put(GenericClientInvocationId::new(
+            gen.generate().unwrap().unwrap().0,
         ));
         cfg.push_layer(layer);
 
         let interceptor = InvocationIdInterceptor::new();
         let mut ctx = Into::into(&mut ctx);
-        interceptor
-            .modify_before_retry_loop(&mut ctx, &rc, &mut cfg)
-            .unwrap();
         interceptor
             .modify_before_transmit(&mut ctx, &rc, &mut cfg)
             .unwrap();

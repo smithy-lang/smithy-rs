@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyRuntime
 
 class InvocationIdDecorator : ClientCodegenDecorator {
     override val name: String get() = "InvocationIdDecorator"
@@ -62,11 +63,13 @@ private class InvocationIdConfigCustomization(
     codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val awsRuntime = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
             *preludeScope,
             "InvocationIdGenerator" to awsRuntime.resolve("invocation_id::InvocationIdGenerator"),
             "SharedInvocationIdGenerator" to awsRuntime.resolve("invocation_id::SharedInvocationIdGenerator"),
+            "SharedGenericClientInvocationIdGenerator" to smithyRuntime(runtimeConfig).resolve("client::invocation_id::SharedInvocationIdGenerator"),
         )
 
     override fun section(section: ServiceConfig): Writable =
@@ -88,7 +91,10 @@ private class InvocationIdConfigCustomization(
                     rustTemplate(
                         """
                         pub fn set_invocation_id_generator(&mut self, gen: #{Option}<#{SharedInvocationIdGenerator}>) -> &mut Self {
-                            self.config.store_or_unset(gen);
+                            // HACK: We're adding a shallow copy of the inner invocation generator before it gets wrapped in a new-type.
+                            // This helps keep a getter `invocation_id_generator` working.
+                            self.config.store_or_unset(gen.clone());
+                            self.config.store_or_unset(gen.map(|g| #{SharedGenericClientInvocationIdGenerator}::new(g)));
                             self
                         }
                         """,
@@ -106,6 +112,15 @@ private class InvocationIdConfigCustomization(
                         """,
                         *codegenScope,
                     )
+                }
+
+                is ServiceConfig.BuilderFromConfigBag -> {
+                    writable {
+                        rustTemplate(
+                            "${section.builder}.set_invocation_id_generator(${section.configBag}.load::<#{SharedInvocationIdGenerator}>().cloned());",
+                            *codegenScope,
+                        )
+                    }
                 }
 
                 else -> {}
