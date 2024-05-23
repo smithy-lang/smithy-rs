@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 #[cfg(feature = "test-util")]
-pub use test_util::PredefinedInvocationIdGenerator;
+pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
@@ -189,6 +189,23 @@ mod test_util {
                     .pop()
                     .expect("testers will provide enough invocation IDs"),
             ))
+        }
+    }
+
+    /// A "generator" that always returns `None`.
+    #[derive(Debug, Default)]
+    pub struct NoInvocationIdGenerator;
+
+    impl NoInvocationIdGenerator {
+        /// Create a new [`NoInvocationIdGenerator`].
+        pub fn new() -> Self {
+            Self
+        }
+    }
+
+    impl InvocationIdGenerator for NoInvocationIdGenerator {
+        fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
+            Ok(None)
         }
     }
 }
