@@ -212,27 +212,25 @@ mod test_util {
 
 #[cfg(test)]
 mod tests {
-    use aws_smithy_runtime_api::client::interceptors::context::{
-        BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
-    };
-    use aws_smithy_runtime_api::client::interceptors::Intercept;
-    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-    use aws_smithy_types::config_bag::ConfigBag;
-
-    use super::*;
-
-    fn expect_header<'a>(
-        context: &'a BeforeTransmitInterceptorContextMut<'_>,
-        header_name: &str,
-    ) -> &'a str {
-        context.request().headers().get(header_name).unwrap()
-    }
-
     #[cfg(feature = "test-util")]
     #[test]
     fn custom_id_generator() {
+        use super::*;
+        use aws_smithy_runtime_api::client::interceptors::context::{
+            BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
+        };
+        use aws_smithy_runtime_api::client::interceptors::Intercept;
+        use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+        use aws_smithy_types::config_bag::ConfigBag;
         use aws_smithy_types::config_bag::Layer;
+
+        fn expect_header<'a>(
+            context: &'a BeforeTransmitInterceptorContextMut<'_>,
+            header_name: &str,
+        ) -> &'a str {
+            context.request().headers().get(header_name).unwrap()
+        }
 
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
