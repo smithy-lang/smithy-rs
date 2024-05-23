@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 22nd, 2024
+==============
+**New this release:**
+- :bug: (client, [smithy-rs#3656](https://github.com/smithy-lang/smithy-rs/issues/3656), [smithy-rs#3657](https://github.com/smithy-lang/smithy-rs/issues/3657)) Fix the Content-Length enforcement so it is only applied to GET requests.
+
+
 May 21st, 2024
 ==============
 **Breaking Changes:**
