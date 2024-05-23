@@ -10,19 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[aws-sdk-rust]]
-message = "Fix the Content-Length enforcement so it is only applied to GET requests."
-references = ["smithy-rs#3656", "smithy-rs#3657"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-authors = ["rcoh", "Velfi"]
-
-[[smithy-rs]]
-message = "Fix the Content-Length enforcement so it is only applied to GET requests."
-references = ["smithy-rs#3656", "smithy-rs#3657"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-authors = ["rcoh", "Velfi"]
-
-[[smithy-rs]]
-message = "Fix server README"
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server"}
-author = "drganjoo"
