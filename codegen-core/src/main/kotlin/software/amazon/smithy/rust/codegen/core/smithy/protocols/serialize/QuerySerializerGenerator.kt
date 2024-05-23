@@ -282,9 +282,17 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
-    private fun RustWriter.serializeCollection(
+    protected open fun RustWriter.serializeCollection(
         memberContext: MemberContext,
         context: Context<CollectionShape>,
+    ) {
+        serializeCollectionInner(memberContext, context, this)
+    }
+
+    protected fun serializeCollectionInner(
+        memberContext: MemberContext,
+        context: Context<CollectionShape>,
+        writer: RustWriter,
     ) {
         val flat = memberContext.shape.isFlattened()
         val memberOverride =
@@ -292,20 +300,20 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 null -> "None"
                 else -> "Some(${override.dq()})"
             }
-        val itemName = safeName("item")
-        safeName("list").also { listName ->
-            rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
-            rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
+        val itemName = writer.safeName("item")
+        writer.safeName("list").also { listName ->
+            writer.rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
+            writer.rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
                 val entryName = safeName("entry")
                 Attribute.AllowUnusedMut.render(this)
-                rust("let mut $entryName = $listName.entry();")
+                writer.rust("let mut $entryName = $listName.entry();")
                 val targetShape = model.expectShape(context.shape.member.target)
-                serializeMemberValue(
+                writer.serializeMemberValue(
                     MemberContext(entryName, ValueExpression.Reference(itemName), context.shape.member),
                     targetShape,
                 )
             }
-            rust("$listName.finish();")
+            writer.rust("$listName.finish();")
         }
     }
 
