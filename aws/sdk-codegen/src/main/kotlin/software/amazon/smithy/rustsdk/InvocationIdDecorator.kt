@@ -94,7 +94,7 @@ private class InvocationIdConfigCustomization(
                             // HACK: We're adding a shallow copy of the inner invocation generator before it gets wrapped in a new-type.
                             // This helps keep a getter `invocation_id_generator` working.
                             self.config.store_or_unset(gen.clone());
-                            self.config.store_or_unset(gen.map(|g| #{SharedGenericClientInvocationIdGenerator}::new(g)));
+                            self.config.store_or_unset(gen.map(#{SharedGenericClientInvocationIdGenerator}::new));
                             self
                         }
                         """,
