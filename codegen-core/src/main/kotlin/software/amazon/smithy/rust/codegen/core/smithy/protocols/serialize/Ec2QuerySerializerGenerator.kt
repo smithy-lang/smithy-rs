@@ -40,7 +40,7 @@ class Ec2QuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
         memberContext: MemberContext,
         context: Context<CollectionShape>,
     ) {
-        rustBlock("""if !${context.valueExpression.asRef()}.is_empty()""") {
+        rustBlock("if !${context.valueExpression.asRef()}.is_empty()") {
             super.serializeCollectionInner(memberContext, context, this)
         }
     }
