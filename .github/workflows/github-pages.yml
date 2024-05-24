@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   build-and-deploy-docs:
+    if: github.repository == 'smithy-lang/smithy-rs'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
