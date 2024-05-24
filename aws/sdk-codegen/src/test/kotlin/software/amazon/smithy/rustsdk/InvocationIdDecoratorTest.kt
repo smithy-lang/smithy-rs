@@ -22,6 +22,7 @@ class InvocationIdDecoratorTest {
             rustCrate.integrationTest("custom_invocation_id") {
                 rustTemplate(
                     """
+                    ##[allow(deprecated)]
                     ##[#{tokio}::test]
                     async fn custom_invocation_id() {
                         ##[derive(::std::fmt::Debug)]
@@ -69,6 +70,7 @@ class InvocationIdDecoratorTest {
             rustCrate.integrationTest("default_invocation_id") {
                 rustTemplate(
                     """
+                    ##[allow(deprecated)]
                     ##[#{tokio}::test]
                     async fn default_invocation_id() {
                         let (http_client, rx) = #{capture_request}(None);
@@ -109,6 +111,7 @@ class InvocationIdDecoratorTest {
             rustCrate.integrationTest("no_invocation_id") {
                 rustTemplate(
                     """
+                    ##[allow(deprecated)]
                     ##[#{tokio}::test]
                     async fn no_invocation_id() {
                         /// A "generator" that always returns `None`.

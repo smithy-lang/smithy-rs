@@ -9,9 +9,7 @@ use std::sync::{Arc, Mutex};
 use fastrand::Rng;
 use http::{HeaderName, HeaderValue};
 
-use aws_smithy_runtime::client::invocation_id::{
-    GenerateInvocationId, InvocationId as GenericClientInvocationId,
-};
+use aws_smithy_runtime::client::invocation_id::InvocationId as GenericClientInvocationId;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::Intercept;
@@ -48,13 +46,6 @@ impl SharedInvocationIdGenerator {
 impl InvocationIdGenerator for SharedInvocationIdGenerator {
     fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
         self.0.generate()
-    }
-}
-
-impl GenerateInvocationId for SharedInvocationIdGenerator {
-    fn generate(&self) -> Result<Option<GenericClientInvocationId>, BoxError> {
-        InvocationIdGenerator::generate(self)
-            .map(|id| id.map(|id| GenericClientInvocationId::new(id.0)))
     }
 }
 
@@ -114,6 +105,30 @@ impl InvocationIdInterceptor {
 impl Intercept for InvocationIdInterceptor {
     fn name(&self) -> &'static str {
         "InvocationIdInterceptor"
+    }
+
+    fn modify_before_retry_loop(
+        &self,
+        _ctx: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        if let Some(gen) = cfg.load::<SharedInvocationIdGenerator>() {
+            match InvocationIdGenerator::generate(gen)? {
+                Some(id) => {
+                    cfg.interceptor_state()
+                        .store_put::<GenericClientInvocationId>(GenericClientInvocationId::new(
+                            id.0,
+                        ));
+                }
+                None => {
+                    cfg.interceptor_state()
+                        .store_or_unset::<GenericClientInvocationId>(None);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn modify_before_transmit(
