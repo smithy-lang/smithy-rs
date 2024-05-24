@@ -294,26 +294,28 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         context: Context<CollectionShape>,
         writer: RustWriter,
     ) {
-        val flat = memberContext.shape.isFlattened()
-        val memberOverride =
-            when (val override = context.shape.member.getTrait<XmlNameTrait>()?.value) {
-                null -> "None"
-                else -> "Some(${override.dq()})"
+        writer.apply {
+            val flat = memberContext.shape.isFlattened()
+            val memberOverride =
+                when (val override = context.shape.member.getTrait<XmlNameTrait>()?.value) {
+                    null -> "None"
+                    else -> "Some(${override.dq()})"
+                }
+            val itemName = safeName("item")
+            safeName("list").also { listName ->
+                rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
+                rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
+                    val entryName = safeName("entry")
+                    Attribute.AllowUnusedMut.render(this)
+                    rust("let mut $entryName = $listName.entry();")
+                    val targetShape = model.expectShape(context.shape.member.target)
+                    serializeMemberValue(
+                        MemberContext(entryName, ValueExpression.Reference(itemName), context.shape.member),
+                        targetShape,
+                    )
+                }
+                rust("$listName.finish();")
             }
-        val itemName = writer.safeName("item")
-        writer.safeName("list").also { listName ->
-            writer.rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
-            writer.rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
-                val entryName = safeName("entry")
-                Attribute.AllowUnusedMut.render(this)
-                writer.rust("let mut $entryName = $listName.entry();")
-                val targetShape = model.expectShape(context.shape.member.target)
-                writer.serializeMemberValue(
-                    MemberContext(entryName, ValueExpression.Reference(itemName), context.shape.member),
-                    targetShape,
-                )
-            }
-            writer.rust("$listName.finish();")
         }
     }
 
