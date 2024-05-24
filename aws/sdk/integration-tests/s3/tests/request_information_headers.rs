@@ -84,7 +84,7 @@ async fn three_retries_and_then_success() {
                 .read_timeout(Duration::from_secs(10))
                 .build(),
         )
-        .invocation_id_generator(PredefinedInvocationIdGenerator::new(vec![
+        .invocation_id_generator_v2(PredefinedInvocationIdGenerator::new(vec![
             InvocationId::new_from_str("00000000-0000-4000-8000-000000000000"),
         ]))
         .interceptor(TimeInterceptor { time_source })

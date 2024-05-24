@@ -165,6 +165,7 @@ impl Storable for InvocationId {
 
 #[cfg(feature = "test-util")]
 mod test_util {
+    use aws_smithy_runtime::client::invocation_id::GenerateInvocationId;
     use std::sync::{Arc, Mutex};
 
     use super::*;
@@ -207,6 +208,13 @@ mod test_util {
         }
     }
 
+    impl GenerateInvocationId for PredefinedInvocationIdGenerator {
+        fn generate(&self) -> Result<Option<GenericClientInvocationId>, BoxError> {
+            InvocationIdGenerator::generate(self)
+                .map(|id| id.map(|id| GenericClientInvocationId::new(id.0)))
+        }
+    }
+
     /// A "generator" that always returns `None`.
     #[derive(Debug, Default)]
     pub struct NoInvocationIdGenerator;
@@ -220,6 +228,12 @@ mod test_util {
 
     impl InvocationIdGenerator for NoInvocationIdGenerator {
         fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
+            Ok(None)
+        }
+    }
+
+    impl GenerateInvocationId for NoInvocationIdGenerator {
+        fn generate(&self) -> Result<Option<GenericClientInvocationId>, BoxError> {
             Ok(None)
         }
     }
