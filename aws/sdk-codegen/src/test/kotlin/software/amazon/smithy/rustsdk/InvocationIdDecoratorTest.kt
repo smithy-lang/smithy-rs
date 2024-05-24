@@ -51,10 +51,10 @@ class InvocationIdDecoratorTest {
                             assert_eq!("custom", request.headers().get("amz-sdk-invocation-id").unwrap());
                         }
 
-                        verify_request_header( $moduleName::Config::builder()
+                        verify_request_header($moduleName::Config::builder()
                             .invocation_id_generator(TestIdGen), |cfg| cfg.invocation_id_generator().is_some()).await;
 
-                        verify_request_header( $moduleName::Config::builder()
+                        verify_request_header($moduleName::Config::builder()
                             .invocation_id_generator_v2(TestIdGen), |cfg| cfg.invocation_id_generator_v2().is_some()).await;
                     }
                     """,
@@ -162,10 +162,10 @@ class InvocationIdDecoratorTest {
                             assert!(request.headers().get("amz-sdk-invocation-id").is_none());
                         }
 
-                        verify_request_header( $moduleName::Config::builder()
+                        verify_request_header($moduleName::Config::builder()
                             .invocation_id_generator(NoInvocationIdGenerator), |cfg| cfg.invocation_id_generator().is_some()).await;
 
-                        verify_request_header( $moduleName::Config::builder()
+                        verify_request_header($moduleName::Config::builder()
                             .invocation_id_generator_v2(NoInvocationIdGenerator), |cfg| cfg.invocation_id_generator_v2().is_some()).await;
                     }
                     """,
