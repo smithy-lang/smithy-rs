@@ -32,23 +32,43 @@ class InvocationIdDecoratorTest {
                                 #{Ok}(#{Some}(#{InvocationId}::new("custom".into())))
                             }
                         }
+                        impl #{GenerateInvocationId} for TestIdGen {
+                            fn generate(&self) -> #{Result}<#{Option}<#{GenericClientInvocationId}>, #{BoxError}> {
+                                #{Ok}(#{Some}(#{GenericClientInvocationId}::new("custom")))
+                            }
+                        }
 
-                        let (http_client, rx) = #{capture_request}(None);
-                        let config = $moduleName::Config::builder()
-                            .http_client(http_client)
-                            .invocation_id_generator(TestIdGen)
-                            .build();
-                        assert!(config.invocation_id_generator().is_some());
+                        async fn verify_request_header<F>(builder: $moduleName::config::Builder, config_verifier: F)
+                        where
+                            F: Fn(&$moduleName::Config) -> bool
+                        {
+                            let (http_client, rx) = #{capture_request}(#{None});
+                            let config = builder.http_client(http_client).build();
+                            config_verifier(&config);
+                            let client = $moduleName::Client::from_conf(config);
+                            let _ = dbg!(client.some_operation().send().await);
+                            let request = rx.expect_request();
+                            assert_eq!("custom", request.headers().get("amz-sdk-invocation-id").unwrap());
+                        }
 
-                        let client = $moduleName::Client::from_conf(config);
+                        verify_request_header( $moduleName::Config::builder()
+                            .invocation_id_generator(TestIdGen), |cfg| cfg.invocation_id_generator().is_some()).await;
 
-                        let _ = dbg!(client.some_operation().send().await);
-                        let request = rx.expect_request();
-                        assert_eq!("custom", request.headers().get("amz-sdk-invocation-id").unwrap());
+                        verify_request_header( $moduleName::Config::builder()
+                            .invocation_id_generator_v2(TestIdGen), |cfg| cfg.invocation_id_generator_v2().is_some()).await;
                     }
                     """,
                     *preludeScope,
                     "tokio" to CargoDependency.Tokio.toType(),
+                    "GenerateInvocationId" to
+                        RuntimeType.smithyRuntime(rc)
+                            .resolve("client::invocation_id::GenerateInvocationId"),
+                    "GenericClientInvocationId" to
+                        RuntimeType.smithyRuntime(rc)
+                            .resolve("client::invocation_id::InvocationId"),
+                    "HttpRequest" to
+                        RuntimeType.smithyRuntimeApi(rc)
+                            .resolve("client::orchestrator::HttpRequest"),
                     "InvocationIdGenerator" to
                         AwsRuntimeType.awsRuntime(rc)
                             .resolve("invocation_id::InvocationIdGenerator"),
@@ -79,6 +99,7 @@ class InvocationIdDecoratorTest {
                             .http_client(http_client)
                             .build();
                         assert!(config.invocation_id_generator().is_none());
+                        assert!(config.invocation_id_generator_v2().is_none());
 
                         let client = $moduleName::Client::from_conf(config);
 
@@ -122,23 +143,43 @@ class InvocationIdDecoratorTest {
                                 #{Ok}(#{None})
                             }
                         }
+                        impl #{GenerateInvocationId} for NoInvocationIdGenerator {
+                            fn generate(&self) -> #{Result}<#{Option}<#{GenericClientInvocationId}>, #{BoxError}> {
+                                #{Ok}(#{None})
+                            }
+                        }
 
-                        let (http_client, rx) = #{capture_request}(None);
-                        let config = $moduleName::Config::builder()
-                            .http_client(http_client)
-                            .invocation_id_generator(NoInvocationIdGenerator)
-                            .build();
-                        assert!(config.invocation_id_generator().is_some());
+                        async fn verify_request_header<F>(builder: $moduleName::config::Builder, config_verifier: F)
+                        where
+                            F: Fn(&$moduleName::Config) -> bool
+                        {
+                            let (http_client, rx) = #{capture_request}(#{None});
+                            let config = builder.http_client(http_client).build();
+                            config_verifier(&config);
+                            let client = $moduleName::Client::from_conf(config);
+                            let _ = dbg!(client.some_operation().send().await);
+                            let request = rx.expect_request();
+                            assert!(request.headers().get("amz-sdk-invocation-id").is_none());
+                        }
 
-                        let client = $moduleName::Client::from_conf(config);
+                        verify_request_header( $moduleName::Config::builder()
+                            .invocation_id_generator(NoInvocationIdGenerator), |cfg| cfg.invocation_id_generator().is_some()).await;
 
-                        let _ = dbg!(client.some_operation().send().await);
-                        let request = rx.expect_request();
-                        assert!(request.headers().get("amz-sdk-invocation-id").is_none());
+                        verify_request_header( $moduleName::Config::builder()
+                            .invocation_id_generator_v2(NoInvocationIdGenerator), |cfg| cfg.invocation_id_generator_v2().is_some()).await;
                     }
                     """,
                     *preludeScope,
                     "tokio" to CargoDependency.Tokio.toType(),
+                    "GenerateInvocationId" to
+                        RuntimeType.smithyRuntime(rc)
+                            .resolve("client::invocation_id::GenerateInvocationId"),
+                    "GenericClientInvocationId" to
+                        RuntimeType.smithyRuntime(rc)
+                            .resolve("client::invocation_id::InvocationId"),
+                    "HttpRequest" to
+                        RuntimeType.smithyRuntimeApi(rc)
+                            .resolve("client::orchestrator::HttpRequest"),
                     "InvocationIdGenerator" to
                         AwsRuntimeType.awsRuntime(rc)
                             .resolve("invocation_id::InvocationIdGenerator"),
