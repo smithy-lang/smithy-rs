@@ -483,7 +483,7 @@ impl RuntimeComponents {
             };
         }
 
-        tracing::trace!(runtime_components=?self, cfg=?cfg, "validating final config");
+        tracing::trace!(runtime_components=?self, "validating final config");
         for validator in self.config_validators() {
             validator.validate_final_config(self, cfg)?;
         }
@@ -875,7 +875,7 @@ impl RuntimeComponentsBuilder {
             };
         }
 
-        tracing::trace!(runtime_components=?self, cfg=?cfg, "validating base client config");
+        tracing::trace!(runtime_components=?self, "validating base client config");
         for validator in self.config_validators() {
             validator.validate_base_client_config(self, cfg)?;
         }

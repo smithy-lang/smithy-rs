@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Reduce verbosity of various debug logs"
+references = ["smithy-rs#3664"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
