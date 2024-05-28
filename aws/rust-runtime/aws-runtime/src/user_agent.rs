@@ -12,6 +12,7 @@ use std::error::Error;
 use std::fmt;
 
 mod interceptor;
+
 pub use interceptor::UserAgentInterceptor;
 
 /// AWS User Agent
