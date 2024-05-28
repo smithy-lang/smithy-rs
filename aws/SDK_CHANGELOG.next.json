@@ -6,119 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Ability to add an inline policy or a list of policy ARNs to the `WebIdentityTokenCredentialsProvider` builder.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "mokhaled2992",
-      "references": [
-        "smithy-rs#3506"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 5
-    },
-    {
-      "message": "Make `BehaviorVersion` be future-proof by disallowing it to be constructed via the `BehaviorVersion {}` syntax.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "Ten0",
-      "references": [
-        "aws-sdk-rust#1111",
-        "smithy-rs#3513"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 5
-    },
-    {
-      "message": "Users may now set service-specific configuration in the environment. For more information, see [this discussion topic](https://github.com/smithy-lang/smithy-rs/discussions/3537).",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#3493"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 5
-    },
-    {
-      "message": "All requests are now retryable, even if they are deserialized successfully. Previously, this was not allowed.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#3389"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 5
-    },
-    {
-      "message": "Add FIPS support to our Hyper 1.0-based client. Customers can enable this mode by enabling the `crypto-aws-lc-fips` on `aws-smithy-experimental`. To construct a client using the new client, consult this [example](https://github.com/awslabs/aws-sdk-rust/blob/release-2024-03-29/sdk/s3/tests/hyper-10.rs).\n\nPlease note that support for Hyper 1.0 remains experimental.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3539"
-      ],
-      "since-commit": "f19a9da9b8f79a7c448246475539c03e1bb58d7e",
-      "age": 5
-    },
-    {
-      "message": "Fixes the identity resolver types (`credentials_provider()` and `token_provider()`) from `SdkConfig` to have\na consistent identity cache partition when re-used across different clients.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [
-        "smithy-rs#3427"
-      ],
-      "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 4
-    },
-    {
-      "message": "Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:\n\n```rust\nlet config = aws_config::defaults(BehaviorVersion::latest())\n    .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())\n    .load()\n    .await;\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3485"
-      ],
-      "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 4
-    },
-    {
-      "message": "Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3485"
-      ],
-      "since-commit": "129b85d3187d61dbe4bac2a105ebc3411516a271",
-      "age": 4
-    },
-    {
       "message": "Upgraded MSRV to Rust 1.75",
       "meta": {
         "bug": false,
@@ -130,7 +17,7 @@
         "smithy-rs#3553"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Make `SigningSettings` and its fields implement `Clone` and `Copy`",
@@ -144,7 +31,7 @@
         "smithy-rs#3533"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Change some credentials related info log messages to debug.",
@@ -158,7 +45,7 @@
         "smithy-rs#3546"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Fix an S3 crate's dependency on `ahash` so the crate can be compiled for `wasm32-unknown-unknown`.",
@@ -173,7 +60,7 @@
         "aws-sdk-rust#1131"
       ],
       "since-commit": "13c04dafcf5d0f6d65a3edf54b78193f00b44265",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Added support for waiters. Services that model waiters now have a `Waiters` trait that adds\nsome methods prefixed with `wait_until` to the existing clients. These can be used to, for example\nin S3, wait for a newly created bucket to be ready, or in EC2, to wait for a started instance to\nhave the status OK.\n\nUsing a waiter looks like the following example for EC2:\n```rust\nuse aws_sdk_ec2::client::Waiters;\n\nlet result = ec2_client.wait_until_instance_status_ok()\n    .instance_ids(\"some-instance-id\")\n    .wait(Duration::from_secs(300))\n    .await;\n```\n",
@@ -192,7 +79,7 @@
         "smithy-rs#3569"
       ],
       "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
-      "age": 2
+      "age": 4
     },
     {
       "message": "SDK crates now set the `rust-version` property in their Cargo.toml files to indicate the minimum supported Rust version.",
@@ -206,7 +93,7 @@
         "smithy-rs#3601"
       ],
       "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
-      "age": 2
+      "age": 4
     },
     {
       "message": "`aws_config::default_provider::use_dual_stack_provider` is now public instead of `pub(crate)`",
@@ -221,7 +108,7 @@
         "smithy-rs#3611"
       ],
       "since-commit": "d7be22025857da5d21a0a1c8f5753fcf48e8d0ac",
-      "age": 2
+      "age": 4
     },
     {
       "message": "`aws-config::loader::ConfigLoader` now creates an `IdentityCache` by default when using `BehaviorVersion::v2024_03_28()`\nor newer. If you're using `BehaviorVersion::latest()`, you will get this change automatically when updating. This\nallows clients created from `SdkConfig` to use the same cache instance by default resulting in fewer cache misses\nwhen using multiple clients.\n",
@@ -235,7 +122,7 @@
         "smithy-rs#3427"
       ],
       "since-commit": "51429ad43da1b62013535aab643c24530f3e44bd",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`. Updating your SDK is not necessary, this change will happen when a new version of the client libraries are consumed.",
@@ -249,6 +136,113 @@
         "smithy-rs#3527"
       ],
       "since-commit": "51429ad43da1b62013535aab643c24530f3e44bd",
+      "age": 3
+    },
+    {
+      "message": "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "aws-sdk-rust#1133"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "aws-sdk-rust#1079"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": [
+        "aajtodd",
+        "Velfi"
+      ],
+      "references": [
+        "aws-sdk-rust#1141",
+        "aws-sdk-rust#1146",
+        "aws-sdk-rust#1148"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#3645"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Update MSRV to `1.76.0`",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#3653"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Compression is now supported for operations modeled with the `@requestCompression` trait.\n\n[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#2891"
+      ],
+      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
+      "age": 2
+    },
+    {
+      "message": "Fix the Content-Length enforcement so it is only applied to GET requests.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": [
+        "rcoh",
+        "Velfi"
+      ],
+      "references": [
+        "smithy-rs#3656",
+        "smithy-rs#3657"
+      ],
+      "since-commit": "db89652d8c11cd2a2da8e887fac8b34393c182fe",
       "age": 1
     }
   ],

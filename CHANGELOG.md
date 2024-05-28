@@ -1,4 +1,24 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 22nd, 2024
+==============
+**New this release:**
+- :bug: (client, [smithy-rs#3656](https://github.com/smithy-lang/smithy-rs/issues/3656), [smithy-rs#3657](https://github.com/smithy-lang/smithy-rs/issues/3657)) Fix the Content-Length enforcement so it is only applied to GET requests.
+
+
+May 21st, 2024
+==============
+**Breaking Changes:**
+- :warning::tada: (all, [smithy-rs#3653](https://github.com/smithy-lang/smithy-rs/issues/3653)) Update MSRV to `1.76.0`
+
+**New this release:**
+- :tada: (client, [smithy-rs#2891](https://github.com/smithy-lang/smithy-rs/issues/2891)) Compression is now supported for operations modeled with the `@requestCompression` trait.
+
+    [**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
+- :bug: (client, [aws-sdk-rust#1133](https://github.com/awslabs/aws-sdk-rust/issues/1133)) Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float.
+- :bug: (all, [smithy-rs#3491](https://github.com/smithy-lang/smithy-rs/issues/3491), [aws-sdk-rust#1079](https://github.com/awslabs/aws-sdk-rust/issues/1079)) Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur.
+- :bug: (all, [aws-sdk-rust#1141](https://github.com/awslabs/aws-sdk-rust/issues/1141), [aws-sdk-rust#1146](https://github.com/awslabs/aws-sdk-rust/issues/1146), [aws-sdk-rust#1148](https://github.com/awslabs/aws-sdk-rust/issues/1148)) Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read.
+
+
 May 8th, 2024
 =============
 **Breaking Changes:**

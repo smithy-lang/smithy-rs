@@ -592,21 +592,6 @@ class DefaultProtocolTestGenerator(
 
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
-        private val DisableTests =
-            setOf<String>(
-                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
-                "SDKAppendedGzipAfterProvidedEncoding_restJson1",
-                "SDKAppendedGzipAfterProvidedEncoding_restXml",
-                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",
-                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_1",
-                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsQuery",
-                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_ec2Query",
-                "SDKAppliedContentEncoding_awsJson1_0",
-                "SDKAppliedContentEncoding_awsJson1_1",
-                "SDKAppliedContentEncoding_awsQuery",
-                "SDKAppliedContentEncoding_ec2Query",
-                "SDKAppliedContentEncoding_restJson1",
-                "SDKAppliedContentEncoding_restXml",
-            )
+        private val DisableTests: Set<String> = setOf()
     }
 }

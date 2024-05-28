@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.traits.IncompatibleWithStalledStreamProtectionTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -34,7 +35,7 @@ class StalledStreamProtectionDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        return baseCustomizations + StalledStreamProtectionOperationCustomization(codegenContext)
+        return baseCustomizations + StalledStreamProtectionOperationCustomization(codegenContext, operation)
     }
 }
 
@@ -99,7 +100,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
             is ServiceConfig.BuilderFromConfigBag ->
                 writable {
                     rustTemplate(
-                        "${section.builder}.set_stalled_stream_protection(${section.config_bag}.load::<#{StalledStreamProtectionConfig}>().cloned());",
+                        "${section.builder}.set_stalled_stream_protection(${section.configBag}.load::<#{StalledStreamProtectionConfig}>().cloned());",
                         *codegenScope,
                     )
                 }
@@ -111,11 +112,17 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
 
 class StalledStreamProtectionOperationCustomization(
     codegenContext: ClientCodegenContext,
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val rc = codegenContext.runtimeConfig
 
     override fun section(section: OperationSection): Writable =
         writable {
+            // Don't add the stalled stream protection interceptor if the operation is incompatible with it
+            if (operationShape.hasTrait(IncompatibleWithStalledStreamProtectionTrait.ID)) {
+                return@writable
+            }
+
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
                     val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
