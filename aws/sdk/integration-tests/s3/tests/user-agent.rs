@@ -11,8 +11,6 @@ use aws_smithy_runtime::client::http::test_util::capture_request;
 
 #[tokio::test]
 async fn user_agent_app_name() {
-    tracing_subscriber::fmt::init();
-
     let (http_client, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
@@ -42,8 +40,6 @@ async fn user_agent_app_name() {
 
 #[tokio::test]
 async fn user_agent_http_client() {
-    tracing_subscriber::fmt::init();
-
     let (http_client, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))

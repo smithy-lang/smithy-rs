@@ -16,7 +16,6 @@ crypto-aws-lc-fips = ["rustls/fips"]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 aws-smithy-runtime-api = { features = ["client", "http-1x"], path = "../aws-smithy-runtime-api" }
 aws-smithy-async = { path = "../aws-smithy-async" }
-# Whenever you update this, be sure to update the `HttpClient::connector_metadata` impl for `HyperClient`.
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 pin-project-lite = "0.2.13"
 hyper-util = "0.1.3"
