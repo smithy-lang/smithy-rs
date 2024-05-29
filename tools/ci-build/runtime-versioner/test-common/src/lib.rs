@@ -37,6 +37,18 @@ impl TestBase {
                 .success(),
             "untarring the test_base into the temp directory failed"
         );
+        // ensure unpacked file has the current user assigned to the owner,
+        // otherwise we could get the `fatal: detected dubious ownership in repository` error
+        let test_repo = Utf8PathBuf::try_from(tmp.path().join("test_base.git")).unwrap();
+        assert!(
+            Command::new("chown")
+                .args(&[&format!("{}", whoami::username()), test_repo.as_str(),])
+                .current_dir(tmp.path())
+                .status()
+                .unwrap()
+                .success(),
+            "setting the owner of `test_base.git` to the current user failed"
+        );
         assert!(
             Command::new("git")
                 .args(["clone", "test_base.git"])
