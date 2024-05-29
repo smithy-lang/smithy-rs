@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.5.4"
+version = "1.5.5"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -46,6 +46,7 @@ indexmap = { version = "2", optional = true, features = ["serde"] }
 tokio = { version = "1.25", features = [] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", optional = true, features = ["env-filter", "fmt", "json"] }
+uuid = "1"
 
 [dev-dependencies]
 approx = "0.5.1"

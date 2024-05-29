@@ -139,6 +139,11 @@ pub async fn invoke_with_stop_point(
     runtime_plugins: &RuntimePlugins,
     stop_point: StopPoint,
 ) -> Result<InterceptorContext, SdkError<Error, HttpResponse>> {
+    let mut random_bytes = [0u8; 16];
+    fastrand::Rng::default().fill(&mut random_bytes);
+    // This is for internal use only, serving to correlate logs to a single operation.
+    // It always emits a random UUID per client and is currently not configurable.
+    let id = uuid::Builder::from_random_bytes(random_bytes).into_uuid();
     async move {
         let mut cfg = ConfigBag::base();
         let cfg = &mut cfg;
@@ -168,7 +173,7 @@ pub async fn invoke_with_stop_point(
         .maybe_timeout(operation_timeout_config)
         .await
     }
-    .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name))
+    .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name, sdk_invocation_id = %id))
     .await
 }
 
