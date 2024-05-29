@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{mem, ops::RangeInclusive, str::FromStr};
+use std::{cmp, mem, ops::RangeInclusive, str::FromStr};
 
 use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
 use aws_smithy_types::{
@@ -69,6 +69,8 @@ impl ObjectDiscoveryStrategy {
     }
 }
 
+/// Discover metadata about an object returning the metadata, the remaining range of data
+/// to be fetched, and (if available) the first chunk of data.
 pub(super) async fn discover_obj(
     handle: &DownloadHandle,
     request: &DownloadRequest,
@@ -84,9 +86,10 @@ pub(super) async fn discover_obj(
         }
         ObjectDiscoveryStrategy::RangedGet(range) => {
             let byte_range = match range.as_ref() {
-                Some(r) => {
-                    ByteRange::Inclusive(*r.start(), *r.start() + handle.target_part_size - 1)
-                }
+                Some(r) => ByteRange::Inclusive(
+                    *r.start(),
+                    cmp::min(*r.start() + handle.target_part_size - 1, *r.end()),
+                ),
                 None => ByteRange::Inclusive(0, handle.target_part_size - 1),
             };
             let r = request
@@ -155,10 +158,9 @@ async fn discover_obj_with_get(
 
     let meta: ObjectMetadata = resp.into();
 
-    // TODO - check content size matches range
     let remaining = match range {
-        Some(range) => (*range.start() + data.remaining() as u64 + 1)..=*range.end(),
-        None => (data.remaining() as u64)..=meta.total_size(),
+        Some(range) => (*range.start() + data.remaining() as u64)..=*range.end(),
+        None => (data.remaining() as u64)..=meta.total_size() - 1,
     };
 
     Ok(ObjectDiscovery {
@@ -170,8 +172,6 @@ async fn discover_obj_with_get(
 
 #[cfg(test)]
 mod tests {
-    use std::ops::RangeInclusive;
-
     use crate::{
         download::{
             discovery::{
@@ -192,6 +192,7 @@ mod tests {
     };
     use aws_smithy_mocks_experimental::{mock, mock_client};
     use aws_smithy_types::byte_stream::ByteStream;
+    use bytes::Buf;
 
     use super::ObjectDiscovery;
 
@@ -203,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn test_stategy_from_req() {
+    fn test_strategy_from_req() {
         assert_eq!(
             ObjectDiscoveryStrategy::RangedGet(None),
             strategy_from_range(None)
@@ -273,7 +274,7 @@ mod tests {
             .match_requests(|r| r.range() == Some("bytes=0-499"))
             .then_output(|| {
                 GetObjectOutput::builder()
-                    .content_length(700)
+                    .content_length(500)
                     .content_range("0-499/700")
                     .body(ByteStream::from_static(bytes))
                     .build()
@@ -291,8 +292,46 @@ mod tests {
             .into();
 
         let discovery = discover_obj(&handle, &request).await.unwrap();
-        assert_eq!(500..=700, discovery.remaining);
+        assert_eq!(200, discovery.remaining.clone().count());
+        assert_eq!(500..=699, discovery.remaining);
+        assert_eq!(
+            500,
+            discovery.initial_chunk.expect("initial chunk").remaining()
+        );
     }
 
-    // FIXME - leftoff needing to test sub range (should cover part size with remainging and without)
+    #[tokio::test]
+    async fn test_discover_obj_with_get_partial_range() {
+        let target_part_size = 100;
+        let bytes = &[0u8; 100];
+        let get_obj_rule = mock!(Client::get_object)
+            .match_requests(|r| r.range() == Some("bytes=200-299"))
+            .then_output(|| {
+                GetObjectOutput::builder()
+                    .content_length(100)
+                    .content_range("200-299/700")
+                    .body(ByteStream::from_static(bytes))
+                    .build()
+            });
+        let client = mock_client!(aws_sdk_s3, &[&get_obj_rule]);
+
+        let handle = DownloadHandle {
+            client,
+            target_part_size,
+        };
+
+        let request = GetObjectInput::builder()
+            .bucket("test-bucket")
+            .key("test-key")
+            .range("bytes=200-499")
+            .into();
+
+        let discovery = discover_obj(&handle, &request).await.unwrap();
+        assert_eq!(200, discovery.remaining.clone().count());
+        assert_eq!(300..=499, discovery.remaining);
+        assert_eq!(
+            100,
+            discovery.initial_chunk.expect("initial chunk").remaining()
+        );
+    }
 }
