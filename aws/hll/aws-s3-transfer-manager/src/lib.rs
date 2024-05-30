@@ -14,7 +14,8 @@
 //! - `test-util`: Enables utilities for unit tests. DO NOT ENABLE IN PRODUCTION.
 
 #![warn(
-    // TODO - re-enable missing_docs,
+    missing_debug_implementations,
+    missing_docs,
     rustdoc::missing_crate_level_docs,
     unreachable_pub,
     rust_2018_idioms

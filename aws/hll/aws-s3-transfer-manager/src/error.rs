@@ -15,6 +15,7 @@ pub enum TransferError {
     #[error("invalid meta request: {0}")]
     InvalidMetaRequest(String),
 
+    /// A download failed
     #[error("download failed")]
     DownloadFailed(#[from] DownloadError),
 }
@@ -28,26 +29,34 @@ pub(crate) type HeadObjectSdkError = ::aws_smithy_runtime_api::client::result::S
     ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
 >;
 
+/// An error related to downloading an object
 #[derive(thiserror::Error, Debug)]
 pub enum DownloadError {
+    /// Discovery of object metadata failed
     #[error(transparent)]
     DiscoverFailed(SdkOperationError),
 
+    /// A failure occurred fetching a single chunk of the overall object data
     #[error("download chunk failed")]
     ChunkFailed { source: SdkOperationError },
 }
 
+/// An underlying S3 SDK error
 #[derive(thiserror::Error, Debug)]
 pub enum SdkOperationError {
+    /// An error occurred invoking [aws_sdk_s3::Client::head_object]
     #[error(transparent)]
     HeadObject(#[from] HeadObjectSdkError),
 
+    /// An error occurred invoking [aws_sdk_s3::Client::get_object]
     #[error(transparent)]
     GetObject(#[from] GetObjectSdkError),
 
+    /// An error occurred reading the underlying data
     #[error(transparent)]
     ReadError(#[from] byte_stream::error::Error),
 
+    /// An unknown IO error occurred carrying out the request
     #[error(transparent)]
     IoError(#[from] io::Error),
 }

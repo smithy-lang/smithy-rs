@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::operation::{get_object::GetObjectOutput, head_object::HeadObjectOutput};
+use aws_sdk_s3::operation::get_object::GetObjectOutput;
+use aws_sdk_s3::operation::head_object::HeadObjectOutput;
 
-// TODO(design): how many of these fields should we expose?
-// TODO(docs): Document fields
+// TODO(aws-sdk-rust#1159,design): how many of these fields should we expose?
+// TODO(aws-sdk-rust#1159,docs): Document fields
 
 /// Object metadata other than the body that can be set from either `GetObject` or `HeadObject`
 #[derive(Debug, Clone)]

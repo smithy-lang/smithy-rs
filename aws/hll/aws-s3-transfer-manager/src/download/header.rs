@@ -45,7 +45,7 @@ impl FromStr for Range {
         match (iter.next(), iter.next()) {
             (Some("bytes"), Some(range)) => {
                 if range.contains(',') {
-                    // TODO - error S3 doesn't support multiple byte ranges
+                    // TODO(aws-sdk-rust#1159) - error S3 doesn't support multiple byte ranges
                     Err(error::invalid_meta_request(format!(
                         "multiple byte ranges not supported for range header {}",
                         s

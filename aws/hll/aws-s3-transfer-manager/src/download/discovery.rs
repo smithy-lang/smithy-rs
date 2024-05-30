@@ -3,23 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{cmp, mem, ops::RangeInclusive, str::FromStr};
+use std::ops::RangeInclusive;
+use std::str::FromStr;
+use std::{cmp, mem};
 
 use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
-use aws_smithy_types::{
-    body::SdkBody,
-    byte_stream::{AggregatedBytes, ByteStream},
-};
+use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream};
 use bytes::Buf;
 
 use crate::error;
 
-use super::{
-    handle::DownloadHandle,
-    header::{self, ByteRange},
-    object_meta::ObjectMetadata,
-    DownloadRequest,
-};
+use super::handle::DownloadHandle;
+use super::header::{self, ByteRange};
+use super::object_meta::ObjectMetadata;
+use super::DownloadRequest;
 
 #[derive(Debug, Clone, PartialEq)]
 enum ObjectDiscoveryStrategy {
@@ -57,7 +55,7 @@ impl ObjectDiscoveryStrategy {
                     ByteRange::Inclusive(start, end) => {
                         ObjectDiscoveryStrategy::RangedGet(Some(start..=end))
                     }
-                    // TODO: explore when given a start range what it would like to just start
+                    // TODO(aws-sdk-rust#1159): explore when given a start range what it would like to just start
                     // sending requests from [start, start+part_size]
                     _ => ObjectDiscoveryStrategy::HeadObject(Some(byte_range)),
                 }
@@ -69,8 +67,10 @@ impl ObjectDiscoveryStrategy {
     }
 }
 
-/// Discover metadata about an object returning the metadata, the remaining range of data
-/// to be fetched, and (if available) the first chunk of data.
+/// Discover metadata about an object.
+///
+///Returns object metadata, the remaining range of data
+/// to be fetched, and _(if available)_ the first chunk of data.
 pub(super) async fn discover_obj(
     handle: &DownloadHandle,
     request: &DownloadRequest,
@@ -142,7 +142,7 @@ async fn discover_obj_with_get(
     let resp = request.send_with(&handle.client).await;
 
     if resp.is_err() {
-        // TODO - deal with empty file errors, see https://github.com/awslabs/aws-c-s3/blob/v0.5.7/source/s3_auto_ranged_get.c#L147-L153
+        // TODO(aws-sdk-rust#1159) - deal with empty file errors, see https://github.com/awslabs/aws-c-s3/blob/v0.5.7/source/s3_auto_ranged_get.c#L147-L153
     }
 
     let mut resp = resp.map_err(|e| error::DownloadError::DiscoverFailed(e.into()))?;
@@ -172,24 +172,15 @@ async fn discover_obj_with_get(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        download::{
-            discovery::{
-                discover_obj, discover_obj_with_get, discover_obj_with_head,
-                ObjectDiscoveryStrategy,
-            },
-            handle::DownloadHandle,
-            header::ByteRange,
-        },
-        MIN_PART_SIZE,
+    use crate::download::discovery::{
+        discover_obj, discover_obj_with_get, discover_obj_with_head, ObjectDiscoveryStrategy,
     };
-    use aws_sdk_s3::{
-        operation::{
-            get_object::{GetObjectInput, GetObjectOutput},
-            head_object::HeadObjectOutput,
-        },
-        Client,
-    };
+    use crate::download::handle::DownloadHandle;
+    use crate::download::header::ByteRange;
+    use crate::MIN_PART_SIZE;
+    use aws_sdk_s3::operation::get_object::{GetObjectInput, GetObjectOutput};
+    use aws_sdk_s3::operation::head_object::HeadObjectOutput;
+    use aws_sdk_s3::Client;
     use aws_smithy_mocks_experimental::{mock, mock_client};
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::Buf;

@@ -12,6 +12,9 @@ use aws_sdk_s3::operation::get_object::builders::{GetObjectFluentBuilder, GetObj
 
 use self::object_meta::ObjectMetadata;
 
+/// Request type for downloading a single object
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct DownloadRequest {
     pub(crate) input: GetObjectInputBuilder,
 }
@@ -31,8 +34,17 @@ impl From<GetObjectInputBuilder> for DownloadRequest {
     }
 }
 
-// FIXME - expose common fields?
+/// Response type for a single download object request.
+#[derive(Debug)]
+#[non_exhaustive]
 pub struct DownloadResponse {
     /// Object metadata
     pub object_meta: ObjectMetadata,
+}
+
+impl DownloadResponse {
+    /// Object metadata
+    pub fn object_meta(&self) -> &ObjectMetadata {
+        &self.object_meta
+    }
 }
