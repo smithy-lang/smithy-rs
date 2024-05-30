@@ -538,11 +538,14 @@ fun RustCrate.integrationTest(
     writable: Writable,
 ) = this.withFile("tests/$name.rs", writable)
 
-fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
+fun TestWriterDelegator.unitTest(
+    additionalAttributes: List<Attribute> = emptyList(),
+    test: Writable,
+): TestWriterDelegator {
     lib {
         val name = safeName("test")
         withInlineModule(RustModule.inlineTests(name), TestModuleDocProvider) {
-            unitTest(name) {
+            unitTest(name, additionalAttributes = additionalAttributes) {
                 test(this)
             }
         }

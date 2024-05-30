@@ -189,6 +189,12 @@ class BuilderGenerator(
         metadata.derives.filter {
             it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
         } + RuntimeType.Default
+
+    // Filter out attributes
+    private val builderAttributes =
+        metadata.additionalAttributes.filter {
+            it == Attribute.NonExhaustive
+        }
     private val builderName = symbolProvider.symbolForBuilder(shape).name
 
     fun render(writer: RustWriter) {
@@ -306,8 +312,8 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
-        metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
+        this.builderAttributes.render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
