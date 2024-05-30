@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+ [[aws-sdk-rust]]
+ message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
+ references = ["smithy-rs#1925", "smithy-rs#3673"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false }
+ author = "Velfi"
+
+ [[smithy-rs]]
+ message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
+ references = ["smithy-rs#1925", "smithy-rs#3673"]
+ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+ author = "Velfi"
