@@ -12,7 +12,10 @@ use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 
-#[cfg(feature = "http-body-0-4-x")]
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/1925)
+//     Feature gating this now would break the
+//     `cargo check --no-default-features --features rt-tokio` test.
+// #[cfg(feature = "http-body-0-4-x")]
 mod http_body_0_4_x;
 
 #[cfg(feature = "http-body-1-x")]
