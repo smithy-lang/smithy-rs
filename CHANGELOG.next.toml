@@ -16,3 +16,8 @@ message = "Reduce verbosity of various debug logs"
 references = ["smithy-rs#3664"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "landonxjames"
+
+[[aws-smithy-runtime]]
+message = "Enable aws-smithy-runtime to compile in rustc 1.72.1"
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "dastrom"
