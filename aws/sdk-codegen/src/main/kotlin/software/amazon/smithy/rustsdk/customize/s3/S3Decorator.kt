@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.client.smithy.traits.IncompatibleWithStalledStreamProtectionTrait
+import software.amazon.smithy.rust.codegen.client.smithy.traits.IsTruncatedPaginatorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -64,6 +65,7 @@ class S3Decorator : ClientCodegenDecorator {
         setOf(
             ShapeId.from("com.amazonaws.s3#CopyObject"),
         )
+    private val operationsWithIsTruncatedPaginator = setOf(ShapeId.from("com.amazonaws.s3#ListPartsOutput"))
 
     override fun protocols(
         serviceId: ShapeId,
@@ -89,6 +91,9 @@ class S3Decorator : ClientCodegenDecorator {
             }.letIf(operationsIncompatibleWithStalledStreamProtection.contains(shape.id)) {
                 logger.info("Adding IncompatibleWithStalledStreamProtection trait to $it")
                 (it as OperationShape).toBuilder().addTrait(IncompatibleWithStalledStreamProtectionTrait()).build()
+            }.letIf(isInIsTruncatedList(shape)) {
+                logger.info("Adding IsTruncatedPaginator trait to $it")
+                (it as StructureShape).toBuilder().addTrait(IsTruncatedPaginatorTrait()).build()
             }
         }
             // the model has the bucket in the path
@@ -155,6 +160,7 @@ class S3Decorator : ClientCodegenDecorator {
                                     )
                                 }
                             }
+
                             else -> {}
                         }
                     }
@@ -164,6 +170,10 @@ class S3Decorator : ClientCodegenDecorator {
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
+
+    private fun isInIsTruncatedList(shape: Shape): Boolean {
+        return shape.isStructureShape && operationsWithIsTruncatedPaginator.contains(shape.id)
     }
 }
 
