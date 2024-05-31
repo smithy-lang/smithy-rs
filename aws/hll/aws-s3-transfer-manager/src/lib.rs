@@ -21,9 +21,9 @@
     rust_2018_idioms
 )]
 
-pub(crate) const MEBI_BYTE: u64 = 1024 * 1024;
-pub(crate) const GIBI_BYTE: u64 = MEBI_BYTE * 1024;
-pub(crate) const MIN_PART_SIZE: u64 = 5 * MEBI_BYTE;
+pub(crate) const MEBIBYTE: u64 = 1024 * 1024;
+pub(crate) const GIBIBYTE: u64 = MEBIBYTE * 1024;
+pub(crate) const MIN_PART_SIZE: u64 = 5 * MEBIBYTE;
 
 pub mod download;
 pub mod error;
