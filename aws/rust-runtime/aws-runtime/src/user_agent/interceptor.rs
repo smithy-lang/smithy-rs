@@ -18,7 +18,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
 
-use crate::user_agent::{ApiMetadata, AwsUserAgent, FrameworkMetadata, InvalidMetadataValue};
+use crate::user_agent::{AdditionalMetadata, ApiMetadata, AwsUserAgent, InvalidMetadataValue};
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
@@ -117,11 +117,8 @@ impl Intercept for UserAgentInterceptor {
                     .http_client()
                     .and_then(|c| c.connector_metadata());
                 if let Some(connector_metadata) = maybe_connector_metadata {
-                    let fm = FrameworkMetadata::new(
-                        connector_metadata.name(),
-                        connector_metadata.version(),
-                    )?;
-                    ua.add_framework_metadata(fm);
+                    let am = AdditionalMetadata::new(Cow::Owned(connector_metadata.to_string()))?;
+                    ua.add_additional_metadata(am);
                 }
 
                 Ok(Cow::Owned(ua))

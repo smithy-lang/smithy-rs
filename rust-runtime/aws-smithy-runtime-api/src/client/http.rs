@@ -169,9 +169,9 @@ pub trait HttpClient: Send + Sync + fmt::Debug {
 
     /// Provide metadata about the crate that this HttpClient uses to make connectors.
     ///
-    /// If this is implemented and returns metadata, that metadata will be
-    /// inserted into the user agent string when making a request with this
-    /// client.
+    /// If this is implemented and returns metadata, interceptors may inspect it
+    /// for the purpose of inserting that data into the user agent string when
+    /// making a request with this client.
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
         None
     }

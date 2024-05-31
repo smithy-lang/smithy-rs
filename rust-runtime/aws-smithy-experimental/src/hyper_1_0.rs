@@ -31,6 +31,7 @@ use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::Connect;
 use hyper_util::rt::TokioExecutor;
 use rustls::crypto::CryptoProvider;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::future::Future;
@@ -616,7 +617,7 @@ where
     }
 
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
-        Some(ConnectorMetadata::new("hyper-1", None))
+        Some(ConnectorMetadata::new("hyper", Some(Cow::Borrowed("1.x"))))
     }
 }
 

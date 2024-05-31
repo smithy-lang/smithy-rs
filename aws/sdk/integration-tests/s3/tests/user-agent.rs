@@ -61,7 +61,7 @@ async fn user_agent_http_client() {
     )
     .unwrap();
     assert!(
-        formatted.contains("lib/capture-request-handler"),
+        formatted.contains("md/capture-request-handler"),
         "'{}' didn't include connector metadata",
         formatted
     );

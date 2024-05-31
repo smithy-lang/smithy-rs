@@ -6,6 +6,7 @@
 //! New-type for a configurable app name.
 
 use std::borrow::Cow;
+use std::fmt;
 
 /// The name of the crate that provides the HTTP connectors and its version.
 ///
@@ -34,5 +35,16 @@ impl ConnectorMetadata {
     /// Return the version of the crate backing a connector.
     pub fn version(&self) -> Option<Cow<'static, str>> {
         self.version.clone()
+    }
+}
+
+impl fmt::Display for ConnectorMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(version) = self.version.as_deref() {
+            write!(f, "-{}", version)?;
+        }
+
+        Ok(())
     }
 }

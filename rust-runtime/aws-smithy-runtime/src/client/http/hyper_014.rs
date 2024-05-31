@@ -28,6 +28,7 @@ use h2::Reason;
 use http::{Extensions, Uri};
 use hyper_0_14::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
 use hyper_0_14::service::Service;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -491,7 +492,7 @@ where
     }
 
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
-        Some(ConnectorMetadata::new("hyper-0", None))
+        Some(ConnectorMetadata::new("hyper", Some(Cow::Borrowed("0.x"))))
     }
 }
 
