@@ -31,7 +31,6 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
@@ -442,7 +441,7 @@ tasks["assemble"].apply {
     outputs.upToDateWhen { false }
 }
 
-project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(outputDir.asFile)
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
 //The task name "test" is already registered by one of our plugins

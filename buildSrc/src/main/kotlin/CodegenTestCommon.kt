@@ -205,13 +205,15 @@ fun Project.registerGenerateCargoWorkspaceTask(
 fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1068): Once doc normalization
+        // is completed, warnings can be prohibited in rustdoc by setting `rustdocflags` to `-D warnings`.
         doFirst {
             outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """
                     [build]
-                    rustflags = ["--deny", "warnings"]
+                    rustflags = ["--deny", "warnings", "--cfg", "aws_sdk_unstable"]
                     """.trimIndent(),
                 )
         }
@@ -255,10 +257,7 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(
-    outputDir: File,
-    defaultRustDocFlags: String,
-) {
+fun Project.registerCargoCommandsTasks(outputDir: File) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -269,29 +268,24 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTDOCFLAGS", defaultRustDocFlags)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
     }
 }
