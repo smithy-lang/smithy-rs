@@ -22,3 +22,9 @@
  references = ["smithy-rs#1925", "smithy-rs#3673"]
  meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
  author = "Velfi"
+
+[[smithy-rs]]
+message = "Reduce verbosity of various debug logs"
+references = ["smithy-rs#3664"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
