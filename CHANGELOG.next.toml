@@ -28,3 +28,15 @@ message = "Enable aws-smithy-runtime to compile in rustc 1.72.1"
 references = ["smithy-rs#3675"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "dastrom"
+
+[[aws-sdk-rust]]
+message = "Fix S3 ListParts API paginator infinite loop."
+references = ["aws-sdk-rust#1143"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Fix S3 ListParts API paginator infinite loop."
+references = ["aws-sdk-rust#1143"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "landonxjames"
