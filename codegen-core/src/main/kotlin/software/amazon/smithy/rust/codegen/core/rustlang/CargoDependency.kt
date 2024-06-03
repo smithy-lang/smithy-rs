@@ -320,7 +320,7 @@ data class CargoDependency(
         val TracingTest: CargoDependency =
             CargoDependency(
                 "tracing-test",
-                CratesIo("0.2.4"),
+                CratesIo("0.2.5"),
                 DependencyScope.Dev,
                 features = setOf("no-env-filter"),
             )
