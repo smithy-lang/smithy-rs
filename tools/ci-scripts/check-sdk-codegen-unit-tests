@@ -6,5 +6,4 @@
 
 set -eux
 cd smithy-rs
-rm -rf ~/.cargo/registry/cache/
 ./gradlew aws:sdk-codegen:test
