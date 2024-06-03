@@ -27,7 +27,7 @@ hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-c
 [dev-dependencies]
 http = "0.2.4"
 tempfile = "3"
-tracing-test = "0.2.5"
+tracing-test = "=0.2.5"
 tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
