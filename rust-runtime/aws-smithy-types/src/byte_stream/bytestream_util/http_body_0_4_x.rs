@@ -119,9 +119,9 @@ mod test {
         // assert that the specified length is used as size hint
         assert_eq!(body.content_length(), Some(file_length));
 
-        let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
+        let mut body = body.try_clone().expect("retryable bodies are cloneable");
         // read a little bit from one of the clones
-        let some_data = body1
+        let some_data = body
             .next()
             .await
             .expect("should have some data")
@@ -130,7 +130,7 @@ mod test {
         assert_eq!(some_data.len(), 16384);
 
         assert_eq!(
-            ByteStream::new(body1).collect().await.unwrap().remaining() as u64,
+            ByteStream::new(body).collect().await.unwrap().remaining() as u64,
             file_length - some_data.len() as u64
         );
     }
