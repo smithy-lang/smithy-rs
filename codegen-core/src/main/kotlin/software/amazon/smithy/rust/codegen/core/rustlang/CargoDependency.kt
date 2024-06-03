@@ -300,7 +300,7 @@ data class CargoDependency(
         val Tokio: CargoDependency =
             CargoDependency(
                 "tokio",
-                CratesIo("1.23.1"),
+                CratesIo("=1.37.0"),
                 DependencyScope.Dev,
                 features = setOf("macros", "test-util", "rt-multi-thread"),
             )
@@ -320,7 +320,7 @@ data class CargoDependency(
         val TracingTest: CargoDependency =
             CargoDependency(
                 "tracing-test",
-                CratesIo("0.2.4"),
+                CratesIo("0.2.5"),
                 DependencyScope.Dev,
                 features = setOf("no-env-filter"),
             )
