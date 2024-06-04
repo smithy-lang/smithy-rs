@@ -277,7 +277,7 @@ class CborParserGenerator(
             *codegenScope,
             "UnionSymbol" to returnSymbolToParse.symbol,
         ) {
-            withBlock("Ok(match decoder.str()? {", "})") {
+            withBlock("Ok(match decoder.str()?.as_ref() {", "})") {
                 for (member in shape.members()) {
                     val variantName = symbolProvider.toMemberName(member)
 

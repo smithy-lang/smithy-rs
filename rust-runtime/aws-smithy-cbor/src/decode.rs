@@ -63,7 +63,6 @@ impl DeserializeError {
     }
 }
 
-
 /// Macro for delegating method calls to the decoder.
 ///
 /// This macro generates wrapper methods for calling specific encoder methods on the decoder
@@ -133,8 +132,8 @@ impl<'b> Decoder<'b> {
         self.decoder.position()
     }
 
-    /// Returns a `cow::Borrowed(&str)` if the element at the current position in the buffer is a definite
-    /// length string. Otherwise, it returns a `cow::Owned(String)` if the element at the current position is an
+    /// Returns a `Cow::Borrowed(&str)` if the element at the current position in the buffer is a definite
+    /// length string. Otherwise, it returns a `Cow::Owned(String)` if the element at the current position is an
     /// indefinite-length string. An error is returned if the element is neither a definite length nor an
     /// indefinite-length string.
     pub fn str(&mut self) -> Result<Cow<'b, str>, DeserializeError> {
@@ -143,7 +142,7 @@ impl<'b> Decoder<'b> {
             Ok(str_value) => Ok(Cow::Borrowed(str_value)),
             Err(e) if e.is_type_mismatch() => {
                 // Move the position back to the start of the CBOR element and then try
-                // decoding it as a indefinite length string.
+                // decoding it as an indefinite length string.
                 self.decoder.set_position(bookmark);
                 Ok(Cow::Owned(self.string()?))
             }

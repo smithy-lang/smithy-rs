@@ -1,13 +1,13 @@
 $version: "2.0"
 
-// TODO Update namespace
-namespace com.amazonaws.simple
+namespace smithy.protocoltests.rpcv2Cbor
 
 use smithy.framework#ValidationException
-use smithy.protocols#rpcv2
+use smithy.protocols#rpcv2Cbor
 use smithy.test#httpResponseTests
 
-@rpcv2(format: ["cbor"])
+
+@rpcv2Cbor
 service RpcV2Service {
     operations: [
         SimpleStructOperation,
@@ -34,7 +34,7 @@ operation ComplexStructOperation {
 apply SimpleStructOperation @httpResponseTests([
     {
         id: "SimpleStruct",
-        protocol: "smithy.protocols#rpcv2",
+        protocol: "smithy.protocols#rpcv2Cbor",
         code: 200, // Not used.
         params: {
             blob: "blobby blob",
@@ -81,7 +81,7 @@ apply SimpleStructOperation @httpResponseTests([
     // Same test, but leave optional types empty
     {
         id: "SimpleStructWithOptionsSetToNone",
-        protocol: "smithy.protocols#rpcv2",
+        protocol: "smithy.protocols#rpcv2Cbor",
         code: 200, // Not used.
         params: {
             requiredBlob: "blobby blob",
@@ -150,7 +150,7 @@ structure ComplexStruct {
     map: SimpleMap
     union: SimpleUnion
 
-    structureList: StructureList
+    structureList: StructList
 
     // `@required` for good measure here.
     @required complexList: ComplexList
@@ -158,7 +158,7 @@ structure ComplexStruct {
     @required complexUnion: ComplexUnion
 }
 
-list StructureList {
+list StructList {
     member: SimpleStruct
 }
 
@@ -171,6 +171,7 @@ map SimpleMap {
     value: Integer
 }
 
+// TODO Cut ticket to Smithy: their protocol tests don't have unions
 union SimpleUnion {
     blob: Blob
     boolean: Boolean
@@ -203,4 +204,5 @@ enum Suit {
     SPADE
 }
 
+// TODO Documents are not supported in RPC v2 CBOR.
 // document MyDocument

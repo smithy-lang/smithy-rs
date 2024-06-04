@@ -46,16 +46,10 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
         // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
         CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
-        // Todo: change this to rpcv2extra
-        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2Extra", imports = listOf("$commonModels/rpcv2.smithy")),
         CodegenTest(
-            "aws.protocoltests.rpcv2#RpcV2Protocol",
-            "adwait-main",
-            imports = listOf(
-                "$commonModels/adwait-main.smithy",
-                "$commonModels/adwait-cbor-structs.smithy",
-                "$commonModels/adwait-empty-input-output.smithy",
-            )
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Service",
+            "rpcv2_extras",
+            imports = listOf("$commonModels/rpcv2-extras.smithy")
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
