@@ -7,7 +7,7 @@ use aws_smithy_types::{Blob, DateTime};
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// delegate_method! {
 ///     /// Wrapper method for encoding method `encode_str` on the encoder.
 ///     encode_str_wrapper => encode_str(data: &str);

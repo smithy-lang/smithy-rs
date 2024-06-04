@@ -52,13 +52,12 @@ fun toRustCrateName(input: String): String {
         "proc_macro"
     )
 
-    // Then within your function, you could include a check against this set
     if (input.isBlank()) {
         throw IllegalArgumentException("Rust crate name cannot be empty")
     }
     val lowerCased = input.lowercase()
-    // Replace any sequence of characters that are not lowercase letters, numbers, or underscores with a single underscore.
-    val sanitized = lowerCased.replace(Regex("[^a-z0-9_]+"), "_")
+    // Replace any sequence of characters that are not lowercase letters, numbers, dashes, or underscores with a single underscore.
+    val sanitized = lowerCased.replace(Regex("[^a-z0-9_-]+"), "_")
     // Trim leading or trailing underscores.
     val trimmed = sanitized.trim('_')
     // Check if the resulting string is empty, purely numeric, or a reserved name

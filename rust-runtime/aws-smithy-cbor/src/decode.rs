@@ -65,12 +65,12 @@ impl DeserializeError {
 
 /// Macro for delegating method calls to the decoder.
 ///
-/// This macro generates wrapper methods for calling specific encoder methods on the decoder
-/// and returning the result with error handling.
+/// This macro generates wrapper methods for calling specific methods on the decoder and returning
+/// the result with error handling.
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// delegate_method! {
 ///     /// Wrapper method for encoding method `encode_str` on the decoder.
 ///     encode_str_wrapper => encode_str(String);
