@@ -1,0 +1,8 @@
+allowed_external_types = [
+    "aws_sdk_s3::operation::get_object::builders::GetObjectFluentBuilder",
+    "aws_sdk_s3::operation::get_object::_get_object_input::GetObjectInputBuilder",
+    "aws_sdk_s3::operation::get_object::GetObjectError",
+    "aws_sdk_s3::operation::head_object::HeadObjectError",
+    "aws_smithy_runtime_api::*",
+    "aws_smithy_types::*",
+]
