@@ -58,8 +58,7 @@ impl FromStr for Range {
                 }
             }
             _ => Err(error::invalid_meta_request(format!(
-                "unsupported byte range header format {}; see https://www.rfc-editor.org/rfc/rfc9110.html#name-range for valid formats",
-                s
+                "unsupported byte range header format `{s}`; see https://www.rfc-editor.org/rfc/rfc9110.html#name-range for valid formats"
             ))),
         }
     }
