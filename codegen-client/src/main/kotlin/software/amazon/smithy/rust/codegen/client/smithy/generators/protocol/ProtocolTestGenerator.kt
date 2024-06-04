@@ -33,7 +33,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -173,13 +175,19 @@ class DefaultProtocolTestGenerator(
         }
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
+
         Attribute.TokioTest.render(testModuleWriter)
-        val action =
-            when (testCase) {
-                is HttpResponseTestCase -> Action.Response
-                is HttpRequestTestCase -> Action.Request
-                else -> throw CodegenException("unknown test case type")
-            }
+        Attribute.TracedTest.render(testModuleWriter)
+        // The `#[traced_test]` macro desugars to using `tracing`, so we need to depend on the latter explicitly in
+        // case the code rendered by the test does not make use of `tracing` at all.
+        val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
+        testModuleWriter.rustTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
+
+        val action = when (testCase) {
+            is HttpResponseTestCase -> Action.Response
+            is HttpRequestTestCase -> Action.Request
+            else -> throw CodegenException("unknown test case type")
+        }
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
@@ -415,8 +423,8 @@ class DefaultProtocolTestGenerator(
         if (body == "") {
             rustWriter.rustTemplate(
                 """
-                // No body
-                #{AssertEq}(::std::str::from_utf8(body).unwrap(), "");
+                // No body.
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )

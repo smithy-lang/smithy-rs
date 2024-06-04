@@ -16,7 +16,6 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-server-codegen"
@@ -25,6 +24,7 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 dependencies {
     implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
@@ -44,6 +44,19 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
+        CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
+        // Todo: change this to rpcv2extra
+        CodegenTest("com.amazonaws.simple#RpcV2Service", "rpcv2Extra", imports = listOf("$commonModels/rpcv2.smithy")),
+        CodegenTest(
+            "aws.protocoltests.rpcv2#RpcV2Protocol",
+            "adwait-main",
+            imports = listOf(
+                "$commonModels/adwait-main.smithy",
+                "$commonModels/adwait-cbor-structs.smithy",
+                "$commonModels/adwait-empty-input-output.smithy",
+            )
+        ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
             "constraints_without_public_constrained_types",
@@ -103,7 +116,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

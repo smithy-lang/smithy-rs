@@ -272,6 +272,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
+        // primitive types
+        val StaticStr = RuntimeType("&'static str")
+
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
         val Http = CargoDependency.Http.toType()
@@ -288,6 +291,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()
         val Regex = CargoDependency.Regex.toType()
+        val Serde= CargoDependency.Serde.toType()
+        val SerdeDeserialize = Serde.resolve("Deserialize")
+        val SerdeSerialize = Serde.resolve("Serialize")
         val RegexLite = CargoDependency.RegexLite.toType()
         val Tokio = CargoDependency.Tokio.toType()
         val TokioStream = CargoDependency.TokioStream.toType()
@@ -299,13 +305,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
-        // serde types. Gated behind `CfgUnstable`.
-        val Serde = CargoDependency.Serde.toType()
-        val SerdeSerialize = Serde.resolve("Serialize")
-        val SerdeDeserialize = Serde.resolve("Deserialize")
-
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
+
+        fun smithyCbor(runtimeConfig: RuntimeConfig) = CargoDependency.smithyCbor(runtimeConfig).toType()
 
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
 

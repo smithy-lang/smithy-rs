@@ -21,18 +21,27 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddTypeFieldToServerErrorsCborCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeEncodingMapOrCollectionCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
@@ -70,8 +79,8 @@ interface ServerProtocol : Protocol {
     fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
 
     /**
-     * In some protocols, such as restJson1,
-     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * In some protocols, such as restJson1 and rpcv2,
+     * when there is no modeled body input, `content-type` must not be set and the body must be empty.
      * Returns a boolean indicating whether to perform this check.
      */
     fun serverContentTypeCheckNoModeledInput(): Boolean = false
@@ -166,7 +175,10 @@ class ServerAwsJsonProtocol(
         rust("""String::from("$serviceName.$operationName")""")
     }
 
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.String
+    // TODO This could technically be `&static str` right?
+    override fun serverRouterRequestSpecType(
+        requestSpecModule: RuntimeType,
+    ): RuntimeType = RuntimeType.String
 
     override fun serverRouterRuntimeConstructor() =
         when (version) {
@@ -255,8 +267,8 @@ class ServerRestXmlProtocol(
 }
 
 /**
- * A customization to, just before we box a recursive member that we've deserialized into `Option<T>`, convert it into
- * `MaybeConstrained` if the target shape can reach a constrained shape.
+ * A customization to, just before we box a recursive member that we've deserialized from JSON into `Option<T>`, convert
+ * it into `MaybeConstrained` if the target shape can reach a constrained shape.
  */
 class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(val codegenContext: ServerCodegenContext) :
     JsonParserCustomization() {
@@ -275,4 +287,75 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
 
             else -> emptySection
         }
+}
+
+/**
+ * A customization to, just before we box a recursive member that we've deserialized from CBOR into `T` held in a
+ * variable binding `v`, convert it into `MaybeConstrained` if the target shape can reach a constrained shape.
+ */
+class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(val codegenContext: ServerCodegenContext) :
+    CborParserCustomization() {
+    override fun section(section: CborParserSection): Writable = when (section) {
+        is CborParserSection.BeforeBoxingDeserializedMember -> writable {
+            // We're only interested in _structure_ member shapes that can reach constrained shapes.
+            if (
+                codegenContext.model.expectShape(section.shape.container) is StructureShape &&
+                section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
+            ) {
+                rust("let v = v.into();")
+            }
+        }
+    }
+}
+
+class ServerRpcV2Protocol(
+    private val serverCodegenContext: ServerCodegenContext,
+) : RpcV2(serverCodegenContext), ServerProtocol {
+    val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolModulePath = "rpc_v2"
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        CborParserGenerator(
+            serverCodegenContext, httpBindingResolver, returnSymbolToParseFn(serverCodegenContext),
+            listOf(
+                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(
+                    serverCodegenContext,
+                ),
+            ),
+        )
+
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator {
+        return CborSerializerGenerator(
+            codegenContext,
+            httpBindingResolver,
+            listOf(
+                BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext),
+                AddTypeFieldToServerErrorsCborCustomization(),
+            ),
+        )
+    }
+
+    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2", "rpc_v2", runtimeConfig)
+
+    override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        .resolve("protocol::rpc_v2::router::RpcV2Router")
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ) = writable {
+        // This is just the key used by the router's map to store and lookup operations, it's completely arbitrary.
+        // We use the same key used by the awsJson1.x routers for simplicity.
+        rust("$serviceName.$operationName".dq())
+    }
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        RuntimeType.StaticStr
+
+    override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = false
 }

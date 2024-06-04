@@ -29,6 +29,49 @@ fun generateImports(imports: List<String>): String =
         "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
     }
 
+fun toRustCrateName(input: String): String {
+    val rustKeywords = setOf(
+        // Strict Keywords.
+        "as", "break", "const", "continue", "crate", "else", "enum", "extern",
+        "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod",
+        "move", "mut", "pub", "ref", "return", "Self", "self", "static", "struct",
+        "super", "trait", "true", "type", "unsafe", "use", "where", "while",
+
+        // Weak Keywords.
+        "dyn", "async", "await", "try",
+
+        // Reserved for Future Use.
+        "abstract", "become", "box", "do", "final", "macro", "override", "priv",
+        "typeof", "unsized", "virtual", "yield",
+
+        // Primitive Types.
+        "bool", "char", "i8", "i16", "i32", "i64", "i128", "isize",
+        "u8", "u16", "u32", "u64", "u128", "usize", "f32", "f64", "str",
+
+        // Additional significant identifiers.
+        "proc_macro"
+    )
+
+    // Then within your function, you could include a check against this set
+    if (input.isBlank()) {
+        throw IllegalArgumentException("Rust crate name cannot be empty")
+    }
+    val lowerCased = input.lowercase()
+    // Replace any sequence of characters that are not lowercase letters, numbers, or underscores with a single underscore.
+    val sanitized = lowerCased.replace(Regex("[^a-z0-9_]+"), "_")
+    // Trim leading or trailing underscores.
+    val trimmed = sanitized.trim('_')
+    // Check if the resulting string is empty, purely numeric, or a reserved name
+    val finalName = when {
+        trimmed.isEmpty() -> throw IllegalArgumentException("Rust crate name after sanitizing cannot be empty.")
+        trimmed.matches(Regex("\\d+")) -> "n$trimmed" // Prepend 'n' if the name is purely numeric.
+        trimmed in rustKeywords -> "${trimmed}_" // Append an underscore if the name is reserved.
+        else -> trimmed
+    }
+    return finalName
+}
+
+
 private fun generateSmithyBuild(
     projectDir: String,
     pluginName: String,
@@ -48,7 +91,7 @@ private fun generateSmithyBuild(
                             ${it.extraCodegenConfig ?: ""}
                         },
                         "service": "${it.service}",
-                        "module": "${it.module}",
+                        "module": "${toRustCrateName(it.module)}",
                         "moduleVersion": "0.0.1",
                         "moduleDescription": "test",
                         "moduleAuthors": ["protocoltest@example.com"]
@@ -205,13 +248,15 @@ fun Project.registerGenerateCargoWorkspaceTask(
 fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1068): Once doc normalization
+        // is completed, warnings can be prohibited in rustdoc by setting `rustdocflags` to `-D warnings`.
         doFirst {
             outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """
                     [build]
-                    rustflags = ["--deny", "warnings"]
+                    rustflags = ["--deny", "warnings", "--cfg", "aws_sdk_unstable"]
                     """.trimIndent(),
                 )
         }
@@ -255,10 +300,7 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(
-    outputDir: File,
-    defaultRustDocFlags: String,
-) {
+fun Project.registerCargoCommandsTasks(outputDir: File) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -269,29 +311,24 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTDOCFLAGS", defaultRustDocFlags)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
     }
 }

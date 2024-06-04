@@ -77,8 +77,6 @@ sealed class JsonParserSection(name: String) : Section(name) {
  */
 typealias JsonParserCustomization = NamedCustomization<JsonParserSection>
 
-data class ReturnSymbolToParse(val symbol: Symbol, val isUnconstrained: Boolean)
-
 class JsonParserGenerator(
     private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
@@ -447,7 +445,7 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
-        val keyTarget = model.expectShape(shape.key.target) as StringShape
+        val keyTarget = model.expectShape(shape.key.target, StringShape::class.java)
         val isSparse = shape.hasTrait<SparseTrait>()
         val returnSymbolToParse = returnSymbolToParse(shape)
         val parser =

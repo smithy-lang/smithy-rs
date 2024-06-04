@@ -26,6 +26,7 @@ dependencies {
     implementation(project(":codegen-core"))
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
 
     // `smithy.framework#ValidationException` is defined here, which is used in `constraints.smithy`, which is used
     // in `CustomValidationExceptionWithReasonDecoratorTest`.

@@ -8,8 +8,11 @@ members = [
     "pokemon-service-lambda",
     "pokemon-service-server-sdk",
     "pokemon-service-client",
+<<<<<<< HEAD
+=======
     "pokemon-service-client-usage",
 
+>>>>>>> release-2023-11-01
 ]
 
 [profile.release]

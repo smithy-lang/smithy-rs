@@ -38,6 +38,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -65,6 +66,8 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.math.BigDecimal
+import software.amazon.smithy.model.traits.DefaultTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -452,7 +455,7 @@ open class Instantiator(
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {
-            is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+            is MemberShape -> shape.getTrait<DefaultTrait>()?.toNode() ?: fillDefaultValue(model.expectShape(shape.target))
 
             // Aggregate shapes.
             is StructureShape -> Node.objectNode()
@@ -487,7 +490,9 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                     val fractionalPart = num.remainder(BigDecimal.ONE)
                     rust(
                         "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                        RuntimeType.dateTime(runtimeConfig),
+//                RuntimeType.dateTime(runtimeConfig),
+                        // TODO
+                        runtimeConfig.smithyRuntimeCrate("smithy-types", scope = DependencyScope.Dev).toType().resolve("DateTime"),
                     )
                 }
 
