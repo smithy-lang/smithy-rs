@@ -33,7 +33,7 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::V2024_06_05`]
+    /// The latest version is currently [`BehaviorVersion::v2024_06_05`]
     pub fn latest() -> Self {
         Self::v2024_06_05()
     }
