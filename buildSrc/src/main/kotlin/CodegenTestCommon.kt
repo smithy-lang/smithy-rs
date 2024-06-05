@@ -257,7 +257,10 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(outputDir: File, allowBrokenIntraDocLinks: Boolean = false) {
+fun Project.registerCargoCommandsTasks(
+    outputDir: File,
+    allowBrokenIntraDocLinks: Boolean = false,
+) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -280,10 +283,11 @@ fun Project.registerCargoCommandsTasks(outputDir: File, allowBrokenIntraDocLinks
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        val args = mutableListOf(
-            "--no-deps",
-            "--document-private-items",
-        )
+        val args =
+            mutableListOf(
+                "--no-deps",
+                "--document-private-items",
+            )
         if (allowBrokenIntraDocLinks) {
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
             // TODO(https://github.com/smithy-lang/smithy-rs/pull/3648) This is the _only_ reason why we need to allow
