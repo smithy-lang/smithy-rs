@@ -51,14 +51,40 @@ where
 }
 
 /// Runtime plugin that provides a default connector.
+#[deprecated(
+    since = "1.6.0",
+    note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
+)]
 pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
-    let _default: Option<SharedHttpClient> = None;
-    #[cfg(feature = "connector-hyper-0-14-x")]
-    let _default = crate::client::http::hyper_014::default_client();
+    #[allow(deprecated)]
+    default_http_client_plugin_v2(BehaviorVersion::v2024_03_28())
+}
 
-    _default.map(|default| {
+/// Runtime plugin that provides a default connector.
+fn default_http_client_plugin_v2(behavior_version: BehaviorVersion) -> Option<SharedRuntimePlugin> {
+    let mut _default: Option<SharedHttpClient> = None;
+
+    if behavior_version.is_at_least(BehaviorVersion::v2024_06_05()) {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "experimental")] {
+                tracing::info!("Using experimental hyper client");
+                _default = Some(aws_smithy_experimental::hyper_1_0::HyperClientBuilder::new()
+                    .crypto_mode(aws_smithy_experimental::hyper_1_0::CryptoMode::AwsLc)
+                    .build_https());
+            }
+        }
+    } else {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "connector-hyper-0-14-x")] {
+                // Before v2024_06_05, a hyper v0.14.x client was the default
+                _default = crate::client::http::hyper_014::default_client();
+            }
+        }
+    }
+
+    _default.map(|default_http_client| {
         default_plugin("default_http_client_plugin", |components| {
-            components.with_http_client(Some(default))
+            components.with_http_client(Some(default_http_client))
         })
         .into_shared()
     })
@@ -195,6 +221,7 @@ fn default_stalled_stream_protection_config_plugin_v2(
             let mut config =
                 StalledStreamProtectionConfig::enabled().grace_period(Duration::from_secs(5));
             // Before v2024_03_28, upload streams did not have stalled stream protection by default
+            #[allow(deprecated)]
             if !behavior_version.is_at_least(BehaviorVersion::v2024_03_28()) {
                 config = config.upload_enabled(false);
             }
@@ -274,7 +301,7 @@ pub fn default_plugins(
         .unwrap_or_else(BehaviorVersion::latest);
 
     [
-        default_http_client_plugin(),
+        default_http_client_plugin_v2(behavior_version),
         default_identity_cache_plugin(),
         default_retry_config_plugin(
             params

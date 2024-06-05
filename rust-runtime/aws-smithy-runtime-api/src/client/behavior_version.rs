@@ -20,6 +20,7 @@ enum Inner {
     // IMPORTANT: Order matters here for the `Ord` derive. Newer versions go to the bottom.
     V2023_11_09,
     V2024_03_28,
+    V2024_06_05,
 }
 
 impl BehaviorVersion {
@@ -32,16 +33,29 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::v2024_03_28`]
+    /// The latest version is currently [`BehaviorVersion::V2024_06_05`]
     pub fn latest() -> Self {
-        Self::v2024_03_28()
+        Self::v2024_06_05()
+    }
+
+    /// Behavior version for June 5th, 2024.
+    ///
+    /// This version enables the v1 hyper client as the default HTTP client.
+    ///
+    /// When a new behavior major version is released, this method will be deprecated.
+    pub fn v2024_06_05() -> Self {
+        Self {
+            inner: Inner::V2024_06_05,
+        }
     }
 
     /// Behavior version for March 28th, 2024.
     ///
     /// This version enables stalled stream protection for uploads (request bodies) by default.
-    ///
-    /// When a new behavior major version is released, this method will be deprecated.
+    #[deprecated(
+        since = "1.6.0",
+        note = "Superseded by V2024_06_05, which enabled the v1 hyper client as the default HTTP client."
+    )]
     pub fn v2024_03_28() -> Self {
         Self {
             inner: Inner::V2024_03_28,
@@ -51,7 +65,7 @@ impl BehaviorVersion {
     /// Behavior version for November 9th, 2023.
     #[deprecated(
         since = "1.4.0",
-        note = "Superceded by v2024_03_28, which enabled stalled stream protection for uploads (request bodies) by default."
+        note = "Superseded by v2024_03_28, which enabled stalled stream protection for uploads (request bodies) by default."
     )]
     pub fn v2023_11_09() -> Self {
         Self {

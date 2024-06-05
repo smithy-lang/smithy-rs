@@ -3,27 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::Debug;
-use std::future::Future;
-use std::net::SocketAddr;
-use std::pin::Pin;
-use std::sync::RwLock;
-use std::task::{Context, Poll};
-use std::time::Duration;
-use std::{fmt, vec};
-
-use client::connect::Connection;
-use h2::Reason;
-use http::Uri;
-use hyper::rt::{Read, Write};
-use hyper_util::client::legacy as client;
-use hyper_util::client::legacy::connect::dns::Name;
-use hyper_util::client::legacy::connect::Connect;
-use hyper_util::rt::TokioExecutor;
-use rustls::crypto::CryptoProvider;
-
+use crate::hyper_1_0::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -42,8 +22,28 @@ use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
+use client::connect::Connection;
+use h2::Reason;
+use http::Uri;
+use hyper::rt::{Read, Write};
+use hyper_util::client::legacy as client;
+use hyper_util::client::legacy::connect::dns::Name;
+use hyper_util::client::legacy::connect::Connect;
+use hyper_util::rt::TokioExecutor;
+use rustls::crypto::CryptoProvider;
+use std::collections::HashMap;
+use std::error::Error;
+use std::future::Future;
+use std::net::SocketAddr;
+use std::pin::Pin;
+use std::sync::RwLock;
+use std::task::{Context, Poll};
+use std::time::Duration;
+use std::{fmt, vec};
 
-use crate::hyper_1_0::timeout_middleware::{ConnectTimeout, HttpTimeoutError};
+mod build_connector;
+mod cached_connectors;
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[non_exhaustive]
 pub enum CryptoMode {
@@ -102,116 +102,6 @@ impl<R: ResolveDns + Clone + 'static> tower::Service<Name> for HyperUtilResolver
                 .collect::<Vec<_>>()
                 .into_iter())
         })
-    }
-}
-
-#[allow(unused_imports)]
-mod cached_connectors {
-
-    use client::connect::HttpConnector;
-    use hyper_rustls::HttpsConnector;
-    use hyper_util::client::legacy as client;
-    use hyper_util::client::legacy::connect::dns::GaiResolver;
-
-    use crate::hyper_1_0::build_connector::make_tls;
-    use crate::hyper_1_0::{CryptoMode, Inner};
-
-    #[cfg(feature = "crypto-ring")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_RING: once_cell::sync::Lazy<
-        HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| make_tls(GaiResolver::new(), CryptoMode::Ring.provider()));
-
-    #[cfg(feature = "crypto-aws-lc")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_AWS_LC: once_cell::sync::Lazy<
-        HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| make_tls(GaiResolver::new(), CryptoMode::AwsLc.provider()));
-
-    #[cfg(feature = "crypto-aws-lc-fips")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_AWS_LC_FIPS: once_cell::sync::Lazy<
-        HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| {
-        make_tls(GaiResolver::new(), CryptoMode::AwsLcFips.provider())
-    });
-
-    pub(super) fn cached_https(mode: Inner) -> hyper_rustls::HttpsConnector<HttpConnector> {
-        match mode {
-            #[cfg(feature = "crypto-ring")]
-            Inner::Standard(CryptoMode::Ring) => HTTPS_NATIVE_ROOTS_RING.clone(),
-            #[cfg(feature = "crypto-aws-lc")]
-            Inner::Standard(CryptoMode::AwsLc) => HTTPS_NATIVE_ROOTS_AWS_LC.clone(),
-            #[cfg(feature = "crypto-aws-lc-fips")]
-            Inner::Standard(CryptoMode::AwsLcFips) => HTTPS_NATIVE_ROOTS_AWS_LC_FIPS.clone(),
-            #[allow(unreachable_patterns)]
-            Inner::Standard(_) => unreachable!("unexpected mode"),
-            Inner::Custom(provider) => make_tls(GaiResolver::new(), provider),
-        }
-    }
-}
-
-mod build_connector {
-    use std::sync::Arc;
-
-    use client::connect::HttpConnector;
-    use hyper_rustls::HttpsConnector;
-    use hyper_util::client::legacy as client;
-    use rustls::crypto::CryptoProvider;
-
-    use aws_smithy_runtime_api::client::dns::ResolveDns;
-
-    use crate::hyper_1_0::{HyperUtilResolver, Inner};
-
-    fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
-        let suites = &[
-            rustls::CipherSuite::TLS13_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS13_AES_128_GCM_SHA256,
-            // TLS1.2 suites
-            rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-        ];
-        let supported_suites = suites
-            .iter()
-            .flat_map(|suite| {
-                base.cipher_suites
-                    .iter()
-                    .find(|s| &s.suite() == suite)
-                    .cloned()
-            })
-            .collect::<Vec<_>>();
-        CryptoProvider {
-            cipher_suites: supported_suites,
-            ..base
-        }
-    }
-
-    pub(crate) fn make_tls<R>(
-        resolver: R,
-        crypto_provider: CryptoProvider,
-    ) -> HttpsConnector<HttpConnector<R>> {
-        use hyper_rustls::ConfigBuilderExt;
-        let mut base_connector = HttpConnector::new_with_resolver(resolver);
-        base_connector.enforce_http(false);
-        hyper_rustls::HttpsConnectorBuilder::new()
-               .with_tls_config(
-                rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_provider)))
-                    .with_safe_default_protocol_versions()
-                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                    .with_native_roots().expect("error with TLS configuration.")
-                    .with_no_client_auth()
-            )
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .wrap_connector(base_connector)
-    }
-
-    pub(super) fn https_with_resolver<R: ResolveDns>(
-        crypto_provider: Inner,
-        resolver: R,
-    ) -> HttpsConnector<HttpConnector<HyperUtilResolver<R>>> {
-        make_tls(HyperUtilResolver { resolver }, crypto_provider.provider())
     }
 }
 
@@ -292,7 +182,7 @@ impl<Any> HyperConnectorBuilder<Any> {
     where
         C: Send + Sync + 'static,
         C: Clone,
-        C: tower::Service<http::Uri>,
+        C: tower::Service<Uri>,
         C::Response: Read + Write + Connection + Send + Sync + Unpin,
         C: Connect,
         C::Future: Unpin + Send + 'static,
@@ -440,7 +330,7 @@ where
     C: Clone + Send + Sync + 'static,
     C: tower::Service<Uri>,
     C::Response: Connection + Read + Write + Unpin + 'static,
-    ConnectTimeout<C>: Connect,
+    timeout_middleware::ConnectTimeout<C>: Connect,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
