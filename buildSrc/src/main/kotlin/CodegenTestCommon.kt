@@ -257,7 +257,7 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(outputDir: File) {
+fun Project.registerCargoCommandsTasks(outputDir: File, allowBrokenIntraDocLinks: Boolean = false) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -280,11 +280,17 @@ fun Project.registerCargoCommandsTasks(outputDir: File) {
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
-        // Clear `RUSTDOCFLAGS` because in the CI Docker image we bake in `-D warnings`, but we currently
-        // generate docs with warnings.
-//        environment("RUSTDOCFLAGS", "")
-        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+        val args = mutableListOf(
+            "--no-deps",
+            "--document-private-items",
+        )
+        if (allowBrokenIntraDocLinks) {
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
+            // TODO(https://github.com/smithy-lang/smithy-rs/pull/3648) This is the _only_ reason why we need to allow
+            // broken intra doc links. Once it lands we can remove this escape hatch and deny _all_ warnings.
+            args += "-A rustdoc::broken-intra-doc-links"
+        }
+        commandLine("cargo", "doc", args)
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
