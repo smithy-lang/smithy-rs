@@ -117,8 +117,8 @@ fun generateFallbackCodeToDefaultValue(
             targetShape is EnumShape) {
             writer.rustTemplate(".unwrap_or(#{DefaultValue:W})", "DefaultValue" to defaultValue)
         } else {
-            // Values for the Rust types of the rest of the shapes require heap allocations, so we calculate them
-            // in a (lazily-executed) closure for minimal performance gains.
+            // Values for the Rust types of the rest of the shapes might require heap allocations,
+            // so we calculate them in a (lazily-executed) closure for minimal performance gains.
             writer.rustTemplate(".unwrap_or_else(##[allow(clippy::redundant_closure)] || #{DefaultValue:W})", "DefaultValue" to defaultValue)
         }
     }
