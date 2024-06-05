@@ -34,8 +34,8 @@ object FluentClientDocs {
                 or identity resolver to be configured. The config is used to customize various aspects of the client,
                 such as:
 
-                  - [the underlying HTTP client](crate::config::Builder::http_client)
-                  - [Retry](crate::config::Builder::retry_config)
+                  - [The underlying HTTP client](crate::config::Builder::http_client)
+                  - [Retries](crate::config::Builder::retry_config)
                   - [Timeouts](crate::config::Builder::timeout_config)
                   - [... and more](crate::config::Builder)
 
