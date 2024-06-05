@@ -54,11 +54,6 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
 
 val allCodegenTests = listOf(
     baseTest(
-        "com.amazonaws.apigateway#BackplaneControlService",
-        "apigateway",
-        imports = listOf("models/apigateway-rules.smithy"),
-    ),
-    baseTest(
         "com.amazonaws.testservice#TestService",
         "endpoint-test-service",
         imports = listOf("models/single-static-endpoint.smithy"),
@@ -68,6 +63,24 @@ val allCodegenTests = listOf(
         "required-values",
         imports = listOf("models/required-value-test.smithy"),
     ),
+    // service specific protocol tests
+    baseTest(
+        "com.amazonaws.apigateway#BackplaneControlService",
+        "apigateway",
+        imports = listOf("models/apigateway-rules.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.glacier#Glacier",
+        "glacier",
+    ),
+    // baseTest(
+    //     "com.amazonaws.machinelearning#AmazonML_20141212",
+    //     "machinelearning",
+    // ),
+    // baseTest(
+    //     "com.amazonaws.s3#AmazonS3",
+    //     "s3"
+    // )
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
