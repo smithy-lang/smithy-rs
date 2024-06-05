@@ -200,7 +200,8 @@ private fun RustWriter.renderAsVariant(
 ) {
     if (member.isTargetUnit()) {
         rust(
-            "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
+            "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner `()`.",
+            unionSymbol
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
         rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<(), &Self>", *preludeScope) {
