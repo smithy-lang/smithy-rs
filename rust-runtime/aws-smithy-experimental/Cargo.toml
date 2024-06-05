@@ -30,7 +30,6 @@ tower = "0.4.1"
 
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
-aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client", "test-util", "connector-hyper-0-14-x"]}
 tokio = { version = "1", features = ["full", "test-util"]}
 
 [[example]]

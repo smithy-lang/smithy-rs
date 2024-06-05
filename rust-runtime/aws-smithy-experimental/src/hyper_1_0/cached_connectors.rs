@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::hyper_1_0::build_connector::make_tls;
+use crate::hyper_1_0::{CryptoMode, Inner};
 use client::connect::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy as client;
 use hyper_util::client::legacy::connect::dns::GaiResolver;
-
-use crate::hyper_1_0::build_connector::make_tls;
-use crate::hyper_1_0::{CryptoMode, Inner};
 
 #[cfg(feature = "crypto-ring")]
 pub(crate) static HTTPS_NATIVE_ROOTS_RING: once_cell::sync::Lazy<HttpsConnector<HttpConnector>> =

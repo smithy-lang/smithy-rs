@@ -5,16 +5,13 @@
 
 #![allow(unused_imports)]
 
-use std::sync::Arc;
-
+use crate::hyper_1_0::{HyperUtilResolver, Inner};
+use aws_smithy_runtime_api::client::dns::ResolveDns;
 use client::connect::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy as client;
 use rustls::crypto::CryptoProvider;
-
-use aws_smithy_runtime_api::client::dns::ResolveDns;
-
-use crate::hyper_1_0::{HyperUtilResolver, Inner};
+use std::sync::Arc;
 
 fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
     let suites = &[
