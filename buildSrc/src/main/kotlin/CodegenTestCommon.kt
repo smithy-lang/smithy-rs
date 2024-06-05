@@ -283,7 +283,7 @@ fun Project.registerCargoCommandsTasks(outputDir: File) {
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
         // Clear `RUSTDOCFLAGS` because in the CI Docker image we bake in `-D warnings`, but we currently
         // generate docs with warnings.
-        environment("RUSTDOCFLAGS", "")
+//        environment("RUSTDOCFLAGS", "")
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
