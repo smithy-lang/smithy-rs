@@ -69,7 +69,7 @@ fn default_http_client_plugin_v2(behavior_version: BehaviorVersion) -> Option<Sh
             if #[cfg(feature = "experimental")] {
                 tracing::info!("Using experimental hyper client");
                 _default = Some(aws_smithy_experimental::hyper_1_0::HyperClientBuilder::new()
-                    .crypto_mode(aws_smithy_experimental::hyper_1_0::CryptoMode::AwsLc)
+                    .crypto_mode(aws_smithy_experimental::hyper_1_0::CryptoMode::Ring)
                     .build_https());
             }
         }
