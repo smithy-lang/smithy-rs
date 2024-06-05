@@ -32,20 +32,22 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
 
     private fun crateLayout(): Writable =
         writable {
-            val hasTypesModule = DirectedWalker(codegenContext.model).walkShapes(codegenContext.serviceShape)
-                .any {
-                    try {
-                        codegenContext.symbolProvider.moduleForShape(it).name == ClientRustModule.types.name
-                    } catch (ex: RuntimeException) {
-                        // The shape should not be rendered in any module.
-                        false
+            val hasTypesModule =
+                DirectedWalker(codegenContext.model).walkShapes(codegenContext.serviceShape)
+                    .any {
+                        try {
+                            codegenContext.symbolProvider.moduleForShape(it).name == ClientRustModule.types.name
+                        } catch (ex: RuntimeException) {
+                            // The shape should not be rendered in any module.
+                            false
+                        }
                     }
+            val typesModuleSentence =
+                if (hasTypesModule) {
+                    "These structs and enums live in [`types`](crate::types). "
+                } else {
+                    ""
                 }
-            val typesModuleSentence = if (hasTypesModule) {
-                "These structs and enums live in [`types`](crate::types). "
-            } else {
-                ""
-            }
             val serviceName = codegenContext.serviceShape.getTrait<TitleTrait>()?.value ?: "the service"
             containerDocs(
                 """

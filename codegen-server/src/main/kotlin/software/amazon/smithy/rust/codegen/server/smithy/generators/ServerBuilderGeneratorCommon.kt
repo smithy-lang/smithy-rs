@@ -114,7 +114,8 @@ fun generateFallbackCodeToDefaultValue(
         if ((targetShape is DocumentShape && (node is BooleanNode || node is NumberNode)) ||
             targetShape is BooleanShape ||
             targetShape is NumberShape ||
-            targetShape is EnumShape) {
+            targetShape is EnumShape
+        ) {
             writer.rustTemplate(".unwrap_or(#{DefaultValue:W})", "DefaultValue" to defaultValue)
         } else {
             // Values for the Rust types of the rest of the shapes might require heap allocations,
@@ -214,7 +215,7 @@ private fun defaultValue(
                     rustTemplate(
                         """#{SmithyTypes}::Document::Array(#{Vec}::new())""",
                         *preludeScope,
-                        "SmithyTypes" to types
+                        "SmithyTypes" to types,
                     )
                 }
 

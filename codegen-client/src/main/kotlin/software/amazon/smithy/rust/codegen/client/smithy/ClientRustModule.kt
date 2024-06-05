@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
-import software.amazon.smithy.model.shapes.IntEnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
