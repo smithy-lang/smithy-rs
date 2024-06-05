@@ -290,7 +290,7 @@ fun Project.registerCargoCommandsTasks(outputDir: File, allowBrokenIntraDocLinks
             // broken intra doc links. Once it lands we can remove this escape hatch and deny _all_ warnings.
             args += "-A rustdoc::broken-intra-doc-links"
         }
-        commandLine("cargo", "doc", args)
+        commandLine("cargo", "doc", *args.toTypedArray())
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
