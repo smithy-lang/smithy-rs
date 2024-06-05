@@ -11,20 +11,20 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
- [[aws-sdk-rust]]
- message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
- references = ["smithy-rs#1925", "smithy-rs#3673"]
- meta = { "breaking" = false, "tada" = false, "bug" = false }
- author = "Velfi"
-
- [[smithy-rs]]
- message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
- references = ["smithy-rs#1925", "smithy-rs#3673"]
- meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
- author = "Velfi"
+[[aws-sdk-rust]]
+message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
+references = ["smithy-rs#1925", "smithy-rs#3673"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Velfi"
 
 [[smithy-rs]]
-message = "Reduce verbosity of various debug logs"
-references = ["smithy-rs#3664"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
-author = "landonxjames"
+message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
+references = ["smithy-rs#1925", "smithy-rs#3673"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Enable aws-smithy-runtime to compile in rustc 1.72.1"
+references = ["smithy-rs#3675"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "dastrom"
