@@ -277,7 +277,7 @@ private fun baseClientRuntimePluginsFn(
                         .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
                         .with_client_plugin(#{NoAuthRuntimePlugin}::new());
 
-                    #{additional_client_plugins:W};
+                    #{additional_client_plugins:W}
 
                     for plugin in configured_plugins {
                         plugins = plugins.with_client_plugin(plugin);
