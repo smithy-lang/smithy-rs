@@ -59,7 +59,13 @@ class FluentClientGenerator(
         fun clientOperationFnName(
             operationShape: OperationShape,
             symbolProvider: RustSymbolProvider,
-        ): String = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+        ): String = RustReservedWords.escapeIfNeeded(clientOperationFnDocsName(operationShape, symbolProvider))
+
+        /** When using the function name in Rust docs, there's no need to escape Rust reserved words. **/
+        fun clientOperationFnDocsName(
+            operationShape: OperationShape,
+            symbolProvider: RustSymbolProvider,
+        ): String = symbolProvider.toSymbol(operationShape).name.toSnakeCase()
 
         fun clientOperationModuleName(
             operationShape: OperationShape,

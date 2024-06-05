@@ -76,7 +76,7 @@ object FluentClientDocs {
                 if (operation != null && member != null) {
                     val operationSymbol = symbolProvider.toSymbol(operation)
                     val memberSymbol = symbolProvider.toSymbol(member)
-                    val operationFnName = FluentClientGenerator.clientOperationFnName(operation, symbolProvider)
+                    val operationFnName = FluentClientGenerator.clientOperationFnDocsName(operation, symbolProvider)
                     docsTemplate(
                         """
                         ## Using the `Client`
