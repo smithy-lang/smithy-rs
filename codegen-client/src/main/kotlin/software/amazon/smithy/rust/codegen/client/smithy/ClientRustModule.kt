@@ -211,7 +211,7 @@ object ClientModuleProvider : ModuleProvider {
                     else -> ClientRustModule.types
                 }
 
-            is EnumShape -> ClientRustModule.types
+            is UnionShape, is EnumShape -> ClientRustModule.types
             is StringShape -> {
                 if (shape.hasTrait<EnumTrait>()) {
                     ClientRustModule.types
