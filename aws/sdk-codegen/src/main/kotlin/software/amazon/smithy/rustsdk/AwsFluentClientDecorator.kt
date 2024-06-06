@@ -65,7 +65,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls", "aws-smithy-runtime/experimental")))
     }
 
     override fun libRsCustomizations(
