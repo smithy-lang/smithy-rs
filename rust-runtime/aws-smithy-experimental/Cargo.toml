@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-experimental"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Experiments for the smithy-rs ecosystem"
 edition = "2021"
@@ -30,7 +30,6 @@ tower = "0.4.1"
 
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
-aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client", "test-util", "connector-hyper-0-14-x"]}
 tokio = { version = "1", features = ["full", "test-util"]}
 
 [[example]]
