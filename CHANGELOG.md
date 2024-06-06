@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 3rd, 2024
+==============
+**New this release:**
+- (client, [smithy-rs#3664](https://github.com/smithy-lang/smithy-rs/issues/3664)) Reduce verbosity of various debug logs
+
+
 May 28th, 2024
 ==============
 
