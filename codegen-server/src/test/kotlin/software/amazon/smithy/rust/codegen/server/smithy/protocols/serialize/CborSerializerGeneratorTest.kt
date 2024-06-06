@@ -62,7 +62,7 @@ internal class CborSerializerGeneratorTest {
 
     @Test
     fun `we serialize and serde_cbor deserializes round trip`() {
-        val model = File("../codegen-core/common-test-models/rpc-v2-extras.smithy").readText().asSmithyModel()
+        val model = File("../codegen-core/common-test-models/rpcv2-extras.smithy").readText().asSmithyModel()
 
         val addDeriveSerdeSerializeDecorator = object : ServerCodegenDecorator {
             override val name: String = "Add `#[derive(serde::Deserialize)]`"
