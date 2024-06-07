@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMe
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.DisabledAuthDecorator
+import software.amazon.smithy.rustsdk.customize.IsTruncatedPaginatorDecorator
 import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
@@ -70,6 +71,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             S3Decorator(),
             S3ExpressDecorator(),
             S3ExtendedRequestIdDecorator(),
+            IsTruncatedPaginatorDecorator(),
         ),
         S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
         STSDecorator().onlyApplyTo("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
@@ -78,7 +80,12 @@ val DECORATORS: List<ClientCodegenDecorator> =
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamquery#Timestream_20181101"),
         // Only build docs-rs for linux to reduce load on docs.rs
         listOf(
-            DocsRsMetadataDecorator(DocsRsMetadataSettings(targets = listOf("x86_64-unknown-linux-gnu"), allFeatures = true)),
+            DocsRsMetadataDecorator(
+                DocsRsMetadataSettings(
+                    targets = listOf("x86_64-unknown-linux-gnu"),
+                    allFeatures = true,
+                ),
+            ),
         ),
     ).flatten()
 

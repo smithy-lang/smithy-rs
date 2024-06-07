@@ -155,6 +155,7 @@ class S3Decorator : ClientCodegenDecorator {
                                     )
                                 }
                             }
+
                             else -> {}
                         }
                     }
