@@ -37,6 +37,9 @@ val properties = PropertyRetriever(rootProject, project)
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
 val publisherToolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
 val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-versioner")
+val awsConfigPath = rootProject.projectDir.resolve("aws/rust-runtime/aws-config")
+val rustRuntimePath = rootProject.projectDir.resolve("rust-runtime")
+val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
@@ -87,9 +90,12 @@ fun generateSmithyBuild(services: AwsServices): String {
         }
         val moduleName = "aws-sdk-${service.module}"
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
-        val defaultConfigPath = services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
-        val partitionsConfigPath = services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
-        val integrationTestPath = project.projectDir.resolve("integration-tests").let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val defaultConfigPath =
+            services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val partitionsConfigPath =
+            services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val integrationTestPath = project.projectDir.resolve("integration-tests")
+            .let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         """
             "${service.module}": {
                 "imports": [${files.joinToString()}],
@@ -293,7 +299,10 @@ tasks.register("relocateAwsRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_RUNTIME.forEach { module ->
             patchFile(sdkOutputDir.file("${module.name}/Cargo.toml").asFile) { line ->
-                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line.let(::rewritePathDependency))
+                rewriteRuntimeCrateVersion(
+                    properties.get(module.versionPropertyName)!!,
+                    line.let(::rewritePathDependency),
+                )
             }
         }
     }
@@ -438,6 +447,7 @@ tasks["assemble"].apply {
         "fixExampleManifests",
         "hydrateReadme",
         "relocateChangelog",
+        "generateLockfiles",
     )
     outputs.upToDateWhen { false }
 }
@@ -450,6 +460,42 @@ tasks.register("sdkTest") {
     description = "Run Cargo clippy/test/docs against the generated SDK."
     dependsOn("assemble")
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
+}
+
+//Tasks for generating individual Cargo.lock files
+fun Project.registerLockfileGeneration(
+    dir: File,
+    name: String,
+): String {
+    val taskName = "generate${name}Lockfile"
+    tasks.register<Exec>(taskName) {
+        workingDir(dir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "generate-lockfile")
+    }
+
+    return taskName
+}
+
+val registerAwsConfigTaskName = registerLockfileGeneration(awsConfigPath, "AwsConfig")
+val registerAwsRustRuntimeTaskName = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
+val registerRustRuntimeTaskName = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
+
+//Parent task to generate all the Cargo.lock files
+tasks.register("generateLockfiles") {
+    description =
+        "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
+            "the assemble task."
+    finalizedBy(
+        Cargo.LOCKFILE.toString,
+        registerAwsConfigTaskName,
+        registerAwsRustRuntimeTaskName,
+        registerRustRuntimeTaskName,
+    )
+    copy {
+        from(outputDir.file("Cargo.lock"))
+        into(rootProject.projectDir.resolve("aws/sdk"))
+    }
 }
 
 tasks.register<Delete>("deleteSdk") {

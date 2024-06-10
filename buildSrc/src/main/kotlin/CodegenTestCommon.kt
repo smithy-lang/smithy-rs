@@ -75,6 +75,7 @@ enum class Cargo(val toString: String) {
     TEST("cargoTest"),
     DOCS("cargoDoc"),
     CLIPPY("cargoClippy"),
+    LOCKFILE("generateLockfile"),
 }
 
 private fun generateCargoWorkspace(
@@ -116,7 +117,7 @@ private fun codegenTests(
     return ret
 }
 
-val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
+val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS, Cargo.LOCKFILE)
 
 /**
  * Filter the Cargo commands to be run on the generated Rust crates using the given [properties].
@@ -130,6 +131,7 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
                 "test" -> Cargo.TEST
                 "doc" -> Cargo.DOCS
                 "clippy" -> Cargo.CLIPPY
+                "lockfile" -> Cargo.LOCKFILE
                 else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `doc`, `clippy`)")
             }
         }
@@ -237,7 +239,8 @@ fun Project.registerModifyMtimeTask() {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
                 @Suppress("UNCHECKED_CAST")
-                val previousBuildHashes: Map<String, Long> = project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
+                val previousBuildHashes: Map<String, Long> =
+                    project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }
@@ -293,5 +296,12 @@ fun Project.registerCargoCommandsTasks(
         workingDir(outputDir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
+    }
+
+    this.tasks.register<Exec>(Cargo.LOCKFILE.toString) {
+        dependsOn(dependentTasks)
+        workingDir(outputDir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "generate-lockfile")
     }
 }
