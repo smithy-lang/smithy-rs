@@ -167,6 +167,8 @@ where
     type Future = UpgradeFuture<P, Input, B, S>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // The check that the inner service is ready is done by `Oneshot` in `UpgradeFuture`'s
+        // implementation.
         Poll::Ready(Ok(()))
     }
 
