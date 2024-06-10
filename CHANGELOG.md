@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 10th, 2024
+===============
+**New this release:**
+- (all, [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925), [smithy-rs#3673](https://github.com/smithy-lang/smithy-rs/issues/3673)) Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`.
+- (all, [smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637), @khuey) Add conversions from smithy StatusCode to http StatusCode.
+- :bug: (client, [smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675), @dastrom) Enable aws-smithy-runtime to compile in rustc 1.72.1
+
+**Contributors**
+Thank you for your contributions! ❤
+- @dastrom ([smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675))
+- @khuey ([smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637))
+
+
 June 3rd, 2024
 ==============
 **New this release:**
