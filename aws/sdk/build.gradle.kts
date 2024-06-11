@@ -490,21 +490,29 @@ val registerAwsConfigTaskName = registerLockfileGeneration(awsConfigPath, "AwsCo
 val registerAwsRustRuntimeTaskName = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
 val registerRustRuntimeTaskName = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
 
+tasks.register<Exec>("generateAwsSdkRustLockfile") {
+    val sdkRustPath: String =
+        properties.get("aws-sdk-rust-path") ?: throw Exception("A -Paws-sdk-rust-path argument must be specified")
+    workingDir(sdkRustPath)
+    environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+    commandLine("cargo", "generate-lockfile")
+    copy {
+        from(sdkRustPath + "/Cargo.lock")
+        into(rootProject.projectDir.resolve("aws/sdk"))
+    }
+}
+
 //Parent task to generate all the Cargo.lock files
-tasks.register("generateLockfiles") {
+tasks.register("generateAllLockfiles") {
     description =
         "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
             "the assemble task."
     finalizedBy(
-        Cargo.LOCKFILE.toString,
+        "generateAwsSdkRustLockfile",
         registerAwsConfigTaskName,
         registerAwsRustRuntimeTaskName,
         registerRustRuntimeTaskName,
     )
-    copy {
-        from(outputDir.file("Cargo.lock"))
-        into(rootProject.projectDir.resolve("aws/sdk"))
-    }
 }
 
 tasks.register<Delete>("deleteSdk") {
