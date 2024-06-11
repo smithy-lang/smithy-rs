@@ -40,9 +40,11 @@ val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-ve
 val awsConfigPath = rootProject.projectDir.resolve("aws/rust-runtime/aws-config")
 val rustRuntimePath = rootProject.projectDir.resolve("rust-runtime")
 val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
+val checkedInCargoLock = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
+
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
@@ -447,9 +449,16 @@ tasks["assemble"].apply {
         "fixExampleManifests",
         "hydrateReadme",
         "relocateChangelog",
-        "generateLockfiles",
     )
+    finalizedBy("copyCheckedInCargoLock")
     outputs.upToDateWhen { false }
+}
+
+tasks.register<Copy>("copyCheckedInCargoLock") {
+    description = "Copy the checked in Cargo.lock file back to the build directory"
+    this.outputs.upToDateWhen { false }
+    from(checkedInCargoLock)
+    into(outputDir)
 }
 
 project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
