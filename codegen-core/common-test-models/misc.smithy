@@ -9,7 +9,7 @@ use smithy.framework#ValidationException
 
 /// A service to test miscellaneous aspects of code generation where protocol
 /// selection is not relevant. If you want to test something protocol-specific,
-/// add it to a separate `<protocol>-extras.smithy`.
+/// add it to a separate `[protocol]-extras.smithy`.
 @restJson1
 @title("MiscService")
 service MiscService {
