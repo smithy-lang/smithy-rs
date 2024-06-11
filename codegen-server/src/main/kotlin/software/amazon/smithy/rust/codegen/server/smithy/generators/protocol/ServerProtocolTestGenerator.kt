@@ -812,6 +812,9 @@ class ServerProtocolTestGenerator(
                 FailingTest(REST_JSON, "RestJsonEndpointTrait", TestType.Request),
                 FailingTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
                 FailingTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
+                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when fixed tests are consumed in next Smithy version
+                FailingTest(REST_JSON, "RestJsonEnumPayloadRequest", TestType.Request),
+                FailingTest(REST_JSON, "RestJsonStringPayloadRequest", TestType.Request),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),

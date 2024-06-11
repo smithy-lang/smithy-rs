@@ -13,7 +13,7 @@ pub mod rest_xml;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 use http::header::CONTENT_TYPE;
-use http::{HeaderMap, HeaderValue};
+use http::HeaderMap;
 
 #[cfg(test)]
 pub mod test_helpers {
@@ -46,81 +46,63 @@ fn parse_mime(content_type: &str) -> Result<mime::Mime, MissingContentTypeReason
         .map_err(MissingContentTypeReason::MimeParseError)
 }
 
-/// When there are no modeled inputs,
-/// a request body is empty and the content-type request header must not be set
-#[allow(clippy::result_large_err)]
-pub fn content_type_header_empty_body_no_modeled_input(
-    headers: &SmithyHeaders,
-) -> Result<(), MissingContentTypeReason> {
-    if headers.contains_key(http::header::CONTENT_TYPE) {
-        let found_mime = headers
-            .get(http::header::CONTENT_TYPE)
-            .unwrap() // The header is present, `unwrap` will not panic.
-            .parse::<mime::Mime>()
-            .map_err(MissingContentTypeReason::MimeParseError)?;
-        Err(MissingContentTypeReason::UnexpectedMimeType {
-            expected_mime: None,
-            found_mime: Some(found_mime),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-/// Checks that the `content-type` header is valid from a Smithy `Headers`.
+/// Checks that the `content-type` header from a `SmithyHeaders` matches what we expect.
 #[allow(clippy::result_large_err)]
 pub fn content_type_header_classifier_smithy(
     headers: &SmithyHeaders,
     expected_content_type: Option<&'static str>,
 ) -> Result<(), MissingContentTypeReason> {
-    match headers.get(CONTENT_TYPE) {
-        Some(content_type) => content_type_header_classifier(content_type, expected_content_type),
-        None => Ok(()),
-    }
+    let actual_content_type = headers.get(CONTENT_TYPE);
+    content_type_header_classifier(actual_content_type, expected_content_type)
 }
 
-/// Checks that the `content-type` header is valid from a `http::HeaderMap`.
-#[allow(clippy::result_large_err)]
-pub fn content_type_header_classifier_http(
-    headers: &HeaderMap<HeaderValue>,
-    expected_content_type: Option<&'static str>,
-) -> Result<(), MissingContentTypeReason> {
-    if let Some(content_type) = headers.get(http::header::CONTENT_TYPE) {
-        let content_type = content_type.to_str().map_err(MissingContentTypeReason::ToStrError)?;
-        content_type_header_classifier(content_type, expected_content_type)
-    } else {
-        Ok(())
-    }
-}
-
-/// Checks that the `content-type` header is valid.
+/// Checks that the `content-type` header matches what we expect.
 #[allow(clippy::result_large_err)]
 fn content_type_header_classifier(
-    content_type: &str,
+    actual_content_type: Option<&str>,
     expected_content_type: Option<&'static str>,
 ) -> Result<(), MissingContentTypeReason> {
-    let found_mime = parse_mime(content_type)?;
-    // There is a `content-type` header.
-    // If there is an implied content type, they must match.
-    if let Some(expected_content_type) = expected_content_type {
-        let expected_mime = expected_content_type
-            .parse::<mime::Mime>()
-            // `expected_content_type` comes from the codegen.
-            .expect("BUG: MIME parsing failed, `expected_content_type` is not valid. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues");
-        if expected_content_type != found_mime {
-            return Err(MissingContentTypeReason::UnexpectedMimeType {
-                expected_mime: Some(expected_mime),
-                found_mime: Some(found_mime),
-            });
-        }
-    } else {
-        // `content-type` header and no modeled input (mismatch).
-        return Err(MissingContentTypeReason::UnexpectedMimeType {
-            expected_mime: None,
-            found_mime: Some(found_mime),
-        });
+    fn parse_expected_mime(expected_content_type: &str) -> mime::Mime {
+        let mime = expected_content_type
+                .parse::<mime::Mime>()
+                // `expected_content_type` comes from the codegen.
+                .expect("BUG: MIME parsing failed, `expected_content_type` is not valid; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues");
+        debug_assert_eq!(
+            mime, expected_content_type,
+            "BUG: expected `content-type` header value we own from codegen should coincide with its mime type; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues",
+        );
+        mime
     }
-    Ok(())
+
+    match (actual_content_type, expected_content_type) {
+        (None, None) => Ok(()),
+        (None, Some(expected_content_type)) => {
+            let expected_mime = parse_expected_mime(expected_content_type);
+            Err(MissingContentTypeReason::UnexpectedMimeType {
+                expected_mime: Some(expected_mime),
+                found_mime: None,
+            })
+        }
+        (Some(actual_content_type), None) => {
+            let found_mime = parse_mime(actual_content_type)?;
+            Err(MissingContentTypeReason::UnexpectedMimeType {
+                expected_mime: None,
+                found_mime: Some(found_mime),
+            })
+        }
+        (Some(actual_content_type), Some(expected_content_type)) => {
+            let expected_mime = parse_expected_mime(expected_content_type);
+            let found_mime = parse_mime(actual_content_type)?;
+            if expected_mime != found_mime {
+                Err(MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime: Some(expected_mime),
+                    found_mime: Some(found_mime),
+                })
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) -> bool {
@@ -163,8 +145,8 @@ mod tests {
     use aws_smithy_runtime_api::http::Headers;
     use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
-    fn req_content_type(content_type: &'static str) -> HeaderMap {
-        let mut headers = HeaderMap::new();
+    fn req_content_type_smithy(content_type: &'static str) -> SmithyHeaders {
+        let mut headers = SmithyHeaders::new();
         headers.insert(CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap());
         headers
     }
@@ -175,75 +157,72 @@ mod tests {
         headers
     }
 
-    const EXPECTED_MIME_APPLICATION_JSON: Option<&'static str> = Some("application/json");
+    const APPLICATION_JSON: Option<&'static str> = Some("application/json");
 
-    #[test]
-    fn check_content_type_header_empty_body_no_modeled_input() {
-        assert!(content_type_header_empty_body_no_modeled_input(&Headers::new()).is_ok());
+    // Validates the rejection type since we cannot implement `PartialEq`
+    // for `MissingContentTypeReason`.
+    fn assert_unexpected_mime_type(
+        result: Result<(), MissingContentTypeReason>,
+        actually_expected_mime: Option<mime::Mime>,
+        actually_found_mime: Option<mime::Mime>,
+    ) {
+        match result {
+            Ok(()) => panic!("content-type validation is expected to fail"),
+            Err(e) => match e {
+                MissingContentTypeReason::UnexpectedMimeType {
+                    expected_mime,
+                    found_mime,
+                } => {
+                    assert_eq!(actually_expected_mime, expected_mime);
+                    assert_eq!(actually_found_mime, found_mime);
+                }
+                _ => panic!("unexpected `MissingContentTypeReason`: {}", e),
+            },
+        }
     }
 
     #[test]
-    fn check_invalid_content_type_header_empty_body_no_modeled_input() {
-        let mut valid = Headers::new();
-        valid.insert(CONTENT_TYPE, "application/json");
-        let result = content_type_header_empty_body_no_modeled_input(&valid).unwrap_err();
-        assert!(matches!(
-            result,
-            MissingContentTypeReason::UnexpectedMimeType {
-                expected_mime: None,
-                found_mime: Some(_)
-            }
-        ));
+    fn check_valid_content_type() {
+        let headers = req_content_type_smithy("application/json");
+        assert!(content_type_header_classifier_smithy(&headers, APPLICATION_JSON,).is_ok());
     }
 
     #[test]
     fn check_invalid_content_type() {
         let invalid = vec!["application/jason", "text/xml"];
         for invalid_mime in invalid {
-            let headers = req_content_type(invalid_mime);
-            let mut results = Vec::new();
-            results.push(content_type_header_classifier_http(
-                &headers,
-                EXPECTED_MIME_APPLICATION_JSON,
-            ));
-            results.push(content_type_header_classifier_smithy(
-                &Headers::try_from(headers).unwrap(),
-                EXPECTED_MIME_APPLICATION_JSON,
-            ));
+            let headers = req_content_type_smithy(invalid_mime);
+            let results = vec![content_type_header_classifier_smithy(&headers, APPLICATION_JSON)];
 
-            // Validates the rejection type since we cannot implement `PartialEq`
-            // for `MissingContentTypeReason`.
+            let actually_expected_mime = Some(parse_mime(APPLICATION_JSON.unwrap()).unwrap());
             for result in results {
-                match result {
-                    Ok(()) => panic!("Content-type validation is expected to fail"),
-                    Err(e) => match e {
-                        MissingContentTypeReason::UnexpectedMimeType {
-                            expected_mime,
-                            found_mime,
-                        } => {
-                            assert_eq!(
-                                expected_mime.unwrap(),
-                                "application/json".parse::<mime::Mime>().unwrap()
-                            );
-                            assert_eq!(found_mime, invalid_mime.parse::<mime::Mime>().ok());
-                        }
-                        _ => panic!("Unexpected `MissingContentTypeReason`: {}", e),
-                    },
-                }
+                let actually_found_mime = invalid_mime.parse::<mime::Mime>().ok();
+                assert_unexpected_mime_type(result, actually_expected_mime.clone(), actually_found_mime);
             }
         }
     }
 
     #[test]
-    fn check_missing_content_type_is_allowed() {
-        let result = content_type_header_classifier_http(&HeaderMap::new(), EXPECTED_MIME_APPLICATION_JSON);
-        assert!(result.is_ok());
+    fn check_missing_content_type_is_not_allowed() {
+        let actually_expected_mime = Some(parse_mime(APPLICATION_JSON.unwrap()).unwrap());
+        let result = content_type_header_classifier_smithy(&SmithyHeaders::new(), APPLICATION_JSON);
+        assert_unexpected_mime_type(result, actually_expected_mime, None);
+    }
+
+    #[test]
+    fn check_missing_content_type_is_expected() {
+        let headers = req_content_type_smithy(APPLICATION_JSON.unwrap());
+        let actually_found_mime = Some(parse_mime(APPLICATION_JSON.unwrap()).unwrap());
+        let actually_expected_mime = None;
+
+        let result = content_type_header_classifier_smithy(&headers, None);
+        assert_unexpected_mime_type(result, actually_expected_mime, actually_found_mime);
     }
 
     #[test]
     fn check_not_parsable_content_type() {
-        let request = req_content_type("123");
-        let result = content_type_header_classifier_http(&request, EXPECTED_MIME_APPLICATION_JSON);
+        let request = req_content_type_smithy("123");
+        let result = content_type_header_classifier_smithy(&request, APPLICATION_JSON);
         assert!(matches!(
             result.unwrap_err(),
             MissingContentTypeReason::MimeParseError(_)
@@ -252,9 +231,15 @@ mod tests {
 
     #[test]
     fn check_non_ascii_visible_characters_content_type() {
-        let request = req_content_type("application/💩");
-        let result = content_type_header_classifier_http(&request, EXPECTED_MIME_APPLICATION_JSON);
-        assert!(matches!(result.unwrap_err(), MissingContentTypeReason::ToStrError(_)));
+        // Note that for Smithy headers, validation fails when attempting to parse the mime type,
+        // unlike with `http`'s `HeaderMap`, that would fail when checking the header value is
+        // valid (~ASCII string).
+        let request = req_content_type_smithy("application/💩");
+        let result = content_type_header_classifier_smithy(&request, APPLICATION_JSON);
+        assert!(matches!(
+            result.unwrap_err(),
+            MissingContentTypeReason::MimeParseError(_)
+        ));
     }
 
     #[test]

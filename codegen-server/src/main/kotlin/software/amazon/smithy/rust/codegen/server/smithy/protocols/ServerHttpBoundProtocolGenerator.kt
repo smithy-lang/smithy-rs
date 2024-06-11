@@ -218,7 +218,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      * we require the HTTP body to be fully read in memory before parsing or deserialization.
      * From a server perspective we need a way to parse an HTTP request from `Bytes` and serialize
      * an HTTP response to `Bytes`.
-     * These traits are the public entrypoint of the ser/de logic of the `aws-smithy-http-server` server.
+     * These traits are the public entrypoint of the ser/de logic of the generated server.
      */
     private fun RustWriter.renderTraits(
         inputSymbol: Symbol,
@@ -258,35 +258,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(init, *codegenScope)
                 }
             }
-        // This checks for the expected `Content-Type` header if the `@httpPayload` trait is present, as dictated by
-        // the core Smithy library, which _does not_ require deserializing the payload.
-        // If no members have `@httpPayload`, the expected `Content-Type` header as dictated _by the protocol_ is
-        // checked later on for non-streaming operations, in `serverRenderShapeParser`: that check _does_ require at
-        // least buffering the entire payload, since the check must only be performed if the payload is empty.
-        val verifyRequestContentTypeHeader =
-            writable {
-                operationShape
-                    .inputShape(model)
-                    .members()
-                    .find { it.hasTrait<HttpPayloadTrait>() }
-                    ?.let { payload ->
-                        val target = model.expectShape(payload.target)
-                        if (!target.isBlobShape || target.hasTrait<MediaTypeTrait>()) {
-                            // `null` is only returned by Smithy when there are no members, but we know there's at least
-                            // the one with `@httpPayload`, so `!!` is safe here.
-                            val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
-                            rustTemplate(
-                                """
-                                #{SmithyHttpServer}::protocol::content_type_header_classifier_http(
-                                    request.headers(),
-                                    Some("$expectedRequestContentType"),
-                                )?;
-                                """,
-                                *codegenScope,
-                            )
-                        }
-                    }
-            }
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
@@ -325,7 +296,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 fn from_request(request: #{http}::Request<B>) -> Self::Future {
                     let fut = async move {
                         #{verifyAcceptHeader:W}
-                        #{verifyRequestContentTypeHeader:W}
                         #{parse_request}(request)
                             .await
                             .map_err(Into::into)
@@ -347,7 +317,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
             "verifyAcceptHeaderStaticContentTypeInit" to verifyAcceptHeaderStaticContentTypeInit,
-            "verifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
         )
 
         // Implement `into_response` for output types.
@@ -747,7 +716,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "RequestParts" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
-        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
 
         if (parser != null) {
             // `null` is only returned by Smithy when there are no members, but we know there's at least one, since
@@ -768,41 +736,43 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 )
             }
         }
+
         for (binding in bindings) {
             val member = binding.member
             val parsedValue =
                 serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
+            val valueToSet =
+                if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                    "Some(value)"
+                } else {
+                    "value"
+                }
             if (parsedValue != null) {
-                rust("if let Some(value) = ")
-                parsedValue(this)
-                rust(
+                rustTemplate(
                     """
-                    {
-                        input = input.${member.setterName()}(${
-                        if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                            "Some(value)"
-                        } else {
-                            "value"
-                        }
-                    });
+                    if let Some(value) = #{ParsedValue:W} {
+                        input = input.${member.setterName()}($valueToSet)
                     }
                     """,
+                    "ParsedValue" to parsedValue,
                 )
             }
         }
+
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
+        // If there's no modeled operation input, some protocols require that `Content-Type` header not be present.
+        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
         if (noInputs && protocol.serverContentTypeCheckNoModeledInput()) {
-            conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
-                rustTemplate(
-                    """
-                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&headers)?;
-                    """,
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                """
+                #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(&headers, None)?;
+                """,
+                *codegenScope,
+            )
         }
+
         val err =
             if (ServerBuilderGenerator.hasFallibleBuilder(
                     inputShape,
@@ -850,14 +820,48 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             *codegenScope,
                         )
                     } else {
+                        // This checks for the expected `Content-Type` header if the `@httpPayload` trait is present, as dictated by
+                        // the core Smithy library, which _does not_ require deserializing the payload.
+                        // If no members have `@httpPayload`, the expected `Content-Type` header as dictated _by the protocol_ is
+                        // checked later on for non-streaming operations, in `serverRenderShapeParser`.
+                        // Both checks require buffering the entire payload, since the check must only be performed if the payload is
+                        // not empty.
+                        val verifyRequestContentTypeHeader =
+                            writable {
+                                operationShape
+                                    .inputShape(model)
+                                    .members()
+                                    .find { it.hasTrait<HttpPayloadTrait>() }
+                                    ?.let { payload ->
+                                        val target = model.expectShape(payload.target)
+                                        if (!target.isBlobShape || target.hasTrait<MediaTypeTrait>()) {
+                                            // `null` is only returned by Smithy when there are no members, but we know there's at least
+                                            // the one with `@httpPayload`, so `!!` is safe here.
+                                            val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
+                                            rustTemplate(
+                                                """
+                                                    if !bytes.is_empty() {
+                                                        #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(
+                                                            &headers,
+                                                            Some("$expectedRequestContentType"),
+                                                        )?;
+                                                    }
+                                                    """,
+                                                *codegenScope,
+                                            )
+                                        }
+                                    }
+                            }
                         rustTemplate(
                             """
                             {
                                 let bytes = #{Hyper}::body::to_bytes(body).await?;
+                                #{VerifyRequestContentTypeHeader:W}
                                 #{Deserializer}(&bytes)?
                             }
                             """,
                             "Deserializer" to deserializer,
+                            "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
                             *codegenScope,
                         )
                     }
