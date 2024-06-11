@@ -446,13 +446,19 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
                     
-                    val encodedBody = 
+                    // TODO This for RPC v2; use `bodyMediaType`, see GitHub issue above
+//                    val encodedBody = 
+//                        """
+//                        #{Bytes}::from(
+//                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
+//                                "`body` field of Smithy protocol test is not correctly base64 encoded"
+//                            )
+//                        )
+//                        """
+                    // TODO This for other protocols
+                    val encodedBody =
                         """
-                        #{Bytes}::from(
-                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
-                                "`body` field of Smithy protocol test is not correctly base64 encoded"
-                            )
-                        )
+                        #{Bytes}::from_static($sanitizedBody.as_bytes())
                         """
 
                     "#{SmithyHttpServer}::body::Body::from($encodedBody)"
