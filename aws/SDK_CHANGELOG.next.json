@@ -6,95 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "aws-sdk-rust#1133"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
-      "message": "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "aws-sdk-rust#1079"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
-      "message": "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": [
-        "aajtodd",
-        "Velfi"
-      ],
-      "references": [
-        "aws-sdk-rust#1141",
-        "aws-sdk-rust#1146",
-        "aws-sdk-rust#1148"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
-      "message": "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "smithy-rs#3645"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
-      "message": "Update MSRV to `1.76.0`",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "landonxjames",
-      "references": [
-        "smithy-rs#3653"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
-      "message": "Compression is now supported for operations modeled with the `@requestCompression` trait.\n\n[**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2891"
-      ],
-      "since-commit": "27b4d14a5102fe1ac928e1e0c647d53597125d51",
-      "age": 5
-    },
-    {
       "message": "Fix the Content-Length enforcement so it is only applied to GET requests.",
       "meta": {
         "bug": true,
@@ -110,7 +21,7 @@
         "smithy-rs#3657"
       ],
       "since-commit": "db89652d8c11cd2a2da8e887fac8b34393c182fe",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`.",
@@ -125,7 +36,7 @@
         "smithy-rs#3673"
       ],
       "since-commit": "052b4dadc06354e673f6a642487871d5f50d135a",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix S3 ListParts API paginator infinite loop.",
@@ -139,7 +50,7 @@
         "aws-sdk-rust#1143"
       ],
       "since-commit": "052b4dadc06354e673f6a642487871d5f50d135a",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
