@@ -145,6 +145,9 @@ pub mod web_identity_token;
 ///
 /// This loader will always set [`BehaviorVersion::latest`].
 ///
+/// For more information about default configuration, refer to the documentation at:
+/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
@@ -159,6 +162,9 @@ pub fn from_env() -> ConfigLoader {
 /// Load default configuration with the _latest_ defaults.
 ///
 /// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
+///
+/// For more information about default configuration, refer to the documentation at:
+/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
 #[cfg(feature = "behavior-version-latest")]
 pub async fn load_from_env() -> SdkConfig {
     from_env().load().await
@@ -184,6 +190,9 @@ pub async fn load_from_env() -> SdkConfig {
 
 /// Create a config loader with the defaults for the given behavior version.
 ///
+/// For more information about default configuration, refer to the documentation at:
+/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
@@ -201,6 +210,9 @@ pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
 /// Load default configuration with the given behavior version.
 ///
 /// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
+///
+/// For more information about default configuration, refer to the documentation at:
+/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
 pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
     defaults(version).load().await
 }
