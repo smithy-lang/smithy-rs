@@ -59,7 +59,13 @@ class FluentClientGenerator(
         fun clientOperationFnName(
             operationShape: OperationShape,
             symbolProvider: RustSymbolProvider,
-        ): String = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+        ): String = RustReservedWords.escapeIfNeeded(clientOperationFnDocsName(operationShape, symbolProvider))
+
+        /** When using the function name in Rust docs, there's no need to escape Rust reserved words. **/
+        fun clientOperationFnDocsName(
+            operationShape: OperationShape,
+            symbolProvider: RustSymbolProvider,
+        ): String = symbolProvider.toSymbol(operationShape).name.toSnakeCase()
 
         fun clientOperationModuleName(
             operationShape: OperationShape,
@@ -277,7 +283,7 @@ private fun baseClientRuntimePluginsFn(
                         .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
                         .with_client_plugin(#{NoAuthRuntimePlugin}::new());
 
-                    #{additional_client_plugins:W};
+                    #{additional_client_plugins:W}
 
                     for plugin in configured_plugins {
                         plugins = plugins.with_client_plugin(plugin);

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import org.intellij.lang.annotations.Language
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
@@ -336,10 +337,10 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
             docs("_Note: ${it}_")
         }
     } else if (autoSuppressMissingDocs) {
+        // Otherwise, suppress the missing docs lint for this shape since
+        // the lack of documentation is a modeling issue rather than a codegen issue.
         rust("##[allow(missing_docs)] // documentation missing in model")
     }
-    // Otherwise, suppress the missing docs lint for this shape since
-    // the lack of documentation is a modeling issue rather than a codegen issue.
     return this
 }
 
@@ -439,16 +440,56 @@ fun RustWriter.deprecatedShape(shape: Shape): RustWriter {
 fun <T : AbstractCodeWriter<T>> T.escape(text: String): String =
     text.replace("$expressionStart", "$expressionStart$expressionStart")
 
-/** Parse input as HTML and normalize it */
+/** Parse input as HTML and normalize it, for suitable use within Rust docs. */
 fun normalizeHtml(input: String): String {
     val doc = Jsoup.parse(input)
     doc.body().apply {
-        normalizeAnchors() // Convert anchor tags missing href attribute into pre tags
+        normalizeAnchors()
+        escapeBracketsInText()
     }
 
     return doc.body().html()
 }
 
+/**
+ * Escape brackets in elements' inner text.
+ *
+ * For example:
+ *
+ * ```html
+ * <body>
+ *     <p>Text without brackets</p>
+ *     <div>Some text with [brackets]</div>
+ *     <span>Another [example, 1]</span>
+ * </body>
+ * ```
+ *
+ * gets converted to:
+ *
+ * ```html
+ * <body>
+ *     <p>Text without brackets</p>
+ *     <div>Some text with \[brackets\]</div>
+ *     <span>Another \[example, 1\]</span>
+ * </body>
+ * ```
+ *
+ * This is useful when rendering Rust docs, since text within brackets might get misinterpreted as broken Markdown doc
+ * links (`[link text](https://example.com)`).
+ **/
+private fun Element.escapeBracketsInText() {
+    // Select all elements that directly contain text with opening or closing brackets.
+    val elements: Elements = select("*:containsOwn([), *:containsOwn(])")
+
+    // Loop through each element and escape the brackets in the text.
+    for (element: Element in elements) {
+        val originalText = element.text()
+        val escapedText = originalText.replace("[", "\\[").replace("]", "\\]")
+        element.text(escapedText)
+    }
+}
+
+/** Convert anchor tags missing `href` attribute into `code` tags. **/
 private fun Element.normalizeAnchors() {
     getElementsByTag("a").forEach {
         val link = it.attr("href")
