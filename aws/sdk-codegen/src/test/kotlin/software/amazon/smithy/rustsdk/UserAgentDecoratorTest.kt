@@ -129,7 +129,7 @@ class UserAgentDecoratorTest {
                         )
                         .unwrap();
                         assert!(
-                            formatted.contains("md/capture-request-handler"),
+                            formatted.contains("md/http##capture-request-handler"),
                             "'{}' didn't include connector metadata",
                             formatted
                         );
