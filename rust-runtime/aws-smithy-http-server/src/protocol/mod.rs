@@ -142,7 +142,6 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_runtime_api::http::Headers;
     use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
     fn req_content_type_smithy(content_type: &'static str) -> SmithyHeaders {

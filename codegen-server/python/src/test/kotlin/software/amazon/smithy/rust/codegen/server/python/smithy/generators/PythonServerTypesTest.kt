@@ -130,6 +130,7 @@ internal class PythonServerTypesTest {
                     let req = Request::builder()
                         .method("POST")
                         .uri("/echo")
+                        .header("content-type", "application/json")
                         .body(Body::from(${payload.dq()}))
                         .unwrap();
 
@@ -222,6 +223,7 @@ internal class PythonServerTypesTest {
                 let req = Request::builder()
                     .method("POST")
                     .uri("/echo")
+                    .header("content-type", "application/json")
                     .body(Body::from("{\"value\":1676298520}"))
                     .unwrap();
                 let res = service.call(req).await.unwrap();
