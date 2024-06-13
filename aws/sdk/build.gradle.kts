@@ -475,29 +475,27 @@ tasks.register("sdkTest") {
 fun Project.registerLockfileGeneration(
     dir: File,
     name: String,
-): String {
-    val taskName = "generate${name}Lockfile"
-    tasks.register<Exec>(taskName) {
+): TaskProvider<Exec> {
+    return tasks.register<Exec>("generate${name}Lockfile") {
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "generate-lockfile")
     }
-
-    return taskName
 }
 
-val registerAwsConfigTaskName = registerLockfileGeneration(awsConfigPath, "AwsConfig")
-val registerAwsRustRuntimeTaskName = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
-val registerRustRuntimeTaskName = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
+val generateAwsConfigLockfile = registerLockfileGeneration(awsConfigPath, "AwsConfig")
+val generateAwsRuntimeLockfile = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
+val generateSmithytRuntimeLockfile = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
 
-tasks.register<Exec>("generateAwsSdkRustLockfile") {
+//Generates a lockfile from the aws-sdk-rust repo and copies it into the smithy-rs repo
+val generateAwsSdkRustLockfile = tasks.register<Exec>("generateAwsSdkRustLockfile") {
     val sdkRustPath: String =
         properties.get("aws-sdk-rust-path") ?: throw Exception("A -Paws-sdk-rust-path argument must be specified")
     workingDir(sdkRustPath)
     environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
     commandLine("cargo", "generate-lockfile")
     copy {
-        from(sdkRustPath + "/Cargo.lock")
+        from("${sdkRustPath}/Cargo.lock")
         into(rootProject.projectDir.resolve("aws/sdk"))
     }
 }
@@ -508,10 +506,10 @@ tasks.register("generateAllLockfiles") {
         "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
             "the assemble task."
     finalizedBy(
-        "generateAwsSdkRustLockfile",
-        registerAwsConfigTaskName,
-        registerAwsRustRuntimeTaskName,
-        registerRustRuntimeTaskName,
+        generateAwsSdkRustLockfile,
+        generateAwsConfigLockfile,
+        generateAwsRuntimeLockfile,
+        generateSmithytRuntimeLockfile,
     )
 }
 
