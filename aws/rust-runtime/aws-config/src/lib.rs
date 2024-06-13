@@ -145,8 +145,7 @@ pub mod web_identity_token;
 ///
 /// This loader will always set [`BehaviorVersion::latest`].
 ///
-/// For more information about default configuration, refer to the documentation at:
-/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 ///
 /// # Examples
 /// ```no_run
@@ -163,8 +162,7 @@ pub fn from_env() -> ConfigLoader {
 ///
 /// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
 ///
-/// For more information about default configuration, refer to the documentation at:
-/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 #[cfg(feature = "behavior-version-latest")]
 pub async fn load_from_env() -> SdkConfig {
     from_env().load().await
@@ -190,8 +188,7 @@ pub async fn load_from_env() -> SdkConfig {
 
 /// Create a config loader with the defaults for the given behavior version.
 ///
-/// For more information about default configuration, refer to the documentation at:
-/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 ///
 /// # Examples
 /// ```no_run
@@ -211,8 +208,7 @@ pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
 ///
 /// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
 ///
-/// For more information about default configuration, refer to the documentation at:
-/// <https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html>
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
     defaults(version).load().await
 }
