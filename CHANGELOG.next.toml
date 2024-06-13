@@ -10,3 +10,27 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """
+Stalled stream protection will no longer be applied to the following Lambda operations: [Invoke], [InvokeAsync], [InvokeWithResponseStream].
+
+[Invoke]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke
+[InvokeAsync]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_async
+[InvokeWithResponseStream]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_with_response_stream
+"""
+references = ["aws-sdk-rust#1166", "smithy-rs#3639"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Stalled stream protection will no longer be applied to the following Lambda operations: [Invoke], [InvokeAsync], [InvokeWithResponseStream].
+
+[Invoke]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke
+[InvokeAsync]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_async
+[InvokeWithResponseStream]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_with_response_stream
+"""
+references = ["aws-sdk-rust#1166", "smithy-rs#3639"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "Velfi"
