@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 // TODO This won't be needed since we'll cover it with a proper integration test.
-internal class RpcV2Test {
+internal class RpcV2CborTest {
     val model = """
         ${"\$"}version: "2.0"
 

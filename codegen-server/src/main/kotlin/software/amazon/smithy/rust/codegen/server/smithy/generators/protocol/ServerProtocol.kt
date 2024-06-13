@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -308,9 +307,9 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborPa
     }
 }
 
-class ServerRpcV2Protocol(
+class ServerRpcV2CborProtocol(
     private val serverCodegenContext: ServerCodegenContext,
-) : RpcV2(serverCodegenContext), ServerProtocol {
+) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath = "rpc_v2"
@@ -349,6 +348,8 @@ class ServerRpcV2Protocol(
     ) = writable {
         // This is just the key used by the router's map to store and lookup operations, it's completely arbitrary.
         // We use the same key used by the awsJson1.x routers for simplicity.
+        // The router will extract the service name and the operation name from the URI, build this key, and lookup the
+        // operation stored there.
         rust("$serviceName.$operationName".dq())
     }
 

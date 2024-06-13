@@ -15,7 +15,8 @@ service RpcV2Service {
     ]
 }
 
-// TODO RpcV2 should not use the `@http` trait.
+// TODO(https://github.com/smithy-lang/smithy/issues/2326): Smithy should not
+// allow HTTP binding traits in this protocol.
 @http(uri: "/simple-struct-operation", method: "POST")
 operation SimpleStructOperation {
     input: SimpleStruct
@@ -23,7 +24,6 @@ operation SimpleStructOperation {
     errors: [ValidationException]
 }
 
-// TODO RpcV2 should not use the `@http` trait.
 @http(uri: "/complex-struct-operation", method: "POST")
 operation ComplexStructOperation {
     input: ComplexStruct
@@ -51,9 +51,6 @@ apply SimpleStructOperation @httpResponseTests([
             double: 0.6969,
 
             timestamp: 1546300800,
-            // document: {
-            //     documentInteger: 69
-            // }
             enum: "DIAMOND"
 
             // With `@required`.
@@ -72,9 +69,6 @@ apply SimpleStructOperation @httpResponseTests([
             requiredDouble: 0.6969,
 
             requiredTimestamp: 1546300800,
-            // document: {
-            //     documentInteger: 69
-            // }
             requiredEnum: "DIAMOND"
         }
     },
@@ -98,9 +92,6 @@ apply SimpleStructOperation @httpResponseTests([
             requiredDouble: 0.6969,
 
             requiredTimestamp: 1546300800,
-            // document: {
-            //     documentInteger: 69
-            // }
             requiredEnum: "DIAMOND"
         }
     }
@@ -121,7 +112,6 @@ structure SimpleStruct {
     double: Double
 
     timestamp: Timestamp
-    // document: MyDocument
     enum: Suit
 
     // With `@required`.
@@ -171,7 +161,8 @@ map SimpleMap {
     value: Integer
 }
 
-// TODO Cut ticket to Smithy: their protocol tests don't have unions
+// TODO(https://github.com/smithy-lang/smithy/issues/2325): Upstream protocol
+// test suite doesn't cover unions.
 union SimpleUnion {
     blob: Blob
     boolean: Boolean
@@ -203,6 +194,3 @@ enum Suit {
     HEART
     SPADE
 }
-
-// TODO Documents are not supported in RPC v2 CBOR.
-// document MyDocument

@@ -25,7 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -82,7 +82,7 @@ internal class CborSerializerGeneratorTest {
             )
 
             val instantiator = ServerInstantiator(codegenContext)
-            val rpcV2 = RpcV2(codegenContext)
+            val rpcV2 = RpcV2Cbor(codegenContext)
 
             for (operationShape in codegenContext.model.operationShapes) {
                 val outputShape = operationShape.outputShape(codegenContext.model)

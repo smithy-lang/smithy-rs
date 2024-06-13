@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
@@ -121,7 +121,7 @@ class ClientRestXmlFactory(
 }
 
 class ClientRpcV2CborFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RpcV2(codegenContext)
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RpcV2Cbor(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
         OperationGenerator(codegenContext, protocol(codegenContext))

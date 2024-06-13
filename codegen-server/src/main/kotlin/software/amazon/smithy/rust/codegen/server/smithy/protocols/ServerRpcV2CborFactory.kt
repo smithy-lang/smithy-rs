@@ -9,14 +9,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Proto
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2Protocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 
 class ServerRpcV2CborFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
     override fun protocol(codegenContext: ServerCodegenContext): Protocol =
-        ServerRpcV2Protocol(codegenContext)
+        ServerRpcV2CborProtocol(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, ServerRpcV2Protocol(codegenContext))
+        ServerHttpBoundProtocolGenerator(codegenContext, ServerRpcV2CborProtocol(codegenContext))
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

@@ -280,12 +280,12 @@ class ServerProtocolTestGenerator(
         testModuleWriter.rust("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
 
-        Attribute.TokioTest.render(testModuleWriter)
-        Attribute.TracedTest.render(testModuleWriter)
         // The `#[traced_test]` macro desugars to using `tracing`, so we need to depend on the latter explicitly in
         // case the code rendered by the test does not make use of `tracing` at all.
         val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
         testModuleWriter.rustTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
+        Attribute.TokioTest.render(testModuleWriter)
+        Attribute.TracedTest.render(testModuleWriter)
 
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
@@ -317,7 +317,16 @@ class ServerProtocolTestGenerator(
         }
 
         with(httpRequestTestCase) {
-            renderHttpRequest(uri, method, headers, body.orNull(), bodyMediaType.orNull(), queryParams, host.orNull())
+            renderHttpRequest(
+                uri,
+                method,
+                headers,
+                body.orNull(),
+                bodyMediaType.orNull(),
+                protocol,
+                queryParams,
+                host.orNull(),
+            )
         }
         if (protocolSupport.requestBodyDeserialization) {
             makeRequest(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
@@ -397,7 +406,16 @@ class ServerProtocolTestGenerator(
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
                 // TODO(https://github.com/smithy-lang/smithy/issues/1932): we send `null` for `bodyMediaType` for now but
                 //  the Smithy protocol test should give it to us.
-                renderHttpRequest(uri.get(), method, headers, body.orNull(), bodyMediaType = null, queryParams, host.orNull())
+                renderHttpRequest(
+                    uri.get(),
+                    method,
+                    headers,
+                    body.orNull(),
+                    bodyMediaType = null,
+                    testCase.protocol,
+                    queryParams,
+                    host.orNull(),
+                )
             }
 
             makeRequest(
@@ -416,6 +434,7 @@ class ServerProtocolTestGenerator(
         headers: Map<String, String>,
         body: String?,
         bodyMediaType: String?,
+        protocol: ShapeId,
         queryParams: List<String>,
         host: String?,
     ) {
@@ -446,20 +465,23 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
                     
-                    // TODO This for RPC v2; use `bodyMediaType`, see GitHub issue above
-//                    val encodedBody = 
-//                        """
-//                        #{Bytes}::from(
-//                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
-//                                "`body` field of Smithy protocol test is not correctly base64 encoded"
-//                            )
-//                        )
-//                        """
-                    // TODO This for other protocols
-                    val encodedBody =
+                    // TODO(https://github.com/smithy-lang/smithy/issues/1932): We're using the `protocol` field as a
+                    // proxy for `bodyMediaType`. This works because `rpcv2Cbor` happens to be the only protocol where
+                    // the body is base64-encoded in the protocol test, but checking `bodyMediaType` should be a more
+                    // resilient check.
+                    val encodedBody = if (protocol.toShapeId() == ShapeId.from("smithy.protocols#rpcv2Cbor")) {
+                        """
+                        #{Bytes}::from(
+                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
+                                "`body` field of Smithy protocol test is not correctly base64 encoded"
+                            )
+                        )
+                        """
+                    } else {
                         """
                         #{Bytes}::from_static($sanitizedBody.as_bytes())
                         """
+                    }
 
                     "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {

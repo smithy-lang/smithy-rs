@@ -26,8 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-// TODO Rename these to RpcV2Cbor
-class RpcV2HttpBindingResolver(
+class RpcV2CborHttpBindingResolver(
     private val model: Model,
 ) : HttpBindingResolver {
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
@@ -50,7 +49,7 @@ class RpcV2HttpBindingResolver(
             .toList()
     }
 
-    // TODO
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     //   In the server, this is only used when the protocol actually supports the `@http` trait.
     //   However, we will have to do this for client support. Perhaps this method deserves a rename.
     override fun httpTrait(operationShape: OperationShape) = PANIC("RPC v2 does not support the `@http` trait")
@@ -84,7 +83,7 @@ class RpcV2HttpBindingResolver(
 /**
  * TODO: Docs.
  */
-open class RpcV2(val codegenContext: CodegenContext) : Protocol {
+open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -97,7 +96,7 @@ open class RpcV2(val codegenContext: CodegenContext) : Protocol {
     )
     private val jsonDeserModule = RustModule.private("json_deser")
 
-    override val httpBindingResolver: HttpBindingResolver = RpcV2HttpBindingResolver(codegenContext.model)
+    override val httpBindingResolver: HttpBindingResolver = RpcV2CborHttpBindingResolver(codegenContext.model)
 
     // Note that [CborParserGenerator] and [CborSerializerGenerator] automatically (de)serialize timestamps
     // using floating point seconds from the epoch.

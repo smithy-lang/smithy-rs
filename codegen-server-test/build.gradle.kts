@@ -48,8 +48,8 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2Service",
-            "rpcv2_extras",
-            imports = listOf("$commonModels/rpcv2-extras.smithy")
+            "rpcv2Cbor_extras",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy")
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
