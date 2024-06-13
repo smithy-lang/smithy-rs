@@ -12,7 +12,7 @@ publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
-http_1x = ["dep:http-1x", "dep:http-body-1x"]
+http_1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
 
 [dependencies]
 # Used by lru, and this forces it to be a later version that avoids
