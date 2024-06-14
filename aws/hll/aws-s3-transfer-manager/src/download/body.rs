@@ -173,9 +173,11 @@ impl UnorderedBody {
 #[cfg(test)]
 mod tests {
     use crate::download::worker::ChunkResponse;
-    use aws_smithy_types::byte_stream::AggregatedBytes;
+    use aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream};
+    use bytes::Bytes;
+    use tokio::sync::mpsc;
 
-    use super::Sequencer;
+    use super::{Body, Sequencer};
 
     fn chunk_resp(seq: u64, data: Option<AggregatedBytes>) -> ChunkResponse {
         ChunkResponse {
@@ -195,5 +197,27 @@ mod tests {
         assert_eq!(sequencer.pop().unwrap().seq, 0);
     }
 
-    // TODO(aws-sdk-rust#1159) - add body tests
+    #[tokio::test]
+    async fn test_body_next() {
+        let (tx, rx) = mpsc::channel(2);
+        let mut body = Body::new(rx);
+        tokio::spawn(async move {
+            for i in 0..3 {
+                let data = Bytes::from(format!("chunk {i}"));
+                let aggregated = ByteStream::from(data).collect().await.unwrap();
+                let chunk = chunk_resp(i as u64, Some(aggregated));
+                tx.send(Ok(chunk)).await.unwrap();
+            }
+        });
+
+        let mut received = Vec::new();
+        while let Some(chunk) = body.next().await {
+            let chunk = chunk.expect("chunk ok");
+            let data = String::from_utf8(chunk.to_vec()).unwrap();
+            received.push(data);
+        }
+
+        let expected: Vec<String> = vec![0, 1, 2].iter().map(|i| format!("chunk {i}")).collect();
+        assert_eq!(expected, received);
+    }
 }
