@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod body;
+pub mod body;
 mod context;
 mod discovery;
 mod handle;
@@ -12,15 +12,15 @@ mod object_meta;
 mod worker;
 
 use crate::download::body::Body;
-use crate::download::discovery::discover_obj;
+use crate::download::discovery::{discover_obj, ObjectDiscovery};
 use crate::download::handle::DownloadHandle;
-use crate::download::worker::{chunk_downloader, distribute_work};
+use crate::download::worker::{chunk_downloader, distribute_work, ChunkResponse};
 use crate::error::TransferError;
 use crate::{MEBIBYTE, MIN_PART_SIZE};
 use aws_sdk_s3::operation::get_object::builders::{GetObjectFluentBuilder, GetObjectInputBuilder};
 use aws_types::SdkConfig;
 use context::DownloadContext;
-use std::cmp;
+use std::{cmp, mem};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::Instrument;
@@ -130,6 +130,11 @@ pub struct Downloader {
 }
 
 impl Downloader {
+    /// Create a new [Builder]
+    pub fn builder() -> Builder {
+        Builder::new()
+    }
+
     /// Download a single object from S3.
     ///
     /// A single logical request may be split into many concurrent ranged `GetObject` requests
@@ -165,9 +170,9 @@ impl Downloader {
         };
 
         // make initial discovery about the object size, metadata, possibly first chunk
-        let discovery = discover_obj(&ctx, &req).await?;
-
+        let mut discovery = discover_obj(&ctx, &req).await?;
         let (comp_tx, comp_rx) = mpsc::channel(self.concurrency);
+        let start_seq = handle_discovery_chunk(&mut discovery, &comp_tx).await;
 
         // spawn all work into the same JoinSet such that when the set is dropped all tasks are cancelled.
         let mut tasks = JoinSet::new();
@@ -179,7 +184,7 @@ impl Downloader {
             let part_size = self.target_part_size_bytes;
             let rem = discovery.remaining.clone();
 
-            tasks.spawn(distribute_work(rem, input, part_size, work_tx));
+            tasks.spawn(distribute_work(rem, input, part_size, start_seq, work_tx));
 
             for i in 0..self.concurrency {
                 let worker = chunk_downloader(ctx.clone(), work_rx.clone(), comp_tx.clone())
@@ -199,4 +204,23 @@ impl Downloader {
 
         Ok(handle)
     }
+}
+
+/// Handle possibly sending the first chunk of data received through discovery. Returns
+/// the starting sequence number to use for remaining chunks.
+async fn handle_discovery_chunk(
+    discovery: &mut ObjectDiscovery,
+    completed: &mpsc::Sender<Result<ChunkResponse, TransferError>>,
+) -> u64 {
+    let mut start_seq = 0;
+    if let Some(initial_data) = mem::replace(&mut discovery.initial_chunk, None) {
+        let chunk = ChunkResponse {
+            seq: start_seq,
+            data: Some(initial_data),
+            object_meta: Some(discovery.meta.clone()),
+        };
+        completed.send(Ok(chunk)).await.expect("initial chunk");
+        start_seq += 1;
+    }
+    start_seq
 }

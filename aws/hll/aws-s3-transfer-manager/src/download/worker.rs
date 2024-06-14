@@ -96,12 +96,13 @@ pub(super) async fn distribute_work(
     remaining: RangeInclusive<u64>,
     input: GetObjectInputBuilder,
     part_size: u64,
+    start_seq: u64,
     tx: async_channel::Sender<ChunkRequest>,
 ) {
     let end = *remaining.end();
     let mut pos = *remaining.start();
     let mut remaining = end - pos + 1;
-    let mut seq = 0;
+    let mut seq = start_seq;
 
     while remaining > 0 {
         let start = pos;
@@ -151,7 +152,7 @@ mod tests {
         let input = GetObjectInputBuilder::default();
         let (tx, rx) = async_channel::unbounded();
 
-        tokio::spawn(distribute_work(rem, input, part_size, tx));
+        tokio::spawn(distribute_work(rem, input, part_size, 0, tx));
 
         let mut chunks = Vec::new();
         while let Ok(chunk) = rx.recv().await {
