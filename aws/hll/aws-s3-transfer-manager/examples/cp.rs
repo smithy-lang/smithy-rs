@@ -30,9 +30,14 @@ pub struct Args {
     /// Destination to copy to <S3Uri | Local>
     #[arg(required = true)]
     dest: TransferUri,
+
     /// Number of concurrent uploads/downloads to perform.
     #[arg(long, default_value_t = 8)]
     concurrency: usize,
+
+    /// Part size to use
+    #[arg(long, default_value_t = 8388608)]
+    part_size: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -114,6 +119,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tm = Downloader::builder()
         .sdk_config(config)
         .concurrency(args.concurrency)
+        .target_part_size(args.part_size)
         .build();
 
     let (bucket, key) = args.source.expect_s3().parts();
