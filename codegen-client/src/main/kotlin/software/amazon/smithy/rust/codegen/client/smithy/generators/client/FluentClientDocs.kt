@@ -34,8 +34,8 @@ object FluentClientDocs {
                 or identity resolver to be configured. The config is used to customize various aspects of the client,
                 such as:
 
-                  - [HTTP Connector](crate::config::Builder::http_connector)
-                  - [Retry](crate::config::Builder::retry_config)
+                  - [The underlying HTTP client](crate::config::Builder::http_client)
+                  - [Retries](crate::config::Builder::retry_config)
                   - [Timeouts](crate::config::Builder::timeout_config)
                   - [... and more](crate::config::Builder)
 
@@ -76,7 +76,7 @@ object FluentClientDocs {
                 if (operation != null && member != null) {
                     val operationSymbol = symbolProvider.toSymbol(operation)
                     val memberSymbol = symbolProvider.toSymbol(member)
-                    val operationFnName = FluentClientGenerator.clientOperationFnName(operation, symbolProvider)
+                    val operationFnName = FluentClientGenerator.clientOperationFnDocsName(operation, symbolProvider)
                     docsTemplate(
                         """
                         ## Using the `Client`

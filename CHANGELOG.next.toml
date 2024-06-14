@@ -11,60 +11,23 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = """
+Stalled stream protection will no longer be applied to the following Lambda operations: [Invoke], [InvokeAsync], [InvokeWithResponseStream].
+
+[Invoke]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke
+[InvokeAsync]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_async
+[InvokeWithResponseStream]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_with_response_stream
+"""
+references = ["aws-sdk-rust#1166", "smithy-rs#3639"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
-references = ["aws-sdk-rust#1133"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "Add documentation on the default configuration to `from_env`, `load_from_env`, `defaults`, and `load_from_defaults` in the `aws-config` crate."
+references = ["aws-sdk-rust#1162"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float."
-references = ["aws-sdk-rust#1133"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
-references = ["smithy-rs#3491", "aws-sdk-rust#1079"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur."
-references = ["aws-sdk-rust#1079"]
-meta = { "breaking" = false, "bug" = true, "tada" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
-references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-authors = ["aajtodd", "Velfi"]
-
-[[smithy-rs]]
-message = "Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read."
-references = ["aws-sdk-rust#1141", "aws-sdk-rust#1146", "aws-sdk-rust#1148"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-authors = ["aajtodd", "Velfi"]
-
-[[aws-sdk-rust]]
-message = "Updating the documentation for the `app_name` method on `ConfigLoader` to indicate the order of precedence for the sources of the `AppName`."
-references = ["smithy-rs#3645"]
-meta = { "breaking" = false, "bug" = false, "tada" = false }
-author = "landonxjames"
-
-[[aws-sdk-rust]]
-message = "Update MSRV to `1.76.0`"
-references = ["smithy-rs#3653"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
-author = "landonxjames"
-
-[[smithy-rs]]
-message = "Update MSRV to `1.76.0`"
-references = ["smithy-rs#3653"]
-meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "all" }
-author = "landonxjames"
 
 [[smithy-rs]]
 message = "A feature, `aws-lambda`, has been added to generated SDKs to re-export types required for Lambda deployment."

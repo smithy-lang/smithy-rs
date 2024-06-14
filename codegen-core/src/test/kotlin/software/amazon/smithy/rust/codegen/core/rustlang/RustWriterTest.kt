@@ -100,6 +100,21 @@ class RustWriterTest {
     }
 
     @Test
+    fun `normalize HTML`() {
+        val output =
+            normalizeHtml(
+                """
+                <a>Link without href attribute</a>
+                <div>Some text with [brackets]</div>
+                <span>] mismatched [ is escaped too</span>
+                """,
+            )
+        output shouldContain "<code>Link without href attribute</code>"
+        output shouldContain "Some text with \\[brackets\\]"
+        output shouldContain "\\] mismatched \\[ is escaped too"
+    }
+
+    @Test
     fun `generate doc links`() {
         val model =
             """

@@ -14,6 +14,7 @@ on:
 jobs:
   smithy-rs-scheduled-dry-run-release:
     name: Scheduled dry-run release
+    if: github.repository == 'smithy-lang/smithy-rs'
     uses: ./.github/workflows/release.yml
     with:
       commit_sha: main

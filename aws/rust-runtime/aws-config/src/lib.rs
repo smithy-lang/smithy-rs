@@ -145,6 +145,8 @@ pub mod web_identity_token;
 ///
 /// This loader will always set [`BehaviorVersion::latest`].
 ///
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
+///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
@@ -159,6 +161,8 @@ pub fn from_env() -> ConfigLoader {
 /// Load default configuration with the _latest_ defaults.
 ///
 /// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
+///
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 #[cfg(feature = "behavior-version-latest")]
 pub async fn load_from_env() -> SdkConfig {
     from_env().load().await
@@ -184,6 +188,8 @@ pub async fn load_from_env() -> SdkConfig {
 
 /// Create a config loader with the defaults for the given behavior version.
 ///
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
+///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
@@ -201,6 +207,8 @@ pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
 /// Load default configuration with the given behavior version.
 ///
 /// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
+///
+/// For more information about default configuration, refer to the AWS SDKs and Tools [shared configuration documentation](https://docs.aws.amazon.com/sdkref/latest/guide/creds-config-files.html).
 pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
     defaults(version).load().await
 }
@@ -230,7 +238,8 @@ mod loader {
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
-        app_name, credentials, endpoint_url, ignore_configured_endpoint_urls as ignore_ep, region,
+        app_name, credentials, disable_request_compression, endpoint_url,
+        ignore_configured_endpoint_urls as ignore_ep, region, request_min_compression_size_bytes,
         retry_config, timeout_config, use_dual_stack, use_fips,
     };
     use crate::meta::region::ProvideRegion;
@@ -274,6 +283,8 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        disable_request_compression: Option<bool>,
+        request_min_compression_size_bytes: Option<u32>,
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
@@ -661,6 +672,18 @@ mod loader {
             self
         }
 
+        #[doc = docs_for!(disable_request_compression)]
+        pub fn disable_request_compression(mut self, disable_request_compression: bool) -> Self {
+            self.disable_request_compression = Some(disable_request_compression);
+            self
+        }
+
+        #[doc = docs_for!(request_min_compression_size_bytes)]
+        pub fn request_min_compression_size_bytes(mut self, size: u32) -> Self {
+            self.request_min_compression_size_bytes = Some(size);
+            self
+        }
+
         /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`].
         ///
         /// This configures stalled stream protection. When enabled, download streams
@@ -778,6 +801,22 @@ mod loader {
                     .await
             };
 
+            let disable_request_compression = if self.disable_request_compression.is_some() {
+                self.disable_request_compression
+            } else {
+                disable_request_compression::disable_request_compression_provider(&conf).await
+            };
+
+            let request_min_compression_size_bytes =
+                if self.request_min_compression_size_bytes.is_some() {
+                    self.request_min_compression_size_bytes
+                } else {
+                    request_min_compression_size_bytes::request_min_compression_size_bytes_provider(
+                        &conf,
+                    )
+                    .await
+                };
+
             let base_config = timeout_config::default_provider()
                 .configure(&conf)
                 .timeout_config()
@@ -853,8 +892,8 @@ mod loader {
                     v
                 }
             };
-            builder.set_endpoint_url(endpoint_url);
 
+            builder.set_endpoint_url(endpoint_url);
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
@@ -875,6 +914,8 @@ mod loader {
             builder.set_sleep_impl(sleep_impl);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_disable_request_compression(disable_request_compression);
+            builder.set_request_min_compression_size_bytes(request_min_compression_size_bytes);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
@@ -1045,7 +1086,7 @@ mod loader {
         }
 
         #[tokio::test]
-        async fn load_fips() {
+        async fn load_use_fips() {
             let conf = base_conf().use_fips(true).load().await;
             assert_eq!(Some(true), conf.use_fips());
         }
@@ -1057,6 +1098,27 @@ mod loader {
 
             let conf = base_conf().load().await;
             assert_eq!(None, conf.use_dual_stack());
+        }
+
+        #[tokio::test]
+        async fn load_disable_request_compression() {
+            let conf = base_conf().disable_request_compression(true).load().await;
+            assert_eq!(Some(true), conf.disable_request_compression());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.disable_request_compression());
+        }
+
+        #[tokio::test]
+        async fn load_request_min_compression_size_bytes() {
+            let conf = base_conf()
+                .request_min_compression_size_bytes(99)
+                .load()
+                .await;
+            assert_eq!(Some(99), conf.request_min_compression_size_bytes());
+
+            let conf = base_conf().load().await;
+            assert_eq!(None, conf.request_min_compression_size_bytes());
         }
 
         #[tokio::test]

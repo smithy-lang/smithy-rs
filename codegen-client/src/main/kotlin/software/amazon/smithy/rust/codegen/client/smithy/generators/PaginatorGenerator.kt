@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.traits.IsTruncatedPaginatorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -21,8 +22,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -71,6 +74,13 @@ class PaginatorGenerator private constructor(
     private val outputType = symbolProvider.toSymbol(outputShape)
     private val errorType = symbolProvider.symbolForOperationError(operation)
 
+    private val isTruncatedPaginator =
+        codegenContext.model.getShape(outputShape.toShapeId()).orNull().let { shape ->
+            shape?.getTrait<SyntheticOutputTrait>()?.originalId.let { shapeId ->
+                codegenContext.model.getShape(shapeId).orNull()?.hasTrait<IsTruncatedPaginatorTrait>() ?: false
+            }
+        }
+
     private fun paginatorType(): RuntimeType =
         RuntimeType.forInlineFun(
             paginatorName,
@@ -89,7 +99,9 @@ class PaginatorGenerator private constructor(
             "Error" to errorType,
             "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
             // SDK Types
-            "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+            "HttpResponse" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::orchestrator::HttpResponse"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "pagination_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::pagination_stream"),
             // External Types
@@ -161,7 +173,7 @@ class PaginatorGenerator private constructor(
                                 let done = match resp {
                                     #{Ok}(ref resp) => {
                                         let new_token = #{output_token}(resp);
-                                        let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
+                                        #{is_empty_setter:W}
                                         if !is_empty && new_token == input.$inputTokenMember.as_ref() && self.stop_on_duplicate_token {
                                             true
                                         } else {
@@ -211,7 +223,35 @@ class PaginatorGenerator private constructor(
                             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                         )
                     },
+                "is_empty_setter" to isEmptySetter(),
             )
+        }
+
+    /** Generate code to calculate the value of is_empty. For most paginators this
+     * is indicated by the next token being the empty string. But for paginators
+     * with the isTruncatedPaginator trait the next token is not necessarily empty.
+     * (ex: for s3 ListParts the final next token is "0" when pagination is complete,
+     * causing the paginator to go back to the first page and loop forever)
+     * In this case we use a false value of isTruncated as the only indicator that
+     * the pagination is exhausted.
+     * */
+    private fun isEmptySetter() =
+        writable {
+            if (isTruncatedPaginator) {
+                rustTemplate(
+                    """
+                    // Pagination is exhausted when `is_truncated` is false
+                    let is_empty = !resp.is_truncated.unwrap_or(false);
+                    """,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    // Pagination is exhausted when the next token is an empty string
+                    let is_empty = new_token.map(|token| token.is_empty()).unwrap_or(true);
+                    """,
+                )
+            }
         }
 
     /** Type of the inner item of the paginator */
@@ -280,7 +320,10 @@ class PaginatorGenerator private constructor(
                         ),
                     "item_type" to
                         writable {
-                            rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
+                            rustTemplate(
+                                "#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>",
+                                *codegenScope,
+                            )
                         },
                     *codegenScope,
                 )
