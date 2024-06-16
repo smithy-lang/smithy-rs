@@ -237,7 +237,8 @@ fun Project.registerModifyMtimeTask() {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
                 @Suppress("UNCHECKED_CAST")
-                val previousBuildHashes: Map<String, Long> = project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
+                val previousBuildHashes: Map<String, Long> =
+                    project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }
