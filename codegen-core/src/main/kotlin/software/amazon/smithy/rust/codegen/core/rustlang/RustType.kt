@@ -667,6 +667,11 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
                 }
             }
 
+        fun attributeWithStringAsArgument(runtimeType: RuntimeType, comment: String): Writable = {
+            // Sorted derives look nicer than unsorted, and it makes test output easier to predict
+            rustInline("#W(\"$comment\")", runtimeType.writable)
+        }
+
         fun derive(runtimeTypes: Collection<RuntimeType>): Writable = derive(*runtimeTypes.toTypedArray())
 
         fun pair(pair: Pair<String, String>): Writable =

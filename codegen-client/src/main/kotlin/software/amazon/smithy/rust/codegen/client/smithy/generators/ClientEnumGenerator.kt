@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumMemberModel
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.RenderSerdeAttribute
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /** Infallible enums have an `Unknown` variant and can't fail to parse */
@@ -158,6 +159,8 @@ data class InfallibleEnumType(
                 This is not intended to be used directly.
                 """.trimIndent(),
             )
+
+            RenderSerdeAttribute.addSerdeWithoutShapeModel(this)
             context.enumMeta.render(this)
             rustTemplate("struct $UNKNOWN_VARIANT_VALUE(pub(crate) #{String});", *preludeScope)
             rustBlock("impl $UNKNOWN_VARIANT_VALUE") {

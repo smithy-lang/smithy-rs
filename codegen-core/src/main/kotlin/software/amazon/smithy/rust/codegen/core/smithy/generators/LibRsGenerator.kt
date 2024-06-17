@@ -25,6 +25,8 @@ sealed class ModuleDocSection {
     object CrateOrganization : ModuleDocSection()
 
     object Examples : ModuleDocSection()
+
+    object AWSSdkUnstable : ModuleDocSection()
 }
 
 sealed class LibRsSection(name: String) : Section(name) {
@@ -77,6 +79,16 @@ class LibRsGenerator(
                     }
                 }
             }
+
+            docSection(ModuleDocSection.AWSSdkUnstable).also { docs ->
+                if (docs.isNotEmpty()) {
+                    containerDocs("\n## Enabling Unstable Features")
+                    docs.forEach { writeTo ->
+                        writeTo(this)
+                    }
+                }
+            }
+
 
             // Examples
             docSection(ModuleDocSection.Examples).also { docs ->

@@ -229,6 +229,8 @@ open class EnumGenerator(
     private fun RustWriter.renderUnnamedEnum() {
         documentShape(shape, model)
         deprecatedShape(shape)
+        RenderSerdeAttribute.addSerde(this, shape, model)
+        RenderSerdeAttribute.addSensitiveWarningDoc(this, shape, model)
         context.enumMeta.render(this)
         rust("struct ${context.enumName}(String);")
         implBlock(
@@ -279,6 +281,8 @@ open class EnumGenerator(
         )
         deprecatedShape(shape)
 
+        RenderSerdeAttribute.addSerde(this, shape, model)
+        RenderSerdeAttribute.addSensitiveWarningDoc(this, shape, model)
         context.enumMeta.render(this)
         rustBlock("enum ${context.enumName}") {
             context.sortedMembers.forEach { member -> member.render(this) }

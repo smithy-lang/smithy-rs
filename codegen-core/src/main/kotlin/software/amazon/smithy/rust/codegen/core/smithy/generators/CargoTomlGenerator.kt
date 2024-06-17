@@ -110,9 +110,18 @@ class CargoTomlGenerator(
                 "dev-dependencies" to
                     dependencies.filter { it.scope == DependencyScope.Dev }
                         .associate { it.name to it.toMap() },
+                "target.'cfg(aws_sdk_unstable)'.dependencies" to dependencies.filter {
+                    it.scope == DependencyScope.CfgUnstable
+                }
+                .associate { it.name to it.toMap() },
                 "features" to cargoFeatures.toMap(),
             ).deepMergeWith(manifestCustomizations)
 
-        writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
+        // NOTE: without this it will produce ["target.'cfg(aws_sdk_unstable)'.dependencies"]
+        // In JSON, this is an equivalent of: {"target.'cfg(aws_sdk_unstable)'.dependencies" : ...}
+        // To make it work, it has to be: {"target": {'cfg(aws_sdk_unstable)': {"dependencies": ...}}}
+        // This piece of code fixes it.
+        var tomlString = TomlWriter().write(cargoToml).replace("\"target.'cfg(aws_sdk_unstable)'.dependencies\"", "target.'cfg(aws_sdk_unstable)'.dependencies")
+        writer.writeWithNoFormatting(tomlString)
     }
 }

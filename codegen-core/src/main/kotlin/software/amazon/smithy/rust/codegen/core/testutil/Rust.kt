@@ -46,6 +46,89 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
+// cargo commands and env values
+private object Commands {
+    const val CargoFmt = "cargo fmt"
+    const val CargoClippy = "cargo clippy"
+
+    private const val cfgUnstable = "--cfg aws_sdk_unstable"
+    private const val allFeature = "--all-features"
+
+    // test variations
+    enum class TestVariation {
+        ALL_FEATURES_WITHOUT_UNSTABLE,
+        NO_FEATURES_WITHOUT_UNSTABLE,
+        ALL_FEATURES_WITH_UNSTABLE,
+        NO_FEATURES_WITH_UNSTABLE,
+
+      val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable =
+            writable {
+                docs("Some test documentation\n\nSome more details...")
+            }
+    }
+
+    val ALL_VARIATIONS = listOf(
+        TestVariation.ALL_FEATURES_WITHOUT_UNSTABLE,
+        TestVariation.NO_FEATURES_WITHOUT_UNSTABLE,
+        TestVariation.ALL_FEATURES_WITH_UNSTABLE,
+        TestVariation.NO_FEATURES_WITH_UNSTABLE,
+    )
+    fun decorateCmd(cmd: String, variation: TestVariation): String {
+        var data = when (variation) {
+            TestVariation.ALL_FEATURES_WITHOUT_UNSTABLE -> "$cmd $allFeature"
+            TestVariation.NO_FEATURES_WITHOUT_UNSTABLE -> cmd
+            TestVariation.ALL_FEATURES_WITH_UNSTABLE -> "$cmd $allFeature $cfgUnstable"
+            TestVariation.NO_FEATURES_WITH_UNSTABLE -> "$cmd $cfgUnstable"
+        }
+
+        return data
+    }
+
+    // helper
+    private fun func(s: String, add: String, flag: Boolean): String =
+        if (flag) {
+            "$s $add"
+        } else {
+            s
+        }
+
+    // unstable flag
+    fun cargoEnvDenyWarnings(enableUnstable: Boolean): Map<String, String> {
+        return mapOf(
+            "RUSTFLAGS" to func("-D warnings", cfgUnstable, enableUnstable),
+        )
+    }
+
+    fun cargoEnvAllowDeadCode(enableUnstable: Boolean): Map<String, String> {
+        return mapOf(
+            "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
+        )
+    }
+
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoTest(true)
+    // // cargo test --all-features
+    // cargoTest(false)
+    // // cargo test
+    // ```
+    fun cargoTest(variation: TestVariation): String {
+        return decorateCmd("cargo test", variation)
+    }
+
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoCheck(true)
+    // // cargo test --all-features
+    // cargoCheck(false)
+    // // cargo test
+    // ```
+    fun cargoCheck(variation: TestVariation): String {
+        return decorateCmd("cargo check", variation)
 val TestModuleDocProvider =
     object : ModuleDocProvider {
         override fun docsWriter(module: RustModule.LeafModule): Writable =
@@ -54,9 +137,14 @@ val TestModuleDocProvider =
             }
     }
 
-/**
- * Waiting for Kotlin to stabilize their temp directory functionality
- */
+val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
+            docs("Some test documentation\n\nSome more details...")
+        }
+    }
+
+/** Waiting for Kotlin to stabilize their temp directory functionality */
 private fun tempDir(directory: File? = null): File {
     return if (directory != null) {
         createTempDirectory(directory.toPath(), "smithy-test").toFile()
@@ -68,7 +156,8 @@ private fun tempDir(directory: File? = null): File {
 /**
  * Creates a Cargo workspace shared among all tests
  *
- * This workspace significantly improves test performance by sharing dependencies between different tests.
+ * This workspace significantly improves test performance by sharing dependencies between different
+ * tests.
  */
 object TestWorkspace {
     private val baseDir by lazy {
@@ -154,20 +243,25 @@ object TestWorkspace {
             FileManifest.create(subprojectDir.toPath()),
             symbolProvider,
             codegenConfig,
-        ).apply {
-            lib {
-                // If the test fails before the crate is finalized, we'll end up with a broken crate.
-                // Since all tests are generated into the same workspace (to avoid re-compilation) a broken crate
-                // breaks the workspace and all subsequent unit tests. By putting this comment in, we prevent
-                // that state from occurring.
-                rust("// touch lib.rs")
+        )
+            .apply {
+                lib {
+                    // If the test fails before the crate is finalized, we'll end up with a
+                    // broken crate.
+                    // Since all tests are generated into the same workspace (to avoid
+                    // re-compilation) a broken crate
+                    // breaks the workspace and all subsequent unit tests. By putting this
+                    // comment in, we prevent
+                    // that state from occurring.
+                    rust("// touch lib.rs")
+                }
             }
-        }
     }
 }
 
 /**
- * Generates a test plugin context for [model] and returns the plugin context and the path it is rooted it.
+ * Generates a test plugin context for [model] and returns the plugin context and the path it is
+ * rooted it.
  *
  * Example:
  * ```kotlin
@@ -216,7 +310,8 @@ fun generatePluginContext(
     }
 
     val settings = settingsBuilder.merge(additionalSettings).build()
-    val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
+    val pluginContext =
+        PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()
     return pluginContext to testPath
 }
 
@@ -226,9 +321,7 @@ fun RustWriter.unitTest(
 ) {
     val testName = name ?: safeName("test")
     raw("#[test]")
-    rustBlock("fn $testName()") {
-        writeWithNoFormatting(test)
-    }
+    rustBlock("fn $testName()") { writeWithNoFormatting(test) }
 }
 
 /*
@@ -263,7 +356,9 @@ fun RustWriter.assertNoNewDependencies(
     val endingDependencies = cargoDependencies().toSet()
     val newDeps = (endingDependencies - startingDependencies)
     val invalidDeps =
-        newDeps.mapNotNull { dep -> dependencyFilter(dep)?.let { message -> message to dep } }.orNullIfEmpty()
+        newDeps
+            .mapNotNull { dep -> dependencyFilter(dep)?.let { message -> message to dep } }
+            .orNullIfEmpty()
     if (invalidDeps != null) {
         val badDeps = invalidDeps.map { it.second.rustName }
         val writtenOut = this.toString()
@@ -329,7 +424,8 @@ class TestWriterDelegator(
 /**
  * Generate a new test module
  *
- * This should only be used in test code—the generated module name will be something like `tests_123`
+ * This should only be used in test code—the generated module name will be something like
+ * `tests_123`
  */
 fun RustCrate.testModule(block: Writable) =
     lib {
@@ -341,15 +437,20 @@ fun RustCrate.testModule(block: Writable) =
     }
 
 fun FileManifest.printGeneratedFiles() {
-    this.files.forEach { path ->
-        println("file:///$path")
-    }
+    this.files.forEach { path -> println("file:///$path") }
 }
 
 /**
- * Setting `runClippy` to true can be helpful when debugging clippy failures, but
- * should generally be set to `false` to avoid invalidating the Cargo cache between
- * every unit test run.
+ * Setting `runClippy` to true can be helpful when debugging clippy failures, but should generally
+ * be set to `false` to avoid invalidating the Cargo cache between every unit test run. If you want
+ * to enable each features individually, specify the name of the feature on featuresToEnable. e.g.
+ * ```kotlin
+ * compileAndTest(featuresToEnable = ["this", "that"])
+ * ```
+ * All features are enabled by default. If you wish to disable them, set enableAllFeatures to False.
+ * ```kotlin
+ * compileAndTest(featuresToEnable = false)
+ * ```
  */
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
@@ -371,7 +472,7 @@ fun TestWriterDelegator.compileAndTest(
     println("Generated files:")
     printGeneratedFiles()
     try {
-        "cargo fmt".runCommand(baseDir)
+        Commands.CargoFmt.runCommand(baseDir)
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
@@ -382,18 +483,24 @@ fun TestWriterDelegator.compileAndTest(
     val env = mapOf("RUSTFLAGS" to "")
     baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
 
-    val testOutput = "cargo test".runCommand(baseDir, env)
+    val sep = "\n======================= OUTPUT ===========================\n"
+    val allOutputs = Commands.ALL_VARIATIONS.map {
+        Commands.cargoTest(it).runCommand(baseDir, env)
+    }.map { "$sep $it" }.joinToString() { it }
+
     if (runClippy) {
-        "cargo clippy --all-features".runCommand(baseDir, env)
+        Commands.CargoClippy.runCommand(baseDir, env)
     }
-    return testOutput
+
+    return allOutputs
 }
 
 fun Path.writeDotCargoConfigToml(rustFlags: List<String>) {
     val dotCargoDir = this.resolve(".cargo")
     Files.createDirectory(dotCargoDir)
 
-    dotCargoDir.resolve("config.toml")
+    dotCargoDir
+        .resolve("config.toml")
         .writeText(
             """
             [build]
@@ -416,12 +523,9 @@ fun String.shouldParseAsRust() {
     "rustfmt ${tempFile.absolutePath}".runCommand()
 }
 
-/**
- * Compiles the contents of the given writer (including dependencies) and runs the tests
- */
+/** Compiles the contents of the given writer (including dependencies) and runs the tests */
 fun RustWriter.compileAndTest(
-    @Language("Rust", prefix = "fn test() {", suffix = "}")
-    main: String = "",
+    @Language("Rust", prefix = "fn test() {", suffix = "}") main: String = "",
     clippy: Boolean = false,
     expectFailure: Boolean = false,
 ): String {
@@ -453,13 +557,31 @@ fun RustWriter.compileAndTest(
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
-        return testOutput
-    } catch (e: CommandError) {
-        if (!expectFailure) {
-            println("Test sources for debugging: file://${testModule.absolutePath}")
+    val tempDir = this.toString().intoCrate(deps, module = module, main = main, strict = clippy)
+    val mainRs = tempDir.resolve("src/main.rs")
+    val testModule = tempDir.resolve("src/$module.rs")
+
+    val outputKeep = ArrayList<String>()
+    for (variation in Commands.ALL_VARIATIONS) {
+        try {
+            val testOutput =
+                if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+                    Commands.cargoTest(variation).runCommand(tempDir.toPath())
+                } else {
+                    Commands.cargoCheck(variation).runCommand(tempDir.toPath())
+                }
+            outputKeep.add(testOutput)
+            if (expectFailure) {
+                println("Test sources for debugging: file://${testModule.absolutePath}")
+            }
+        } catch (e: CommandError) {
+            if (!expectFailure) {
+                println("Test sources for debugging: file://${testModule.absolutePath}")
+            }
+            throw e
         }
-        throw e
     }
+    return outputKeep.joinToString() { it }
 }
 
 private fun String.intoCrate(
@@ -531,8 +653,8 @@ fun String.shouldCompile(): File {
 }
 
 /**
- * Inserts the provided strings as a main function and executes the result. This is intended to be used to validate
- * that generated code compiles and has some basic properties.
+ * Inserts the provided strings as a main function and executes the result. This is intended to be
+ * used to validate that generated code compiles and has some basic properties.
  *
  * Example usage:
  * ```
@@ -554,12 +676,11 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {
         val name = safeName("test")
         withInlineModule(RustModule.inlineTests(name), TestModuleDocProvider) {
-            unitTest(name) {
-                test(this)
-            }
+            unitTest(name) { test(this) }
         }
     }
     return this
 }
 
-fun String.runWithWarnings(crate: Path) = this.runCommand(crate, mapOf("RUSTFLAGS" to "-D warnings"))
+fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean = true) =
+    this.runCommand(crate, Commands.cargoEnvDenyWarnings(enableUnstableFlag))

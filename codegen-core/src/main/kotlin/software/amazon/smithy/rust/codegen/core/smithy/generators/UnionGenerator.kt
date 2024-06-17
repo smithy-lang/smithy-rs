@@ -66,7 +66,7 @@ open class UnionGenerator(
     open fun render() {
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
-
+        RenderSerdeAttribute.addSerde(writer, shape, model)
         val containerMeta = unionSymbol.expectRustMetadata()
         containerMeta.render(writer)
 

@@ -173,7 +173,9 @@ open class StructureGenerator(
         memberName: String,
         memberSymbol: Symbol,
     ) {
+        RenderSerdeAttribute.skipIfStream(writer, member, model, shape)
         writer.renderMemberDoc(member, memberSymbol)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         writer.deprecatedShape(member)
         memberSymbol.expectRustMetadata().render(writer)
         writer.write("$memberName: #T,", memberSymbol)
@@ -184,6 +186,8 @@ open class StructureGenerator(
         val containerMeta = symbol.expectRustMetadata()
         writer.documentShape(shape, model)
         writer.deprecatedShape(shape)
+        RenderSerdeAttribute.addSerde(writer, shape, model)
+        RenderSerdeAttribute.addSensitiveWarningDoc(writer, shape, model)
         containerMeta.render(writer)
 
         writer.rustBlock("struct $name ${shape.lifetimeDeclaration(symbolProvider)}") {
@@ -193,6 +197,7 @@ open class StructureGenerator(
             writeCustomizations(customizations, StructureSection.AdditionalFields(shape))
         }
 
+        RenderSerdeAttribute.importSerde(writer, shape, model)
         renderStructureImpl()
         if (!containerMeta.hasDebugDerive()) {
             renderDebugImpl()

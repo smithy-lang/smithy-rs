@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Sensitiv
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customize.SerdeDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointParamsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
@@ -59,6 +60,7 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
         val codegenDecorator =
             CombinedClientCodegenDecorator.fromClasspath(
                 context,
+                SerdeDecorator(),
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
