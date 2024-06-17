@@ -37,3 +37,9 @@ Then, call `PresignedRequest::make_http_1x_request` or `PresignedRequest::into_h
 references = ["smithy-rs#3696"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "`AwsErrorCodeClassifier` for S3 now treats `InternalError` as a transient error to trigger retries."
+references = ["aws-sdk-rust#1163"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
