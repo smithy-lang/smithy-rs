@@ -53,7 +53,7 @@ impl<E> Default for AwsErrorCodeClassifier<E> {
     }
 }
 
-/// Builder for [`AwsErrorCodeClassifierBuilder`]
+/// Builder for [`AwsErrorCodeClassifier`]
 #[derive(Debug)]
 pub struct AwsErrorCodeClassifierBuilder<E> {
     throttling_errors: Option<Cow<'static, [&'static str]>>,
