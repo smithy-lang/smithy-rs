@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Inter
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.fluentBuilderType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -36,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
@@ -43,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
-import kotlin.streams.toList
 
 private val presigningTypes: Array<Pair<String, Any>> =
     arrayOf(
@@ -101,12 +102,6 @@ class AwsPresigningDecorator internal constructor(
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    private val codegenScope =
-        arrayOf(
-            *presigningTypes,
-            *preludeScope,
-        )
-
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
@@ -160,13 +155,29 @@ class AwsPresigningDecorator internal constructor(
                         self.execute(move |sender, conf|sender.presign(conf, presigning_config)).await
                     }
                     """,
-                    *codegenScope,
-                    "CustomizablePresigned" to CustomizablePresigned,
+                    *preludeScope,
+                    *presigningTypes,
+                    "CustomizablePresigned" to customizablePresigned,
                 )
             }
         }
 
-    private val CustomizablePresigned =
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        if (anyPresignedShapes(codegenContext)) {
+            rustCrate.mergeFeature(
+                Feature(
+                    "http-1x",
+                    default = false,
+                    listOf("dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
+                ),
+            )
+        }
+    }
+
+    private val customizablePresigned =
         RuntimeType.forInlineFun("CustomizablePresigned", InternalTraitsModule) {
             rustTemplate(
                 """
@@ -175,7 +186,8 @@ class AwsPresigningDecorator internal constructor(
                 }
 
                 """,
-                *codegenScope,
+                *preludeScope,
+                *presigningTypes,
             )
         }
 }
@@ -186,8 +198,8 @@ class AwsPresignedFluentBuilderMethod(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
         arrayOf(
-            *presigningTypes,
             *preludeScope,
+            *presigningTypes,
             "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
@@ -246,8 +258,7 @@ class AwsPresignedFluentBuilderMethod(
                     }
                 }
                 """,
-                *preludeScope,
-                *presigningTypes,
+                *codegenScope,
                 "OperationError" to section.operationErrorType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
