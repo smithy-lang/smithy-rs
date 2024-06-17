@@ -80,5 +80,8 @@ async fn retry_200_internal_error() {
         error.as_service_error().unwrap().code(),
         Some("InternalError")
     );
-    assert!(logs_contain("retrying after"));
+    assert!(
+        logs_contain("retrying after")
+            && logs_contain("set the result of classification to 'retry transient error error'")
+    );
 }
