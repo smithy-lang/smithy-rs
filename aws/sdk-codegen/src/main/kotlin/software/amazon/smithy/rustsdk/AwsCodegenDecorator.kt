@@ -63,6 +63,10 @@ val DECORATORS: List<ClientCodegenDecorator> =
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
         ),
+        // S3 needs `AwsErrorCodeClassifier` to handle an `InternalError` as a transient error. We need to customize
+        // that behavior for S3 in a way that does not conflict with the globally applied `RetryClassifierDecorator`.
+        // Therefore, that decorator is applied to all but S3, and S3 customizes the creation of `AwsErrorCodeClassifier`
+        // accordingly (see https://github.com/smithy-lang/smithy-rs/pull/3699).
         RetryClassifierDecorator().applyExceptFor("com.amazonaws.s3#AmazonS3"),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
