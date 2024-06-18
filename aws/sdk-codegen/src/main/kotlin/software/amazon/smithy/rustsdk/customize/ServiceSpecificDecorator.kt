@@ -17,6 +17,14 @@ fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): List<ClientCodegenDec
         },
     )
 
+/** Apply this decorator to all services but the one identified by ID */
+fun ClientCodegenDecorator.applyExceptFor(serviceId: String): List<ClientCodegenDecorator> =
+    listOf(
+        ConditionalDecorator(this) { _, serviceShapeId ->
+            serviceShapeId != ShapeId.from(serviceId)
+        },
+    )
+
 /** Apply the given decorators only to this service ID */
 fun String.applyDecorators(vararg decorators: ClientCodegenDecorator): List<ClientCodegenDecorator> =
     decorators.map { it.onlyApplyTo(this) }.flatten()
