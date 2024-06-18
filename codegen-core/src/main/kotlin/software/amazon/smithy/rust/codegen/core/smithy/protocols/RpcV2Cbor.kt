@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
@@ -20,15 +21,21 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class RpcV2CborHttpBindingResolver(
     private val model: Model,
+    private val contentTypes: ProtocolContentTypes,
 ) : HttpBindingResolver {
+    private val httpIndex: HttpBindingIndex = HttpBindingIndex.of(model)
+
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
         // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
@@ -58,11 +65,28 @@ class RpcV2CborHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape) = bindings(operationShape.outputShape)
     override fun errorResponseBindings(errorShape: ToShapeId) = bindings(errorShape)
 
-    // TODO This should return null when operationShape has no members, and we should not rely on our janky
-    //  `serverContentTypeCheckNoModeledInput`. Same goes for restJson1 protocol.
-    override fun requestContentType(operationShape: OperationShape): String = "application/cbor"
+    /**
+     * https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html#requests
+     * > Requests for operations with no defined input type MUST NOT contain bodies in their HTTP requests.
+     * > The `Content-Type` for the serialization format MUST NOT be set.
+     */
+    override fun requestContentType(operationShape: OperationShape): String? {
+        // When `syntheticInputTrait.originalId == null` it implies that the operation had no input defined
+        // in the Smithy model.
+        val syntheticInputTrait = operationShape.inputShape(model).expectTrait<SyntheticInputTrait>()
+        if (syntheticInputTrait.originalId == null) {
+            return null
+        }
+
+        return httpIndex.determineRequestContentType(
+            operationShape,
+            contentTypes.requestDocument,
+            contentTypes.eventStreamContentType,
+        ).orNull()
+    }
 
     /**
+     * https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html#responses
      * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
      * > The `Content-Type` for the serialization format MUST NOT be set.
      */
@@ -73,7 +97,12 @@ class RpcV2CborHttpBindingResolver(
         if (syntheticOutputTrait.originalId == null) {
             return null
         }
-        return requestContentType(operationShape)
+
+        return httpIndex.determineResponseContentType(
+            operationShape,
+            contentTypes.responseDocument,
+            contentTypes.eventStreamContentType,
+        ).orNull()
     }
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
@@ -96,7 +125,15 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     )
     private val jsonDeserModule = RustModule.private("json_deser")
 
-    override val httpBindingResolver: HttpBindingResolver = RpcV2CborHttpBindingResolver(codegenContext.model)
+    override val httpBindingResolver: HttpBindingResolver = RpcV2CborHttpBindingResolver(
+        codegenContext.model,
+        ProtocolContentTypes(
+            requestDocument = "application/cbor",
+            responseDocument = "application/cbor",
+            eventStreamContentType = "application/vnd.amazon.eventstream",
+            eventStreamMessageContentType = "application/cbor",
+        ),
+    )
 
     // Note that [CborParserGenerator] and [CborSerializerGenerator] automatically (de)serialize timestamps
     // using floating point seconds from the epoch.

@@ -730,8 +730,28 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
             rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
-            // TODO Isn't this VERY wrong? If there's modeled operation input, we must reject if there's no payload!
-            //   We currently accept and silently build empty input!
+            // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
+            // operation input; we simply parse it as empty operation input.
+            // This behavior applies to all protocols. This might seem like a bug, but it isn't. There's protocol tests
+            // that assert that the server should be lenient and accept both empty payloads and no payload
+            // when there is modeled input:
+            //
+            // * [restJson1]: clients omit the payload altogether when the input is empty! So services must accept this.
+            // * [rpcv2Cbor]: services must accept no payload or empty CBOR map for operations with modeled input.
+            //
+            // For the AWS JSON 1.x protocols, services are lenient in the case when there is no modeled input:
+            //
+            // * [awsJson1_0]: services must accept no payload or empty JSON document payload for operations with no modeled input
+            // * [awsJson1_1]: services must accept no payload or empty JSON document payload for operations with no modeled input
+            //
+            // However, it's true that there are no tests pinning server behavior when there is _empty_ input. There's
+            // a [consultation with Smithy] to remedy this. Until that gets resolved, in the meantime, we are being lenient.
+            //
+            // [restJson1]: https://github.com/smithy-lang/smithy/blob/main/smithy-aws-protocol-tests/model/restJson1/empty-input-output.smithy#L22
+            // [awsJson1_0]: https://github.com/smithy-lang/smithy/blob/main/smithy-aws-protocol-tests/model/awsJson1_0/empty-input-output.smithy
+            // [awsJson1_1]: https://github.com/smithy-lang/smithy/blob/main/smithy-aws-protocol-tests/model/awsJson1_1/empty-operation.smithy
+            // [rpcv2Cbor]: https://github.com/smithy-lang/smithy/blob/main/smithy-protocol-tests/model/rpcv2Cbor/empty-input-output.smithy
+            // [consultation with Smithy]: https://github.com/smithy-lang/smithy/issues/2327
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
@@ -781,6 +801,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 *codegenScope,
             )
         }
+
+        // TODO What about when there's no modeled operation input but the payload is not empty? In some protocols we
+        //  must accept `{}` but we currently accept anything!
 
         val err =
             if (ServerBuilderGenerator.hasFallibleBuilder(

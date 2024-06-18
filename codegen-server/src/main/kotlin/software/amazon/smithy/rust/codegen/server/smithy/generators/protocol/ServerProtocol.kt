@@ -78,7 +78,7 @@ interface ServerProtocol : Protocol {
     fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
 
     /**
-     * In some protocols, such as restJson1 and rpcv2,
+     * In some protocols, such as restJson1 and rpcv2Cbor,
      * when there is no modeled body input, `content-type` must not be set and the body must be empty.
      * Returns a boolean indicating whether to perform this check.
      */
