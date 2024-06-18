@@ -66,6 +66,13 @@ service RestJsonExtras {
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
         QueryPrecedence,
+        // TODO(https://github.com/smithy-lang/smithy/pull/2314)
+        HttpPayloadTraits2,
+        // TODO(https://github.com/smithy-lang/smithy/pull/2310)
+        MalformedContentTypeWithBody2,
+        // TODO(https://github.com/smithy-lang/smithy/pull/2315)
+        HttpEnumPayload2,
+        HttpStringPayload2,
     ],
     errors: [ExtraError]
 }
@@ -101,6 +108,7 @@ structure ExtraError {}
         id: "StringPayload",
         uri: "/StringPayload",
         body: "rawstring",
+        headers: { "Content-Type": "text/plain" },
         params: { payload: "rawstring" },
         method: "POST",
         protocol: "aws.protocols#restJson1"

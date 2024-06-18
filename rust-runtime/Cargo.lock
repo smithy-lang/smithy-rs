@@ -465,7 +465,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.61.2"
+version = "0.62.0"
 dependencies = [
  "aws-smithy-http 0.60.8",
  "aws-smithy-json 0.60.7",
