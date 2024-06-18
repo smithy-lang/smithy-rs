@@ -14,6 +14,7 @@ import software.amazon.smithy.rustsdk.customize.IsTruncatedPaginatorDecorator
 import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
+import software.amazon.smithy.rustsdk.customize.applyExceptFor
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.lambda.LambdaDecorator
@@ -41,7 +42,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
             SigV4AuthDecorator(),
             HttpRequestChecksumDecorator(),
             HttpResponseChecksumDecorator(),
-            RetryClassifierDecorator(),
             IntegrationTestDecorator(),
             AwsFluentClientDecorator(),
             CrateLicenseDecorator(),
@@ -63,6 +63,11 @@ val DECORATORS: List<ClientCodegenDecorator> =
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
         ),
+        // S3 needs `AwsErrorCodeClassifier` to handle an `InternalError` as a transient error. We need to customize
+        // that behavior for S3 in a way that does not conflict with the globally applied `RetryClassifierDecorator`.
+        // Therefore, that decorator is applied to all but S3, and S3 customizes the creation of `AwsErrorCodeClassifier`
+        // accordingly (see https://github.com/smithy-lang/smithy-rs/pull/3699).
+        RetryClassifierDecorator().applyExceptFor("com.amazonaws.s3#AmazonS3"),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),

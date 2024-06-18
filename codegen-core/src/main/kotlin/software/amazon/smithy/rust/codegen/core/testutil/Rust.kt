@@ -86,6 +86,15 @@ object TestWorkspace {
     }
     private val subprojects = mutableListOf<String>()
 
+    private val cargoLock: File by lazy {
+        var curFile = File(this.javaClass.protectionDomain.codeSource.location.path)
+        while (!curFile.endsWith("smithy-rs")) {
+            curFile = curFile.parentFile
+        }
+
+        curFile.resolve("aws/sdk/Cargo.lock")
+    }
+
     init {
         baseDir.mkdirs()
     }
@@ -103,6 +112,7 @@ object TestWorkspace {
                 ),
             )
         cargoToml.writeText(workspaceToml)
+        cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
     }
 
     fun subproject(): File {
@@ -259,9 +269,11 @@ fun RustWriter.assertNoNewDependencies(
         val writtenOut = this.toString()
         val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
         throw CodegenException(
-            "found invalid dependencies. ${invalidDeps.map {
-                it.first
-            }}\nHint: the following lines may be the problem.\n${
+            "found invalid dependencies. ${
+                invalidDeps.map {
+                    it.first
+                }
+            }\nHint: the following lines may be the problem.\n${
                 badLines.joinToString(
                     separator = "\n",
                     prefix = "   ",
