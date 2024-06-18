@@ -71,6 +71,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
                 // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
                 "$commonModels/rest-json-extras-2314.smithy",
                 // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
+                // TODO(https://github.com/smithy-lang/smithy/pull/2331): Can be deleted when consumed in next Smithy version.
                 "$commonModels/rest-json-extras-2315.smithy",
             ),
         ),
