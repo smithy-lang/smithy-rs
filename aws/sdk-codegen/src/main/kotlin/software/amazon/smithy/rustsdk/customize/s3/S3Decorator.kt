@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
@@ -140,6 +141,9 @@ class S3Decorator : ClientCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations +
             object : OperationCustomization() {
+                private val runtimeConfig = codegenContext.runtimeConfig
+                private val symbolProvider = codegenContext.symbolProvider
+
                 override fun section(section: OperationSection): Writable {
                     return writable {
                         when (section) {
@@ -151,7 +155,28 @@ class S3Decorator : ClientCodegenDecorator {
                                             ${section.forceError} = true;
                                         }
                                         """,
-                                        "errors" to RuntimeType.unwrappedXmlErrors(codegenContext.runtimeConfig),
+                                        "errors" to RuntimeType.unwrappedXmlErrors(runtimeConfig),
+                                    )
+                                }
+                            }
+
+                            is OperationSection.RetryClassifiers -> {
+                                section.registerRetryClassifier(this) {
+                                    rustTemplate(
+                                        """
+                                        #{AwsErrorCodeClassifier}::<#{OperationError}>::builder().transient_errors({
+                                            let mut transient_errors: Vec<&'static str> = #{TRANSIENT_ERRORS}.into();
+                                            transient_errors.push("InternalError");
+                                            #{Cow}::Owned(transient_errors)
+                                            }).build()""",
+                                        "AwsErrorCodeClassifier" to
+                                            AwsRuntimeType.awsRuntime(runtimeConfig)
+                                                .resolve("retries::classifiers::AwsErrorCodeClassifier"),
+                                        "Cow" to RuntimeType.Cow,
+                                        "OperationError" to symbolProvider.symbolForOperationError(operation),
+                                        "TRANSIENT_ERRORS" to
+                                            AwsRuntimeType.awsRuntime(runtimeConfig)
+                                                .resolve("retries::classifiers::TRANSIENT_ERRORS"),
                                     )
                                 }
                             }

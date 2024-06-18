@@ -159,8 +159,7 @@ class InlineDependency(
                 CargoDependency.smithyTypes(runtimeConfig),
             )
 
-        fun constrained(): InlineDependency =
-            InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
+        fun constrained(): InlineDependency = forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
     }
 }
 
@@ -181,6 +180,7 @@ data class CargoDependency(
     val features: Set<String> = emptySet(),
     val defaultFeatures: Boolean = true,
     val rustName: String = name.replace("-", "_"),
+    val `package`: String? = null,
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
 
@@ -225,6 +225,9 @@ data class CargoDependency(
         if (!defaultFeatures) {
             attribs["default-features"] = false
         }
+        if (`package`.isNotNullOrEmpty()) {
+            attribs["package"] = `package`.toString()
+        }
         return attribs
     }
 
@@ -264,10 +267,6 @@ data class CargoDependency(
         val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.30"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
-        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
-        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
-        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
-        val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.12.2"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
@@ -325,6 +324,17 @@ data class CargoDependency(
                 features = setOf("no-env-filter"),
             )
 
+        // Hyper 0.x types
+        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
+        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
+        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
+        val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
+
+        // Hyper 1.x types
+        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http", optional = true)
+        val HttpBody1x: CargoDependency =
+            CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body", optional = true)
+
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
@@ -370,3 +380,5 @@ data class CargoDependency(
             CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)
     }
 }
+
+private fun String?.isNotNullOrEmpty(): Boolean = !this.isNullOrEmpty()
