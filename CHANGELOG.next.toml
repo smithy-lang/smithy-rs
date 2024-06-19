@@ -10,16 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-[[smithy-rs]]
-message = """Fix request `Content-Type` header checking
-
-Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
-
-1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
-2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
-
-This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
-"""
-references = ["smithy-rs#3690"]
-meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
-author = "david-perez"

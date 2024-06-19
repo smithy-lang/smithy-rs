@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 19th, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3690](https://github.com/smithy-lang/smithy-rs/issues/3690)) Fix request `Content-Type` header checking
+
+    Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
+
+    1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
+    2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
+
+    This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
+
+
 June 17th, 2024
 ===============
 
