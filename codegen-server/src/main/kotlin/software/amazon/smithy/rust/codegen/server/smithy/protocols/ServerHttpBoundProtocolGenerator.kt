@@ -60,6 +60,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.smithy.wrapOptional
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -793,7 +794,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderQueryStringParser(this, operationShape)
 
         // If there's no modeled operation input, some protocols require that `Content-Type` header not be present.
-        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
+        val noInputs = !OperationNormalizer.hadUserModeledOperationInput(operationShape, model)
         if (noInputs && protocol.serverContentTypeCheckNoModeledInput()) {
             rustTemplate(
                 """

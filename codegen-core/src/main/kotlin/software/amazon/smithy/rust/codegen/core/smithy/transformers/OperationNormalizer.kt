@@ -14,11 +14,13 @@ import software.amazon.smithy.model.traits.InputTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.rename
 import java.util.Optional
-import kotlin.streams.toList
 
 /**
  * Generate synthetic Input and Output structures for operations.
@@ -42,6 +44,24 @@ object OperationNormalizer {
 
     private fun OperationShape.syntheticOutputId() =
         ShapeId.fromParts(this.id.namespace + ".synthetic", "${this.id.name}Output")
+
+    /**
+     * Returns `true` if the user had originally modeled an operation input shape on the given [operation];
+     * `false` if the transform added a synthetic one.
+     */
+    fun hadUserModeledOperationInput(operation: OperationShape, model: Model): Boolean {
+        val syntheticInputTrait = operation.inputShape(model).expectTrait<SyntheticInputTrait>()
+        return syntheticInputTrait.originalId != null
+    }
+
+    /**
+     * Returns `true` if the user had originally modeled an operation output shape on the given [operation];
+     * `false` if the transform added a synthetic one.
+     */
+    fun hadUserModeledOperationOutput(operation: OperationShape, model: Model): Boolean {
+        val syntheticOutputTrait = operation.outputShape(model).expectTrait<SyntheticOutputTrait>()
+        return syntheticOutputTrait.originalId != null
+    }
 
     /**
      * Add synthetic input & output shapes to every Operation in model. The generated shapes will be marked with

@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborS
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -34,8 +35,6 @@ class RpcV2CborHttpBindingResolver(
     private val model: Model,
     private val contentTypes: ProtocolContentTypes,
 ) : HttpBindingResolver {
-    private val httpIndex: HttpBindingIndex = HttpBindingIndex.of(model)
-
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
         // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
@@ -70,40 +69,24 @@ class RpcV2CborHttpBindingResolver(
      * > Requests for operations with no defined input type MUST NOT contain bodies in their HTTP requests.
      * > The `Content-Type` for the serialization format MUST NOT be set.
      */
-    override fun requestContentType(operationShape: OperationShape): String? {
-        // When `syntheticInputTrait.originalId == null` it implies that the operation had no input defined
-        // in the Smithy model.
-        val syntheticInputTrait = operationShape.inputShape(model).expectTrait<SyntheticInputTrait>()
-        if (syntheticInputTrait.originalId == null) {
-            return null
+    override fun requestContentType(operationShape: OperationShape): String? =
+        if (OperationNormalizer.hadUserModeledOperationInput(operationShape, model)) {
+            "application/cbor"
+        } else {
+            null
         }
-
-        return httpIndex.determineRequestContentType(
-            operationShape,
-            contentTypes.requestDocument,
-            contentTypes.eventStreamContentType,
-        ).orNull()
-    }
 
     /**
      * https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html#responses
      * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
      * > The `Content-Type` for the serialization format MUST NOT be set.
      */
-    override fun responseContentType(operationShape: OperationShape): String? {
-        // When `syntheticOutputTrait.originalId == null` it implies that the operation had no output defined
-        // in the Smithy model.
-        val syntheticOutputTrait = operationShape.outputShape(model).expectTrait<SyntheticOutputTrait>()
-        if (syntheticOutputTrait.originalId == null) {
-            return null
+    override fun responseContentType(operationShape: OperationShape): String? =
+        if (OperationNormalizer.hadUserModeledOperationOutput(operationShape, model)) {
+            "application/cbor"
+        } else {
+            null
         }
-
-        return httpIndex.determineResponseContentType(
-            operationShape,
-            contentTypes.responseDocument,
-            contentTypes.eventStreamContentType,
-        ).orNull()
-    }
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/cbor")

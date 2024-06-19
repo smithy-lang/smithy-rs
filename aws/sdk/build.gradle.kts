@@ -453,9 +453,7 @@ tasks["assemble"].apply {
     outputs.upToDateWhen { false }
 }
 
-<<<<<<< HEAD
 project.registerCargoCommandsTasks(outputDir.asFile)
-=======
 tasks.register<Copy>("copyCheckedInCargoLock") {
     description = "Copy the checked in Cargo.lock file back to the build directory"
     this.outputs.upToDateWhen { false }
@@ -463,8 +461,6 @@ tasks.register<Copy>("copyCheckedInCargoLock") {
     into(outputDir)
 }
 
-project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
->>>>>>> upstream/main
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
 //The task name "test" is already registered by one of our plugins

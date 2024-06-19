@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -313,8 +314,7 @@ class JsonSerializerGenerator(
     override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there was no operation output shape in the
         // original (untransformed) model.
-        val syntheticOutputTrait = operationShape.outputShape(model).expectTrait<SyntheticOutputTrait>()
-        if (syntheticOutputTrait.originalId == null) {
+        if (!OperationNormalizer.hadUserModeledOperationOutput(operationShape, model)) {
             return null
         }
 
