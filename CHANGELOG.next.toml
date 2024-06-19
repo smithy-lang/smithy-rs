@@ -10,36 +10,16 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[smithy-rs]]
+message = """Fix request `Content-Type` header checking
 
-[[aws-sdk-rust]]
-message = """
-Stalled stream protection will no longer be applied to the following Lambda operations: [Invoke], [InvokeAsync], [InvokeWithResponseStream].
+Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
 
-[Invoke]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke
-[InvokeAsync]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_async
-[InvokeWithResponseStream]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_with_response_stream
+1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
+2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
+
+This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
 """
-references = ["aws-sdk-rust#1166", "smithy-rs#3639"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Add documentation on the default configuration to `from_env`, `load_from_env`, `defaults`, and `load_from_defaults` in the `aws-config` crate."
-references = ["aws-sdk-rust#1162"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "ysaito1001"
-
-[[aws-sdk-rust]]
-message = """
-Pre-signed requests may now be converted to Http v1.x requests. This requires enabling the `http-1x` feature for the SDK in question.
-Then, call `PresignedRequest::make_http_1x_request` or `PresignedRequest::into_http_1x_request`.
-"""
-references = ["smithy-rs#3696"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "`AwsErrorCodeClassifier` for S3 now treats `InternalError` as a transient error to trigger retries."
-references = ["aws-sdk-rust#1163"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
+references = ["smithy-rs#3690"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"
