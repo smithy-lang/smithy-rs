@@ -18,7 +18,7 @@
         "smithy-rs#3673"
       ],
       "since-commit": "052b4dadc06354e673f6a642487871d5f50d135a",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix S3 ListParts API paginator infinite loop.",
@@ -32,7 +32,7 @@
         "aws-sdk-rust#1143"
       ],
       "since-commit": "052b4dadc06354e673f6a642487871d5f50d135a",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Stalled stream protection will no longer be applied to the following Lambda operations: [Invoke], [InvokeAsync], [InvokeWithResponseStream].\n\n[Invoke]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke\n[InvokeAsync]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_async\n[InvokeWithResponseStream]: https://docs.rs/aws-sdk-lambda/latest/aws_sdk_lambda/client/struct.Client.html#method.invoke_with_response_stream\n",
@@ -47,7 +47,7 @@
         "smithy-rs#3639"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add documentation on the default configuration to `from_env`, `load_from_env`, `defaults`, and `load_from_defaults` in the `aws-config` crate.",
@@ -61,7 +61,7 @@
         "aws-sdk-rust#1162"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Pre-signed requests may now be converted to Http v1.x requests. This requires enabling the `http-1x` feature for the SDK in question.\nThen, call `PresignedRequest::make_http_1x_request` or `PresignedRequest::into_http_1x_request`.\n",
@@ -75,7 +75,7 @@
         "smithy-rs#3696"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 1
+      "age": 2
     },
     {
       "message": "`AwsErrorCodeClassifier` for S3 now treats `InternalError` as a transient error to trigger retries.",
@@ -89,7 +89,7 @@
         "aws-sdk-rust#1163"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
