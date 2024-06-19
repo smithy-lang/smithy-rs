@@ -67,7 +67,6 @@ service RestJsonExtras {
         EmptyStructWithContentOnWireOp,
         QueryPrecedence,
         // TODO(https://github.com/smithy-lang/smithy/pull/2314)
-        HttpPayloadTraitOnString2,
         HttpPayloadTraits2,
         // TODO(https://github.com/smithy-lang/smithy/pull/2310)
         MalformedContentTypeWithBody2,

@@ -771,11 +771,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val member = binding.member
             val parsedValue =
                 serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
-            val valueToSet = if (symbolProvider.toSymbol(binding.member).isOptional()) {
-                "Some(value)"
-            } else {
-                "value"
-            }
+            val valueToSet =
+                if (symbolProvider.toSymbol(binding.member).isOptional()) {
+                    "Some(value)"
+                } else {
+                    "value"
+                }
             if (parsedValue != null) {
                 rustTemplate(
                     """
@@ -783,7 +784,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         input = input.${member.setterName()}($valueToSet)
                     }
                     """,
-                    "ParsedValue" to parsedValue
+                    "ParsedValue" to parsedValue,
                 )
             }
         }

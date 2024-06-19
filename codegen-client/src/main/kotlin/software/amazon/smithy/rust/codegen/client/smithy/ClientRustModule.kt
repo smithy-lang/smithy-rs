@@ -7,10 +7,13 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
@@ -195,8 +198,9 @@ object ClientModuleProvider : ModuleProvider {
     override fun moduleForShape(
         context: ModuleProviderContext,
         shape: Shape,
-    ): RustModule.LeafModule =
-        when (shape) {
+    ): RustModule.LeafModule {
+        fun shouldNotBeRendered(): Nothing = PANIC("Shape ${shape.id} should not be rendered in any module")
+        return when (shape) {
             is OperationShape -> perOperationModule(context, shape)
             is StructureShape ->
                 when {
@@ -206,8 +210,18 @@ object ClientModuleProvider : ModuleProvider {
                     else -> ClientRustModule.types
                 }
 
-            else -> ClientRustModule.types
+            is UnionShape, is EnumShape -> ClientRustModule.types
+            is StringShape -> {
+                if (shape.hasTrait<EnumTrait>()) {
+                    ClientRustModule.types
+                } else {
+                    shouldNotBeRendered()
+                }
+            }
+
+            else -> shouldNotBeRendered()
         }
+    }
 
     override fun moduleForOperationError(
         context: ModuleProviderContext,

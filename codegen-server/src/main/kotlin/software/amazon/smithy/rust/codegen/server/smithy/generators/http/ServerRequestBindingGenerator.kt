@@ -34,6 +34,8 @@ class ServerRequestBindingGenerator(
         HttpBindingGenerator(
             protocol,
             codegenContext,
+            // Note how we parse the HTTP-bound values into _unconstrained_ types; they will be constrained when
+            // building the builder.
             codegenContext.unconstrainedShapeSymbolProvider,
             operationShape,
             listOf(

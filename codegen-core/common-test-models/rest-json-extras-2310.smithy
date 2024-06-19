@@ -17,8 +17,7 @@ structure GreetingStruct {
 apply MalformedContentTypeWithBody2 @httpMalformedRequestTests([
     {
         id: "RestJsonWithBodyExpectsApplicationJsonContentTypeNoHeaders",
-        documentation: """
-        When there is modeled input, the content type must be application/json""",
+        documentation: "When there is modeled input, the content type must be application/json",
         protocol: restJson1,
         request: {
             method: "POST",

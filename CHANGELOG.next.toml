@@ -10,21 +10,16 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
-references = ["smithy-rs#1925", "smithy-rs#3673"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Velfi"
-
 [[smithy-rs]]
-message = "Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`."
-references = ["smithy-rs#1925", "smithy-rs#3673"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all"}
-author = "Velfi"
+message = """Fix request `Content-Type` header checking
 
-[[smithy-rs]]
-message = "Enable aws-smithy-runtime to compile in rustc 1.72.1"
-references = ["smithy-rs#3675"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "dastrom"
+Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
+
+1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
+2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
+
+This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
+"""
+references = ["smithy-rs#3690"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
+author = "david-perez"

@@ -18,6 +18,7 @@ allow = [
     "MIT",
     "MPL-2.0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
 ]
 confidence-threshold = 1.0
 exceptions = [
