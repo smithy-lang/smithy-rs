@@ -467,14 +467,13 @@ class CborParserGenerator(
 
             is TimestampShape -> rust("decoder.timestamp()")
 
-            // TODO Document shapes have not been specced out yet.
-            // is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
-
             // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
             is StructureShape -> deserializeStruct(target)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is UnionShape -> deserializeUnion(target)
+
+            // Note that no protocol using CBOR serialization supports `document` shapes.
             else -> PANIC("unexpected shape: $target")
         }
         // TODO Boxing

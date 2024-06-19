@@ -231,9 +231,6 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    private fun OperationShape.toName(): String =
-        RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(this).name.toSnakeCase())
-
     /**
      * Filter out test cases that are disabled or don't match the service protocol
      */
@@ -333,7 +330,7 @@ class ServerProtocolTestGenerator(
             checkHandlerWasEntered(this)
         }
 
-        // Explicitly warn if the test case defined parameters that we aren't doing anything with
+        // Explicitly warn if the test case defined parameters that we aren't doing anything with.
         with(httpRequestTestCase) {
             if (authScheme.isPresent) {
                 logger.warning("Test case provided authScheme but this was ignored")

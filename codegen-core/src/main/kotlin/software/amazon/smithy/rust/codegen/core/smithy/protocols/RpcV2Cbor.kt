@@ -71,7 +71,7 @@ class RpcV2CborHttpBindingResolver(
      */
     override fun requestContentType(operationShape: OperationShape): String? =
         if (OperationNormalizer.hadUserModeledOperationInput(operationShape, model)) {
-            "application/cbor"
+            contentTypes.requestDocument
         } else {
             null
         }
@@ -83,7 +83,7 @@ class RpcV2CborHttpBindingResolver(
      */
     override fun responseContentType(operationShape: OperationShape): String? =
         if (OperationNormalizer.hadUserModeledOperationOutput(operationShape, model)) {
-            "application/cbor"
+            contentTypes.responseDocument
         } else {
             null
         }
@@ -92,9 +92,6 @@ class RpcV2CborHttpBindingResolver(
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/cbor")
 }
 
-/**
- * TODO: Docs.
- */
 open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -131,30 +128,11 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         CborSerializerGenerator(codegenContext, httpBindingResolver)
 
-    // TODO: Implement `RpcV2.parseHttpErrorMetadata`
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_error_metadata", jsonDeserModule) {
-            rustTemplate(
-                """
-                pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
-                }
-                """,
-                *errorScope,
-            )
-        }
+        TODO("rpcv2Cbor client support has not yet been implemented")
 
-    // TODO: Implement `RpcV2.parseEventStreamErrorMetadata`
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_event_stream_error_metadata", jsonDeserModule) {
-            // `HeaderMap::new()` doesn't allocate.
-            rustTemplate(
-                """
-                pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
-                }
-                """,
-                *errorScope,
-            )
-        }
+        TODO("rpcv2Cbor event streams have not yet been implemented")
 }
