@@ -25,14 +25,16 @@ import java.util.Optional
 /**
  * Generate synthetic Input and Output structures for operations.
  *
- * Operation input/output shapes can be retroactively added. In order to support this while maintaining backwards compatibility,
- * we need to generate input/output shapes for all operations in a backwards compatible way.
- *
  * This works by **adding** new shapes to the model for operation inputs & outputs. These new shapes have `SyntheticInputTrait`
  * and `SyntheticOutputTrait` attached to them as needed. This enables downstream code generators to determine if a shape is
  * "real" vs. a shape created as a synthetic input/output.
  *
  * The trait also tracks the original shape id for certain serialization tasks that require it to exist.
+ *
+ * Note that adding/removing operation input/output [is a breaking change]; the only reason why we synthetically add them
+ * is to produce a consistent API.
+ *
+ * [is a breaking change]: <https://github.com/smithy-lang/smithy/issues/2253#issuecomment-2069943344>
  */
 object OperationNormalizer {
     // Functions to construct synthetic shape IDs—Don't rely on these in external code.
