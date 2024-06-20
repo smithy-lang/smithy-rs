@@ -8,9 +8,10 @@
 use crate::http::extensions::Extensions;
 use crate::http::{Headers, HttpError};
 use aws_smithy_types::body::SdkBody;
-#[allow(unused)]
-use http as http0;
 use std::fmt;
+
+#[cfg(feature = "http-02x")]
+use http as http0;
 
 /// HTTP response status code
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

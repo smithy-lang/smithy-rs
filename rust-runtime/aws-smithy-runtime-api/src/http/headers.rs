@@ -7,8 +7,6 @@
 
 use crate::http::error::HttpError;
 use http as http0;
-use http0::header::Iter;
-use http0::HeaderMap;
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -16,7 +14,7 @@ use std::str::FromStr;
 /// An immutable view of headers
 #[derive(Clone, Default, Debug)]
 pub struct Headers {
-    pub(super) headers: HeaderMap<HeaderValue>,
+    pub(super) headers: http0::HeaderMap<HeaderValue>,
 }
 
 impl<'a> IntoIterator for &'a Headers {
@@ -32,7 +30,7 @@ impl<'a> IntoIterator for &'a Headers {
 
 /// An Iterator over headers
 pub struct HeadersIter<'a> {
-    inner: Iter<'a, HeaderValue>,
+    inner: http0::header::Iter<'a, HeaderValue>,
 }
 
 impl<'a> Iterator for HeadersIter<'a> {
@@ -180,10 +178,10 @@ impl Headers {
 }
 
 #[cfg(feature = "http-02x")]
-impl TryFrom<HeaderMap> for Headers {
+impl TryFrom<http0::HeaderMap> for Headers {
     type Error = HttpError;
 
-    fn try_from(value: HeaderMap) -> Result<Self, Self::Error> {
+    fn try_from(value: http0::HeaderMap) -> Result<Self, Self::Error> {
         if let Some(e) = value
             .values()
             .filter_map(|value| std::str::from_utf8(value.as_bytes()).err())
@@ -191,7 +189,7 @@ impl TryFrom<HeaderMap> for Headers {
         {
             Err(HttpError::header_was_not_a_string(e))
         } else {
-            let mut string_safe_headers: HeaderMap<HeaderValue> = Default::default();
+            let mut string_safe_headers: http0::HeaderMap<HeaderValue> = Default::default();
             string_safe_headers.extend(
                 value
                     .into_iter()

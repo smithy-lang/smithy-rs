@@ -217,7 +217,7 @@ mod test {
     use aws_smithy_types::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
-    use http::header::CONTENT_LENGTH;
+    use http0::header::CONTENT_LENGTH;
     use http_body_0_4::Body;
     use http_body_1::Frame;
     use std::error::Error;
@@ -230,6 +230,7 @@ mod test {
     }
 
     impl ManyFrameBody {
+        #[allow(clippy::new_ret_no_self)]
         fn new(input: impl Into<String>) -> SdkBody {
             let mut data = input.into().as_bytes().to_vec();
             data.reverse();

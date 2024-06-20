@@ -10,8 +10,6 @@ use crate::http::Headers;
 use crate::http::HttpError;
 use aws_smithy_types::body::SdkBody;
 use http as http0;
-use http0::uri::PathAndQuery;
-use http0::Method;
 use std::borrow::Cow;
 
 /// Parts struct useful for structural decomposition that the [`Request`] type can be converted into.
@@ -30,7 +28,7 @@ pub struct RequestParts<B = SdkBody> {
 pub struct Request<B = SdkBody> {
     body: B,
     uri: Uri,
-    method: Method,
+    method: http0::Method,
     extensions: Extensions,
     headers: Headers,
 }
@@ -132,7 +130,7 @@ impl Uri {
     }
 }
 
-fn merge_paths(endpoint_path: Option<PathAndQuery>, uri: &ParsedUri) -> Cow<'_, str> {
+fn merge_paths(endpoint_path: Option<http0::uri::PathAndQuery>, uri: &ParsedUri) -> Cow<'_, str> {
     let uri_path_and_query = uri.path_and_query();
     let endpoint_path = match endpoint_path {
         None => return Cow::Borrowed(uri_path_and_query),
@@ -246,7 +244,7 @@ impl<B> Request<B> {
         Self {
             body,
             uri: Uri::from_http0x_uri(http0::Uri::from_static("/")),
-            method: Method::GET,
+            method: http0::Method::GET,
             extensions: Default::default(),
             headers: Default::default(),
         }
@@ -379,7 +377,7 @@ impl<B> TryFrom<http1::Request<B>> for Request<B> {
         Ok(Self {
             body,
             uri: Uri::from_http1x_uri(parts.uri),
-            method: Method::from_bytes(parts.method.as_str().as_bytes()).expect("valid"),
+            method: http0::Method::from_bytes(parts.method.as_str().as_bytes()).expect("valid"),
             extensions: parts.extensions.into(),
             headers,
         })
@@ -388,10 +386,9 @@ impl<B> TryFrom<http1::Request<B>> for Request<B> {
 
 #[cfg(all(test, feature = "http-02x", feature = "http-1x"))]
 mod test {
-    use super::*;
     use aws_smithy_types::body::SdkBody;
-    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
-    use http::Uri;
+    use http as http0;
+    use http0::header::{AUTHORIZATION, CONTENT_LENGTH};
 
     #[test]
     fn non_ascii_requests() {
@@ -399,7 +396,7 @@ mod test {
             .header("k", "😹")
             .body(SdkBody::empty())
             .unwrap();
-        let request: Request = request
+        let request: super::Request = request
             .try_into()
             .expect("failed to convert a non-string header");
         assert_eq!(request.headers().get("k"), Some("😹"))
@@ -452,7 +449,7 @@ mod test {
     #[test]
     fn try_clone_clones_all_data() {
         let request = ::http::Request::builder()
-            .uri(Uri::from_static("https://www.amazon.com"))
+            .uri(http0::Uri::from_static("https://www.amazon.com"))
             .method("POST")
             .header(CONTENT_LENGTH, 456)
             .header(AUTHORIZATION, "Token: hello")
@@ -474,7 +471,7 @@ mod test {
     fn valid_round_trips() {
         let request = || {
             http::Request::builder()
-                .uri(Uri::from_static("https://www.amazon.com"))
+                .uri(http0::Uri::from_static("https://www.amazon.com"))
                 .method("POST")
                 .header(CONTENT_LENGTH, 456)
                 .header(AUTHORIZATION, "Token: hello")

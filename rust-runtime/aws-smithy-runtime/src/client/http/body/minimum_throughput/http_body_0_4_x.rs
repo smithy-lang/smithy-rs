@@ -15,7 +15,7 @@ use std::task::{Context, Poll};
 
 const ZERO_THROUGHPUT: Throughput = Throughput::new_bytes_per_second(0);
 
-// Helper trait for interpretting the throughput report.
+// Helper trait for interpreting the throughput report.
 trait DownloadReport {
     fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput);
 }
@@ -140,17 +140,17 @@ where
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
-        self.inner.size_hint()
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body_0_4::SizeHint {
+        self.inner.size_hint()
     }
 }
 
@@ -208,16 +208,16 @@ where
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
-        self.inner.size_hint()
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body_0_4::SizeHint {
+        self.inner.size_hint()
     }
 }

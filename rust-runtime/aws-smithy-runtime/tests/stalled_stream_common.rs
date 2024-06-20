@@ -87,7 +87,8 @@ impl HttpClient for FakeServer {
 struct ChannelBody {
     receiver: tokio::sync::mpsc::Receiver<Bytes>,
 }
-impl http_body_0_4::Body for ChannelBody {
+
+impl Body for ChannelBody {
     type Data = Bytes;
     type Error = Infallible;
 
@@ -96,7 +97,7 @@ impl http_body_0_4::Body for ChannelBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
         match self.receiver.poll_recv(cx) {
-            Poll::Ready(value) => Poll::Ready(value.map(|v| Ok(v))),
+            Poll::Ready(value) => Poll::Ready(value.map(Ok)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -104,7 +105,7 @@ impl http_body_0_4::Body for ChannelBody {
     fn poll_trailers(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
         unreachable!()
     }
 }

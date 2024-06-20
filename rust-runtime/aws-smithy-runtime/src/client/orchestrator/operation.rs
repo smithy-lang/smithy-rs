@@ -449,7 +449,7 @@ mod tests {
     #[tokio::test]
     async fn operation() {
         let (connector, request_rx) = capture_request(Some(
-            http::Response::builder()
+            http0::Response::builder()
                 .status(418)
                 .body(SdkBody::from(&b"I'm a teapot!"[..]))
                 .unwrap(),
@@ -486,21 +486,21 @@ mod tests {
     async fn operation_retries() {
         let connector = StaticReplayClient::new(vec![
             ReplayEvent::new(
-                http::Request::builder()
+                http0::Request::builder()
                     .uri("http://localhost:1234/")
                     .body(SdkBody::from(&b"what are you?"[..]))
                     .unwrap(),
-                http::Response::builder()
+                http0::Response::builder()
                     .status(503)
                     .body(SdkBody::from(&b""[..]))
                     .unwrap(),
             ),
             ReplayEvent::new(
-                http::Request::builder()
+                http0::Request::builder()
                     .uri("http://localhost:1234/")
                     .body(SdkBody::from(&b"what are you?"[..]))
                     .unwrap(),
-                http::Response::builder()
+                http0::Response::builder()
                     .status(418)
                     .body(SdkBody::from(&b"I'm a teapot!"[..]))
                     .unwrap(),
