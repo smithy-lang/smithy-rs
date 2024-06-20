@@ -141,6 +141,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             )
         }
 
+    fun toDevDependencyType(): RuntimeType = copy(dependency = dependency?.toDevDependency())
+
     /**
      * Convert this [RuntimeType] into a [Symbol].
      *
@@ -167,9 +169,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * val http = CargoDependency.http.resolve("Request")
      * ```
      */
-    fun resolve(subPath: String): RuntimeType {
-        return copy(path = "$path::$subPath")
-    }
+    fun resolve(subPath: String): RuntimeType = copy(path = "$path::$subPath")
 
     /**
      * Returns the fully qualified name for this type

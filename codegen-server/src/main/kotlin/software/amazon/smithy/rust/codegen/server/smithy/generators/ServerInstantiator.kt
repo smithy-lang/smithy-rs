@@ -70,7 +70,11 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
-class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomWritable = NoCustomWritable()) :
+class ServerInstantiator(
+    codegenContext: CodegenContext,
+    customWritable: CustomWritable = NoCustomWritable(),
+    ignoreMissingMembers: Boolean = false,
+) :
     Instantiator(
         codegenContext.symbolProvider,
         codegenContext.model,
@@ -81,6 +85,7 @@ class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomW
         // Construct with direct pattern to more closely replicate actual server customer usage
         constructPattern = InstantiatorConstructPattern.DIRECT,
         customWritable = customWritable,
+        ignoreMissingMembers = ignoreMissingMembers,
     )
 
 class ServerBuilderInstantiator(

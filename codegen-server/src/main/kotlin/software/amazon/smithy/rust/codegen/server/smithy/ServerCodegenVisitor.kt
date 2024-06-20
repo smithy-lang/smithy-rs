@@ -608,7 +608,7 @@ open class ServerCodegenVisitor(
     }
 
     /**
-     * Generate protocol tests. This method can be overridden by other languages such has Python.
+     * Generate protocol tests. This method can be overridden by other languages such as Python.
      */
     open fun protocolTests() {
         rustCrate.withModule(ServerRustModule.Operation) {

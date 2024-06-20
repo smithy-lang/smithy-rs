@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -14,10 +15,13 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -26,7 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
-import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -34,17 +38,20 @@ import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegen
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
-import java.io.File
+import java.util.function.Predicate
 
 internal class CborSerializerGeneratorTest {
     class DeriveSerdeDeserializeSymbolMetadataProvider(
         private val base: RustSymbolProvider,
     ) : SymbolMetadataProvider(base) {
+        private val serdeDeserialize =
+            CargoDependency.Serde.copy(scope = DependencyScope.Compile).toType().resolve("Deserialize")
+
         private fun addDeriveSerdeDeserialize(shape: Shape): RustMetadata {
             check(shape !is MemberShape)
 
             val baseMetadata = base.toSymbol(shape).expectRustMetadata()
-            return baseMetadata.withDerives(RuntimeType.SerdeDeserialize)
+            return baseMetadata.withDerives(serdeDeserialize)
         }
 
         override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
@@ -62,8 +69,6 @@ internal class CborSerializerGeneratorTest {
 
     @Test
     fun `we serialize and serde_cbor deserializes round trip`() {
-        val model = File("../codegen-core/common-test-models/rpcv2Cbor-extras.smithy").readText().asSmithyModel()
-
         val addDeriveSerdeSerializeDecorator = object : ServerCodegenDecorator {
             override val name: String = "Add `#[derive(serde::Deserialize)]`"
             override val order: Byte = 0
@@ -72,16 +77,32 @@ internal class CborSerializerGeneratorTest {
                 DeriveSerdeDeserializeSymbolMetadataProvider(base)
         }
 
+        // Filter out `timestamp` and `blob` shapes: those map to runtime types in `aws-smithy-types` on
+        // which we can't `#[derive(serde::Deserialize)]`.
+        val model = Model.assembler().discoverModels().assemble().result.get()
+        val removeTimestampAndBlobShapes: Predicate<Shape> = Predicate { shape ->
+            when (shape) {
+                is MemberShape -> {
+                    val targetShape = model.expectShape(shape.target)
+                    targetShape is BlobShape || targetShape is TimestampShape
+                }
+                is BlobShape, is TimestampShape -> true
+                else -> false
+            }
+        }
+        val transformedModel = ModelTransformer.create().removeShapesIf(model, removeTimestampAndBlobShapes)
+
         serverIntegrationTest(
-            model,
+            transformedModel,
             additionalDecorators = listOf(addDeriveSerdeSerializeDecorator),
+            params = IntegrationTestParams(service = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol")
         ) { codegenContext, rustCrate ->
             val codegenScope = arrayOf(
                 "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
                 "SerdeCbor" to CargoDependency.SerdeCbor.toType(),
             )
 
-            val instantiator = ServerInstantiator(codegenContext)
+            val instantiator = ServerInstantiator(codegenContext, ignoreMissingMembers = true)
             val rpcV2 = RpcV2Cbor(codegenContext)
 
             for (operationShape in codegenContext.model.operationShapes) {
@@ -94,6 +115,7 @@ internal class CborSerializerGeneratorTest {
                             outputShape,
                         )
                     }
+
                 val serializeFn = rpcV2
                     .structuredDataSerializer()
                     .operationOutputSerializer(operationShape)
@@ -102,8 +124,8 @@ internal class CborSerializerGeneratorTest {
                 // TODO Filter out `timestamp` and `blob` shapes: those map to runtime types in `aws-smithy-types` on
                 //  which we can't `#[derive(Deserialize)]`.
                 rustCrate.withModule(ProtocolFunctions.serDeModule) {
-                    for ((idx, test) in tests.withIndex()) {
-                        unitTest("TODO_$idx") {
+                    for (test in tests) {
+                        unitTest("we_serialize_and_serde_cbor_deserializes_${test.id}") {
                             rustTemplate(
                                 """
                                 let expected = #{InstantiateShape:W};
@@ -111,7 +133,7 @@ internal class CborSerializerGeneratorTest {
                                     .expect("generated CBOR serializer failed");
                                 let actual = #{SerdeCbor}::from_slice(&bytes)
                                    .expect("serde_cbor failed deserializing from bytes");
-                                 #{AssertEq}(expected, actual);
+                                #{AssertEq}(expected, actual);
                                 """,
                                 "InstantiateShape" to instantiator.generate(test.targetShape, test.testCase.params),
                                 "SerializeFn" to serializeFn,

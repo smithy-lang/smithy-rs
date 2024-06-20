@@ -88,7 +88,8 @@ object TestWorkspace {
 
     private val cargoLock: File by lazy {
         var curFile = File(this.javaClass.protectionDomain.codeSource.location.path)
-        while (!curFile.endsWith("smithy-rs")) {
+        // TODO This is not a robust check.
+        while (!curFile.endsWith("smithy-rs") && !curFile.endsWith("SmithyRsSource")) {
             curFile = curFile.parentFile
         }
 
