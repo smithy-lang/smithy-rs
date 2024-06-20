@@ -5,14 +5,16 @@
 
 use std::sync::Arc;
 
-use aws_smithy_http_server::{routing::LambdaHandler, AddExtensionLayer};
+use aws_smithy_http_server::AddExtensionLayer;
 
 use pokemon_service_common::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics,
     setup_tracing, stream_pokemon_radio, State,
 };
 use pokemon_service_lambda::get_storage_lambda;
-use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
+use pokemon_service_server_sdk::{
+    server::routing::LambdaHandler, PokemonService, PokemonServiceConfig,
+};
 
 #[tokio::main]
 pub async fn main() {

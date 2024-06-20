@@ -19,6 +19,6 @@ tracing = "0.1"
 lambda_http = "0.8.0"
 
 # Local paths
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["aws-lambda"] }
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["aws-lambda"] }
 pokemon-service-common = { path = "../pokemon-service-common/" }

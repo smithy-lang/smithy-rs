@@ -10,3 +10,8 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+[[smithy-rs]]
+message = "A feature, `aws-lambda`, has been added to generated SDKs to re-export types required for Lambda deployment."
+references = ["smithy-rs#3643"]
+meta = { "breaking" = false, "bug" = true, "tada" = false, "target" = "server" }
+author = "drganjoo"
