@@ -610,12 +610,8 @@ open class ServerCodegenVisitor(
     /**
      * Generate protocol tests. This method can be overridden by other languages such as Python.
      */
-    open fun protocolTests() {
-        rustCrate.withModule(ServerRustModule.Operation) {
-            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(
-                this,
-            )
-        }
+    open fun protocolTestsForOperation(writer: RustWriter, shape: OperationShape) {
+        ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), shape).render(writer)
     }
 
     /**
@@ -647,9 +643,6 @@ open class ServerCodegenVisitor(
         rustCrate.withModule(ServerRustModule.Server) {
             ServerRuntimeTypesReExportsGenerator(codegenContext).render(this)
         }
-
-        // Generate protocol tests.
-        protocolTests()
 
         // Generate service module.
         rustCrate.withModule(ServerRustModule.Service) {
@@ -693,6 +686,11 @@ open class ServerCodegenVisitor(
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
             .forEach { structureShape -> this.structureShape(structureShape) }
+
+        // Generate protocol tests.
+        rustCrate.withModule(ServerRustModule.Operation) {
+            protocolTestsForOperation(this, shape)
+        }
     }
 
     override fun blobShape(shape: BlobShape) {
