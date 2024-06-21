@@ -53,11 +53,6 @@ class ClientProtocolTestGenerator(
     override val codegenContext: ClientCodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
-
-    override val expectFail: Set<FailingTest> = ExpectFail,
-    override val runOnly: Set<String> = emptySet(),
-    override val disabledTests: Set<String> = emptySet(),
-
     private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
         rustTemplate(
             """
@@ -70,7 +65,7 @@ class ClientProtocolTestGenerator(
             "Client" to ClientRustModule.root.toType().resolve("Client"),
         )
     },
-) : ProtocolTestGenerator {
+) : ProtocolTestGenerator() {
     companion object {
         private val ExpectFail =
             setOf<FailingTest>(
@@ -80,6 +75,15 @@ class ClientProtocolTestGenerator(
                 FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
             )
     }
+
+    override val appliesTo: AppliesTo
+        get() = AppliesTo.CLIENT
+    override val expectFail: Set<FailingTest>
+        get() = ExpectFail
+    override val runOnly: Set<String>
+        get() = emptySet()
+    override val disabledTests: Set<String>
+        get() = emptySet()
 
     private val rc = codegenContext.runtimeConfig
     private val logger = Logger.getLogger(javaClass.name)
@@ -95,18 +99,7 @@ class ClientProtocolTestGenerator(
             "Uri" to RT.Http.resolve("Uri"),
         )
 
-    override fun render(writer: RustWriter) {
-        val allTests = allTestCases(AppliesTo.CLIENT)
-        if (allTests.isEmpty()) {
-            return
-        }
-
-        writer.withInlineModule(protocolTestsModule(), null) {
-            renderAllTestCases(allTests)
-        }
-    }
-
-    private fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         for (it in allTests) {
             renderTestCaseBlock(it, this) {
                 when (it) {
