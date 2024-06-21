@@ -149,8 +149,6 @@ interface ProtocolTestGenerator {
                 is TestCase.RequestTest -> "_request"
                 is TestCase.MalformedRequestTest -> "_malformed_request"
             }
-        // TODO Do we need this one?
-        Attribute.AllowUnusedMut.render(testModuleWriter)
         testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnNameSuffix()") {
             block(this)
         }
