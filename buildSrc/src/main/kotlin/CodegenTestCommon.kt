@@ -258,10 +258,7 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(
-    outputDir: File,
-    allowBrokenIntraDocLinks: Boolean = false,
-) {
+fun Project.registerCargoCommandsTasks(outputDir: File) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -289,13 +286,6 @@ fun Project.registerCargoCommandsTasks(
                 "--no-deps",
                 "--document-private-items",
             )
-        if (allowBrokenIntraDocLinks) {
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
-            // TODO(https://github.com/smithy-lang/smithy-rs/pull/3648) This is the _only_ reason why we need to allow
-            // broken intra doc links. Once it lands we can remove this escape hatch and deny _all_ warnings.
-            args += "--config"
-            args += """build.rustdocflags = ["-A", "rustdoc::broken-intra-doc-links"]"""
-        }
         commandLine("cargo", "doc", *args.toTypedArray())
     }
 
