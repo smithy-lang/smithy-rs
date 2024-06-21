@@ -16,7 +16,6 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 val buildDir = layout.buildDirectory.get().asFile
 
@@ -128,7 +127,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 
