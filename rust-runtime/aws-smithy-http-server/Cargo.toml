@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.61.2"
+version = "0.62.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
