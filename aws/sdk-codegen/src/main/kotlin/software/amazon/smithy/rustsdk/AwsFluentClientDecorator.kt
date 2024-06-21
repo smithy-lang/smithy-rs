@@ -13,8 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -28,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rustsdk.customize.s3.S3ExpressFluentClientCustomization
@@ -91,7 +91,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseGenerator: ProtocolTestGenerator,
     ): ProtocolTestGenerator =
-        DefaultProtocolTestGenerator(
+        ClientProtocolTestGenerator(
             codegenContext,
             baseGenerator.protocolSupport,
             baseGenerator.operationShape,

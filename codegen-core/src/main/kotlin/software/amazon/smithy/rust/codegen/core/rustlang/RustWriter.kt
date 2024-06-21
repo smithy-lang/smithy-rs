@@ -378,7 +378,13 @@ fun <T : AbstractCodeWriter<T>> T.docs(
     vararg args: Any,
     newlinePrefix: String = "/// ",
     trimStart: Boolean = true,
+    /** If `false`, will disable templating in `args` into `#{T}` spans */
+    templating: Boolean = true,
 ): T {
+    if (!templating && args.isNotEmpty()) {
+        PANIC("Templating was disabled yet the following arguments were passed in: $args")
+    }
+
     // Because writing docs relies on the newline prefix, ensure that there was a new line written
     // before we write the docs
     this.ensureNewline()
@@ -392,7 +398,13 @@ fun <T : AbstractCodeWriter<T>> T.docs(
                     else -> it
                 }.replace("\t", "  ") // Rustdoc warns on tabs in documentation
             }
-    write(cleaned, *args)
+
+    if (templating) {
+        write(cleaned, *args)
+    } else {
+        writeWithNoFormatting(cleaned)
+    }
+
     popState()
     return this
 }
