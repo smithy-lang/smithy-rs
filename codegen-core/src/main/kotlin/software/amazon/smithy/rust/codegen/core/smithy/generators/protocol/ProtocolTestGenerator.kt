@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.OperationIndex
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -40,28 +42,29 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 /**
  * Common interface to generate protocol tests for a given [operationShape].
  */
-interface ProtocolTestGenerator {
-    val codegenContext: CodegenContext
-    val protocolSupport: ProtocolSupport
-    val operationShape: OperationShape
+abstract class ProtocolTestGenerator {
+    abstract val codegenContext: CodegenContext
+    abstract val protocolSupport: ProtocolSupport
+    abstract val operationShape: OperationShape
+    abstract val appliesTo: AppliesTo
 
     /**
      * We expect these tests to fail due to shortcomings in our implementation.
      * They will _fail_ if they pass, so we will discover and remove them if we fix them by accident.
      **/
-    val expectFail: Set<FailingTest>
+    abstract val expectFail: Set<FailingTest>
 
     /** Only generate these tests; useful to temporarily set and shorten development cycles */
-    val runOnly: Set<String>
+    abstract val runOnly: Set<String>
 
     /**
      * These tests are not even attempted to be generated, either because they will not compile
      * or because they are flaky.
      */
-    val disabledTests: Set<String>
+    abstract val disabledTests: Set<String>
 
     /** The Rust module in which we should generate the protocol tests for [operationShape]. */
-    fun protocolTestsModule(): RustModule.LeafModule {
+    private fun protocolTestsModule(): RustModule.LeafModule {
         val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
         val testModuleName = "${operationName.toSnakeCase()}_test"
         val additionalAttributes =
@@ -70,33 +73,49 @@ interface ProtocolTestGenerator {
     }
 
     /** The entry point to render the protocol tests, invoked by the code generators. */
-    fun render(writer: RustWriter)
-
-    /** Filter out test cases that are disabled or don't match the service protocol. */
-    fun List<TestCase>.filterMatching(): List<TestCase> =
-        if (runOnly.isEmpty()) {
-            this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
-        } else {
-            this.filter { testCase -> runOnly.contains(testCase.id) }
+    fun render(writer: RustWriter) {
+        val allTests = allTestCases().fixBroken()
+        if (allTests.isEmpty()) {
+            return
         }
 
+        writer.withInlineModule(protocolTestsModule(), null) {
+            renderAllTestCases(allTests)
+        }
+    }
+
+    /** Implementors should describe how to render the test cases. **/
+    abstract fun RustWriter.renderAllTestCases(allTests: List<TestCase>)
+
+    /**
+     * This function applies a "fix function" to each broken test before we synthesize it.
+     * Broken tests are those whose definitions in the `awslabs/smithy` repository are wrong.
+     * We try to contribute fixes upstream to pare down this function to the identity function.
+     */
+    open fun List<TestCase>.fixBroken(): List<TestCase> = this
+
+    /** Filter out test cases that are disabled or don't match the service protocol. */
+    private fun List<TestCase>.filterMatching(): List<TestCase> = if (runOnly.isEmpty()) {
+        this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
+    } else {
+        this.filter { testCase -> runOnly.contains(testCase.id) }
+    }
+
     /** Do we expect this [testCase] to fail? */
-    fun expectFail(testCase: TestCase): Boolean =
+    private fun expectFail(testCase: TestCase): Boolean =
         expectFail.find {
             it.id == testCase.id && it.kind == testCase.kind && it.service == codegenContext.serviceShape.id.toString()
         } != null
 
-    /**
-     * Parses from the model and returns all test cases for [operationShape] applying to the [appliesTo] artifact type
-     * that should be rendered by implementors.
-     **/
-    fun allTestCases(appliesTo: AppliesTo): List<TestCase> {
+    fun requestTestCases(): List<TestCase> {
+        val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
+            .map { TestCase.RequestTest(it) }
+        return requestTests.filterMatching()
+    }
+
+    fun responseTestCases(): List<TestCase> {
         val operationIndex = OperationIndex.of(codegenContext.model)
         val outputShape = operationShape.outputShape(codegenContext.model)
-
-        val requestTests =
-            operationShape.getTrait<HttpRequestTestsTrait>()
-                ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.RequestTest(it) }
 
         // `@httpResponseTests` trait can apply to operation shapes and structure shapes with the `@error` trait.
         // Find both kinds for the operation for which we're generating protocol tests.
@@ -111,22 +130,27 @@ interface ProtocolTestGenerator {
                 testCases.map { TestCase.ResponseTest(it, error) }
             }
 
-        // `@httpMalformedRequestTests` only make sense for servers.
-        val malformedRequestTests =
-            if (appliesTo == AppliesTo.SERVER) {
-                operationShape.getTrait<HttpMalformedRequestTestsTrait>()
-                    ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
-            } else {
-                emptyList()
-            }
-
-        // Note there's no `@httpMalformedResponseTests`: https://github.com/smithy-lang/smithy/issues/2334
-
-        val allTests: List<TestCase> =
-            (requestTests + responseTestsOnOperations + responseTestsOnErrors + malformedRequestTests)
-                .filterMatching()
-        return allTests
+        return (responseTestsOnOperations + responseTestsOnErrors).filterMatching()
     }
+
+    fun malformedRequestTestCases(): List<TestCase> {
+        // `@httpMalformedRequestTests` only make sense for servers.
+        val malformedRequestTests = if (appliesTo == AppliesTo.SERVER) {
+            operationShape.getTrait<HttpMalformedRequestTestsTrait>()
+                ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
+        } else {
+            emptyList()
+        }
+        return malformedRequestTests.filterMatching()
+    }
+
+    /**
+     * Parses from the model and returns all test cases for [operationShape] applying to the [appliesTo] artifact type
+     * that should be rendered by implementors.
+     **/
+    fun allTestCases(): List<TestCase> =
+        // Note there's no `@httpMalformedResponseTests`: https://github.com/smithy-lang/smithy/issues/2334
+        requestTestCases() + responseTestCases() + malformedRequestTestCases()
 
     fun renderTestCaseBlock(
         testCase: TestCase,

@@ -61,10 +61,7 @@ class ServerProtocolTestGenerator(
     override val codegenContext: CodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
-    override val expectFail: Set<FailingTest> = ExpectFail,
-    override val runOnly: Set<String> = emptySet(),
-    override val disabledTests: Set<String> = DisabledTests,
-) : ProtocolTestGenerator {
+): ProtocolTestGenerator() {
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(
@@ -214,6 +211,15 @@ class ServerProtocolTestGenerator(
             )
     }
 
+    override val appliesTo: AppliesTo
+        get() = AppliesTo.SERVER
+    override val expectFail: Set<FailingTest>
+        get() = ExpectFail
+    override val runOnly: Set<String>
+        get() = emptySet()
+    override val disabledTests: Set<String>
+        get() = DisabledTests
+
     private val logger = Logger.getLogger(javaClass.name)
 
     private val model = codegenContext.model
@@ -256,18 +262,7 @@ class ServerProtocolTestGenerator(
             "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
         )
 
-    override fun render(writer: RustWriter) {
-        val allTests = allTestCases(AppliesTo.SERVER).fixBroken()
-        if (allTests.isEmpty()) {
-            return
-        }
-
-        writer.withInlineModule(protocolTestsModule(), null) {
-            renderAllTestCases(allTests)
-        }
-    }
-
-    private fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
         for (it in allTests) {
             renderTestCaseBlock(it, this) {
                 when (it) {
@@ -279,10 +274,11 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    // This function applies a "fix function" to each broken test before we synthesize it.
-    // Broken tests are those whose definitions in the `awslabs/smithy` repository are wrong, usually because they have
-    // not been written with a server-side perspective in mind.
-    private fun List<TestCase>.fixBroken(): List<TestCase> =
+    /**
+     * Broken tests in the `awslabs/smithy` repository are usually wrong because they have not been written
+     * with a server-side perspective in mind.
+     */
+    override fun List<TestCase>.fixBroken(): List<TestCase> =
         this.map {
             when (it) {
                 is TestCase.MalformedRequestTest -> {
