@@ -61,7 +61,7 @@ class ServerProtocolTestGenerator(
     override val codegenContext: CodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
-): ProtocolTestGenerator() {
+) : ProtocolTestGenerator() {
     companion object {
         private val ExpectFail: Set<FailingTest> =
             setOf(

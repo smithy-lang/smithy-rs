@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.OperationIndex
-import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -27,12 +26,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -95,11 +93,12 @@ abstract class ProtocolTestGenerator {
     open fun List<TestCase>.fixBroken(): List<TestCase> = this
 
     /** Filter out test cases that are disabled or don't match the service protocol. */
-    private fun List<TestCase>.filterMatching(): List<TestCase> = if (runOnly.isEmpty()) {
-        this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
-    } else {
-        this.filter { testCase -> runOnly.contains(testCase.id) }
-    }
+    private fun List<TestCase>.filterMatching(): List<TestCase> =
+        if (runOnly.isEmpty()) {
+            this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
+        } else {
+            this.filter { testCase -> runOnly.contains(testCase.id) }
+        }
 
     /** Do we expect this [testCase] to fail? */
     private fun expectFail(testCase: TestCase): Boolean =
@@ -108,8 +107,9 @@ abstract class ProtocolTestGenerator {
         } != null
 
     fun requestTestCases(): List<TestCase> {
-        val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
-            .map { TestCase.RequestTest(it) }
+        val requestTests =
+            operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
+                .map { TestCase.RequestTest(it) }
         return requestTests.filterMatching()
     }
 
@@ -135,12 +135,13 @@ abstract class ProtocolTestGenerator {
 
     fun malformedRequestTestCases(): List<TestCase> {
         // `@httpMalformedRequestTests` only make sense for servers.
-        val malformedRequestTests = if (appliesTo == AppliesTo.SERVER) {
-            operationShape.getTrait<HttpMalformedRequestTestsTrait>()
-                ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
-        } else {
-            emptyList()
-        }
+        val malformedRequestTests =
+            if (appliesTo == AppliesTo.SERVER) {
+                operationShape.getTrait<HttpMalformedRequestTestsTrait>()
+                    ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
+            } else {
+                emptyList()
+            }
         return malformedRequestTests.filterMatching()
     }
 
@@ -165,7 +166,7 @@ abstract class ProtocolTestGenerator {
         // The `#[traced_test]` macro desugars to using `tracing`, so we need to depend on the latter explicitly in
         // case the code rendered by the test does not make use of `tracing` at all.
         val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
-        testModuleWriter.rustTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
+        testModuleWriter.rustInlineTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
         Attribute.TokioTest.render(testModuleWriter)
         Attribute.TracedTest.render(testModuleWriter)
 
