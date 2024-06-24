@@ -166,13 +166,8 @@ abstract class ProtocolTestGenerator {
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
-        val fnNameSuffix =
-            when (testCase) {
-                is TestCase.ResponseTest -> "_response"
-                is TestCase.RequestTest -> "_request"
-                is TestCase.MalformedRequestTest -> "_malformed_request"
-            }
-        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnNameSuffix()") {
+        val fnNameSuffix = testCase.kind.toString().toSnakeCase()
+        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}_$fnNameSuffix()") {
             block(this)
         }
     }
@@ -280,6 +275,7 @@ object ServiceShapeId {
     const val AWS_JSON_10 = "aws.protocoltests.json10#JsonRpc10"
     const val AWS_JSON_11 = "aws.protocoltests.json#JsonProtocol"
     const val REST_JSON = "aws.protocoltests.restjson#RestJson"
+    const val RPC_V2_CBOR = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
     const val REST_XML = "aws.protocoltests.restxml#RestXml"
     const val AWS_QUERY = "aws.protocoltests.query#AwsQuery"
     const val EC2_QUERY = "aws.protocoltests.ec2#AwsEc2"

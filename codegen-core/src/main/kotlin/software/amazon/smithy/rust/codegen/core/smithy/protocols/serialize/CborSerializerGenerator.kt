@@ -392,13 +392,13 @@ class CborSerializerGenerator(
     }
 
     private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
+        for (customization in customizations) {
+            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+        }
         // `.expect()` safety: `From<u64> for usize` is not in the standard library, but the conversion should be
         // infallible (unless we ever have 128-bit machines I guess).
         // See https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243.
         // TODO Point to a `static` to not inflate the binary.
-        for (customization in customizations) {
-            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
-        }
         rust(
             """
             encoder.array(

@@ -47,10 +47,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
