@@ -73,7 +73,7 @@ impl Headers {
     /// Returns the value for a given key
     ///
     /// If multiple values are associated, the first value is returned
-    /// See [HeaderMap::get]
+    /// See [HeaderMap::get](http0::HeaderMap::get)
     pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
         self.headers.get(key.as_ref()).map(|v| v.as_ref())
     }
