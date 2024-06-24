@@ -12,7 +12,7 @@ use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
-use http0::header::CONTENT_TYPE;
+use http_02x::header::CONTENT_TYPE;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, MutexGuard};
 

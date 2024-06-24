@@ -39,7 +39,7 @@ async fn stalled_stream_performance() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let make_service = make_service_fn(move |_connection: &AddrStream| async move {
         Ok::<_, Infallible>(service_fn(
-            move |_: http0::Request<hyper_0_14::Body>| async move {
+            move |_: http_02x::Request<hyper_0_14::Body>| async move {
                 let (mut sender, body) = hyper_0_14::Body::channel();
                 tokio::task::spawn(async move {
                     for _i in 0..(data_size / block_size) {
@@ -49,7 +49,7 @@ async fn stalled_stream_performance() {
                             .expect("failed to write data");
                     }
                 });
-                Ok::<_, Infallible>(http0::Response::new(body))
+                Ok::<_, Infallible>(http_02x::Response::new(body))
             },
         ))
     });
@@ -80,7 +80,7 @@ async fn stalled_stream_performance() {
 
 async fn make_request(address: &str, wrap_body: bool) -> Duration {
     let mut client = hyper_0_14::Client::new();
-    let req = ::http0::Request::builder()
+    let req = ::http_02x::Request::builder()
         .uri(address)
         .body(hyper_0_14::Body::empty())
         .unwrap();

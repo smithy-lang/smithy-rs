@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::http::Response;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use bytes::Buf;
-use http_body_1::{Frame, SizeHint};
+use http_body_1x::{Frame, SizeHint};
 use pin_project_lite::pin_project;
 use std::borrow::Cow;
 use std::error::Error;
@@ -70,8 +70,8 @@ impl ContentLengthEnforcingBody<SdkBody> {
 impl<
         E: Into<aws_smithy_types::body::Error>,
         Data: Buf,
-        InnerBody: http_body_1::Body<Error = E, Data = Data>,
-    > http_body_1::Body for ContentLengthEnforcingBody<InnerBody>
+        InnerBody: http_body_1x::Body<Error = E, Data = Data>,
+    > http_body_1x::Body for ContentLengthEnforcingBody<InnerBody>
 {
     type Data = Data;
     type Error = aws_smithy_types::body::Error;
@@ -217,9 +217,9 @@ mod test {
     use aws_smithy_types::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
-    use http0::header::CONTENT_LENGTH;
-    use http_body_0_4::Body;
-    use http_body_1::Frame;
+    use http_02x::header::CONTENT_LENGTH;
+    use http_body_04x::Body;
+    use http_body_1x::Frame;
     use std::error::Error;
     use std::pin::Pin;
     use std::task::{Context, Poll};
@@ -238,7 +238,7 @@ mod test {
         }
     }
 
-    impl http_body_1::Body for ManyFrameBody {
+    impl http_body_1x::Body for ManyFrameBody {
         type Data = Bytes;
         type Error = <SdkBody as Body>::Error;
 

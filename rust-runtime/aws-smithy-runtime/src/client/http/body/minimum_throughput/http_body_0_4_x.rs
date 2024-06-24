@@ -8,7 +8,7 @@ use crate::client::http::body::minimum_throughput::{
     throughput::ThroughputReport, Throughput, ThroughputReadingBody,
 };
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use http_body_0_4::Body;
+use http_body_04x::Body;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::task::{Context, Poll};
@@ -140,7 +140,7 @@ where
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
@@ -149,7 +149,7 @@ where
         self.inner.is_end_stream()
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
+    fn size_hint(&self) -> http_body_04x::SizeHint {
         self.inner.size_hint()
     }
 }
@@ -208,7 +208,7 @@ where
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
@@ -217,7 +217,7 @@ where
         self.inner.is_end_stream()
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
+    fn size_hint(&self) -> http_body_04x::SizeHint {
         self.inner.size_hint()
     }
 }

@@ -200,7 +200,13 @@ mod download_test_tools {
     use crate::stalled_stream_common::*;
 
     fn response(body: SdkBody) -> HttpResponse {
-        HttpResponse::try_from(http0::Response::builder().status(200).body(body).unwrap()).unwrap()
+        HttpResponse::try_from(
+            http_02x::Response::builder()
+                .status(200)
+                .body(body)
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     pub fn operation(

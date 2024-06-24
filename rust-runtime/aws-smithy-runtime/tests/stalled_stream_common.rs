@@ -42,7 +42,7 @@ pub use aws_smithy_types::{
     body::SdkBody, error::display::DisplayErrorContext, timeout::TimeoutConfig,
 };
 pub use bytes::Bytes;
-pub use http_body_0_4::Body;
+pub use http_body_04x::Body;
 pub use pin_utils::pin_mut;
 pub use std::{
     collections::VecDeque,
@@ -105,7 +105,7 @@ impl Body for ChannelBody {
     fn poll_trailers(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http0::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
         unreachable!()
     }
 }

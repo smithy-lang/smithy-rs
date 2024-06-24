@@ -31,9 +31,9 @@ bytes = "1"
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.0.0"
 h2 = { version = "0.3", default-features = false, optional = true }
-http0 = { package = "http", version = "0.2.8" }
-http-body-0-4 = { package = "http-body", version = "0.4.4" }
-http-body-1 = { package = "http-body", version = "1" }
+http-02x = { package = "http", version = "0.2.8" }
+http-body-04x = { package = "http-body", version = "0.4.4" }
+http-body-1x = { package = "http-body", version = "1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
 httparse = "1.8.0"
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }

@@ -152,7 +152,7 @@ impl<T, E> Receiver<T, E> {
     }
 
     async fn buffer_next_chunk(&mut self) -> Result<(), SdkError<E, RawMessage>> {
-        use http_body::Body;
+        use http_body_04x::Body;
 
         if !self.buffer.is_eos() {
             let next_chunk = self

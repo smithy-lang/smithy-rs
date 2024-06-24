@@ -163,7 +163,7 @@ impl HyperConnectorBuilder {
     pub fn build<C>(self, tcp_connector: C) -> HyperConnector
     where
         C: Clone + Send + Sync + 'static,
-        C: hyper_0_14::service::Service<http0::Uri>,
+        C: hyper_0_14::service::Service<http_02x::Uri>,
         C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
@@ -281,7 +281,7 @@ impl<C> fmt::Debug for Adapter<C> {
 fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<ConnectionMetadata> {
     let capture_conn = capture_conn.clone();
     if let Some(conn) = capture_conn.clone().connection_metadata().as_ref() {
-        let mut extensions = http0::Extensions::new();
+        let mut extensions = http_02x::Extensions::new();
         conn.get_extras(&mut extensions);
         let http_info = extensions.get::<HttpInfo>();
         let mut builder = ConnectionMetadata::builder()
@@ -306,7 +306,7 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
 impl<C> HttpConnector for Adapter<C>
 where
     C: Clone + Send + Sync + 'static,
-    C: hyper_0_14::service::Service<http0::Uri>,
+    C: hyper_0_14::service::Service<http_02x::Uri>,
     C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
@@ -436,7 +436,7 @@ impl<C, F> HttpClient for HyperClient<F>
 where
     F: Fn() -> C + Send + Sync,
     C: Clone + Send + Sync + 'static,
-    C: hyper_0_14::service::Service<http0::Uri>,
+    C: hyper_0_14::service::Service<http_02x::Uri>,
     C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
@@ -594,7 +594,7 @@ impl HyperClientBuilder {
     pub fn build<C>(self, tcp_connector: C) -> SharedHttpClient
     where
         C: Clone + Send + Sync + 'static,
-        C: hyper_0_14::service::Service<http0::Uri>,
+        C: hyper_0_14::service::Service<http_02x::Uri>,
         C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
@@ -606,7 +606,7 @@ impl HyperClientBuilder {
     where
         F: Fn() -> C + Send + Sync + 'static,
         C: Clone + Send + Sync + 'static,
-        C: hyper_0_14::service::Service<http0::Uri>,
+        C: hyper_0_14::service::Service<http_02x::Uri>,
         C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
@@ -759,9 +759,9 @@ mod timeout_middleware {
         }
     }
 
-    impl<I> hyper_0_14::service::Service<http0::Uri> for ConnectTimeout<I>
+    impl<I> hyper_0_14::service::Service<http_02x::Uri> for ConnectTimeout<I>
     where
-        I: hyper_0_14::service::Service<http0::Uri>,
+        I: hyper_0_14::service::Service<http_02x::Uri>,
         I::Error: Into<BoxError>,
     {
         type Response = I::Response;
@@ -772,7 +772,7 @@ mod timeout_middleware {
             self.inner.poll_ready(cx).map_err(|err| err.into())
         }
 
-        fn call(&mut self, req: http0::Uri) -> Self::Future {
+        fn call(&mut self, req: http_02x::Uri) -> Self::Future {
             match &self.timeout {
                 Some((sleep, duration)) => {
                     let sleep = sleep.sleep(*duration);
@@ -789,9 +789,9 @@ mod timeout_middleware {
         }
     }
 
-    impl<I, B> hyper_0_14::service::Service<http0::Request<B>> for HttpReadTimeout<I>
+    impl<I, B> hyper_0_14::service::Service<http_02x::Request<B>> for HttpReadTimeout<I>
     where
-        I: hyper_0_14::service::Service<http0::Request<B>, Error = hyper_0_14::Error>,
+        I: hyper_0_14::service::Service<http_02x::Request<B>, Error = hyper_0_14::Error>,
     {
         type Response = I::Response;
         type Error = BoxError;
@@ -801,7 +801,7 @@ mod timeout_middleware {
             self.inner.poll_ready(cx).map_err(|err| err.into())
         }
 
-        fn call(&mut self, req: http0::Request<B>) -> Self::Future {
+        fn call(&mut self, req: http_02x::Request<B>) -> Self::Future {
             match &self.timeout {
                 Some((sleep, duration)) => {
                     let sleep = sleep.sleep(*duration);
@@ -852,7 +852,7 @@ mod timeout_middleware {
         #[non_exhaustive]
         #[derive(Clone, Default, Debug)]
         struct NeverConnects;
-        impl hyper_0_14::service::Service<http0::Uri> for NeverConnects {
+        impl hyper_0_14::service::Service<http_02x::Uri> for NeverConnects {
             type Response = TcpStream;
             type Error = ConnectorError;
             type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -861,7 +861,7 @@ mod timeout_middleware {
                 Poll::Ready(Ok(()))
             }
 
-            fn call(&mut self, _uri: http0::Uri) -> Self::Future {
+            fn call(&mut self, _uri: http_02x::Uri) -> Self::Future {
                 Box::pin(async move {
                     Never::new().await;
                     unreachable!()
@@ -872,7 +872,7 @@ mod timeout_middleware {
         /// A service that will connect but never send any data
         #[derive(Clone, Debug, Default)]
         struct NeverReplies;
-        impl hyper_0_14::service::Service<http0::Uri> for NeverReplies {
+        impl hyper_0_14::service::Service<http_02x::Uri> for NeverReplies {
             type Response = EmptyStream;
             type Error = BoxError;
             type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
@@ -881,7 +881,7 @@ mod timeout_middleware {
                 Poll::Ready(Ok(()))
             }
 
-            fn call(&mut self, _req: http0::Uri) -> Self::Future {
+            fn call(&mut self, _req: http_02x::Uri) -> Self::Future {
                 std::future::ready(Ok(EmptyStream))
             }
         }
@@ -1126,7 +1126,7 @@ mod test {
         inner: T,
     }
 
-    impl<T> hyper_0_14::service::Service<http0::Uri> for TestConnection<T>
+    impl<T> hyper_0_14::service::Service<http_02x::Uri> for TestConnection<T>
     where
         T: Clone + Connection,
     {
@@ -1138,7 +1138,7 @@ mod test {
             Poll::Ready(Ok(()))
         }
 
-        fn call(&mut self, _req: http0::Uri) -> Self::Future {
+        fn call(&mut self, _req: http_02x::Uri) -> Self::Future {
             std::future::ready(Ok(self.inner.clone()))
         }
     }

@@ -17,7 +17,7 @@ use tokio::sync::oneshot;
 
 #[derive(Debug)]
 struct Inner {
-    response: Option<http0::Response<SdkBody>>,
+    response: Option<http_02x::Response<SdkBody>>,
     sender: Option<oneshot::Sender<HttpRequest>>,
 }
 
@@ -101,13 +101,13 @@ impl CaptureRequestReceiver {
 /// );
 /// ```
 pub fn capture_request(
-    response: Option<http0::Response<SdkBody>>,
+    response: Option<http_02x::Response<SdkBody>>,
 ) -> (CaptureRequestHandler, CaptureRequestReceiver) {
     let (tx, rx) = oneshot::channel();
     (
         CaptureRequestHandler(Arc::new(Mutex::new(Inner {
             response: Some(response.unwrap_or_else(|| {
-                http0::Response::builder()
+                http_02x::Response::builder()
                     .status(200)
                     .body(SdkBody::empty())
                     .expect("unreachable")

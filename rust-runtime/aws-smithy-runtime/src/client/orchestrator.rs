@@ -504,7 +504,7 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
     use aws_smithy_types::timeout::TimeoutConfig;
-    use http0::{Response, StatusCode};
+    use http_02x::{Response, StatusCode};
     use std::borrow::Cow;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -535,7 +535,7 @@ mod tests {
 
     impl HttpConnector for OkConnector {
         fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
-            HttpConnectorFuture::ready(Ok(http0::Response::builder()
+            HttpConnectorFuture::ready(Ok(http_02x::Response::builder()
                 .status(200)
                 .body(SdkBody::empty())
                 .expect("OK response is valid")

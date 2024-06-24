@@ -75,7 +75,7 @@ impl NeverTcpConnector {
 }
 
 #[cfg(feature = "connector-hyper-0-14-x")]
-impl hyper_0_14::service::Service<http0::Uri> for NeverTcpConnector {
+impl hyper_0_14::service::Service<http_02x::Uri> for NeverTcpConnector {
     type Response = connection::NeverTcpConnection;
     type Error = aws_smithy_runtime_api::box_error::BoxError;
     type Future = std::pin::Pin<
@@ -89,7 +89,7 @@ impl hyper_0_14::service::Service<http0::Uri> for NeverTcpConnector {
         std::task::Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, _: http0::Uri) -> Self::Future {
+    fn call(&mut self, _: http_02x::Uri) -> Self::Future {
         Box::pin(async {
             Never::new().await;
             unreachable!()

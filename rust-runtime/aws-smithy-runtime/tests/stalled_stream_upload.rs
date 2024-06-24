@@ -254,7 +254,7 @@ mod upload_test_tools {
 
     pub fn successful_response() -> HttpResponse {
         HttpResponse::try_from(
-            http0::Response::builder()
+            http_02x::Response::builder()
                 .status(200)
                 .body(SdkBody::empty())
                 .unwrap(),
