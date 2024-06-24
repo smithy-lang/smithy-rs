@@ -12,27 +12,36 @@ import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
@@ -83,6 +92,41 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                 DeriveSerdeDeserializeSymbolMetadataProvider(base)
         }
 
+        // Don't generate protocol tests, because it'll attempt to pull out `params` for member shapes we'll remove
+        // from the model.
+        val noProtocolTestsDecorator = object : ServerCodegenDecorator {
+            override val name: String = "Don't generate protocol tests"
+            override val order: Byte = 0
+
+            override fun protocolTestGenerator(
+                codegenContext: ServerCodegenContext,
+                baseGenerator: ProtocolTestGenerator
+            ): ProtocolTestGenerator {
+                val noOpProtocolTestsGenerator = object : ProtocolTestGenerator() {
+                    override val codegenContext: CodegenContext
+                        get() = PANIC("We'll never need this")
+                    override val protocolSupport: ProtocolSupport
+                        get() = PANIC("We'll never need this")
+                    override val operationShape: OperationShape
+                        get() = PANIC("We'll never need this")
+                    override val appliesTo: AppliesTo
+                        get() = PANIC("We'll never need this")
+                    override val expectFail: Set<FailingTest>
+                        get() = PANIC("We'll never need this")
+                    override val runOnly: Set<String>
+                        get() = PANIC("We'll never need this")
+                    override val disabledTests: Set<String>
+                        get() = PANIC("We'll never need this")
+
+                    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+                        // No-op.
+                    }
+
+                }
+                return noOpProtocolTestsGenerator
+            }
+        }
+
         // Filter out `timestamp` and `blob` shapes: those map to runtime types in `aws-smithy-types` on
         // which we can't `#[derive(serde::Deserialize)]`.
         val model = Model.assembler().discoverModels().assemble().result.get()
@@ -100,7 +144,7 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
 
         serverIntegrationTest(
             transformedModel,
-            additionalDecorators = listOf(addDeriveSerdeSerializeDecorator),
+            additionalDecorators = listOf(addDeriveSerdeSerializeDecorator, noProtocolTestsDecorator),
             params = IntegrationTestParams(service = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol")
         ) { codegenContext, rustCrate ->
             val codegenScope = arrayOf(

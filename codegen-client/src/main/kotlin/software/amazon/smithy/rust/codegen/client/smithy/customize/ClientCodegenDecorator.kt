@@ -93,14 +93,6 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, Cl
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations
-
-    /**
-     * Hook to override the protocol test generator
-     */
-    fun protocolTestGenerator(
-        codegenContext: ClientCodegenContext,
-        baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator = baseGenerator
 }
 
 /**
@@ -174,14 +166,6 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     ): List<ServiceRuntimePluginCustomization> =
         combineCustomizations(baseCustomizations) { decorator, customizations ->
             decorator.serviceRuntimePluginCustomizations(codegenContext, customizations)
-        }
-
-    override fun protocolTestGenerator(
-        codegenContext: ClientCodegenContext,
-        baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator =
-        combineCustomizations(baseGenerator) { decorator, gen ->
-            decorator.protocolTestGenerator(codegenContext, gen)
         }
 
     companion object {
