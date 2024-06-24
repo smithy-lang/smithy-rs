@@ -125,9 +125,9 @@ impl ValidateRequest {
 ///     ReplayEvent::new(
 ///         // If `assert_requests_match` is called later, then this request will be matched
 ///         // against the actual request that was made.
-///         http0::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
+///         http_02x::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
 ///         // This response will be given to the first request regardless of whether it matches the request above.
-///         http0::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
+///         http_02x::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
 ///     ),
 ///     // The next ReplayEvent covers the second request/response pair...
 /// ]);
