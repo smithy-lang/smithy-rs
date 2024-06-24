@@ -220,7 +220,7 @@ class ServerProtocolTestGenerator(
     override val disabledTests: Set<String>
         get() = DisabledTests
 
-    private val logger = Logger.getLogger(javaClass.name)
+    override val logger: Logger = Logger.getLogger(javaClass.name)
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider

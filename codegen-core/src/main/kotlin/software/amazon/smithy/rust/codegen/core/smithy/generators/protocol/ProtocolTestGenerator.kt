@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import java.util.logging.Logger
 
 /**
  * Common interface to generate protocol tests for a given [operationShape].
@@ -45,6 +46,7 @@ abstract class ProtocolTestGenerator {
     abstract val protocolSupport: ProtocolSupport
     abstract val operationShape: OperationShape
     abstract val appliesTo: AppliesTo
+    abstract val logger: Logger
 
     /**
      * We expect these tests to fail due to shortcomings in our implementation.
@@ -72,7 +74,7 @@ abstract class ProtocolTestGenerator {
 
     /** The entry point to render the protocol tests, invoked by the code generators. */
     fun render(writer: RustWriter) {
-        val allTests = allTestCases().fixBroken()
+        val allTests = allMatchingTestCases().fixBroken()
         if (allTests.isEmpty()) {
             return
         }
@@ -97,6 +99,7 @@ abstract class ProtocolTestGenerator {
         if (runOnly.isEmpty()) {
             this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
         } else {
+            logger.warning("Generating only specified tests")
             this.filter { testCase -> runOnly.contains(testCase.id) }
         }
 
@@ -124,10 +127,8 @@ abstract class ProtocolTestGenerator {
                 ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
         val responseTestsOnErrors =
             operationIndex.getErrors(operationShape).flatMap { error ->
-                val testCases =
-                    error.getTrait<HttpResponseTestsTrait>()
-                        ?.getTestCasesFor(appliesTo).orEmpty()
-                testCases.map { TestCase.ResponseTest(it, error) }
+                error.getTrait<HttpResponseTestsTrait>()
+                    ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.ResponseTest(it, error) }
             }
 
         return (responseTestsOnOperations + responseTestsOnErrors).filterMatching()
@@ -149,7 +150,7 @@ abstract class ProtocolTestGenerator {
      * Parses from the model and returns all test cases for [operationShape] applying to the [appliesTo] artifact type
      * that should be rendered by implementors.
      **/
-    fun allTestCases(): List<TestCase> =
+    fun allMatchingTestCases(): List<TestCase> =
         // Note there's no `@httpMalformedResponseTests`: https://github.com/smithy-lang/smithy/issues/2334
         requestTestCases() + responseTestCases() + malformedRequestTestCases()
 
@@ -287,9 +288,6 @@ object ServiceShapeId {
     const val AWS_JSON_10 = "aws.protocoltests.json10#JsonRpc10"
     const val AWS_JSON_11 = "aws.protocoltests.json#JsonProtocol"
     const val REST_JSON = "aws.protocoltests.restjson#RestJson"
-    const val REST_XML = "aws.protocoltests.restxml#RestXml"
-    const val AWS_QUERY = "aws.protocoltests.query#AwsQuery"
-    const val EC2_QUERY = "aws.protocoltests.ec2#AwsEc2"
     const val REST_JSON_VALIDATION = "aws.protocoltests.restjson.validation#RestJsonValidation"
 }
 
