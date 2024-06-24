@@ -31,7 +31,7 @@
 pub mod box_error;
 
 /// APIs for client orchestration.
-#[cfg(any(feature = "client", doc))]
+#[cfg(feature = "client")]
 pub mod client;
 
 pub mod http;
