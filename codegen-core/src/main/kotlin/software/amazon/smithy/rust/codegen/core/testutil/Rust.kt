@@ -87,12 +87,8 @@ object TestWorkspace {
     private val subprojects = mutableListOf<String>()
 
     private val cargoLock: File by lazy {
-        var curFile = File(this.javaClass.protectionDomain.codeSource.location.path)
-        while (!curFile.endsWith("smithy-rs")) {
-            curFile = curFile.parentFile
-        }
-
-        curFile.resolve("aws/sdk/Cargo.lock")
+        val projectDir = "git rev-parse --show-toplevel".runCommand().replace("\n", "")
+        File(projectDir).resolve("aws/sdk/Cargo.lock")
     }
 
     init {
