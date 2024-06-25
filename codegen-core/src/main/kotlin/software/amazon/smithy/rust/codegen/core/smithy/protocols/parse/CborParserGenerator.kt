@@ -37,6 +37,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
@@ -291,11 +293,27 @@ class CborParserGenerator(
                         }
                     }
                 }
-                // TODO Test client mode (parse unknown variant) and server mode (reject unknown variant).
-                // In client mode, resolve an unknown union variant to the unknown variant.
-                // In server mode, use strict parsing.
-                // Consultation: https://github.com/awslabs/smithy/issues/1222
-                rust("_ => { todo!() }")
+                when (codegenTarget.renderUnknownVariant()) {
+                    // In client mode, resolve an unknown union variant to the unknown variant.
+                    true ->
+                        rustTemplate(
+                            """
+                            _ => {
+                              decoder.skip()?;
+                              Some(#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME})
+                            }
+                            """,
+                            "Union" to returnSymbolToParse.symbol,
+                            *codegenScope,
+                        )
+                    // In server mode, use strict parsing.
+                    // Consultation: https://github.com/awslabs/smithy/issues/1222
+                    false ->
+                        rustTemplate(
+                            "variant => return Err(#{Error}::unknown_union_variant(variant, decoder.position()))",
+                            *codegenScope,
+                        )
+                }
             }
         }
     }

@@ -47,11 +47,21 @@ impl DeserializeError {
         }
     }
 
+    /// Unknown union variant was detected. Servers reject unknown union varaints.
+    pub fn unknown_union_variant(variant_name: &str, at: usize) -> Self {
+        Self {
+            _inner: Error::message(format!("encountered unknown union variant {}", variant_name))
+                .at(at),
+        }
+    }
+
     /// More than one union variant was detected, but we never even got to parse the first one.
     pub fn mixed_union_variants(at: usize) -> Self {
         Self {
-            _inner: Error::message("encountered mixed variants in union; expected end of union")
-                .at(at),
+            _inner: Error::message(
+                "encountered mixed variants in union; expected a single union variant to be set",
+            )
+            .at(at),
         }
     }
 
