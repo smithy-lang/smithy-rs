@@ -48,21 +48,17 @@ import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-/**
- * Class describing a CBOR parser section that can be used in a customization.
- */
+/** Class describing a CBOR parser section that can be used in a customization. */
 sealed class CborParserSection(name: String) : Section(name) {
     data class BeforeBoxingDeserializedMember(val shape: MemberShape) : CborParserSection("BeforeBoxingDeserializedMember")
 }
 
-/**
- * Customization for the CBOR parser.
- */
+/** Customization for the CBOR parser. */
 typealias CborParserCustomization = NamedCustomization<CborParserSection>
 
-// TODO Add a `CborParserGeneratorTest` a la `CborSerializerGeneratorTest`.
 class CborParserGenerator(
     private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
@@ -75,7 +71,6 @@ class CborParserGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
-    // TODO Use?
     private val codegenTarget = codegenContext.target
     private val smithyCbor = CargoDependency.smithyCbor(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
@@ -239,10 +234,11 @@ class CborParserGenerator(
                             // Call `builder.set_member()` only if the value for the field on the wire is not null.
                             rustTemplate(
                                 """
-                                ::aws_smithy_cbor::decode::set_optional(builder, decoder, |builder, decoder| {
+                                #{SmithyCbor}::decode::set_optional(builder, decoder, |builder, decoder| {
                                     Ok(#{MemberSettingWritable:W})
                                 })?
                                 """,
+                                *codegenScope,
                                 "MemberSettingWritable" to callBuilderSetMemberFieldWritable
                             )
                         }
@@ -266,8 +262,6 @@ class CborParserGenerator(
 
     private fun unionPairParserFnWritable(shape: UnionShape) = writable {
         val returnSymbolToParse = returnSymbolToParse(shape)
-        // TODO Test with unit variants
-        // TODO Test with all unit variants
         rustBlockTemplate(
             """
             fn pair(
@@ -281,8 +275,20 @@ class CborParserGenerator(
                 for (member in shape.members()) {
                     val variantName = symbolProvider.toMemberName(member)
 
-                    withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
-                        deserializeMember(member).invoke(this)
+                    if (member.isTargetUnit()) {
+                        rust(
+                            """
+                            ${member.memberName.dq()} => { 
+                                decoder.skip()?;
+                                #T::$variantName 
+                            }
+                            """,
+                            returnSymbolToParse.symbol
+                        )
+                    } else {
+                        withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
+                            deserializeMember(member).invoke(this)
+                        }
                     }
                 }
                 // TODO Test client mode (parse unknown variant) and server mode (reject unknown variant).

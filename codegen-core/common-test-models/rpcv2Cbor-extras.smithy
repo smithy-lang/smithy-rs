@@ -139,6 +139,7 @@ structure ComplexStruct {
     list: SimpleList
     map: SimpleMap
     union: SimpleUnion
+    unitUnion: UnitUnion
 
     structureList: StructList
 
@@ -162,11 +163,18 @@ map SimpleMap {
 }
 
 // TODO(https://github.com/smithy-lang/smithy/issues/2325): Upstream protocol
-// test suite doesn't cover unions.
+// test suite doesn't cover unions. While the generated SDK compiles, we're not
+// exercising the (de)serializers with actual values.
 union SimpleUnion {
     blob: Blob
     boolean: Boolean
     string: String
+    unit: Unit
+}
+
+union UnitUnion {
+    unitA: Unit
+    unitB: Unit
 }
 
 list ComplexList {

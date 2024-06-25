@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
@@ -47,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
+import software.amazon.smithy.rust.codegen.core.util.isUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // TODO Cleanup commented and unused code.
@@ -137,7 +139,6 @@ class CborSerializerGenerator(
         }
     }
 
-    // Specialized since it holds a JsonObjectWriter expression rather than a JsonValueWriter
     data class StructContext(
         /** Name of the variable that holds the struct */
         val localName: String,
@@ -300,6 +301,16 @@ class CborSerializerGenerator(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
+        if (context.shape.isUnit()) {
+            rust(
+                """
+                encoder.begin_map();
+                encoder.end();
+                """
+            )
+            return
+        }
+
         // TODO Need to inject `__type` when serializing errors.
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
             rustBlockTemplate(
@@ -371,8 +382,7 @@ class CborSerializerGenerator(
 
             is TimestampShape -> rust("$encoder.timestamp(${value.asRef()});")
 
-            // TODO Document shapes have not been specced out yet.
-            // is DocumentShape -> rust("$encoder.document(${value.asRef()});")
+            is DocumentShape -> UNREACHABLE("Smithy RPC v2 CBOR does not support `document` shapes")
 
             // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
             else -> {

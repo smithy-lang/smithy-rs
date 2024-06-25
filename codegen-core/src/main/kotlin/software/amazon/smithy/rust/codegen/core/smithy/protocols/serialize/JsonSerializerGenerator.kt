@@ -492,13 +492,17 @@ class JsonSerializerGenerator(
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
             // We call inner only when context's shape is not the Unit type.
             // If it were, calling inner would generate the following function:
-            //   pub fn serialize_structure_crate_model_unit(
-            //       object: &mut aws_smithy_json::serialize::JsonObjectWriter,
-            //       input: &crate::model::Unit,
-            //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
-            //       let (_, _) = (object, input);
-            //       Ok(())
-            //   }
+            //
+            // ```rust
+            // pub fn serialize_structure_crate_model_unit(
+            //     object: &mut aws_smithy_json::serialize::JsonObjectWriter,
+            //     input: &crate::model::Unit,
+            // ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+            //     let (_, _) = (object, input);
+            //     Ok(())
+            // }
+            // ```
+            //
             // However, this would cause a compilation error at a call site because it cannot
             // extract data out of the Unit type that corresponds to the variable "input" above.
             if (!context.shape.isTargetUnit()) {

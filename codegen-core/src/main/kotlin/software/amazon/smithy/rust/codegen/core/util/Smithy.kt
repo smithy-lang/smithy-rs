@@ -73,6 +73,10 @@ fun MemberShape.isOutputEventStream(model: Model): Boolean {
 
 private val unitShapeId = ShapeId.from("smithy.api#Unit")
 
+fun Shape.isUnit(): Boolean {
+    return this.id == unitShapeId
+}
+
 fun MemberShape.isTargetUnit(): Boolean {
     return this.target == unitShapeId
 }
