@@ -40,16 +40,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Proto
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRpcV2CborFactory
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.util.function.Predicate
@@ -61,17 +65,19 @@ import java.util.function.Predicate
  * is battle-tested.
  */
 internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
-    class DeriveSerdeDeserializeSymbolMetadataProvider(
+    class DeriveSerdeSerializeDeserializeSymbolMetadataProvider(
         private val base: RustSymbolProvider,
     ) : SymbolMetadataProvider(base) {
         private val serdeDeserialize =
             CargoDependency.Serde.copy(scope = DependencyScope.Compile).toType().resolve("Deserialize")
+        private val serdeSerialize =
+            CargoDependency.Serde.copy(scope = DependencyScope.Compile).toType().resolve("Serialize")
 
-        private fun addDeriveSerdeDeserialize(shape: Shape): RustMetadata {
+        private fun addDeriveSerdeSerializeDeserialize(shape: Shape): RustMetadata {
             check(shape !is MemberShape)
 
             val baseMetadata = base.toSymbol(shape).expectRustMetadata()
-            return baseMetadata.withDerives(serdeDeserialize)
+            return baseMetadata.withDerives(serdeSerialize, serdeDeserialize)
         }
 
         override fun memberMeta(memberShape: MemberShape): RustMetadata {
@@ -84,63 +90,19 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
             )
         }
 
-        override fun structureMeta(structureShape: StructureShape) = addDeriveSerdeDeserialize(structureShape)
-        override fun unionMeta(unionShape: UnionShape) = addDeriveSerdeDeserialize(unionShape)
-        override fun enumMeta(stringShape: StringShape) = addDeriveSerdeDeserialize(stringShape)
+        override fun structureMeta(structureShape: StructureShape) = addDeriveSerdeSerializeDeserialize(structureShape)
+        override fun unionMeta(unionShape: UnionShape) = addDeriveSerdeSerializeDeserialize(unionShape)
+        override fun enumMeta(stringShape: StringShape) = addDeriveSerdeSerializeDeserialize(stringShape)
 
-        override fun listMeta(listShape: ListShape): RustMetadata = addDeriveSerdeDeserialize(listShape)
-        override fun mapMeta(mapShape: MapShape): RustMetadata = addDeriveSerdeDeserialize(mapShape)
-        override fun stringMeta(stringShape: StringShape): RustMetadata = addDeriveSerdeDeserialize(stringShape)
-        override fun numberMeta(numberShape: NumberShape): RustMetadata = addDeriveSerdeDeserialize(numberShape)
-        override fun blobMeta(blobShape: BlobShape): RustMetadata = addDeriveSerdeDeserialize(blobShape)
+        override fun listMeta(listShape: ListShape): RustMetadata = addDeriveSerdeSerializeDeserialize(listShape)
+        override fun mapMeta(mapShape: MapShape): RustMetadata = addDeriveSerdeSerializeDeserialize(mapShape)
+        override fun stringMeta(stringShape: StringShape): RustMetadata = addDeriveSerdeSerializeDeserialize(stringShape)
+        override fun numberMeta(numberShape: NumberShape): RustMetadata = addDeriveSerdeSerializeDeserialize(numberShape)
+        override fun blobMeta(blobShape: BlobShape): RustMetadata = addDeriveSerdeSerializeDeserialize(blobShape)
     }
 
-    @Test
-    fun `we serialize and serde_cbor deserializes round trip`() {
-        val addDeriveSerdeSerializeDecorator = object : ServerCodegenDecorator {
-            override val name: String = "Add `#[derive(serde::Deserialize)]`"
-            override val order: Byte = 0
-
-            override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider =
-                DeriveSerdeDeserializeSymbolMetadataProvider(base)
-        }
-
-        // Don't generate protocol tests, because it'll attempt to pull out `params` for member shapes we'll remove
-        // from the model.
-        val noProtocolTestsDecorator = object : ServerCodegenDecorator {
-            override val name: String = "Don't generate protocol tests"
-            override val order: Byte = 0
-
-            override fun protocolTestGenerator(
-                codegenContext: ServerCodegenContext,
-                baseGenerator: ProtocolTestGenerator
-            ): ProtocolTestGenerator {
-                val noOpProtocolTestsGenerator = object : ProtocolTestGenerator() {
-                    override val codegenContext: CodegenContext
-                        get() = baseGenerator.codegenContext
-                    override val protocolSupport: ProtocolSupport
-                        get() = baseGenerator.protocolSupport
-                    override val operationShape: OperationShape
-                        get() = baseGenerator.operationShape
-                    override val appliesTo: AppliesTo
-                        get() = baseGenerator.appliesTo
-                    override val expectFail: Set<FailingTest>
-                        get() = baseGenerator.expectFail
-                    override val runOnly: Set<String>
-                        get() = baseGenerator.runOnly
-                    override val disabledTests: Set<String>
-                        get() = baseGenerator.disabledTests
-
-                    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
-                        // No-op.
-                    }
-
-                }
-                return noOpProtocolTestsGenerator
-            }
-        }
-
-        val model = Model.assembler().discoverModels().assemble().result.get()
+    fun prepareRpcV2CborModel(): Model {
+        var model = Model.assembler().discoverModels().assemble().result.get()
 
         // Filter out `timestamp` and `blob` shapes: those map to runtime types in `aws-smithy-types` on
         // which we can't `#[derive(serde::Deserialize)]`.
@@ -179,9 +141,8 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
             return predicate
         }
 
-
         val modelTransformer = ModelTransformer.create()
-        val transformedModel = modelTransformer.removeShapesIf(
+        model = modelTransformer.removeShapesIf(
             modelTransformer.removeShapesIf(model, removeTimestampAndBlobShapes),
             // These enums do not serialize their variants using the Rust members' names.
             // We'd have to tack on `#[serde(rename = "name")]` using the proper name defined in the Smithy enum definition.
@@ -195,16 +156,65 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
             ),
         )
 
-        val serviceShape = transformedModel.expectShape(ShapeId.from(RPC_V2_CBOR))
+        return model
+    }
+
+    @Test
+    fun `serde_cbor round trip`() {
+        val addDeriveSerdeSerializeDeserializeDecorator = object : ServerCodegenDecorator {
+            override val name: String = "Add `#[derive(serde::Serialize, serde::Deserialize)]`"
+            override val order: Byte = 0
+
+            override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider =
+                DeriveSerdeSerializeDeserializeSymbolMetadataProvider(base)
+        }
+
+        // Don't generate protocol tests, because it'll attempt to pull out `params` for member shapes we'll remove
+        // from the model.
+        val noProtocolTestsDecorator = object : ServerCodegenDecorator {
+            override val name: String = "Don't generate protocol tests"
+            override val order: Byte = 0
+
+            override fun protocolTestGenerator(
+                codegenContext: ServerCodegenContext,
+                baseGenerator: ProtocolTestGenerator
+            ): ProtocolTestGenerator {
+                val noOpProtocolTestsGenerator = object : ProtocolTestGenerator() {
+                    override val codegenContext: CodegenContext
+                        get() = baseGenerator.codegenContext
+                    override val protocolSupport: ProtocolSupport
+                        get() = baseGenerator.protocolSupport
+                    override val operationShape: OperationShape
+                        get() = baseGenerator.operationShape
+                    override val appliesTo: AppliesTo
+                        get() = baseGenerator.appliesTo
+                    override val expectFail: Set<FailingTest>
+                        get() = baseGenerator.expectFail
+                    override val runOnly: Set<String>
+                        get() = baseGenerator.runOnly
+                    override val disabledTests: Set<String>
+                        get() = baseGenerator.disabledTests
+
+                    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+                        // No-op.
+                    }
+
+                }
+                return noOpProtocolTestsGenerator
+            }
+        }
+
+        val model = prepareRpcV2CborModel()
+        val serviceShape = model.expectShape(ShapeId.from(RPC_V2_CBOR))
         serverIntegrationTest(
-            transformedModel,
-            additionalDecorators = listOf(addDeriveSerdeSerializeDecorator, noProtocolTestsDecorator),
+            model,
+            additionalDecorators = listOf(addDeriveSerdeSerializeDeserializeDecorator, noProtocolTestsDecorator),
             params = IntegrationTestParams(service = serviceShape.id.toString())
         ) { codegenContext, rustCrate ->
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1147): NaN != NaN. Ideally we when we address
             //  this issue, we'd re-use the structure shape comparison code that both client and server protocol test
             //  generators would use.
-            val expectFail = setOf("RpcV2CborSupportsNaNFloatOutputs")
+            val expectFail = setOf("RpcV2CborSupportsNaNFloatInputs", "RpcV2CborSupportsNaNFloatOutputs")
 
             val codegenScope = arrayOf(
                 "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
@@ -217,16 +227,16 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
             for (operationShape in codegenContext.model.operationShapes) {
                 val serverProtocolTestGenerator =
                     ServerProtocolTestGenerator(codegenContext, ServerRpcV2CborFactory().support(), operationShape)
-                // The SDK can only serialize operation outputs, so we only ask for response tests.
-                val tests =
-                    serverProtocolTestGenerator.responseTestCases()
 
                 rustCrate.withModule(ProtocolFunctions.serDeModule) {
-                    for (test in tests) {
+                    // The SDK can only serialize operation outputs, so we only ask for response tests.
+                    val responseTests =
+                        serverProtocolTestGenerator.responseTestCases()
+
+                    for (test in responseTests) {
                         when (test) {
                             is TestCase.MalformedRequestTest -> UNREACHABLE("we did not ask for tests of this kind")
                             is TestCase.RequestTest -> UNREACHABLE("we did not ask for tests of this kind")
-//                            is TestCase.RequestTest -> operationShape.inputShape(codegenContext.model) to test.testCase.params
                             is TestCase.ResponseTest -> {
                                 val targetShape = test.targetShape
                                 val params = test.testCase.params
@@ -250,13 +260,67 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                                         """
                                         let expected = #{InstantiateShape:W};
                                         let bytes = #{SerializeFn}(&expected)
-                                            .expect("generated CBOR serializer failed");
+                                            .expect("our generated CBOR serializer failed");
                                         let actual = #{SerdeCbor}::from_slice(&bytes)
                                            .expect("serde_cbor failed deserializing from bytes");
                                         #{AssertEq}(expected, actual);
                                         """,
                                         "InstantiateShape" to instantiator.generate(targetShape, params),
                                         "SerializeFn" to serializeFn,
+                                        *codegenScope,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // The SDK can only deserialize operation inputs, so we only ask for request tests.
+                    val requestTests =
+                        serverProtocolTestGenerator.requestTestCases()
+                    val inputShape = operationShape.inputShape(codegenContext.model)
+                    val err =
+                        if (ServerBuilderGenerator.hasFallibleBuilder(
+                                inputShape,
+                                codegenContext.model,
+                                codegenContext.symbolProvider,
+                                takeInUnconstrainedTypes = true,
+                            )
+                        ) {
+                            """.expect("builder failed to build")"""
+                        } else {
+                            ""
+                        }
+
+                    for (test in requestTests) {
+                        when (test) {
+                            is TestCase.MalformedRequestTest -> UNREACHABLE("we did not ask for tests of this kind")
+                            is TestCase.ResponseTest -> UNREACHABLE("we did not ask for tests of this kind")
+                            is TestCase.RequestTest -> {
+                                val targetShape = operationShape.inputShape(codegenContext.model)
+                                val params = test.testCase.params
+
+                                val deserializeFn = rpcV2.structuredDataParser().serverInputParser(operationShape)
+                                    ?: // Skip if there's nothing to serialize.
+                                    continue
+
+                                if (expectFail.contains(test.id)) {
+                                    writeWithNoFormatting("#[should_panic]")
+                                }
+                                unitTest("serde_cbor_serializes_and_we_deserialize_${test.id.toSnakeCase()}_${test.kind.toString().toSnakeCase()}") {
+                                    rustTemplate(
+                                        """
+                                        let expected = #{InstantiateShape:W};
+                                        let bytes: Vec<u8> = #{SerdeCbor}::to_vec(&expected)
+                                            .expect("serde_cbor failed serializing to `Vec<u8>`");
+                                        let input = #{InputBuilder}::default();
+                                        let input = #{DeserializeFn}(&bytes, input)
+                                           .expect("our generated CBOR deserializer failed");
+                                        let actual = input.build()$err;
+                                        #{AssertEq}(expected, actual);
+                                        """,
+                                        "InstantiateShape" to instantiator.generate(targetShape, params),
+                                        "DeserializeFn" to deserializeFn,
+                                        "InputBuilder" to inputShape.serverBuilderSymbol(codegenContext),
                                         *codegenScope,
                                     )
                                 }
