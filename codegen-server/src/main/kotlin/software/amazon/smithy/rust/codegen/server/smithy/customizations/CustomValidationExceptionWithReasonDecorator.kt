@@ -249,12 +249,12 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                         } else {
                             rust(
                                 """
-                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                                message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
-                                name: path + "/${it.forMember.memberName}",
-                                reason: crate::model::ValidationExceptionFieldReason::Other,
-                            },
-                            """,
+                                ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
+                                    message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                    name: path + "/${it.forMember.memberName}",
+                                    reason: crate::model::ValidationExceptionFieldReason::Other,
+                                },
+                                """,
                             )
                         }
                     }
