@@ -7,9 +7,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ToShapeId
+import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -20,15 +23,17 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
-import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // TODO Rename these to RpcV2Cbor
 class RpcV2HttpBindingResolver(
     private val model: Model,
+    private val serviceShape: ServiceShape,
 ) : HttpBindingResolver {
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
@@ -50,18 +55,27 @@ class RpcV2HttpBindingResolver(
             .toList()
     }
 
-    // TODO
-    //   In the server, this is only used when the protocol actually supports the `@http` trait.
-    //   However, we will have to do this for client support. Perhaps this method deserves a rename.
-    override fun httpTrait(operationShape: OperationShape) = PANIC("RPC v2 does not support the `@http` trait")
+    override fun httpTrait(operationShape: OperationShape) =
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/service/${serviceShape.id.name}/operation/${operationShape.id.name}"))
+            .build()!!
 
     override fun requestBindings(operationShape: OperationShape) = bindings(operationShape.inputShape)
+
     override fun responseBindings(operationShape: OperationShape) = bindings(operationShape.outputShape)
+
     override fun errorResponseBindings(errorShape: ToShapeId) = bindings(errorShape)
 
-    // TODO This should return null when operationShape has no members, and we should not rely on our janky
-    //  `serverContentTypeCheckNoModeledInput`. Same goes for restJson1 protocol.
-    override fun requestContentType(operationShape: OperationShape): String = "application/cbor"
+    override fun requestContentType(operationShape: OperationShape): String? {
+        // When `syntheticInputTrait.originalId == null` it implies that the operation had no input defined
+        // in the Smithy model.
+        if (operationShape.inputShape(model).expectTrait<SyntheticInputTrait>().originalId == null) {
+            return null
+        }
+        return "application/cbor"
+    }
 
     /**
      * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
@@ -74,7 +88,7 @@ class RpcV2HttpBindingResolver(
         if (syntheticOutputTrait.originalId == null) {
             return null
         }
-        return requestContentType(operationShape)
+        return "application/cbor"
     }
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
@@ -86,22 +100,29 @@ class RpcV2HttpBindingResolver(
  */
 open class RpcV2(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
-            .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "Response" to RuntimeType.Http.resolve("Response"),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
     private val jsonDeserModule = RustModule.private("json_deser")
 
-    override val httpBindingResolver: HttpBindingResolver = RpcV2HttpBindingResolver(codegenContext.model)
+    override val httpBindingResolver: HttpBindingResolver =
+        RpcV2HttpBindingResolver(codegenContext.model, codegenContext.serviceShape)
 
     // Note that [CborParserGenerator] and [CborSerializerGenerator] automatically (de)serialize timestamps
     // using floating point seconds from the epoch.
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
+
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        listOf("smithy-protocol" to "rpc-v2-cbor")
 
     override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("smithy-protocol" to "rpc-v2-cbor")
@@ -112,18 +133,8 @@ open class RpcV2(val codegenContext: CodegenContext) : Protocol {
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         CborSerializerGenerator(codegenContext, httpBindingResolver)
 
-    // TODO: Implement `RpcV2.parseHttpErrorMetadata`
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        RuntimeType.forInlineFun("parse_http_error_metadata", jsonDeserModule) {
-            rustTemplate(
-                """
-                pub fn parse_http_error_metadata(response: &#{Response}<#{Bytes}>) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    #{json_errors}::parse_error_metadata(response.body(), response.headers())
-                }
-                """,
-                *errorScope,
-            )
-        }
+        RuntimeType.cborErrors(runtimeConfig).resolve("parse_error_metadata")
 
     // TODO: Implement `RpcV2.parseEventStreamErrorMetadata`
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =

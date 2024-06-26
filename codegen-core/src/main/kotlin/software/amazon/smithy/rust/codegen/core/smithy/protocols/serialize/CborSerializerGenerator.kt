@@ -40,6 +40,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -93,7 +94,10 @@ class CborSerializerGenerator(
         val writeNulls: Boolean = false,
     ) {
         companion object {
-            fun collectionMember(context: Context<CollectionShape>, itemName: String): MemberContext =
+            fun collectionMember(
+                context: Context<CollectionShape>,
+                itemName: String,
+            ): MemberContext =
                 MemberContext(
                     "encoder",
                     ValueExpression.Reference(itemName),
@@ -101,7 +105,11 @@ class CborSerializerGenerator(
                     writeNulls = true,
                 )
 
-            fun mapMember(context: Context<MapShape>, key: String, value: String): MemberContext =
+            fun mapMember(
+                context: Context<MapShape>,
+                key: String,
+                value: String,
+            ): MemberContext =
                 MemberContext(
                     "encoder.str($key)",
                     ValueExpression.Reference(value),
@@ -131,8 +139,7 @@ class CborSerializerGenerator(
                 )
 
             /** Returns an expression to encode a key member **/
-            private fun encodeKeyExpression(name: String): String =
-                "encoder.str(${name.dq()})"
+            private fun encodeKeyExpression(name: String): String = "encoder.str(${name.dq()})"
         }
     }
 
@@ -148,14 +155,17 @@ class CborSerializerGenerator(
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+
     // TODO Cleanup
-    private val codegenScope = arrayOf(
-        "String" to RuntimeType.String,
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
-        "ByteSlab" to RuntimeType.ByteSlab,
-    )
+    private val codegenScope =
+        arrayOf(
+            "String" to RuntimeType.String,
+            "Error" to runtimeConfig.serializationError(),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
+            "ByteSlab" to RuntimeType.ByteSlab,
+            "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
+        )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
     /**
@@ -168,10 +178,11 @@ class CborSerializerGenerator(
         includedMembers: List<MemberShape>,
         error: Boolean,
     ): RuntimeType {
-        val suffix = when (error) {
-            true -> "error"
-            else -> "output"
-        }
+        val suffix =
+            when (error) {
+                true -> "error"
+                else -> "output"
+            }
         return protocolFunctions.serializeFn(structureShape, fnNameSuffix = suffix) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<Vec<u8>, #{Error}>",
@@ -199,13 +210,13 @@ class CborSerializerGenerator(
                 "target" to symbolProvider.toSymbol(target),
             ) {
                 rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+                rustTemplate("let mut encoder = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
                 when (target) {
                     is StructureShape -> serializeStructure(StructContext("input", target))
                     is UnionShape -> serializeUnion(Context(ValueExpression.Reference("input"), target))
                     else -> throw IllegalStateException("json payloadSerializer only supports structs and unions")
                 }
-                rust("object.finish();")
+                rust("encoder.finish();")
                 rustTemplate("Ok(out.into_bytes())", *codegenScope)
             }
         }
@@ -230,11 +241,12 @@ class CborSerializerGenerator(
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
-        // Don't generate an operation CBOR serializer if there is no CBOR body.
-        val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
-        if (httpDocumentMembers.isEmpty()) {
+        val syntheticOutputTrait = operationShape.inputShape(model).expectTrait<SyntheticInputTrait>()
+        if (syntheticOutputTrait.originalId == null) {
             return null
         }
+
+        val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
 
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
@@ -242,11 +254,14 @@ class CborSerializerGenerator(
                 "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
-                rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                serializeStructure(StructContext("input", inputShape), httpDocumentMembers)
-                rust("object.finish();")
-                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
+                rustTemplate("let mut encoder = #{Encoder}::new(Vec::new());", *codegenScope)
+                // Open a scope in which we can safely shadow the `encoder` variable to bind it to a mutable reference
+                // which doesn't require us to pass `&mut encoder` where requested.
+                rustBlock("") {
+                    rust("let encoder = &mut encoder;")
+                    serializeStructure(StructContext("input", inputShape), httpDocumentMembers)
+                }
+                rustTemplate("Ok(#{SdkBody}::from(encoder.into_writer()))", *codegenScope)
             }
         }
     }
@@ -301,28 +316,29 @@ class CborSerializerGenerator(
         includedMembers: List<MemberShape>? = null,
     ) {
         // TODO Need to inject `__type` when serializing errors.
-        val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
-                "StructureSymbol" to symbolProvider.toSymbol(context.shape),
-                *codegenScope,
-            ) {
-                // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
-                //  instead of `.begin_map()` for efficiency. Add test.
-                rust("encoder.begin_map();")
-                for (customization in customizations) {
-                    customization.section(CborSerializerSection.BeforeSerializingStructureMembers(context.shape, "encoder"))(this)
-                }
-                context.copy(localName = "input").also { inner ->
-                    val members = includedMembers ?: inner.shape.members()
-                    for (member in members) {
-                        serializeMember(MemberContext.structMember(inner, member, symbolProvider))
+        val structureSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                rustBlockTemplate(
+                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
+                    "StructureSymbol" to symbolProvider.toSymbol(context.shape),
+                    *codegenScope,
+                ) {
+                    // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
+                    //  instead of `.begin_map()` for efficiency. Add test.
+                    rust("encoder.begin_map();")
+                    for (customization in customizations) {
+                        customization.section(CborSerializerSection.BeforeSerializingStructureMembers(context.shape, "encoder"))(this)
                     }
+                    context.copy(localName = "input").also { inner ->
+                        val members = includedMembers ?: inner.shape.members()
+                        for (member in members) {
+                            serializeMember(MemberContext.structMember(inner, member, symbolProvider))
+                        }
+                    }
+                    rust("encoder.end();")
+                    rust("Ok(())")
                 }
-                rust("encoder.end();")
-                rust("Ok(())")
             }
-        }
         rust("#T(encoder, ${context.localName})?;", structureSerializer)
     }
 
@@ -349,7 +365,10 @@ class CborSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
+    private fun RustWriter.serializeMemberValue(
+        context: MemberContext,
+        target: Shape,
+    ) {
         val encoder = context.encoderBindingName
         val value = context.valueExpression
         val containerShape = model.expectShape(context.shape.container)
@@ -404,7 +423,7 @@ class CborSerializerGenerator(
             encoder.array(
                 (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
-            """
+            """,
         )
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
@@ -423,7 +442,7 @@ class CborSerializerGenerator(
             encoder.map(
                 (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
-            """
+            """,
         )
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"
@@ -433,37 +452,39 @@ class CborSerializerGenerator(
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> Result<(), #{Error}>",
-                "UnionSymbol" to unionSymbol,
-                *codegenScope,
-            ) {
-                // A union is serialized identically as a `structure` shape, but only a single member can be set to a
-                // non-null value.
-                rust("encoder.map(1);")
-                rustBlock("match input") {
-                    for (member in context.shape.members()) {
-                        val variantName = if (member.isTargetUnit()) {
-                            symbolProvider.toMemberName(member)
-                        } else {
-                            "${symbolProvider.toMemberName(member)}(inner)"
+        val unionSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                rustBlockTemplate(
+                    "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> Result<(), #{Error}>",
+                    "UnionSymbol" to unionSymbol,
+                    *codegenScope,
+                ) {
+                    // A union is serialized identically as a `structure` shape, but only a single member can be set to a
+                    // non-null value.
+                    rust("encoder.map(1);")
+                    rustBlock("match input") {
+                        for (member in context.shape.members()) {
+                            val variantName =
+                                if (member.isTargetUnit()) {
+                                    symbolProvider.toMemberName(member)
+                                } else {
+                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                }
+                            rustBlock("#T::$variantName =>", unionSymbol) {
+                                serializeMember(MemberContext.unionMember("inner", member))
+                            }
                         }
-                        rustBlock("#T::$variantName =>", unionSymbol) {
-                            serializeMember(MemberContext.unionMember("inner", member))
+                        if (codegenTarget.renderUnknownVariant()) {
+                            rustTemplate(
+                                "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                                "Union" to unionSymbol,
+                                *codegenScope,
+                            )
                         }
                     }
-                    if (codegenTarget.renderUnknownVariant()) {
-                        rustTemplate(
-                            "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
-                            "Union" to unionSymbol,
-                            *codegenScope,
-                        )
-                    }
+                    rust("Ok(())")
                 }
-                rust("Ok(())")
             }
-        }
         rust("#T(encoder, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
 }

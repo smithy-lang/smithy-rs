@@ -291,7 +291,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()
         val Regex = CargoDependency.Regex.toType()
-        val Serde= CargoDependency.Serde.toType()
+        val Serde = CargoDependency.Serde.toType()
         val SerdeDeserialize = Serde.resolve("Deserialize")
         val SerdeSerialize = Serde.resolve("Serialize")
         val RegexLite = CargoDependency.RegexLite.toType()
@@ -519,6 +519,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         )
 
         // inlinable types
+        fun cborErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.cborErrors(runtimeConfig))
+
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.ec2QueryErrors(runtimeConfig))
 

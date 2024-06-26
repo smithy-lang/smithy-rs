@@ -55,6 +55,13 @@ impl DeserializeError {
         }
     }
 
+    /// Returns a custom error without an offset.
+    pub fn custom(message: impl Into<Cow<'static, str>>, at: usize) -> Self {
+        Self {
+            _inner: Error::message(message.into()).at(at),
+        }
+    }
+
     /// An unexpected type was encountered.
     // We handle this one when decoding sparse collections: we have to expect either a `null` or an
     // item, so we try decoding both.
@@ -196,7 +203,12 @@ impl<'b> Decoder<'b> {
             )))
         } else {
             let epoch_seconds = self.decoder.f64().map_err(DeserializeError::new)?;
-            Ok(DateTime::from_secs_f64(epoch_seconds))
+
+            let seconds = epoch_seconds.floor() as i64;
+            let subsecond_nanos = epoch_seconds - epoch_seconds.floor();
+            let subsecond_nanos =
+                (subsecond_nanos * 1_000_000_000_f64) as u32 / 1_000_000 * 1_000_000;
+            Ok(DateTime::from_secs_and_nanos(seconds, subsecond_nanos))
         }
     }
 }

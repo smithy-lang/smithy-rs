@@ -32,6 +32,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -62,12 +63,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.math.BigDecimal
-import software.amazon.smithy.model.traits.DefaultTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -201,9 +201,10 @@ open class Instantiator(
             ?.let { it(writer) }
             ?: run {
                 if (data is NullNode && !targetShape.isDocumentShape) {
-                    check(symbol.isOptional()) {
-                        "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
-                    }
+                    // TODO(RpcV2CborClientSupport): upgrading to smithy 1.50.0 should fix a upstream bug and allow for commenting in the following
+                    // check(symbol.isOptional()) {
+                    //    "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
+                    // }
                     writer.rustTemplate("#{None}", *preludeScope)
                 } else {
                     // Structure builder setters for structure shape members _always_ take in `Option<T>`.

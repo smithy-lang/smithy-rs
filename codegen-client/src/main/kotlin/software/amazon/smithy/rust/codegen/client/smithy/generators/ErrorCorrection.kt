@@ -87,7 +87,18 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
 
             target is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
             target is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
-            target is UnionShape -> rust("Some(#T::Unknown)", targetSymbol)
+            target is UnionShape ->
+                rustTemplate(
+                    "Some(#{unknown})", *preludeScope,
+                    "unknown" to
+                        writable {
+                            if (memberSymbol.isRustBoxed()) {
+                                rust("Box::new(#T::Unknown)", targetSymbol)
+                            } else {
+                                rust("#T::Unknown", targetSymbol)
+                            }
+                        },
+                )
         }
     }
 }

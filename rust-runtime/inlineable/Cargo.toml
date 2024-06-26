@@ -17,6 +17,7 @@ gated-tests = []
 default = ["gated-tests"]
 
 [dependencies]
+aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-compression = { path = "../aws-smithy-compression", features = ["http-body-0-4-x"] }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }

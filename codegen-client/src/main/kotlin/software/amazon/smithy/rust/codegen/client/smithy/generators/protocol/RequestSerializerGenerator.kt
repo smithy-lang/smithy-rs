@@ -21,7 +21,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -126,8 +128,16 @@ class RequestSerializerGenerator(
     }
 
     private fun needsContentLength(operationShape: OperationShape): Boolean {
-        return protocol.httpBindingResolver.requestBindings(operationShape)
-            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
+        val bindings = protocol.httpBindingResolver.requestBindings(operationShape)
+        val hasDocumentOrPayloadBinding =
+            bindings.any {
+                it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD
+            }
+        val hasSyntheticInputTrait =
+            operationShape.inputShape(codegenContext.model)
+                .expectTrait<SyntheticInputTrait>().originalId != null
+
+        return hasDocumentOrPayloadBinding || hasSyntheticInputTrait
     }
 
     private fun createHttpRequest(operationShape: OperationShape): Writable =

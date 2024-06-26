@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -183,11 +182,12 @@ class DefaultProtocolTestGenerator(
         val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
         testModuleWriter.rustTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
 
-        val action = when (testCase) {
-            is HttpResponseTestCase -> Action.Response
-            is HttpRequestTestCase -> Action.Request
-            else -> throw CodegenException("unknown test case type")
-        }
+        val action =
+            when (testCase) {
+                is HttpResponseTestCase -> Action.Response
+                is HttpRequestTestCase -> Action.Request
+                else -> throw CodegenException("unknown test case type")
+            }
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
@@ -330,6 +330,7 @@ class DefaultProtocolTestGenerator(
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
+        val mediaType = testCase.bodyMediaType.orNull()
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -342,19 +343,19 @@ class DefaultProtocolTestGenerator(
             let parsed = de.deserialize_streaming(&mut http_response);
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
-                    #{SdkBody}::from(#{copy_from_slice}(body.bytes().unwrap()))
+                    #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
                 de.deserialize_nonstreaming(&http_response)
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to
-                RT.smithyRuntimeApiClient(rc)
-                    .resolve("client::ser_de::SharedResponseDeserializer"),
-            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+            "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
             "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
+            "MediaType" to RT.protocolTest(rc, "MediaType"),
+            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
+            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SharedResponseDeserializer"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
@@ -589,12 +590,15 @@ class DefaultProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
+        private val Cbor = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
         private val ExpectFail =
             setOf<FailingTest>(
                 // Failing because we don't serialize default values if they match the default
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
+                FailingTest(Cbor, "RpcV2CborClientPopulatesDefaultValuesInInput", Action.Request),
+                FailingTest(Cbor, "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request), // defaultBoolean: true is still the same as default, so that won't be serialized
             )
         private val RunOnly: Set<String>? = null
 
