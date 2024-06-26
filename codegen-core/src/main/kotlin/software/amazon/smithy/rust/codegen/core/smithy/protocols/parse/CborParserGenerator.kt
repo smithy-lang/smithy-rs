@@ -383,9 +383,6 @@ class CborParserGenerator(
         fnNameSuffix: String? = null,
     ): RuntimeType {
         return protocolFunctions.deserializeFn(shape, fnNameSuffix) { fnName ->
-            // TODO Test no members.
-//            val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
-            // TODO Assert token stream ended.
             rustTemplate(
                 """
                 pub(crate) fn $fnName(value: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}> {
@@ -396,7 +393,7 @@ class CborParserGenerator(
                     #{DecodeStructureMapLoop:W}
 
                     if decoder.position() != value.len() {
-                        todo!()
+                        return Err(#{Error}::expected_end_of_stream(decoder.position()));
                     }
 
                     Ok(builder)

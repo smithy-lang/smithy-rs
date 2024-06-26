@@ -6,6 +6,7 @@
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2::RpcV2};
+use bytes::Bytes;
 use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
@@ -54,11 +55,14 @@ impl IntoResponse<RpcV2> for RuntimeError {
             .header("Content-Type", "application/cbor")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));
 
-        // TODO
+        // https://cbor.nemo157.com/#type=hex&value=a0
+        const EMPTY_CBOR_MAP: Bytes = Bytes::from_static(&[0xa0]);
+
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing
+        // `__type`.
         let body = match self {
             RuntimeError::Validation(reason) => crate::body::to_boxed(reason),
-            // See https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html#empty-body-serialization
-            _ => crate::body::to_boxed("{}"),
+            _ => crate::body::to_boxed(EMPTY_CBOR_MAP),
         };
 
         res.body(body)

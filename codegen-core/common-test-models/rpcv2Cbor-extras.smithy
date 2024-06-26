@@ -5,13 +5,15 @@ namespace smithy.protocoltests.rpcv2Cbor
 use smithy.framework#ValidationException
 use smithy.protocols#rpcv2Cbor
 use smithy.test#httpResponseTests
-
+use smithy.test#httpMalformedRequestTests
 
 @rpcv2Cbor
 service RpcV2Service {
     operations: [
-        SimpleStructOperation,
+        SimpleStructOperation
         ComplexStructOperation
+        EmptyStructOperation
+        SingleMemberStructOperation
     ]
 }
 
@@ -24,12 +26,88 @@ operation SimpleStructOperation {
     errors: [ValidationException]
 }
 
-@http(uri: "/complex-struct-operation", method: "POST")
 operation ComplexStructOperation {
     input: ComplexStruct
     output: ComplexStruct
     errors: [ValidationException]
 }
+
+operation EmptyStructOperation {
+    input: EmptyStruct
+    output: EmptyStruct
+}
+
+operation SingleMemberStructOperation {
+    input: SingleMemberStruct
+    output: SingleMemberStruct
+}
+
+// TODO We fail this one, cut issue
+apply EmptyStructOperation @httpMalformedRequestTests([
+    {
+        id: "AdditionalTokensEmptyStruct",
+        documentation: """
+        When additional tokens are found past where we expect the end of the body,
+        the request should be rejected with a serialization exception.""",
+        protocol: rpcv2Cbor,
+        request: {
+            method: "POST",
+            uri: "/service/RpcV2Service/operation/EmptyStructOperation",
+            headers: {
+                "smithy-protocol": "rpc-v2-cbor",
+                "Accept": "application/cbor",
+                "Content-Type": "application/cbor"
+            }
+            // Two empty variable-length encoded CBOR maps back to back.
+            body: "v/+//w=="
+        },
+        response: {
+            code: 400,
+            body: {
+                mediaType: "application/cbor",
+                assertion: {
+                    // An empty CBOR map.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type`.
+                    contents: "oA=="
+                }
+            }
+        }
+
+    }
+])
+
+apply SingleMemberStructOperation @httpMalformedRequestTests([
+    {
+        id: "AdditionalTokensSingleMemberStruct",
+        documentation: """
+        When additional tokens are found past where we expect the end of the body,
+        the request should be rejected with a serialization exception.""",
+        protocol: rpcv2Cbor,
+        request: {
+            method: "POST",
+            uri: "/service/RpcV2Service/operation/SingleMemberStructOperation",
+            headers: {
+                "smithy-protocol": "rpc-v2-cbor",
+                "Accept": "application/cbor",
+                "Content-Type": "application/cbor"
+            }
+            // Two empty variable-length encoded CBOR maps back to back.
+            body: "v/+//w=="
+        },
+        response: {
+            code: 400,
+            body: {
+                mediaType: "application/cbor",
+                assertion: {
+                    // An empty CBOR map.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type`.
+                    contents: "oA=="
+                }
+            }
+        }
+
+    }
+])
 
 apply SimpleStructOperation @httpResponseTests([
     {
@@ -136,6 +214,7 @@ structure SimpleStruct {
 
 structure ComplexStruct {
     structure: SimpleStruct
+    emptyStructure: EmptyStruct
     list: SimpleList
     map: SimpleMap
     union: SimpleUnion
@@ -147,6 +226,12 @@ structure ComplexStruct {
     @required complexList: ComplexList
     @required complexMap: ComplexMap
     @required complexUnion: ComplexUnion
+}
+
+structure EmptyStruct { }
+
+structure SingleMemberStruct {
+    message: String
 }
 
 list StructList {

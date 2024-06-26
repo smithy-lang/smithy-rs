@@ -65,6 +65,13 @@ impl DeserializeError {
         }
     }
 
+    /// Expected end of stream but more data is available.
+    pub fn expected_end_of_stream(at: usize) -> Self {
+        Self {
+            _inner: Error::message("encountered additional data; expected end of stream").at(at),
+        }
+    }
+
     /// An unexpected type was encountered.
     // We handle this one when decoding sparse collections: we have to expect either a `null` or an
     // item, so we try decoding both.
