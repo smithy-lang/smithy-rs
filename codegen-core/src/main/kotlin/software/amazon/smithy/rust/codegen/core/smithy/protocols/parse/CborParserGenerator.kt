@@ -318,10 +318,32 @@ class CborParserGenerator(
         }
     }
 
-    private fun decodeStructureMapLoopWritable() = writable {
+    enum class CollectionKind {
+        Map,
+        List;
+
+        /** Method to invoke on the decoder to decode this collection kind. **/
+        fun decoderMethodName() = when (this) {
+            Map -> "map"
+            List -> "list"
+        }
+    }
+
+    /**
+     * Decode a collection of homogeneous CBOR data items: a map or an array.
+     * The first branch of the `match` corresponds to when the collection is encoded using variable-length encoding;
+     * the second branch corresponds to fixed-length encoding.
+     *
+     * https://www.rfc-editor.org/rfc/rfc8949.html#name-indefinite-length-arrays-an
+     */
+    private fun decodeCollectionLoopWritable(
+        collectionKind: CollectionKind,
+        variableBindingName: String,
+        decodeItemFnName: String,
+    ) = writable {
         rustTemplate(
             """
-            match decoder.map()? {
+            match decoder.${collectionKind.decoderMethodName()}()? {
                 None => loop {
                     match decoder.datatype()? {
                         #{SmithyCbor}::data::Type::Break => {
@@ -329,13 +351,13 @@ class CborParserGenerator(
                             break;
                         }
                         _ => {
-                            builder = pair(builder, decoder)?;
+                            $variableBindingName = $decodeItemFnName($variableBindingName, decoder)?;
                         }
                     };
                 },
                 Some(n) => {
                     for _ in 0..n {
-                        builder = pair(builder, decoder)?;
+                        $variableBindingName = $decodeItemFnName($variableBindingName, decoder)?;
                     }
                 }
             };
@@ -344,59 +366,9 @@ class CborParserGenerator(
         )
     }
 
-    // TODO This should be DRYed up with `decodeStructureMapLoopWritable`.
-    private fun decodeMapLoopWritable() = writable {
-        rustTemplate(
-            """
-            match decoder.map()? {
-                None => loop {
-                    match decoder.datatype()? {
-                        #{SmithyCbor}::data::Type::Break => {
-                            decoder.skip()?;
-                            break;
-                        }
-                        _ => {
-                            map = pair(map, decoder)?;
-                        }
-                    };
-                },
-                Some(n) => {
-                    for _ in 0..n {
-                        map = pair(map, decoder)?;
-                    }
-                }
-            };
-            """,
-            *codegenScope,
-        )
-    }
-
-    // TODO This should be DRYed up with `decodeStructureMapLoopWritable`.
-    private fun decodeListLoop() = writable {
-        rustTemplate(
-            """
-            match decoder.list()? {
-                None => loop {
-                    match decoder.datatype()? {
-                        #{SmithyCbor}::data::Type::Break => {
-                            decoder.skip()?;
-                            break;
-                        }
-                        _ => {
-                            list = member(list, decoder)?;
-                        }
-                    };
-                },
-                Some(n) => {
-                    for _ in 0..n {
-                        list = member(list, decoder)?;
-                    }
-                }
-            };
-            """,
-            *codegenScope,
-        )
-    }
+    private fun decodeStructureMapLoopWritable() = decodeCollectionLoopWritable(CollectionKind.Map, "builder", "pair")
+    private fun decodeMapLoopWritable() = decodeCollectionLoopWritable(CollectionKind.Map, "map", "pair")
+    private fun decodeListLoopWritable() = decodeCollectionLoopWritable(CollectionKind.List, "list", "member")
 
     /**
      * Reusable structure parser implementation that can be used to generate parsing code for
@@ -552,7 +524,7 @@ class CborParserGenerator(
                     returnUnconstrainedType = returnUnconstrainedType,
                 ),
                 "InitContainerWritable" to initContainerWritable,
-                "DecodeListLoop" to decodeListLoop(),
+                "DecodeListLoop" to decodeListLoopWritable(),
                 *codegenScope,
             )
         }
