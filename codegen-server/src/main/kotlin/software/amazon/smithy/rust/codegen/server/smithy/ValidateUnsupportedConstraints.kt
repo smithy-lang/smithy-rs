@@ -175,6 +175,23 @@ data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
     Throwable(message = messages.joinToString("\n") { it.message })
 
+/*
+ * Returns a set of operation shapes that must have a supported validation exception shape
+ * in their associated errors list.
+ */
+fun operationShapesThatMustHaveValidationException(model: Model, service: ServiceShape): Set<OperationShape> {
+    val walker = DirectedWalker(model)
+    return walker.walkShapes(service)
+        .filterIsInstance<OperationShape>()
+        .asSequence()
+        .filter { operationShape ->
+            // Walk the shapes reachable via this operation input.
+            walker.walkShapes(operationShape.inputShape(model))
+                .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+        }
+        .toSet()
+}
+
 /**
  * Validate that all constrained operations have the shape [validationExceptionShapeId] shape attached to their errors.
  */
@@ -189,14 +206,7 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
     val walker = DirectedWalker(model)
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
-        walker.walkShapes(service)
-            .filterIsInstance<OperationShape>()
-            .asSequence()
-            .filter { operationShape ->
-                // Walk the shapes reachable via this operation input.
-                walker.walkShapes(operationShape.inputShape(model))
-                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
-            }
+        operationShapesThatMustHaveValidationException(model, service)
             .filter { !it.errors.contains(validationExceptionShapeId) }
             .map { OperationWithConstrainedInputWithoutValidationException(it) }
             .toSet()
