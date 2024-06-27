@@ -239,7 +239,8 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
 
     override fun builderConstraintViolationFn(constraintViolations: Collection<ConstraintViolation>) =
         writable {
-            rustBlockTemplate("pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
+            rustBlockTemplate(
+                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
                 "String" to RuntimeType.String,
             ) {
                 rustBlock("match self") {
