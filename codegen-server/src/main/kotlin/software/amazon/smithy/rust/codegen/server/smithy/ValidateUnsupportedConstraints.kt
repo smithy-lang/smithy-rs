@@ -176,7 +176,7 @@ data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMess
     Throwable(message = messages.joinToString("\n") { it.message })
 
 /*
- * Returns a set of operation shapes that must have a supported validation exception shape
+ * Returns the set of operation shapes that must have a supported validation exception shape
  * in their associated errors list.
  */
 fun operationShapesThatMustHaveValidationException(model: Model, service: ServiceShape): Set<OperationShape> {
