@@ -15,10 +15,3 @@ message = "A feature, `aws-lambda`, has been added to generated SDKs to re-expor
 references = ["smithy-rs#3643"]
 meta = { "breaking" = false, "bug" = true, "tada" = false, "target" = "server" }
 author = "drganjoo"
-
-[[smithy-rs]]
-message = "Define a function to return operation shapes that need a `ValidationException`."
-references = ["smithy-rs#3722"]
-meta = { "breaking" = false, "bug" = false, "tada" = false, "target" = "server" }
-author = "drganjoo"
-
