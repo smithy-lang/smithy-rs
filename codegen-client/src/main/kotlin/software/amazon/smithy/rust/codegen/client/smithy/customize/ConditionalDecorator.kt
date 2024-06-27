@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
@@ -25,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 
 /**
  * Delegating decorator that only applies when a condition is true
