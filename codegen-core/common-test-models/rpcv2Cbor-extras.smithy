@@ -42,7 +42,6 @@ operation SingleMemberStructOperation {
     output: SingleMemberStruct
 }
 
-// TODO We fail this one, cut issue
 apply EmptyStructOperation @httpMalformedRequestTests([
     {
         id: "AdditionalTokensEmptyStruct",

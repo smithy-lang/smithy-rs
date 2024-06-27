@@ -150,7 +150,7 @@ class ServerProtocolTestGenerator(
                 FailingTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams", TestCaseKind.Response),
                 FailingTest(AWS_JSON_10, "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams", TestCaseKind.Response),
 
-                // TODO
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3723): This affects all protocols
                 FailingTest(RPC_V2_CBOR_EXTRAS, "AdditionalTokensEmptyStruct", TestCaseKind.MalformedRequest),
             )
 

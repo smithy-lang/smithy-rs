@@ -804,8 +804,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             )
         }
 
-        // TODO What about when there's no modeled operation input but the payload is not empty? In some protocols we
-        //  must accept `{}` but we currently accept anything!
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3723): we should inject a check here that asserts that
+        //  the body contents are valid when there is empty operation input or no operation input.
 
         val err =
             if (ServerBuilderGenerator.hasFallibleBuilder(
