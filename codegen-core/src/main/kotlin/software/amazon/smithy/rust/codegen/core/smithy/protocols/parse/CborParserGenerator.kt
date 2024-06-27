@@ -23,6 +23,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -212,8 +213,10 @@ class CborParserGenerator(
                                     val symbol = symbolProvider.toSymbol(member)
                                     if (symbol.isRustBoxed()) {
                                         rustBlock("") {
-                                            rustTemplate("let v = #{DeserializeMember:W}?;",
-                                                "DeserializeMember" to deserializeMember(member))
+                                            rustTemplate(
+                                                "let v = #{DeserializeMember:W}?;",
+                                                "DeserializeMember" to deserializeMember(member)
+                                            )
 
                                             for (customization in customizations) {
                                                 customization.section(
@@ -226,7 +229,8 @@ class CborParserGenerator(
                                         }
                                     } else {
                                         rustTemplate("#{DeserializeMember:W}?",
-                                            "DeserializeMember" to deserializeMember(member))
+                                            "DeserializeMember" to deserializeMember(member)
+                                        )
                                     }
                                 }
                             }
@@ -442,7 +446,7 @@ class CborParserGenerator(
         return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
-    private fun RustWriter.deserializeMember(memberShape: MemberShape) = writable {
+    private fun deserializeMember(memberShape: MemberShape) = writable {
         when (val target = model.expectShape(memberShape.target)) {
             // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
             is BlobShape -> rust("decoder.blob()")
@@ -469,28 +473,23 @@ class CborParserGenerator(
             // Note that no protocol using CBOR serialization supports `document` shapes.
             else -> PANIC("unexpected shape: $target")
         }
-        // TODO Boxing
-//        val symbol = symbolProvider.toSymbol(memberShape)
-//        if (symbol.isRustBoxed()) {
-//            for (customization in customizations) {
-//                customization.section(JsonParserSection.BeforeBoxingDeserializedMember(memberShape))(this)
-//            }
-//            rust(".map(Box::new)")
-//        }
     }
 
-    private fun RustWriter.deserializeString(target: StringShape, bubbleUp: Boolean = true) = writable {
-        // TODO Handle enum shapes
-        rust("decoder.string()")
+    private fun deserializeString(target: StringShape) = writable {
+        when (target.hasTrait<EnumTrait>()) {
+            true -> {
+                if (this@CborParserGenerator.returnSymbolToParse(target).isUnconstrained) {
+                    rust("decoder.string()")
+                } else {
+                    rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                }
+            }
+            false -> rust("decoder.string()")
+        }
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
-
-        // TODO Test `@sparse` and non-@sparse lists.
-        //      - Clients should insert only non-null values in non-`@sparse` list.
-        //      - Servers should reject upon encountering first null value in non-`@sparse` list.
-        //      - Both clients and servers should insert null values in `@sparse` list.
 
         val parser = protocolFunctions.deserializeFn(shape) { fnName ->
             val initContainerWritable = writable {
@@ -531,11 +530,6 @@ class CborParserGenerator(
     private fun RustWriter.deserializeMap(shape: MapShape) {
         val keyTarget = model.expectShape(shape.key.target, StringShape::class.java)
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
-
-        // TODO Test `@sparse` and non-@sparse maps.
-        //      - Clients should insert only non-null values in non-`@sparse` map.
-        //      - Servers should reject upon encountering first null value in non-`@sparse` map.
-        //      - Both clients and servers should insert null values in `@sparse` map.
 
         val parser = protocolFunctions.deserializeFn(shape) { fnName ->
             val initContainerWritable = writable {

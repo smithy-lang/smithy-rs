@@ -11,6 +11,7 @@ use smithy.test#httpMalformedRequestTests
 service RpcV2Service {
     operations: [
         SimpleStructOperation
+        ErrorSerializationOperation
         ComplexStructOperation
         EmptyStructOperation
         SingleMemberStructOperation
@@ -23,6 +24,12 @@ service RpcV2Service {
 operation SimpleStructOperation {
     input: SimpleStruct
     output: SimpleStruct
+    errors: [ValidationException]
+}
+
+operation ErrorSerializationOperation {
+    input: SimpleStruct
+    output: ValidationException
     errors: [ValidationException]
 }
 
@@ -99,19 +106,68 @@ apply SingleMemberStructOperation @httpMalformedRequestTests([
                 mediaType: "application/cbor",
                 assertion: {
                     // An empty CBOR map.
-                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type`.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type` because `SerializationException` is not modeled.
                     contents: "oA=="
                 }
             }
         }
-
     }
 ])
+
+apply ErrorSerializationOperation @httpMalformedRequestTests([
+    {
+        id: "ErrorSerializationIncludesTypeField",
+        documentation: """
+        When invalid input is provided the request should be rejected with
+        a validation exception, and a `__type` field should be included""",
+        protocol: rpcv2Cbor,
+        request: {
+            method: "POST",
+            uri: "/service/RpcV2Service/operation/ErrorSerializationOperation",
+            headers: {
+                "smithy-protocol": "rpc-v2-cbor",
+                "Accept": "application/cbor",
+                "Content-Type": "application/cbor"
+            }
+            // An empty CBOR map. We're missing a lot of `@required` members!
+            body: "oA=="
+        },
+        response: {
+            code: 400,
+            body: {
+                mediaType: "application/cbor",
+                assertion: {
+                    // TODO Adjust
+                    contents: "oA=="
+                }
+            }
+        }
+    }
+])
+
+apply ErrorSerializationOperation @httpResponseTests([
+    {
+        id: "OperationOutputSerializationDoesNotIncludeTypeField",
+        documentation: """
+        Despite the operation output being a structure shape with the `@error` trait,
+        `__type` field should not be included, because we're not serializing a
+        server error response""",
+        protocol: rpcv2Cbor,
+        // TODO This should fail with another code!
+        code: 200,
+        params: {
+            message: "ValidationException message field"
+        }
+        bodyMediaType: "application/cbor"
+        // TODO Adjust
+        body: ""
+    }
+)]
 
 apply SimpleStructOperation @httpResponseTests([
     {
         id: "SimpleStruct",
-        protocol: "smithy.protocols#rpcv2Cbor",
+        protocol: rpcv2Cbor,
         code: 200, // Not used.
         params: {
             blob: "blobby blob",
@@ -152,7 +208,7 @@ apply SimpleStructOperation @httpResponseTests([
     // Same test, but leave optional types empty
     {
         id: "SimpleStructWithOptionsSetToNone",
-        protocol: "smithy.protocols#rpcv2Cbor",
+        protocol: rpcv2Cbor,
         code: 200, // Not used.
         params: {
             requiredBlob: "blobby blob",

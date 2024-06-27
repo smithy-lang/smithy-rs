@@ -337,8 +337,7 @@ class JsonParserGenerator(
                         rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
                     }
                 }
-
-                else -> rust("u.into_owned()")
+                false -> rust("u.into_owned()")
             }
         }
     }

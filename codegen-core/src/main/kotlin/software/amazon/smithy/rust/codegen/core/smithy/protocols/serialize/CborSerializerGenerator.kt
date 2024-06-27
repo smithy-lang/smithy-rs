@@ -41,12 +41,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.isUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -61,8 +58,11 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * Mutate the serializer prior to serializing any structure members. Eg: this can be used to inject `__type`
      * to record the error type in the case of an error structure.
      */
-    data class BeforeSerializingStructureMembers(val structureShape: StructureShape, val encoderBindingName: String) :
-        CborSerializerSection("ServerError")
+    data class BeforeSerializingStructureMembers(
+        val structureShape: StructureShape,
+        val encoderBindingName: String,
+        val isServerErrorResponse: Boolean,
+    ) : CborSerializerSection("ServerError")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
@@ -191,45 +191,16 @@ class CborSerializerGenerator(
         }
     }
 
-    // TODO
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        val target = model.expectShape(member.target)
-        return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> std::result::Result<#{ByteSlab}, #{Error}>",
-                *codegenScope,
-                "target" to symbolProvider.toSymbol(target),
-            ) {
-                rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                when (target) {
-                    is StructureShape -> serializeStructure(StructContext("input", target))
-                    is UnionShape -> serializeUnion(Context(ValueExpression.Reference("input"), target))
-                    else -> throw IllegalStateException("json payloadSerializer only supports structs and unions")
-                }
-                rust("object.finish();")
-                rustTemplate("Ok(out.into_bytes())", *codegenScope)
-            }
-        }
+        TODO("We only call this when serializing in event streams, which are not supported yet: https://github.com/smithy-lang/smithy-rs/issues/3573")
     }
 
-    // TODO Unclear whether we'll need this.
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unsetpayload") { fnName ->
-            rustTemplate(
-                """
-                pub fn $fnName() -> #{ByteSlab} {
-                    b"{}"[..].into()
-                }
-                """,
-                *codegenScope,
-            )
-        }
+        UNREACHABLE("Only clients use this method when serializing an `@httpPayload`. No protocol using CBOR supports this trait, so we don't need to implement this")
 
-    override fun unsetUnion(union: UnionShape): RuntimeType {
-        // TODO
-        TODO("Not yet implemented")
-    }
+    override fun unsetUnion(union: UnionShape): RuntimeType =
+        UNREACHABLE("Only clients use this method when serializing an `@httpPayload`. No protocol using CBOR supports this trait, so we don't need to implement this")
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation CBOR serializer if there is no CBOR body.
@@ -238,35 +209,12 @@ class CborSerializerGenerator(
             return null
         }
 
-        val inputShape = operationShape.inputShape(model)
-        return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
-            ) {
-                rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
-                serializeStructure(StructContext("input", inputShape), httpDocumentMembers)
-                rust("object.finish();")
-                rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
-            }
-        }
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
+        TODO("Client implementation should fill this out")
     }
 
-    override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
-            rustTemplate(
-                """
-                pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
-                    let mut out = String::new();
-                    #{JsonValueWriter}::new(&mut out).document(input);
-                    out.into_bytes()
-                }
-                """,
-                "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
-            )
-        }
-    }
+    override fun documentSerializer(): RuntimeType =
+        UNREACHABLE("No protocol using CBOR supports `document` shapes, so we don't need to implement this")
 
     override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation CBOR serializer if there was no operation output shape in the
@@ -275,16 +223,7 @@ class CborSerializerGenerator(
             return null
         }
 
-        // TODO
-        // Note that, unlike the client, we serialize an empty JSON document `"{}"` if the operation output shape is
-        // empty (has no members).
-        // The client instead serializes an empty payload `""` in _both_ these scenarios:
-        //     1. there is no operation input shape; and
-        //     2. the operation input shape is empty (has no members).
-        // The first case gets reduced to the second, because all operations get a synthetic input shape with
-        // the [OperationNormalizer] transformation.
         val httpDocumentMembers = httpBindingResolver.responseMembers(operationShape, HttpLocation.DOCUMENT)
-
         val outputShape = operationShape.outputShape(model)
         return serverSerializer(outputShape, httpDocumentMembers, error = false)
     }
@@ -300,6 +239,8 @@ class CborSerializerGenerator(
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
+        /** Whether we're serializing a top-level structure shape corresponding for a server operation response. */
+        isServerErrorResponse: Boolean = false,
     ) {
         if (context.shape.isUnit()) {
             rust(
@@ -311,7 +252,6 @@ class CborSerializerGenerator(
             return
         }
 
-        // TODO Need to inject `__type` when serializing errors.
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
@@ -322,7 +262,13 @@ class CborSerializerGenerator(
                 //  instead of `.begin_map()` for efficiency. Add test.
                 rust("encoder.begin_map();")
                 for (customization in customizations) {
-                    customization.section(CborSerializerSection.BeforeSerializingStructureMembers(context.shape, "encoder"))(this)
+                    customization.section(
+                        CborSerializerSection.BeforeSerializingStructureMembers(
+                            context.shape,
+                            "encoder",
+                            isServerErrorResponse,
+                        ),
+                    )(this)
                 }
                 context.copy(localName = "input").also { inner ->
                     val members = includedMembers ?: inner.shape.members()

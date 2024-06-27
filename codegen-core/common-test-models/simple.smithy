@@ -19,10 +19,4 @@ operation Operation {
 
 structure OperationInputOutput {
     message: String
-    unitUnion: UnitUnion
-}
-
-union UnitUnion {
-    unitA: Unit
-    message: String
 }

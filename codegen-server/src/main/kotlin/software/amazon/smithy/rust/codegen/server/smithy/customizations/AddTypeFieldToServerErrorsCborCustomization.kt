@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 class AddTypeFieldToServerErrorsCborCustomization : CborSerializerCustomization() {
     override fun section(section: CborSerializerSection): Writable = when (section) {
         is CborSerializerSection.BeforeSerializingStructureMembers ->
-            if (section.structureShape.hasTrait<ErrorTrait>()) {
+            if (section.isServerErrorResponse && section.structureShape.hasTrait<ErrorTrait>()) {
                 writable {
                     rust(
                         """
