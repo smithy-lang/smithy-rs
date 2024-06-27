@@ -15,3 +15,11 @@ message = "A feature, `aws-lambda`, has been added to generated SDKs to re-expor
 references = ["smithy-rs#3643"]
 meta = { "breaking" = false, "bug" = true, "tada" = false, "target" = "server" }
 author = "drganjoo"
+
+[[smithy-rs]]
+message = """
+Content-Type header validation now ignores parameter portion of media types.
+"""
+references = ["smithy-rs#3471","smithy-rs#3724"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, target = "server" }
+authors = ["djedward"]
