@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use tokio::sync::mpsc;
 
-/// Stream of binary data representing an object's contents.
+/// Stream of binary data representing an Amazon S3 Object's contents.
 ///
 /// Wraps potentially multiple streams of binary data into a single coherent stream.
 /// The data on this stream is sequenced into the correct order.
@@ -57,14 +57,10 @@ impl Body {
                 break;
             }
 
-            let chunk = self.inner.next().await;
-            if chunk.is_none() {
-                break;
-            }
-
-            match chunk? {
-                Ok(chunk) => self.sequencer.push(chunk),
-                Err(err) => return Some(Err(err)),
+            match self.inner.next().await {
+                None => break,
+                Some(Ok(chunk)) => self.sequencer.push(chunk),
+                Some(Err(err)) => return Some(Err(err)),
             }
         }
 
@@ -159,8 +155,8 @@ impl UnorderedBody {
     /// Pull the next chunk of data off the stream.
     ///
     /// Returns [None] when there is no more data.
-    /// Chunks returned from an [UnorderedBody] are not guaranteed to be sequenced
-    /// in the right order. Consumers are expected to sequence the data themselves
+    /// Chunks returned from an [UnorderedBody] are not guaranteed to be sorted
+    /// in the right order. Consumers are expected to sort the data themselves
     /// using the chunk sequence number (starting from zero).
     pub(crate) async fn next(&mut self) -> Option<Result<ChunkResponse, TransferError>> {
         match self.chunks.as_mut() {
@@ -173,6 +169,7 @@ impl UnorderedBody {
 #[cfg(test)]
 mod tests {
     use crate::download::worker::ChunkResponse;
+    use crate::error::TransferError;
     use aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream};
     use bytes::Bytes;
     use tokio::sync::mpsc;
@@ -202,7 +199,8 @@ mod tests {
         let (tx, rx) = mpsc::channel(2);
         let mut body = Body::new(rx);
         tokio::spawn(async move {
-            for i in 0..3 {
+            let seq = vec![2, 0, 1];
+            for i in seq {
                 let data = Bytes::from(format!("chunk {i}"));
                 let aggregated = ByteStream::from(data).collect().await.unwrap();
                 let chunk = chunk_resp(i as u64, Some(aggregated));
@@ -219,5 +217,28 @@ mod tests {
 
         let expected: Vec<String> = vec![0, 1, 2].iter().map(|i| format!("chunk {i}")).collect();
         assert_eq!(expected, received);
+    }
+
+    #[tokio::test]
+    async fn test_body_next_error() {
+        let (tx, rx) = mpsc::channel(2);
+        let mut body = Body::new(rx);
+        tokio::spawn(async move {
+            let data = Bytes::from("chunk 0".to_string());
+            let aggregated = ByteStream::from(data).collect().await.unwrap();
+            let chunk = chunk_resp(0, Some(aggregated));
+            tx.send(Ok(chunk)).await.unwrap();
+            let err = TransferError::InvalidMetaRequest("test errors".to_string());
+            tx.send(Err(err)).await.unwrap();
+        });
+
+        let mut received = Vec::new();
+        while let Some(chunk) = body.next().await {
+            received.push(chunk);
+        }
+
+        assert_eq!(2, received.len());
+        received.pop().unwrap().expect_err("error propagated");
+        received.pop().unwrap().expect("chunk 0 successful");
     }
 }

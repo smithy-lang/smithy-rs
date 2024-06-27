@@ -14,7 +14,7 @@ mod worker;
 use crate::download::body::Body;
 use crate::download::discovery::{discover_obj, ObjectDiscovery};
 use crate::download::handle::DownloadHandle;
-use crate::download::worker::{chunk_downloader, distribute_work, ChunkResponse};
+use crate::download::worker::{distribute_work, download_chunks, ChunkResponse};
 use crate::error::TransferError;
 use crate::{MEBIBYTE, MIN_PART_SIZE};
 use aws_sdk_s3::operation::get_object::builders::{GetObjectFluentBuilder, GetObjectInputBuilder};
@@ -71,6 +71,7 @@ impl Builder {
     }
 
     /// Size of parts the object will be downloaded in, in bytes.
+    ///
     /// The minimum part size is 5 MiB and any value given less than that will be rounded up.
     /// Defaults is 8 MiB.
     pub fn target_part_size(mut self, size_bytes: u64) -> Self {
@@ -79,6 +80,7 @@ impl Builder {
     }
 
     /// Set whether checksum validation is enabled.
+    ///
     /// Default is true.
     pub fn enable_checksum_validation(mut self, enabled: bool) -> Self {
         self.checksum_validation_enabled = enabled;
@@ -91,8 +93,9 @@ impl Builder {
         self
     }
 
-    /// Set the concurrency level this component is allowed to use. This sets the maximum
-    /// number of concurrent in-flight requests.
+    /// Set the concurrency level this component is allowed to use.
+    ///
+    /// This sets the maximum number of concurrent in-flight requests.
     /// Default is 8.
     pub fn concurrency(mut self, concurrency: usize) -> Self {
         self.concurrency = concurrency;
@@ -187,16 +190,18 @@ impl Downloader {
             tasks.spawn(distribute_work(rem, input, part_size, start_seq, work_tx));
 
             for i in 0..self.concurrency {
-                let worker = chunk_downloader(ctx.clone(), work_rx.clone(), comp_tx.clone())
+                let worker = download_chunks(ctx.clone(), work_rx.clone(), comp_tx.clone())
                     .instrument(tracing::debug_span!("chunk-downloader", worker = i));
                 tasks.spawn(worker);
             }
         }
 
-        // drop our reference to completion sender such that when all workers drop theirs it's closed
+        // Drop our half of the completion channel. When all workers drop theirs, the channel is closed.
         drop(comp_tx);
 
         let handle = DownloadHandle {
+            // FIXME(aws-sdk-rust#1159) - initial object discovery for a range/first-part will not
+            //   have the correct metadata w.r.t. content-length and maybe others for the whole object.
             object_meta: discovery.meta,
             body: Body::new(comp_rx),
             tasks,
@@ -220,7 +225,7 @@ async fn handle_discovery_chunk(
             object_meta: Some(discovery.meta.clone()),
         };
         completed.send(Ok(chunk)).await.expect("initial chunk");
-        start_seq += 1;
+        start_seq = 1;
     }
     start_seq
 }

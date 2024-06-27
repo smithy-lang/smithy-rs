@@ -17,7 +17,7 @@ use tokio::io::AsyncWriteExt;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
-const ONE_GIGABYTE: u64 = 1024 * 1024 * 1024;
+const ONE_MEBIBYTE: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, clap::Parser)]
 #[command(name = "cp")]
@@ -102,16 +102,14 @@ fn invalid_arg(message: &str) -> ! {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
-    let args = Args::parse();
-    println!("{:#?}", args);
+    let args = dbg!(Args::parse());
 
+    use TransferUri::*;
     match (&args.source, &args.dest) {
-        (TransferUri::Local(_), TransferUri::S3(_)) => todo!("upload not implemented yet"),
-        (TransferUri::Local(_), TransferUri::Local(_)) => {
-            invalid_arg("local to local transfer not supported")
-        }
-        (TransferUri::S3(_), TransferUri::Local(_)) => (),
-        (TransferUri::S3(_), TransferUri::S3(_)) => invalid_arg("s3 to s3 transfer not supported"),
+        (Local(_), S3(_)) => todo!("upload not implemented yet"),
+        (Local(_), Local(_)) => invalid_arg("local to local transfer not supported"),
+        (S3(_), Local(_)) => (),
+        (S3(_), S3(_)) => invalid_arg("s3 to s3 transfer not supported"),
     }
 
     let config = aws_config::from_env().load().await;
@@ -143,19 +141,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let elapsed_secs = start.elapsed().as_secs_f64();
-
+    let elapsed = start.elapsed();
     let obj_size = handle.object_meta.total_size();
-    let obj_size_gigabytes = obj_size as f64 / ONE_GIGABYTE as f64;
-    let obj_size_gigabits = obj_size_gigabytes * 8.0;
+    let obj_size_mebibytes = obj_size as f64 / ONE_MEBIBYTE as f64;
 
     println!(
-        "downloaded {} bytes ({} GiB) in {} seconds; GiB/s: {}; Gbps: {}",
-        obj_size,
-        obj_size_gigabytes,
-        elapsed_secs,
-        obj_size_gigabytes / elapsed_secs,
-        obj_size_gigabits / elapsed_secs
+        "downloaded {obj_size} bytes ({obj_size_mebibytes} MiB) in {elapsed:?}; MiB/s: {}",
+        obj_size_mebibytes / elapsed.as_secs_f64(),
     );
 
     Ok(())

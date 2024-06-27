@@ -34,6 +34,7 @@ impl ChunkRequest {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ChunkResponse {
+    // TODO(aws-sdk-rust#1159, design) - consider PartialOrd for ChunkResponse and hiding `seq` as internal only detail
     // the seq number
     pub(crate) seq: u64,
     // chunk data
@@ -44,7 +45,7 @@ pub(crate) struct ChunkResponse {
 
 /// Worker function that processes requests from the [requests] channel and
 /// sends the result back on the [completed] channel.
-pub(super) async fn chunk_downloader(
+pub(super) async fn download_chunks(
     ctx: DownloadContext,
     requests: async_channel::Receiver<ChunkRequest>,
     completed: mpsc::Sender<Result<ChunkResponse, TransferError>>,
