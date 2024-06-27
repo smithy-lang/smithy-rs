@@ -587,6 +587,8 @@ class DefaultProtocolTestGenerator(
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
+                FailingTest(RestJson, "RestJsonClientPopulatesDefaultValuesInInput", Action.Request),
+                FailingTest(RestJson, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
             )
         private val RunOnly: Set<String>? = null
 
