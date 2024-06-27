@@ -179,7 +179,10 @@ data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMess
  * Returns the set of operation shapes that must have a supported validation exception shape
  * in their associated errors list.
  */
-fun operationShapesThatMustHaveValidationException(model: Model, service: ServiceShape): Set<OperationShape> {
+fun operationShapesThatMustHaveValidationException(
+    model: Model,
+    service: ServiceShape,
+): Set<OperationShape> {
     val walker = DirectedWalker(model)
     return walker.walkShapes(service)
         .filterIsInstance<OperationShape>()
