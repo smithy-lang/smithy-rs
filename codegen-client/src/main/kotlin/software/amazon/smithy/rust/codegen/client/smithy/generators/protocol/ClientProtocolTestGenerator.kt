@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Faili
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCaseKind
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -73,6 +74,10 @@ class ClientProtocolTestGenerator(
                 FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", TestCaseKind.Request),
                 FailingTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", TestCaseKind.Request),
                 FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
+                FailingTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
+                FailingTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults", TestCaseKind.Request),
+                // TODO(https://github.com/smithy-lang/smithy/pull/2341): Remove this once the fix in the PR is available in a newer version of Smithy
+                FailingTest(REST_JSON, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse", TestCaseKind.Response),
             )
     }
 
