@@ -157,12 +157,13 @@ class ServerProtocolTestGenerator(
                     "RestJsonMalformedPatternReDOSString",
                     howToFixItFn = ::fixRestJsonMalformedPatternReDOSString,
                     inAtLeast = setOf("1.26.2", "1.49.0"),
-                    trackedIn = setOf(
-                        // TODO(https://github.com/awslabs/smithy/issues/1506)
-                        "https://github.com/awslabs/smithy/issues/1506",
-                        // TODO(https://github.com/smithy-lang/smithy/pull/2340)
-                        "https://github.com/smithy-lang/smithy/pull/2340",
-                    ),
+                    trackedIn =
+                        setOf(
+                            // TODO(https://github.com/awslabs/smithy/issues/1506)
+                            "https://github.com/awslabs/smithy/issues/1506",
+                            // TODO(https://github.com/smithy-lang/smithy/pull/2340)
+                            "https://github.com/smithy-lang/smithy/pull/2340",
+                        ),
                 ),
             )
 
@@ -188,7 +189,9 @@ class ServerProtocolTestGenerator(
                 "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
 
-        private fun fixRestJsonMalformedPatternReDOSString(testCase: TestCase.MalformedRequestTest): TestCase.MalformedRequestTest {
+        private fun fixRestJsonMalformedPatternReDOSString(
+            testCase: TestCase.MalformedRequestTest,
+        ): TestCase.MalformedRequestTest {
             val brokenResponse = testCase.testCase.response
             val brokenBody = brokenResponse.body.get()
             val fixedBody =
@@ -321,7 +324,7 @@ class ServerProtocolTestGenerator(
 
         if (!protocolSupport.responseSerialization || (
                 !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
-                )
+            )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
