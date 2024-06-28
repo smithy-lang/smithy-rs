@@ -76,7 +76,7 @@ class ClientProtocolTestGenerator(
                 FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
                 FailingTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
                 FailingTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults", TestCaseKind.Request),
-                // TODO(smithy#2341): Remove this once the fix in the PR is available in a later version of Smithy
+                // TODO(https://github.com/smithy-lang/smithy/pull/2341): Remove this once the fix in the PR is available in a later version of Smithy
                 FailingTest(REST_JSON, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse", TestCaseKind.Response),
             )
     }
