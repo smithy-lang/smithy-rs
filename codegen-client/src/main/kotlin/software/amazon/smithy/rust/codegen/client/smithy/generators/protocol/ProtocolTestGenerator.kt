@@ -589,6 +589,8 @@ class DefaultProtocolTestGenerator(
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
                 FailingTest(RestJson, "RestJsonClientPopulatesDefaultValuesInInput", Action.Request),
                 FailingTest(RestJson, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
+                // TODO(smithy#2341): Remove this once the fix in the PR is available in a subsequent release of Smithy
+                FailingTest(RestJson, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse", Action.Response),
             )
         private val RunOnly: Set<String>? = null
 
