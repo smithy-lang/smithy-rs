@@ -8,14 +8,16 @@ package software.amazon.smithy.rustsdk.customize.s3
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import kotlin.jvm.optionals.getOrNull
 
-internal class S3ExpiresCustomizationsTest {
+internal class S3ExpiresDecoratorTest {
     @Test
     fun `Model is pre-processed correctly`() {
         val baseModel =
@@ -59,7 +61,9 @@ internal class S3ExpiresCustomizationsTest {
                 expires: String
             }
             """.asSmithyModel()
-        val model = S3ExpiresCustomizations().processModel(baseModel)
+        val serviceShape = baseModel.expectShape(ShapeId.from("smithy.example#S3"), ServiceShape::class.java)
+        val settings = testClientRustSettings()
+        val model = S3ExpiresDecorator().transformModel(serviceShape, baseModel, settings)
 
         val expiresShapes =
             listOf(

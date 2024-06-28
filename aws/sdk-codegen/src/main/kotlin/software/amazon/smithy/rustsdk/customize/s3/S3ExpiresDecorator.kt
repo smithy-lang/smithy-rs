@@ -7,6 +7,8 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
@@ -15,19 +17,36 @@ import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.OutputTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rustsdk.InlineAwsDependency
 import kotlin.streams.asSequence
 
 /**
  * Enforces that Expires fields have the DateTime type (since in the future the model will change to model them as String),
  * and add an ExpiresString field to maintain the raw string value sent.
  */
-class S3ExpiresCustomizations {
+class S3ExpiresDecorator : ClientCodegenDecorator {
+    override val name: String = "S3Expires"
+    override val order: Byte = 0
     private val expires = "Expires"
     private val expiresString = "ExpiresString"
 
-    fun processModel(model: Model): Model {
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model {
         val transformer = ModelTransformer.create()
 
         // Ensure all `Expires` shapes are timestamps
@@ -84,4 +103,47 @@ class S3ExpiresCustomizations {
 
         return transformedModel
     }
+
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> {
+        val outputShape = operation.outputShape(codegenContext.model)
+
+        if (outputShape.memberNames.any { it.equals(expires, ignoreCase = true) }) {
+            return baseCustomizations +
+                ParseExpiresFieldsCustomization(
+                    codegenContext,
+                )
+        } else {
+            return baseCustomizations
+        }
+    }
+}
+
+class ParseExpiresFieldsCustomization(
+    private val codegenContext: ClientCodegenContext,
+) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalInterceptors -> {
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        val interceptor =
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile("s3_expires_interceptor"),
+                            ).resolve("S3ExpiresInterceptor")
+                        rustTemplate(
+                            """
+                            #{S3ExpiresInterceptor}
+                            """,
+                            "S3ExpiresInterceptor" to interceptor,
+                        )
+                    }
+                }
+
+                else -> {}
+            }
+        }
 }
