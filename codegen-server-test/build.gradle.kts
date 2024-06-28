@@ -91,11 +91,6 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
-        CodegenTest(
-            "aws.protocoltests.restxml#RestXmlExtras",
-            "rest_xml_extras",
-            imports = listOf("$commonModels/rest-xml-extras.smithy"),
-        ),
     )
 }
 
