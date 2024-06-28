@@ -93,7 +93,7 @@ fn content_type_header_classifier(
         (Some(actual_content_type), Some(expected_content_type)) => {
             let expected_mime = parse_expected_mime(expected_content_type);
             let found_mime = parse_mime(actual_content_type)?;
-            if expected_mime != found_mime {
+            if expected_mime != found_mime.essence_str() {
                 Err(MissingContentTypeReason::UnexpectedMimeType {
                     expected_mime: Some(expected_mime),
                     found_mime: Some(found_mime),
@@ -239,6 +239,13 @@ mod tests {
             result.unwrap_err(),
             MissingContentTypeReason::MimeParseError(_)
         ));
+    }
+
+    #[test]
+    fn valid_content_type_header_classifier_http_params() {
+        let request = req_content_type_smithy("application/json; charset=utf-8");
+        let result = content_type_header_classifier_smithy(&request, APPLICATION_JSON);
+        assert!(result.is_ok());
     }
 
     #[test]
