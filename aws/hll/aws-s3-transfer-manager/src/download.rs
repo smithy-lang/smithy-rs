@@ -72,10 +72,9 @@ impl Builder {
 
     /// Size of parts the object will be downloaded in, in bytes.
     ///
-    /// The minimum part size is 5 MiB and any value given less than that will be rounded up.
     /// Defaults is 8 MiB.
     pub fn target_part_size(mut self, size_bytes: u64) -> Self {
-        self.target_part_size_bytes = cmp::min(size_bytes, MIN_PART_SIZE);
+        self.target_part_size_bytes = size_bytes;
         self
     }
 

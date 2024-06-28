@@ -11,6 +11,8 @@ use aws_s3_transfer_manager::download::Downloader;
 
 use aws_s3_transfer_manager::download::body::Body;
 use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
+use aws_types::SdkConfig;
+use bytes::Buf;
 use clap::{CommandFactory, Parser};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -115,6 +117,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let config = aws_config::from_env().load().await;
 
+    println!("warming up client...");
+    warmup(&config).await?;
+    println!("warming up complete");
+
     let tm = Downloader::builder()
         .sdk_config(config)
         .concurrency(args.concurrency)
@@ -151,12 +157,56 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+// async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Error>> {
+//     let b1: &[u8] = &mut [];
+//     let b2: &[u8] = &mut [];
+//     let b3: &[u8] = &mut [];
+//     let b4: &[u8] = &mut [];
+//     let b5: &[u8] = &mut [];
+//     let b6: &[u8] = &mut [];
+//     let b7: &[u8] = &mut [];
+//     let b8: &[u8] = &mut [];
+//     while let Some(chunk) = body.next().await {
+//         let mut chunk = chunk.unwrap();
+//         while chunk.has_remaining() {
+//             let mut dst = [
+//                 IoSlice::new(b1),
+//                 IoSlice::new(b2),
+//                 IoSlice::new(b3),
+//                 IoSlice::new(b4),
+//                 IoSlice::new(b5),
+//                 IoSlice::new(b6),
+//                 IoSlice::new(b7),
+//                 IoSlice::new(b8),
+//             ];
+//             let filled = chunk.chunks_vectored(&mut dst[..]);
+//             tracing::trace!("filled: {filled} io slices");
+//
+//             let wc = dest.write_vectored(&dst[0..filled]).await?;
+//             tracing::trace!("wrote: {wc} bytes");
+//             chunk.advance(wc);
+//         }
+//     }
+//     Ok(())
+// }
+
 async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Error>> {
     while let Some(chunk) = body.next().await {
         let chunk = chunk.unwrap();
+        tracing::trace!("recv'd chunk remaining={}", chunk.remaining());
+        let mut segment_cnt = 1;
         for segment in chunk.into_segments() {
             dest.write_all(segment.as_ref()).await?;
+            tracing::trace!("wrote segment size: {}", segment.remaining());
+            segment_cnt += 1;
         }
+        tracing::trace!("chunk had {segment_cnt} segments");
     }
+    Ok(())
+}
+
+async fn warmup(config: &SdkConfig) -> Result<(), Box<dyn Error>> {
+    let s3 = aws_sdk_s3::Client::new(&config);
+    s3.list_buckets().send().await?;
     Ok(())
 }
