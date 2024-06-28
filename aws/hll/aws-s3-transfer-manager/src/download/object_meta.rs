@@ -51,7 +51,7 @@ pub struct ObjectMetadata {
 
 impl ObjectMetadata {
     /// The total object size
-    pub(crate) fn total_size(&self) -> u64 {
+    pub fn total_size(&self) -> u64 {
         match (self.content_length, self.content_range.as_ref()) {
             (_, Some(range)) => {
                 let total = range.split_once('/').map(|x| x.1).expect("content range total");

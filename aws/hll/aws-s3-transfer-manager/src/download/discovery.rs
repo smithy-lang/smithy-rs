@@ -14,10 +14,10 @@ use bytes::Buf;
 
 use crate::error;
 
-use super::handle::DownloadHandle;
 use super::header::{self, ByteRange};
 use super::object_meta::ObjectMetadata;
 use super::DownloadRequest;
+use crate::download::context::DownloadContext;
 
 #[derive(Debug, Clone, PartialEq)]
 enum ObjectDiscoveryStrategy {
@@ -72,25 +72,25 @@ impl ObjectDiscoveryStrategy {
 ///Returns object metadata, the remaining range of data
 /// to be fetched, and _(if available)_ the first chunk of data.
 pub(super) async fn discover_obj(
-    handle: &DownloadHandle,
+    ctx: &DownloadContext,
     request: &DownloadRequest,
 ) -> Result<ObjectDiscovery, error::TransferError> {
     let strategy = ObjectDiscoveryStrategy::from_request(request)?;
     match strategy {
         ObjectDiscoveryStrategy::HeadObject(byte_range) => {
-            discover_obj_with_head(handle, request, byte_range).await
+            discover_obj_with_head(ctx, request, byte_range).await
         }
         ObjectDiscoveryStrategy::FirstPart => {
             let r = request.input.clone().part_number(1);
-            discover_obj_with_get(handle, r, None).await
+            discover_obj_with_get(ctx, r, None).await
         }
         ObjectDiscoveryStrategy::RangedGet(range) => {
             let byte_range = match range.as_ref() {
                 Some(r) => ByteRange::Inclusive(
                     *r.start(),
-                    cmp::min(*r.start() + handle.target_part_size - 1, *r.end()),
+                    cmp::min(*r.start() + ctx.target_part_size - 1, *r.end()),
                 ),
-                None => ByteRange::Inclusive(0, handle.target_part_size - 1),
+                None => ByteRange::Inclusive(0, ctx.target_part_size - 1),
             };
             let r = request
                 .input
@@ -98,17 +98,17 @@ pub(super) async fn discover_obj(
                 .set_part_number(None)
                 .range(header::Range::bytes(byte_range));
 
-            discover_obj_with_get(handle, r, range).await
+            discover_obj_with_get(ctx, r, range).await
         }
     }
 }
 
 async fn discover_obj_with_head(
-    handle: &DownloadHandle,
+    ctx: &DownloadContext,
     request: &DownloadRequest,
     byte_range: Option<ByteRange>,
 ) -> Result<ObjectDiscovery, error::TransferError> {
-    let meta: ObjectMetadata = handle
+    let meta: ObjectMetadata = ctx
         .client
         .head_object()
         .set_bucket(request.input.get_bucket().clone())
@@ -135,11 +135,11 @@ async fn discover_obj_with_head(
 }
 
 async fn discover_obj_with_get(
-    handle: &DownloadHandle,
+    ctx: &DownloadContext,
     request: GetObjectInputBuilder,
     range: Option<RangeInclusive<u64>>,
 ) -> Result<ObjectDiscovery, error::TransferError> {
-    let resp = request.send_with(&handle.client).await;
+    let resp = request.send_with(&ctx.client).await;
 
     if resp.is_err() {
         // TODO(aws-sdk-rust#1159) - deal with empty file errors, see https://github.com/awslabs/aws-c-s3/blob/v0.5.7/source/s3_auto_ranged_get.c#L147-L153
@@ -172,10 +172,10 @@ async fn discover_obj_with_get(
 
 #[cfg(test)]
 mod tests {
+    use crate::download::context::DownloadContext;
     use crate::download::discovery::{
-        discover_obj, discover_obj_with_get, discover_obj_with_head, ObjectDiscoveryStrategy,
+        discover_obj, discover_obj_with_head, ObjectDiscoveryStrategy,
     };
-    use crate::download::handle::DownloadHandle;
     use crate::download::header::ByteRange;
     use crate::MIN_PART_SIZE;
     use aws_sdk_s3::operation::get_object::{GetObjectInput, GetObjectOutput};
@@ -220,7 +220,7 @@ mod tests {
             .then_output(|| HeadObjectOutput::builder().content_length(500).build());
         let client = mock_client!(aws_sdk_s3, &[&head_obj_rule]);
 
-        let handle = DownloadHandle {
+        let ctx = DownloadContext {
             client,
             target_part_size: MIN_PART_SIZE,
         };
@@ -229,9 +229,7 @@ mod tests {
             .key("test-key")
             .into();
 
-        discover_obj_with_head(&handle, &request, range)
-            .await
-            .unwrap()
+        discover_obj_with_head(&ctx, &request, range).await.unwrap()
     }
 
     #[tokio::test]
@@ -272,7 +270,7 @@ mod tests {
             });
         let client = mock_client!(aws_sdk_s3, &[&get_obj_rule]);
 
-        let handle = DownloadHandle {
+        let ctx = DownloadContext {
             client,
             target_part_size,
         };
@@ -282,7 +280,7 @@ mod tests {
             .key("test-key")
             .into();
 
-        let discovery = discover_obj(&handle, &request).await.unwrap();
+        let discovery = discover_obj(&ctx, &request).await.unwrap();
         assert_eq!(200, discovery.remaining.clone().count());
         assert_eq!(500..=699, discovery.remaining);
         assert_eq!(
@@ -306,7 +304,7 @@ mod tests {
             });
         let client = mock_client!(aws_sdk_s3, &[&get_obj_rule]);
 
-        let handle = DownloadHandle {
+        let ctx = DownloadContext {
             client,
             target_part_size,
         };
@@ -317,7 +315,7 @@ mod tests {
             .range("bytes=200-499")
             .into();
 
-        let discovery = discover_obj(&handle, &request).await.unwrap();
+        let discovery = discover_obj(&ctx, &request).await.unwrap();
         assert_eq!(200, discovery.remaining.clone().count());
         assert_eq!(300..=499, discovery.remaining);
         assert_eq!(
