@@ -184,7 +184,11 @@ class CborSerializerGenerator(
                 // Open a scope in which we can safely shadow the `encoder` variable to bind it to a mutable reference.
                 rustBlock("") {
                     rust("let encoder = &mut encoder;")
-                    serializeStructure(StructContext("value", structureShape), includedMembers)
+                    serializeStructure(
+                        StructContext("value", structureShape),
+                        includedMembers,
+                        isServerErrorResponse = true,
+                    )
                 }
                 rust("Ok(encoder.into_writer())")
             }
