@@ -14,6 +14,7 @@ use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
 use clap::{CommandFactory, Parser};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
+use tracing::{debug_span, Instrument};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -101,7 +102,7 @@ fn invalid_arg(message: &str) -> ! {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt::init();
+    console_subscriber::init();
     let args = dbg!(Args::parse());
 
     use TransferUri::*;
@@ -123,7 +124,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let (bucket, key) = args.source.expect_s3().parts();
     let input = GetObjectInputBuilder::default().bucket(bucket).key(key);
 
-    let mut dest = fs::File::create(args.dest.expect_local()).await?;
+    let dest = fs::File::create(args.dest.expect_local()).await?;
     println!("dest file opened, starting download");
 
     let start = time::Instant::now();
@@ -132,14 +133,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     //      likely abstract this into performant utils for single file download. Higher level
     //      TM will handle it's own thread pool for filesystem work
     let mut handle = tm.download(input.into()).await?;
-    let mut body = mem::replace(&mut handle.body, Body::empty());
+    let body = mem::replace(&mut handle.body, Body::empty());
 
-    while let Some(chunk) = body.next().await {
-        let chunk = chunk.unwrap();
-        for segment in chunk.into_segments() {
-            dest.write_all(segment.as_ref()).await?;
-        }
-    }
+    write_body(body, dest)
+        .instrument(debug_span!("write-output"))
+        .await?;
 
     let elapsed = start.elapsed();
     let obj_size = handle.object_meta.total_size();
@@ -150,5 +148,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         obj_size_mebibytes / elapsed.as_secs_f64(),
     );
 
+    Ok(())
+}
+
+async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Error>> {
+    while let Some(chunk) = body.next().await {
+        let chunk = chunk.unwrap();
+        for segment in chunk.into_segments() {
+            dest.write_all(segment.as_ref()).await?;
+        }
+    }
     Ok(())
 }
