@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.core.smithy.generators.protocol
 
 import software.amazon.smithy.model.knowledge.OperationIndex
@@ -13,6 +18,7 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.shouldPanic
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -31,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import java.util.logging.Logger
 
 /**
  * Common interface to generate protocol tests for a given [operationShape].
@@ -40,6 +47,7 @@ abstract class ProtocolTestGenerator {
     abstract val protocolSupport: ProtocolSupport
     abstract val operationShape: OperationShape
     abstract val appliesTo: AppliesTo
+    abstract val logger: Logger
 
     /**
      * We expect these tests to fail due to shortcomings in our implementation.
@@ -77,7 +85,7 @@ abstract class ProtocolTestGenerator {
 
     /** The entry point to render the protocol tests, invoked by the code generators. */
     fun render(writer: RustWriter) {
-        val allTests = allTestCases().flatMap {
+        val allTests = allMatchingTestCases().flatMap {
             fixBrokenTestCase(it)
         }
         if (allTests.isEmpty()) {
@@ -182,24 +190,26 @@ abstract class ProtocolTestGenerator {
         // `@httpResponseTests` trait can apply to operation shapes and structure shapes with the `@error` trait.
         // Find both kinds for the operation for which we're generating protocol tests.
         val responseTestsOnOperations =
-            operationShape.getTrait<HttpResponseTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
-                .map { TestCase.ResponseTest(it, outputShape) }
-        val responseTestsOnErrors = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait<HttpResponseTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
-            testCases.map { TestCase.ResponseTest(it, error) }
-        }
+            operationShape.getTrait<HttpResponseTestsTrait>()
+                ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
+        val responseTestsOnErrors =
+            operationIndex.getErrors(operationShape).flatMap { error ->
+                error.getTrait<HttpResponseTestsTrait>()
+                    ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.ResponseTest(it, error) }
+            }
 
         return (responseTestsOnOperations + responseTestsOnErrors).filterMatching()
     }
 
     fun malformedRequestTestCases(): List<TestCase> {
         // `@httpMalformedRequestTests` only make sense for servers.
-        val malformedRequestTests = if (appliesTo == AppliesTo.SERVER) {
-            operationShape.getTrait<HttpMalformedRequestTestsTrait>()?.testCases.orEmpty()
-                .map { TestCase.MalformedRequestTest(it) }
-        } else {
-            emptyList()
-        }
+        val malformedRequestTests =
+            if (appliesTo == AppliesTo.SERVER) {
+                operationShape.getTrait<HttpMalformedRequestTestsTrait>()
+                    ?.testCases.orEmpty().map { TestCase.MalformedRequestTest(it) }
+            } else {
+                emptyList()
+            }
         return malformedRequestTests.filterMatching()
     }
 
@@ -207,7 +217,7 @@ abstract class ProtocolTestGenerator {
      * Parses from the model and returns all test cases for [operationShape] applying to the [appliesTo] artifact type
      * that should be rendered by implementors.
      **/
-    fun allTestCases(): List<TestCase> =
+    fun allMatchingTestCases(): List<TestCase> =
         // Note there's no `@httpMalformedResponseTests`: https://github.com/smithy-lang/smithy/issues/2334
         requestTestCases() + responseTestCases() + malformedRequestTestCases()
 
@@ -230,10 +240,15 @@ abstract class ProtocolTestGenerator {
         Attribute.TracedTest.render(testModuleWriter)
 
         if (testCase.expectFail()) {
-            testModuleWriter.writeWithNoFormatting("#[should_panic]")
+            shouldPanic().render(testModuleWriter)
         }
-        val fnNameSuffix = testCase.kind.toString().toSnakeCase()
-        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}_$fnNameSuffix()") {
+        val fnNameSuffix =
+            when (testCase) {
+                is TestCase.ResponseTest -> "_response"
+                is TestCase.RequestTest -> "_request"
+                is TestCase.MalformedRequestTest -> "_malformed_request"
+            }
+        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnNameSuffix()") {
             block(this)
         }
     }

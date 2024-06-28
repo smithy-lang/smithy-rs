@@ -323,11 +323,12 @@ fun Project.registerCargoCommandsTasks(outputDir: File) {
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194#issuecomment-2147657902)
-        // Clear `RUSTDOCFLAGS` because in the CI Docker image we bake in `-D warnings`, but we currently
-        // generate docs with warnings.
-        environment("RUSTDOCFLAGS", "")
-        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+        val args =
+            mutableListOf(
+                "--no-deps",
+                "--document-private-items",
+            )
+        commandLine("cargo", "doc", *args.toTypedArray())
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {

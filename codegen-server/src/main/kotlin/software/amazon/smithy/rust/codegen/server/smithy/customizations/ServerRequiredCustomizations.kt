@@ -48,6 +48,14 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
             ),
         )
 
+        rustCrate.mergeFeature(
+            Feature(
+                "aws-lambda",
+                true,
+                listOf("aws-smithy-http-server/aws-lambda"),
+            ),
+        )
+
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
             rustTemplate(

@@ -228,7 +228,7 @@ class ServerProtocolTestGenerator(
     override val disabledTests: Set<String>
         get() = DisabledTests
 
-    private val logger = Logger.getLogger(javaClass.name)
+    override val logger: Logger = Logger.getLogger(javaClass.name)
 
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -527,7 +527,7 @@ class ServerProtocolTestGenerator(
     private fun checkHandlerWasEntered(rustWriter: RustWriter) {
         rustWriter.rust(
             """
-            assert!(receiver.recv().await.is_some());
+            assert!(receiver.recv().await.is_some(), "we expected operation handler to be invoked but it was not entered");
             """,
         )
     }

@@ -11,15 +11,15 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 [[smithy-rs]]
-message = """Fix request `Content-Type` header checking
+message = "A feature, `aws-lambda`, has been added to generated SDKs to re-export types required for Lambda deployment."
+references = ["smithy-rs#3643"]
+meta = { "breaking" = false, "bug" = true, "tada" = false, "target" = "server" }
+author = "drganjoo"
 
-Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
-
-1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
-2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
-
-This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
+[[smithy-rs]]
+message = """
+Content-Type header validation now ignores parameter portion of media types.
 """
-references = ["smithy-rs#3690"]
-meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server"}
-author = "david-perez"
+references = ["smithy-rs#3471","smithy-rs#3724"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, target = "server" }
+authors = ["djedward"]

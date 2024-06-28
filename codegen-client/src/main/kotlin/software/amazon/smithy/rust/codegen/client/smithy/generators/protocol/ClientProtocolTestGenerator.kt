@@ -87,8 +87,9 @@ class ClientProtocolTestGenerator(
     override val brokenTests: Set<BrokenTest>
         get() = emptySet()
 
+    override val logger: Logger = Logger.getLogger(javaClass.name)
+
     private val rc = codegenContext.runtimeConfig
-    private val logger = Logger.getLogger(javaClass.name)
 
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)

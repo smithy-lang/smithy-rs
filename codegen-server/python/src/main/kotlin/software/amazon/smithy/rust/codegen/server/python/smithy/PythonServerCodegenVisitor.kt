@@ -223,7 +223,10 @@ class PythonServerCodegenVisitor(
         }
     }
 
-    override fun protocolTestsForOperation(writer: RustWriter, operationShape: OperationShape) {
+    override fun protocolTestsForOperation(
+        writer: RustWriter,
+        operationShape: OperationShape,
+    ) {
         logger.warning("[python-server-codegen] Protocol tests are disabled for this language")
     }
 
