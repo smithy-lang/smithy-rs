@@ -560,6 +560,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
         val CfgTest = Attribute(cfg("test"))
+        val DenyDeprecated = Attribute(deny("deprecated"))
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
