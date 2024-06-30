@@ -18,53 +18,54 @@ import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import kotlin.jvm.optionals.getOrNull
 
 internal class S3ExpiresDecoratorTest {
+    private val baseModel =
+        """
+        namespace smithy.example
+        use aws.protocols#restXml
+        use aws.auth#sigv4
+        use aws.api#service
+        @restXml
+        @sigv4(name: "s3")
+        @service(
+            sdkId: "S3"
+            arnNamespace: "s3"
+        )
+        service S3 {
+            version: "1.0.0",
+            operations: [GetFoo, NewGetFoo]
+        }
+        operation GetFoo {
+            input: GetFooInput
+            output: GetFooOutput
+        }
+
+        operation NewGetFoo {
+            input: GetFooInput
+            output: NewGetFooOutput
+        }
+
+        structure GetFooInput {
+            payload: String
+            expires: String
+        }
+
+        @output
+        structure GetFooOutput {
+            expires: Timestamp
+        }
+
+        @output
+        structure NewGetFooOutput {
+            expires: String
+        }
+        """.asSmithyModel()
+
+    private val serviceShape = baseModel.expectShape(ShapeId.from("smithy.example#S3"), ServiceShape::class.java)
+    private val settings = testClientRustSettings()
+    private val model = S3ExpiresDecorator().transformModel(serviceShape, baseModel, settings)
+
     @Test
     fun `Model is pre-processed correctly`() {
-        val baseModel =
-            """
-            namespace smithy.example
-            use aws.protocols#restXml
-            use aws.auth#sigv4
-            use aws.api#service
-            @restXml
-            @sigv4(name: "s3")
-            @service(
-                sdkId: "S3"
-                arnNamespace: "s3"
-            )
-            service S3 {
-                version: "1.0.0",
-                operations: [GetFoo, NewGetFoo]
-            }
-            operation GetFoo {
-                input: GetFooInput
-                output: GetFooOutput
-            }
-
-            operation NewGetFoo {
-                input: GetFooInput
-                output: NewGetFooOutput
-            }
-
-            structure GetFooInput {
-                payload: String
-                expires: String
-            }
-
-            @output
-            structure GetFooOutput {
-                expires: Timestamp
-            }
-
-            @output
-            structure NewGetFooOutput {
-                expires: String
-            }
-            """.asSmithyModel()
-        val serviceShape = baseModel.expectShape(ShapeId.from("smithy.example#S3"), ServiceShape::class.java)
-        val settings = testClientRustSettings()
-        val model = S3ExpiresDecorator().transformModel(serviceShape, baseModel, settings)
-
         val expiresShapes =
             listOf(
                 model.expectShape(ShapeId.from("smithy.example#GetFooInput\$expires")),
