@@ -24,8 +24,6 @@ enum ObjectDiscoveryStrategy {
     // Send a `HeadObject` request.
     // The overall transfer is optionally constrained to the given range.
     HeadObject(Option<ByteRange>),
-    // Send `GetObject` with `part_number` = 1
-    FirstPart,
     // Send `GetObject` request using a ranged get.
     // The overall transfer is optionally constrained to the given range.
     RangedGet(Option<RangeInclusive<u64>>),
@@ -79,10 +77,6 @@ pub(super) async fn discover_obj(
     match strategy {
         ObjectDiscoveryStrategy::HeadObject(byte_range) => {
             discover_obj_with_head(ctx, request, byte_range).await
-        }
-        ObjectDiscoveryStrategy::FirstPart => {
-            let r = request.input.clone().part_number(1);
-            discover_obj_with_get(ctx, r, None).await
         }
         ObjectDiscoveryStrategy::RangedGet(range) => {
             let byte_range = match range.as_ref() {
@@ -177,7 +171,7 @@ mod tests {
         discover_obj, discover_obj_with_head, ObjectDiscoveryStrategy,
     };
     use crate::download::header::ByteRange;
-    use crate::MIN_PART_SIZE;
+    use crate::MEBIBYTE;
     use aws_sdk_s3::operation::get_object::{GetObjectInput, GetObjectOutput};
     use aws_sdk_s3::operation::head_object::HeadObjectOutput;
     use aws_sdk_s3::Client;
@@ -222,7 +216,7 @@ mod tests {
 
         let ctx = DownloadContext {
             client,
-            target_part_size: MIN_PART_SIZE,
+            target_part_size: 5 * MEBIBYTE,
         };
         let request = GetObjectInput::builder()
             .bucket("test-bucket")

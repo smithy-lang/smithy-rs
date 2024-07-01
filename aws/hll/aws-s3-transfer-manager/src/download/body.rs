@@ -40,6 +40,8 @@ impl Body {
     }
 
     /// Convert this body into an unordered stream of chunks.
+    // TODO(aws-sdk-rust#1159) - revisit if we actually need/use unordered data stream
+    #[allow(dead_code)]
     pub(crate) fn unordered(self) -> UnorderedBody {
         self.inner
     }
@@ -177,11 +179,7 @@ mod tests {
     use super::{Body, Sequencer};
 
     fn chunk_resp(seq: u64, data: Option<AggregatedBytes>) -> ChunkResponse {
-        ChunkResponse {
-            seq,
-            data,
-            object_meta: None,
-        }
+        ChunkResponse { seq, data }
     }
 
     #[test]

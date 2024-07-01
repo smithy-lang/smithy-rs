@@ -4,7 +4,6 @@
  */
 use crate::download::context::DownloadContext;
 use crate::download::header;
-use crate::download::object_meta::ObjectMetadata;
 use crate::error;
 use crate::error::TransferError;
 use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
@@ -39,8 +38,6 @@ pub(crate) struct ChunkResponse {
     pub(crate) seq: u64,
     // chunk data
     pub(crate) data: Option<AggregatedBytes>,
-    // object metadata
-    pub(crate) object_meta: Option<ObjectMetadata>,
 }
 
 /// Worker function that processes requests from the [requests] channel and
@@ -89,7 +86,6 @@ async fn download_chunk(
     Ok(ChunkResponse {
         seq: request.seq,
         data: Some(bytes),
-        object_meta: Some(ObjectMetadata::from(resp)),
     })
 }
 

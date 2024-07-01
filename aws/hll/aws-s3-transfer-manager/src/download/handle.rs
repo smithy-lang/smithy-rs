@@ -17,7 +17,7 @@ pub struct DownloadHandle {
     pub body: Body,
 
     /// All child tasks spawned for this download
-    pub(crate) tasks: task::JoinSet<()>,
+    pub(crate) _tasks: task::JoinSet<()>,
 }
 
 impl DownloadHandle {
