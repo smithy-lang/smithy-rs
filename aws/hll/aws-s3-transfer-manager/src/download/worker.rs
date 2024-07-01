@@ -40,8 +40,8 @@ pub(crate) struct ChunkResponse {
     pub(crate) data: Option<AggregatedBytes>,
 }
 
-/// Worker function that processes requests from the [requests] channel and
-/// sends the result back on the [completed] channel.
+/// Worker function that processes requests from the `requests` channel and
+/// sends the result back on the `completed` channel.
 pub(super) async fn download_chunks(
     ctx: DownloadContext,
     requests: async_channel::Receiver<ChunkRequest>,
