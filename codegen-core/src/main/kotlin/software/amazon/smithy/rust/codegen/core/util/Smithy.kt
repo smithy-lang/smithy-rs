@@ -100,7 +100,11 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
-        is MemberShape -> model.expectShape(this.target).shouldRedact(model) || model.expectShape(this.container).shouldRedact(model)
+        is MemberShape ->
+            model.expectShape(target).shouldRedact(model) ||
+                model.expectShape(container)
+                    .shouldRedact(model)
+
         else -> this.hasTrait<SensitiveTrait>()
     }
 
@@ -132,6 +136,16 @@ inline fun <reified T : Trait> StructureShape.findMemberWithTrait(model: Model):
 inline fun <reified T : Trait> UnionShape.findMemberWithTrait(model: Model): MemberShape? {
     return this.members().find { it.getMemberTrait(model, T::class.java).isPresent }
 }
+
+/**
+ * If is member shape returns target, otherwise returns self.
+ * @param model for loading the target shape
+ */
+fun Shape.targetOrSelf(model: Model): Shape =
+    when (this) {
+        is MemberShape -> model.expectShape(this.target)
+        else -> this
+    }
 
 /** Kotlin sugar for hasTrait() check. e.g. shape.hasTrait<EnumTrait>() instead of shape.hasTrait(EnumTrait::class.java) */
 inline fun <reified T : Trait> Shape.hasTrait(): Boolean = hasTrait(T::class.java)
