@@ -37,7 +37,7 @@ import kotlin.streams.asSequence
  * and add an ExpiresString field to maintain the raw string value sent.
  */
 class S3ExpiresDecorator : ClientCodegenDecorator {
-    override val name: String = "S3Expires"
+    override val name: String = "S3ExpiresDecorator"
     override val order: Byte = 0
     private val expires = "Expires"
     private val expiresString = "ExpiresString"
@@ -55,7 +55,7 @@ class S3ExpiresDecorator : ClientCodegenDecorator {
                 .asSequence()
                 .mapNotNull { shape ->
                     shape.members()
-                        .singleOrNull { member -> member.memberName.equals("Expires", ignoreCase = true) }
+                        .singleOrNull { member -> member.memberName.equals(expires, ignoreCase = true) }
                         ?.target
                 }
                 .associateWith { ShapeType.TIMESTAMP }

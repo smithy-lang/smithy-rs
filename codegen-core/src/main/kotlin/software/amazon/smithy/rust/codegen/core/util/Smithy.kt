@@ -101,8 +101,8 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
         is MemberShape ->
-            model.expectShape(this.target).shouldRedact(model) ||
-                model.expectShape(this.container)
+            model.expectShape(target).shouldRedact(model) ||
+                model.expectShape(container)
                     .shouldRedact(model)
 
         else -> this.hasTrait<SensitiveTrait>()

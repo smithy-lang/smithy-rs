@@ -36,18 +36,18 @@ impl Intercept for S3ExpiresInterceptor {
         if headers.contains_key(EXPIRES) {
             let expires_header = headers.get(EXPIRES).unwrap().to_string();
 
-            //If the Expires header fails to parse to an HttpDate we remove the header so
-            //it is parsed to None. We use HttpDate since that is the SEP defined default
-            //if no other format is specified in the model.
+            // If the Expires header fails to parse to an HttpDate we remove the header so
+            // it is parsed to None. We use HttpDate since that is the SEP defined default
+            // if no other format is specified in the model.
             if DateTime::from_str(&expires_header, Format::HttpDate).is_err() {
                 tracing::debug!(
-                    "Failed to parse the header Expires = \"{expires_header}\" as an HttpDate. The raw string value can found in ExpireString."
+                    "Failed to parse the header `{EXPIRES}` = \"{expires_header}\" as an HttpDate. The raw string value can found in `{EXPIRES_STRING}`."
                 );
                 headers.remove(EXPIRES);
             }
 
-            //Regardless of parsing success we copy the value of the Expires header to the
-            //ExpiresString header.
+            // Regardless of parsing success we copy the value of the Expires header to the
+            // ExpiresString header.
             headers.insert(EXPIRES_STRING, expires_header);
         }
 
