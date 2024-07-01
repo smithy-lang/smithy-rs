@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
+import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -27,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Broke
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
@@ -76,9 +78,36 @@ class ClientProtocolTestGenerator(
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2341): Remove this once the fix in the PR is available in a newer version of Smithy
-                FailingTest.ResponseTest(REST_JSON, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse"),
             )
+
+        private val BrokenTests:
+            Set<BrokenTest> =
+            setOf(
+                BrokenTest.ResponseTest(
+                    ServiceShapeId.REST_JSON,
+                    "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse",
+                    howToFixItFn = ::fixRestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse,
+                    inAtLeast = setOf("1.50.0"),
+                    trackedIn =
+                        setOf(
+                            // TODO(https://github.com/smithy-lang/smithy/pull/2341)
+                            "https://github.com/smithy-lang/smithy/pull/2341",
+                        ),
+                ),
+            )
+
+        private fun fixRestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse(
+            testCase: TestCase.ResponseTest,
+        ): TestCase.ResponseTest {
+            val fixedParams =
+                testCase.testCase.params.toBuilder().withMember("defaultTimestamp", NumberNode.from(2)).build()
+            return TestCase.ResponseTest(
+                testCase.testCase.toBuilder()
+                    .params(fixedParams)
+                    .build(),
+                testCase.targetShape,
+            )
+        }
     }
 
     override val appliesTo: AppliesTo
@@ -90,7 +119,7 @@ class ClientProtocolTestGenerator(
     override val disabledTests: Set<String>
         get() = emptySet()
     override val brokenTests: Set<BrokenTest>
-        get() = emptySet()
+        get() = BrokenTests
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
 
