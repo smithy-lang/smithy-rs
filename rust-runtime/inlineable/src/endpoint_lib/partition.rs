@@ -35,6 +35,7 @@ pub(crate) struct Partition<'a> {
     dual_stack_dns_suffix: &'a str,
     supports_fips: bool,
     supports_dual_stack: bool,
+    implicit_global_region: &'a str,
 }
 
 #[allow(unused)]
@@ -58,6 +59,10 @@ impl<'a> Partition<'a> {
     pub(crate) fn supports_dual_stack(&self) -> bool {
         self.supports_dual_stack
     }
+
+    pub(crate) fn implicit_global_region(&self) -> &str {
+        self.implicit_global_region
+    }
 }
 
 static DEFAULT_OVERRIDE: &PartitionOutputOverride = &PartitionOutputOverride {
@@ -66,6 +71,7 @@ static DEFAULT_OVERRIDE: &PartitionOutputOverride = &PartitionOutputOverride {
     dual_stack_dns_suffix: None,
     supports_fips: None,
     supports_dual_stack: None,
+    implicit_global_region: None,
 };
 
 /// Merge the base output and the override output, dealing with `Cow`s
@@ -145,6 +151,7 @@ impl PartitionResolver {
             supports_dual_stack: region_override
                 .supports_dual_stack
                 .unwrap_or(base.outputs.supports_dual_stack),
+            implicit_global_region: merge!(base, region_override, implicit_global_region),
         })
     }
 }
@@ -211,6 +218,7 @@ pub(crate) struct PartitionOutput {
     dual_stack_dns_suffix: Str,
     supports_fips: bool,
     supports_dual_stack: bool,
+    implicit_global_region: Str,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -220,6 +228,7 @@ pub(crate) struct PartitionOutputOverride {
     dual_stack_dns_suffix: Option<Str>,
     supports_fips: Option<bool>,
     supports_dual_stack: Option<bool>,
+    implicit_global_region: Option<Str>,
 }
 
 impl PartitionOutputOverride {
@@ -236,6 +245,9 @@ impl PartitionOutputOverride {
             supports_dual_stack: self
                 .supports_dual_stack
                 .ok_or("missing supportsDualstack")?,
+            implicit_global_region: self
+                .implicit_global_region
+                .ok_or("missing implicitGlobalRegion")?,
         })
     }
 }
@@ -432,6 +444,9 @@ mod deser {
                             "supportsDualStack" => {
                                 builder.supports_dual_stack = expect_bool_or_null(tokens.next())?;
                             }
+                            "implicitGlobalRegion" => {
+                                builder.implicit_global_region = token_to_str(tokens.next())?;
+                            }
                             _ => skip_value(tokens)?,
                         },
                         other => {
@@ -502,7 +517,8 @@ mod test {
         "dnsSuffix": "amazonaws.com",
         "dualStackDnsSuffix": "api.aws",
         "supportsFIPS": true,
-        "supportsDualStack": true
+        "supportsDualStack": true,
+        "implicitGlobalRegion": "us-east-1"
       }
     },
     {
@@ -518,7 +534,8 @@ mod test {
         "dnsSuffix": "amazonaws.com",
         "dualStackDnsSuffix": "api.aws",
         "supportsFIPS": true,
-        "supportsDualStack": true
+        "supportsDualStack": true,
+        "implicitGlobalRegion": "us-gov-east-1"
       }
     },
     {
@@ -534,7 +551,8 @@ mod test {
         "dnsSuffix": "amazonaws.com.cn",
         "dualStackDnsSuffix": "api.amazonwebservices.com.cn",
         "supportsFIPS": true,
-        "supportsDualStack": true
+        "supportsDualStack": true,
+        "implicitGlobalRegion": "cn-north-1"
       }
     },
     {
@@ -545,7 +563,8 @@ mod test {
         "dnsSuffix": "c2s.ic.gov",
         "supportsFIPS": true,
         "supportsDualStack": false,
-        "dualStackDnsSuffix": "c2s.ic.gov"
+        "dualStackDnsSuffix": "c2s.ic.gov",
+        "implicitGlobalRegion": "us-iso-foo-1"
       },
       "regions": {}
     },
@@ -557,7 +576,8 @@ mod test {
         "dnsSuffix": "sc2s.sgov.gov",
         "supportsFIPS": true,
         "supportsDualStack": false,
-        "dualStackDnsSuffix": "sc2s.sgov.gov"
+        "dualStackDnsSuffix": "sc2s.sgov.gov",
+        "implicitGlobalRegion": "us-isob-foo-1"
       },
       "regions": {}
     }
@@ -571,6 +591,10 @@ mod test {
             "amazonaws.com.cn"
         );
         assert_eq!(resolver.partitions.len(), 5);
+        assert_eq!(
+            resolve(&resolver, "af-south-1").implicit_global_region,
+            "us-east-1"
+        );
     }
 
     #[test]
@@ -590,6 +614,7 @@ mod test {
                 dual_stack_dns_suffix: "api.aws".into(),
                 supports_fips: true,
                 supports_dual_stack: true,
+                implicit_global_region: "us-east-1".into(),
             },
         });
         resolver.add_partition(PartitionMetadata {
@@ -602,6 +627,7 @@ mod test {
                 dual_stack_dns_suffix: "other.aws".into(),
                 supports_fips: false,
                 supports_dual_stack: true,
+                implicit_global_region: "other-south-2".into(),
             },
         });
         assert_eq!(resolve(&resolver, "us-east-1").name, "aws");

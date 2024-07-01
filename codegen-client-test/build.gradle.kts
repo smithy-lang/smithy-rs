@@ -15,7 +15,6 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
@@ -67,7 +66,16 @@ val allCodegenTests = listOf(
     ClientTest(
         "aws.protocoltests.restjson#RestJsonExtras",
         "rest_json_extras",
-        dependsOn = listOf("rest-json-extras.smithy"),
+        dependsOn = listOf(
+            "rest-json-extras.smithy",
+            // TODO(https://github.com/smithy-lang/smithy/pull/2310): Can be deleted when consumed in next Smithy version.
+            "rest-json-extras-2310.smithy",
+            // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
+            "rest-json-extras-2314.smithy",
+            // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
+            // TODO(https://github.com/smithy-lang/smithy/pull/2331): Can be deleted when consumed in next Smithy version.
+            "rest-json-extras-2315.smithy",
+        ),
     ),
     ClientTest("aws.protocoltests.misc#MiscService", "misc", dependsOn = listOf("misc.smithy")),
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
@@ -125,7 +133,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

@@ -16,7 +16,6 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 val buildDir = layout.buildDirectory.get().asFile
 
@@ -61,7 +60,15 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
         CodegenTest(
             "aws.protocoltests.restjson#RestJsonExtras",
             "rest_json_extras",
-            imports = listOf("$commonModels/rest-json-extras.smithy"),
+            imports = listOf(
+                "$commonModels/rest-json-extras.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2310): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2310.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2314.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2315.smithy",
+            ),
         ),
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2477)
         // CodegenTest(
@@ -120,7 +127,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir))
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

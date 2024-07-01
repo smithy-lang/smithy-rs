@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
@@ -222,7 +223,10 @@ class PythonServerCodegenVisitor(
         }
     }
 
-    override fun protocolTests() {
+    override fun protocolTestsForOperation(
+        writer: RustWriter,
+        operationShape: OperationShape,
+    ) {
         logger.warning("[python-server-codegen] Protocol tests are disabled for this language")
     }
 

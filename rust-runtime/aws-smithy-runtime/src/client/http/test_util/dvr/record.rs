@@ -7,6 +7,7 @@ use super::{
     Action, BodyData, ConnectionId, Direction, Error, Event, NetworkTraffic, Request, Response,
     Version,
 };
+use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -14,7 +15,7 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
-use http_body_0_4::Body;
+use http_body_04x::Body;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -252,5 +253,9 @@ impl HttpClient for RecordingClient {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        Some(ConnectorMetadata::new("recording-client", None))
     }
 }

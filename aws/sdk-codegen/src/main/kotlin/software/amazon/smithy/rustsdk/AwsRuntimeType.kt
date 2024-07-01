@@ -33,7 +33,13 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 
 object AwsRuntimeType {
     fun presigning(): RuntimeType =
-        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
+        RuntimeType.forInlineDependency(
+            InlineAwsDependency.forRustFile(
+                "presigning", visibility = Visibility.PUBLIC,
+                CargoDependency.Http1x,
+                CargoDependency.HttpBody1x,
+            ),
+        )
 
     fun presigningInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
         RuntimeType.forInlineDependency(

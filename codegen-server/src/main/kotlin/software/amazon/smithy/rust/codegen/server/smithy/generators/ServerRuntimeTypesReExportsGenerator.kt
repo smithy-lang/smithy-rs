@@ -38,6 +38,11 @@ class ServerRuntimeTypesReExportsGenerator(
             }
             pub mod request {
                 pub use #{SmithyHttpServer}::request::FromParts;
+
+                ##[cfg(feature = "aws-lambda")]
+                pub mod lambda {
+                    pub use #{SmithyHttpServer}::request::lambda::Context;
+                }
             }
             pub mod response {
                 pub use #{SmithyHttpServer}::response::IntoResponse;

@@ -38,6 +38,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.PrimitiveInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -108,15 +110,17 @@ fun generateFallbackCodeToDefaultValue(
             "DefaultValue" to defaultValue,
         )
     } else {
-        when (targetShape) {
-            is NumberShape, is EnumShape, is BooleanShape -> {
-                writer.rustTemplate(".unwrap_or(#{DefaultValue:W})", "DefaultValue" to defaultValue)
-            }
-            // Values for the Rust types of the rest of the shapes require heap allocations, so we calculate them
-            // in a (lazily-executed) closure for slight performance gains.
-            else -> {
-                writer.rustTemplate(".unwrap_or_else(|| #{DefaultValue:W})", "DefaultValue" to defaultValue)
-            }
+        val node = member.expectTrait<DefaultTrait>().toNode()!!
+        if ((targetShape is DocumentShape && (node is BooleanNode || node is NumberNode)) ||
+            targetShape is BooleanShape ||
+            targetShape is NumberShape ||
+            targetShape is EnumShape
+        ) {
+            writer.rustTemplate(".unwrap_or(#{DefaultValue:W})", "DefaultValue" to defaultValue)
+        } else {
+            // Values for the Rust types of the rest of the shapes might require heap allocations,
+            // so we calculate them in a (lazily-executed) closure for minimal performance gains.
+            writer.rustTemplate(".unwrap_or_else(##[allow(clippy::redundant_closure)] || #{DefaultValue:W})", "DefaultValue" to defaultValue)
         }
     }
 }
@@ -125,7 +129,7 @@ fun generateFallbackCodeToDefaultValue(
  * Returns a writable to construct a Rust value of the correct type holding the modeled `@default` value on the
  * [member] shape.
  */
-fun defaultValue(
+private fun defaultValue(
     model: Model,
     runtimeConfig: RuntimeConfig,
     symbolProvider: RustSymbolProvider,
@@ -164,12 +168,12 @@ fun defaultValue(
             }
         is ListShape -> {
             check(node is ArrayNode && node.isEmpty)
-            rust("Vec::new()")
+            rustTemplate("#{Vec}::new()", *preludeScope)
         }
 
         is MapShape -> {
             check(node is ObjectNode && node.isEmpty)
-            rust("std::collections::HashMap::new()")
+            rustTemplate("#{HashMap}::new()", "HashMap" to RuntimeType.HashMap)
         }
 
         is DocumentShape -> {
@@ -188,7 +192,8 @@ fun defaultValue(
 
                 is StringNode ->
                     rustTemplate(
-                        "#{SmithyTypes}::Document::String(String::from(${node.value.dq()}))",
+                        "#{SmithyTypes}::Document::String(#{String}::from(${node.value.dq()}))",
+                        *preludeScope,
                         "SmithyTypes" to types,
                     )
 
@@ -207,14 +212,19 @@ fun defaultValue(
 
                 is ArrayNode -> {
                     check(node.isEmpty)
-                    rustTemplate("""#{SmithyTypes}::Document::Array(Vec::new())""", "SmithyTypes" to types)
+                    rustTemplate(
+                        """#{SmithyTypes}::Document::Array(#{Vec}::new())""",
+                        *preludeScope,
+                        "SmithyTypes" to types,
+                    )
                 }
 
                 is ObjectNode -> {
                     check(node.isEmpty)
                     rustTemplate(
-                        "#{SmithyTypes}::Document::Object(std::collections::HashMap::new())",
+                        "#{SmithyTypes}::Document::Object(#{HashMap}::new())",
                         "SmithyTypes" to types,
+                        "HashMap" to RuntimeType.HashMap,
                     )
                 }
 

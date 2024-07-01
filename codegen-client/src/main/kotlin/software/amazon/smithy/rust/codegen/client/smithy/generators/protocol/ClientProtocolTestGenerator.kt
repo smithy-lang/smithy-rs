@@ -5,43 +5,37 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
-import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
-import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
-import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
-import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import java.util.logging.Logger
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType as RT
 
@@ -52,18 +46,10 @@ data class ClientCreationParams(
     val clientName: String,
 )
 
-interface ProtocolTestGenerator {
-    val codegenContext: ClientCodegenContext
-    val protocolSupport: ProtocolSupport
-    val operationShape: OperationShape
-
-    fun render(writer: RustWriter)
-}
-
 /**
- * Generate protocol tests for an operation
+ * Generate client protocol tests for an [operationShape].
  */
-class DefaultProtocolTestGenerator(
+class ClientProtocolTestGenerator(
     override val codegenContext: ClientCodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
@@ -79,118 +65,52 @@ class DefaultProtocolTestGenerator(
             "Client" to ClientRustModule.root.toType().resolve("Client"),
         )
     },
-) : ProtocolTestGenerator {
+) : ProtocolTestGenerator() {
+    companion object {
+        private val ExpectFail =
+            setOf<FailingTest>(
+                // Failing because we don't serialize default values if they match the default.
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
+            )
+    }
+
+    override val appliesTo: AppliesTo
+        get() = AppliesTo.CLIENT
+    override val expectFail: Set<FailingTest>
+        get() = ExpectFail
+    override val runOnly: Set<String>
+        get() = emptySet()
+    override val disabledTests: Set<String>
+        get() = emptySet()
+    override val brokenTests: Set<BrokenTest>
+        get() = emptySet()
+
+    override val logger: Logger = Logger.getLogger(javaClass.name)
+
     private val rc = codegenContext.runtimeConfig
-    private val logger = Logger.getLogger(javaClass.name)
 
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)
-    private val operationSymbol = codegenContext.symbolProvider.toSymbol(operationShape)
-    private val operationIndex = OperationIndex.of(codegenContext.model)
 
     private val instantiator = ClientInstantiator(codegenContext)
 
     private val codegenScope =
         arrayOf(
-            "SmithyHttp" to RT.smithyHttp(rc),
             "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
             "Uri" to RT.Http.resolve("Uri"),
         )
 
-    sealed class TestCase {
-        abstract val testCase: HttpMessageTestCase
-
-        data class RequestTest(override val testCase: HttpRequestTestCase) : TestCase()
-
-        data class ResponseTest(override val testCase: HttpResponseTestCase, val targetShape: StructureShape) :
-            TestCase()
-    }
-
-    override fun render(writer: RustWriter) {
-        val requestTests =
-            operationShape.getTrait<HttpRequestTestsTrait>()
-                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
-        val responseTests =
-            operationShape.getTrait<HttpResponseTestsTrait>()
-                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
-        val errorTests =
-            operationIndex.getErrors(operationShape).flatMap { error ->
-                val testCases =
-                    error.getTrait<HttpResponseTestsTrait>()
-                        ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty()
-                testCases.map { TestCase.ResponseTest(it, error) }
-            }
-        val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
-        if (allTests.isNotEmpty()) {
-            val operationName = operationSymbol.name
-            val testModuleName = "${operationName.toSnakeCase()}_request_test"
-            val additionalAttributes =
-                listOf(
-                    Attribute(allow("unreachable_code", "unused_variables")),
-                )
-            writer.withInlineModule(
-                RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes),
-                null,
-            ) {
-                renderAllTestCases(allTests)
-            }
-        }
-    }
-
-    private fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
-        allTests.forEach {
-            renderTestCaseBlock(it.testCase, this) {
+    override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
+        for (it in allTests) {
+            renderTestCaseBlock(it, this) {
                 when (it) {
                     is TestCase.RequestTest -> this.renderHttpRequestTestCase(it.testCase)
                     is TestCase.ResponseTest -> this.renderHttpResponseTestCase(it.testCase, it.targetShape)
+                    is TestCase.MalformedRequestTest -> PANIC("Client protocol test generation does not support HTTP compliance test case type `$it`")
                 }
             }
-        }
-    }
-
-    /**
-     * Filter out test cases that are disabled or don't match the service protocol
-     */
-    private fun List<TestCase>.filterMatching(): List<TestCase> {
-        return if (RunOnly.isNullOrEmpty()) {
-            this.filter { testCase ->
-                testCase.testCase.protocol == codegenContext.protocol &&
-                    !DisableTests.contains(testCase.testCase.id)
-            }
-        } else {
-            this.filter { RunOnly.contains(it.testCase.id) }
-        }
-    }
-
-    private fun renderTestCaseBlock(
-        testCase: HttpMessageTestCase,
-        testModuleWriter: RustWriter,
-        block: Writable,
-    ) {
-        testModuleWriter.newlinePrefix = "/// "
-        testCase.documentation.map {
-            testModuleWriter.writeWithNoFormatting(it)
-        }
-        testModuleWriter.write("Test ID: ${testCase.id}")
-        testModuleWriter.newlinePrefix = ""
-        Attribute.TokioTest.render(testModuleWriter)
-        val action =
-            when (testCase) {
-                is HttpResponseTestCase -> Action.Response
-                is HttpRequestTestCase -> Action.Request
-                else -> throw CodegenException("unknown test case type")
-            }
-        if (expectFail(testCase)) {
-            testModuleWriter.writeWithNoFormatting("#[should_panic]")
-        }
-        val fnName =
-            when (action) {
-                is Action.Response -> "_response"
-                is Action.Request -> "_request"
-            }
-        Attribute.AllowUnusedMut.render(testModuleWriter)
-        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
-            block(this)
         }
     }
 
@@ -275,18 +195,6 @@ class DefaultProtocolTestGenerator(
             }
         }
     }
-
-    private fun HttpMessageTestCase.action(): Action =
-        when (this) {
-            is HttpRequestTestCase -> Action.Request
-            is HttpResponseTestCase -> Action.Response
-            else -> throw CodegenException("Unknown test case type")
-        }
-
-    private fun expectFail(testCase: HttpMessageTestCase): Boolean =
-        ExpectFail.find {
-            it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
-        } != null
 
     private fun RustWriter.renderHttpResponseTestCase(
         testCase: HttpResponseTestCase,
@@ -434,58 +342,6 @@ class DefaultProtocolTestGenerator(
         }
     }
 
-    private fun checkRequiredHeaders(
-        rustWriter: RustWriter,
-        actualExpression: String,
-        requireHeaders: List<String>,
-    ) {
-        basicCheck(
-            requireHeaders,
-            rustWriter,
-            "required_headers",
-            actualExpression,
-            "require_headers",
-        )
-    }
-
-    private fun checkForbidHeaders(
-        rustWriter: RustWriter,
-        actualExpression: String,
-        forbidHeaders: List<String>,
-    ) {
-        basicCheck(
-            forbidHeaders,
-            rustWriter,
-            "forbidden_headers",
-            actualExpression,
-            "forbid_headers",
-        )
-    }
-
-    private fun checkHeaders(
-        rustWriter: RustWriter,
-        actualExpression: String,
-        headers: Map<String, String>,
-    ) {
-        if (headers.isEmpty()) {
-            return
-        }
-        val variableName = "expected_headers"
-        rustWriter.withBlock("let $variableName = [", "];") {
-            writeWithNoFormatting(
-                headers.entries.joinToString(",") {
-                    "(${it.key.dq()}, ${it.value.dq()})"
-                },
-            )
-        }
-        assertOk(rustWriter) {
-            write(
-                "#T($actualExpression, $variableName)",
-                RT.protocolTest(rc, "validate_headers"),
-            )
-        }
-    }
-
     private fun checkRequiredQueryParams(
         rustWriter: RustWriter,
         requiredParams: List<String>,
@@ -518,80 +374,4 @@ class DefaultProtocolTestGenerator(
         "&http_request",
         "validate_query_string",
     )
-
-    private fun basicCheck(
-        params: List<String>,
-        rustWriter: RustWriter,
-        expectedVariableName: String,
-        actualExpression: String,
-        checkFunction: String,
-    ) {
-        if (params.isEmpty()) {
-            return
-        }
-        rustWriter.withBlock("let $expectedVariableName = ", ";") {
-            strSlice(this, params)
-        }
-        assertOk(rustWriter) {
-            write(
-                "#T($actualExpression, $expectedVariableName)",
-                RT.protocolTest(rc, checkFunction),
-            )
-        }
-    }
-
-    /**
-     * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
-     * for pretty printing protocol test helper results
-     */
-    private fun assertOk(
-        rustWriter: RustWriter,
-        inner: Writable,
-    ) {
-        rustWriter.write("#T(", RT.protocolTest(rc, "assert_ok"))
-        inner(rustWriter)
-        rustWriter.write(");")
-    }
-
-    private fun strSlice(
-        writer: RustWriter,
-        args: List<String>,
-    ) {
-        writer.withBlock("&[", "]") {
-            write(args.joinToString(",") { it.dq() })
-        }
-    }
-
-    companion object {
-        sealed class Action {
-            object Request : Action()
-
-            object Response : Action()
-        }
-
-        data class FailingTest(val service: String, val id: String, val action: Action)
-
-        // These tests fail due to shortcomings in our implementation.
-        // These could be configured via runtime configuration, but since this won't be long-lasting,
-        // it makes sense to do the simplest thing for now.
-        // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
-        private val JsonRpc10 = "aws.protocoltests.json10#JsonRpc10"
-        private val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
-        private val RestJson = "aws.protocoltests.restjson#RestJson"
-        private val RestXml = "aws.protocoltests.restxml#RestXml"
-        private val AwsQuery = "aws.protocoltests.query#AwsQuery"
-        private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail =
-            setOf<FailingTest>(
-                // Failing because we don't serialize default values if they match the default
-                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
-                FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
-                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
-            )
-        private val RunOnly: Set<String>? = null
-
-        // These tests are not even attempted to be generated, either because they will not compile
-        // or because they are flaky
-        private val DisableTests: Set<String> = setOf()
-    }
 }

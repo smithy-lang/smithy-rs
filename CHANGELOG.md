@@ -1,4 +1,42 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 19th, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3690](https://github.com/smithy-lang/smithy-rs/issues/3690)) Fix request `Content-Type` header checking
+
+    Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
+
+    1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
+    2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
+
+    This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
+
+
+June 17th, 2024
+===============
+
+June 12th, 2024
+===============
+
+June 10th, 2024
+===============
+**New this release:**
+- (all, [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925), [smithy-rs#3673](https://github.com/smithy-lang/smithy-rs/issues/3673)) Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`.
+- (all, [smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637), @khuey) Add conversions from smithy StatusCode to http StatusCode.
+- :bug: (client, [smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675), @dastrom) Enable aws-smithy-runtime to compile in rustc 1.72.1
+
+**Contributors**
+Thank you for your contributions! ❤
+- @dastrom ([smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675))
+- @khuey ([smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637))
+
+
+June 3rd, 2024
+==============
+**New this release:**
+- (client, [smithy-rs#3664](https://github.com/smithy-lang/smithy-rs/issues/3664)) Reduce verbosity of various debug logs
+
+
 May 28th, 2024
 ==============
 
