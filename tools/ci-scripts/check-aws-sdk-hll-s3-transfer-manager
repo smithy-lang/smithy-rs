@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -eux
+cd smithy-rs
+
+# Make services and latest runtime path available
+mkdir -p aws/sdk/build
+mv ../aws-sdk-smoketest aws/sdk/build/aws-sdk
+SDK_PATH="$(git rev-parse --show-toplevel)"/aws/sdk/build/aws-sdk/sdk
+
+echo -e "${C_YELLOW}# Patching services and runtime to latest for aws-s3-transfer-manager...${C_RESET}"
+sdk-versioner use-path-dependencies \
+  --sdk-path $SDK_PATH \
+  aws/hll/aws-s3-transfer-manager
+
+echo -e "${C_YELLOW}# Testing aws-s3-transfer-manager...${C_RESET}"
+pushd "aws/hll/aws-s3-transfer-manager" &>/dev/null
+
+echo "${C_YELLOW}## Running 'cargo clippy'${C_RESET}"
+cargo clippy --all-features
+
+echo "${C_YELLOW}## Running 'cargo test'${C_RESET}"
+cargo test --all-features
+
+echo "${C_YELLOW}## Running 'cargo doc'${C_RESET}"
+cargo doc --no-deps --document-private-items --all-features
+
+
+popd
