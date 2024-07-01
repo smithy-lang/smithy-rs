@@ -23,13 +23,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCaseKind
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -71,13 +71,13 @@ class ClientProtocolTestGenerator(
         private val ExpectFail =
             setOf<FailingTest>(
                 // Failing because we don't serialize default values if they match the default.
-                FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", TestCaseKind.Request),
-                FailingTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", TestCaseKind.Request),
-                FailingTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
-                FailingTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput", TestCaseKind.Request),
-                FailingTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults", TestCaseKind.Request),
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
                 // TODO(https://github.com/smithy-lang/smithy/pull/2341): Remove this once the fix in the PR is available in a newer version of Smithy
-                FailingTest(REST_JSON, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse", TestCaseKind.Response),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse"),
             )
     }
 
@@ -88,6 +88,8 @@ class ClientProtocolTestGenerator(
     override val runOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
+        get() = emptySet()
+    override val brokenTests: Set<BrokenTest>
         get() = emptySet()
 
     override val logger: Logger = Logger.getLogger(javaClass.name)
