@@ -31,15 +31,19 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
 val publisherToolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
 val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-versioner")
+val awsConfigPath = rootProject.projectDir.resolve("aws/rust-runtime/aws-config")
+val rustRuntimePath = rootProject.projectDir.resolve("rust-runtime")
+val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
+val checkedInCargoLock = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
+
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
@@ -87,9 +91,12 @@ fun generateSmithyBuild(services: AwsServices): String {
         }
         val moduleName = "aws-sdk-${service.module}"
         val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
-        val defaultConfigPath = services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
-        val partitionsConfigPath = services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
-        val integrationTestPath = project.projectDir.resolve("integration-tests").let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val defaultConfigPath =
+            services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val partitionsConfigPath =
+            services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val integrationTestPath = project.projectDir.resolve("integration-tests")
+            .let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         """
             "${service.module}": {
                 "imports": [${files.joinToString()}],
@@ -293,7 +300,10 @@ tasks.register("relocateAwsRuntime") {
         // Patch the Cargo.toml files
         CrateSet.AWS_SDK_RUNTIME.forEach { module ->
             patchFile(sdkOutputDir.file("${module.name}/Cargo.toml").asFile) { line ->
-                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line.let(::rewritePathDependency))
+                rewriteRuntimeCrateVersion(
+                    properties.get(module.versionPropertyName)!!,
+                    line.let(::rewritePathDependency),
+                )
             }
         }
     }
@@ -439,10 +449,18 @@ tasks["assemble"].apply {
         "hydrateReadme",
         "relocateChangelog",
     )
+    finalizedBy("copyCheckedInCargoLock")
     outputs.upToDateWhen { false }
 }
 
-project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
+tasks.register<Copy>("copyCheckedInCargoLock") {
+    description = "Copy the checked in Cargo.lock file back to the build directory"
+    this.outputs.upToDateWhen { false }
+    from(checkedInCargoLock)
+    into(outputDir)
+}
+
+project.registerCargoCommandsTasks(outputDir.asFile)
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
 //The task name "test" is already registered by one of our plugins
@@ -450,6 +468,48 @@ tasks.register("sdkTest") {
     description = "Run Cargo clippy/test/docs against the generated SDK."
     dependsOn("assemble")
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
+}
+
+//Tasks for generating individual Cargo.lock files
+fun Project.registerLockfileGeneration(
+    dir: File,
+    name: String,
+): TaskProvider<Exec> {
+    return tasks.register<Exec>("generate${name}Lockfile") {
+        workingDir(dir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "generate-lockfile")
+    }
+}
+
+val generateAwsConfigLockfile = registerLockfileGeneration(awsConfigPath, "AwsConfig")
+val generateAwsRuntimeLockfile = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
+val generateSmithytRuntimeLockfile = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
+
+//Generates a lockfile from the aws-sdk-rust repo and copies it into the smithy-rs repo
+val generateAwsSdkRustLockfile = tasks.register<Exec>("generateAwsSdkRustLockfile") {
+    val sdkRustPath: String =
+        properties.get("aws-sdk-rust-path") ?: throw Exception("A -Paws-sdk-rust-path argument must be specified")
+    workingDir(sdkRustPath)
+    environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+    commandLine("cargo", "generate-lockfile")
+    copy {
+        from("${sdkRustPath}/Cargo.lock")
+        into(rootProject.projectDir.resolve("aws/sdk"))
+    }
+}
+
+//Parent task to generate all the Cargo.lock files
+tasks.register("generateAllLockfiles") {
+    description =
+        "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
+            "the assemble task."
+    finalizedBy(
+        generateAwsSdkRustLockfile,
+        generateAwsConfigLockfile,
+        generateAwsRuntimeLockfile,
+        generateSmithytRuntimeLockfile,
+    )
 }
 
 tasks.register<Delete>("deleteSdk") {

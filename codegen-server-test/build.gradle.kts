@@ -16,7 +16,6 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-server-codegen"
@@ -64,7 +63,16 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest(
             "aws.protocoltests.restjson#RestJsonExtras",
             "rest_json_extras",
-            imports = listOf("$commonModels/rest-json-extras.smithy"),
+            imports = listOf(
+                "$commonModels/rest-json-extras.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2310): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2310.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2314.smithy",
+                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
+                // TODO(https://github.com/smithy-lang/smithy/pull/2331): Can be deleted when consumed in next Smithy version.
+                "$commonModels/rest-json-extras-2315.smithy",
+            ),
         ),
         CodegenTest(
             "aws.protocoltests.restjson.validation#RestJsonValidation",
@@ -92,6 +100,11 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),
+        CodegenTest(
+            "aws.protocoltests.restxml#RestXmlExtras",
+            "rest_xml_extras",
+            imports = listOf("$commonModels/rest-xml-extras.smithy"),
+        ),
     )
 }
 
@@ -103,7 +116,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

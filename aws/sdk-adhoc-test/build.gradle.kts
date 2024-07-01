@@ -20,7 +20,6 @@ java {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-client-codegen"
@@ -54,11 +53,6 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
 
 val allCodegenTests = listOf(
     baseTest(
-        "com.amazonaws.apigateway#BackplaneControlService",
-        "apigateway",
-        imports = listOf("models/apigateway-rules.smithy"),
-    ),
-    baseTest(
         "com.amazonaws.testservice#TestService",
         "endpoint-test-service",
         imports = listOf("models/single-static-endpoint.smithy"),
@@ -68,6 +62,22 @@ val allCodegenTests = listOf(
         "required-values",
         imports = listOf("models/required-value-test.smithy"),
     ),
+    // service specific protocol tests
+    baseTest(
+        "com.amazonaws.apigateway#BackplaneControlService",
+        "apigateway",
+        imports = listOf("models/apigateway-rules.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.glacier#Glacier",
+        "glacier",
+    ),
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/139) - we assume this will be handled by EP2.0 rules but
+    //  the machinelearning service model has yet to be updated to include rules that handle the expected customization
+    // baseTest(
+    //     "com.amazonaws.machinelearning#AmazonML_20141212",
+    //     "machinelearning",
+    // ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
@@ -78,7 +88,7 @@ tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

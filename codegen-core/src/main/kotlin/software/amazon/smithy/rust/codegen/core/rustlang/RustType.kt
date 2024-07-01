@@ -565,11 +565,16 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val DocInline = Attribute(doc("inline"))
         val NoImplicitPrelude = Attribute("no_implicit_prelude")
 
-        fun shouldPanic(expectedMessage: String) =
-            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+        fun shouldPanic(expectedMessage: String? = null): Attribute =
+            if (expectedMessage != null) {
+                Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+            } else {
+                Attribute("should_panic")
+            }
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val TracedTest = Attribute(RuntimeType.TracingTest.resolve("traced_test").writable)
         val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**

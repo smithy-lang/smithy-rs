@@ -126,7 +126,7 @@ ARG rust_nightly_version
 RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_component
-ARG cargo_component_version=0.10.1
+ARG cargo_component_version=0.13.2
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
