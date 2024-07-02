@@ -21,7 +21,6 @@ pub struct SerializationError {
     kind: SerializationErrorKind,
 }
 
-// TODO The docs in `main` are wrong.
 impl SerializationError {
     /// An error that occurs when serialization of an operation fails for an unknown reason.
     pub fn unknown_variant(union: &'static str) -> Self {
