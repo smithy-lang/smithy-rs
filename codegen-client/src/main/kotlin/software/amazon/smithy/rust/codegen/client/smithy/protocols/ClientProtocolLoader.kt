@@ -13,6 +13,7 @@ import software.amazon.smithy.aws.traits.protocols.Ec2QueryTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -28,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
@@ -41,6 +43,7 @@ class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, C
                 Ec2QueryTrait.ID to ClientEc2QueryFactory(),
                 RestJson1Trait.ID to ClientRestJsonFactory(),
                 RestXmlTrait.ID to ClientRestXmlFactory(),
+                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
             )
         val Default = ClientProtocolLoader(DefaultProtocols)
     }
@@ -111,6 +114,15 @@ class ClientRestXmlFactory(
     private val generator: (CodegenContext) -> Protocol = { RestXml(it) },
 ) : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
+
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, protocol(codegenContext))
+
+    override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
+}
+
+class ClientRpcV2CborFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RpcV2Cbor(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
         OperationGenerator(codegenContext, protocol(codegenContext))

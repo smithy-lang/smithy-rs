@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomiza
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.util.deepMergeWith
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -120,6 +121,14 @@ interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
      * Hook for customizing symbols by inserting an additional symbol provider.
      */
     fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider = base
+
+    /**
+     * Hook to override the protocol test generator.
+     */
+    fun protocolTestGenerator(
+        codegenContext: CodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = baseGenerator
 }
 
 /**
@@ -197,6 +206,14 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Dec
     final override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider =
         combineCustomizations(base) { decorator, otherProvider ->
             decorator.symbolProvider(otherProvider)
+        }
+
+    final override fun protocolTestGenerator(
+        codegenContext: CodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator =
+        combineCustomizations(baseGenerator) { decorator, gen ->
+            decorator.protocolTestGenerator(codegenContext, gen)
         }
 
     /**

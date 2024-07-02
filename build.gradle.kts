@@ -18,7 +18,7 @@ allprojects {
     val allowLocalDeps: String by project
     repositories {
         if (allowLocalDeps.toBoolean()) {
-         mavenLocal()
+            mavenLocal()
         }
         mavenCentral()
         google()

@@ -32,6 +32,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -61,10 +62,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.math.BigDecimal
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * Class describing an instantiator section that can be used in a customization.
@@ -94,6 +97,11 @@ open class Instantiator(
     private val customizations: List<InstantiatorCustomization> = listOf(),
     private val constructPattern: InstantiatorConstructPattern = InstantiatorConstructPattern.BUILDER,
     private val customWritable: CustomWritable = NoCustomWritable(),
+    /**
+     * The protocol test may provide data for missing members (because we transformed the model).
+     * This flag makes it so that it is simply ignored, and code generation continues.
+     **/
+    private val ignoreMissingMembers: Boolean = false,
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
@@ -422,8 +430,14 @@ open class Instantiator(
                 }
         }
 
-        data.members.forEach { (key, value) ->
-            val memberShape = shape.expectMember(key.value)
+        for ((key, value) in data.members) {
+            val memberShape =
+                shape.getMember(key.value).getOrNull()
+                    ?: if (ignoreMissingMembers) {
+                        continue
+                    } else {
+                        throw CodegenException("Protocol test defines data for member shape `${key.value}`, but member shape was not found on structure shape ${shape.id}")
+                    }
             renderMemberHelper(memberShape, value)
         }
 
@@ -452,7 +466,9 @@ open class Instantiator(
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {
-            is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+            is MemberShape ->
+                shape.getTrait<DefaultTrait>()?.toNode()
+                    ?: fillDefaultValue(model.expectShape(shape.target))
 
             // Aggregate shapes.
             is StructureShape -> Node.objectNode()
@@ -487,7 +503,7 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                     val fractionalPart = num.remainder(BigDecimal.ONE)
                     rust(
                         "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                        RuntimeType.dateTime(runtimeConfig),
+                        RuntimeType.dateTime(runtimeConfig).toDevDependencyType(),
                     )
                 }
 
@@ -500,12 +516,12 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                     if (shape.hasTrait<StreamingTrait>()) {
                         rust(
                             "#T::from_static(b${(data as StringNode).value.dq()})",
-                            RuntimeType.byteStream(runtimeConfig),
+                            RuntimeType.byteStream(runtimeConfig).toDevDependencyType(),
                         )
                     } else {
                         rust(
                             "#T::new(${(data as StringNode).value.dq()})",
-                            RuntimeType.blob(runtimeConfig),
+                            RuntimeType.blob(runtimeConfig).toDevDependencyType(),
                         )
                     }
 
@@ -518,7 +534,8 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                             rust(
                                 """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
                                 numberSymbol,
-                                RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
+                                RuntimeType.smithyTypes(runtimeConfig).toDevDependencyType()
+                                    .resolve("primitive::Parse"),
                             )
                         }
 
@@ -533,7 +550,7 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                 is BooleanShape -> rust(data.asBooleanNode().get().toString())
                 is DocumentShape ->
                     rustBlock("") {
-                        val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
+                        val smithyJson = CargoDependency.smithyJson(runtimeConfig).toDevDependency().toType()
                         rustTemplate(
                             """
                             let json_bytes = br##"${Node.prettyPrintJson(data)}"##;

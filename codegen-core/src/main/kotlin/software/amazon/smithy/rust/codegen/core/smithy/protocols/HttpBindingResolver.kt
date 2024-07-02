@@ -169,6 +169,10 @@ open class HttpTraitHttpBindingResolver(
         model: Model,
     ): TimestampFormatTrait.Format = httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
+    /**
+     * Note that `null` will be returned and hence `Content-Type` will not be set when operation input has no members.
+     * This is in line with what protocol tests assert.
+     */
     override fun requestContentType(operationShape: OperationShape): String? =
         httpIndex.determineRequestContentType(
             operationShape,
@@ -176,6 +180,10 @@ open class HttpTraitHttpBindingResolver(
             contentTypes.eventStreamContentType,
         ).orNull()
 
+    /**
+     * Note that `null` will be returned and hence `Content-Type` will not be set when operation output has no members.
+     * This is in line with what protocol tests assert.
+     */
     override fun responseContentType(operationShape: OperationShape): String? =
         httpIndex.determineResponseContentType(
             operationShape,

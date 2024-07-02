@@ -609,13 +609,20 @@ open class ServerCodegenVisitor(
     }
 
     /**
-     * Generate protocol tests. This method can be overridden by other languages such has Python.
+     * Generate protocol tests. This method can be overridden by other languages such as Python.
      */
     open fun protocolTestsForOperation(
         writer: RustWriter,
         shape: OperationShape,
     ) {
-        ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), shape).render(writer)
+        codegenDecorator.protocolTestGenerator(
+            codegenContext,
+            ServerProtocolTestGenerator(
+                codegenContext,
+                protocolGeneratorFactory.support(),
+                shape,
+            ),
+        ).render(writer)
     }
 
     /**

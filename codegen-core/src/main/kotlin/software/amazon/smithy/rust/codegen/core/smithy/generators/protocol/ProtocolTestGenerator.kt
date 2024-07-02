@@ -163,7 +163,6 @@ abstract class ProtocolTestGenerator {
         if (runOnly.isEmpty()) {
             this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
         } else {
-            logger.warning("Generating only specified tests")
             this.filter { testCase -> runOnly.contains(testCase.id) }
         }
 
@@ -412,6 +411,11 @@ object ServiceShapeId {
     const val AWS_JSON_10 = "aws.protocoltests.json10#JsonRpc10"
     const val AWS_JSON_11 = "aws.protocoltests.json#JsonProtocol"
     const val REST_JSON = "aws.protocoltests.restjson#RestJson"
+    const val RPC_V2_CBOR = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
+    const val RPC_V2_CBOR_EXTRAS = "smithy.protocoltests.rpcv2Cbor#RpcV2Service"
+    const val REST_XML = "aws.protocoltests.restxml#RestXml"
+    const val AWS_QUERY = "aws.protocoltests.query#AwsQuery"
+    const val EC2_QUERY = "aws.protocoltests.ec2#AwsEc2"
     const val REST_JSON_VALIDATION = "aws.protocoltests.restjson.validation#RestJsonValidation"
 }
 

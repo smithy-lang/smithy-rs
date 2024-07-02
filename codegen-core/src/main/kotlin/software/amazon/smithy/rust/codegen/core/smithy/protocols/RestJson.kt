@@ -56,6 +56,12 @@ class RestJsonHttpBindingResolver(
                 }
             }
         }
+
+        // The spec does not mention whether we should set the `Content-Type` header when there is no modeled output.
+        // The protocol tests indicate it's optional:
+        // <https://github.com/smithy-lang/smithy/blob/ad8aac3c9ce18ce2170443c0296ef38be46a7320/smithy-aws-protocol-tests/model/restJson1/empty-input-output.smithy#L52-L54>
+        //
+        // In our implementation, we opt to always set it to `application/json`.
         return super.responseContentType(operationShape) ?: "application/json"
     }
 }
@@ -124,10 +130,10 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

@@ -27,9 +27,10 @@ dependencies {
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
 
     // `smithy.framework#ValidationException` is defined here, which is used in event stream
-// marshalling/unmarshalling tests.
+    // marshalling/unmarshalling tests.
     testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 

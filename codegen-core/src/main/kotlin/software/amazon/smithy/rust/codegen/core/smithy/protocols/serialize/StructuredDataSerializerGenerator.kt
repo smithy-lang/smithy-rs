@@ -25,12 +25,15 @@ interface StructuredDataSerializerGenerator {
     fun payloadSerializer(member: MemberShape): RuntimeType
 
     /**
-     * Generate the correct data when attempting to serialize a structure that is unset
+     * Generate the correct data when attempting to serialize a structure that is unset.
      *
      * ```rust
      * fn rest_json_unset_struct_payload() -> Vec<u8> {
      *     ...
      * }
+     * ```
+     *
+     * This method is only invoked when serializing an `@httpPayload`.
      */
     fun unsetStructure(structure: StructureShape): RuntimeType
 
@@ -41,6 +44,9 @@ interface StructuredDataSerializerGenerator {
      * fn rest_json_unset_union_payload() -> Vec<u8> {
      *     ...
      * }
+     * ```
+     *
+     * This method is only invoked when serializing an `@httpPayload`.
      */
     fun unsetUnion(union: UnionShape): RuntimeType
 

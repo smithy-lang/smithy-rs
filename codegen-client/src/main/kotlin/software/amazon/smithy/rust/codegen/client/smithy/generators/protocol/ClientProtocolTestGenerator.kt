@@ -323,8 +323,8 @@ class ClientProtocolTestGenerator(
         if (body == "") {
             rustWriter.rustTemplate(
                 """
-                // No body
-                #{AssertEq}(::std::str::from_utf8(body).unwrap(), "");
+                // No body.
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )
