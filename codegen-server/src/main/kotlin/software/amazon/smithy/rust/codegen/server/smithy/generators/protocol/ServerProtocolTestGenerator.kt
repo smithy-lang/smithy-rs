@@ -68,9 +68,6 @@ class ServerProtocolTestGenerator(
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTrait"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues"),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when fixed tests are consumed in next Smithy version
-                FailingTest.RequestTest(REST_JSON, "RestJsonEnumPayloadRequest"),
-                FailingTest.RequestTest(REST_JSON, "RestJsonStringPayloadRequest"),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0"),
@@ -141,12 +138,15 @@ class ServerProtocolTestGenerator(
                 // These tests are broken because they are missing a target header.
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
                 // Response defaults are not set when builders are not used https://github.com/smithy-lang/smithy-rs/issues/3339
                 FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(
                     AWS_JSON_10,
                     "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
                 ),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
             )
 
         private val BrokenTests:
