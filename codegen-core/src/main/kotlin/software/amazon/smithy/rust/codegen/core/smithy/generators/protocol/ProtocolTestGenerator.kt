@@ -159,11 +159,12 @@ abstract class ProtocolTestGenerator {
     abstract fun RustWriter.renderAllTestCases(allTests: List<TestCase>)
 
     /** Filter out test cases that are disabled or don't match the service protocol. */
-    private fun List<TestCase>.filterMatching(): List<TestCase> = if (runOnly.isEmpty()) {
-        this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
-    } else {
-        this.filter { testCase -> runOnly.contains(testCase.id) }
-    }
+    private fun List<TestCase>.filterMatching(): List<TestCase> =
+        if (runOnly.isEmpty()) {
+            this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
+        } else {
+            this.filter { testCase -> runOnly.contains(testCase.id) }
+        }
 
     private fun TestCase.toFailingTest(): FailingTest =
         when (this) {
@@ -186,8 +187,9 @@ abstract class ProtocolTestGenerator {
         }
 
     fun requestTestCases(): List<TestCase> {
-        val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
-            .map { TestCase.RequestTest(it) }
+        val requestTests =
+            operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
+                .map { TestCase.RequestTest(it) }
         return requestTests.filterMatching()
     }
 
@@ -430,7 +432,9 @@ sealed class FailingTest(open val serviceShapeId: String, open val id: String) {
 
 sealed class TestCaseKind {
     data object Request : TestCaseKind()
+
     data object Response : TestCaseKind()
+
     data object MalformedRequest : TestCaseKind()
 }
 
@@ -497,30 +501,34 @@ sealed class TestCase {
      */
 
     val id: String
-        get() = when (this) {
-            is RequestTest -> this.testCase.id
-            is MalformedRequestTest -> this.testCase.id
-            is ResponseTest -> this.testCase.id
-        }
+        get() =
+            when (this) {
+                is RequestTest -> this.testCase.id
+                is MalformedRequestTest -> this.testCase.id
+                is ResponseTest -> this.testCase.id
+            }
 
     val protocol: ShapeId
-        get() = when (this) {
-            is RequestTest -> this.testCase.protocol
-            is MalformedRequestTest -> this.testCase.protocol
-            is ResponseTest -> this.testCase.protocol
-        }
+        get() =
+            when (this) {
+                is RequestTest -> this.testCase.protocol
+                is MalformedRequestTest -> this.testCase.protocol
+                is ResponseTest -> this.testCase.protocol
+            }
 
     val kind: TestCaseKind
-        get() = when (this) {
-            is RequestTest -> TestCaseKind.Request
-            is ResponseTest -> TestCaseKind.Response
-            is MalformedRequestTest -> TestCaseKind.MalformedRequest
-        }
+        get() =
+            when (this) {
+                is RequestTest -> TestCaseKind.Request
+                is ResponseTest -> TestCaseKind.Response
+                is MalformedRequestTest -> TestCaseKind.MalformedRequest
+            }
 
     val documentation: String?
-        get() = when (this) {
-            is RequestTest -> this.testCase.documentation.orNull()
-            is ResponseTest -> this.testCase.documentation.orNull()
-            is MalformedRequestTest -> this.testCase.documentation.orNull()
-        }
+        get() =
+            when (this) {
+                is RequestTest -> this.testCase.documentation.orNull()
+                is ResponseTest -> this.testCase.documentation.orNull()
+                is MalformedRequestTest -> this.testCase.documentation.orNull()
+            }
 }

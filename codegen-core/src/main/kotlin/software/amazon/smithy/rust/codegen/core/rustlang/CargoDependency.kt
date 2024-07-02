@@ -42,10 +42,11 @@ sealed class RustDependency(open val name: String) : SymbolDependencyContainer {
         ) + dependencies().flatMap { it.dependencies }
     }
 
-    open fun toDevDependency(): RustDependency = when (this) {
-        is CargoDependency -> this.toDevDependency()
-        is InlineDependency -> PANIC("it does not make sense for an inline dependency to be a dev-dependency")
-    }
+    open fun toDevDependency(): RustDependency =
+        when (this) {
+            is CargoDependency -> this.toDevDependency()
+            is InlineDependency -> PANIC("it does not make sense for an inline dependency to be a dev-dependency")
+        }
 
     companion object {
         private const val PROPERTY_KEY = "rustdep"

@@ -224,7 +224,7 @@ class JsonSerializerGenerator(
                     """
                     object.finish();
                     Ok(out)
-                    """
+                    """,
                 )
             }
         }

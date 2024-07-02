@@ -51,7 +51,10 @@ object OperationNormalizer {
      * Returns `true` if the user had originally modeled an operation input shape on the given [operation];
      * `false` if the transform added a synthetic one.
      */
-    fun hadUserModeledOperationInput(operation: OperationShape, model: Model): Boolean {
+    fun hadUserModeledOperationInput(
+        operation: OperationShape,
+        model: Model,
+    ): Boolean {
         val syntheticInputTrait = operation.inputShape(model).expectTrait<SyntheticInputTrait>()
         return syntheticInputTrait.originalId != null
     }
@@ -60,7 +63,10 @@ object OperationNormalizer {
      * Returns `true` if the user had originally modeled an operation output shape on the given [operation];
      * `false` if the transform added a synthetic one.
      */
-    fun hadUserModeledOperationOutput(operation: OperationShape, model: Model): Boolean {
+    fun hadUserModeledOperationOutput(
+        operation: OperationShape,
+        model: Model,
+    ): Boolean {
         val syntheticOutputTrait = operation.outputShape(model).expectTrait<SyntheticOutputTrait>()
         return syntheticOutputTrait.originalId != null
     }

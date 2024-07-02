@@ -35,15 +35,16 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
     ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
     companion object {
-        val DefaultProtocols = mapOf(
-            AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
-            AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
-            AwsQueryTrait.ID to ClientAwsQueryFactory(),
-            Ec2QueryTrait.ID to ClientEc2QueryFactory(),
-            RestJson1Trait.ID to ClientRestJsonFactory(),
-            RestXmlTrait.ID to ClientRestXmlFactory(),
-            Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
-        )
+        val DefaultProtocols =
+            mapOf(
+                AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
+                AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
+                AwsQueryTrait.ID to ClientAwsQueryFactory(),
+                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
+                RestJson1Trait.ID to ClientRestJsonFactory(),
+                RestXmlTrait.ID to ClientRestXmlFactory(),
+                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
+            )
         val Default = ClientProtocolLoader(DefaultProtocols)
     }
 }

@@ -95,7 +95,10 @@ class CborSerializerGenerator(
         val writeNulls: Boolean = false,
     ) {
         companion object {
-            fun collectionMember(context: Context<CollectionShape>, itemName: String): MemberContext =
+            fun collectionMember(
+                context: Context<CollectionShape>,
+                itemName: String,
+            ): MemberContext =
                 MemberContext(
                     "encoder",
                     ValueExpression.Reference(itemName),
@@ -103,7 +106,11 @@ class CborSerializerGenerator(
                     writeNulls = true,
                 )
 
-            fun mapMember(context: Context<MapShape>, key: String, value: String): MemberContext =
+            fun mapMember(
+                context: Context<MapShape>,
+                key: String,
+                value: String,
+            ): MemberContext =
                 MemberContext(
                     "encoder.str($key)",
                     ValueExpression.Reference(value),
@@ -133,8 +140,7 @@ class CborSerializerGenerator(
                 )
 
             /** Returns an expression to encode a key member **/
-            private fun encodeKeyExpression(name: String): String =
-                "encoder.str(${name.dq()})"
+            private fun encodeKeyExpression(name: String): String = "encoder.str(${name.dq()})"
         }
     }
 
@@ -149,14 +155,16 @@ class CborSerializerGenerator(
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+
     // TODO Cleanup
-    private val codegenScope = arrayOf(
-        "String" to RuntimeType.String,
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
-        "ByteSlab" to RuntimeType.ByteSlab,
-    )
+    private val codegenScope =
+        arrayOf(
+            "String" to RuntimeType.String,
+            "Error" to runtimeConfig.serializationError(),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
+            "ByteSlab" to RuntimeType.ByteSlab,
+        )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
     /**
@@ -169,10 +177,11 @@ class CborSerializerGenerator(
         includedMembers: List<MemberShape>,
         error: Boolean,
     ): RuntimeType {
-        val suffix = when (error) {
-            true -> "error"
-            else -> "output"
-        }
+        val suffix =
+            when (error) {
+                true -> "error"
+                else -> "output"
+            }
         return protocolFunctions.serializeFn(structureShape, fnNameSuffix = suffix) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(value: &#{target}) -> Result<Vec<u8>, #{Error}>",
@@ -247,38 +256,39 @@ class CborSerializerGenerator(
                 """
                 encoder.begin_map();
                 encoder.end();
-                """
+                """,
             )
             return
         }
 
-        val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
-                "StructureSymbol" to symbolProvider.toSymbol(context.shape),
-                *codegenScope,
-            ) {
-                // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
-                //  instead of `.begin_map()` for efficiency. Add test.
-                rust("encoder.begin_map();")
-                for (customization in customizations) {
-                    customization.section(
-                        CborSerializerSection.BeforeSerializingStructureMembers(
-                            context.shape,
-                            "encoder",
-                        ),
-                    )(this)
-                }
-                context.copy(localName = "input").also { inner ->
-                    val members = includedMembers ?: inner.shape.members()
-                    for (member in members) {
-                        serializeMember(MemberContext.structMember(inner, member, symbolProvider))
+        val structureSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                rustBlockTemplate(
+                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
+                    "StructureSymbol" to symbolProvider.toSymbol(context.shape),
+                    *codegenScope,
+                ) {
+                    // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
+                    //  instead of `.begin_map()` for efficiency. Add test.
+                    rust("encoder.begin_map();")
+                    for (customization in customizations) {
+                        customization.section(
+                            CborSerializerSection.BeforeSerializingStructureMembers(
+                                context.shape,
+                                "encoder",
+                            ),
+                        )(this)
                     }
+                    context.copy(localName = "input").also { inner ->
+                        val members = includedMembers ?: inner.shape.members()
+                        for (member in members) {
+                            serializeMember(MemberContext.structMember(inner, member, symbolProvider))
+                        }
+                    }
+                    rust("encoder.end();")
+                    rust("Ok(())")
                 }
-                rust("encoder.end();")
-                rust("Ok(())")
             }
-        }
         rust("#T(encoder, ${context.localName})?;", structureSerializer)
     }
 
@@ -305,7 +315,10 @@ class CborSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
+    private fun RustWriter.serializeMemberValue(
+        context: MemberContext,
+        target: Shape,
+    ) {
         val encoder = context.encoderBindingName
         val value = context.valueExpression
         val containerShape = model.expectShape(context.shape.container)
@@ -359,7 +372,7 @@ class CborSerializerGenerator(
             encoder.array(
                 (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
-            """
+            """,
         )
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
@@ -378,7 +391,7 @@ class CborSerializerGenerator(
             encoder.map(
                 (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
             );
-            """
+            """,
         )
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"
@@ -388,37 +401,39 @@ class CborSerializerGenerator(
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            rustBlockTemplate(
-                "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> Result<(), #{Error}>",
-                "UnionSymbol" to unionSymbol,
-                *codegenScope,
-            ) {
-                // A union is serialized identically as a `structure` shape, but only a single member can be set to a
-                // non-null value.
-                rust("encoder.map(1);")
-                rustBlock("match input") {
-                    for (member in context.shape.members()) {
-                        val variantName = if (member.isTargetUnit()) {
-                            symbolProvider.toMemberName(member)
-                        } else {
-                            "${symbolProvider.toMemberName(member)}(inner)"
+        val unionSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                rustBlockTemplate(
+                    "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> Result<(), #{Error}>",
+                    "UnionSymbol" to unionSymbol,
+                    *codegenScope,
+                ) {
+                    // A union is serialized identically as a `structure` shape, but only a single member can be set to a
+                    // non-null value.
+                    rust("encoder.map(1);")
+                    rustBlock("match input") {
+                        for (member in context.shape.members()) {
+                            val variantName =
+                                if (member.isTargetUnit()) {
+                                    symbolProvider.toMemberName(member)
+                                } else {
+                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                }
+                            rustBlock("#T::$variantName =>", unionSymbol) {
+                                serializeMember(MemberContext.unionMember("inner", member))
+                            }
                         }
-                        rustBlock("#T::$variantName =>", unionSymbol) {
-                            serializeMember(MemberContext.unionMember("inner", member))
+                        if (codegenTarget.renderUnknownVariant()) {
+                            rustTemplate(
+                                "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                                "Union" to unionSymbol,
+                                *codegenScope,
+                            )
                         }
                     }
-                    if (codegenTarget.renderUnknownVariant()) {
-                        rustTemplate(
-                            "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
-                            "Union" to unionSymbol,
-                            *codegenScope,
-                        )
-                    }
+                    rust("Ok(())")
                 }
-                rust("Ok(())")
             }
-        }
         rust("#T(encoder, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
 }

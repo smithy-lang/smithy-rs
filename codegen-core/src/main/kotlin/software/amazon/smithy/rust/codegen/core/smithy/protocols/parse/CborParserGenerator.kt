@@ -77,13 +77,14 @@ class CborParserGenerator(
     private val codegenTarget = codegenContext.target
     private val smithyCbor = CargoDependency.smithyCbor(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
-    private val codegenScope = arrayOf(
-        "SmithyCbor" to smithyCbor,
-        "Decoder" to smithyCbor.resolve("Decoder"),
-        "Error" to smithyCbor.resolve("decode::DeserializeError"),
-        "HashMap" to RuntimeType.HashMap,
-        "Vec" to RuntimeType.Vec,
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyCbor" to smithyCbor,
+            "Decoder" to smithyCbor.resolve("Decoder"),
+            "Error" to smithyCbor.resolve("decode::DeserializeError"),
+            "HashMap" to RuntimeType.HashMap,
+            "Vec" to RuntimeType.Vec,
+        )
 
     private fun listMemberParserFn(
         listSymbol: Symbol,
@@ -193,7 +194,10 @@ class CborParserGenerator(
         }
     }
 
-    private fun structurePairParserFnWritable(builderSymbol: Symbol, includedMembers: Collection<MemberShape>) = writable {
+    private fun structurePairParserFnWritable(
+        builderSymbol: Symbol,
+        includedMembers: Collection<MemberShape>,
+    ) = writable {
         rustBlockTemplate(
             """
             fn pair(
@@ -207,34 +211,36 @@ class CborParserGenerator(
             withBlock("builder = match decoder.str()?.as_ref() {", "};") {
                 for (member in includedMembers) {
                     rustBlock("${member.memberName.dq()} =>") {
-                        val callBuilderSetMemberFieldWritable = writable {
-                            withBlock("builder.${member.setterName()}(", ")") {
-                                conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
-                                    val symbol = symbolProvider.toSymbol(member)
-                                    if (symbol.isRustBoxed()) {
-                                        rustBlock("") {
-                                            rustTemplate(
-                                                "let v = #{DeserializeMember:W}?;",
-                                                "DeserializeMember" to deserializeMember(member)
-                                            )
+                        val callBuilderSetMemberFieldWritable =
+                            writable {
+                                withBlock("builder.${member.setterName()}(", ")") {
+                                    conditionalBlock("Some(", ")", symbolProvider.toSymbol(member).isOptional()) {
+                                        val symbol = symbolProvider.toSymbol(member)
+                                        if (symbol.isRustBoxed()) {
+                                            rustBlock("") {
+                                                rustTemplate(
+                                                    "let v = #{DeserializeMember:W}?;",
+                                                    "DeserializeMember" to deserializeMember(member),
+                                                )
 
-                                            for (customization in customizations) {
-                                                customization.section(
-                                                    CborParserSection.BeforeBoxingDeserializedMember(
-                                                        member
-                                                    )
-                                                )(this)
+                                                for (customization in customizations) {
+                                                    customization.section(
+                                                        CborParserSection.BeforeBoxingDeserializedMember(
+                                                            member,
+                                                        ),
+                                                    )(this)
+                                                }
+                                                rust("Box::new(v)")
                                             }
-                                            rust("Box::new(v)")
+                                        } else {
+                                            rustTemplate(
+                                                "#{DeserializeMember:W}?",
+                                                "DeserializeMember" to deserializeMember(member),
+                                            )
                                         }
-                                    } else {
-                                        rustTemplate("#{DeserializeMember:W}?",
-                                            "DeserializeMember" to deserializeMember(member)
-                                        )
                                     }
                                 }
                             }
-                        }
 
                         if (member.isOptional) {
                             // Call `builder.set_member()` only if the value for the field on the wire is not null.
@@ -245,10 +251,9 @@ class CborParserGenerator(
                                 })?
                                 """,
                                 *codegenScope,
-                                "MemberSettingWritable" to callBuilderSetMemberFieldWritable
+                                "MemberSettingWritable" to callBuilderSetMemberFieldWritable,
                             )
-                        }
-                        else {
+                        } else {
                             callBuilderSetMemberFieldWritable.invoke(this)
                         }
                     }
@@ -260,77 +265,81 @@ class CborParserGenerator(
                         decoder.skip()?;
                         builder
                     }
-                    """)
+                    """,
+                )
             }
             rust("Ok(builder)")
         }
     }
 
-    private fun unionPairParserFnWritable(shape: UnionShape) = writable {
-        val returnSymbolToParse = returnSymbolToParse(shape)
-        rustBlockTemplate(
-            """
+    private fun unionPairParserFnWritable(shape: UnionShape) =
+        writable {
+            val returnSymbolToParse = returnSymbolToParse(shape)
+            rustBlockTemplate(
+                """
             fn pair(
                 decoder: &mut #{Decoder}
             ) -> Result<#{UnionSymbol}, #{Error}>
             """,
-            *codegenScope,
-            "UnionSymbol" to returnSymbolToParse.symbol,
-        ) {
-            withBlock("Ok(match decoder.str()?.as_ref() {", "})") {
-                for (member in shape.members()) {
-                    val variantName = symbolProvider.toMemberName(member)
+                *codegenScope,
+                "UnionSymbol" to returnSymbolToParse.symbol,
+            ) {
+                withBlock("Ok(match decoder.str()?.as_ref() {", "})") {
+                    for (member in shape.members()) {
+                        val variantName = symbolProvider.toMemberName(member)
 
-                    if (member.isTargetUnit()) {
-                        rust(
-                            """
+                        if (member.isTargetUnit()) {
+                            rust(
+                                """
                             ${member.memberName.dq()} => { 
                                 decoder.skip()?;
                                 #T::$variantName 
                             }
                             """,
-                            returnSymbolToParse.symbol
-                        )
-                    } else {
-                        withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
-                            deserializeMember(member).invoke(this)
+                                returnSymbolToParse.symbol,
+                            )
+                        } else {
+                            withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
+                                deserializeMember(member).invoke(this)
+                            }
                         }
                     }
-                }
-                when (codegenTarget.renderUnknownVariant()) {
-                    // In client mode, resolve an unknown union variant to the unknown variant.
-                    true ->
-                        rustTemplate(
-                            """
+                    when (codegenTarget.renderUnknownVariant()) {
+                        // In client mode, resolve an unknown union variant to the unknown variant.
+                        true ->
+                            rustTemplate(
+                                """
                             _ => {
                               decoder.skip()?;
                               Some(#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME})
                             }
                             """,
-                            "Union" to returnSymbolToParse.symbol,
-                            *codegenScope,
-                        )
-                    // In server mode, use strict parsing.
-                    // Consultation: https://github.com/awslabs/smithy/issues/1222
-                    false ->
-                        rustTemplate(
-                            "variant => return Err(#{Error}::unknown_union_variant(variant, decoder.position()))",
-                            *codegenScope,
-                        )
+                                "Union" to returnSymbolToParse.symbol,
+                                *codegenScope,
+                            )
+                        // In server mode, use strict parsing.
+                        // Consultation: https://github.com/awslabs/smithy/issues/1222
+                        false ->
+                            rustTemplate(
+                                "variant => return Err(#{Error}::unknown_union_variant(variant, decoder.position()))",
+                                *codegenScope,
+                            )
+                    }
                 }
             }
         }
-    }
 
     enum class CollectionKind {
         Map,
-        List;
+        List,
+        ;
 
         /** Method to invoke on the decoder to decode this collection kind. **/
-        fun decoderMethodName() = when (this) {
-            Map -> "map"
-            List -> "list"
-        }
+        fun decoderMethodName() =
+            when (this) {
+                Map -> "map"
+                List -> "list"
+            }
     }
 
     /**
@@ -371,7 +380,9 @@ class CborParserGenerator(
     }
 
     private fun decodeStructureMapLoopWritable() = decodeCollectionLoopWritable(CollectionKind.Map, "builder", "pair")
+
     private fun decodeMapLoopWritable() = decodeCollectionLoopWritable(CollectionKind.Map, "map", "pair")
+
     private fun decodeListLoopWritable() = decodeCollectionLoopWritable(CollectionKind.List, "list", "member")
 
     /**
@@ -446,62 +457,66 @@ class CborParserGenerator(
         return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
-    private fun deserializeMember(memberShape: MemberShape) = writable {
-        when (val target = model.expectShape(memberShape.target)) {
-            // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
-            is BlobShape -> rust("decoder.blob()")
-            is BooleanShape -> rust("decoder.boolean()")
+    private fun deserializeMember(memberShape: MemberShape) =
+        writable {
+            when (val target = model.expectShape(memberShape.target)) {
+                // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
+                is BlobShape -> rust("decoder.blob()")
+                is BooleanShape -> rust("decoder.boolean()")
 
-            is StringShape -> deserializeString(target).invoke(this)
+                is StringShape -> deserializeString(target).invoke(this)
 
-            is ByteShape -> rust("decoder.byte()")
-            is ShortShape -> rust("decoder.short()")
-            is IntegerShape -> rust("decoder.integer()")
-            is LongShape -> rust("decoder.long()")
+                is ByteShape -> rust("decoder.byte()")
+                is ShortShape -> rust("decoder.short()")
+                is IntegerShape -> rust("decoder.integer()")
+                is LongShape -> rust("decoder.long()")
 
-            is FloatShape -> rust("decoder.float()")
-            is DoubleShape -> rust("decoder.double()")
+                is FloatShape -> rust("decoder.float()")
+                is DoubleShape -> rust("decoder.double()")
 
-            is TimestampShape -> rust("decoder.timestamp()")
+                is TimestampShape -> rust("decoder.timestamp()")
 
-            // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
-            is StructureShape -> deserializeStruct(target)
-            is CollectionShape -> deserializeCollection(target)
-            is MapShape -> deserializeMap(target)
-            is UnionShape -> deserializeUnion(target)
+                // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
+                is StructureShape -> deserializeStruct(target)
+                is CollectionShape -> deserializeCollection(target)
+                is MapShape -> deserializeMap(target)
+                is UnionShape -> deserializeUnion(target)
 
-            // Note that no protocol using CBOR serialization supports `document` shapes.
-            else -> PANIC("unexpected shape: $target")
-        }
-    }
-
-    private fun deserializeString(target: StringShape) = writable {
-        when (target.hasTrait<EnumTrait>()) {
-            true -> {
-                if (this@CborParserGenerator.returnSymbolToParse(target).isUnconstrained) {
-                    rust("decoder.string()")
-                } else {
-                    rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
-                }
+                // Note that no protocol using CBOR serialization supports `document` shapes.
+                else -> PANIC("unexpected shape: $target")
             }
-            false -> rust("decoder.string()")
         }
-    }
+
+    private fun deserializeString(target: StringShape) =
+        writable {
+            when (target.hasTrait<EnumTrait>()) {
+                true -> {
+                    if (this@CborParserGenerator.returnSymbolToParse(target).isUnconstrained) {
+                        rust("decoder.string()")
+                    } else {
+                        rust("#T::from(u.as_ref())", symbolProvider.toSymbol(target))
+                    }
+                }
+                false -> rust("decoder.string()")
+            }
+        }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
 
-        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
-            val initContainerWritable = writable {
-                withBlock("let mut list = ", ";") {
-                    conditionalBlock("#{T}(", ")", conditional = returnUnconstrainedType, returnSymbol) {
-                        rustTemplate("#{Vec}::new()", *codegenScope)
+        val parser =
+            protocolFunctions.deserializeFn(shape) { fnName ->
+                val initContainerWritable =
+                    writable {
+                        withBlock("let mut list = ", ";") {
+                            conditionalBlock("#{T}(", ")", conditional = returnUnconstrainedType, returnSymbol) {
+                                rustTemplate("#{Vec}::new()", *codegenScope)
+                            }
+                        }
                     }
-                }
-            }
 
-            rustTemplate(
-                """
+                rustTemplate(
+                    """
                 pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
                     #{ListMemberParserFn:W}
                     
@@ -512,18 +527,19 @@ class CborParserGenerator(
                     Ok(list)
                 }
                 """,
-                "ReturnType" to returnSymbol,
-                "ListMemberParserFn" to listMemberParserFn(
-                    returnSymbol,
-                    isSparseList = shape.hasTrait<SparseTrait>(),
-                    shape.member,
-                    returnUnconstrainedType = returnUnconstrainedType,
-                ),
-                "InitContainerWritable" to initContainerWritable,
-                "DecodeListLoop" to decodeListLoopWritable(),
-                *codegenScope,
-            )
-        }
+                    "ReturnType" to returnSymbol,
+                    "ListMemberParserFn" to
+                        listMemberParserFn(
+                            returnSymbol,
+                            isSparseList = shape.hasTrait<SparseTrait>(),
+                            shape.member,
+                            returnUnconstrainedType = returnUnconstrainedType,
+                        ),
+                    "InitContainerWritable" to initContainerWritable,
+                    "DecodeListLoop" to decodeListLoopWritable(),
+                    *codegenScope,
+                )
+            }
         rust("#T(decoder)", parser)
     }
 
@@ -531,17 +547,19 @@ class CborParserGenerator(
         val keyTarget = model.expectShape(shape.key.target, StringShape::class.java)
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
 
-        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
-            val initContainerWritable = writable {
-                withBlock("let mut map = ", ";") {
-                    conditionalBlock("#{T}(", ")", conditional = returnUnconstrainedType, returnSymbol) {
-                        rustTemplate("#{HashMap}::new()", *codegenScope)
+        val parser =
+            protocolFunctions.deserializeFn(shape) { fnName ->
+                val initContainerWritable =
+                    writable {
+                        withBlock("let mut map = ", ";") {
+                            conditionalBlock("#{T}(", ")", conditional = returnUnconstrainedType, returnSymbol) {
+                                rustTemplate("#{HashMap}::new()", *codegenScope)
+                            }
+                        }
                     }
-                }
-            }
 
-            rustTemplate(
-                """
+                rustTemplate(
+                    """
                 pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
                     #{MapPairParserFn:W}
                     
@@ -552,63 +570,66 @@ class CborParserGenerator(
                     Ok(map)
                 }
                 """,
-                "ReturnType" to returnSymbol,
-                "MapPairParserFn" to mapPairParserFnWritable(
-                    keyTarget,
-                    shape.value,
-                    isSparseMap = shape.hasTrait<SparseTrait>(),
-                    returnSymbol,
-                    returnUnconstrainedType = returnUnconstrainedType,
-                ),
-                "InitContainerWritable" to initContainerWritable,
-                "DecodeMapLoop" to decodeMapLoopWritable(),
-                *codegenScope,
-            )
-        }
+                    "ReturnType" to returnSymbol,
+                    "MapPairParserFn" to
+                        mapPairParserFnWritable(
+                            keyTarget,
+                            shape.value,
+                            isSparseMap = shape.hasTrait<SparseTrait>(),
+                            returnSymbol,
+                            returnUnconstrainedType = returnUnconstrainedType,
+                        ),
+                    "InitContainerWritable" to initContainerWritable,
+                    "DecodeMapLoop" to decodeMapLoopWritable(),
+                    *codegenScope,
+                )
+            }
         rust("#T(decoder)", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
         val returnSymbolToParse = returnSymbolToParse(shape)
-        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
-            rustBlockTemplate(
-                "pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}>",
-                "ReturnType" to returnSymbolToParse.symbol,
-                *codegenScope,
-            ) {
-                val builderSymbol = symbolProvider.symbolForBuilder(shape)
-                val includedMembers = shape.members()
+        val parser =
+            protocolFunctions.deserializeFn(shape) { fnName ->
+                rustBlockTemplate(
+                    "pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}>",
+                    "ReturnType" to returnSymbolToParse.symbol,
+                    *codegenScope,
+                ) {
+                    val builderSymbol = symbolProvider.symbolForBuilder(shape)
+                    val includedMembers = shape.members()
 
-                rustTemplate(
-                    """
+                    rustTemplate(
+                        """
                     #{StructurePairParserFn:W}
                     
                     let mut builder = #{Builder}::default();
                     
                     #{DecodeStructureMapLoop:W}
                     """,
-                    *codegenScope,
-                    "StructurePairParserFn" to structurePairParserFnWritable(builderSymbol, includedMembers),
-                    "Builder" to builderSymbol,
-                    "DecodeStructureMapLoop" to decodeStructureMapLoopWritable(),
-                )
+                        *codegenScope,
+                        "StructurePairParserFn" to structurePairParserFnWritable(builderSymbol, includedMembers),
+                        "Builder" to builderSymbol,
+                        "DecodeStructureMapLoop" to decodeStructureMapLoopWritable(),
+                    )
 
-                // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
-                if (returnSymbolToParse.isUnconstrained) {
-                    rust("Ok(builder)")
-                } else {
-                    rust("Ok(builder.build())")
+                    // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
+                    if (returnSymbolToParse.isUnconstrained) {
+                        rust("Ok(builder)")
+                    } else {
+                        rust("Ok(builder.build())")
+                    }
                 }
             }
-        }
         rust("#T(decoder)", parser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val returnSymbolToParse = returnSymbolToParse(shape)
-        val parser = protocolFunctions.deserializeFn(shape) { fnName ->
-            rustTemplate(
-                """
+        val parser =
+            protocolFunctions.deserializeFn(shape) { fnName ->
+                rustTemplate(
+                    """
                 pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{UnionSymbol}, #{Error}> {
                     #{UnionPairParserFnWritable}
                     
@@ -633,11 +654,11 @@ class CborParserGenerator(
                     }
                 }
                 """,
-                "UnionSymbol" to returnSymbolToParse.symbol,
-                "UnionPairParserFnWritable" to unionPairParserFnWritable(shape),
-                *codegenScope,
-            )
-        }
+                    "UnionSymbol" to returnSymbolToParse.symbol,
+                    "UnionPairParserFnWritable" to unionPairParserFnWritable(shape),
+                    *codegenScope,
+                )
+            }
         rust("#T(decoder)", parser)
     }
 }

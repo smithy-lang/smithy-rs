@@ -9,7 +9,6 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.codegenIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin

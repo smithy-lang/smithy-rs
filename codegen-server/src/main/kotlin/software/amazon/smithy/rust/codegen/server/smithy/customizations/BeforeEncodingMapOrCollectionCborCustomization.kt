@@ -21,19 +21,21 @@ import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstr
  * That value will be a `std::collections::HashMap` for map shapes, and a `std::vec::Vec` for collection shapes.
  */
 class BeforeEncodingMapOrCollectionCborCustomization(private val codegenContext: ServerCodegenContext) : CborSerializerCustomization() {
-    override fun section(section: CborSerializerSection): Writable = when (section) {
-        is CborSerializerSection.BeforeIteratingOverMapOrCollection -> writable {
-            check(section.shape is CollectionShape || section.shape is MapShape)
-            if (workingWithPublicConstrainedWrapperTupleType(
-                    section.shape,
-                    codegenContext.model,
-                    codegenContext.settings.codegenConfig.publicConstrainedTypes,
-                )
-            ) {
-                section.context.valueExpression =
-                    ValueExpression.Reference("&${section.context.valueExpression.name}.0")
-            }
+    override fun section(section: CborSerializerSection): Writable =
+        when (section) {
+            is CborSerializerSection.BeforeIteratingOverMapOrCollection ->
+                writable {
+                    check(section.shape is CollectionShape || section.shape is MapShape)
+                    if (workingWithPublicConstrainedWrapperTupleType(
+                            section.shape,
+                            codegenContext.model,
+                            codegenContext.settings.codegenConfig.publicConstrainedTypes,
+                        )
+                    ) {
+                        section.context.valueExpression =
+                            ValueExpression.Reference("&${section.context.valueExpression.name}.0")
+                    }
+                }
+            else -> emptySection
         }
-        else -> emptySection
-    }
 }

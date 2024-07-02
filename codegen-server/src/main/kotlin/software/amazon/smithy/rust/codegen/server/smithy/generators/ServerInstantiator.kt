@@ -76,17 +76,17 @@ class ServerInstantiator(
     ignoreMissingMembers: Boolean = false,
 ) :
     Instantiator(
-        codegenContext.symbolProvider,
-        codegenContext.model,
-        codegenContext.runtimeConfig,
-        ServerBuilderKindBehavior(codegenContext),
-        defaultsForRequiredFields = true,
-        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
-        // Construct with direct pattern to more closely replicate actual server customer usage
-        constructPattern = InstantiatorConstructPattern.DIRECT,
-        customWritable = customWritable,
-        ignoreMissingMembers = ignoreMissingMembers,
-    )
+            codegenContext.symbolProvider,
+            codegenContext.model,
+            codegenContext.runtimeConfig,
+            ServerBuilderKindBehavior(codegenContext),
+            defaultsForRequiredFields = true,
+            customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+            // Construct with direct pattern to more closely replicate actual server customer usage
+            constructPattern = InstantiatorConstructPattern.DIRECT,
+            customWritable = customWritable,
+            ignoreMissingMembers = ignoreMissingMembers,
+        )
 
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,

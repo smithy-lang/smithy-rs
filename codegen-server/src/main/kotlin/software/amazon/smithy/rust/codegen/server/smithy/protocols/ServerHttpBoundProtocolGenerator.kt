@@ -59,7 +59,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.smithy.wrapOptional
@@ -123,9 +122,9 @@ class ServerHttpBoundProtocolGenerator(
     customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
     additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ServerProtocolGenerator(
-    protocol,
-    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
-) {
+        protocol,
+        ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
+    ) {
     // TODO Delete, unused
     // Define suffixes for operation input / output / error wrappers
     companion object {
@@ -575,14 +574,19 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
-    private fun setResponseHeaderIfAbsent(writer: RustWriter, headerName: String, headerValue: String) {
+    private fun setResponseHeaderIfAbsent(
+        writer: RustWriter,
+        headerName: String,
+        headerValue: String,
+    ) {
         // We can be a tad more efficient if there's a `const` `HeaderName` in the `http` crate that matches.
         // https://docs.rs/http/latest/http/header/index.html#constants
-        val headerNameExpr = if (headerName == "content-type") {
-            "#{http}::header::CONTENT_TYPE"
-        } else {
-            "#{http}::header::HeaderName::from_static(\"$headerName\")"
-        }
+        val headerNameExpr =
+            if (headerName == "content-type") {
+                "#{http}::header::CONTENT_TYPE"
+            } else {
+                "#{http}::header::HeaderName::from_static(\"$headerName\")"
+            }
 
         writer.rustTemplate(
             """
@@ -595,7 +599,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             *codegenScope,
         )
     }
-
 
     /**
      * Sets HTTP response headers for the operation's output shape or the operation's error shape.

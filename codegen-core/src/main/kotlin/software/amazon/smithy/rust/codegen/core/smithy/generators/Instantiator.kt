@@ -32,6 +32,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -61,12 +62,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.math.BigDecimal
-import software.amazon.smithy.model.traits.DefaultTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -218,12 +218,12 @@ open class Instantiator(
                         ")",
                         // The conditions are not commutative: note client builders always take in `Option<T>`.
                         conditional =
-                        symbol.isOptional() ||
-                            (
-                                model.expectShape(memberShape.container) is StructureShape &&
-                                    builderKindBehavior.doesSetterTakeInOption(
-                                        memberShape,
-                                    )
+                            symbol.isOptional() ||
+                                (
+                                    model.expectShape(memberShape.container) is StructureShape &&
+                                        builderKindBehavior.doesSetterTakeInOption(
+                                            memberShape,
+                                        )
                                 ),
                         *preludeScope,
                     ) {
@@ -431,12 +431,13 @@ open class Instantiator(
         }
 
         for ((key, value) in data.members) {
-            val memberShape = shape.getMember(key.value).getOrNull()
-                ?: if (ignoreMissingMembers) {
-                    continue
-                } else {
-                    throw CodegenException("Protocol test defines data for member shape `${key.value}`, but member shape was not found on structure shape ${shape.id}")
-                }
+            val memberShape =
+                shape.getMember(key.value).getOrNull()
+                    ?: if (ignoreMissingMembers) {
+                        continue
+                    } else {
+                        throw CodegenException("Protocol test defines data for member shape `${key.value}`, but member shape was not found on structure shape ${shape.id}")
+                    }
             renderMemberHelper(memberShape, value)
         }
 
@@ -465,8 +466,9 @@ open class Instantiator(
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {
-            is MemberShape -> shape.getTrait<DefaultTrait>()?.toNode()
-                ?: fillDefaultValue(model.expectShape(shape.target))
+            is MemberShape ->
+                shape.getTrait<DefaultTrait>()?.toNode()
+                    ?: fillDefaultValue(model.expectShape(shape.target))
 
             // Aggregate shapes.
             is StructureShape -> Node.objectNode()

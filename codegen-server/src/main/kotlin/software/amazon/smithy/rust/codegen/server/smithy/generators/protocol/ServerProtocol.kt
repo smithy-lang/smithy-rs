@@ -24,12 +24,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
@@ -175,9 +175,7 @@ class ServerAwsJsonProtocol(
     }
 
     // TODO This could technically be `&static str` right?
-    override fun serverRouterRequestSpecType(
-        requestSpecModule: RuntimeType,
-    ): RuntimeType = RuntimeType.String
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.String
 
     override fun serverRouterRuntimeConstructor() =
         when (version) {
@@ -294,17 +292,19 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
  */
 class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(val codegenContext: ServerCodegenContext) :
     CborParserCustomization() {
-    override fun section(section: CborParserSection): Writable = when (section) {
-        is CborParserSection.BeforeBoxingDeserializedMember -> writable {
-            // We're only interested in _structure_ member shapes that can reach constrained shapes.
-            if (
-                codegenContext.model.expectShape(section.shape.container) is StructureShape &&
-                section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
-            ) {
-                rust("let v = v.into();")
-            }
+    override fun section(section: CborParserSection): Writable =
+        when (section) {
+            is CborParserSection.BeforeBoxingDeserializedMember ->
+                writable {
+                    // We're only interested in _structure_ member shapes that can reach constrained shapes.
+                    if (
+                        codegenContext.model.expectShape(section.shape.container) is StructureShape &&
+                        section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
+                    ) {
+                        rust("let v = v.into();")
+                    }
+                }
         }
-    }
 }
 
 class ServerRpcV2CborProtocol(
@@ -337,8 +337,9 @@ class ServerRpcV2CborProtocol(
 
     override fun markerStruct() = ServerRuntimeType.protocol("RpcV2", "rpc_v2", runtimeConfig)
 
-    override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("protocol::rpc_v2::router::RpcV2Router")
+    override fun routerType() =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::rpc_v2::router::RpcV2Router")
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -353,8 +354,7 @@ class ServerRpcV2CborProtocol(
         rust("$serviceName.$operationName".dq())
     }
 
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
-        RuntimeType.StaticStr
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
 
     override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
 

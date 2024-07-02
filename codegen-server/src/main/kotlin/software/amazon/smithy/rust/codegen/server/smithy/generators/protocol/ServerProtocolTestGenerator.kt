@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_11
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON_VALIDATION
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR_EXTRAS
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
@@ -331,12 +330,15 @@ class ServerProtocolTestGenerator(
      * serialize said shape, the resulting HTTP response is of the form we expect, as defined in the test case.
      * [shape] is either an operation output shape or an error shape.
      */
-    private fun RustWriter.renderHttpResponseTestCase(testCase: HttpResponseTestCase, shape: StructureShape) {
+    private fun RustWriter.renderHttpResponseTestCase(
+        testCase: HttpResponseTestCase,
+        shape: StructureShape,
+    ) {
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
                 !protocolSupport.errorSerialization && shape.hasTrait<ErrorTrait>()
-                )
+            )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -436,19 +438,20 @@ class ServerProtocolTestGenerator(
                     // proxy for `bodyMediaType`. This works because `rpcv2Cbor` happens to be the only protocol where
                     // the body is base64-encoded in the protocol test, but checking `bodyMediaType` should be a more
                     // resilient check.
-                    val encodedBody = if (protocol.toShapeId() == ShapeId.from("smithy.protocols#rpcv2Cbor")) {
-                        """
+                    val encodedBody =
+                        if (protocol.toShapeId() == ShapeId.from("smithy.protocols#rpcv2Cbor")) {
+                            """
                         #{Bytes}::from(
                             #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
                                 "`body` field of Smithy protocol test is not correctly base64 encoded"
                             )
                         )
                         """
-                    } else {
-                        """
+                        } else {
+                            """
                         #{Bytes}::from_static($sanitizedBody.as_bytes())
                         """
-                    }
+                        }
 
                     "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {

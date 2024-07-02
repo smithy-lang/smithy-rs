@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerSection
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**
  * Smithy RPC v2 CBOR requires errors to be serialized in server responses with an additional `__type` field.
@@ -40,21 +39,22 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
  * there shouldn't™️ be any harm in always including it, which simplifies the code generator.
  */
 class AddTypeFieldToServerErrorsCborCustomization : CborSerializerCustomization() {
-    override fun section(section: CborSerializerSection): Writable = when (section) {
-        is CborSerializerSection.BeforeSerializingStructureMembers ->
-            if (section.structureShape.hasTrait<ErrorTrait>()) {
-                writable {
-                    rust(
-                        """
+    override fun section(section: CborSerializerSection): Writable =
+        when (section) {
+            is CborSerializerSection.BeforeSerializingStructureMembers ->
+                if (section.structureShape.hasTrait<ErrorTrait>()) {
+                    writable {
+                        rust(
+                            """
                         ${section.encoderBindingName}
                             .str("__type")
                             .str("${escape(section.structureShape.id.toString())}");
-                        """
-                    )
+                        """,
+                        )
+                    }
+                } else {
+                    emptySection
                 }
-            } else {
-                emptySection
-            }
-        else -> emptySection
-    }
+            else -> emptySection
+        }
 }
