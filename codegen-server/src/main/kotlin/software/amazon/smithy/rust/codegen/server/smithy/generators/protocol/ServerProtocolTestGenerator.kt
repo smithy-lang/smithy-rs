@@ -138,7 +138,6 @@ class ServerProtocolTestGenerator(
                 // These tests are broken because they are missing a target header.
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody"),
-                FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
                 // Response defaults are not set when builders are not used https://github.com/smithy-lang/smithy-rs/issues/3339
                 FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(
@@ -147,6 +146,9 @@ class ServerProtocolTestGenerator(
                 ),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
+                // The test itself might be questionable, see the discussion
+                // https://github.com/smithy-lang/smithy-rs/pull/3728#discussion_r1662512615
+                FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
             )
 
         private val BrokenTests:
