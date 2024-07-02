@@ -212,6 +212,7 @@ class PythonServerCodegenVisitor(
                     rustCrate.createInlineModuleCreator(),
                     this@modelsModuleWriter,
                     shape,
+                    validationExceptionConversionGenerator,
                 ).render()
             }
         }
