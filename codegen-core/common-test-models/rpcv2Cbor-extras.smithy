@@ -29,7 +29,7 @@ operation SimpleStructOperation {
 
 operation ErrorSerializationOperation {
     input: SimpleStruct
-    output: ValidationException
+    output: ErrorSerializationOperationOutput
     errors: [ValidationException]
 }
 
@@ -73,7 +73,7 @@ apply EmptyStructOperation @httpMalformedRequestTests([
                 mediaType: "application/cbor",
                 assertion: {
                     // An empty CBOR map.
-                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type`.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3716): we're not serializing `__type` because `SerializationException` is not modeled.
                     contents: "oA=="
                 }
             }
@@ -137,8 +137,7 @@ apply ErrorSerializationOperation @httpMalformedRequestTests([
             body: {
                 mediaType: "application/cbor",
                 assertion: {
-                    // TODO Adjust
-                    contents: "oA=="
+                    contents: "v2ZfX3R5cGV4JHNtaXRoeS5mcmFtZXdvcmsjVmFsaWRhdGlvbkV4Y2VwdGlvbmdtZXNzYWdleGsxIHZhbGlkYXRpb24gZXJyb3IgZGV0ZWN0ZWQuIFZhbHVlIGF0ICcvcmVxdWlyZWRCbG9iJyBmYWlsZWQgdG8gc2F0aXNmeSBjb25zdHJhaW50OiBNZW1iZXIgbXVzdCBub3QgYmUgbnVsbGlmaWVsZExpc3SBv2RwYXRobS9yZXF1aXJlZEJsb2JnbWVzc2FnZXhOVmFsdWUgYXQgJy9yZXF1aXJlZEJsb2InIGZhaWxlZCB0byBzYXRpc2Z5IGNvbnN0cmFpbnQ6IE1lbWJlciBtdXN0IG5vdCBiZSBudWxs//8="
                 }
             }
         }
@@ -147,22 +146,24 @@ apply ErrorSerializationOperation @httpMalformedRequestTests([
 
 apply ErrorSerializationOperation @httpResponseTests([
     {
-        id: "OperationOutputSerializationDoesNotIncludeTypeField",
+        id: "OperationOutputSerializationQuestionablyIncludesTypeField",
         documentation: """
         Despite the operation output being a structure shape with the `@error` trait,
-        `__type` field should not be included, because we're not serializing a
-        server error response""",
+        `__type` field should, in a strict interpretation of the spec, not be included, 
+        because we're not serializing a server error response. However, we do, because 
+        there shouldn't™️ be any harm in doing so, and it greatly simplifies the 
+        code generator. This test just pins this behavior in case we ever modify it.""",
         protocol: rpcv2Cbor,
-        // TODO This should fail with another code!
         code: 200,
         params: {
-            message: "ValidationException message field"
+            errorShape: {
+                message: "ValidationException message field"
+            }
         }
         bodyMediaType: "application/cbor"
-        // TODO Adjust
-        body: ""
+        body: "v2plcnJvclNoYXBlv2ZfX3R5cGV4JHNtaXRoeS5mcmFtZXdvcmsjVmFsaWRhdGlvbkV4Y2VwdGlvbmdtZXNzYWdleCFWYWxpZGF0aW9uRXhjZXB0aW9uIG1lc3NhZ2UgZmllbGT//w=="
     }
-)]
+])
 
 apply SimpleStructOperation @httpResponseTests([
     {
@@ -229,6 +230,10 @@ apply SimpleStructOperation @httpResponseTests([
         }
     }
 ])
+
+structure ErrorSerializationOperationOutput {
+    errorShape: ValidationException
+}
 
 structure SimpleStruct {
     blob: Blob

@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
@@ -57,6 +58,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRpcV2CborFactory
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.util.function.Predicate
+import java.util.logging.Logger
 
 /**
  * This lives in `codegen-server` because we want to run a full integration test for convenience,
@@ -188,8 +190,12 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                         get() = baseGenerator.operationShape
                     override val appliesTo: AppliesTo
                         get() = baseGenerator.appliesTo
+                    override val logger: Logger
+                        get() = Logger.getLogger(javaClass.name)
                     override val expectFail: Set<FailingTest>
                         get() = baseGenerator.expectFail
+                    override val brokenTests: Set<BrokenTest>
+                        get() = emptySet()
                     override val runOnly: Set<String>
                         get() = baseGenerator.runOnly
                     override val disabledTests: Set<String>

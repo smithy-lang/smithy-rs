@@ -17,11 +17,32 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 /**
  * Smithy RPC v2 CBOR requires errors to be serialized in server responses with an additional `__type` field.
+ *
+ * Note that we apply this customization when serializing _any_ structure with the `@error` trait, regardless if it's
+ * an error response or not. Consider this model:
+ *
+ * ```smithy
+ * operation ErrorSerializationOperation {
+ *     input: SimpleStruct
+ *     output: ErrorSerializationOperationOutput
+ *     errors: [ValidationException]
+ * }
+ *
+ * structure ErrorSerializationOperationOutput {
+ *     errorShape: ValidationException
+ * }
+ * ```
+ *
+ * `ValidationException` is re-used across the operation output and the operation error. The `__type` field will
+ * appear when serializing both.
+ *
+ * Strictly speaking, the spec says we should only add `__type` when serializing an operation error response, but
+ * there shouldn't™️ be any harm in always including it, which simplifies the code generator.
  */
 class AddTypeFieldToServerErrorsCborCustomization : CborSerializerCustomization() {
     override fun section(section: CborSerializerSection): Writable = when (section) {
         is CborSerializerSection.BeforeSerializingStructureMembers ->
-            if (section.isServerErrorResponse && section.structureShape.hasTrait<ErrorTrait>()) {
+            if (section.structureShape.hasTrait<ErrorTrait>()) {
                 writable {
                     rust(
                         """

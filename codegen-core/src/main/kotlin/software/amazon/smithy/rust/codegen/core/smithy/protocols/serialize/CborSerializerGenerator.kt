@@ -61,7 +61,6 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     data class BeforeSerializingStructureMembers(
         val structureShape: StructureShape,
         val encoderBindingName: String,
-        val isServerErrorResponse: Boolean,
     ) : CborSerializerSection("ServerError")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
@@ -187,7 +186,6 @@ class CborSerializerGenerator(
                     serializeStructure(
                         StructContext("value", structureShape),
                         includedMembers,
-                        isServerErrorResponse = true,
                     )
                 }
                 rust("Ok(encoder.into_writer())")
@@ -243,8 +241,6 @@ class CborSerializerGenerator(
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
-        /** Whether we're serializing a top-level structure shape corresponding for a server operation response. */
-        isServerErrorResponse: Boolean = false,
     ) {
         if (context.shape.isUnit()) {
             rust(
@@ -270,7 +266,6 @@ class CborSerializerGenerator(
                         CborSerializerSection.BeforeSerializingStructureMembers(
                             context.shape,
                             "encoder",
-                            isServerErrorResponse,
                         ),
                     )(this)
                 }
