@@ -22,8 +22,8 @@
 )]
 
 pub(crate) const MEBIBYTE: u64 = 1024 * 1024;
-pub(crate) const GIBIBYTE: u64 = MEBIBYTE * 1024;
-pub(crate) const MIN_PART_SIZE: u64 = 5 * MEBIBYTE;
-
+/// Abstractions for downloading objects from S3
 pub mod download;
+
+/// Error types emitted by `aws-s3-transfer-manager`
 pub mod error;

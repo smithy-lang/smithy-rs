@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Abstractions for response bodies and consuming data streams.
 pub mod body;
 mod context;
 mod discovery;
@@ -16,11 +17,10 @@ use crate::download::discovery::{discover_obj, ObjectDiscovery};
 use crate::download::handle::DownloadHandle;
 use crate::download::worker::{distribute_work, download_chunks, ChunkResponse};
 use crate::error::TransferError;
-use crate::{MEBIBYTE, MIN_PART_SIZE};
+use crate::MEBIBYTE;
 use aws_sdk_s3::operation::get_object::builders::{GetObjectFluentBuilder, GetObjectInputBuilder};
 use aws_types::SdkConfig;
 use context::DownloadContext;
-use std::{cmp, mem};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::Instrument;
@@ -53,7 +53,6 @@ impl From<GetObjectInputBuilder> for DownloadRequest {
 #[derive(Debug, Clone)]
 pub struct Builder {
     target_part_size_bytes: u64,
-    checksum_validation_enabled: bool,
     // TODO(design): should we instead consider an enum here allows for not only explicit but also
     // an "Auto" mode that allows us to control the concurrency actually used based on overall transfer and part size?
     concurrency: usize,
@@ -64,7 +63,6 @@ impl Builder {
     fn new() -> Self {
         Self {
             target_part_size_bytes: 8 * MEBIBYTE,
-            checksum_validation_enabled: true,
             concurrency: 8,
             sdk_config: None,
         }
@@ -72,18 +70,9 @@ impl Builder {
 
     /// Size of parts the object will be downloaded in, in bytes.
     ///
-    /// The minimum part size is 5 MiB and any value given less than that will be rounded up.
     /// Defaults is 8 MiB.
     pub fn target_part_size(mut self, size_bytes: u64) -> Self {
-        self.target_part_size_bytes = cmp::min(size_bytes, MIN_PART_SIZE);
-        self
-    }
-
-    /// Set whether checksum validation is enabled.
-    ///
-    /// Default is true.
-    pub fn enable_checksum_validation(mut self, enabled: bool) -> Self {
-        self.checksum_validation_enabled = enabled;
+        self.target_part_size_bytes = size_bytes;
         self
     }
 
@@ -102,6 +91,7 @@ impl Builder {
         self
     }
 
+    /// Consumes the builder and constructs a [Downloader]
     pub fn build(self) -> Downloader {
         self.into()
     }
@@ -115,7 +105,6 @@ impl From<Builder> for Downloader {
         let client = aws_sdk_s3::Client::new(&sdk_config);
         Self {
             target_part_size_bytes: value.target_part_size_bytes,
-            checksum_validation_enabled: value.checksum_validation_enabled,
             concurrency: value.concurrency,
             client,
         }
@@ -127,7 +116,6 @@ impl From<Builder> for Downloader {
 #[derive(Debug, Clone)]
 pub struct Downloader {
     target_part_size_bytes: u64,
-    checksum_validation_enabled: bool,
     concurrency: usize,
     client: aws_sdk_s3::client::Client,
 }
@@ -187,6 +175,11 @@ impl Downloader {
             let part_size = self.target_part_size_bytes;
             let rem = discovery.remaining.clone();
 
+            // TODO(aws-sdk-rust#1159) - test semaphore based approach where we create all futures at once,
+            //        the downside is controlling memory usage as a large download may result in
+            //        quite a few futures created. If more performant could be enabled for
+            //        objects less than some size.
+
             tasks.spawn(distribute_work(rem, input, part_size, start_seq, work_tx));
 
             for i in 0..self.concurrency {
@@ -204,7 +197,7 @@ impl Downloader {
             //   have the correct metadata w.r.t. content-length and maybe others for the whole object.
             object_meta: discovery.meta,
             body: Body::new(comp_rx),
-            tasks,
+            _tasks: tasks,
         };
 
         Ok(handle)
@@ -218,11 +211,10 @@ async fn handle_discovery_chunk(
     completed: &mpsc::Sender<Result<ChunkResponse, TransferError>>,
 ) -> u64 {
     let mut start_seq = 0;
-    if let Some(initial_data) = mem::replace(&mut discovery.initial_chunk, None) {
+    if let Some(initial_data) = discovery.initial_chunk.take() {
         let chunk = ChunkResponse {
             seq: start_seq,
             data: Some(initial_data),
-            object_meta: Some(discovery.meta.clone()),
         };
         completed.send(Ok(chunk)).await.expect("initial chunk");
         start_seq = 1;

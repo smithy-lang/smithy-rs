@@ -38,7 +38,10 @@ pub enum DownloadError {
 
     /// A failure occurred fetching a single chunk of the overall object data
     #[error("download chunk failed")]
-    ChunkFailed { source: SdkOperationError },
+    ChunkFailed {
+        /// The underlying SDK error
+        source: SdkOperationError,
+    },
 }
 
 /// An underlying S3 SDK error
