@@ -172,9 +172,15 @@ class UnconstrainedUnionGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                rustBlock("impl $constraintViolationName") {
-                    validationExceptionConversionGenerator.unionShapeConstraintViolationImplBlock(constraintViolations())
-                }
+                rustTemplate(
+                    """
+                    impl $constraintViolationName {
+                        #{UnionShapeConstraintViolationImplBlock:W}
+                    }
+                    """,
+                    "UnionShapeConstraintViolationImplBlock" to
+                        validationExceptionConversionGenerator.unionShapeConstraintViolationImplBlock(constraintViolations()),
+                )
             }
         }
     }
