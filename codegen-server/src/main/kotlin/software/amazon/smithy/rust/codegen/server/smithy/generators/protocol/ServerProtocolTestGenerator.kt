@@ -150,7 +150,6 @@ class ServerProtocolTestGenerator(
                     AWS_JSON_10,
                     "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
                 ),
-
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3723): This affects all protocols
                 FailingTest.MalformedRequestTest(RPC_V2_CBOR_EXTRAS, "AdditionalTokensEmptyStruct"),
             )
@@ -163,12 +162,13 @@ class ServerProtocolTestGenerator(
                     "RestJsonMalformedPatternReDOSString",
                     howToFixItFn = ::fixRestJsonMalformedPatternReDOSString,
                     inAtLeast = setOf("1.26.2", "1.49.0"),
-                    trackedIn = setOf(
-                        // TODO(https://github.com/awslabs/smithy/issues/1506)
-                        "https://github.com/awslabs/smithy/issues/1506",
-                        // TODO(https://github.com/smithy-lang/smithy/pull/2340)
-                        "https://github.com/smithy-lang/smithy/pull/2340",
-                    ),
+                    trackedIn =
+                        setOf(
+                            // TODO(https://github.com/awslabs/smithy/issues/1506)
+                            "https://github.com/awslabs/smithy/issues/1506",
+                            // TODO(https://github.com/smithy-lang/smithy/pull/2340)
+                            "https://github.com/smithy-lang/smithy/pull/2340",
+                        ),
                 ),
             )
 
@@ -194,7 +194,9 @@ class ServerProtocolTestGenerator(
                 "S3PreservesEmbeddedDotSegmentInUriLabel",
             )
 
-        private fun fixRestJsonMalformedPatternReDOSString(testCase: TestCase.MalformedRequestTest): TestCase.MalformedRequestTest {
+        private fun fixRestJsonMalformedPatternReDOSString(
+            testCase: TestCase.MalformedRequestTest,
+        ): TestCase.MalformedRequestTest {
             val brokenResponse = testCase.testCase.response
             val brokenBody = brokenResponse.body.get()
             val fixedBody =
