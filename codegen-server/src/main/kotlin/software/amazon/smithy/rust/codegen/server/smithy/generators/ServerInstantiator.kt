@@ -74,6 +74,7 @@ class ServerInstantiator(
     codegenContext: CodegenContext,
     customWritable: CustomWritable = NoCustomWritable(),
     ignoreMissingMembers: Boolean = false,
+    withinTest: Boolean = false,
 ) :
     Instantiator(
             codegenContext.symbolProvider,
@@ -86,6 +87,7 @@ class ServerInstantiator(
             constructPattern = InstantiatorConstructPattern.DIRECT,
             customWritable = customWritable,
             ignoreMissingMembers = ignoreMissingMembers,
+            withinTest = withinTest,
         )
 
 class ServerBuilderInstantiator(

@@ -260,7 +260,7 @@ class ServerProtocolTestGenerator(
             inputT to outputT
         }
 
-    private val instantiator = ServerInstantiator(codegenContext)
+    private val instantiator = ServerInstantiator(codegenContext, withinTest = true)
 
     private val codegenScope =
         arrayOf(

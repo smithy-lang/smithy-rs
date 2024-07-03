@@ -94,7 +94,7 @@ class ClientProtocolTestGenerator(
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)
 
-    private val instantiator = ClientInstantiator(codegenContext)
+    private val instantiator = ClientInstantiator(codegenContext, withinTest = true)
 
     private val codegenScope =
         arrayOf(
