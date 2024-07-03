@@ -297,6 +297,7 @@ class ConstraintsMemberShapeTest {
                 model,
                 runtimeConfig = runtimeConfig,
                 overrideTestDir = dirToUse,
+                service = "constrainedMemberShape#ConstrainedService",
             )
         val codegenDecorator =
             CombinedServerCodegenDecorator.fromClasspath(

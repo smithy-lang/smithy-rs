@@ -11,6 +11,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.util.stream.Stream
@@ -198,6 +199,9 @@ internal class RecursiveConstraintViolationsTest {
     @ParameterizedTest
     @ArgumentsSource(RecursiveConstraintViolationsTestProvider::class)
     fun `recursive constraint violation code generation test`(testCase: TestCase) {
-        serverIntegrationTest(testCase.model)
+        serverIntegrationTest(
+            testCase.model,
+            params = IntegrationTestParams(service = "com.amazonaws.recursiveconstraintviolations#RecursiveConstraintViolations"),
+        )
     }
 }
