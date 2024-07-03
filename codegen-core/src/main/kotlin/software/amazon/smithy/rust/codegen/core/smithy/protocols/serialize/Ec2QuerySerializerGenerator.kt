@@ -6,10 +6,13 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import software.amazon.smithy.aws.traits.protocols.Ec2QueryNameTrait
+import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.XmlNameTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -31,5 +34,14 @@ class Ec2QuerySerializerGenerator(codegenContext: CodegenContext) : QuerySeriali
 
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         TODO("Not yet implemented")
+    }
+
+    override fun RustWriter.serializeCollection(
+        memberContext: MemberContext,
+        context: Context<CollectionShape>,
+    ) {
+        rustBlock("if !${context.valueExpression.asRef()}.is_empty()") {
+            super.serializeCollectionInner(memberContext, context, this)
+        }
     }
 }

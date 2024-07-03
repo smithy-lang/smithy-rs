@@ -483,7 +483,6 @@ impl RuntimeComponents {
             };
         }
 
-        tracing::trace!(runtime_components=?self, cfg=?cfg, "validating final config");
         for validator in self.config_validators() {
             validator.validate_final_config(self, cfg)?;
         }
@@ -875,7 +874,6 @@ impl RuntimeComponentsBuilder {
             };
         }
 
-        tracing::trace!(runtime_components=?self, cfg=?cfg, "validating base client config");
         for validator in self.config_validators() {
             validator.validate_base_client_config(self, cfg)?;
         }
@@ -891,9 +889,36 @@ impl RuntimeComponentsBuilder {
         Ok(())
     }
 
+    /// Converts this builder into [`TimeComponents`].
+    pub fn into_time_components(mut self) -> TimeComponents {
+        TimeComponents {
+            sleep_impl: self.sleep_impl.take().map(|s| s.value),
+            time_source: self.time_source.take().map(|s| s.value),
+        }
+    }
+
     /// Wraps `v` in tracking associated with this builder
     fn tracked<T>(&self, v: Option<T>) -> Option<Tracked<T>> {
         v.map(|v| Tracked::new(self.builder_name, v))
+    }
+}
+
+/// Time-related subset of components that can be extracted directly from [`RuntimeComponentsBuilder`] prior to validation.
+#[derive(Debug)]
+pub struct TimeComponents {
+    sleep_impl: Option<SharedAsyncSleep>,
+    time_source: Option<SharedTimeSource>,
+}
+
+impl TimeComponents {
+    /// Returns the async sleep implementation if one is available.
+    pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
+        self.sleep_impl.clone()
+    }
+
+    /// Returns the time source if one is available.
+    pub fn time_source(&self) -> Option<SharedTimeSource> {
+        self.time_source.clone()
     }
 }
 

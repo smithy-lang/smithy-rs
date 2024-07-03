@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -21,10 +22,10 @@ use std::sync::Arc;
 ///
 /// ```rust
 /// use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
-/// let http_client = infallible_client_fn(|_req| http::Response::builder().status(200).body("OK!").unwrap());
+/// let http_client = infallible_client_fn(|_req| http_02x::Response::builder().status(200).body("OK!").unwrap());
 /// ```
 pub fn infallible_client_fn<B>(
-    f: impl Fn(http::Request<SdkBody>) -> http::Response<B> + Send + Sync + 'static,
+    f: impl Fn(http_02x::Request<SdkBody>) -> http_02x::Response<B> + Send + Sync + 'static,
 ) -> SharedHttpClient
 where
     B: Into<SdkBody>,
@@ -36,7 +37,7 @@ where
 struct InfallibleClientFn {
     #[allow(clippy::type_complexity)]
     response: Arc<
-        dyn Fn(http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ConnectorError>
+        dyn Fn(http_02x::Request<SdkBody>) -> Result<http_02x::Response<SdkBody>, ConnectorError>
             + Send
             + Sync,
     >,
@@ -50,7 +51,7 @@ impl fmt::Debug for InfallibleClientFn {
 
 impl InfallibleClientFn {
     fn new<B: Into<SdkBody>>(
-        f: impl Fn(http::Request<SdkBody>) -> http::Response<B> + Send + Sync + 'static,
+        f: impl Fn(http_02x::Request<SdkBody>) -> http_02x::Response<B> + Send + Sync + 'static,
     ) -> Self {
         Self {
             response: Arc::new(move |request| Ok(f(request).map(|b| b.into()))),
@@ -74,5 +75,9 @@ impl HttpClient for InfallibleClientFn {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        Some(ConnectorMetadata::new("infallible-client", None))
     }
 }

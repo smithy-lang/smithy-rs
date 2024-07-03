@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.waiters
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -52,6 +53,7 @@ class RustWaiterMatcherGeneratorTest {
                 "Output" to outputSymbol,
                 "Error" to errorSymbol,
                 "ErrorMetadata" to RuntimeType.errorMetadata(codegenContext.runtimeConfig),
+                "SomeEnum" to codegenContext.symbolProvider.toSymbol(codegenContext.model.lookup<EnumShape>("test#SomeEnum")),
                 "matcher_fn" to matcherFn,
             )
 
@@ -115,12 +117,11 @@ class RustWaiterMatcherGeneratorTest {
     ) { scope ->
         rustTemplate(
             """
-            let input = #{Input}::builder().foo("foo").build().unwrap();
             let result = #{Ok}(#{Output}::builder().some_string("bar").build());
-            assert!(#{matcher_fn}(&input, &result));
+            assert!(#{matcher_fn}(result.as_ref()));
 
             let result = #{Err}(#{Error}::builder().message("asdf").build());
-            assert!(!#{matcher_fn}(&input, &result));
+            assert!(!#{matcher_fn}(result.as_ref()));
             """,
             *scope,
         )
@@ -137,9 +138,8 @@ class RustWaiterMatcherGeneratorTest {
     ) { scope ->
         rustTemplate(
             """
-            let input = #{Input}::builder().foo("foo").build().unwrap();
             let result = #{Ok}(#{Output}::builder().some_string("bar").build());
-            assert!(!#{matcher_fn}(&input, &result));
+            assert!(!#{matcher_fn}(result.as_ref()));
 
             let result = #{Err}(
                 #{Error}::builder()
@@ -147,7 +147,7 @@ class RustWaiterMatcherGeneratorTest {
                     .meta(#{ErrorMetadata}::builder().code("SomeOtherError").build())
                     .build()
             );
-            assert!(!#{matcher_fn}(&input, &result));
+            assert!(!#{matcher_fn}(result.as_ref()));
 
             let result = #{Err}(
                 #{Error}::builder()
@@ -155,7 +155,7 @@ class RustWaiterMatcherGeneratorTest {
                     .meta(#{ErrorMetadata}::builder().code("SomeError").build())
                     .build()
             );
-            assert!(#{matcher_fn}(&input, &result));
+            assert!(#{matcher_fn}(result.as_ref()));
             """,
             *scope,
         )
@@ -187,12 +187,11 @@ class RustWaiterMatcherGeneratorTest {
         ) { scope ->
             rustTemplate(
                 """
-                let input = #{Input}::builder().foo("foo").build().unwrap();
                 let result = #{Ok}(#{Output}::builder().some_string("bar").build());
-                assert!(!#{matcher_fn}(&input, &result));
+                assert!(!#{matcher_fn}(result.as_ref()));
 
                 let result = #{Ok}(#{Output}::builder().some_string("expected-value").build());
-                assert!(#{matcher_fn}(&input, &result));
+                assert!(#{matcher_fn}(result.as_ref()));
                 """,
                 *scope,
             )
@@ -208,12 +207,11 @@ class RustWaiterMatcherGeneratorTest {
         ) { scope ->
             rustTemplate(
                 """
-                let input = #{Input}::builder().foo("foo").build().unwrap();
                 let result = #{Ok}(#{Output}::builder().some_bool(false).build());
-                assert!(!#{matcher_fn}(&input, &result));
+                assert!(!#{matcher_fn}(result.as_ref()));
 
                 let result = #{Ok}(#{Output}::builder().some_bool(true).build());
-                assert!(#{matcher_fn}(&input, &result));
+                assert!(#{matcher_fn}(result.as_ref()));
                 """,
                 *scope,
             )
@@ -229,18 +227,17 @@ class RustWaiterMatcherGeneratorTest {
         ) { scope ->
             rustTemplate(
                 """
-                let input = #{Input}::builder().foo("foo").build().unwrap();
                 let result = #{Ok}(#{Output}::builder()
                     .some_list("foo")
                     .some_list("bar")
                     .build());
-                assert!(!#{matcher_fn}(&input, &result));
+                assert!(!#{matcher_fn}(result.as_ref()));
 
                 let result = #{Ok}(#{Output}::builder()
                     .some_list("foo")
                     .some_list("foo")
                     .build());
-                assert!(#{matcher_fn}(&input, &result));
+                assert!(#{matcher_fn}(result.as_ref()));
                 """,
                 *scope,
             )
@@ -256,17 +253,41 @@ class RustWaiterMatcherGeneratorTest {
         ) { scope ->
             rustTemplate(
                 """
-                let input = #{Input}::builder().foo("foo").build().unwrap();
                 let result = #{Ok}(#{Output}::builder()
                     .some_list("bar")
                     .build());
-                assert!(!#{matcher_fn}(&input, &result));
+                assert!(!#{matcher_fn}(result.as_ref()));
 
                 let result = #{Ok}(#{Output}::builder()
                     .some_list("bar")
                     .some_list("foo")
                     .build());
-                assert!(#{matcher_fn}(&input, &result));
+                assert!(#{matcher_fn}(result.as_ref()));
+                """,
+                *scope,
+            )
+        }
+
+        test(
+            "output_path_matcher_any_string_equals_enum",
+            matcherJson(
+                path = "someEnumList",
+                expected = "Foo",
+                comparator = "anyStringEquals",
+            ),
+        ) { scope ->
+            rustTemplate(
+                """
+                let result = #{Ok}(#{Output}::builder()
+                    .some_enum_list(#{SomeEnum}::Bar)
+                    .build());
+                assert!(!#{matcher_fn}(result.as_ref()));
+
+                let result = #{Ok}(#{Output}::builder()
+                    .some_enum_list(#{SomeEnum}::Bar)
+                    .some_enum_list(#{SomeEnum}::Foo)
+                    .build());
+                assert!(#{matcher_fn}(result.as_ref()));
                 """,
                 *scope,
             )
@@ -301,10 +322,10 @@ class RustWaiterMatcherGeneratorTest {
                 """
                 let input = #{Input}::builder().foo("foo").build().unwrap();
                 let result = #{Ok}(#{Output}::builder().some_string("bar").build());
-                assert!(#{matcher_fn}(&input, &result));
+                assert!(#{matcher_fn}(&input, result.as_ref()));
 
                 let input = #{Input}::builder().foo("asdf").build().unwrap();
-                assert!(!#{matcher_fn}(&input, &result));
+                assert!(!#{matcher_fn}(&input, result.as_ref()));
                 """,
                 *scope,
             )
@@ -340,10 +361,19 @@ class RustWaiterMatcherGeneratorTest {
             someString: String,
             someBool: Boolean,
             someList: SomeList,
+            someEnumList: SomeEnumList,
         }
 
         list SomeList {
             member: String
+        }
+
+        enum SomeEnum {
+            Foo,
+            Bar,
+        }
+        list SomeEnumList {
+            member: SomeEnum,
         }
         """.asSmithyModel()
 }

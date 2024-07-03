@@ -23,6 +23,7 @@ jobs:
   acquire-base-image:
     runs-on: smithy_ubuntu-latest_8-core
     name: Acquire Base Image
+    timeout-minutes: 60
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
     permissions:

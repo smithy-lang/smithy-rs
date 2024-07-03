@@ -154,7 +154,8 @@ class PythonServerUnionGenerator(
     ) {
         if (member.isTargetUnit()) {
             writer.rust(
-                "/// Tries to convert the union instance into [`$variantName`].",
+                "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner `()`.",
+                unionSymbol,
             )
             writer.rust("/// :rtype None:")
             writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<()>", "pyo3" to pyo3) {

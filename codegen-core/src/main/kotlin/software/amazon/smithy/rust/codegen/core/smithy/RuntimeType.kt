@@ -253,6 +253,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Debug = stdFmt.resolve("Debug")
         val Default = std.resolve("default::Default")
         val Display = stdFmt.resolve("Display")
+        val Duration = std.resolve("time::Duration")
         val Eq = stdCmp.resolve("Eq")
         val From = stdConvert.resolve("From")
         val Hash = std.resolve("hash::Hash")
@@ -307,6 +308,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
 
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
+
+        fun smithyCompression(runtimeConfig: RuntimeConfig) = CargoDependency.smithyCompression(runtimeConfig).toType()
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = CargoDependency.smithyEventStream(runtimeConfig).toType()
 
@@ -524,5 +527,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
+
+        fun clientRequestCompression(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.clientRequestCompression(runtimeConfig))
     }
 }

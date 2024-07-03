@@ -7,9 +7,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.traits.TitleTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
@@ -30,6 +32,22 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
 
     private fun crateLayout(): Writable =
         writable {
+            val hasTypesModule =
+                DirectedWalker(codegenContext.model).walkShapes(codegenContext.serviceShape)
+                    .any {
+                        try {
+                            codegenContext.symbolProvider.moduleForShape(it).name == ClientRustModule.types.name
+                        } catch (ex: RuntimeException) {
+                            // The shape should not be rendered in any module.
+                            false
+                        }
+                    }
+            val typesModuleSentence =
+                if (hasTypesModule) {
+                    "These structs and enums live in [`types`](crate::types). "
+                } else {
+                    ""
+                }
             val serviceName = codegenContext.serviceShape.getTrait<TitleTrait>()?.value ?: "the service"
             containerDocs(
                 """
@@ -40,7 +58,7 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
                 either a successful output or a [`SdkError`](crate::error::SdkError).
 
                 Some of these API inputs may be structs or enums to provide more complex structured information.
-                These structs and enums live in [`types`](crate::types). There are some simpler types for
+                ${typesModuleSentence}There are some simpler types for
                 representing data such as date times or binary blobs that live in [`primitives`](crate::primitives).
 
                 All types required to configure a client via the [`Config`](crate::Config) struct live

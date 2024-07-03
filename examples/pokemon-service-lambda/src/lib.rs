@@ -5,13 +5,14 @@
 
 use std::sync::Arc;
 
-use aws_smithy_http_server::{request::lambda::Context, Extension};
+use aws_smithy_http_server::Extension;
 
 use pokemon_service_common::State;
 use pokemon_service_server_sdk::{
     error::{GetStorageError, StorageAccessNotAuthorized},
     input::GetStorageInput,
     output::GetStorageOutput,
+    server::request::lambda::Context,
 };
 
 /// Retrieves the user's storage and logs the lambda request ID.

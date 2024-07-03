@@ -5,13 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
+import software.amazon.smithy.waiters.WaitableTrait
 
 object FluentClientDocs {
     fun clientConstructionDocs(codegenContext: ClientCodegenContext) =
@@ -30,8 +34,8 @@ object FluentClientDocs {
                 or identity resolver to be configured. The config is used to customize various aspects of the client,
                 such as:
 
-                  - [HTTP Connector](crate::config::Builder::http_connector)
-                  - [Retry](crate::config::Builder::retry_config)
+                  - [The underlying HTTP client](crate::config::Builder::http_client)
+                  - [Retries](crate::config::Builder::retry_config)
                   - [Timeouts](crate::config::Builder::timeout_config)
                   - [... and more](crate::config::Builder)
 
@@ -72,7 +76,7 @@ object FluentClientDocs {
                 if (operation != null && member != null) {
                     val operationSymbol = symbolProvider.toSymbol(operation)
                     val memberSymbol = symbolProvider.toSymbol(member)
-                    val operationFnName = FluentClientGenerator.clientOperationFnName(operation, symbolProvider)
+                    val operationFnName = FluentClientGenerator.clientOperationFnDocsName(operation, symbolProvider)
                     docsTemplate(
                         """
                         ## Using the `Client`
@@ -97,6 +101,32 @@ object FluentClientDocs {
                         "operation" to operationSymbol,
                     )
                 }
+            }
+        }
+
+    fun waiterDocs(codegenContext: ClientCodegenContext) =
+        writable {
+            val operations = TopDownIndex.of(codegenContext.model).getContainedOperations(codegenContext.serviceShape)
+            if (operations.any { it.hasTrait<WaitableTrait>() }) {
+                docs(
+                    """
+                    ## Waiters
+
+                    This client provides `wait_until` methods behind the [`Waiters`](crate::client::Waiters) trait.
+                    To use them, simply import the trait, and then call one of the `wait_until` methods. This will
+                    return a waiter fluent builder that takes various parameters, which are documented on the builder
+                    type. Once parameters have been provided, the `wait` method can be called to initiate waiting.
+
+                    For example, if there was a `wait_until_thing` method, it could look like:
+                    ```rust,ignore
+                    let result = client.wait_until_thing()
+                        .thing_id("someId")
+                        .wait(Duration::from_secs(120))
+                        .await;
+                    ```
+                    """.trimIndent(),
+                    trimStart = false,
+                )
             }
         }
 }

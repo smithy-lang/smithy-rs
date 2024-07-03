@@ -23,7 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
@@ -322,7 +322,7 @@ class ClientCodegenVisitor(
             // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
             codegenDecorator.protocolTestGenerator(
                 codegenContext,
-                DefaultProtocolTestGenerator(
+                ClientProtocolTestGenerator(
                     codegenContext,
                     protocolGeneratorFactory.support(),
                     operationShape,

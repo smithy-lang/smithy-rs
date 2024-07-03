@@ -136,6 +136,10 @@ impl UploadThroughput {
         self.logs.lock().unwrap().push_bytes_transferred(now, bytes);
     }
 
+    pub(crate) fn mark_complete(&self) -> bool {
+        self.logs.lock().unwrap().mark_complete()
+    }
+
     pub(crate) fn report(&self, now: SystemTime) -> ThroughputReport {
         self.logs.lock().unwrap().report(now)
     }
@@ -177,6 +181,8 @@ trait UploadReport {
 impl UploadReport for ThroughputReport {
     fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput) {
         let throughput = match self {
+            // stream has been exhausted, stop tracking violations
+            ThroughputReport::Complete => return (false, ZERO_THROUGHPUT),
             // If the report is incomplete, then we don't have enough data yet to
             // decide if minimum throughput was violated.
             ThroughputReport::Incomplete => {
@@ -213,7 +219,7 @@ impl UploadReport for ThroughputReport {
 pin_project_lite::pin_project! {
     /// Future that pairs with [`UploadThroughput`] to add a minimum throughput
     /// requirement to a request upload stream.
-    struct UploadThroughputCheckFuture {
+    pub(crate) struct UploadThroughputCheckFuture {
         #[pin]
         response: HttpConnectorFuture,
         #[pin]

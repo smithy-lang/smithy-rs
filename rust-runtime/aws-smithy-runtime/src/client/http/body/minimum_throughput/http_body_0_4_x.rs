@@ -8,20 +8,21 @@ use crate::client::http::body::minimum_throughput::{
     throughput::ThroughputReport, Throughput, ThroughputReadingBody,
 };
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use http_body_0_4::Body;
+use http_body_04x::Body;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::task::{Context, Poll};
 
 const ZERO_THROUGHPUT: Throughput = Throughput::new_bytes_per_second(0);
 
-// Helper trait for interpretting the throughput report.
+// Helper trait for interpreting the throughput report.
 trait DownloadReport {
     fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput);
 }
 impl DownloadReport for ThroughputReport {
     fn minimum_throughput_violated(self, minimum_throughput: Throughput) -> (bool, Throughput) {
         let throughput = match self {
+            ThroughputReport::Complete => return (false, ZERO_THROUGHPUT),
             // If the report is incomplete, then we don't have enough data yet to
             // decide if minimum throughput was violated.
             ThroughputReport::Incomplete => {
@@ -139,17 +140,17 @@ where
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
-        self.inner.size_hint()
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body_04x::SizeHint {
+        self.inner.size_hint()
     }
 }
 
@@ -175,6 +176,18 @@ where
                 tracing::trace!("received data: {}", bytes.len());
                 this.throughput
                     .push_bytes_transferred(now, bytes.len() as u64);
+
+                // hyper will optimistically stop polling when end of stream is reported
+                // (e.g. when content-length amount of data has been consumed) which means
+                // we may never get to `Poll:Ready(None)`. Check for same condition and
+                // attempt to stop checking throughput violations _now_ as we may never
+                // get polled again. The caveat here is that it depends on `Body` implementations
+                // implementing `is_end_stream()` correctly. Users can also disable SSP as an
+                // alternative for such fringe use cases.
+                if self.is_end_stream() {
+                    tracing::trace!("stream reported end of stream before Poll::Ready(None) reached; marking stream complete");
+                    self.throughput.mark_complete();
+                }
                 Poll::Ready(Some(Ok(bytes)))
             }
             Poll::Pending => {
@@ -183,23 +196,28 @@ where
                 Poll::Pending
             }
             // If we've read all the data or an error occurred, then return that result.
-            res => res,
+            res => {
+                if this.throughput.mark_complete() {
+                    tracing::trace!("stream completed: {:?}", res);
+                }
+                res
+            }
         }
     }
 
     fn poll_trailers(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
         let this = self.as_mut().project();
         this.inner.poll_trailers(cx)
     }
 
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
-        self.inner.size_hint()
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body_04x::SizeHint {
+        self.inner.size_hint()
     }
 }

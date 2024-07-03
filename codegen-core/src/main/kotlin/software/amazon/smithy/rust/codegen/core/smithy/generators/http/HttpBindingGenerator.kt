@@ -332,17 +332,13 @@ class HttpBindingGenerator(
                         }
                     }
                     if (targetShape.hasTrait<EnumTrait>()) {
-                        if (codegenTarget == CodegenTarget.SERVER) {
-                            rust(
-                                "Ok(#T::try_from(body_str)?)",
-                                symbolProvider.toSymbol(targetShape),
-                            )
-                        } else {
-                            rust(
-                                "Ok(#T::from(body_str))",
-                                symbolProvider.toSymbol(targetShape),
-                            )
-                        }
+                        // - In servers, `T` is an unconstrained `String` that will be constrained when building the
+                        //   builder.
+                        // - In clients, `T` will directly be the target generated enum type.
+                        rust(
+                            "Ok(#T::from(body_str))",
+                            symbolProvider.toSymbol(targetShape),
+                        )
                     } else {
                         rust("Ok(body_str.to_string())")
                     }

@@ -4,6 +4,7 @@
  */
 
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -11,7 +12,7 @@ use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
-use http::header::CONTENT_TYPE;
+use http_02x::header::CONTENT_TYPE;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -124,9 +125,9 @@ impl ValidateRequest {
 ///     ReplayEvent::new(
 ///         // If `assert_requests_match` is called later, then this request will be matched
 ///         // against the actual request that was made.
-///         http::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
+///         http_02x::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
 ///         // This response will be given to the first request regardless of whether it matches the request above.
-///         http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
+///         http_02x::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
 ///     ),
 ///     // The next ReplayEvent covers the second request/response pair...
 /// ]);
@@ -144,7 +145,7 @@ impl ValidateRequest {
 /// http_client.assert_requests_match(&[]);
 /// ```
 ///
-/// [`assert_requests_match`]: crate::client::http::test_util::StaticReplayClient::assert_requests_match
+/// [`assert_requests_match`]: StaticReplayClient::assert_requests_match
 /// [DVR]: crate::client::http::test_util::dvr
 #[derive(Clone, Debug)]
 pub struct StaticReplayClient {
@@ -222,11 +223,11 @@ impl StaticReplayClient {
             req.assert_matches(i, ignore_headers)
         }
         let remaining_requests = self.data.lock().unwrap();
-        let number_of_remaining_requests = remaining_requests.len();
-        let actual_requests = self.requests().len();
         assert!(
             remaining_requests.is_empty(),
-            "Expected {number_of_remaining_requests} additional requests (only {actual_requests} sent)",
+            "Expected {} additional requests (only {} sent)",
+            remaining_requests.len(),
+            self.requests().len()
         );
     }
 }
@@ -258,6 +259,10 @@ impl HttpClient for StaticReplayClient {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        Some(ConnectorMetadata::new("static-replay-client", None))
     }
 }
 

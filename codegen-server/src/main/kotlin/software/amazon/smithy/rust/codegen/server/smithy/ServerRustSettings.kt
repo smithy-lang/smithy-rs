@@ -38,6 +38,7 @@ data class ServerRustSettings(
     override val codegenConfig: ServerCodegenConfig,
     override val license: String?,
     override val examplesUri: String?,
+    override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
         service,
@@ -50,6 +51,7 @@ data class ServerRustSettings(
         codegenConfig,
         license,
         examplesUri,
+        minimumSupportedRustVersion,
         customizationConfig,
     ) {
     companion object {
@@ -71,6 +73,7 @@ data class ServerRustSettings(
                 codegenConfig = ServerCodegenConfig.fromCodegenConfigAndNode(coreCodegenConfig, codegenSettingsNode),
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
+                minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
             )
         }
@@ -82,10 +85,10 @@ data class ServerRustSettings(
  * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  */
 data class ServerCodegenConfig(
-    override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
-    override val debugMode: Boolean = defaultDebugMode,
-    val publicConstrainedTypes: Boolean = defaultPublicConstrainedTypes,
-    val ignoreUnsupportedConstraints: Boolean = defaultIgnoreUnsupportedConstraints,
+    override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+    override val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    val publicConstrainedTypes: Boolean = DEFAULT_PUBLIC_CONSTRAINED_TYPES,
+    val ignoreUnsupportedConstraints: Boolean = DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS,
     /**
      * A flag to enable _experimental_ support for custom validation exceptions via the
      * [CustomValidationExceptionWithReasonDecorator] decorator.
@@ -97,8 +100,8 @@ data class ServerCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
     companion object {
-        private const val defaultPublicConstrainedTypes = true
-        private const val defaultIgnoreUnsupportedConstraints = false
+        private const val DEFAULT_PUBLIC_CONSTRAINED_TYPES = true
+        private const val DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS = false
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
 
         fun fromCodegenConfigAndNode(
@@ -108,8 +111,8 @@ data class ServerCodegenConfig(
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
-                publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", defaultPublicConstrainedTypes),
-                ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", defaultIgnoreUnsupportedConstraints),
+                publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", DEFAULT_PUBLIC_CONSTRAINED_TYPES),
+                ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
                 experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = node.get().getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
             )
         } else {

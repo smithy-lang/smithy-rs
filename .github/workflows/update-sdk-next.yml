@@ -40,12 +40,12 @@ jobs:
       with:
         distribution: corretto
         java-package: jdk
-        java-version: 11
+        java-version: 17
       # Rust is only used to `rustfmt` the generated code; doesn't need to match MSRV
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.74.1
+        toolchain: 1.76.0
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK

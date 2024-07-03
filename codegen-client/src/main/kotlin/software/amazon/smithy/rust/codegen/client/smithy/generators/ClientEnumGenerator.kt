@@ -31,10 +31,10 @@ data class InfallibleEnumType(
 ) : EnumType() {
     companion object {
         /** Name of the generated unknown enum member name for enums with named members. */
-        const val UnknownVariant = "Unknown"
+        const val UNKNOWN_VARIANT = "Unknown"
 
-        /** Name of the opaque struct that is inner data for the generated [UnknownVariant]. */
-        const val UnknownVariantValue = "UnknownVariantValue"
+        /** Name of the opaque struct that is inner data for the generated [UNKNOWN_VARIANT]. */
+        const val UNKNOWN_VARIANT_VALUE = "UnknownVariantValue"
     }
 
     override fun implFromForStr(context: EnumGeneratorContext): Writable =
@@ -56,7 +56,7 @@ data class InfallibleEnumType(
                             rust("${member.value.dq()} => ${context.enumName}::${member.derivedName()},")
                         }
                         rust(
-                            "other => ${context.enumName}::$UnknownVariant(#T(other.to_owned()))",
+                            "other => ${context.enumName}::$UNKNOWN_VARIANT(#T(other.to_owned()))",
                             unknownVariantValue(context),
                         )
                     },
@@ -131,25 +131,25 @@ data class InfallibleEnumType(
 
     override fun additionalDocs(context: EnumGeneratorContext): Writable =
         writable {
-            renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UnknownVariant, UnknownVariantValue)
+            renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UNKNOWN_VARIANT, UNKNOWN_VARIANT_VALUE)
         }
 
     override fun additionalEnumMembers(context: EnumGeneratorContext): Writable =
         writable {
-            docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+            docs("`$UNKNOWN_VARIANT` contains new variants that have been added since this code was generated.")
             rust(
-                """##[deprecated(note = "Don't directly match on `$UnknownVariant`. See the docs on this enum for the correct way to handle unknown variants.")]""",
+                """##[deprecated(note = "Don't directly match on `$UNKNOWN_VARIANT`. See the docs on this enum for the correct way to handle unknown variants.")]""",
             )
-            rust("$UnknownVariant(#T)", unknownVariantValue(context))
+            rust("$UNKNOWN_VARIANT(#T)", unknownVariantValue(context))
         }
 
     override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable =
         writable {
-            rust("${context.enumName}::$UnknownVariant(value) => value.as_str()")
+            rust("${context.enumName}::$UNKNOWN_VARIANT(value) => value.as_str()")
         }
 
     private fun unknownVariantValue(context: EnumGeneratorContext): RuntimeType {
-        return RuntimeType.forInlineFun(UnknownVariantValue, unknownVariantModule) {
+        return RuntimeType.forInlineFun(UNKNOWN_VARIANT_VALUE, unknownVariantModule) {
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
@@ -159,8 +159,8 @@ data class InfallibleEnumType(
                 """.trimIndent(),
             )
             context.enumMeta.render(this)
-            rustTemplate("struct $UnknownVariantValue(pub(crate) #{String});", *preludeScope)
-            rustBlock("impl $UnknownVariantValue") {
+            rustTemplate("struct $UNKNOWN_VARIANT_VALUE(pub(crate) #{String});", *preludeScope)
+            rustBlock("impl $UNKNOWN_VARIANT_VALUE") {
                 // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
                 rustBlock("pub(crate) fn as_str(&self) -> &str") {
                     rust("&self.0")
@@ -168,7 +168,7 @@ data class InfallibleEnumType(
             }
             rustTemplate(
                 """
-                impl #{Display} for $UnknownVariantValue {
+                impl #{Display} for $UNKNOWN_VARIANT_VALUE {
                     fn fmt(&self, f: &mut #{Fmt}::Formatter) -> #{Fmt}::Result {
                         write!(f, "{}", self.0)
                     }

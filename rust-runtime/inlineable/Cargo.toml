@@ -16,8 +16,8 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 gated-tests = []
 default = ["gated-tests"]
 
-
 [dependencies]
+aws-smithy-compression = { path = "../aws-smithy-compression", features = ["http-body-0-4-x"] }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
@@ -27,15 +27,18 @@ bytes = "1"
 fastrand = "2.0.0"
 futures-util = "0.3.29"
 http = "0.2.1"
+http-body = "0.4"
 md-5 = "0.10.0"
 once_cell = "1.16.0"
 percent-encoding = "2.2.0"
 pin-project-lite = "0.2"
 regex-lite = "0.1.5"
+tracing = "0.1.37"
 url = "2.3.1"
 
 [dev-dependencies]
 proptest = "1"
+tokio = { version = "1.26", features = ["full", "test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

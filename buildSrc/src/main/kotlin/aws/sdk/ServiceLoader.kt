@@ -102,6 +102,7 @@ fun Project.discoverServices(
     serviceMembership: Membership,
 ): AwsServices {
     val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
+    val extrasDir = project.file("aws-models-extra")
     logger.info("Using model path: $models")
     val baseServices =
         fileTree(models)
@@ -120,12 +121,12 @@ fun Project.discoverServices(
                     val title = service.expectTrait(TitleTrait::class.java).value
                     val sdkId =
                         service.expectTrait(ServiceTrait::class.java).sdkId
-                            .toLowerCase()
+                            .lowercase()
                             .replace(" ", "")
                             // The smithy models should not include the suffix "service" but currently they do
                             .removeSuffix("service")
                             .removeSuffix("api")
-                    val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
+                    val testFile = extrasDir.resolve("$sdkId-tests.smithy")
                     val extras =
                         if (testFile.exists()) {
                             logger.warn("Discovered protocol tests for ${file.name}")

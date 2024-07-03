@@ -11,13 +11,9 @@ use thiserror::Error;
 pub enum MissingContentTypeReason {
     #[error("headers taken by another extractor")]
     HeadersTakenByAnotherExtractor,
-    #[error("no `Content-Type` header")]
-    NoContentTypeHeader,
-    #[error("`Content-Type` header value is not a valid HTTP header value: {0}")]
-    ToStrError(http::header::ToStrError),
     #[error("invalid `Content-Type` header value mime type: {0}")]
     MimeParseError(mime::FromStrError),
-    #[error("unexpected `Content-Type` header value; expected {expected_mime:?}, found {found_mime:?}")]
+    #[error("unexpected `Content-Type` header value; expected mime {expected_mime:?}, found mime {found_mime:?}")]
     UnexpectedMimeType {
         expected_mime: Option<mime::Mime>,
         found_mime: Option<mime::Mime>,

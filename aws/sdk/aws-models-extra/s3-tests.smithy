@@ -153,8 +153,7 @@ apply CreateMultipartUpload @httpRequestTests([
         protocol: "aws.protocols#restXml",
         uri: "/object.txt",
         queryParams: [
-            "uploads",
-            "x-id=CreateMultipartUpload"
+            "uploads"
         ],
         params: {
             "Bucket": "test-bucket",
@@ -384,3 +383,125 @@ apply ListObjectVersions @httpResponseTests([
             }
 }]
 )
+
+
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/157) - Remove duplicated tests if these make it into the actual model or otherwise become easier
+// to integrate.
+// Protocol tests below are duplicated from
+// https://github.com/smithy-lang/smithy/blob/main/smithy-aws-protocol-tests/model/restXml/services/s3.smithy
+// NOTE: These are duplicated because of currently difficult to replicate structural differences in the build.
+// S3 pulls in `aws-config` which requires all runtime crates to point to `build` dir. This makes adding the protocol tests
+// to `sdk-adhoc-test` difficult as it does not replicate relocating runtimes and re-processing Cargo.toml files.
+
+apply DeleteObjectTagging @httpRequestTests([
+    {
+        id: "S3EscapeObjectKeyInUriLabel",
+        documentation: """
+            S3 clients should escape special characters in Object Keys
+            when the Object Key is used as a URI label binding.
+        """,
+        protocol: "aws.protocols#restXml",
+        method: "DELETE",
+        uri: "/my%20key.txt",
+        host: "s3.us-west-2.amazonaws.com",
+        resolvedHost: "mybucket.s3.us-west-2.amazonaws.com",
+        body: "",
+        queryParams: [
+            "tagging"
+        ],
+        params: {
+            Bucket: "mybucket",
+            Key: "my key.txt"
+        },
+        vendorParams: {
+            scopedConfig: {
+                client: {
+                    region: "us-west-2",
+                },
+            },
+        },
+    },
+    {
+        id: "S3EscapePathObjectKeyInUriLabel",
+        documentation: """
+            S3 clients should preserve an Object Key representing a path
+            when the Object Key is used as a URI label binding, but still
+            escape special characters.
+        """,
+        protocol: "aws.protocols#restXml",
+        method: "DELETE",
+        uri: "/foo/bar/my%20key.txt",
+        host: "s3.us-west-2.amazonaws.com",
+        resolvedHost: "mybucket.s3.us-west-2.amazonaws.com",
+        body: "",
+        queryParams: [
+            "tagging"
+        ],
+        params: {
+            Bucket: "mybucket",
+            Key: "foo/bar/my key.txt"
+        },
+        vendorParams: {
+            scopedConfig: {
+                client: {
+                    region: "us-west-2",
+                },
+            },
+        },
+    }
+])
+
+apply GetObject @httpRequestTests([
+    {
+        id: "S3PreservesLeadingDotSegmentInUriLabel",
+        documentation: """
+            S3 clients should not remove dot segments from request paths.
+        """,
+        protocol: "aws.protocols#restXml",
+        method: "GET",
+        uri: "/../key.txt",
+        host: "s3.us-west-2.amazonaws.com",
+        resolvedHost: "mybucket.s3.us-west-2.amazonaws.com",
+        body: "",
+        params: {
+            Bucket: "mybucket",
+            Key: "../key.txt"
+        },
+        vendorParams: {
+            scopedConfig: {
+                client: {
+                    region: "us-west-2",
+                    s3: {
+                        addressing_style: "virtual",
+                    },
+                },
+            },
+        },
+    },
+    {
+        id: "S3PreservesEmbeddedDotSegmentInUriLabel",
+        documentation: """
+            S3 clients should not remove dot segments from request paths.
+        """,
+        protocol: "aws.protocols#restXml",
+        method: "GET",
+        uri: "/foo/../key.txt",
+        host: "s3.us-west-2.amazonaws.com",
+        resolvedHost: "mybucket.s3.us-west-2.amazonaws.com",
+        body: "",
+        params: {
+            Bucket: "mybucket",
+            Key: "foo/../key.txt"
+        },
+        vendorParams: {
+            scopedConfig: {
+                client: {
+                    region: "us-west-2",
+                    s3: {
+                        addressing_style: "virtual",
+                    },
+                },
+            },
+        },
+    }
+])

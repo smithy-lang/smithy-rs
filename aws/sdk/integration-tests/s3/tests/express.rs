@@ -255,10 +255,7 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
     let http_client = StaticReplayClient::new(vec![
         ReplayEvent::new(create_session_request(), create_session_response()),
         ReplayEvent::new(
-            operation_request_with_checksum(
-                "?delete&x-id=DeleteObjects",
-                Some(("x-amz-checksum-crc32", "AAAAAA==")),
-            ),
+            operation_request_with_checksum("?delete", Some(("x-amz-checksum-crc32", "AAAAAA=="))),
             response_ok(),
         ),
     ]);
@@ -270,6 +267,17 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
         .send()
         .await;
 
+    let checksum_headers: Vec<_> = http_client
+        .actual_requests()
+        .last()
+        .unwrap()
+        .headers()
+        .iter()
+        .filter(|(key, _)| key.starts_with("x-amz-checksum"))
+        .collect();
+
+    assert_eq!(1, checksum_headers.len());
+    assert_eq!("x-amz-checksum-crc32", checksum_headers[0].0);
     http_client.assert_requests_match(&[""]);
 }
 

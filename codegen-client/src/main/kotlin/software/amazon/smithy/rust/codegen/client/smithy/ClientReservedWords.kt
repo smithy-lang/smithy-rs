@@ -26,8 +26,8 @@ val ClientReservedWords =
             mapOf(
                 // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
                 // that represent union variants that have been added since this SDK was generated.
-                UnionGenerator.UnknownVariantName to "${UnionGenerator.UnknownVariantName}Value",
-                "${UnionGenerator.UnknownVariantName}Value" to "${UnionGenerator.UnknownVariantName}Value_",
+                UnionGenerator.UNKNOWN_VARIANT_NAME to "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value",
+                "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value" to "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value_",
             ),
         enumMemberMap =
             mapOf(

@@ -125,7 +125,7 @@ open class EventStreamMarshallerGenerator(
                     if (target.renderUnknownVariant()) {
                         rustTemplate(
                             """
-                            Self::Input::${UnionGenerator.UnknownVariantName} => return Err(
+                            Self::Input::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(
                                 #{Error}::marshalling(${unknownVariantError(unionSymbol.rustType().name).dq()}.to_owned())
                             )
                             """,
@@ -197,7 +197,7 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    // Event stream header types: https://awslabs.github.io/smithy/1.0/spec/core/stream-traits.html#eventheader-trait
+    // Event stream header types: https://smithy.io/2.0/spec/streaming.html#eventheader-trait
     // Note: there are no floating point header types for Event Stream.
     private fun headerValue(
         inputName: String,

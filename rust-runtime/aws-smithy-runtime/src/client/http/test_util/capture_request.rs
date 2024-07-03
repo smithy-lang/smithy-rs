@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -16,7 +17,7 @@ use tokio::sync::oneshot;
 
 #[derive(Debug)]
 struct Inner {
-    response: Option<http::Response<SdkBody>>,
+    response: Option<http_02x::Response<SdkBody>>,
     sender: Option<oneshot::Sender<HttpRequest>>,
 }
 
@@ -46,6 +47,10 @@ impl HttpClient for CaptureRequestHandler {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        Some(ConnectorMetadata::new("capture-request-handler", None))
     }
 }
 
@@ -96,13 +101,13 @@ impl CaptureRequestReceiver {
 /// );
 /// ```
 pub fn capture_request(
-    response: Option<http::Response<SdkBody>>,
+    response: Option<http_02x::Response<SdkBody>>,
 ) -> (CaptureRequestHandler, CaptureRequestReceiver) {
     let (tx, rx) = oneshot::channel();
     (
         CaptureRequestHandler(Arc::new(Mutex::new(Inner {
             response: Some(response.unwrap_or_else(|| {
-                http::Response::builder()
+                http_02x::Response::builder()
                     .status(200)
                     .body(SdkBody::empty())
                     .expect("unreachable")

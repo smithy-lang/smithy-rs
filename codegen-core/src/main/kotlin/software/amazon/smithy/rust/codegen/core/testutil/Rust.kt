@@ -86,6 +86,11 @@ object TestWorkspace {
     }
     private val subprojects = mutableListOf<String>()
 
+    private val cargoLock: File by lazy {
+        val projectDir = "git rev-parse --show-toplevel".runCommand().replace("\n", "")
+        File(projectDir).resolve("aws/sdk/Cargo.lock")
+    }
+
     init {
         baseDir.mkdirs()
     }
@@ -97,11 +102,13 @@ object TestWorkspace {
                 mapOf(
                     "workspace" to
                         mapOf(
+                            "resolver" to "2",
                             "members" to subprojects,
                         ),
                 ),
             )
         cargoToml.writeText(workspaceToml)
+        cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
     }
 
     fun subproject(): File {
@@ -118,7 +125,7 @@ object TestWorkspace {
                 // help rust select the right version when we run cargo test
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.74.1\"\n",
+                "[toolchain]\nchannel = \"1.76.0\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
@@ -258,9 +265,11 @@ fun RustWriter.assertNoNewDependencies(
         val writtenOut = this.toString()
         val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
         throw CodegenException(
-            "found invalid dependencies. ${invalidDeps.map {
-                it.first
-            }}\nHint: the following lines may be the problem.\n${
+            "found invalid dependencies. ${
+                invalidDeps.map {
+                    it.first
+                }
+            }\nHint: the following lines may be the problem.\n${
                 badLines.joinToString(
                     separator = "\n",
                     prefix = "   ",
@@ -466,6 +475,7 @@ private fun String.intoCrate(
                 moduleDescription = null,
                 moduleLicense = null,
                 moduleRepository = null,
+                minimumSupportedRustVersion = null,
                 writer = this,
                 dependencies = deps,
             ).render()

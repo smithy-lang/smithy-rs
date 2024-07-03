@@ -36,7 +36,15 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
         }
 
     override val httpBindingResolver: HttpBindingResolver =
-        HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
+        HttpTraitHttpBindingResolver(
+            codegenContext.model,
+            ProtocolContentTypes(
+                requestDocument = "application/xml",
+                responseDocument = "application/xml",
+                eventStreamContentType = "application/vnd.amazon.eventstream",
+                eventStreamMessageContentType = "application/xml",
+            ),
+        )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format =
         TimestampFormatTrait.Format.DATE_TIME

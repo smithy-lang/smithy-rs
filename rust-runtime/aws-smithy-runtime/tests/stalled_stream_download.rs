@@ -34,7 +34,7 @@ async fn download_success() {
     let result = eagerly_consume(response_body).await;
     server.await.unwrap();
 
-    result.ok().expect("response MUST NOT timeout");
+    result.expect("response MUST NOT timeout");
 }
 
 /// Scenario: Download takes a some time to start, but then goes normally.
@@ -62,7 +62,7 @@ async fn download_slow_start() {
     let result = eagerly_consume(response_body).await;
     server.await.unwrap();
 
-    result.ok().expect("response MUST NOT timeout");
+    result.expect("response MUST NOT timeout");
 }
 
 /// Scenario: Download starts fine, and then slowly falls below minimum throughput.
@@ -105,9 +105,13 @@ async fn download_stalls() {
     let (time, sleep) = tick_advance_time_and_sleep();
     let (server, response_sender) = channel_server();
     let op = operation(server, time.clone(), sleep);
+    let barrier = Arc::new(Barrier::new(2));
 
+    let c = barrier.clone();
     let server = tokio::spawn(async move {
-        for _ in 1..10 {
+        c.wait().await;
+        for i in 1..10 {
+            tracing::debug!("send {i}");
             response_sender.send(NEAT_DATA).await.unwrap();
             tick!(time, Duration::from_secs(1));
         }
@@ -115,7 +119,10 @@ async fn download_stalls() {
     });
 
     let response_body = op.invoke(()).await.expect("initial success");
-    let result = tokio::spawn(eagerly_consume(response_body));
+    let result = tokio::spawn(async move {
+        barrier.wait().await;
+        eagerly_consume(response_body).await
+    });
     server.await.unwrap();
 
     let err = result
@@ -159,7 +166,7 @@ async fn download_stall_recovery_in_grace_period() {
     let result = eagerly_consume(response_body).await;
     server.await.unwrap();
 
-    result.ok().expect("response MUST NOT timeout");
+    result.expect("response MUST NOT timeout");
 }
 
 /// Scenario: The server sends data fast enough, but the customer doesn't consume the
@@ -184,15 +191,22 @@ async fn user_downloads_data_too_slowly() {
     let result = slowly_consume(time, response_body).await;
     server.await.unwrap();
 
-    result.ok().expect("response MUST NOT timeout");
+    result.expect("response MUST NOT timeout");
 }
 
 use download_test_tools::*;
+use tokio::sync::Barrier;
 mod download_test_tools {
     use crate::stalled_stream_common::*;
 
     fn response(body: SdkBody) -> HttpResponse {
-        HttpResponse::try_from(http::Response::builder().status(200).body(body).unwrap()).unwrap()
+        HttpResponse::try_from(
+            http_02x::Response::builder()
+                .status(200)
+                .body(body)
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     pub fn operation(
@@ -220,7 +234,7 @@ mod download_test_tools {
             }
         }
 
-        let operation = Operation::builder()
+        Operation::builder()
             .service_name("test")
             .operation_name("test")
             .http_client(FakeServer(http_connector.into_shared()))
@@ -238,8 +252,7 @@ mod download_test_tools {
             .interceptor(StalledStreamProtectionInterceptor::default())
             .sleep_impl(sleep)
             .time_source(time)
-            .build();
-        operation
+            .build()
     }
 
     /// Fake server/connector that responds with a channel body.
@@ -272,7 +285,7 @@ mod download_test_tools {
             if let Err(err) = result {
                 return Err(err);
             } else {
-                tracing::info!("consumed bytes from the response body");
+                info!("consumed bytes from the response body");
             }
         }
         Ok(())
@@ -288,7 +301,7 @@ mod download_test_tools {
             if let Err(err) = result {
                 return Err(err);
             } else {
-                tracing::info!("consumed bytes from the response body");
+                info!("consumed bytes from the response body");
                 tick!(time, Duration::from_secs(10));
             }
         }

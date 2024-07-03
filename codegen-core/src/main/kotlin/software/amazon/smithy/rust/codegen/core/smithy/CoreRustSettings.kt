@@ -15,18 +15,18 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
-import kotlin.streams.toList
 
-const val SERVICE = "service"
-const val MODULE_NAME = "module"
-const val MODULE_DESCRIPTION = "moduleDescription"
-const val MODULE_VERSION = "moduleVersion"
-const val MODULE_AUTHORS = "moduleAuthors"
-const val MODULE_REPOSITORY = "moduleRepository"
-const val RUNTIME_CONFIG = "runtimeConfig"
-const val LICENSE = "license"
-const val EXAMPLES = "examples"
-const val CUSTOMIZATION_CONFIG = "customizationConfig"
+private const val SERVICE = "service"
+private const val MODULE_NAME = "module"
+private const val MODULE_DESCRIPTION = "moduleDescription"
+private const val MODULE_VERSION = "moduleVersion"
+private const val MODULE_AUTHORS = "moduleAuthors"
+private const val MODULE_REPOSITORY = "moduleRepository"
+private const val RUNTIME_CONFIG = "runtimeConfig"
+private const val LICENSE = "license"
+private const val EXAMPLES = "examples"
+private const val MINIMUM_SUPPORTED_RUST_VERSION = "minimumSupportedRustVersion"
+private const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
 
 /**
@@ -39,26 +39,26 @@ const val CODEGEN_SETTINGS = "codegen"
  * [debugMode]: Generate comments in the generated code indicating where code was generated from
  */
 open class CoreCodegenConfig(
-    open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
-    open val debugMode: Boolean = defaultDebugMode,
-    open val flattenCollectionAccessors: Boolean = defaultFlattenMode,
+    open val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+    open val debugMode: Boolean = DEFAULT_DEBUG_MODE,
+    open val flattenCollectionAccessors: Boolean = DEFAULT_FLATTEN_MODE,
 ) {
     companion object {
-        const val defaultFormatTimeoutSeconds = 20
-        const val defaultDebugMode = false
-        const val defaultFlattenMode = false
+        const val DEFAULT_FORMAT_TIMEOUT_SECONDS = 20
+        const val DEFAULT_DEBUG_MODE = false
+        const val DEFAULT_FLATTEN_MODE = false
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
-                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
-                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenMode),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", DEFAULT_FORMAT_TIMEOUT_SECONDS).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", DEFAULT_DEBUG_MODE),
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_MODE),
                 )
             } else {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = defaultFormatTimeoutSeconds,
-                    debugMode = defaultDebugMode,
+                    formatTimeoutSeconds = DEFAULT_FORMAT_TIMEOUT_SECONDS,
+                    debugMode = DEFAULT_DEBUG_MODE,
                 )
             }
     }
@@ -88,6 +88,7 @@ open class CoreRustSettings(
     open val codegenConfig: CoreCodegenConfig,
     open val license: String?,
     open val examplesUri: String? = null,
+    open val minimumSupportedRustVersion: String? = null,
     open val customizationConfig: ObjectNode? = null,
 ) {
     /**
@@ -177,6 +178,7 @@ open class CoreRustSettings(
                     CODEGEN_SETTINGS,
                     EXAMPLES,
                     LICENSE,
+                    MINIMUM_SUPPORTED_RUST_VERSION,
                     CUSTOMIZATION_CONFIG,
                 ),
             )
@@ -198,6 +200,7 @@ open class CoreRustSettings(
                 codegenConfig = coreCodegenConfig,
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
+                minimumSupportedRustVersion = config.getStringMember(MINIMUM_SUPPORTED_RUST_VERSION).orNull()?.value,
                 customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull(),
             )
         }
