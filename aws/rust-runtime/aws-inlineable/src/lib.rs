@@ -56,6 +56,9 @@ pub mod endpoint_discovery;
 // the `presigning_interceptors` module can refer to it.
 mod serialization_settings;
 
+/// Parse the Expires and ExpiresString fields correctly
+pub mod s3_expires_interceptor;
+
 // just so docs work
 #[allow(dead_code)]
 /// allow docs to work

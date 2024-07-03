@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -30,6 +31,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstraintVi
 import software.amazon.smithy.rust.codegen.server.smithy.generators.Range
 import software.amazon.smithy.rust.codegen.server.smithy.generators.StringTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.TraitInfo
+import software.amazon.smithy.rust.codegen.server.smithy.generators.UnionConstraintTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
@@ -243,5 +245,20 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
             "String" to RuntimeType.String,
             "AsValidationExceptionFields" to validationExceptionFields.join(""),
         )
+    }
+
+    override fun unionShapeConstraintViolationImplBlock(
+        unionConstraintTraitInfo: Collection<UnionConstraintTraitInfo>,
+    ) = writable {
+        rustBlockTemplate(
+            "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
+            "String" to RuntimeType.String,
+        ) {
+            withBlock("match self {", "}") {
+                for (constraintViolation in unionConstraintTraitInfo) {
+                    rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")
+                }
+            }
+        }
     }
 }
