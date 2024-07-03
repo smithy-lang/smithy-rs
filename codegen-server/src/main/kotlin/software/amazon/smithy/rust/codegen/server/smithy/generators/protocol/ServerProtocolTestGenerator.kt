@@ -146,8 +146,7 @@ class ServerProtocolTestGenerator(
                 ),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
-                // The test itself might be questionable, see the discussion
-                // https://github.com/smithy-lang/smithy-rs/pull/3728#discussion_r1662512615
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3735): Null `Document` may come through a request even though its shape is `@required`
                 FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
             )
 
