@@ -243,7 +243,7 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                     "SerdeCbor" to CargoDependency.SerdeCbor.toType(),
                 )
 
-            val instantiator = ServerInstantiator(codegenContext, ignoreMissingMembers = true)
+            val instantiator = ServerInstantiator(codegenContext, ignoreMissingMembers = true, withinTest = true)
             val rpcV2 = ServerRpcV2CborProtocol(codegenContext)
 
             for (operationShape in codegenContext.model.operationShapes) {
