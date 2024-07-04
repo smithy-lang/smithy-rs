@@ -243,6 +243,7 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
 }
 
 impl<S> FromIterator<(&'static str, S)> for RpcV2Router<S> {
+    #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
             routes: iter.into_iter().collect(),

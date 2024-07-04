@@ -47,7 +47,7 @@ pub(crate) const ROUTE_CUTOFF: usize = 15;
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<String, S, ROUTE_CUTOFF>,
+    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
@@ -107,9 +107,9 @@ where
     }
 }
 
-impl<S> FromIterator<(String, S)> for AwsJsonRouter<S> {
+impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (String, S)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
             routes: iter.into_iter().collect(),
         }
