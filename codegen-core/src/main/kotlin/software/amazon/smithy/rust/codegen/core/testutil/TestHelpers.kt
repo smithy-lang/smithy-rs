@@ -152,12 +152,18 @@ fun String.asSmithyModel(
     disableValidation: Boolean = false,
 ): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
-    val denyModelsContaining = arrayOf(
-        // If Smithy protocol test models are in our classpath, don't load them, since they are fairly large and we
-        // almost never need them.
-        "smithy-protocol-tests"
-    )
-    val urls = ModelDiscovery.findModels().filter { modelUrl -> denyModelsContaining.none { modelUrl.toString().contains(it) } }
+    val denyModelsContaining =
+        arrayOf(
+            // If Smithy protocol test models are in our classpath, don't load them, since they are fairly large and we
+            // almost never need them.
+            "smithy-protocol-tests",
+        )
+    val urls =
+        ModelDiscovery.findModels().filter { modelUrl ->
+            denyModelsContaining.none {
+                modelUrl.toString().contains(it)
+            }
+        }
     val assembler = Model.assembler()
     for (url in urls) {
         assembler.addImport(url)

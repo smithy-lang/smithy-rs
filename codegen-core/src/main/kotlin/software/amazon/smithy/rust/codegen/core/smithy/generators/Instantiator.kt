@@ -32,7 +32,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
-import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -62,7 +61,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -492,19 +490,21 @@ class PrimitiveInstantiator(
     private val symbolProvider: SymbolProvider,
     withinTest: Boolean = false,
 ) {
-    val codegenScope = listOf(
-        "DateTime" to RuntimeType.dateTime(runtimeConfig),
-        "Bytestream" to RuntimeType.byteStream(runtimeConfig),
-        "Blob" to RuntimeType.blob(runtimeConfig),
-        "SmithyJson" to RuntimeType.smithyJson(runtimeConfig),
-        "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
-    ).map { it.first to
-        if (withinTest) {
-            it.second.toDevDependencyType()
-        } else {
-            it.second
-        }
-    }.toTypedArray()
+    val codegenScope =
+        listOf(
+            "DateTime" to RuntimeType.dateTime(runtimeConfig),
+            "Bytestream" to RuntimeType.byteStream(runtimeConfig),
+            "Blob" to RuntimeType.blob(runtimeConfig),
+            "SmithyJson" to RuntimeType.smithyJson(runtimeConfig),
+            "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
+        ).map {
+            it.first to
+                if (withinTest) {
+                    it.second.toDevDependencyType()
+                } else {
+                    it.second
+                }
+        }.toTypedArray()
 
     fun instantiate(
         shape: SimpleShape,
