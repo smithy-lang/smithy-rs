@@ -363,14 +363,10 @@ class CborSerializerGenerator(
         for (customization in customizations) {
             customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
         }
-        // `.expect()` safety: `From<u64> for usize` is not in the standard library, but the conversion should be
-        // infallible (unless we ever have 128-bit machines I guess).
-        // See https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243.
-        // TODO Point to a `static` to not inflate the binary.
         rust(
             """
             encoder.array(
-                (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
+                (${context.valueExpression.asValue()}).len()
             );
             """,
         )

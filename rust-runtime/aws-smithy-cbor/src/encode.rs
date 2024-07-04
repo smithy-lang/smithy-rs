@@ -31,7 +31,8 @@ pub struct Encoder {
     encoder: minicbor::Encoder<Vec<u8>>,
 }
 
-// TODO docs
+/// We always write to a `Vec<u8>`, which is infallible in `minicbor`.
+/// https://docs.rs/minicbor/latest/minicbor/encode/write/trait.Write.html#impl-Write-for-Vec%3Cu8%3E
 const INFALLIBLE_WRITE: &str = "write failed";
 
 impl Encoder {
@@ -42,12 +43,6 @@ impl Encoder {
     }
 
     delegate_method! {
-        /// Writes a fixed length array of given length.
-        array => array(len: u64);
-        /// Used when we know the size in advance, i.e.:
-        /// - when a struct has all non-`Option`al members.
-        /// - when serializing `union` shapes (they can only have one member set).
-        map => map(len: u64);
         /// Used when it's not cheap to calculate the size, i.e. when the struct has one or more
         /// `Option`al members.
         begin_map => begin_map();
@@ -75,6 +70,29 @@ impl Encoder {
 
     pub fn blob(&mut self, x: &Blob) -> &mut Self {
         self.encoder.bytes(x.as_ref()).expect(INFALLIBLE_WRITE);
+        self
+    }
+
+    /// Writes a fixed length array of given length.
+    pub fn array(&mut self, len: usize) -> &mut Self {
+        self.encoder
+            // `.expect()` safety: `From<u64> for usize` is not in the standard library,
+            // but the conversion should be infallible (unless we ever have 128-bit machines I
+            // guess). <See https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243>.
+            .array(len.try_into().expect("`usize` to `u64` conversion failed"))
+            .expect(INFALLIBLE_WRITE);
+        self
+    }
+
+    /// Writes a fixed length map of given length.
+    /// Used when we know the size in advance, i.e.:
+    /// - when a struct has all non-`Option`al members.
+    /// - when serializing `union` shapes (they can only have one member set).
+    /// - when serializing a `map` shape.
+    pub fn map(&mut self, len: usize) -> &mut Self {
+        self.encoder
+            .array(len.try_into().expect("`usize` to `u64` conversion failed"))
+            .expect(INFALLIBLE_WRITE);
         self
     }
 
