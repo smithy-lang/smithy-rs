@@ -492,7 +492,7 @@ class ServerProtocolTestGenerator(
         checkRequestParams(inputShape, this)
 
         // Construct a dummy response.
-        withBlock("let response = ", ";") {
+        withBlock("let output = ", ";") {
             instantiator.render(this, outputShape, Node.objectNode())
         }
 

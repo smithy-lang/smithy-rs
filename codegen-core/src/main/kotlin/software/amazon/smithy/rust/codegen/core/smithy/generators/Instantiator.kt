@@ -468,9 +468,7 @@ open class Instantiator(
      */
     private fun fillDefaultValue(shape: Shape): Node =
         when (shape) {
-            is MemberShape ->
-                shape.getTrait<DefaultTrait>()?.toNode()
-                    ?: fillDefaultValue(model.expectShape(shape.target))
+            is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
 
             // Aggregate shapes.
             is StructureShape -> Node.objectNode()
