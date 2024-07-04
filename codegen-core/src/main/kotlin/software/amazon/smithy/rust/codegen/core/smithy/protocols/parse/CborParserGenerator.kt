@@ -200,6 +200,7 @@ class CborParserGenerator(
     ) = writable {
         rustBlockTemplate(
             """
+            ##[allow(clippy::match_single_binding)]
             fn pair(
                 mut builder: #{Builder},
                 decoder: &mut #{Decoder}
@@ -277,11 +278,10 @@ class CborParserGenerator(
             val returnSymbolToParse = returnSymbolToParse(shape)
             rustBlockTemplate(
                 """
-            ##[allow(clippy::match_single_binding)]
-            fn pair(
-                decoder: &mut #{Decoder}
-            ) -> Result<#{UnionSymbol}, #{Error}>
-            """,
+                fn pair(
+                    decoder: &mut #{Decoder}
+                ) -> Result<#{UnionSymbol}, #{Error}>
+                """,
                 *codegenScope,
                 "UnionSymbol" to returnSymbolToParse.symbol,
             ) {
@@ -292,11 +292,11 @@ class CborParserGenerator(
                         if (member.isTargetUnit()) {
                             rust(
                                 """
-                            ${member.memberName.dq()} => { 
-                                decoder.skip()?;
-                                #T::$variantName 
-                            }
-                            """,
+                                ${member.memberName.dq()} => { 
+                                    decoder.skip()?;
+                                    #T::$variantName 
+                                }
+                                """,
                                 returnSymbolToParse.symbol,
                             )
                         } else {
@@ -310,11 +310,11 @@ class CborParserGenerator(
                         true ->
                             rustTemplate(
                                 """
-                            _ => {
-                              decoder.skip()?;
-                              Some(#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME})
-                            }
-                            """,
+                                _ => {
+                                  decoder.skip()?;
+                                  Some(#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME})
+                                }
+                                """,
                                 "Union" to returnSymbolToParse.symbol,
                                 *codegenScope,
                             )
@@ -518,16 +518,16 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
-                    #{ListMemberParserFn:W}
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
+                        #{ListMemberParserFn:W}
+                        
+                        #{InitContainerWritable:W}
+                        
+                        #{DecodeListLoop:W}
                     
-                    #{InitContainerWritable:W}
-                    
-                    #{DecodeListLoop:W}
-                
-                    Ok(list)
-                }
-                """,
+                        Ok(list)
+                    }
+                    """,
                     "ReturnType" to returnSymbol,
                     "ListMemberParserFn" to
                         listMemberParserFn(
@@ -561,16 +561,16 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
-                    #{MapPairParserFn:W}
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
+                        #{MapPairParserFn:W}
+                        
+                        #{InitContainerWritable:W}
+                        
+                        #{DecodeMapLoop:W}
                     
-                    #{InitContainerWritable:W}
-                    
-                    #{DecodeMapLoop:W}
-                
-                    Ok(map)
-                }
-                """,
+                        Ok(map)
+                    }
+                    """,
                     "ReturnType" to returnSymbol,
                     "MapPairParserFn" to
                         mapPairParserFnWritable(
@@ -602,12 +602,12 @@ class CborParserGenerator(
 
                     rustTemplate(
                         """
-                    #{StructurePairParserFn:W}
-                    
-                    let mut builder = #{Builder}::default();
-                    
-                    #{DecodeStructureMapLoop:W}
-                    """,
+                        #{StructurePairParserFn:W}
+                        
+                        let mut builder = #{Builder}::default();
+                        
+                        #{DecodeStructureMapLoop:W}
+                        """,
                         *codegenScope,
                         "StructurePairParserFn" to structurePairParserFnWritable(builderSymbol, includedMembers),
                         "Builder" to builderSymbol,
@@ -631,30 +631,30 @@ class CborParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustTemplate(
                     """
-                pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{UnionSymbol}, #{Error}> {
-                    #{UnionPairParserFnWritable}
-                    
-                    match decoder.map()? {
-                        None => {
-                            let variant = pair(decoder)?;
-                            match decoder.datatype()? {
-                                #{SmithyCbor}::data::Type::Break => {
-                                    decoder.skip()?;
-                                    Ok(variant)
-                                }
-                                ty => Err(
-                                    #{Error}::unexpected_union_variant(
-                                        ty,
-                                        decoder.position(),
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{UnionSymbol}, #{Error}> {
+                        #{UnionPairParserFnWritable}
+                        
+                        match decoder.map()? {
+                            None => {
+                                let variant = pair(decoder)?;
+                                match decoder.datatype()? {
+                                    #{SmithyCbor}::data::Type::Break => {
+                                        decoder.skip()?;
+                                        Ok(variant)
+                                    }
+                                    ty => Err(
+                                        #{Error}::unexpected_union_variant(
+                                            ty,
+                                            decoder.position(),
+                                        ),
                                     ),
-                                ),
+                                }
                             }
+                            Some(1) => pair(decoder),
+                            Some(_) => Err(#{Error}::mixed_union_variants(decoder.position()))
                         }
-                        Some(1) => pair(decoder),
-                        Some(_) => Err(#{Error}::mixed_union_variants(decoder.position()))
                     }
-                }
-                """,
+                    """,
                     "UnionSymbol" to returnSymbolToParse.symbol,
                     "UnionPairParserFnWritable" to unionPairParserFnWritable(shape),
                     *codegenScope,
