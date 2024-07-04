@@ -164,7 +164,7 @@ where
     T1: FromRequest<P, B>,
     T2: FromParts<P>,
     T1::Rejection: std::fmt::Display,
-    T2::Rejection: std::fmt::Display
+    T2::Rejection: std::fmt::Display,
 {
     type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
     type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;

@@ -151,9 +151,7 @@ where
                     let result = ready!(call.poll(cx));
                     let output = match result {
                         Ok(ok) => ok.into_response(),
-                        Err(err) => {
-                            err.into_response()
-                        }
+                        Err(err) => err.into_response(),
                     };
                     return Poll::Ready(Ok(output));
                 }
