@@ -80,7 +80,7 @@ class ClientProtocolTestGenerator(
         get() = AppliesTo.CLIENT
     override val expectFail: Set<FailingTest>
         get() = ExpectFail
-    override val runOnly: Set<String>
+    override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
         get() = emptySet()
@@ -115,6 +115,8 @@ class ClientProtocolTestGenerator(
     }
 
     private fun RustWriter.renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase) {
+        logger.info("Generating request test: ${httpRequestTestCase.id}")
+
         if (!protocolSupport.requestSerialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -200,6 +202,8 @@ class ClientProtocolTestGenerator(
         testCase: HttpResponseTestCase,
         expectedShape: StructureShape,
     ) {
+        logger.info("Generating response test: ${testCase.id}")
+
         if (!protocolSupport.responseDeserialization || (
                 !protocolSupport.errorDeserialization &&
                     expectedShape.hasTrait(

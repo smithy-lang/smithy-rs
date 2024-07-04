@@ -64,7 +64,7 @@ abstract class ProtocolTestGenerator {
     abstract val brokenTests: Set<BrokenTest>
 
     /** Only generate these tests; useful to temporarily set and shorten development cycles */
-    abstract val runOnly: Set<String>
+    abstract val generateOnly: Set<String>
 
     /**
      * These tests are not even attempted to be generated, either because they will not compile
@@ -89,6 +89,8 @@ abstract class ProtocolTestGenerator {
             allMatchingTestCases().flatMap {
                 fixBrokenTestCase(it)
             }
+                // Filter afterward in case a fixed broken test is disabled.
+                .filterMatching()
         if (allTests.isEmpty()) {
             return
         }
@@ -109,6 +111,8 @@ abstract class ProtocolTestGenerator {
         if (!it.isBroken()) {
             listOf(it)
         } else {
+            logger.info("Fixing ${it.kind} test case ${it.id}")
+
             assert(it.expectFail())
 
             val brokenTest = it.findInBroken()!!
@@ -160,10 +164,11 @@ abstract class ProtocolTestGenerator {
 
     /** Filter out test cases that are disabled or don't match the service protocol. */
     private fun List<TestCase>.filterMatching(): List<TestCase> =
-        if (runOnly.isEmpty()) {
+        if (generateOnly.isEmpty()) {
             this.filter { testCase -> testCase.protocol == codegenContext.protocol && !disabledTests.contains(testCase.id) }
         } else {
-            this.filter { testCase -> runOnly.contains(testCase.id) }
+            logger.warning("Generating only specified tests")
+            this.filter { testCase -> generateOnly.contains(testCase.id) }
         }
 
     private fun TestCase.toFailingTest(): FailingTest =
@@ -190,7 +195,7 @@ abstract class ProtocolTestGenerator {
         val requestTests =
             operationShape.getTrait<HttpRequestTestsTrait>()?.getTestCasesFor(appliesTo).orEmpty()
                 .map { TestCase.RequestTest(it) }
-        return requestTests.filterMatching()
+        return requestTests
     }
 
     fun responseTestCases(): List<TestCase> {
@@ -208,7 +213,7 @@ abstract class ProtocolTestGenerator {
                     ?.getTestCasesFor(appliesTo).orEmpty().map { TestCase.ResponseTest(it, error) }
             }
 
-        return (responseTestsOnOperations + responseTestsOnErrors).filterMatching()
+        return (responseTestsOnOperations + responseTestsOnErrors)
     }
 
     fun malformedRequestTestCases(): List<TestCase> {
@@ -220,7 +225,7 @@ abstract class ProtocolTestGenerator {
             } else {
                 emptyList()
             }
-        return malformedRequestTests.filterMatching()
+        return malformedRequestTests
     }
 
     /**

@@ -212,8 +212,8 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                                 get() = baseGenerator.expectFail
                             override val brokenTests: Set<BrokenTest>
                                 get() = emptySet()
-                            override val runOnly: Set<String>
-                                get() = baseGenerator.runOnly
+                            override val generateOnly: Set<String>
+                                get() = baseGenerator.generateOnly
                             override val disabledTests: Set<String>
                                 get() = baseGenerator.disabledTests
 

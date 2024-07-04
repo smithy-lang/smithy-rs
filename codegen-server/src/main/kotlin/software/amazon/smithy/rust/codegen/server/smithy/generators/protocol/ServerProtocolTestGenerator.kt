@@ -225,7 +225,7 @@ class ServerProtocolTestGenerator(
         get() = ExpectFail
     override val brokenTests: Set<BrokenTest>
         get() = BrokenTests
-    override val runOnly: Set<String>
+    override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
         get() = DisabledTests
@@ -291,6 +291,8 @@ class ServerProtocolTestGenerator(
      * an operation's input shape, the resulting shape is of the form we expect, as defined in the test case.
      */
     private fun RustWriter.renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase) {
+        logger.info("Generating request test: ${httpRequestTestCase.id}")
+
         if (!protocolSupport.requestDeserialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -334,6 +336,8 @@ class ServerProtocolTestGenerator(
         testCase: HttpResponseTestCase,
         shape: StructureShape,
     ) {
+        logger.info("Generating response test: ${testCase.id}")
+
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
@@ -366,6 +370,8 @@ class ServerProtocolTestGenerator(
      * with the given response.
      */
     private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase) {
+        logger.info("Generating malformed request test: ${testCase.id}")
+
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
 
         val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
@@ -470,7 +476,7 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    /** Returns the body of the request test. */
+    /** Returns the body of the operation handler in a request test. */
     private fun checkRequestHandler(
         operationShape: OperationShape,
         httpRequestTestCase: HttpRequestTestCase,
@@ -478,7 +484,7 @@ class ServerProtocolTestGenerator(
         val inputShape = operationShape.inputShape(codegenContext.model)
         val outputShape = operationShape.outputShape(codegenContext.model)
 
-        // Construct expected request.
+        // Construct expected operation input.
         withBlock("let expected = ", ";") {
             instantiator.render(this, inputShape, httpRequestTestCase.params, httpRequestTestCase.headers)
         }
@@ -491,9 +497,9 @@ class ServerProtocolTestGenerator(
         }
 
         if (operationShape.errors.isEmpty()) {
-            rust("response")
+            rust("output")
         } else {
-            rust("Ok(response)")
+            rust("Ok(output)")
         }
     }
 
