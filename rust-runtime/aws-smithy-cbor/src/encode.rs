@@ -32,7 +32,7 @@ pub struct Encoder {
 }
 
 /// We always write to a `Vec<u8>`, which is infallible in `minicbor`.
-/// https://docs.rs/minicbor/latest/minicbor/encode/write/trait.Write.html#impl-Write-for-Vec%3Cu8%3E
+/// <https://docs.rs/minicbor/latest/minicbor/encode/write/trait.Write.html#impl-Write-for-Vec%3Cu8%3E>
 const INFALLIBLE_WRITE: &str = "write failed";
 
 impl Encoder {
