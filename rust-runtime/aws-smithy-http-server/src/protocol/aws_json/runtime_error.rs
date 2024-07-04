@@ -11,12 +11,28 @@ use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    /// Request failed to deserialize or response failed to serialize.
+    #[error("request failed to deserialize or response failed to serialize: {0}")]
     Serialization(crate::Error),
+    /// As of writing, this variant can only occur upon failure to extract an
+    /// [`crate::extension::Extension`] from the request.
+    #[error("internal failure: {0}")]
     InternalFailure(crate::Error),
+    /// Request contains an `Accept` header with a MIME type, and the server cannot return a response
+    /// body adhering to that MIME type.
+    // This is returned directly (i.e. without going through a [`RequestRejection`] first) in the
+    // generated SDK when calling [`crate::protocol::accept_header_classifier`] in
+    // `from_request`.
+    #[error("not acceptable request: request contains an `Accept` header with a MIME type, and the server cannot return a response body adhering to that MIME type")]
     NotAcceptable,
+    /// The request does not contain the expected `Content-Type` header value.
+    #[error("unsupported media type: request does not contain the expected `Content-Type` header value")]
     UnsupportedMediaType,
+    /// Operation input contains data that does not adhere to the modeled [constraint traits].
+    /// [constraint traits]: <https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html>
+    #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
 }
 
