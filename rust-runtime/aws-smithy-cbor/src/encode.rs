@@ -91,7 +91,7 @@ impl Encoder {
     /// - when serializing a `map` shape.
     pub fn map(&mut self, len: usize) -> &mut Self {
         self.encoder
-            .array(len.try_into().expect("`usize` to `u64` conversion failed"))
+            .map(len.try_into().expect("`usize` to `u64` conversion failed"))
             .expect(INFALLIBLE_WRITE);
         self
     }
