@@ -494,7 +494,7 @@ class PrimitiveInstantiator(
 ) {
     val codegenScope = listOf(
         "DateTime" to RuntimeType.dateTime(runtimeConfig),
-        "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+        "Bytestream" to RuntimeType.byteStream(runtimeConfig),
         "Blob" to RuntimeType.blob(runtimeConfig),
         "SmithyJson" to RuntimeType.smithyJson(runtimeConfig),
         "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
