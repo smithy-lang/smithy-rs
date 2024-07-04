@@ -363,13 +363,7 @@ class CborSerializerGenerator(
         for (customization in customizations) {
             customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
         }
-        rust(
-            """
-            encoder.array(
-                (${context.valueExpression.asValue()}).len()
-            );
-            """,
-        )
+        rust("encoder.array((${context.valueExpression.asValue()}).len());")
         val itemName = safeName("item")
         rustBlock("for $itemName in ${context.valueExpression.asRef()}") {
             serializeMember(MemberContext.collectionMember(context, itemName))
@@ -382,13 +376,7 @@ class CborSerializerGenerator(
         for (customization in customizations) {
             customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
         }
-        rust(
-            """
-            encoder.map(
-                (${context.valueExpression.asValue()}).len().try_into().expect("`usize` to `u64` conversion failed")
-            );
-            """,
-        )
+        rust("encoder.map((${context.valueExpression.asValue()}).len());")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
             val keyExpression = "$keyName.as_str()"
             serializeMember(MemberContext.mapMember(context, keyExpression, valueName))

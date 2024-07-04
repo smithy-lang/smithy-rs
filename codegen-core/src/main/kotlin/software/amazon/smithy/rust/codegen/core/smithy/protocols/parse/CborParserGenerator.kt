@@ -277,6 +277,7 @@ class CborParserGenerator(
             val returnSymbolToParse = returnSymbolToParse(shape)
             rustBlockTemplate(
                 """
+            ##[allow(clippy::match_single_binding)]
             fn pair(
                 decoder: &mut #{Decoder}
             ) -> Result<#{UnionSymbol}, #{Error}>

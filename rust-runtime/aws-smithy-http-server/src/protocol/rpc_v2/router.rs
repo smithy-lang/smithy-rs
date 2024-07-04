@@ -55,11 +55,11 @@ pub struct RpcV2Router<S> {
 /// Requests for the `rpcv2` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
 /// header. An `rpcv2` request is malformed if it contains either of these headers. Server-side
 /// implementations MUST reject such requests for security reasons.
-const FORBIDDEN_HEADERS: &'static [&'static str] = &["x-amz-target", "x-amzn-target"];
+const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 
 /// Matches the `Identifier` ABNF rule in
 /// <https://smithy.io/2.0/spec/model.html#shape-id-abnf>.
-const IDENTIFIER_PATTERN: &'static str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
+const IDENTIFIER_PATTERN: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
 
 impl<S> RpcV2Router<S> {
     // TODO Consider building a nom parser
@@ -171,9 +171,7 @@ pub enum WireFormatError {
 /// by the protocol (see [`WireFormat`]).
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
     let header = headers.get("smithy-protocol").ok_or(WireFormatError::HeaderNotFound)?;
-    let header = header
-        .to_str()
-        .map_err(|e| WireFormatError::HeaderValueNotVisibleAscii(e))?;
+    let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
     let captures = RpcV2Router::<()>::wire_format_regex()
         .captures(header)
         .ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
@@ -217,7 +215,7 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
 
         // Some headers are not allowed.
         let request_has_forbidden_header = FORBIDDEN_HEADERS
-            .into_iter()
+            .iter()
             .any(|&forbidden_header| request.headers().contains_key(forbidden_header));
         if request_has_forbidden_header {
             return Err(Error::ForbiddenHeaders);
