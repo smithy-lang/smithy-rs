@@ -60,15 +60,7 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
         CodegenTest(
             "aws.protocoltests.restjson#RestJsonExtras",
             "rest_json_extras",
-            imports = listOf(
-                "$commonModels/rest-json-extras.smithy",
-                // TODO(https://github.com/smithy-lang/smithy/pull/2310): Can be deleted when consumed in next Smithy version.
-                "$commonModels/rest-json-extras-2310.smithy",
-                // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
-                "$commonModels/rest-json-extras-2314.smithy",
-                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
-                "$commonModels/rest-json-extras-2315.smithy",
-            ),
+            imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2477)
         // CodegenTest(
