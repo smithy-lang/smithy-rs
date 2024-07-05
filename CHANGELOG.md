@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 3rd, 2024
+==============
+**New this release:**
+- :bug: (server, [smithy-rs#3643](https://github.com/smithy-lang/smithy-rs/issues/3643)) A feature, `aws-lambda`, has been added to generated SDKs to re-export types required for Lambda deployment.
+- :bug: (server, [smithy-rs#3471](https://github.com/smithy-lang/smithy-rs/issues/3471), [smithy-rs#3724](https://github.com/smithy-lang/smithy-rs/issues/3724), @djedward) Content-Type header validation now ignores parameter portion of media types.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @djedward ([smithy-rs#3471](https://github.com/smithy-lang/smithy-rs/issues/3471), [smithy-rs#3724](https://github.com/smithy-lang/smithy-rs/issues/3724))
+
+
 June 19th, 2024
 ===============
 **Breaking Changes:**
