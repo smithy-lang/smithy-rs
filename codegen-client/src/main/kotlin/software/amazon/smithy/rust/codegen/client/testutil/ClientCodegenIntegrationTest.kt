@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.codegenIntegrationTest
 import java.nio.file.Path
@@ -36,6 +37,13 @@ fun clientIntegrationTest(
                     rustCrate: RustCrate,
                 ) {
                     test(codegenContext, rustCrate)
+                }
+
+                override fun protocolTestGenerator(
+                    codegenContext: ClientCodegenContext,
+                    baseGenerator: ProtocolTestGenerator,
+                ): ProtocolTestGenerator {
+                    return super.protocolTestGenerator(codegenContext, baseGenerator)
                 }
             }
         RustClientCodegenPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
