@@ -272,7 +272,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
-        // primitve types
+        // primitive types
         val StaticStr = RuntimeType("&'static str")
 
         // external cargo dependency types
