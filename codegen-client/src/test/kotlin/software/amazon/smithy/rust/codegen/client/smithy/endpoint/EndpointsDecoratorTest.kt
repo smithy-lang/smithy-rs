@@ -58,12 +58,12 @@ class EndpointsDecoratorTest {
                 }
             }],
             "parameters": {
-                "Bucket": { "required": false, "type": "String" },
-                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
-                "BuiltInWithDefault": { "required": true, "type": "String", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
-                "BoolBuiltInWithDefault": { "required": true, "type": "Boolean", "builtIn": "AWS::FooBar", "default": true },
-                "AStringParam": { "required": false, "type": "String" },
-                "ABoolParam": { "required": false, "type": "Boolean" },
+                "Bucket": { "required": false, "type": "string" },
+                "Region": { "required": false, "type": "string", "builtIn": "AWS::Region" },
+                "BuiltInWithDefault": { "required": true, "type": "string", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
+                "BoolBuiltInWithDefault": { "required": true, "type": "boolean", "builtIn": "AWS::FooBar", "default": true },
+                "AStringParam": { "required": false, "type": "string" },
+                "ABoolParam": { "required": false, "type": "boolean" },
                 "AStringArrayParam": { "required": false, "type": "stringArray" }
             }
         })

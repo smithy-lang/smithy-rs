@@ -158,7 +158,8 @@ class EndpointParamsInterceptorGenerator(
                 is StringNode -> rust("Some(${node.value.dq()}.to_string())")
                 is BooleanNode -> rust("Some(${node.value})")
                 is ArrayNode -> {
-                    val elms = node.elements.map { "\"$it\".to_string()" }.joinToString(",")
+                    // Cast the elements to a StringNode so this will fail if non-string values are provided
+                    val elms = node.elements.map { "\"${(it as StringNode).value}\".to_string()" }.joinToString(",")
                     rust("Some(vec![$elms])")
                 }
 
