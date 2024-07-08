@@ -127,11 +127,7 @@ mod tests {
     #[tokio::test]
     async fn simple_routing() {
         let routes = vec![("Service.Operation")];
-        let router: AwsJsonRouter<_> = routes
-            .clone()
-            .into_iter()
-            .map(|operation| (operation.to_string(), ()))
-            .collect();
+        let router: AwsJsonRouter<_> = routes.clone().into_iter().map(|operation| (operation, ())).collect();
 
         let mut headers = HeaderMap::new();
         headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));

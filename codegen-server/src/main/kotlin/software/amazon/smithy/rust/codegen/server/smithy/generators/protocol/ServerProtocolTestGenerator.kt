@@ -71,9 +71,6 @@ class ServerProtocolTestGenerator(
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTrait"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues"),
-                // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when fixed tests are consumed in next Smithy version
-                FailingTest.RequestTest(REST_JSON, "RestJsonEnumPayloadRequest"),
-                FailingTest.RequestTest(REST_JSON, "RestJsonStringPayloadRequest"),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0"),
@@ -144,7 +141,8 @@ class ServerProtocolTestGenerator(
                 // These tests are broken because they are missing a target header.
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody"),
-                // Response defaults are not set when builders are not used https://github.com/smithy-lang/smithy-rs/issues/3339
+                // For the following 4 tests, response defaults are not set when builders are not used
+                // https://github.com/smithy-lang/smithy-rs/issues/3339
                 FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(
                     AWS_JSON_10,
@@ -154,9 +152,13 @@ class ServerProtocolTestGenerator(
                 FailingTest.MalformedRequestTest(RPC_V2_CBOR_EXTRAS, "AdditionalTokensEmptyStruct"),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3339)
                 FailingTest.ResponseTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3743): We need to be able to configure
                 //  instantiator so that it uses default _modeled_ values; `""` is not a valid enum value for `defaultEnum`.
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody"),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3735): Null `Document` may come through a request even though its shape is `@required`
+                FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
             )
 
         private val BrokenTests:
