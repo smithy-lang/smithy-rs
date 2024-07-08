@@ -154,8 +154,9 @@ class ServerProtocolTestGenerator(
                 FailingTest.MalformedRequestTest(RPC_V2_CBOR_EXTRAS, "AdditionalTokensEmptyStruct"),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3339)
                 FailingTest.ResponseTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams"),
-                // TODO: We need to be able to configure instantiator so that it uses default _modeled_ values; `""` is not a valid enum value for `defaultEnum`.
-                FailingTest.ResponseTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody"),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3743): We need to be able to configure
+                //  instantiator so that it uses default _modeled_ values; `""` is not a valid enum value for `defaultEnum`.
+                FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody"),
             )
 
         private val BrokenTests:
