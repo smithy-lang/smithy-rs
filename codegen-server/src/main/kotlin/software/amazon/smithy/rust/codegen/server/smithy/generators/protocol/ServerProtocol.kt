@@ -163,10 +163,10 @@ class ServerAwsJsonProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust("""String::from("$serviceName.$operationName")""")
+        rust(""""$serviceName.$operationName"""")
     }
 
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.String
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
 
     override fun serverRouterRuntimeConstructor() =
         when (version) {
