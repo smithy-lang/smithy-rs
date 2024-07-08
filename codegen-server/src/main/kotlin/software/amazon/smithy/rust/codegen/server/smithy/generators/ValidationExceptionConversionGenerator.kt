@@ -53,4 +53,8 @@ interface ValidationExceptionConversionGenerator {
         collectionConstraintsInfo: Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ): Writable
+
+    fun unionShapeConstraintViolationImplBlock(
+        unionConstraintTraitInfo: Collection<UnionConstraintTraitInfo>,
+    ): Writable
 }

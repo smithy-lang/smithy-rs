@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
@@ -53,6 +52,7 @@ class UnconstrainedUnionGenerator(
     private val inlineModuleCreator: InlineModuleCreator,
     private val modelsModuleWriter: RustWriter,
     val shape: UnionShape,
+    private val validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -172,18 +172,15 @@ class UnconstrainedUnionGenerator(
             )
 
             if (shape.isReachableFromOperationInput()) {
-                rustBlock("impl $constraintViolationName") {
-                    rustBlockTemplate(
-                        "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField",
-                        "String" to RuntimeType.String,
-                    ) {
-                        withBlock("match self {", "}") {
-                            for (constraintViolation in constraintViolations()) {
-                                rust("""Self::${constraintViolation.name()}(inner) => inner.as_validation_exception_field(path + "/${constraintViolation.forMember.memberName}"),""")
-                            }
-                        }
+                rustTemplate(
+                    """
+                    impl $constraintViolationName {
+                        #{UnionShapeConstraintViolationImplBlock:W}
                     }
-                }
+                    """,
+                    "UnionShapeConstraintViolationImplBlock" to
+                        validationExceptionConversionGenerator.unionShapeConstraintViolationImplBlock(constraintViolations()),
+                )
             }
         }
     }
@@ -199,30 +196,26 @@ class UnconstrainedUnionGenerator(
             }
         }
 
-    data class ConstraintViolation(val forMember: MemberShape) {
-        fun name() = forMember.memberName.toPascalCase()
-    }
-
     private fun constraintViolations() =
         sortedMembers
             .filter { it.targetCanReachConstrainedShape(model, symbolProvider) }
-            .map { ConstraintViolation(it) }
+            .map { UnionConstraintTraitInfo(it) }
 
     private fun renderConstraintViolation(
         writer: RustWriter,
-        constraintViolation: ConstraintViolation,
+        unionConstraintTraitInfo: UnionConstraintTraitInfo,
     ) {
-        val targetShape = model.expectShape(constraintViolation.forMember.target)
+        val targetShape = model.expectShape(unionConstraintTraitInfo.forMember.target)
 
         val constraintViolationSymbol =
             constraintViolationSymbolProvider.toSymbol(targetShape)
                 // Box this constraint violation symbol if necessary.
-                .letIf(constraintViolation.forMember.hasTrait<ConstraintViolationRustBoxTrait>()) {
+                .letIf(unionConstraintTraitInfo.forMember.hasTrait<ConstraintViolationRustBoxTrait>()) {
                     it.makeRustBoxed()
                 }
 
         writer.rust(
-            "${constraintViolation.name()}(#T),",
+            "${unionConstraintTraitInfo.name()}(#T),",
             constraintViolationSymbol,
         )
     }
@@ -291,7 +284,7 @@ class UnconstrainedUnionGenerator(
                     {
                         let constrained: #{ConstrainedSymbol} = $unconstrainedVar
                             .try_into()$boxIt$boxErr
-                            .map_err(Self::Error::${ConstraintViolation(member).name()})?;
+                            .map_err(Self::Error::${UnionConstraintTraitInfo(member).name()})?;
                         constrained.into()
                     }
                     """,
@@ -304,9 +297,13 @@ class UnconstrainedUnionGenerator(
                         .try_into()
                         $boxIt
                         $boxErr
-                        .map_err(Self::Error::${ConstraintViolation(member).name()})?
+                        .map_err(Self::Error::${UnionConstraintTraitInfo(member).name()})?
                     """,
                 )
             }
         }
+}
+
+data class UnionConstraintTraitInfo(val forMember: MemberShape) {
+    fun name() = forMember.memberName.toPascalCase()
 }

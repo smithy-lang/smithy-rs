@@ -596,6 +596,7 @@ open class ServerCodegenVisitor(
                     rustCrate.createInlineModuleCreator(),
                     this@modelsModuleWriter,
                     shape,
+                    validationExceptionConversionGenerator,
                 ).render()
             }
         }
