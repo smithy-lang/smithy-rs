@@ -11,12 +11,22 @@ use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Serialization`]
+    #[error("request failed to deserialize or response failed to serialize: {0}")]
     Serialization(crate::Error),
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::InternalFailure`]
+    #[error("internal failure: {0}")]
     InternalFailure(crate::Error),
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::NotAcceptable`]
+    #[error("not acceptable request: request contains an `Accept` header with a MIME type, and the server cannot return a response body adhering to that MIME type")]
     NotAcceptable,
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::UnsupportedMediaType`]
+    #[error("unsupported media type: request does not contain the expected `Content-Type` header value")]
     UnsupportedMediaType,
+    /// See: [`crate::protocol::rest_json_1::runtime_error::RuntimeError::Validation`]
+    #[error("validation failure: operation input contains data that does not adhere to the modeled constraints: {0}")]
     Validation(String),
 }
 

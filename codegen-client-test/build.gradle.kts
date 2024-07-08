@@ -66,16 +66,7 @@ val allCodegenTests = listOf(
     ClientTest(
         "aws.protocoltests.restjson#RestJsonExtras",
         "rest_json_extras",
-        dependsOn = listOf(
-            "rest-json-extras.smithy",
-            // TODO(https://github.com/smithy-lang/smithy/pull/2310): Can be deleted when consumed in next Smithy version.
-            "rest-json-extras-2310.smithy",
-            // TODO(https://github.com/smithy-lang/smithy/pull/2314): Can be deleted when consumed in next Smithy version.
-            "rest-json-extras-2314.smithy",
-            // TODO(https://github.com/smithy-lang/smithy/pull/2315): Can be deleted when consumed in next Smithy version.
-            // TODO(https://github.com/smithy-lang/smithy/pull/2331): Can be deleted when consumed in next Smithy version.
-            "rest-json-extras-2315.smithy",
-        ),
+        dependsOn = listOf("rest-json-extras.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#MiscService", "misc", dependsOn = listOf("misc.smithy")),
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),

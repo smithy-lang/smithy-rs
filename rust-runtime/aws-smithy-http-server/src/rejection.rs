@@ -25,11 +25,16 @@ pub mod any_rejections {
     //! [`IntoResponse`].
 
     use super::IntoResponse;
+    use thiserror::Error;
 
     macro_rules! any_rejection {
         ($name:ident, $($var:ident),+) => (
+            #[derive(Debug, Error)]
             pub enum $name<$($var),*> {
-                $($var ($var),)*
+                $(
+                    #[error("{0}")]
+                    $var($var),
+                )*
             }
 
             impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
