@@ -251,7 +251,7 @@ impl<const N: usize> LogBuffer<N> {
 
     /// If this LogBuffer is empty, returns `true`. Else, returns `false`.
     fn is_empty(&self) -> bool {
-        return self.length == 0;
+        self.length == 0
     }
 }
 
