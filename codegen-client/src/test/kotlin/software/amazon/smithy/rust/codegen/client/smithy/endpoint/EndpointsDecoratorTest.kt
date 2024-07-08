@@ -191,8 +191,8 @@ class EndpointsDecoratorTest {
                                             .a_string_array_param(
                                                 vec!["a", "b", "c"]
                                                     .iter()
-                                                    .map(|i| i.to_string())
-                                                    .collect::<Vec<String>>()
+                                                    .map(ToString::to_string)
+                                                    .collect::<Vec<_>>()
                                             )
                                             .build()
                                             .unwrap()
