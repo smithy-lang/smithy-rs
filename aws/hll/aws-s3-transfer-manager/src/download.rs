@@ -17,7 +17,7 @@ use crate::download::discovery::{discover_obj, ObjectDiscovery};
 use crate::download::handle::DownloadHandle;
 use crate::download::worker::{distribute_work, download_chunks, ChunkResponse};
 use crate::error::TransferError;
-use crate::MEBIBYTE;
+use crate::{DEFAULT_CONCURRENCY, MEBIBYTE};
 use aws_sdk_s3::operation::get_object::builders::{GetObjectFluentBuilder, GetObjectInputBuilder};
 use aws_types::SdkConfig;
 use context::DownloadContext;
@@ -63,7 +63,7 @@ impl Builder {
     fn new() -> Self {
         Self {
             target_part_size_bytes: 8 * MEBIBYTE,
-            concurrency: 8,
+            concurrency: DEFAULT_CONCURRENCY,
             sdk_config: None,
         }
     }
@@ -126,7 +126,7 @@ impl Downloader {
         Builder::new()
     }
 
-    /// Download a single object from S3.
+    /// Download a single object from Amazon S3.
     ///
     /// A single logical request may be split into many concurrent ranged `GetObject` requests
     /// to improve throughput.

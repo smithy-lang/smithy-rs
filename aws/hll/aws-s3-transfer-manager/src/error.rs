@@ -18,6 +18,10 @@ pub enum TransferError {
     /// A download failed
     #[error("download failed")]
     DownloadFailed(#[from] DownloadError),
+
+    /// A upload failed
+    #[error("upload failed")]
+    UploadFailed(#[from] UploadError),
 }
 
 pub(crate) type GetObjectSdkError = ::aws_smithy_runtime_api::client::result::SdkError<
@@ -42,6 +46,28 @@ pub enum DownloadError {
         /// The underlying SDK error
         source: SdkOperationError,
     },
+}
+
+pub(crate) type CreateMultipartUploadSdkError = ::aws_smithy_runtime_api::client::result::SdkError<
+    aws_sdk_s3::operation::create_multipart_upload::CreateMultipartUploadError,
+    ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+>;
+
+pub(crate) type UploadPartSdkError = ::aws_smithy_runtime_api::client::result::SdkError<
+    aws_sdk_s3::operation::upload_part::UploadPartError,
+    ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+>;
+
+/// An error related to upload an object
+#[derive(thiserror::Error, Debug)]
+pub enum UploadError {
+    /// An error occurred invoking [aws_sdk_s3::Client::CreateMultipartUpload]
+    #[error(transparent)]
+    CreateMultipartUpload(#[from] CreateMultipartUploadSdkError),
+
+    /// An error occurred invoking [aws_sdk_s3::Client::UploadPart]
+    #[error(transparent)]
+    UploadPart(#[from] UploadPartSdkError),
 }
 
 /// An underlying S3 SDK error
@@ -71,4 +97,10 @@ pub(crate) fn chunk_failed<E: Into<SdkOperationError>>(e: E) -> TransferError {
 
 pub(crate) fn invalid_meta_request(message: String) -> TransferError {
     TransferError::InvalidMetaRequest(message)
+}
+
+impl From<CreateMultipartUploadSdkError> for TransferError {
+    fn from(value: CreateMultipartUploadSdkError) -> Self {
+        TransferError::UploadFailed(value.into())
+    }
 }
