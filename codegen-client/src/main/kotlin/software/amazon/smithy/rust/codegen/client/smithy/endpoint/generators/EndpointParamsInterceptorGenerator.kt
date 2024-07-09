@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
@@ -156,6 +157,12 @@ class EndpointParamsInterceptorGenerator(
             when (node) {
                 is StringNode -> rust("Some(${node.value.dq()}.to_string())")
                 is BooleanNode -> rust("Some(${node.value})")
+                is ArrayNode -> {
+                    // Cast the elements to a StringNode so this will fail if non-string values are provided
+                    val elms = node.elements.map { "${(it as StringNode).value.dq()}.to_string()" }.joinToString(",")
+                    rust("Some(vec![$elms])")
+                }
+
                 else -> PANIC("unsupported default value: $node")
             }
         }

@@ -109,6 +109,7 @@ fun Parameter.symbol(): Symbol {
         when (this.type) {
             ParameterType.STRING -> RustType.String
             ParameterType.BOOLEAN -> RustType.Bool
+            ParameterType.STRING_ARRAY -> RustType.Vec(RustType.String)
             else -> TODO("unexpected type: ${this.type}")
         }
     // Parameter return types are always optional

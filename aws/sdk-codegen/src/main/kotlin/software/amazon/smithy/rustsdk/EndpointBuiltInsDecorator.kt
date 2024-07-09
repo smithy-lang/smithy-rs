@@ -114,6 +114,7 @@ fun Model.sdkConfigSetter(
         when (builtinType) {
             ParameterType.STRING -> writable { rust("|s|s.to_string()") }
             ParameterType.BOOLEAN -> null
+            // No builtins currently map to stringArray
             else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
         }
 

@@ -58,12 +58,13 @@ class EndpointsDecoratorTest {
                 }
             }],
             "parameters": {
-                "Bucket": { "required": false, "type": "String" },
-                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
-                "BuiltInWithDefault": { "required": true, "type": "String", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
-                "BoolBuiltInWithDefault": { "required": true, "type": "Boolean", "builtIn": "AWS::FooBar", "default": true },
-                "AStringParam": { "required": false, "type": "String" },
-                "ABoolParam": { "required": false, "type": "Boolean" }
+                "Bucket": { "required": false, "type": "string" },
+                "Region": { "required": false, "type": "string", "builtIn": "AWS::Region" },
+                "BuiltInWithDefault": { "required": true, "type": "string", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
+                "BoolBuiltInWithDefault": { "required": true, "type": "boolean", "builtIn": "AWS::FooBar", "default": true },
+                "AStringParam": { "required": false, "type": "string" },
+                "ABoolParam": { "required": false, "type": "boolean" },
+                "AStringArrayParam": { "required": false, "type": "stringArray" }
             }
         })
         @clientContextParams(
@@ -107,7 +108,10 @@ class EndpointsDecoratorTest {
             operations: [TestOperation]
         }
 
-        @staticContextParams(Region: { value: "us-east-2" })
+        @staticContextParams(
+            Region: { value: "us-east-2" },
+            AStringArrayParam: {value: ["a", "b", "c"]}
+        )
         operation TestOperation {
             input: TestOperationInput
         }
@@ -184,6 +188,12 @@ class EndpointsDecoratorTest {
                                             .a_bool_param(false)
                                             .a_string_param("hello".to_string())
                                             .region("us-east-2".to_string())
+                                            .a_string_array_param(
+                                                vec!["a", "b", "c"]
+                                                    .iter()
+                                                    .map(ToString::to_string)
+                                                    .collect::<Vec<_>>()
+                                            )
                                             .build()
                                             .unwrap()
                                     );
@@ -198,6 +208,7 @@ class EndpointsDecoratorTest {
 
                             let interceptor = TestInterceptor::default();
                             let config = Config::builder()
+                                .behavior_version_latest()
                                 .http_client(NeverClient::new())
                                 .interceptor(interceptor.clone())
                                 .timeout_config(
