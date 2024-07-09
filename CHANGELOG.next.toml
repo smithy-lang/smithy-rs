@@ -10,35 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[smithy-rs]]
-message = "Support `stringArray` type in endpoints params"
-references = ["smithy-rs#3742"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "landonxjames"
-
-[[aws-sdk-rust]]
-message = "Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon."
-references = ["smithy-rs#3744"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon."
-references = ["smithy-rs#3744"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "Velfi"
-
-[[smithy-rs]]
-message = """
-`FromParts<Protocol>::Rejection` must implement `std::fmt::Display`.
-
-Handlers can accept user-defined types if they implement 
-[FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) with a `Rejection` 
-type that implements `std::fmt::Display` (preferably `std::error::Error`) to enable error logging when parameter construction from request parts fails.
-
-See the [changelog discussion for futher details](https://github.com/smithy-lang/smithy-rs/discussions/3749).
-"""
-references = ["smithy-rs#3746"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
-author = "drganjoo"
