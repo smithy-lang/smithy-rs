@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -17,7 +18,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
@@ -29,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSym
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -70,8 +74,8 @@ interface ServerProtocol : Protocol {
     fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
 
     /**
-     * In some protocols, such as restJson1,
-     * when there is no modeled body input, content type must not be set and the body must be empty.
+     * In some protocols, such as `restJson1` and `rpcv2Cbor`,
+     * when there is no modeled body input, `content-type` must not be set and the body must be empty.
      * Returns a boolean indicating whether to perform this check.
      */
     fun serverContentTypeCheckNoModeledInput(): Boolean = false
@@ -90,6 +94,19 @@ interface ServerProtocol : Protocol {
     fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
+
+    /**
+     * The function that deserializes a non-streaming `@httpPayload`-bound shape takes as input a byte slab and returns
+     * a `Result` holding the deserialized shape if successful.
+     * What error type should we use in case of failure?
+     *
+     * Note that despite the trait (https://smithy.io/2.0/spec/http-bindings.html#httppayload-trait) being able to
+     * target any structure member shape, AWS Protocols only support binding the following shape types to the payload
+     * (and Smithy does indeed enforce this at model build-time): string, blob, structure, union, and document
+     *
+     * Implementers are free to throw an exception if the protocol doesn't support `@httpPayload`.
+     */
+    fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType
 }
 
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
@@ -185,6 +202,10 @@ class ServerAwsJsonProtocol(
     override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
+
+    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
+        UNREACHABLE("This protocol does not support `@httpPayload`")
+    }
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) =
@@ -227,6 +248,18 @@ class ServerRestJsonProtocol(
     override fun serverRouterRuntimeConstructor() = "new_rest_json_router"
 
     override fun serverContentTypeCheckNoModeledInput() = true
+
+    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
+        check(binding.location == HttpLocation.PAYLOAD)
+
+        if (codegenContext.model.expectShape(binding.member.target) is StringShape) {
+            // The only way deserializing a string can fail is if the HTTP body does not contain valid UTF-8.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3750): we're returning an incorrect `RequestRejection` variant here.
+            return requestRejection(runtimeConfig)
+        }
+
+        return RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError")
+    }
 }
 
 class ServerRestXmlProtocol(
@@ -252,6 +285,18 @@ class ServerRestXmlProtocol(
     override fun serverRouterRuntimeConstructor() = "new_rest_xml_router"
 
     override fun serverContentTypeCheckNoModeledInput() = true
+
+    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
+        check(binding.location == HttpLocation.PAYLOAD)
+
+        if (codegenContext.model.expectShape(binding.member.target) is StringShape) {
+            // The only way deserializing a string can fail is if the HTTP body does not contain valid UTF-8.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3750): we're returning an incorrect `RequestRejection` variant here.
+            return requestRejection(runtimeConfig)
+        }
+
+        return RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError")
+    }
 }
 
 /**
