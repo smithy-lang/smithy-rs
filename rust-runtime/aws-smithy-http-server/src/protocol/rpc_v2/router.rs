@@ -62,7 +62,7 @@ const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 const IDENTIFIER_PATTERN: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
 
 impl<S> RpcV2Router<S> {
-    // TODO Consider building a nom parser
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3748) Consider building a nom parser.
     fn uri_path_regex() -> &'static Regex {
         // Every request for the `rpcv2Cbor` protocol MUST be sent to a URL with the
         // following form: `{prefix?}/service/{serviceName}/operation/{operationName}`
@@ -124,24 +124,20 @@ impl<S> RpcV2Router<S> {
     }
 }
 
-// TODO: Implement (current body copied from the rest xml impl)
-// and document.
-/// A Smithy RPC V2 routing error.
+// TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
+// we have no tests to pin our implemenation against!
 impl IntoResponse<RpcV2> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
-            Error::NotFound => http::Response::builder()
+            Error::MethodNotAllowed => method_disallowed(),
+            _ => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
-                // TODO
-                .header(http::header::CONTENT_TYPE, "application/xml")
+                .header(http::header::CONTENT_TYPE, "application/cbor")
                 .extension(RuntimeErrorExtension::new(
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
-            Error::MethodNotAllowed => method_disallowed(),
-            // TODO
-            _ => todo!(),
+                .expect("invalid HTTP response for RPCv2 CBOR routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
         }
     }
 }

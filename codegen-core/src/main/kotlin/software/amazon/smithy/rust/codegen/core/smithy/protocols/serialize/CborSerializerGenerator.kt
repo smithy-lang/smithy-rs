@@ -268,8 +268,8 @@ class CborSerializerGenerator(
                     "StructureSymbol" to symbolProvider.toSymbol(context.shape),
                     *codegenScope,
                 ) {
-                    // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
-                    //  instead of `.begin_map()` for efficiency. Add test.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3745) If all members are non-`Option`-al,
+                    //  we know AOT the map's size and can use `.map()` instead of `.begin_map()` for efficiency.
                     rust("encoder.begin_map();")
                     for (customization in customizations) {
                         customization.section(

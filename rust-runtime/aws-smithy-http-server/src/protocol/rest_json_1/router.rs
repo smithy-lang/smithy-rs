@@ -12,6 +12,8 @@ use super::RestJson1;
 
 pub use crate::protocol::rest::router::*;
 
+// TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
+// we have no tests to pin our implemenation against!
 impl IntoResponse<RestJson1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
