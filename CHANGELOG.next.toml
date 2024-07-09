@@ -36,8 +36,8 @@ message = """
 An operation handler can accept user-defined data types as long as they implement
 [FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html).
 The trait has an associated type [`Rejection`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html#associatedtype.Rejection).
-Whatever data type is set for `Rejection` must now implement (at least) `std::fmt::Display`.
-Additionally, it is recommended to implement `std::error::Error` for that type.
+Whatever data type is set for `Rejection` must now implement (at least) [`std::fmt::Display`](https://doc.rust-lang.org/std/fmt/trait.Display.html).
+Additionally, it is recommended to implement [`std::error::Error`](https://doc.rust-lang.org/std/error/trait.Error.html) for that type.
 
 This requirement is necessary to help us write error log entries when the parameter that the operation handler expects fails to be
 constructed from the request parts.
