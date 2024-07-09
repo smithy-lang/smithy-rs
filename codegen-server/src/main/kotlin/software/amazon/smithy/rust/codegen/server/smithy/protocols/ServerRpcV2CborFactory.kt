@@ -11,11 +11,17 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGenerat
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 
-class ServerRpcV2CborFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
+class ServerRpcV2CborFactory(
+    private val additionalServerHttpBoundProtocolCustomizations: List<ServerHttpBoundProtocolCustomization> = emptyList(),
+) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
     override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerRpcV2CborProtocol(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, ServerRpcV2CborProtocol(codegenContext))
+        ServerHttpBoundProtocolGenerator(
+            codegenContext,
+            ServerRpcV2CborProtocol(codegenContext),
+            additionalServerHttpBoundProtocolCustomizations,
+        )
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

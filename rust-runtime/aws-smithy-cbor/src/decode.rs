@@ -50,8 +50,11 @@ impl DeserializeError {
     /// Unknown union variant was detected. Servers reject unknown union varaints.
     pub fn unknown_union_variant(variant_name: &str, at: usize) -> Self {
         Self {
-            _inner: Error::message(format!("encountered unknown union variant {}", variant_name))
-                .at(at),
+            _inner: Error::message(format!(
+                "encountered unknown union variant {}",
+                variant_name
+            ))
+            .at(at),
         }
     }
 
@@ -206,8 +209,9 @@ impl<'b> Decoder<'b> {
     /// a `DeserializeError` error is returned.
     pub fn timestamp(&mut self) -> Result<DateTime, DeserializeError> {
         let tag = self.decoder.tag().map_err(DeserializeError::new)?;
+        let timestamp_tag = minicbor::data::Tag::from(minicbor::data::IanaTag::Timestamp);
 
-        if !matches!(tag, minicbor::data::Tag::Timestamp) {
+        if tag != timestamp_tag {
             Err(DeserializeError::new(Error::message(
                 "expected timestamp tag",
             )))

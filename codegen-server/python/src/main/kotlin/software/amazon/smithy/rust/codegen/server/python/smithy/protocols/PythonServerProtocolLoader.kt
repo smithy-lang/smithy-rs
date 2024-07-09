@@ -56,10 +56,10 @@ class PythonServerAfterDeserializedMemberJsonParserCustomization(private val run
 }
 
 /**
- * Customization class used to force casting a non primitive type into one overriden by a new symbol provider,
+ * Customization class used to force casting a non-primitive type into one overridden by a new symbol provider,
  * by explicitly calling `into()` on it.
  */
-class PythonServerAfterDeserializedMemberServerHttpBoundCustomization() :
+class PythonServerAfterDeserializedMemberServerHttpBoundCustomization :
     ServerHttpBoundProtocolCustomization() {
     override fun section(section: ServerHttpBoundProtocolSection): Writable =
         when (section) {

@@ -80,8 +80,11 @@ class ServerProtocolLoader(supportedProtocols: ProtocolMap<ServerProtocolGenerat
                         AwsJsonVersion.Json11,
                         additionalServerHttpBoundProtocolCustomizations = listOf(StreamPayloadSerializerCustomization()),
                     ),
-                // TODO `StreamPayloadSerializerCustomization`
-                Rpcv2CborTrait.ID to ServerRpcV2CborFactory(),
+                Rpcv2CborTrait.ID to ServerRpcV2CborFactory(
+                    additionalServerHttpBoundProtocolCustomizations = listOf(
+                        StreamPayloadSerializerCustomization(),
+                    ),
+                ),
             )
     }
 }

@@ -98,7 +98,9 @@ impl Encoder {
 
     pub fn timestamp(&mut self, x: &DateTime) -> &mut Self {
         self.encoder
-            .tag(minicbor::data::Tag::Timestamp)
+            .tag(minicbor::data::Tag::from(
+                minicbor::data::IanaTag::Timestamp,
+            ))
             .expect(INFALLIBLE_WRITE);
         self.encoder.f64(x.as_secs_f64()).expect(INFALLIBLE_WRITE);
         self
