@@ -53,7 +53,7 @@ class ServerRequestBindingGenerator(
     ): RuntimeType =
         httpBindingGenerator.generateDeserializePayloadFn(
             binding,
-            protocol.deserializeHttpPayloadErrorType(binding).toSymbol(),
+            protocol.deserializePayloadErrorType(binding).toSymbol(),
             structuredHandler,
             HttpMessageType.REQUEST,
         )

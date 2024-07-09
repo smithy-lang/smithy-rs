@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSym
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
-import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -96,17 +95,17 @@ interface ServerProtocol : Protocol {
             .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
 
     /**
-     * The function that deserializes a non-streaming `@httpPayload`-bound shape takes as input a byte slab and returns
-     * a `Result` holding the deserialized shape if successful.
-     * What error type should we use in case of failure?
+     * The function that deserializes a payload-bound shape takes as input a byte slab and returns a `Result` holding
+     * the deserialized shape if successful. What error type should we use in case of failure?
+     *
+     * The shape could be payload-bound either because of the `@httpPayload` trait, or because it's part of an event
+     * stream.
      *
      * Note that despite the trait (https://smithy.io/2.0/spec/http-bindings.html#httppayload-trait) being able to
      * target any structure member shape, AWS Protocols only support binding the following shape types to the payload
      * (and Smithy does indeed enforce this at model build-time): string, blob, structure, union, and document
-     *
-     * Implementers are free to throw an exception if the protocol doesn't support `@httpPayload`.
      */
-    fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType
+    fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType
 }
 
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
@@ -203,9 +202,17 @@ class ServerAwsJsonProtocol(
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
 
-    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
-        UNREACHABLE("This protocol does not support `@httpPayload`")
-    }
+    /*
+     * Note that despite the AWS JSON 1.x protocols not supporting the `@httpPayload` trait, event streams are bound
+     * to the payload.
+     */
+    override fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType =
+        deserializePayloadErrorType(
+            codegenContext,
+            binding,
+            requestRejection(runtimeConfig),
+            RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError"),
+        )
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) =
@@ -249,17 +256,13 @@ class ServerRestJsonProtocol(
 
     override fun serverContentTypeCheckNoModeledInput() = true
 
-    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
-        check(binding.location == HttpLocation.PAYLOAD)
-
-        if (codegenContext.model.expectShape(binding.member.target) is StringShape) {
-            // The only way deserializing a string can fail is if the HTTP body does not contain valid UTF-8.
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3750): we're returning an incorrect `RequestRejection` variant here.
-            return requestRejection(runtimeConfig)
-        }
-
-        return RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError")
-    }
+    override fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType =
+        deserializePayloadErrorType(
+            codegenContext,
+            binding,
+            requestRejection(runtimeConfig),
+            RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError"),
+        )
 }
 
 class ServerRestXmlProtocol(
@@ -286,17 +289,31 @@ class ServerRestXmlProtocol(
 
     override fun serverContentTypeCheckNoModeledInput() = true
 
-    override fun deserializeHttpPayloadErrorType(binding: HttpBindingDescriptor): RuntimeType {
-        check(binding.location == HttpLocation.PAYLOAD)
+    override fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType =
+        deserializePayloadErrorType(
+            codegenContext,
+            binding,
+            requestRejection(runtimeConfig),
+            RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
+}
 
-        if (codegenContext.model.expectShape(binding.member.target) is StringShape) {
-            // The only way deserializing a string can fail is if the HTTP body does not contain valid UTF-8.
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3750): we're returning an incorrect `RequestRejection` variant here.
-            return requestRejection(runtimeConfig)
-        }
+/** Just a common function to keep things DRY. **/
+fun deserializePayloadErrorType(
+    codegenContext: CodegenContext,
+    binding: HttpBindingDescriptor,
+    requestRejection: RuntimeType,
+    protocolSerializationFormatError: RuntimeType,
+): RuntimeType {
+    check(binding.location == HttpLocation.PAYLOAD)
 
-        return RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError")
+    if (codegenContext.model.expectShape(binding.member.target) is StringShape) {
+        // The only way deserializing a string can fail is if the HTTP body does not contain valid UTF-8.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3750): we're returning an incorrect `RequestRejection` variant here.
+        return requestRejection
     }
+
+    return protocolSerializationFormatError
 }
 
 /**
