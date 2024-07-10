@@ -9,7 +9,7 @@ pub mod aws_json_11;
 pub mod rest;
 pub mod rest_json_1;
 pub mod rest_xml;
-pub mod rpc_v2;
+pub mod rpc_v2_cbor;
 
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
