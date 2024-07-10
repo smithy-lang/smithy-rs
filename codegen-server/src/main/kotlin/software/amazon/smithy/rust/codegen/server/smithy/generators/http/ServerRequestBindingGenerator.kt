@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.http
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -20,12 +19,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 class ServerRequestBindingGenerator(
-    protocol: Protocol,
+    val protocol: ServerProtocol,
     codegenContext: ServerCodegenContext,
     operationShape: OperationShape,
     additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
@@ -50,12 +49,11 @@ class ServerRequestBindingGenerator(
 
     fun generateDeserializePayloadFn(
         binding: HttpBindingDescriptor,
-        errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
     ): RuntimeType =
         httpBindingGenerator.generateDeserializePayloadFn(
             binding,
-            errorSymbol,
+            protocol.deserializePayloadErrorType(binding).toSymbol(),
             structuredHandler,
             HttpMessageType.REQUEST,
         )
