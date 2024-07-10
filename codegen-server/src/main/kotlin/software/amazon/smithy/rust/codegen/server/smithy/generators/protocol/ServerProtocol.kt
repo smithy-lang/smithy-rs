@@ -311,7 +311,7 @@ class ServerRpcV2CborProtocol(
 ) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
-    override val protocolModulePath = "rpc_v2"
+    override val protocolModulePath = "rpc_v2_cbor"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
         CborParserGenerator(
@@ -338,7 +338,7 @@ class ServerRpcV2CborProtocol(
 
     override fun routerType() =
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-            .resolve("protocol::rpc_v2::router::RpcV2CborRouter")
+            .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,

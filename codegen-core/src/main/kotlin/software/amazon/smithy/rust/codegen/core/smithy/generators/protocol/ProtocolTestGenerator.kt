@@ -417,7 +417,7 @@ object ServiceShapeId {
     const val AWS_JSON_11 = "aws.protocoltests.json#JsonProtocol"
     const val REST_JSON = "aws.protocoltests.restjson#RestJson"
     const val RPC_V2_CBOR = "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
-    const val RPC_V2_CBOR_EXTRAS = "smithy.protocoltests.rpcv2Cbor#RpcV2Service"
+    const val RPC_V2_CBOR_EXTRAS = "smithy.protocoltests.rpcv2Cbor#RpcV2CborService"
     const val REST_XML = "aws.protocoltests.restxml#RestXml"
     const val AWS_QUERY = "aws.protocoltests.query#AwsQuery"
     const val EC2_QUERY = "aws.protocoltests.ec2#AwsEc2"

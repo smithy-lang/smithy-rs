@@ -5,6 +5,10 @@
 
 //! CBOR abstractions for Smithy.
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
+
 pub mod data;
 pub mod decode;
 pub mod encode;
