@@ -7,7 +7,6 @@ pub mod rejection;
 pub mod router;
 pub mod runtime_error;
 
-// TODO Rename to RpcV2Cbor
-// TODO: Fill link
-/// [Smithy RPC V2]().
-pub struct RpcV2;
+/// [Smithy RPC v2 CBOR](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html)
+/// protocol.
+pub struct RpcV2Cbor;

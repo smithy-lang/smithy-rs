@@ -24,7 +24,7 @@ use crate::routing::Route;
 use crate::routing::Router;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
-use super::RpcV2;
+use super::RpcV2Cbor;
 
 pub use crate::protocol::rest::router::*;
 
@@ -46,7 +46,9 @@ pub enum Error {
     NotFound,
 }
 
-// TODO Docs
+/// A [`Router`] supporting the [Smithy RPC v2 CBOR] protocol.
+///
+/// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
 pub struct RpcV2Router<S> {
     routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
@@ -126,7 +128,7 @@ impl<S> RpcV2Router<S> {
 
 // TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
 // we have no tests to pin our implemenation against!
-impl IntoResponse<RpcV2> for Error {
+impl IntoResponse<RpcV2Cbor> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::MethodNotAllowed => method_disallowed(),

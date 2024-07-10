@@ -5,7 +5,7 @@
 
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
-use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2::RpcV2};
+use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2::RpcV2Cbor};
 use bytes::Bytes;
 use http::StatusCode;
 
@@ -54,13 +54,13 @@ impl RuntimeError {
     }
 }
 
-impl IntoResponse<RpcV2> for InternalFailureException {
+impl IntoResponse<RpcV2Cbor> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<RpcV2>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<RpcV2> for RuntimeError {
+impl IntoResponse<RpcV2Cbor> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())

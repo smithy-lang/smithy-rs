@@ -41,7 +41,7 @@ pub enum Error {
 // https://github.com/smithy-lang/smithy-rs/pull/1429#issuecomment-1147516546
 pub(crate) const ROUTE_CUTOFF: usize = 15;
 
-/// A [`Router`] supporting [`AWS JSON 1.0`] and [`AWS JSON 1.1`] protocols.
+/// A [`Router`] supporting [AWS JSON 1.0] and [AWS JSON 1.1] protocols.
 ///
 /// [AWS JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
@@ -65,7 +65,6 @@ impl<S> AwsJsonRouter<S> {
         }
     }
 
-    // TODO This function is not used? Codegen should probably delegate to this function.
     /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> AwsJsonRouter<Route<B>>
     where
