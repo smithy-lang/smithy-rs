@@ -68,6 +68,10 @@ pub enum UploadError {
     /// An error occurred invoking [aws_sdk_s3::Client::UploadPart]
     #[error(transparent)]
     UploadPart(#[from] UploadPartSdkError),
+
+    /// An I/O error occurred
+    #[error(transparent)]
+    IOError(#[from] crate::io::error::Error),
 }
 
 /// An underlying S3 SDK error

@@ -1,81 +1,32 @@
-mod handle;
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-use crate::error::TransferError;
-use crate::types::{ConcurrencySetting, SizeHint, TargetPartSize};
-use crate::upload::handle::{UploadHandle, UploadResponse};
+use crate::upload::request::UploadRequest;
+use crate::upload::response::UploadResponse;
+
+use crate::error::{TransferError, UploadError};
+use crate::types::{ConcurrencySetting, TargetPartSize};
+use crate::upload::handle::UploadHandle;
 use crate::{DEFAULT_CONCURRENCY, MEBIBYTE};
-use aws_sdk_s3::operation::put_object::builders::PutObjectInputBuilder;
 use aws_types::SdkConfig;
 use std::cmp;
 use tokio::task::JoinSet;
+
+mod handle;
+
+/// Request types for uploads to Amazon S3
+pub mod request;
+
+/// Response types for uploads to Amazon S3
+pub mod response;
 
 /// Minimum upload part size in bytes
 const MIN_PART_SIZE_BYTES: u64 = 5 * MEBIBYTE;
 
 /// Maximum number of parts that a single S3 multipart upload supports
 const MAX_PARTS: u64 = 10_000;
-
-/// Request type for uploading a single object
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct UploadRequest {
-    pub(crate) input: PutObjectInputBuilder,
-}
-
-// FIXME(aws-sdk-rust#1159): PutObjectInputBuilder doesn't implement Clone because of ByteStream
-// impl From<PutObjectFluentBuilder> for UploadRequest {
-//     fn from(value: PutObjectFluentBuilder) -> Self {
-//         let builder = PutObjectInputBuilder::default();
-//         let body = value.get_body().take();
-//
-//         let builder = builder
-//             .set_body(body)
-//             .set_acl(value.get_acl().to_owned())
-//             .set_bucket(value.get_bucket().to_owned())
-//             .set_cache_control(value.get_cache_control().to_owned())
-//             .set_content_disposition(value.get_content_disposition().to_owned())
-//             .set_content_encoding(value.get_content_encoding().to_owned())
-//             .set_content_language(value.get_content_language().to_owned())
-//             .set_content_length(value.get_content_length().to_owned())
-//             .set_content_md5(value.get_content_md5().to_owned())
-//             .set_content_type(value.get_content_type().to_owned())
-//             .set_checksum_algorithm(value.get_checksum_algorithm().to_owned())
-//             .set_checksum_crc32(value.get_checksum_crc32().to_owned())
-//             .set_checksum_crc32_c(value.get_checksum_crc32_c().to_owned())
-//             .set_checksum_sha1(value.get_checksum_sha1().to_owned())
-//             .set_checksum_sha256(value.get_checksum_sha256().to_owned())
-//             .set_expires(value.get_expires().to_owned())
-//             .set_grant_full_control(value.get_grant_full_control().to_owned())
-//             .set_grant_read(value.get_grant_read().to_owned())
-//             .set_grant_read_acp(value.get_grant_read_acp().to_owned())
-//             .set_grant_write_acp(value.get_grant_write_acp().to_owned())
-//             .set_key(value.get_key().to_owned())
-//             .set_metadata(value.get_metadata().to_owned())
-//             .set_server_side_encryption(value.get_server_side_encryption().to_owned())
-//             .set_storage_class(value.get_storage_class().to_owned())
-//             .set_website_redirect_location(value.get_website_redirect_location().to_owned())
-//             .set_sse_customer_algorithm(value.get_sse_customer_algorithm().to_owned())
-//             .set_sse_customer_key(value.get_sse_customer_key().to_owned())
-//             .set_sse_customer_key_md5(value.get_sse_customer_key_md5().to_owned())
-//             .set_ssekms_key_id(value.get_ssekms_key_id().to_owned())
-//             .set_ssekms_encryption_context(value.get_ssekms_encryption_context().to_owned())
-//             .set_bucket_key_enabled(value.get_bucket_key_enabled().to_owned())
-//             .set_request_payer(value.get_request_payer().to_owned())
-//             .set_tagging(value.get_tagging().to_owned())
-//             .set_object_lock_mode(value.get_object_lock_mode().to_owned())
-//             .set_object_lock_retain_until_date(value.get_object_lock_retain_until_date().to_owned())
-//             .set_object_lock_legal_hold_status(value.get_object_lock_legal_hold_status().to_owned())
-//             .set_expected_bucket_owner(value.get_expected_bucket_owner().to_owned());
-//
-//         Self { input: builder }
-//     }
-// }
-
-impl From<PutObjectInputBuilder> for UploadRequest {
-    fn from(value: PutObjectInputBuilder) -> Self {
-        Self { input: value }
-    }
-}
 
 /// Fluent style builder for [Uploader]
 #[derive(Debug, Clone)]
@@ -88,8 +39,8 @@ pub struct Builder {
 impl Builder {
     fn new() -> Self {
         Self {
-            multipart_threshold_part_size: TargetPartSize::Explicit(8 * MEBIBYTE),
-            concurrency: ConcurrencySetting::Explicit(DEFAULT_CONCURRENCY),
+            multipart_threshold_part_size: TargetPartSize::Auto,
+            concurrency: ConcurrencySetting::Auto,
             sdk_config: None,
         }
     }
@@ -156,20 +107,6 @@ pub struct Uploader {
     client: aws_sdk_s3::client::Client,
 }
 
-impl UploadRequest {
-    fn size_hint(&self) -> Result<SizeHint, TransferError> {
-        let content_length = self.input.get_content_length();
-        let body_size_hint = self.input.get_body().as_ref().map(|b| b.size_hint());
-        match (body_size_hint, content_length) {
-            (Some(hint), _) => Ok(SizeHint::default().with_lower(hint.0).with_upper(hint.1)),
-            (None, Some(content_len)) => Ok(SizeHint::exact(*content_len as u64)),
-            (None, None) => Err(TransferError::InvalidMetaRequest(
-                "upload content length must be known".to_string(),
-            )),
-        }
-    }
-}
-
 impl Uploader {
     /// Create a new [Builder]
     pub fn builder() -> Builder {
@@ -180,8 +117,8 @@ impl Uploader {
     ///
     /// A single logical request may be split into many concurrent `UploadPart` requests
     /// to improve throughput.
-    pub async fn upload(&self, req: UploadRequest) -> Result<UploadHandle, TransferError> {
-        let size_hint = req.size_hint()?;
+    pub async fn upload(&self, req: UploadRequest) -> Result<UploadHandle, UploadError> {
+        let size_hint = req.body().size_hint();
         let min_mpu_threshold = self.mpu_threshold_bytes();
         let mut tasks = JoinSet::new();
 
@@ -190,7 +127,11 @@ impl Uploader {
             // let resp = req.input.send_with(&self.client)?;
             todo!("send request as is")
         } else {
-            let part_size = cmp::max(min_mpu_threshold, size_hint.lower() / MAX_PARTS);
+            // MPU has max of 10K parts which requires us to know the upper bound on the content (today anyway)
+            let upper_bound = size_hint
+                .upper()
+                .ok_or_else(crate::io::error::Error::upper_bound_size_hint_required)?;
+            let part_size = cmp::max(min_mpu_threshold, upper_bound / MAX_PARTS);
             tracing::trace!("upload request using multipart upload with part size: {part_size}");
             let mpu = start_mpu(&self.client, &req).await?;
             tracing::trace!(
@@ -216,7 +157,7 @@ impl Uploader {
     fn mpu_threshold_bytes(&self) -> u64 {
         match self.multipart_threshold_part_size {
             // FIXME(aws-sdk-rust#1159): add logic for determining this
-            TargetPartSize::Auto => MIN_PART_SIZE_BYTES,
+            TargetPartSize::Auto => 8 * MEBIBYTE,
             TargetPartSize::Explicit(explicit) => explicit,
         }
     }
@@ -225,39 +166,39 @@ impl Uploader {
 async fn start_mpu(
     client: &aws_sdk_s3::client::Client,
     req: &UploadRequest,
-) -> Result<UploadResponse, TransferError> {
+) -> Result<UploadResponse, UploadError> {
     let resp = client
         .create_multipart_upload()
-        .set_acl(req.input.get_acl().clone())
-        .set_bucket(req.input.get_bucket().clone())
-        .set_cache_control(req.input.get_cache_control().clone())
-        .set_content_disposition(req.input.get_content_disposition().clone())
-        .set_content_encoding(req.input.get_content_encoding().clone())
-        .set_content_language(req.input.get_content_language().clone())
-        .set_content_type(req.input.get_content_type().clone())
-        .set_expires(req.input.get_expires().clone())
-        .set_grant_full_control(req.input.get_grant_full_control().clone())
-        .set_grant_read(req.input.get_grant_read().clone())
-        .set_grant_read_acp(req.input.get_grant_read_acp().clone())
-        .set_grant_write_acp(req.input.get_grant_write_acp().clone())
-        .set_key(req.input.get_key().clone())
-        .set_metadata(req.input.get_metadata().clone())
-        .set_server_side_encryption(req.input.get_server_side_encryption().clone())
-        .set_storage_class(req.input.get_storage_class().clone())
-        .set_website_redirect_location(req.input.get_website_redirect_location().clone())
-        .set_sse_customer_algorithm(req.input.get_sse_customer_algorithm().clone())
-        .set_sse_customer_key(req.input.get_sse_customer_key().clone())
-        .set_sse_customer_key_md5(req.input.get_sse_customer_key_md5().clone())
-        .set_ssekms_key_id(req.input.get_ssekms_key_id().clone())
-        .set_ssekms_encryption_context(req.input.get_ssekms_encryption_context().clone())
-        .set_bucket_key_enabled(req.input.get_bucket_key_enabled().clone())
-        .set_request_payer(req.input.get_request_payer().clone())
-        .set_tagging(req.input.get_tagging().clone())
-        .set_object_lock_mode(req.input.get_object_lock_mode().clone())
-        .set_object_lock_retain_until_date(req.input.get_object_lock_retain_until_date().clone())
-        .set_object_lock_legal_hold_status(req.input.get_object_lock_legal_hold_status().clone())
-        .set_expected_bucket_owner(req.input.get_expected_bucket_owner().clone())
-        .set_checksum_algorithm(req.input.get_checksum_algorithm().clone())
+        .set_acl(req.acl.clone())
+        .set_bucket(req.bucket.clone())
+        .set_cache_control(req.cache_control.clone())
+        .set_content_disposition(req.content_disposition.clone())
+        .set_content_encoding(req.content_encoding.clone())
+        .set_content_language(req.content_language.clone())
+        .set_content_type(req.content_type.clone())
+        .set_expires(req.expires.clone())
+        .set_grant_full_control(req.grant_full_control.clone())
+        .set_grant_read(req.grant_read.clone())
+        .set_grant_read_acp(req.grant_read_acp.clone())
+        .set_grant_write_acp(req.grant_write_acp.clone())
+        .set_key(req.key.clone())
+        .set_metadata(req.metadata.clone())
+        .set_server_side_encryption(req.server_side_encryption.clone())
+        .set_storage_class(req.storage_class.clone())
+        .set_website_redirect_location(req.website_redirect_location.clone())
+        .set_sse_customer_algorithm(req.sse_customer_algorithm.clone())
+        .set_sse_customer_key(req.sse_customer_key.clone())
+        .set_sse_customer_key_md5(req.sse_customer_key_md5.clone())
+        .set_ssekms_key_id(req.sse_kms_key_id.clone())
+        .set_ssekms_encryption_context(req.sse_kms_encryption_context.clone())
+        .set_bucket_key_enabled(req.bucket_key_enabled.clone())
+        .set_request_payer(req.request_payer.clone())
+        .set_tagging(req.tagging.clone())
+        .set_object_lock_mode(req.object_lock_mode.clone())
+        .set_object_lock_retain_until_date(req.object_lock_retain_until_date.clone())
+        .set_object_lock_legal_hold_status(req.object_lock_legal_hold_status.clone())
+        .set_expected_bucket_owner(req.expected_bucket_owner.clone())
+        .set_checksum_algorithm(req.checksum_algorithm.clone())
         .send()
         .await?;
 

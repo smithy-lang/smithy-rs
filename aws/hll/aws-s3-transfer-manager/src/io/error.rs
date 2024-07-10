@@ -1,3 +1,7 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::Formatter;
@@ -6,6 +10,7 @@ use tokio::task::JoinError;
 
 #[derive(Debug)]
 pub(crate) enum ErrorKind {
+    UpperBoundSizeHintRequired,
     OffsetGreaterThanFileSize,
     TaskFailed(JoinError),
     IOError(StdIoError),
@@ -15,6 +20,12 @@ pub(crate) enum ErrorKind {
 #[derive(Debug)]
 pub struct Error {
     kind: ErrorKind,
+}
+
+impl Error {
+    pub(crate) fn upper_bound_size_hint_required() -> Error {
+        ErrorKind::UpperBoundSizeHintRequired.into()
+    }
 }
 impl From<ErrorKind> for Error {
     fn from(kind: ErrorKind) -> Self {
@@ -31,6 +42,10 @@ impl From<StdIoError> for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.kind {
+            ErrorKind::UpperBoundSizeHintRequired => write!(
+                f,
+                "size hint upper bound (SizeHint::upper) is required but was None"
+            ),
             ErrorKind::OffsetGreaterThanFileSize => write!(
                 f,
                 "offset must be less than or equal to file size but was greater than"
@@ -44,6 +59,7 @@ impl fmt::Display for Error {
 impl StdError for Error {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match &self.kind {
+            ErrorKind::UpperBoundSizeHintRequired => None,
             ErrorKind::OffsetGreaterThanFileSize => None,
             ErrorKind::IOError(err) => Some(err as _),
             ErrorKind::TaskFailed(err) => Some(err as _),

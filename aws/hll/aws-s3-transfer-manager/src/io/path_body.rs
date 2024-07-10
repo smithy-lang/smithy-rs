@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use crate::io::error::{Error, ErrorKind};
 use crate::io::stream::InputStream;
 use crate::io::stream::RawInputStream;
@@ -32,6 +37,7 @@ pub(super) struct PathBody {
 /// }
 /// # }
 /// ```
+#[derive(Debug)]
 pub struct PathBodyBuilder {
     path: Option<PathBuf>,
     length: Option<u64>,

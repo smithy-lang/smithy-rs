@@ -1,7 +1,9 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 use std::cmp;
-use std::io::{Read, Seek};
 use std::ops::DerefMut;
-use std::os::unix::fs::FileExt;
 use std::sync::Mutex;
 
 use bytes::{Buf, Bytes, BytesMut};
@@ -109,7 +111,7 @@ impl PartReaderState {
     }
 
     /// Set the initial offset to start reading from
-    fn with_offset(mut self, offset: u64) -> Self {
+    fn with_offset(self, offset: u64) -> Self {
         Self { offset, ..self }
     }
 }
@@ -214,7 +216,6 @@ mod file_util {
 
     #[cfg(unix)]
     mod unix {
-        use bytes::BufMut;
         use std::fs::File;
         use std::io;
         use std::os::unix::fs::FileExt;
@@ -225,7 +226,7 @@ mod file_util {
             path: impl AsRef<Path>,
             offset: u64,
         ) -> Result<(), io::Error> {
-            let mut file = File::open(path)?;
+            let file = File::open(path)?;
             file.read_exact_at(dst, offset)
         }
     }

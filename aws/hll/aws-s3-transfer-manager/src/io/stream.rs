@@ -1,12 +1,17 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 use std::default::Default;
 use std::path::Path;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 
 use crate::io::error::Error;
 use crate::io::path_body::PathBody;
-pub use crate::io::path_body::PathBodyBuilder;
-use crate::types::SizeHint;
+use crate::io::path_body::PathBodyBuilder;
+use crate::io::size_hint::SizeHint;
 
 /// Source of binary data.
 ///
@@ -23,8 +28,6 @@ impl InputStream {
         Self { inner }
     }
 
-    // FIXME - we really don't want size hint, we want streams with known content size I think or else we can't respect 10K max part size,
-    //         I suppose we can make that an error for the time being and keep it open to unbounded streams if possible later...
     /// Return the bounds on the remaining length of the `InputStream`
     pub fn size_hint(&self) -> SizeHint {
         self.inner.size_hint()
@@ -84,12 +87,10 @@ pub(super) enum RawInputStream {
 
 impl RawInputStream {
     pub(super) fn size_hint(&self) -> SizeHint {
-        // match self {
-        //     Inner::Buf(bytes) => SizeHint::exact(bytes.remaining() as u64),
-        //     // Inner::Fs(path) => SizeHint::exact(path.)
-        //     // Inner::Dyn(st) => st.
-        // }
-        unimplemented!()
+        match self {
+            RawInputStream::Buf(bytes) => SizeHint::exact(bytes.remaining() as u64),
+            RawInputStream::Fs(path_body) => SizeHint::exact(path_body.length),
+        }
     }
 }
 
