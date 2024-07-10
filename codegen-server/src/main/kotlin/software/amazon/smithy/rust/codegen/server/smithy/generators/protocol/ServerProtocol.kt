@@ -306,6 +306,68 @@ class ServerRestXmlProtocol(
         )
 }
 
+class ServerRpcV2CborProtocol(
+    private val serverCodegenContext: ServerCodegenContext,
+) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
+    val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolModulePath = "rpc_v2_cbor"
+
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        CborParserGenerator(
+            serverCodegenContext, httpBindingResolver, returnSymbolToParseFn(serverCodegenContext),
+            listOf(
+                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(
+                    serverCodegenContext,
+                ),
+            ),
+        )
+
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator {
+        return CborSerializerGenerator(
+            codegenContext,
+            httpBindingResolver,
+            listOf(
+                BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext),
+                AddTypeFieldToServerErrorsCborCustomization(),
+            ),
+        )
+    }
+
+    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2Cbor", "rpc_v2_cbor", runtimeConfig)
+
+    override fun routerType() =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
+
+    override fun serverRouterRequestSpec(
+        operationShape: OperationShape,
+        operationName: String,
+        serviceName: String,
+        requestSpecModule: RuntimeType,
+    ) = writable {
+        // This is just the key used by the router's map to store and look up operations, it's completely arbitrary.
+        // We use the same key used by the awsJson1.x routers for simplicity.
+        // The router will extract the service name and the operation name from the URI, build this key, and lookup the
+        // operation stored there.
+        rust("$serviceName.$operationName".dq())
+    }
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
+
+    override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
+
+    override fun serverContentTypeCheckNoModeledInput() = false
+
+    override fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType =
+        deserializePayloadErrorType(
+            codegenContext,
+            binding,
+            requestRejection(runtimeConfig),
+            RuntimeType.smithyCbor(codegenContext.runtimeConfig).resolve("decode::DeserializeError"),
+        )
+}
+
 /** Just a common function to keep things DRY. **/
 fun deserializePayloadErrorType(
     codegenContext: CodegenContext,
@@ -366,58 +428,4 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborPa
                     }
                 }
         }
-}
-
-class ServerRpcV2CborProtocol(
-    private val serverCodegenContext: ServerCodegenContext,
-) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
-    val runtimeConfig = codegenContext.runtimeConfig
-
-    override val protocolModulePath = "rpc_v2_cbor"
-
-    override fun structuredDataParser(): StructuredDataParserGenerator =
-        CborParserGenerator(
-            serverCodegenContext, httpBindingResolver, returnSymbolToParseFn(serverCodegenContext),
-            listOf(
-                ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(
-                    serverCodegenContext,
-                ),
-            ),
-        )
-
-    override fun structuredDataSerializer(): StructuredDataSerializerGenerator {
-        return CborSerializerGenerator(
-            codegenContext,
-            httpBindingResolver,
-            listOf(
-                BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext),
-                AddTypeFieldToServerErrorsCborCustomization(),
-            ),
-        )
-    }
-
-    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2Cbor", "rpc_v2_cbor", runtimeConfig)
-
-    override fun routerType() =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-            .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
-
-    override fun serverRouterRequestSpec(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ) = writable {
-        // This is just the key used by the router's map to store and lookup operations, it's completely arbitrary.
-        // We use the same key used by the awsJson1.x routers for simplicity.
-        // The router will extract the service name and the operation name from the URI, build this key, and lookup the
-        // operation stored there.
-        rust("$serviceName.$operationName".dq())
-    }
-
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
-
-    override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
-
-    override fun serverContentTypeCheckNoModeledInput() = false
 }

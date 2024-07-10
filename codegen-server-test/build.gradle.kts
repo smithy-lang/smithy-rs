@@ -44,7 +44,6 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
         CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",

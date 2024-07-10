@@ -27,7 +27,6 @@ service PokemonService {
 }
 
 /// Capture Pokémons via event streams.
-@http(uri: "/simple-struct-operation", method: "POST")
 operation CapturePokemon {
     input := {
         events: AttemptCapturingPokemonEvent
