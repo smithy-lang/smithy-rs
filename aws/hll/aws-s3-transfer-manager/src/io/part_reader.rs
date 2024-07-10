@@ -1,11 +1,12 @@
-use std::io::{Error, Read, Seek};
+use std::cmp;
+use std::io::{Read, Seek};
 use std::ops::DerefMut;
 use std::os::unix::fs::FileExt;
 use std::sync::Mutex;
-use std::{cmp, io};
 
 use bytes::{Buf, Bytes, BytesMut};
 
+use crate::io::error::Error;
 use crate::io::path_body::PathBody;
 use crate::io::stream::RawInputStream;
 use crate::io::InputStream;
@@ -84,7 +85,7 @@ pub(crate) trait ReadPart {
     /// When there is no more data readers should return `Ok(None)`.
     /// NOTE: Implementations are allowed to return data in any order and consumers are
     /// expected to order data by the part number.
-    async fn next_part(&self) -> Result<Option<PartData>, io::Error>;
+    async fn next_part(&self) -> Result<Option<PartData>, Error>;
 }
 
 #[derive(Debug)]
@@ -133,7 +134,7 @@ impl BytesPartReader {
 }
 
 impl ReadPart for BytesPartReader {
-    async fn next_part(&self) -> Result<Option<PartData>, io::Error> {
+    async fn next_part(&self) -> Result<Option<PartData>, Error> {
         let mut state = self.state.lock().expect("lock valid");
         if state.remaining == 0 {
             return Ok(None);
@@ -198,7 +199,7 @@ impl ReadPart for PathBodyPartReader {
             unsafe { dst.set_len(dst.capacity()) }
             file_util::read_file_chunk_sync(dst.deref_mut(), path, offset)?;
             let data = dst.freeze();
-            Ok::<PartData, io::Error>(PartData { data, part_number })
+            Ok::<PartData, Error>(PartData { data, part_number })
         });
 
         handle.await?.map(|part_data| Some(part_data))

@@ -1,3 +1,4 @@
+use crate::io::error::{Error, ErrorKind};
 use crate::io::stream::InputStream;
 use crate::io::stream::RawInputStream;
 use std::fs;
@@ -80,7 +81,7 @@ impl PathBodyBuilder {
     }
 
     /// Returns a [`InputStream`] from this builder.
-    pub fn build(self) -> Result<InputStream, std::io::Error> {
+    pub fn build(self) -> Result<InputStream, Error> {
         let path = self.path.expect("path set");
         let offset = self.offset.unwrap_or_default();
 
@@ -91,8 +92,7 @@ impl PathBodyBuilder {
                 let file_size = metadata.len();
 
                 if offset >= file_size {
-                    // TODO - handle - return error for offset > total file size
-                    panic!("offset > total file size");
+                    return Err(ErrorKind::OffsetGreaterThanFileSize.into());
                 }
 
                 file_size - offset

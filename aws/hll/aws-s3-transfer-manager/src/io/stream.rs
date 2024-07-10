@@ -1,9 +1,9 @@
 use std::default::Default;
-use std::io;
 use std::path::Path;
 
 use bytes::Bytes;
 
+use crate::io::error::Error;
 use crate::io::path_body::PathBody;
 pub use crate::io::path_body::PathBodyBuilder;
 use crate::types::SizeHint;
@@ -69,7 +69,7 @@ impl InputStream {
     ///     InputStream::from_path("docs/rows.csv").expect("file should be readable")
     /// }
     /// ```
-    pub fn from_path(path: impl AsRef<Path>) -> Result<InputStream, io::Error> {
+    pub fn from_path(path: impl AsRef<Path>) -> Result<InputStream, Error> {
         Self::read_from().path(path).build()
     }
 }
