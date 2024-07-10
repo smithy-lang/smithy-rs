@@ -22,12 +22,6 @@ features = [
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
 
-[package.metadata.docs.rs]
-all-features = true
-targets = ["x86_64-unknown-linux-gnu"]
-rustdoc-args = ["--cfg", "docsrs"]
-# End of docs.rs metadata
-
 [dev-dependencies]
 criterion = "0.5.1"
 
@@ -38,3 +32,10 @@ harness = false
 [[bench]]
 name = "blob"
 harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

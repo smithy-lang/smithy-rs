@@ -426,7 +426,7 @@ fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     let actual_cbor_value: serde_cbor::Value = serde_cbor::from_slice(actual_body.as_ref())
         .map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
             expected: "cbor".to_owned(),
-            found: format!("{} {:?}", e.to_string(), actual_body),
+            found: format!("{} {:?}", e, actual_body),
         })?;
     let actual_body_base64 = base64_simd::STANDARD.encode_to_string(&actual_body);
 
