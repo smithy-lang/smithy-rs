@@ -50,7 +50,7 @@ pub enum Error {
 ///
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
-pub struct RpcV2Router<S> {
+pub struct RpcV2CborRouter<S> {
     routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
@@ -63,7 +63,7 @@ const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 /// <https://smithy.io/2.0/spec/model.html#shape-id-abnf>.
 const IDENTIFIER_PATTERN: &str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
 
-impl<S> RpcV2Router<S> {
+impl<S> RpcV2CborRouter<S> {
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/3748) Consider building a nom parser.
     fn uri_path_regex() -> &'static Regex {
         // Every request for the `rpcv2Cbor` protocol MUST be sent to a URL with the
@@ -100,23 +100,23 @@ impl<S> RpcV2Router<S> {
         &SMITHY_PROTOCOL_REGEX
     }
 
-    pub fn boxed<B>(self) -> RpcV2Router<Route<B>>
+    pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
         S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
-        RpcV2Router {
+        RpcV2CborRouter {
             routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
         }
     }
 
     /// Applies a [`Layer`] uniformly to all routes.
-    pub fn layer<L>(self, layer: L) -> RpcV2Router<L::Service>
+    pub fn layer<L>(self, layer: L) -> RpcV2CborRouter<L::Service>
     where
         L: Layer<S>,
     {
-        RpcV2Router {
+        RpcV2CborRouter {
             routes: self
                 .routes
                 .into_iter()
@@ -170,7 +170,7 @@ pub enum WireFormatError {
 fn parse_wire_format_from_header(headers: &HeaderMap) -> Result<WireFormat, WireFormatError> {
     let header = headers.get("smithy-protocol").ok_or(WireFormatError::HeaderNotFound)?;
     let header = header.to_str().map_err(WireFormatError::HeaderValueNotVisibleAscii)?;
-    let captures = RpcV2Router::<()>::wire_format_regex()
+    let captures = RpcV2CborRouter::<()>::wire_format_regex()
         .captures(header)
         .ok_or_else(|| WireFormatError::HeaderValueNotValid(header.to_owned()))?;
 
@@ -200,7 +200,7 @@ impl FromStr for WireFormat {
     }
 }
 
-impl<S: Clone, B> Router<B> for RpcV2Router<S> {
+impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
     type Service = S;
 
     type Error = Error;
@@ -240,7 +240,7 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
     }
 }
 
-impl<S> FromIterator<(&'static str, S)> for RpcV2Router<S> {
+impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
@@ -256,7 +256,7 @@ mod tests {
 
     use crate::protocol::test_helpers::req;
 
-    use super::{Error, Router, RpcV2Router};
+    use super::{Error, Router, RpcV2CborRouter};
 
     fn identifier_regex() -> Regex {
         Regex::new(&format!("^{}$", super::IDENTIFIER_PATTERN)).unwrap()
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn uri_regex_works_accepts() {
-        let regex = RpcV2Router::<()>::uri_path_regex();
+        let regex = RpcV2CborRouter::<()>::uri_path_regex();
 
         for uri in [
             "/service/Service/operation/Operation",
@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn uri_regex_works_rejects() {
-        let regex = RpcV2Router::<()>::uri_path_regex();
+        let regex = RpcV2CborRouter::<()>::uri_path_regex();
 
         for uri in [
             "",
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn wire_format_regex_works() {
-        let regex = RpcV2Router::<()>::wire_format_regex();
+        let regex = RpcV2CborRouter::<()>::wire_format_regex();
 
         let captures = regex.captures("rpc-v2-something").unwrap();
         assert_eq!("something", &captures["format"]);
@@ -354,7 +354,7 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2Router<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
+        let router: RpcV2CborRouter<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.
