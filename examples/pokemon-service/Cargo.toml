@@ -23,7 +23,7 @@ pokemon-service-common = { path = "../pokemon-service-common/" }
 assert_cmd = "2.0"
 async-stream = "0.3"
 rand = "0.8.5"
-serial_test = "1.0.0"
+serial_test = "3.1.1"
 
 # We use hyper client in tests
 hyper = { version = "0.14.26", features = ["server", "client"] }
