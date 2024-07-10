@@ -1,8 +1,11 @@
 use std::default::Default;
-use std::path::PathBuf;
+use std::io;
+use std::path::Path;
 
 use bytes::Bytes;
 
+use crate::io::path_body::PathBody;
+pub use crate::io::path_body::PathBodyBuilder;
 use crate::types::SizeHint;
 
 /// Source of binary data.
@@ -27,7 +30,48 @@ impl InputStream {
         self.inner.size_hint()
     }
 
-    // pub fn read_from() -> crate::io::FsBuilder
+    /// Returns a [`PathBodyBuilder`], allowing you to build a `InputStream` with
+    /// full control over how the file is read (eg. specifying the length of
+    /// the file or the starting offset to read from).
+    ///
+    /// ```no_run
+    /// # {
+    /// use aws_s3_transfer_manager::io::InputStream;
+    ///
+    /// async fn input_stream_from_file() -> InputStream {
+    ///     let stream = InputStream::read_from()
+    ///         .path("docs/some-large-file.csv")
+    ///         // Specify the length of the file used (skips an additional call to retrieve the size)
+    ///         .length(123_456)
+    ///         .build()
+    ///         .expect("valid path");
+    ///     stream
+    /// }
+    /// # }
+    /// ```
+    pub fn read_from() -> PathBodyBuilder {
+        PathBodyBuilder::new()
+    }
+
+    /// Create a new `InputStream` that reads data from a given `path`.
+    ///
+    /// ## Warning
+    /// The contents of the file MUST not change. The length & checksum of the file
+    /// will be cached. If the contents of the file change, the operation will almost certainly fail.
+    ///
+    /// Furthermore, a partial write MAY seek in the file and resume from the previous location.
+    ///
+    /// # Examples
+    /// ```no_run
+    /// use aws_s3_transfer_manager::io::InputStream;
+    /// use std::path::Path;
+    ///  async fn make_stream() -> InputStream {
+    ///     InputStream::from_path("docs/rows.csv").expect("file should be readable")
+    /// }
+    /// ```
+    pub fn from_path(path: impl AsRef<Path>) -> Result<InputStream, io::Error> {
+        Self::read_from().path(path).build()
+    }
 }
 
 #[derive(Debug)]
@@ -35,9 +79,7 @@ pub(super) enum RawInputStream {
     /// In-memory buffer to read from
     Buf(Bytes),
     /// File based input
-    // FIXME - replace with PathBody
-    Fs(PathBuf),
-    // Dyn(Box<dyn io::Read>),
+    Fs(PathBody),
 }
 
 impl RawInputStream {
@@ -49,10 +91,6 @@ impl RawInputStream {
         // }
         unimplemented!()
     }
-
-    // fn into_part_reader(self) -> PartReader {
-    //     unimplemented!()
-    // }
 }
 
 impl Default for InputStream {
@@ -76,13 +114,3 @@ impl From<Vec<u8>> for InputStream {
         Self::from(Bytes::from(value))
     }
 }
-
-// impl<T> TryFrom<T> for InputStream
-// where
-//     T: AsRef<std::path::Path>,
-// {
-//     type Error = ();
-//     fn try_from(value: T) -> Result<Self, Self::Error> {
-//         todo!()
-//     }
-// }

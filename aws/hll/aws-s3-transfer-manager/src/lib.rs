@@ -33,6 +33,8 @@ pub mod error;
 /// Common types used by `aws-s3-transfer-manager`
 pub mod types;
 
-mod io;
+/// Types and helpers for I/O
+pub mod io;
+
 /// Abstractions for downloading objects from Amazon S3
 pub mod upload;
