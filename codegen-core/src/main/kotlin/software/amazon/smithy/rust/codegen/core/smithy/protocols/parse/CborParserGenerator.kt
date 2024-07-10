@@ -69,7 +69,7 @@ class CborParserGenerator(
     private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
-    private val customizations: List<CborParserCustomization> = listOf(),
+    private val customizations: List<CborParserCustomization> = emptyList(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -445,7 +445,7 @@ class CborParserGenerator(
             errorShape,
             symbolProvider.symbolForBuilder(errorShape),
             errorShape.members().toList(),
-            fnNameSuffix = "json_err",
+            fnNameSuffix = "cbor_err",
         )
     }
 

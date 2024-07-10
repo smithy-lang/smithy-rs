@@ -331,7 +331,7 @@ impl<T: AsRef<str>> From<T> for MediaType {
     }
 }
 
-pub fn validate_body<T: AsRef<[u8]>>(
+pub fn validate_body<T: AsRef<[u8]> + Debug>(
     actual_body: T,
     expected_body: &str,
     media_type: MediaType,
@@ -414,7 +414,7 @@ fn try_json_eq(expected: &str, actual: &str) -> Result<(), ProtocolTestFailure> 
     }
 }
 
-fn try_cbor_eq<T: AsRef<[u8]>>(
+fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     actual_body: T,
     expected_body: &str,
 ) -> Result<(), ProtocolTestFailure> {
@@ -422,9 +422,12 @@ fn try_cbor_eq<T: AsRef<[u8]>>(
         .decode_to_vec(expected_body)
         .expect("smithy protocol test `body` property is not properly base64 encoded");
     let expected_cbor_value: serde_cbor::Value =
-        serde_cbor::from_slice(decoded.as_slice()).unwrap();
-    let actual_cbor_value: serde_cbor::Value =
-        serde_cbor::from_slice(actual_body.as_ref()).unwrap(); // TODO Don't panic
+        serde_cbor::from_slice(decoded.as_slice()).expect("expected value must be valid CBOR");
+    let actual_cbor_value: serde_cbor::Value = serde_cbor::from_slice(actual_body.as_ref())
+        .map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
+            expected: "cbor".to_owned(),
+            found: format!("{} {:?}", e.to_string(), actual_body),
+        })?;
     let actual_body_base64 = base64_simd::STANDARD.encode_to_string(&actual_body);
 
     if expected_cbor_value != actual_cbor_value {

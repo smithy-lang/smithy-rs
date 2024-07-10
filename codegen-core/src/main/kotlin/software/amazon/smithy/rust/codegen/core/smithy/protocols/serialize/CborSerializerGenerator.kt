@@ -48,10 +48,8 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.isUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-// TODO Cleanup commented and unused code.
-
 /**
- * Class describing a JSON serializer section that can be used in a customization.
+ * Class describing a CBOR serializer section that can be used in a customization.
  */
 sealed class CborSerializerSection(name: String) : Section(name) {
     /**
@@ -81,7 +79,7 @@ class CborSerializerGenerator(
     data class Context<out T : Shape>(
         /** Expression representing the value to write to the encoder */
         var valueExpression: ValueExpression,
-        /** Path in the JSON to get here, used for errors */
+        /** Path in the CBOR to get here, used for errors */
         val shape: T,
     )
 
@@ -156,14 +154,10 @@ class CborSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    // TODO Cleanup
     private val codegenScope =
         arrayOf(
-            "String" to RuntimeType.String,
             "Error" to runtimeConfig.serializationError(),
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
-            "ByteSlab" to RuntimeType.ByteSlab,
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
