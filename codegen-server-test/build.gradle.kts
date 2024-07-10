@@ -47,7 +47,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         // CodegenTest("aws.protocoltests.restxml#RestXml", "restXml"),
         CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
         CodegenTest(
-            "smithy.protocoltests.rpcv2Cbor#RpcV2Service",
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy")
         ),

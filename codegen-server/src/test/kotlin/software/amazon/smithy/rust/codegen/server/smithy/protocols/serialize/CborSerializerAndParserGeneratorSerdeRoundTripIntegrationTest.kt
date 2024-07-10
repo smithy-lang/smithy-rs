@@ -244,7 +244,7 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                 )
 
             val instantiator = ServerInstantiator(codegenContext, ignoreMissingMembers = true, withinTest = true)
-            val rpcV2 = ServerRpcV2CborProtocol(codegenContext)
+            val rpcv2Cbor = ServerRpcV2CborProtocol(codegenContext)
 
             for (operationShape in codegenContext.model.operationShapes) {
                 val serverProtocolTestGenerator =
@@ -265,9 +265,9 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
 
                                 val serializeFn =
                                     if (targetShape.hasTrait<ErrorTrait>()) {
-                                        rpcV2.structuredDataSerializer().serverErrorSerializer(targetShape.id)
+                                        rpcv2Cbor.structuredDataSerializer().serverErrorSerializer(targetShape.id)
                                     } else {
-                                        rpcV2.structuredDataSerializer().operationOutputSerializer(operationShape)
+                                        rpcv2Cbor.structuredDataSerializer().operationOutputSerializer(operationShape)
                                     }
 
                                 if (serializeFn == null) {
@@ -323,7 +323,7 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                                 val params = test.testCase.params
 
                                 val deserializeFn =
-                                    rpcV2.structuredDataParser().serverInputParser(operationShape)
+                                    rpcv2Cbor.structuredDataParser().serverInputParser(operationShape)
                                         ?: // Skip if there's nothing to serialize.
                                         continue
 

@@ -334,11 +334,11 @@ class ServerRpcV2CborProtocol(
         )
     }
 
-    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2", "rpc_v2", runtimeConfig)
+    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2Cbor", "rpc_v2_cbor", runtimeConfig)
 
     override fun routerType() =
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-            .resolve("protocol::rpc_v2::router::RpcV2Router")
+            .resolve("protocol::rpc_v2::router::RpcV2CborRouter")
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,

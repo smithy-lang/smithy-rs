@@ -8,7 +8,7 @@ use smithy.test#httpResponseTests
 use smithy.test#httpMalformedRequestTests
 
 @rpcv2Cbor
-service RpcV2Service {
+service RpcV2CborService {
     operations: [
         SimpleStructOperation
         ErrorSerializationOperation
@@ -58,7 +58,7 @@ apply EmptyStructOperation @httpMalformedRequestTests([
         protocol: rpcv2Cbor,
         request: {
             method: "POST",
-            uri: "/service/RpcV2Service/operation/EmptyStructOperation",
+            uri: "/service/RpcV2CborService/operation/EmptyStructOperation",
             headers: {
                 "smithy-protocol": "rpc-v2-cbor",
                 "Accept": "application/cbor",
@@ -91,7 +91,7 @@ apply SingleMemberStructOperation @httpMalformedRequestTests([
         protocol: rpcv2Cbor,
         request: {
             method: "POST",
-            uri: "/service/RpcV2Service/operation/SingleMemberStructOperation",
+            uri: "/service/RpcV2CborService/operation/SingleMemberStructOperation",
             headers: {
                 "smithy-protocol": "rpc-v2-cbor",
                 "Accept": "application/cbor",
@@ -123,7 +123,7 @@ apply ErrorSerializationOperation @httpMalformedRequestTests([
         protocol: rpcv2Cbor,
         request: {
             method: "POST",
-            uri: "/service/RpcV2Service/operation/ErrorSerializationOperation",
+            uri: "/service/RpcV2CborService/operation/ErrorSerializationOperation",
             headers: {
                 "smithy-protocol": "rpc-v2-cbor",
                 "Accept": "application/cbor",

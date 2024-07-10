@@ -28,13 +28,13 @@ use super::RpcV2Cbor;
 
 pub use crate::protocol::rest::router::*;
 
-/// An RPC v2 routing error.
+/// An RPC v2 CBOR routing error.
 #[derive(Debug, Error)]
 pub enum Error {
     /// Method was not `POST`.
     #[error("method not POST")]
     MethodNotAllowed,
-    /// Requests for the `rpcv2` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
+    /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
     /// header.
     #[error("contains forbidden headers")]
     ForbiddenHeaders,
@@ -54,8 +54,8 @@ pub struct RpcV2CborRouter<S> {
     routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
-/// Requests for the `rpcv2` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
-/// header. An `rpcv2` request is malformed if it contains either of these headers. Server-side
+/// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
+/// header. An `rpcv2Cbor` request is malformed if it contains either of these headers. Server-side
 /// implementations MUST reject such requests for security reasons.
 const FORBIDDEN_HEADERS: &[&str] = &["x-amz-target", "x-amzn-target"];
 
@@ -302,7 +302,7 @@ mod tests {
             // if only the name was specified. For example, if the `service`'s absolute shape ID is
             // `com.example#TheService`, a service should accept both `TheService` and
             // `com.example.TheService` as values for the `serviceName` segment.
-            "/service/aws.protocoltests.rpcv2.Service/operation/Operation",
+            "/service/aws.protocoltests.rpcv2Cbor.Service/operation/Operation",
             "/service/namespace.Service/operation/Operation",
         ] {
             let captures = regex.captures(uri).unwrap();
