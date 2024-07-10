@@ -128,6 +128,8 @@ data class GeneratedExpression(
 
     internal fun isStringOrEnum(): Boolean = isString() || isEnum()
 
+    internal fun isObject(): Boolean = outputShape is TraversedShape.Object
+
     /** Dereferences this expression if it is a reference. */
     internal fun dereference(namer: SafeNamer): GeneratedExpression =
         if (outputType is RustType.Reference) {
@@ -427,6 +429,40 @@ class RustJmespathShapeTraversalGenerator(
                                 },
                     )
                 }
+            }
+
+            "keys" -> {
+                if (expr.arguments.size != 1) {
+                    throw InvalidJmesPathTraversalException("Keys function takes exactly one argument")
+                }
+                val arg = generate(expr.arguments[0], bindings)
+                if (!arg.isObject()) {
+                    throw InvalidJmesPathTraversalException("Argument to `keys` function must be an object type")
+                }
+                GeneratedExpression(
+                    identifier = ident,
+                    outputType = RustType.Vec(RustType.String),
+                    outputShape = TraversedShape.Array(null, TraversedShape.String(null)),
+                    output =
+                        writable {
+                            arg.output(this)
+                            val out = arg.outputShape.shape
+                            when (out) {
+                                is StructureShape -> {
+                                    // Can't iterate a struct in Rust so source the keys from smithy
+                                    val keys = out.allMembers.keys.map { "${it.dq()}.to_string()" }.joinToString(",")
+                                    rust("let $ident = vec![$keys];")
+                                }
+
+                                is MapShape -> {
+                                    rust("let $ident = ${arg.identifier}.keys().map(Clone::clone).collect::<Vec<String>>();")
+                                }
+
+                                else ->
+                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct or a map, got ${out?.type}")
+                            }
+                        },
+                )
             }
 
             else -> throw UnsupportedJmesPathException("The `${expr.name}` function is not supported by smithy-rs")
