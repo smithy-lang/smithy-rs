@@ -1,4 +1,20 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 9th, 2024
+==============
+**Breaking Changes:**
+- :warning: (server, [smithy-rs#3746](https://github.com/smithy-lang/smithy-rs/issues/3746)) `FromParts<Protocol>::Rejection` must implement `std::fmt::Display`.
+
+    Handlers can accept user-defined types if they implement 
+    [FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) with a `Rejection` 
+    type that implements `std::fmt::Display` (preferably `std::error::Error`) to enable error logging when parameter construction from request parts fails.
+
+    See the [changelog discussion for futher details](https://github.com/smithy-lang/smithy-rs/discussions/3749).
+
+**New this release:**
+- (client, [smithy-rs#3742](https://github.com/smithy-lang/smithy-rs/issues/3742)) Support `stringArray` type in endpoints params
+- :bug: (client, [smithy-rs#3744](https://github.com/smithy-lang/smithy-rs/issues/3744)) Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon.
+
+
 July 3rd, 2024
 ==============
 **New this release:**
