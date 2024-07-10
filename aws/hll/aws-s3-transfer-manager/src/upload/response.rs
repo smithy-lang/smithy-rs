@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_sdk_s3::operation::create_multipart_upload::CreateMultipartUploadOutput;
 use std::fmt::{Debug, Formatter};
 
 /// Common response fields for uploading an object to Amazon S3
@@ -185,5 +186,29 @@ impl Debug for UploadResponse {
         formatter.field("request_charged", &self.request_charged);
         formatter.field("upload_id", &self.upload_id);
         formatter.finish()
+    }
+}
+
+impl From<CreateMultipartUploadOutput> for UploadResponse {
+    fn from(value: CreateMultipartUploadOutput) -> Self {
+        UploadResponse {
+            upload_id: value.upload_id,
+            server_side_encryption: value.server_side_encryption,
+            sse_customer_algorithm: value.sse_customer_algorithm,
+            sse_customer_key_md5: value.sse_customer_key_md5,
+            sse_kms_key_id: value.ssekms_key_id,
+            sse_kms_encryption_context: value.ssekms_encryption_context,
+            bucket_key_enabled: value.bucket_key_enabled,
+            request_charged: value.request_charged,
+            // remaining fields not available from CreateMultipartUploadOutput
+            checksum_sha256: None,
+            expiration: None,
+            e_tag: None,
+            checksum_crc32: None,
+            checksum_crc32_c: None,
+            checksum_sha1: None,
+            version_id: None,
+            // TODO(aws-sdk-rust#1159): abort_rule_id and abort_date seem unique to CreateMultipartUploadOutput
+        }
     }
 }

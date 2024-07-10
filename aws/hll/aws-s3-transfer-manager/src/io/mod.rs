@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod part_reader;
+pub(crate) mod part_reader;
 mod path_body;
 mod stream;
 

@@ -3,22 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::upload::request::UploadRequest;
-use crate::upload::response::UploadResponse;
+pub use crate::upload::request::UploadRequest;
+pub use crate::upload::response::UploadResponse;
 
-use crate::error::{TransferError, UploadError};
+use crate::error::UploadError;
+use crate::io::part_reader::{PartReaderBuilder, ReadPart};
+use crate::io::InputStream;
 use crate::types::{ConcurrencySetting, TargetPartSize};
+use crate::upload::context::UploadContext;
 use crate::upload::handle::UploadHandle;
 use crate::{DEFAULT_CONCURRENCY, MEBIBYTE};
 use aws_types::SdkConfig;
 use std::cmp;
-use tokio::task::JoinSet;
+use std::sync::Arc;
+use tracing::Instrument;
 
 mod handle;
 
 /// Request types for uploads to Amazon S3
 pub mod request;
 
+mod context;
 /// Response types for uploads to Amazon S3
 pub mod response;
 
@@ -117,56 +122,129 @@ impl Uploader {
     ///
     /// A single logical request may be split into many concurrent `UploadPart` requests
     /// to improve throughput.
-    pub async fn upload(&self, req: UploadRequest) -> Result<UploadHandle, UploadError> {
-        let size_hint = req.body().size_hint();
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use std::error::Error;
+    /// use std::path::Path;
+    /// use aws_s3_transfer_manager::io::InputStream;
+    /// use aws_s3_transfer_manager::upload::{Uploader, UploadRequest};
+    ///
+    /// async fn upload_file(client: Uploader, path: impl AsRef<Path>) -> Result<(), Box<dyn Error>> {
+    ///     let stream = InputStream::from_path(path)?;
+    ///     let request = UploadRequest::builder()
+    ///         .bucket("my-bucket")
+    ///         .key("my-key")
+    ///         .body(stream)
+    ///         .into();
+    ///
+    ///     let handle = client.upload(request).await?;
+    ///
+    ///     // upload() will return potentially before the request is complete.
+    ///     // The handle given must be joined to drive the request to completion.
+    ///     // It can also be used to get progress, pause or cancel the request, etc.
+    ///     let response = handle.join()?;
+    ///     // ... do something with response
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn upload(&self, mut req: UploadRequest) -> Result<UploadHandle, UploadError> {
         let min_mpu_threshold = self.mpu_threshold_bytes();
-        let mut tasks = JoinSet::new();
 
+        // separate the body
+        let stream = req.take_body();
+        let size_hint = stream.size_hint();
+        let ctx = self.new_context(req);
+        let mut handle = UploadHandle::new(ctx);
+
+        // FIXME - should be upper
         if size_hint.lower() < min_mpu_threshold {
             tracing::trace!("upload request content size hint ({size_hint:?}) less than min part size threshold ({min_mpu_threshold}); sending as single PutObject request");
             // let resp = req.input.send_with(&self.client)?;
             todo!("send request as is")
         } else {
-            // MPU has max of 10K parts which requires us to know the upper bound on the content (today anyway)
-            let upper_bound = size_hint
-                .upper()
-                .ok_or_else(crate::io::error::Error::upper_bound_size_hint_required)?;
-            let part_size = cmp::max(min_mpu_threshold, upper_bound / MAX_PARTS);
-            tracing::trace!("upload request using multipart upload with part size: {part_size}");
-            let mpu = start_mpu(&self.client, &req).await?;
-            tracing::trace!(
-                "multipart upload started with upload id: {:?}",
-                mpu.upload_id
-            );
-
-            // FIXME - leftoff here, need parallel reading of the body which means likely moving
-            // away from SdkBody for the public type to TM
-            // let body = req.input.get_body().take().expect("body must be present");
-            // let part_cnt = size_hint.lower() / part_size;
-            // for i in part_cnt {
-            //     // tasks.spawn(async {})
-            // }
+            self.try_start_mpu_upload(&mut handle, stream).await?
         }
-
-        let handle = UploadHandle { _tasks: tasks };
 
         Ok(handle)
     }
+
+    fn new_context(&self, req: UploadRequest) -> UploadContext {
+        UploadContext {
+            client: self.client.clone(),
+            request: Arc::new(req),
+            upload_id: None,
+        }
+    }
+
+    /// Upload the object via multipart upload
+    async fn try_start_mpu_upload(
+        &self,
+        handle: &mut UploadHandle,
+        stream: InputStream,
+    ) -> Result<(), UploadError> {
+        // MPU has max of 10K parts which requires us to know the upper bound on the content (today anyway)
+        let upper_bound = stream
+            .size_hint()
+            .upper()
+            .ok_or_else(crate::io::error::Error::upper_bound_size_hint_required)?;
+
+        let part_size = cmp::max(self.mpu_threshold_bytes(), upper_bound / MAX_PARTS);
+        tracing::trace!("upload request using multipart upload with part size: {part_size}");
+
+        let mpu = start_mpu(&handle).await?;
+        tracing::trace!(
+            "multipart upload started with upload id: {:?}",
+            mpu.upload_id
+        );
+
+        handle
+            .ctx
+            .set_upload_id(mpu.upload_id().expect("upload ID present").to_owned());
+
+        let part_reader = Arc::new(
+            PartReaderBuilder::new()
+                .stream(stream)
+                .part_size(part_size as usize)
+                .build(),
+        );
+
+        let n_workers = self.num_workers();
+        for i in 0..n_workers {
+            let worker = upload_part(handle.ctx.clone(), part_reader.clone())
+                .instrument(tracing::debug_span!("upload-part", worker = i));
+            handle.tasks.spawn(worker);
+        }
+
+        Ok(())
+    }
+
+    /// Get the concrete number of workers to use based on the concurrency setting.
+    fn num_workers(&self) -> usize {
+        match self.concurrency {
+            // TODO(aws-sdk-rust#1159): add logic for determining this
+            ConcurrencySetting::Auto => DEFAULT_CONCURRENCY,
+            ConcurrencySetting::Explicit(explicit) => explicit,
+        }
+    }
+
     /// Get the concrete minimum upload size in bytes to use to determine whether multipart uploads
     /// are enabled for a given request.
     fn mpu_threshold_bytes(&self) -> u64 {
         match self.multipart_threshold_part_size {
-            // FIXME(aws-sdk-rust#1159): add logic for determining this
+            // TODO(aws-sdk-rust#1159): add logic for determining this
             TargetPartSize::Auto => 8 * MEBIBYTE,
             TargetPartSize::Explicit(explicit) => explicit,
         }
     }
 }
 
-async fn start_mpu(
-    client: &aws_sdk_s3::client::Client,
-    req: &UploadRequest,
-) -> Result<UploadResponse, UploadError> {
+/// start a new multipart upload by invoking `CreateMultipartUpload`
+async fn start_mpu(handle: &UploadHandle) -> Result<UploadResponse, UploadError> {
+    let req = handle.ctx.request();
+    let client = handle.ctx.client();
+
     let resp = client
         .create_multipart_upload()
         .set_acl(req.acl.clone())
@@ -202,11 +280,24 @@ async fn start_mpu(
         .send()
         .await?;
 
-    unimplemented!()
-    // Ok(resp.into())
+    Ok(resp.into())
 }
 
-// async fn upload_part(
-//     ctx: UploadContext,
-//     req: UploadRequest,
-// )
+async fn upload_part(ctx: UploadContext, reader: Arc<impl ReadPart>) -> Result<(), UploadError> {
+    unimplemented!()
+    // FIXME - need to figure out how errors for individual parts are propagated
+    // loop {
+    // let part_result = reader.next_part().await?;
+    // let part_data = match part_result {
+    //     Some(part_data) => part_data,
+    //     None => return Ok(()),
+    // };
+
+    // ctx.client.upload_part()
+    //     .bucket()
+    //     .key()
+    //     .upload_id(ctx.upload_id.clone())
+    //     .body()
+    // TODO - rest of the members to set, checksums, etc
+    // }
+}

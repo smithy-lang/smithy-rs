@@ -3,7 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::io::InputStream;
 use std::fmt::Debug;
+use std::mem;
+
+// TODO(aws-sdk-rust#1159): add FailedMultipartUploadPolicy
+// e.g. enum FailedMultipartUploadPolicy {
+//    AbortUpload,   // default, abort upload if any part fails
+//    Retain
+// }
 
 /// Request type for uploading a single object
 #[non_exhaustive]
@@ -188,6 +196,11 @@ impl UploadRequest {
     /// Create a new builder for `UploadRequest`
     pub fn builder() -> UploadRequestBuilder {
         UploadRequestBuilder::default()
+    }
+
+    /// Split the body from the request by taking it and replacing it with the default.
+    pub(crate) fn take_body(&mut self) -> InputStream {
+        mem::take(&mut self.body)
     }
 
     /// <p>The canned ACL to apply to the object. For more information, see <a href="https://docs.aws.amazon.com/AmazonS3/latest/dev/acl-overview.html#CannedACL">Canned ACL</a> in the <i>Amazon S3 User Guide</i>.</p>
@@ -1398,7 +1411,7 @@ impl UploadRequestBuilder {
     }
 
     /// Consumes the builder and constructs a [`UploadRequest`]
-    // FIXME - replace BuildError with our own type?
+    // FIXME(aws-sdk-rust#1159): replace BuildError with our own type?
     pub fn build(self) -> Result<UploadRequest, ::aws_smithy_types::error::operation::BuildError> {
         Ok(UploadRequest {
             body: self.body.unwrap_or_default(),
