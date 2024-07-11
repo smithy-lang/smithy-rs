@@ -12,6 +12,7 @@ use crate::io::InputStream;
 use crate::types::{ConcurrencySetting, TargetPartSize};
 use crate::upload::context::UploadContext;
 use crate::upload::handle::UploadHandle;
+use crate::upload::response::UploadResponseBuilder;
 use crate::{DEFAULT_CONCURRENCY, MEBIBYTE};
 use aws_sdk_s3::types::CompletedPart;
 use aws_smithy_types::byte_stream::ByteStream;
@@ -42,6 +43,7 @@ pub struct Builder {
     multipart_threshold_part_size: TargetPartSize,
     concurrency: ConcurrencySetting,
     sdk_config: Option<SdkConfig>,
+    client: Option<aws_sdk_s3::Client>,
 }
 
 impl Builder {
@@ -50,6 +52,7 @@ impl Builder {
             multipart_threshold_part_size: TargetPartSize::Auto,
             concurrency: ConcurrencySetting::Auto,
             sdk_config: None,
+            client: None,
         }
     }
 
@@ -67,6 +70,14 @@ impl Builder {
             }
             tps => tps,
         };
+
+        self.set_multipart_threshold_part_size(threshold)
+    }
+
+    /// Minimum object size that should trigger a multipart upload.
+    ///
+    /// NOTE: This does not validate the setting and is meant for internal use only.
+    pub(crate) fn set_multipart_threshold_part_size(mut self, threshold: TargetPartSize) -> Self {
         self.multipart_threshold_part_size = threshold;
         self
     }
@@ -90,14 +101,23 @@ impl Builder {
     pub fn build(self) -> Uploader {
         self.into()
     }
+
+    /// Set an explicit client to use. This takes precedence over setting `sdk_config`.
+    pub(crate) fn client(mut self, client: aws_sdk_s3::Client) -> Self {
+        self.client = Some(client);
+        self
+    }
 }
 
 impl From<Builder> for Uploader {
     fn from(value: Builder) -> Self {
-        let sdk_config = value
-            .sdk_config
-            .unwrap_or_else(|| SdkConfig::builder().build());
-        let client = aws_sdk_s3::Client::new(&sdk_config);
+        let client = value.client.unwrap_or_else(|| {
+            let sdk_config = value
+                .sdk_config
+                .unwrap_or_else(|| SdkConfig::builder().build());
+            aws_sdk_s3::Client::new(&sdk_config)
+        });
+
         Self {
             multipart_threshold_part_size: value.multipart_threshold_part_size,
             concurrency: value.concurrency,
@@ -155,7 +175,6 @@ impl Uploader {
     pub async fn upload(&self, mut req: UploadRequest) -> Result<UploadHandle, UploadError> {
         let min_mpu_threshold = self.mpu_threshold_bytes();
 
-        // separate the body
         let stream = req.take_body();
         let ctx = self.new_context(req);
         let mut handle = UploadHandle::new(ctx);
@@ -208,9 +227,7 @@ impl Uploader {
             mpu.upload_id
         );
 
-        handle
-            .ctx
-            .set_upload_id(mpu.upload_id().expect("upload ID present").to_owned());
+        handle.set_response(mpu);
 
         let part_reader = Arc::new(
             PartReaderBuilder::new()
@@ -250,7 +267,7 @@ impl Uploader {
 }
 
 /// start a new multipart upload by invoking `CreateMultipartUpload`
-async fn start_mpu(handle: &UploadHandle) -> Result<UploadResponse, UploadError> {
+async fn start_mpu(handle: &UploadHandle) -> Result<UploadResponseBuilder, UploadError> {
     let req = handle.ctx.request();
     let client = handle.ctx.client();
 
@@ -349,4 +366,83 @@ async fn upload_parts(
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use crate::io::InputStream;
+    use crate::types::{ConcurrencySetting, TargetPartSize};
+    use crate::upload::{Builder, UploadRequest, Uploader};
+    use aws_sdk_s3::operation::complete_multipart_upload::CompleteMultipartUploadOutput;
+    use aws_sdk_s3::operation::create_multipart_upload::CreateMultipartUploadOutput;
+    use aws_sdk_s3::operation::upload_part::UploadPartOutput;
+    use aws_smithy_mocks_experimental::{mock, mock_client, RuleMode};
+    use bytes::Bytes;
+    use std::ops::Deref;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_basic_mpu() {
+        let expected_upload_id = Arc::new("test-upload".to_owned());
+        let body = Bytes::from_static(b"every adolescent dog goes bonkers early");
+        let stream = InputStream::from(body);
+
+        let upload_id = expected_upload_id.clone();
+        let create_mpu =
+            mock!(aws_sdk_s3::Client::create_multipart_upload).then_output(move || {
+                CreateMultipartUploadOutput::builder()
+                    .upload_id(upload_id.as_ref().to_owned())
+                    .build()
+            });
+
+        let upload_id = expected_upload_id.clone();
+        let upload_1 = mock!(aws_sdk_s3::Client::upload_part)
+            .match_requests(move |r| {
+                r.upload_id.as_ref() == Some(&upload_id) && r.content_length == Some(30)
+            })
+            .then_output(|| UploadPartOutput::builder().build());
+
+        let upload_id = expected_upload_id.clone();
+        let upload_2 = mock!(aws_sdk_s3::Client::upload_part)
+            .match_requests(move |r| {
+                r.upload_id.as_ref() == Some(&upload_id) && r.content_length == Some(9)
+            })
+            .then_output(|| UploadPartOutput::builder().build());
+
+        let expected_e_tag = Arc::new("test-e-tag".to_owned());
+        let upload_id = expected_upload_id.clone();
+        let e_tag = expected_e_tag.clone();
+        let complete_mpu = mock!(aws_sdk_s3::Client::complete_multipart_upload)
+            .match_requests(move |r| {
+                r.upload_id.as_ref() == Some(&upload_id)
+                    && r.multipart_upload.clone().unwrap().parts.unwrap().len() == 2
+            })
+            .then_output(move || {
+                CompleteMultipartUploadOutput::builder()
+                    .e_tag(e_tag.as_ref().to_owned())
+                    .build()
+            });
+
+        let client = mock_client!(
+            aws_sdk_s3,
+            RuleMode::Sequential,
+            &[&create_mpu, &upload_1, &upload_2, &complete_mpu]
+        );
+
+        let uploader = Uploader::builder()
+            .concurrency(ConcurrencySetting::Explicit(1))
+            .set_multipart_threshold_part_size(TargetPartSize::Explicit(30))
+            .client(client)
+            .build();
+
+        let request = UploadRequest::builder()
+            .bucket("test-bucket")
+            .key("test-key")
+            .body(stream)
+            .build()
+            .unwrap();
+
+        let handle = uploader.upload(request).await.unwrap();
+
+        let resp = handle.join().await.unwrap();
+        assert_eq!(expected_upload_id.deref(), resp.upload_id.unwrap().deref());
+        assert_eq!(expected_e_tag.deref(), resp.e_tag.unwrap().deref());
+    }
+}

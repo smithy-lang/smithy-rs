@@ -5,6 +5,7 @@
 
 use crate::error::UploadError;
 use crate::upload::context::UploadContext;
+use crate::upload::response::UploadResponseBuilder;
 use crate::upload::UploadResponse;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
 use tokio::task;
@@ -17,6 +18,8 @@ pub struct UploadHandle {
     pub(crate) tasks: task::JoinSet<Result<Vec<CompletedPart>, UploadError>>,
     /// The context used to drive an upload to completion
     pub(crate) ctx: UploadContext,
+    /// The response that will eventually be yielded to the caller.
+    response: Option<UploadResponseBuilder>,
 }
 
 impl UploadHandle {
@@ -25,13 +28,26 @@ impl UploadHandle {
         Self {
             tasks: task::JoinSet::new(),
             ctx,
+            response: None,
         }
+    }
+
+    /// Set the initial response builder once available
+    ///
+    /// This is usually after `CreateMultipartUpload` is initiated (or
+    /// `PutObject` is invoked for uploads less than the required MPU threshold).
+    pub(crate) fn set_response(&mut self, builder: UploadResponseBuilder) {
+        if builder.upload_id.is_some() {
+            let upload_id = builder.upload_id.clone().expect("upload ID present");
+            self.ctx.set_upload_id(upload_id);
+        }
+
+        self.response = Some(builder);
     }
 
     /// Consume the handle and wait for upload to complete
     pub async fn join(mut self) -> Result<UploadResponse, UploadError> {
-        // TODO - if mpu, call CompleteMultipartUploadResponse
-        unimplemented!()
+        complete_upload(self).await
     }
 
     /// Abort the upload and cancel any in-progress part uploads.
@@ -45,15 +61,15 @@ impl UploadHandle {
         unimplemented!()
     }
 
-    /// Pause the upload and return a handle that can be used to resume the upload.
-    pub fn pause(mut self) -> PausedUploadHandle {
-        unimplemented!()
-    }
+    // /// Pause the upload and return a handle that can be used to resume the upload.
+    // pub fn pause(mut self) -> PausedUploadHandle {
+    //     unimplemented!()
+    // }
 
     // pub fn progress() -> Progress
 }
 
-async fn finish_upload(mut handle: UploadHandle) -> Result<UploadResponse, UploadError> {
+async fn complete_upload(mut handle: UploadHandle) -> Result<UploadResponse, UploadError> {
     if !handle.ctx.is_multipart_upload() {
         todo!("non mpu upload not implemented yet")
     }
@@ -81,7 +97,7 @@ async fn finish_upload(mut handle: UploadHandle) -> Result<UploadResponse, Uploa
     }
 
     // complete the multipart upload
-    let resp = handle
+    let complete_mpu_resp = handle
         .ctx
         .client
         .complete_multipart_upload()
@@ -106,8 +122,14 @@ async fn finish_upload(mut handle: UploadHandle) -> Result<UploadResponse, Uploa
         .send()
         .await?;
 
-    todo!("not implemented")
-}
+    // set remaining fields from completing the multipart upload
+    let resp = handle
+        .response
+        .take()
+        .expect("response set")
+        .set_e_tag(complete_mpu_resp.e_tag.clone())
+        .set_expiration(complete_mpu_resp.expiration.clone())
+        .set_version_id(complete_mpu_resp.version_id.clone());
 
-#[derive(Debug)]
-pub struct PausedUploadHandle {}
+    Ok(resp.build().expect("valid response"))
+}
