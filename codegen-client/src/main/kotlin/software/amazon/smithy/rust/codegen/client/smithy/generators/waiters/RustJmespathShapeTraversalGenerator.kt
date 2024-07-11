@@ -280,7 +280,7 @@ class JmesPathTraversalCodegenBugException(msg: String?, what: Throwable? = null
  * - Object projections
  * - Multi-select lists (but only when every item in the list is the exact same type)
  * - And/or/not boolean operations
- * - Functions `contains` and `length`. The `keys` function may be supported in the future.
+ * - Functions `contains`, `length`, and `keys`.
  */
 class RustJmespathShapeTraversalGenerator(
     codegenContext: ClientCodegenContext,

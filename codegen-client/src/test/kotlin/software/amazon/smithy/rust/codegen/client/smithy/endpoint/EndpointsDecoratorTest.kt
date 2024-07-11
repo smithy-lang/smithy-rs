@@ -32,6 +32,7 @@ class EndpointsDecoratorTest {
 
         use smithy.rules#clientContextParams
         use smithy.rules#staticContextParams
+        use smithy.rules#operationContextParams
         use smithy.rules#contextParam
         use aws.protocols#awsJson1_1
 
@@ -64,7 +65,10 @@ class EndpointsDecoratorTest {
                 "BoolBuiltInWithDefault": { "required": true, "type": "boolean", "builtIn": "AWS::FooBar", "default": true },
                 "AStringParam": { "required": false, "type": "string" },
                 "ABoolParam": { "required": false, "type": "boolean" },
-                "AStringArrayParam": { "required": false, "type": "stringArray" }
+                "AStringArrayParam": { "required": false, "type": "stringArray" },
+                "JmesPathParamString": {"required": false, type: "string"},
+                "JmesPathParamBoolean": {"required": false, type: "boolean"},
+                "JmesPathParamStringArray": {"required": false, type: "stringArray"},
             }
         })
         @clientContextParams(
@@ -112,6 +116,17 @@ class EndpointsDecoratorTest {
             Region: { value: "us-east-2" },
             AStringArrayParam: {value: ["a", "b", "c"]}
         )
+        @operationContextParams(
+            JmesPathParamString: {
+                path: "nested.field",
+            }
+            JmesPathParamBoolean: {
+                path: "nested.boolField",
+            }
+            JmesPathParamStringArray: {
+                path: "keys(nested.mapField)",
+            }
+        )
         operation TestOperation {
             input: TestOperationInput
         }
@@ -125,7 +140,14 @@ class EndpointsDecoratorTest {
         }
 
         structure NestedStructure {
-            field: String
+            field: String,
+            boolField: Boolean,
+            mapField: IntegerMap,
+        }
+
+        map IntegerMap {
+            key: String,
+            value: Integer
         }
         """.asSmithyModel(disableValidation = true)
 
@@ -157,7 +179,7 @@ class EndpointsDecoratorTest {
                             use std::time::Duration;
                             use $moduleName::{
                                 config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
-                                config::Intercept, config::SharedAsyncSleep, Client, Config,
+                                config::Intercept, config::SharedAsyncSleep, types::NestedStructure, Client, Config,
                             };
 
                             ##[derive(Clone, Debug, Default)]
@@ -194,6 +216,8 @@ class EndpointsDecoratorTest {
                                                     .map(ToString::to_string)
                                                     .collect::<Vec<_>>()
                                             )
+                                            .jmes_path_param_string_array(vec!["key2".to_string(), "key1".to_string()])
+                                            .jmes_path_param_string("nested-field")
                                             .build()
                                             .unwrap()
                                     );
@@ -222,7 +246,20 @@ class EndpointsDecoratorTest {
                                 .build();
                             let client = Client::from_conf(config);
 
-                            let _ = dbg!(client.test_operation().bucket("bucket-name").send().await);
+                            let _ = dbg!(
+                                client
+                                .test_operation()
+                                .bucket("bucket-name")
+                                .nested(
+                                    NestedStructure::builder()
+                                        .field("nested-field")
+                                        .map_field("key1", 1)
+                                        .map_field("key2", 2)
+                                        .build()
+                                )
+                                .send()
+                                .await
+                            );
                             assert!(
                                 interceptor.called.load(Ordering::Relaxed),
                                 "the interceptor should have been called"
