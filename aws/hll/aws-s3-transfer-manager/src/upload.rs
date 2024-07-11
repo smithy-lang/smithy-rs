@@ -13,7 +13,10 @@ use crate::types::{ConcurrencySetting, TargetPartSize};
 use crate::upload::context::UploadContext;
 use crate::upload::handle::UploadHandle;
 use crate::{DEFAULT_CONCURRENCY, MEBIBYTE};
+use aws_sdk_s3::types::CompletedPart;
+use aws_smithy_types::byte_stream::ByteStream;
 use aws_types::SdkConfig;
+use bytes::Buf;
 use std::cmp;
 use std::sync::Arc;
 use tracing::Instrument;
@@ -137,14 +140,14 @@ impl Uploader {
     ///         .bucket("my-bucket")
     ///         .key("my-key")
     ///         .body(stream)
-    ///         .into();
+    ///         .build()?;
     ///
     ///     let handle = client.upload(request).await?;
     ///
     ///     // upload() will return potentially before the request is complete.
     ///     // The handle given must be joined to drive the request to completion.
     ///     // It can also be used to get progress, pause or cancel the request, etc.
-    ///     let response = handle.join()?;
+    ///     let response = handle.join().await?;
     ///     // ... do something with response
     ///     Ok(())
     /// }
@@ -154,17 +157,22 @@ impl Uploader {
 
         // separate the body
         let stream = req.take_body();
-        let size_hint = stream.size_hint();
         let ctx = self.new_context(req);
         let mut handle = UploadHandle::new(ctx);
 
-        // FIXME - should be upper
-        if size_hint.lower() < min_mpu_threshold {
-            tracing::trace!("upload request content size hint ({size_hint:?}) less than min part size threshold ({min_mpu_threshold}); sending as single PutObject request");
+        // MPU has max of 10K parts which requires us to know the upper bound on the content length (today anyway)
+        let content_length = stream
+            .size_hint()
+            .upper()
+            .ok_or_else(crate::io::error::Error::upper_bound_size_hint_required)?;
+
+        if content_length < min_mpu_threshold {
+            tracing::trace!("upload request content size hint ({content_length}) less than min part size threshold ({min_mpu_threshold}); sending as single PutObject request");
             // let resp = req.input.send_with(&self.client)?;
-            todo!("send request as is")
+            todo!("adapt body to ByteStream and send request as is for non mpu upload")
         } else {
-            self.try_start_mpu_upload(&mut handle, stream).await?
+            self.try_start_mpu_upload(&mut handle, stream, content_length)
+                .await?
         }
 
         Ok(handle)
@@ -179,18 +187,19 @@ impl Uploader {
     }
 
     /// Upload the object via multipart upload
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` - The upload handle
+    /// * `stream` - The content to upload
+    /// * `content_length` - The upper bound on the content length
     async fn try_start_mpu_upload(
         &self,
         handle: &mut UploadHandle,
         stream: InputStream,
+        content_length: u64,
     ) -> Result<(), UploadError> {
-        // MPU has max of 10K parts which requires us to know the upper bound on the content (today anyway)
-        let upper_bound = stream
-            .size_hint()
-            .upper()
-            .ok_or_else(crate::io::error::Error::upper_bound_size_hint_required)?;
-
-        let part_size = cmp::max(self.mpu_threshold_bytes(), upper_bound / MAX_PARTS);
+        let part_size = cmp::max(self.mpu_threshold_bytes(), content_length / MAX_PARTS);
         tracing::trace!("upload request using multipart upload with part size: {part_size}");
 
         let mpu = start_mpu(&handle).await?;
@@ -212,7 +221,7 @@ impl Uploader {
 
         let n_workers = self.num_workers();
         for i in 0..n_workers {
-            let worker = upload_part(handle.ctx.clone(), part_reader.clone())
+            let worker = upload_parts(handle.ctx.clone(), part_reader.clone())
                 .instrument(tracing::debug_span!("upload-part", worker = i));
             handle.tasks.spawn(worker);
         }
@@ -283,21 +292,61 @@ async fn start_mpu(handle: &UploadHandle) -> Result<UploadResponse, UploadError>
     Ok(resp.into())
 }
 
-async fn upload_part(ctx: UploadContext, reader: Arc<impl ReadPart>) -> Result<(), UploadError> {
-    unimplemented!()
-    // FIXME - need to figure out how errors for individual parts are propagated
-    // loop {
-    // let part_result = reader.next_part().await?;
-    // let part_data = match part_result {
-    //     Some(part_data) => part_data,
-    //     None => return Ok(()),
-    // };
+/// Worker function that pulls part data off the `reader` and uploads each part until the reader
+/// is exhausted. If any part fails the worker will return the error and stop processing. If
+/// the worker finishes successfully the completed parts uploaded by this worker are returned.
+async fn upload_parts(
+    ctx: UploadContext,
+    reader: Arc<impl ReadPart>,
+) -> Result<Vec<CompletedPart>, UploadError> {
+    let mut completed_parts = Vec::new();
+    loop {
+        let part_result = reader.next_part().await?;
+        let part_data = match part_result {
+            Some(part_data) => part_data,
+            None => break,
+        };
 
-    // ctx.client.upload_part()
-    //     .bucket()
-    //     .key()
-    //     .upload_id(ctx.upload_id.clone())
-    //     .body()
-    // TODO - rest of the members to set, checksums, etc
-    // }
+        let part_number = part_data.part_number as i32;
+        tracing::trace!("worker recv'd part number {}", part_number);
+
+        let content_length = part_data.data.remaining();
+        let body = ByteStream::from(part_data.data);
+
+        // TODO(aws-sdk-rust#1159): disable payload signing
+        // TODO(aws-sdk-rust#1159): set checksum fields if applicable
+        let resp = ctx
+            .client
+            .upload_part()
+            .set_bucket(ctx.request.bucket.clone())
+            .set_key(ctx.request.key.clone())
+            .set_upload_id(ctx.upload_id.clone())
+            .part_number(part_number)
+            .content_length(content_length as i64)
+            .body(body)
+            .set_sse_customer_algorithm(ctx.request.sse_customer_algorithm.clone())
+            .set_sse_customer_key(ctx.request.sse_customer_key.clone())
+            .set_sse_customer_key_md5(ctx.request.sse_customer_key_md5.clone())
+            .set_request_payer(ctx.request.request_payer.clone())
+            .set_expected_bucket_owner(ctx.request.expected_bucket_owner.clone())
+            .send()
+            .await?;
+
+        let completed = CompletedPart::builder()
+            .part_number(part_number)
+            .set_e_tag(resp.e_tag.clone())
+            .set_checksum_crc32(resp.checksum_crc32.clone())
+            .set_checksum_crc32_c(resp.checksum_crc32_c.clone())
+            .set_checksum_sha1(resp.checksum_sha1.clone())
+            .set_checksum_sha256(resp.checksum_sha256.clone())
+            .build();
+
+        completed_parts.push(completed);
+    }
+
+    tracing::trace!("no more parts, worker finished");
+    Ok(completed_parts)
 }
+
+#[cfg(test)]
+mod test {}

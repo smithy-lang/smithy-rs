@@ -19,14 +19,23 @@ pub(crate) struct UploadContext {
 }
 
 impl UploadContext {
+    /// The S3 client to use for SDK operations
     pub(crate) fn client(&self) -> &aws_sdk_s3::Client {
         &self.client
     }
+
+    /// The original request (sans the body as it will have been taken for processing)
     pub(crate) fn request(&self) -> &UploadRequest {
         self.request.deref()
     }
 
+    /// Set the upload ID if the transfer will be done using a multipart upload
     pub(crate) fn set_upload_id(&mut self, upload_id: String) {
         self.upload_id = Some(upload_id)
+    }
+
+    /// Check if this transfer is using multipart upload
+    pub(crate) fn is_multipart_upload(&self) -> bool {
+        self.upload_id.is_some()
     }
 }

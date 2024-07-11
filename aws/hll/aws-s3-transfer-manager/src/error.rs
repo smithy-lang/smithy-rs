@@ -58,12 +58,22 @@ pub(crate) type UploadPartSdkError = ::aws_smithy_runtime_api::client::result::S
     ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
 >;
 
+pub(crate) type CompleteMultipartUploadSdkError =
+    ::aws_smithy_runtime_api::client::result::SdkError<
+        aws_sdk_s3::operation::complete_multipart_upload::CompleteMultipartUploadError,
+        ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+    >;
+
 /// An error related to upload an object
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
     /// An error occurred invoking [aws_sdk_s3::Client::CreateMultipartUpload]
     #[error(transparent)]
     CreateMultipartUpload(#[from] CreateMultipartUploadSdkError),
+
+    /// An error occurred invoking [aws_sdk_s3::Client::CreateMultipartUpload]
+    #[error(transparent)]
+    CompleteMultipartUpload(#[from] CompleteMultipartUploadSdkError),
 
     /// An error occurred invoking [aws_sdk_s3::Client::UploadPart]
     #[error(transparent)]

@@ -75,8 +75,8 @@ impl ReadPart for PartReader {
 
 /// Data for a single part
 pub(crate) struct PartData {
-    data: Bytes,
-    part_number: u64,
+    pub(crate) data: Bytes,
+    pub(crate) part_number: u64,
 }
 
 /// The `ReadPart` trait allows for reading data from an `InputStream` and packaging the raw
@@ -87,7 +87,9 @@ pub(crate) trait ReadPart {
     /// When there is no more data readers should return `Ok(None)`.
     /// NOTE: Implementations are allowed to return data in any order and consumers are
     /// expected to order data by the part number.
-    async fn next_part(&self) -> Result<Option<PartData>, Error>;
+    fn next_part(
+        &self,
+    ) -> impl std::future::Future<Output = Result<Option<PartData>, Error>> + Send;
 }
 
 #[derive(Debug)]
