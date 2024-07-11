@@ -5,10 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.node.ExpectationNotMetException
@@ -20,7 +16,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.HttpErrorTrait
@@ -124,13 +119,7 @@ class ServerHttpBoundProtocolGenerator(
 ) : ServerProtocolGenerator(
         protocol,
         ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
-    ) {
-    // Define suffixes for operation input / output / error wrappers
-    companion object {
-        const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
-        const val OPERATION_OUTPUT_WRAPPER_SUFFIX = "OperationOutputWrapper"
-    }
-}
+    )
 
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
@@ -697,8 +686,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         inputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
     ) {
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
         val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust(
@@ -740,7 +727,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         for (binding in bindings) {
             val member = binding.member
             val parsedValue =
-                serverRenderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
+                serverRenderBindingParser(binding, operationShape, httpBindingGenerator(operationShape), structuredDataParser)
             val valueToSet =
                 if (symbolProvider.toSymbol(binding.member).isOptional()) {
                     "Some(value)"
@@ -801,13 +788,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 val structureShapeHandler: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body)", structuredDataParser.payloadParser(binding.member))
                 }
-                val errorSymbol = getDeserializePayloadErrorSymbol(binding)
                 val deserializer =
-                    httpBindingGenerator.generateDeserializePayloadFn(
-                        binding,
-                        errorSymbol,
-                        structuredHandler = structureShapeHandler,
-                    )
+                    httpBindingGenerator.generateDeserializePayloadFn(binding, structuredHandler = structureShapeHandler)
                 return writable {
                     if (binding.member.isStreaming(model)) {
                         rustTemplate(
@@ -1196,9 +1178,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         binding: HttpBindingDescriptor,
         operationShape: OperationShape,
     ) {
-        val httpBindingGenerator =
-            ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
-        val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
+        val deserializer = httpBindingGenerator(operationShape).generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
             #{deserializer}(&headers)?
@@ -1215,8 +1195,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     ) {
         check(binding.location == HttpLocation.PREFIX_HEADERS)
 
-        val httpBindingGenerator = ServerRequestBindingGenerator(protocol, codegenContext, operationShape)
-        val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
+        val deserializer = httpBindingGenerator(operationShape).generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
             #{deserializer}(&headers)?
@@ -1300,33 +1279,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
     }
 
-    /**
-     * Returns the error type of the function that deserializes a non-streaming HTTP payload (a byte slab) into the
-     * shape targeted by the `httpPayload` trait.
-     */
-    private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): Symbol {
-        check(binding.location == HttpLocation.PAYLOAD)
-
-        if (model.expectShape(binding.member.target) is StringShape) {
-            return protocol.requestRejection(runtimeConfig).toSymbol()
-        }
-        return when (codegenContext.protocol) {
-            RestJson1Trait.ID, AwsJson1_0Trait.ID, AwsJson1_1Trait.ID -> {
-                RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError").toSymbol()
-            }
-            RestXmlTrait.ID -> {
-                RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError").toSymbol()
-            }
-            else -> {
-                TODO("Protocol ${codegenContext.protocol} not supported yet")
-            }
-        }
-    }
-
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
             "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
         } else {
             ""
         }
+
+    private fun httpBindingGenerator(operationShape: OperationShape) =
+        ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
 }
