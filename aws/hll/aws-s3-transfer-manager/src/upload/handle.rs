@@ -5,6 +5,7 @@
 
 use crate::error::UploadError;
 use crate::upload::context::UploadContext;
+use crate::upload::request::FailedMultipartUploadPolicy;
 use crate::upload::response::UploadResponseBuilder;
 use crate::upload::UploadResponse;
 use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart};
@@ -51,14 +52,47 @@ impl UploadHandle {
     }
 
     /// Abort the upload and cancel any in-progress part uploads.
-    pub async fn abort(&mut self) {
+    pub async fn abort(&mut self) -> Result<AbortedUpload, UploadError> {
+        // TODO(aws-sdk-rust#1159) - handle already completed upload
+
         // cancel in-progress uploads
         self.tasks.abort_all();
         // join all tasks
         while let Some(_) = self.tasks.join_next().await {}
 
-        // TODO - invoke abort multipart upload depending on the policy
-        unimplemented!()
+        if !self.ctx.is_multipart_upload() {
+            return Ok(AbortedUpload::default());
+        }
+
+        let abort_policy = self
+            .ctx
+            .request
+            .failed_multipart_upload_policy
+            .unwrap_or_default();
+
+        match abort_policy {
+            FailedMultipartUploadPolicy::AbortUpload => {}
+            FailedMultipartUploadPolicy::Retain => {}
+        }
+
+        let abort_mpu_resp = self
+            .ctx
+            .client
+            .abort_multipart_upload()
+            .set_bucket(self.ctx.request.bucket.clone())
+            .set_key(self.ctx.request.key.clone())
+            .set_upload_id(self.ctx.upload_id.clone())
+            .set_request_payer(self.ctx.request.request_payer.clone())
+            .set_expected_bucket_owner(self.ctx.request.expected_bucket_owner.clone())
+            .send()
+            .await?;
+
+        let aborted_upload = AbortedUpload {
+            upload_id: self.ctx.upload_id.clone(),
+            request_charged: abort_mpu_resp.request_charged,
+        };
+
+        Ok(aborted_upload)
     }
 
     // /// Pause the upload and return a handle that can be used to resume the upload.
@@ -67,6 +101,30 @@ impl UploadHandle {
     // }
 
     // pub fn progress() -> Progress
+}
+
+/// Describes the result of aborting an in-progress upload.
+#[derive(Debug, Default)]
+pub struct AbortedUpload {
+    upload_id: Option<String>,
+    request_charged: Option<aws_sdk_s3::types::RequestCharged>,
+}
+
+impl AbortedUpload {
+    /// Get the multipart upload ID that was cancelled
+    ///
+    /// Not present for uploads that did not utilize a multipart upload
+    pub fn upload_id(&self) -> &Option<String> {
+        &self.upload_id
+    }
+
+    /// If present, indicates that the requester was successfully charged for the request.
+    ///
+    /// This functionality is not supported for directory buckets and is
+    /// not present for uploads that did not utilize a multipart upload
+    pub fn request_charged(&self) -> &Option<aws_sdk_s3::types::RequestCharged> {
+        &self.request_charged
+    }
 }
 
 async fn complete_upload(mut handle: UploadHandle) -> Result<UploadResponse, UploadError> {
@@ -80,6 +138,7 @@ async fn complete_upload(mut handle: UploadHandle) -> Result<UploadResponse, Upl
     );
 
     let mut all_parts = Vec::new();
+
     // join all the upload tasks
     while let Some(join_result) = handle.tasks.join_next().await {
         let result = join_result.expect("task completed");
@@ -90,7 +149,8 @@ async fn complete_upload(mut handle: UploadHandle) -> Result<UploadResponse, Upl
             // TODO(aws-sdk-rust#1159, design) - do we want to return first error or collect all errors?
             Err(err) => {
                 tracing::error!("multipart upload failed, aborting");
-                handle.abort().await;
+                // TODO(aws-sdk-rust#1159) - if cancelling causes an error we want to propagate that in the returned error somehow?
+                handle.abort().await?;
                 return Err(err);
             }
         }
