@@ -200,27 +200,63 @@ class EndpointsDecoratorTest {
                                     let params = cfg
                                         .load::<EndpointResolverParams>()
                                         .expect("params set in config");
-                                    let params: &Params = params.get().expect("correct type");
+                                    let preset_params: &Params = params.get().expect("correct type");
+                                    let manual_params: &Params = &Params::builder()
+                                        .bucket("bucket-name".to_string())
+                                        .built_in_with_default("some-default")
+                                        .bool_built_in_with_default(true)
+                                        .a_bool_param(false)
+                                        .a_string_param("hello".to_string())
+                                        .region("us-east-2".to_string())
+                                        .a_string_array_param(
+                                            vec!["a", "b", "c"]
+                                                .iter()
+                                                .map(ToString::to_string)
+                                                .collect::<Vec<_>>(),
+                                        )
+                                        .jmes_path_param_string_array(vec!["key2".to_string(), "key1".to_string()])
+                                        .jmes_path_param_string("nested-field")
+                                        .build()
+                                        .unwrap();
+
+                                    // The params struct for this test contains a vec sourced from the JMESPath keys function which
+                                    // does not guarantee the order. Due to this we cannot compare the preset_params with the
+                                    // manual_params directly, instead we must assert equlaity field by field.
+                                    assert_eq!(preset_params.bucket(), manual_params.bucket());
+                                    assert_eq!(preset_params.region(), manual_params.region());
                                     assert_eq!(
-                                        params,
-                                        &Params::builder()
-                                            .bucket("bucket-name".to_string())
-                                            .built_in_with_default("some-default")
-                                            .bool_built_in_with_default(true)
-                                            .a_bool_param(false)
-                                            .a_string_param("hello".to_string())
-                                            .region("us-east-2".to_string())
-                                            .a_string_array_param(
-                                                vec!["a", "b", "c"]
-                                                    .iter()
-                                                    .map(ToString::to_string)
-                                                    .collect::<Vec<_>>()
-                                            )
-                                            .jmes_path_param_string_array(vec!["key2".to_string(), "key1".to_string()])
-                                            .jmes_path_param_string("nested-field")
-                                            .build()
-                                            .unwrap()
+                                        preset_params.a_string_param(),
+                                        manual_params.a_string_param()
                                     );
+                                    assert_eq!(
+                                        preset_params.built_in_with_default(),
+                                        manual_params.built_in_with_default()
+                                    );
+                                    assert_eq!(
+                                        preset_params.bool_built_in_with_default(),
+                                        manual_params.bool_built_in_with_default()
+                                    );
+                                    assert_eq!(preset_params.a_bool_param(), manual_params.a_bool_param());
+                                    assert_eq!(
+                                        preset_params.a_string_array_param(),
+                                        manual_params.a_string_array_param()
+                                    );
+                                    assert_eq!(
+                                        preset_params.jmes_path_param_string(),
+                                        manual_params.jmes_path_param_string()
+                                    );
+                                    assert_eq!(
+                                        preset_params.jmes_path_param_boolean(),
+                                        manual_params.jmes_path_param_boolean()
+                                    );
+                                    assert!(preset_params
+                                        .jmes_path_param_string_array()
+                                        .unwrap()
+                                        .contains(&"key1".to_string()));
+                                    assert!(preset_params
+                                        .jmes_path_param_string_array()
+                                        .unwrap()
+                                        .contains(&"key2".to_string()));
 
                                     let endpoint = cfg.load::<Endpoint>().expect("endpoint set in config");
                                     assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");

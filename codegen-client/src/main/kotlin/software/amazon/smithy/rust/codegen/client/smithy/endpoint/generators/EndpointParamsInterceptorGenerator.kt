@@ -112,6 +112,9 @@ class EndpointParamsInterceptorGenerator(
                 }
             }
 
+            // The get_* functions below are generated from JMESPath expressions in the
+            // operationContextParams trait. They target the operation's input shape.
+
             #{jmespath_getters}
             """,
             *codegenScope,
@@ -210,6 +213,7 @@ class EndpointParamsInterceptorGenerator(
                         ),
                     )
 
+                rust("// Generated from JMESPath Expression: $pathValue")
                 rustBlockTemplate(
                     "fn $getterName(input: #{Input}) -> Option<#{Ret}>",
                     "Input" to input.rustType().asRef(),

@@ -446,11 +446,12 @@ class RustJmespathShapeTraversalGenerator(
                     output =
                         writable {
                             arg.output(this)
-                            val out = arg.outputShape.shape
-                            when (out) {
+                            val outputShape = arg.outputShape.shape
+                            when (outputShape) {
                                 is StructureShape -> {
                                     // Can't iterate a struct in Rust so source the keys from smithy
-                                    val keys = out.allMembers.keys.map { "${it.dq()}.to_string()" }.joinToString(",")
+                                    val keys =
+                                        outputShape.allMembers.keys.joinToString(",") { "${it.dq()}.to_string()" }
                                     rust("let $ident = vec![$keys];")
                                 }
 
@@ -459,7 +460,7 @@ class RustJmespathShapeTraversalGenerator(
                                 }
 
                                 else ->
-                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct or a map, got ${out?.type}")
+                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct or a map, got ${outputShape?.type}")
                             }
                         },
                 )
