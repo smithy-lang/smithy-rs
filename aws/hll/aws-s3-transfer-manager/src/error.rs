@@ -64,6 +64,11 @@ pub(crate) type CompleteMultipartUploadSdkError =
         ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
     >;
 
+pub(crate) type AbortMultipartUploadSdkError = ::aws_smithy_runtime_api::client::result::SdkError<
+    aws_sdk_s3::operation::abort_multipart_upload::AbortMultipartUploadError,
+    ::aws_smithy_runtime_api::client::orchestrator::HttpResponse,
+>;
+
 /// An error related to upload an object
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
@@ -78,6 +83,9 @@ pub enum UploadError {
     /// An error occurred invoking [aws_sdk_s3::Client::UploadPart]
     #[error(transparent)]
     UploadPart(#[from] UploadPartSdkError),
+
+    #[error(transparent)]
+    AbortMultipartpload(#[from] AbortMultipartUploadSdkError),
 
     /// An I/O error occurred
     #[error(transparent)]

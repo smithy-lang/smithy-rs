@@ -68,6 +68,7 @@ impl UploadHandle {
             .ctx
             .request
             .failed_multipart_upload_policy
+            .clone()
             .unwrap_or_default();
 
         match abort_policy {
@@ -155,6 +156,9 @@ async fn complete_upload(mut handle: UploadHandle) -> Result<UploadResponse, Upl
             }
         }
     }
+
+    // parts must be sorted
+    all_parts.sort_by_key(|p| p.part_number.expect("part number set"));
 
     // complete the multipart upload
     let complete_mpu_resp = handle

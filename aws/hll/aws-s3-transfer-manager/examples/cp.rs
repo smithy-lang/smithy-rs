@@ -10,6 +10,9 @@ use std::{mem, time};
 use aws_s3_transfer_manager::download::Downloader;
 
 use aws_s3_transfer_manager::download::body::Body;
+use aws_s3_transfer_manager::io::InputStream;
+use aws_s3_transfer_manager::types::{ConcurrencySetting, TargetPartSize};
+use aws_s3_transfer_manager::upload::{UploadRequest, Uploader};
 use aws_sdk_s3::operation::get_object::builders::GetObjectInputBuilder;
 use aws_types::SdkConfig;
 use bytes::Buf;
@@ -102,24 +105,9 @@ fn invalid_arg(message: &str) -> ! {
         .exit()
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    console_subscriber::init();
-    let args = dbg!(Args::parse());
-
-    use TransferUri::*;
-    match (&args.source, &args.dest) {
-        (Local(_), S3(_)) => todo!("upload not implemented yet"),
-        (Local(_), Local(_)) => invalid_arg("local to local transfer not supported"),
-        (S3(_), Local(_)) => (),
-        (S3(_), S3(_)) => invalid_arg("s3 to s3 transfer not supported"),
-    }
-
+async fn do_download(args: Args) -> Result<(), Box<dyn Error>> {
     let config = aws_config::from_env().load().await;
-
-    println!("warming up client...");
     warmup(&config).await?;
-    println!("warming up complete");
 
     let tm = Downloader::builder()
         .sdk_config(config)
@@ -146,49 +134,72 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     let elapsed = start.elapsed();
-    let obj_size = handle.object_meta.total_size();
-    let obj_size_mebibytes = obj_size as f64 / ONE_MEBIBYTE as f64;
+    let obj_size_bytes = handle.object_meta.total_size();
+    let obj_size_mebibytes = obj_size_bytes as f64 / ONE_MEBIBYTE as f64;
 
     println!(
-        "downloaded {obj_size} bytes ({obj_size_mebibytes} MiB) in {elapsed:?}; MiB/s: {}",
+        "downloaded {obj_size_bytes} bytes ({obj_size_mebibytes} MiB) in {elapsed:?}; MiB/s: {}",
         obj_size_mebibytes / elapsed.as_secs_f64(),
     );
 
     Ok(())
 }
 
-// async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Error>> {
-//     let b1: &[u8] = &mut [];
-//     let b2: &[u8] = &mut [];
-//     let b3: &[u8] = &mut [];
-//     let b4: &[u8] = &mut [];
-//     let b5: &[u8] = &mut [];
-//     let b6: &[u8] = &mut [];
-//     let b7: &[u8] = &mut [];
-//     let b8: &[u8] = &mut [];
-//     while let Some(chunk) = body.next().await {
-//         let mut chunk = chunk.unwrap();
-//         while chunk.has_remaining() {
-//             let mut dst = [
-//                 IoSlice::new(b1),
-//                 IoSlice::new(b2),
-//                 IoSlice::new(b3),
-//                 IoSlice::new(b4),
-//                 IoSlice::new(b5),
-//                 IoSlice::new(b6),
-//                 IoSlice::new(b7),
-//                 IoSlice::new(b8),
-//             ];
-//             let filled = chunk.chunks_vectored(&mut dst[..]);
-//             tracing::trace!("filled: {filled} io slices");
-//
-//             let wc = dest.write_vectored(&dst[0..filled]).await?;
-//             tracing::trace!("wrote: {wc} bytes");
-//             chunk.advance(wc);
-//         }
-//     }
-//     Ok(())
-// }
+async fn do_upload(args: Args) -> Result<(), Box<dyn Error>> {
+    let config = aws_config::from_env().load().await;
+    warmup(&config).await?;
+
+    let tm = Uploader::builder()
+        .sdk_config(config)
+        .concurrency(ConcurrencySetting::Explicit(args.concurrency))
+        .multipart_threshold_part_size(TargetPartSize::Explicit(args.part_size))
+        .build();
+
+    let path = args.source.expect_local();
+    let file_meta = fs::metadata(path).await.expect("file metadata");
+
+    let stream = InputStream::from_path(path)?;
+    let (bucket, key) = args.dest.expect_s3().parts();
+
+    let request = UploadRequest::builder()
+        .bucket(bucket)
+        .key(key)
+        .body(stream)
+        .build()?;
+
+    println!("starting upload");
+    let start = time::Instant::now();
+
+    let handle = tm.upload(request).await?;
+    let _resp = handle.join().await?;
+    let elapsed = start.elapsed();
+
+    let obj_size_bytes = file_meta.len();
+    let obj_size_mebibytes = obj_size_bytes as f64 / ONE_MEBIBYTE as f64;
+
+    println!(
+        "uploaded {obj_size_bytes} bytes ({obj_size_mebibytes} MiB) in {elapsed:?}; MiB/s: {}",
+        obj_size_mebibytes / elapsed.as_secs_f64()
+    );
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    console_subscriber::init();
+    let args = dbg!(Args::parse());
+
+    use TransferUri::*;
+    match (&args.source, &args.dest) {
+        (Local(_), S3(_)) => do_upload(args).await?,
+        (Local(_), Local(_)) => invalid_arg("local to local transfer not supported"),
+        (S3(_), Local(_)) => do_download(args).await?,
+        (S3(_), S3(_)) => invalid_arg("s3 to s3 transfer not supported"),
+    }
+
+    Ok(())
+}
 
 async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Error>> {
     while let Some(chunk) = body.next().await {
@@ -206,7 +217,9 @@ async fn write_body(mut body: Body, mut dest: fs::File) -> Result<(), Box<dyn Er
 }
 
 async fn warmup(config: &SdkConfig) -> Result<(), Box<dyn Error>> {
+    println!("warming up client...");
     let s3 = aws_sdk_s3::Client::new(&config);
     s3.list_buckets().send().await?;
+    println!("warming up complete");
     Ok(())
 }
