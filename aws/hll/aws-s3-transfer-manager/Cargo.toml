@@ -29,3 +29,4 @@ aws-smithy-mocks-experimental = "0.2.1"
 clap = { version = "4.5.7", default-features = false, features = ["derive", "std", "help"] }
 console-subscriber = "0.3.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tempfile = "3.10.1"
