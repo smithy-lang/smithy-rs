@@ -502,9 +502,9 @@ object SupportStructures {
             rustTemplate(
                 """
                 ##[allow(missing_docs)]
-                pub struct ConfigurableSerde<T> {
-                    pub value: T,
-                    pub settings: #{SerializationSettings}
+                pub(crate) struct ConfigurableSerde<T> {
+                    pub(crate) value: T,
+                    pub(crate) settings: #{SerializationSettings}
                 }
 
                 impl<T> #{serde}::Serialize for ConfigurableSerde<T> where for <'a> ConfigurableSerdeRef<'a, T>: #{serde}::Serialize {
@@ -532,9 +532,9 @@ object SupportStructures {
             rustTemplate(
                 """
                 ##[allow(missing_docs)]
-                pub struct ConfigurableSerdeRef<'a, T> {
-                    pub value: &'a T,
-                    pub settings: &'a SerializationSettings
+                pub(crate) struct ConfigurableSerdeRef<'a, T> {
+                    pub(crate) value: &'a T,
+                    pub(crate) settings: &'a SerializationSettings
                 }
                 """,
             )
