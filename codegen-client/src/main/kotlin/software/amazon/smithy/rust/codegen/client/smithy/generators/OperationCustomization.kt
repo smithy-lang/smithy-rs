@@ -125,6 +125,14 @@ sealed class OperationSection(name: String) : Section(name) {
             writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
         }
     }
+
+    /**
+     * Hook to add unit tests for an operation.
+     */
+    data class UnitTests(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("UnitTests")
 }
 
 abstract class OperationCustomization : NamedCustomization<OperationSection>()

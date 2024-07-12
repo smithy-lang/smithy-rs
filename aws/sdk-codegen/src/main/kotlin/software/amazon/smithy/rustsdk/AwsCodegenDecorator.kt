@@ -63,6 +63,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
+            SmokeTestsDecorator(),
         ),
         // S3 needs `AwsErrorCodeClassifier` to handle an `InternalError` as a transient error. We need to customize
         // that behavior for S3 in a way that does not conflict with the globally applied `RetryClassifierDecorator`.
