@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.plus
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeFunctionName
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
@@ -93,15 +95,15 @@ fun serializerFn(
             is StructureShape -> RuntimeType.forInlineFun(name, Module, structSerdeImpl(codegenContext, shape))
             is UnionShape -> RuntimeType.forInlineFun(name, Module, serializeUnionImpl(codegenContext, shape))
             is TimestampShape -> serializeDateTime(codegenContext, shape)
+            is StringShape, is NumberShape -> directSerde(codegenContext, shape)
             else -> null
         }
     return writable {
         val wrapper =
-            when (shape) {
-                is StringShape, is NumberShape -> directSerde(codegenContext, shape)
-                is StructureShape, is UnionShape, is TimestampShape -> null
-                is MapShape -> serializeMap(codegenContext, shape)
-                is ListShape -> serializeList(codegenContext, shape)
+            when {
+                deps != null -> null
+                shape is MapShape -> serializeMap(codegenContext, shape)
+                shape is ListShape -> serializeList(codegenContext, shape)
                 else -> serializeWithTodo(codegenContext, shape)
             }
         if (wrapper != null && applyTo != null) {
@@ -139,7 +141,9 @@ fun serializeMap(
                 }
                 map.end()
                 """,
-                *SupportStructures.codegenScope, "value" to value, "member" to serializeMember(codegenContext, shape.value, "v"),
+                *SupportStructures.codegenScope,
+                "value" to value,
+                "member" to serializeMember(codegenContext, shape.value, "v"),
             )
         }
     }
@@ -160,7 +164,9 @@ fun serializeList(
                 }
                 seq.end()
                 """,
-                *SupportStructures.codegenScope, "value" to value, "member" to serializeMember(codegenContext, shape.member, "v"),
+                *SupportStructures.codegenScope,
+                "value" to value,
+                "member" to serializeMember(codegenContext, shape.member, "v"),
             )
         }
     }
@@ -169,9 +175,10 @@ fun directSerde(
     codegenContext: CodegenContext,
     shape: Shape,
 ): RuntimeType {
-    return serializeWithWrapper(codegenContext, shape) { value ->
-        val baseValue = value.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
-        writable {
+    return RuntimeType.forInlineFun(codegenContext.symbolProvider.toSymbol(shape).rustType().toString(), Module) {
+        implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
+            val baseValue =
+                writable { rust("self.value") }.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
             rustTemplate("#{base}.serialize(serializer)", "base" to baseValue)
         }
     }
@@ -232,44 +239,46 @@ fun structSerdeImpl(
     codegenContext: CodegenContext,
     shape: StructureShape,
 ): Writable {
-    return implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
-        rustTemplate(
-            """
-            use #{serde}::ser::SerializeStruct;
-            use #{SerializeConfigured};
-            """,
-            *SupportStructures.codegenScope,
-        )
-        rust(
-            "let mut s = serializer.serialize_struct(${
-                shape.contextName(codegenContext.serviceShape).dq()
-            }, ${shape.members().size})?;",
-        )
-        rust("let inner = &self.value;")
-        for (member in shape.members()) {
-            val serializedName = member.memberName.dq()
-            val fieldName = codegenContext.symbolProvider.toMemberName(member)
-            val field = safeName("member")
-            val fieldSerialization =
-                writable {
+    return writable {
+        implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
+            rustTemplate(
+                """
+                use #{serde}::ser::SerializeStruct;
+                use #{SerializeConfigured};
+                """,
+                *SupportStructures.codegenScope,
+            )
+            rust(
+                "let mut s = serializer.serialize_struct(${
+                    shape.contextName(codegenContext.serviceShape).dq()
+                }, ${shape.members().size})?;",
+            )
+            rust("let inner = &self.value;")
+            for (member in shape.members()) {
+                val serializedName = member.memberName.dq()
+                val fieldName = codegenContext.symbolProvider.toMemberName(member)
+                val field = safeName("member")
+                val fieldSerialization =
+                    writable {
+                        rustTemplate(
+                            "s.serialize_field($serializedName, #{member})?;",
+                            "member" to serializeMember(codegenContext, member, field),
+                        )
+                    }
+                if (codegenContext.symbolProvider.toSymbol(member).isOptional()) {
                     rustTemplate(
-                        "s.serialize_field($serializedName, #{member})?;",
-                        "member" to serializeMember(codegenContext, member, field),
+                        "if let Some($field) = &inner.$fieldName { #{serializeField} }",
+                        "serializeField" to fieldSerialization,
+                    )
+                } else {
+                    rustTemplate(
+                        "let $field = &inner.$fieldName; #{serializeField}",
+                        "serializeField" to fieldSerialization,
                     )
                 }
-            if (codegenContext.symbolProvider.toSymbol(member).isOptional()) {
-                rustTemplate(
-                    "if let Some($field) = &inner.$fieldName { #{serializeField} }",
-                    "serializeField" to fieldSerialization,
-                )
-            } else {
-                rustTemplate(
-                    "let $field = &inner.$fieldName; #{serializeField}",
-                    "serializeField" to fieldSerialization,
-                )
             }
+            rust("s.end()")
         }
-        rust("s.end()")
     }
 }
 
@@ -281,34 +290,36 @@ fun serializeUnionImpl(
     val symbolProvider = codegenContext.symbolProvider
     val unionSymbol = symbolProvider.toSymbol(shape)
 
-    return implSerializeConfigured(unionSymbol) {
-        rustTemplate(
-            """
-            use #{SerializeConfigured};
-            """,
-            *SupportStructures.codegenScope,
-        )
-        rustBlock("match self.value") {
-            shape.members().forEachIndexed { index, member ->
-                val fieldName = member.memberName.dq()
-                val variantName =
-                    if (member.isTargetUnit()) {
-                        symbolProvider.toMemberName(member)
-                    } else {
-                        "${symbolProvider.toMemberName(member)}(inner)"
+    return writable {
+        implSerializeConfigured(unionSymbol) {
+            rustTemplate(
+                """
+                use #{SerializeConfigured};
+                """,
+                *SupportStructures.codegenScope,
+            )
+            rustBlock("match self.value") {
+                shape.members().forEachIndexed { index, member ->
+                    val fieldName = member.memberName.dq()
+                    val variantName =
+                        if (member.isTargetUnit()) {
+                            symbolProvider.toMemberName(member)
+                        } else {
+                            "${symbolProvider.toMemberName(member)}(inner)"
+                        }
+                    withBlock("#T::$variantName => {", "},", symbolProvider.toSymbol(shape)) {
+                        rustTemplate(
+                            "serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, #{member})",
+                            "member" to serializeMember(codegenContext, member, "inner"),
+                        )
                     }
-                withBlock("#T::$variantName => {", "},", symbolProvider.toSymbol(shape)) {
+                }
+                if (codegenContext.target.renderUnknownVariant()) {
                     rustTemplate(
-                        "serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, #{member})",
-                        "member" to serializeMember(codegenContext, member, "inner"),
+                        "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => serializer.serialize_str(\"unknown variant!\")",
+                        "Union" to unionSymbol,
                     )
                 }
-            }
-            if (codegenContext.target.renderUnknownVariant()) {
-                rustTemplate(
-                    "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => serializer.serialize_str(\"unknown variant!\")",
-                    "Union" to unionSymbol,
-                )
             }
         }
     }
@@ -321,28 +332,26 @@ fun serializeDateTime(
     RuntimeType.forInlineFun("SerializeDateTime", Module) {
         implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
             rust("serializer.serialize_str(&self.value.to_string())")
-        }(this)
+        }
     }
 
-private fun implSerializeConfigured(
+private fun RustWriter.implSerializeConfigured(
     shape: Symbol,
     block: Writable,
-): Writable {
-    return writable {
-        rustTemplate(
-            """
-            impl<'a> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}> {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-                where
-                    S: #{serde}::Serializer,
-                {
-                    #{body}
-                }
+) {
+    rustTemplate(
+        """
+        impl<'a> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: #{serde}::Serializer,
+            {
+                #{body}
             }
-            """,
-            "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
-        )
-    }
+        }
+        """,
+        "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+    )
 }
 
 private fun implSerializeConfiguredWrapper(
