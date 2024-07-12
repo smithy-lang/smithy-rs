@@ -115,3 +115,15 @@ impl From<Vec<u8>> for InputStream {
         Self::from(Bytes::from(value))
     }
 }
+
+impl From<&'static [u8]> for InputStream {
+    fn from(slice: &'static [u8]) -> InputStream {
+        Self::from(Bytes::from_static(slice))
+    }
+}
+
+impl From<&'static str> for InputStream {
+    fn from(slice: &'static str) -> InputStream {
+        Self::from(Bytes::from_static(slice.as_bytes()))
+    }
+}

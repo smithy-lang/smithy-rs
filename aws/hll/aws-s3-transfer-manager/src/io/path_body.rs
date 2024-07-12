@@ -4,8 +4,7 @@
  */
 
 use crate::io::error::{Error, ErrorKind};
-use crate::io::stream::InputStream;
-use crate::io::stream::RawInputStream;
+use crate::io::stream::{InputStream, RawInputStream};
 use std::fs;
 use std::path::PathBuf;
 

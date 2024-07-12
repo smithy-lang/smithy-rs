@@ -13,7 +13,7 @@ pub(crate) enum ErrorKind {
     UpperBoundSizeHintRequired,
     OffsetGreaterThanFileSize,
     TaskFailed(JoinError),
-    IOError(StdIoError),
+    IoError(StdIoError),
 }
 
 /// An I/O related error occurred
@@ -35,7 +35,7 @@ impl From<ErrorKind> for Error {
 
 impl From<StdIoError> for Error {
     fn from(err: StdIoError) -> Self {
-        ErrorKind::IOError(err).into()
+        ErrorKind::IoError(err).into()
     }
 }
 
@@ -50,8 +50,8 @@ impl fmt::Display for Error {
                 f,
                 "offset must be less than or equal to file size but was greater than"
             ),
-            ErrorKind::IOError(_) => write!(f, "I/O error"),
-            ErrorKind::TaskFailed(_) => write!(f, "internal task failed to complete"),
+            ErrorKind::IoError(_) => write!(f, "I/O error"),
+            ErrorKind::TaskFailed(_) => write!(f, "task failed"),
         }
     }
 }
@@ -61,7 +61,7 @@ impl StdError for Error {
         match &self.kind {
             ErrorKind::UpperBoundSizeHintRequired => None,
             ErrorKind::OffsetGreaterThanFileSize => None,
-            ErrorKind::IOError(err) => Some(err as _),
+            ErrorKind::IoError(err) => Some(err as _),
             ErrorKind::TaskFailed(err) => Some(err as _),
         }
     }

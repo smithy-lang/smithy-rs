@@ -16,12 +16,12 @@ use crate::MEBIBYTE;
 
 /// Builder for creating a `ReadPart` implementation.
 #[derive(Debug)]
-pub(crate) struct PartReaderBuilder {
+pub(crate) struct Builder {
     stream: Option<RawInputStream>,
     part_size: usize,
 }
 
-impl PartReaderBuilder {
+impl Builder {
     pub(crate) fn new() -> Self {
         Self {
             stream: None,
@@ -73,8 +73,9 @@ impl ReadPart for PartReader {
 
 /// Data for a single part
 pub(crate) struct PartData {
-    pub(crate) data: Bytes,
+    // 1-indexed 
     pub(crate) part_number: u64,
+    pub(crate) data: Bytes,
 }
 
 /// The `ReadPart` trait allows for reading data from an `InputStream` and packaging the raw
@@ -130,7 +131,7 @@ impl BytesPartReader {
         Self {
             buf,
             part_size,
-            state: Mutex::new(PartReaderState::new(content_length)),
+            state: Mutex::new(PartReaderState::new(content_length)), // std Mutex
         }
     }
 }
@@ -159,7 +160,7 @@ impl ReadPart for BytesPartReader {
 struct PathBodyPartReader {
     body: PathBody,
     part_size: usize,
-    state: Mutex<PartReaderState>,
+    state: Mutex<PartReaderState>, // std Mutex
 }
 
 impl PathBodyPartReader {
@@ -169,7 +170,7 @@ impl PathBodyPartReader {
         Self {
             body,
             part_size,
-            state: Mutex::new(PartReaderState::new(content_length).with_offset(offset)),
+            state: Mutex::new(PartReaderState::new(content_length).with_offset(offset)), // std Mutex
         }
     }
 }
@@ -257,7 +258,7 @@ mod test {
     use bytes::{Buf, Bytes};
     use tempfile::NamedTempFile;
 
-    use crate::io::part_reader::{PartData, PartReaderBuilder, ReadPart};
+    use crate::io::part_reader::{PartData, Builder, ReadPart};
     use crate::io::InputStream;
 
     async fn collect_parts(reader: impl ReadPart) -> Vec<PartData> {
@@ -276,7 +277,7 @@ mod test {
         let data = Bytes::from("a lep is a ball, a tay is a hammer, a flix is a comb");
         let stream = InputStream::from(data.clone());
         let expected = data.chunks(5).collect::<Vec<_>>();
-        let reader = PartReaderBuilder::new().part_size(5).stream(stream).build();
+        let reader = Builder::new().part_size(5).stream(stream).build();
         let parts = collect_parts(reader).await;
         let actual = parts.iter().map(|p| p.data.chunk()).collect::<Vec<_>>();
 
@@ -303,7 +304,7 @@ mod test {
         let expected = data.chunks(part_size).collect::<Vec<_>>();
 
         let stream = builder.build().unwrap();
-        let reader = PartReaderBuilder::new()
+        let reader = Builder::new()
             .part_size(part_size)
             .stream(stream)
             .build();
