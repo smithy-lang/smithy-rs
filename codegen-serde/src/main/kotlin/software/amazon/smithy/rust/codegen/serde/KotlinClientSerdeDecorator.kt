@@ -7,11 +7,14 @@ package software.amazon.smithy.rust.codegen.serde
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.neighbor.Walker
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -42,6 +45,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 val SerdeFeature = Feature("serde", false, listOf("dep:serde"))
 val Module =
@@ -62,12 +66,10 @@ class KotlinClientSerdeDecorator : ClientCodegenDecorator {
         rustCrate.mergeFeature(SerdeFeature)
         rustCrate.withModule(Module) {
             serializationRoots(codegenContext).forEach {
-                this.addDependency(
-                    serializerFn(
-                        codegenContext,
-                        it,
-                    ).toSymbol(),
-                )
+                rootSerializer(
+                    codegenContext,
+                    it,
+                )(this)
             }
             addDependency(SupportStructures.serializeRedacted().toSymbol())
             addDependency(SupportStructures.serializeUnredacted().toSymbol())
@@ -75,20 +77,38 @@ class KotlinClientSerdeDecorator : ClientCodegenDecorator {
     }
 }
 
+fun rootSerializer(
+    codegenContext: CodegenContext,
+    shape: Shape,
+): Writable = serializerFn(codegenContext, shape, null)
+
 fun serializerFn(
     codegenContext: CodegenContext,
     shape: Shape,
-): RuntimeType {
+    applyTo: Writable?,
+): Writable {
     val name = codegenContext.symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape) + "_serde"
-    val symbolProvider = codegenContext.symbolProvider
-    return RuntimeType.forInlineFun(name, Module) {
-        rust("// serializers for $name")
+    val deps =
         when (shape) {
-            is StructureShape -> structSerdeImpl(codegenContext, shape)(this)
-            is UnionShape -> serializeUnionImpl(codegenContext, shape)(this)
-            // is MemberShape -> serializeMember(codegenContext, shape)(this)
-            is StringShape, is NumberShape -> directSerde(codegenContext, shape)(this)
-            else -> serializeWithTodo(codegenContext, shape)(this)
+            is StructureShape -> RuntimeType.forInlineFun(name, Module, structSerdeImpl(codegenContext, shape))
+            is UnionShape -> RuntimeType.forInlineFun(name, Module, serializeUnionImpl(codegenContext, shape))
+            is TimestampShape -> serializeDateTime(codegenContext, shape)
+            else -> null
+        }
+    return writable {
+        val wrapper =
+            when (shape) {
+                is StringShape, is NumberShape -> directSerde(codegenContext, shape)
+                is StructureShape, is UnionShape, is TimestampShape -> null
+                is MapShape -> serializeMap(codegenContext, shape)
+                is ListShape -> serializeList(codegenContext, shape)
+                else -> serializeWithTodo(codegenContext, shape)
+            }
+        if (wrapper != null && applyTo != null) {
+            rustTemplate("&#{wrapper}(#{applyTo})", "wrapper" to wrapper, "applyTo" to applyTo)
+        } else {
+            deps?.toSymbol().also { addDependency(it) }
+            applyTo?.invoke(this)
         }
     }
 }
@@ -96,32 +116,95 @@ fun serializerFn(
 fun serializeWithTodo(
     codegenContext: CodegenContext,
     shape: Shape,
-) = writable {
-    val rustType = codegenContext.symbolProvider.toSymbol(shape)
-    rustTemplate(
-        """
-        impl #{SerializeConfigured} for #{Shape} {}
-        impl<'a> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}> {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where S: #{serde}::Serializer,
-            {
-                serializer.serialize_str("todo")
-            }
+): RuntimeType =
+    serializeWithWrapper(codegenContext, shape) { _ ->
+        writable {
+            rust("serializer.serialize_str(\"todo\")")
         }
-        """,
-        *SupportStructures.codegenScope, "Shape" to rustType,
-    )
-}
+    }
+
+fun serializeMap(
+    codegenContext: CodegenContext,
+    shape: MapShape,
+): RuntimeType =
+    serializeWithWrapper(codegenContext, shape) { value ->
+        writable {
+            rustTemplate(
+                """
+                use #{SerializeConfigured};
+                use #{serde}::ser::SerializeMap;
+                let mut map = serializer.serialize_map(Some(#{value}.len()))?;
+                for (k, v) in self.value.0.iter() {
+                    map.serialize_entry(k, #{member})?;
+                }
+                map.end()
+                """,
+                *SupportStructures.codegenScope, "value" to value, "member" to serializeMember(codegenContext, shape.value, "v"),
+            )
+        }
+    }
+
+fun serializeList(
+    codegenContext: CodegenContext,
+    shape: ListShape,
+): RuntimeType =
+    serializeWithWrapper(codegenContext, shape) { value ->
+        writable {
+            rustTemplate(
+                """
+                use #{SerializeConfigured};
+                use #{serde}::ser::SerializeSeq;
+                let mut seq = serializer.serialize_seq(Some(#{value}.len()))?;
+                for v in self.value.0.iter() {
+                    seq.serialize_element(#{member})?;
+                }
+                seq.end()
+                """,
+                *SupportStructures.codegenScope, "value" to value, "member" to serializeMember(codegenContext, shape.member, "v"),
+            )
+        }
+    }
 
 fun directSerde(
     codegenContext: CodegenContext,
     shape: Shape,
-): Writable {
-    val rustType = codegenContext.symbolProvider.toSymbol(shape)
-    val baseValue = writable { rust("self.value") }.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
-    return implSerializeConfigured(rustType) {
-        rustTemplate("#{base}.serialize(serializer)", "base" to baseValue)
+): RuntimeType {
+    return serializeWithWrapper(codegenContext, shape) { value ->
+        val baseValue = value.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
+        writable {
+            rustTemplate("#{base}.serialize(serializer)", "base" to baseValue)
+        }
     }
+}
+
+fun serializeWithWrapper(
+    codegenContext: CodegenContext,
+    shape: Shape,
+    body: (Writable) -> Writable,
+): RuntimeType {
+    val name =
+        "Serializer" +
+            codegenContext.symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape)
+                .toPascalCase()
+    val type = Module.toType().resolve(name).toSymbol()
+    val base = writable { rust("self.value.0") }
+    // val baseValue = writable { rust("self.0.value") }.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
+    val serialization =
+        implSerializeConfiguredWrapper(type) {
+            body(base)(this)
+        }
+    val wrapperStruct =
+        RuntimeType.forInlineFun(name, Module) {
+            rustTemplate(
+                """
+                struct $name<'a>(&'a #{Shape});
+                #{serializer}
+                """,
+                "Shape" to codegenContext.symbolProvider.toSymbol(shape),
+                "serializer" to serialization,
+            )
+        }
+    return wrapperStruct
 }
 
 fun serializeMember(
@@ -131,9 +214,9 @@ fun serializeMember(
 ): Writable {
     val target = codegenContext.model.expectShape(shape.target)
     return writable {
-        val fieldName = codegenContext.symbolProvider.toMemberName(shape)
-        addDependency(serializerFn(codegenContext, target).toSymbol())
-        rust("&$memberRef.serialize_ref(&self.settings)")
+        serializerFn(codegenContext, target) {
+            rust("&$memberRef")
+        }.plus { rust(".serialize_ref(&self.settings)") }(this)
     }.letIf(target.hasTrait<SensitiveTrait>()) { memberSerialization ->
         memberSerialization.map {
             rustTemplate(
@@ -231,6 +314,16 @@ fun serializeUnionImpl(
     }
 }
 
+fun serializeDateTime(
+    codegenContext: CodegenContext,
+    shape: TimestampShape,
+): RuntimeType =
+    RuntimeType.forInlineFun("SerializeDateTime", Module) {
+        implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
+            rust("serializer.serialize_str(&self.value.to_string())")
+        }(this)
+    }
+
 private fun implSerializeConfigured(
     shape: Symbol,
     block: Writable,
@@ -239,6 +332,27 @@ private fun implSerializeConfigured(
         rustTemplate(
             """
             impl<'a> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}> {
+                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                where
+                    S: #{serde}::Serializer,
+                {
+                    #{body}
+                }
+            }
+            """,
+            "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+        )
+    }
+}
+
+private fun implSerializeConfiguredWrapper(
+    shape: Symbol,
+    block: Writable,
+): Writable {
+    return writable {
+        rustTemplate(
+            """
+            impl<'a, 'b> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}<'b>> {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     S: #{serde}::Serializer,
@@ -286,7 +400,9 @@ object SupportStructures {
                         .serialize(serializer)
                 }
                 """,
-                "serde" to serde, "SerializeConfigured" to serializeConfigured(), "SerializationSettings" to serializationSettings(),
+                "serde" to serde,
+                "SerializeConfigured" to serializeConfigured(),
+                "SerializationSettings" to serializationSettings(),
             )
         }
 
@@ -305,7 +421,9 @@ object SupportStructures {
                         .serialize(serializer)
                 }
                 """,
-                "serde" to serde, "SerializeConfigured" to serializeConfigured(), "SerializationSettings" to serializationSettings(),
+                "serde" to serde,
+                "SerializeConfigured" to serializeConfigured(),
+                "SerializationSettings" to serializationSettings(),
             )
         }
 
