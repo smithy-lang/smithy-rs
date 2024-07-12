@@ -24,7 +24,7 @@ class OperationUnitTestGenerator(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
     ) {
-        // TODO don't generate this if there are no customizations adding unit tests.
+        // TODO(smithy-rs#3759) don't generate this if there are no customizations adding unit tests.
         writer.rustTemplate(
             """
             ##[cfg(test)]
