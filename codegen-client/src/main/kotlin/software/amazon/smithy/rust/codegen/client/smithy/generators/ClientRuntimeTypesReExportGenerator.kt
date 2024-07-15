@@ -56,6 +56,16 @@ class ClientRuntimeTypesReExportGenerator(
                 "ShouldAttempt" to smithyRuntimeApi.resolve("client::retries::ShouldAttempt"),
             )
         }
+        rustCrate.withModule(ClientRustModule.Config.http) {
+            rustTemplate(
+                """
+                pub use #{HttpRequest};
+                pub use #{HttpResponse};
+                """,
+                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
+                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
+            )
+        }
         rustCrate.withModule(ClientRustModule.Config.interceptors) {
             rustTemplate(
                 """
