@@ -469,6 +469,8 @@ object SupportStructures {
             rustTemplate(
                 """
                 /// Serialize a value redacting sensitive fields
+                ///
+                /// This function is intended to be used by `serde(serialize_with = "serialize_redacted")`
                 pub fn serialize_redacted<'a, T, S: #{serde}::Serializer>(value: &'a T, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
@@ -490,6 +492,8 @@ object SupportStructures {
             rustTemplate(
                 """
                 /// Serialize a value without redacting sensitive fields
+                ///
+                /// This function is intended to be used by `serde(serialize_with = "serialize_unredacted")`
                 pub fn serialize_unredacted<'a, T, S: #{serde}::Serializer>(value: &'a T, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
@@ -511,17 +515,18 @@ object SupportStructures {
             rustTemplate(
                 """
                 /// Trait that allows configuring serialization
-                /// **This trait should not be implemented directly!** Instead, `impl Serialize for ConfigurableSerdeRef<T>`**
+                /// **This trait should not be implemented directly!** Instead, `impl Serialize for ConfigurableSerdeRef<T>`
                 pub trait SerializeConfigured {
-                    /// Return a `Serialize` implementation for this object that owns the object. This is what you want
-                    /// If you need to pass something that `impl`s serialize elsewhere.
+                    /// Return a `Serialize` implementation for this object that owns the object.
+                    ///
+                    /// Use this if you need to create `Arc<dyn Serialize>` or similar.
                     fn serialize_owned(self, settings: #{SerializationSettings}) -> impl #{serde}::Serialize;
 
                     /// Return a `Serialize` implementation for this object that borrows from the given object
                     fn serialize_ref<'a>(&'a self, settings: &'a #{SerializationSettings}) -> impl #{serde}::Serialize + 'a;
                 }
 
-                /// Blanket implementation for all `T` that implement `ConfigurableSerdeRef
+                /// Blanket implementation for all `T` that implement `ConfigurableSerdeRef`
                 impl<T> SerializeConfigured for T
                 where
                     for<'a> #{ConfigurableSerdeRef}<'a, T>: #{serde}::Serialize,
