@@ -65,7 +65,7 @@ class SmokeTestsOperationCustomization(
             is OperationSection.UnitTests ->
                 writable {
                     testCases.forEach { testCase ->
-                        Attribute(cfg("smokeTests")).render(this)
+                        Attribute(cfg("v2SmokeTests")).render(this)
                         Attribute.TokioTest.render(this)
                         this.rustBlock("async fn test_${testCase.id.toSnakeCase()}()") {
                             val instantiator = SmokeTestsInstantiator(codegenContext)
