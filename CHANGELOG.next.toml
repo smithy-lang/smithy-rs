@@ -24,7 +24,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "landonxjames"
 
 [[aws-sdk-rust]]
-message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported AWS SDK clients so that using these types doen not require directly depending on `aws-smithy-runtime-api`."
+message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in AWS SDK clients so that using these types doen not require directly depending on `aws-smithy-runtime-api`."
 references = ["smithy-rs#3591"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
