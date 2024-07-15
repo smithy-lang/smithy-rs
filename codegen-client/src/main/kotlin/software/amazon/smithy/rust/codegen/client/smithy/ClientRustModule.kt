@@ -68,14 +68,17 @@ object ClientRustModule {
         /** crate::config::endpoint */
         val endpoint = RustModule.public("endpoint", parent = self)
 
+        /** crate::config::http */
+        val http = RustModule.public("http", parent = self)
+
+        /** crate::config::interceptors */
+        val interceptors = RustModule.public("interceptors", parent = self)
+
         /** crate::config::retry */
         val retry = RustModule.public("retry", parent = self)
 
         /** crate::config::timeout */
         val timeout = RustModule.public("timeout", parent = self)
-
-        /** crate::config::interceptors */
-        val interceptors = RustModule.public("interceptors", parent = self)
     }
 
     val Error = RustModule.public("error")
@@ -122,6 +125,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
             ClientRustModule.Config.retry -> strDoc("Retry configuration.")
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
+            ClientRustModule.Config.http -> strDoc("HTTP request and response types.")
             ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Intercept`](crate::config::Intercept).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
