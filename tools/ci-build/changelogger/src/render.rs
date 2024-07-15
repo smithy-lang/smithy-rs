@@ -10,12 +10,14 @@ use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
-    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry, ValidationSet,
+    Changelog, ChangelogLoader, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
+    ValidationSet,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::versions_manifest::{CrateVersionMetadataMap, VersionsManifest};
 use std::env;
 use std::fmt::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
@@ -244,9 +246,14 @@ fn render_table_row(columns: [&str; 2], out: &mut String) {
 
 fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     let mut combined = Changelog::new();
+    let loader = ChangelogLoader::default();
     for source in &args.source {
-        let changelog = Changelog::load_from_file(source)
-            .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
+        let changelog = if source.is_dir() {
+            loader.load_from_dir(source)
+        } else {
+            loader.load_from_file(source)
+        }
+        .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
         changelog.validate(ValidationSet::Render).map_err(|errs| {
             anyhow::Error::msg(format!(
                 "failed to load {source:?}: {errors}",
@@ -321,8 +328,14 @@ fn update_changelogs(
     update.push_str(&current);
     std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
 
-    std::fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
-        .context("failed to truncate source")?;
+    if args.source_to_truncate.is_dir() {
+        fs::remove_dir_all(&args.source_to_truncate)
+            .and_then(|_| fs::create_dir(&args.source_to_truncate))
+            .with_context(|| format!("failed to empty directory {:?}", &args.source_to_truncate))?;
+    } else {
+        fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
+            .with_context(|| format!("failed to truncate source {:?}", &args.source_to_truncate))?;
+    }
     eprintln!("Changelogs updated!");
     Ok(())
 }
@@ -494,16 +507,187 @@ fn render(
 #[cfg(test)]
 mod test {
     use super::{date_based_release_metadata, render, Changelog, ChangelogEntries, ChangelogEntry};
+    use smithy_rs_tool_common::changelog::ChangelogLoader;
     use smithy_rs_tool_common::{
         changelog::SdkAffected,
         package::PackageCategory,
         versions_manifest::{CrateVersion, CrateVersionMetadataMap},
     };
+    use std::fs;
+    use tempfile::TempDir;
     use time::OffsetDateTime;
 
     fn render_full(entries: &[ChangelogEntry], release_header: &str) -> String {
         let (header, body) = render(entries, CrateVersionMetadataMap::new(), release_header);
         format!("{header}{body}")
+    }
+
+    const SMITHY_RS_EXPECTED_END_TO_END: &str = r#"v0.3.0 (January 4th, 2022)
+==========================
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the code generator
+
+**New this release:**
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib, @other-external-dev) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447), @external-contrib, @other-external-dev) I made a change to update the code generator
+
+    **Update guide:**
+    blah blah
+- (all, [smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200), @another-contrib) I made a minor change
+
+**Contributors**
+Thank you for your contributions! ❤
+- @another-contrib ([smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200))
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
+- @other-external-dev ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
+
+"#;
+
+    const AWS_SDK_EXPECTED_END_TO_END: &str = r#"v0.1.0 (January 4th, 2022)
+==========================
+**Breaking Changes:**
+- :warning: ([smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the AWS SDK
+
+**New this release:**
+- :tada: ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+
+**Service Features:**
+- `aws-sdk-ec2` (0.12.0): Some API change
+- `aws-sdk-s3` (0.14.0): Some new API to do X
+
+**Service Documentation:**
+- `aws-sdk-ec2` (0.12.0): Updated some docs
+
+**Contributors**
+Thank you for your contributions! ❤
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
+
+"#;
+
+    #[test]
+    fn end_to_end_changelog_entry_markdown_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let smithy_rs_entry1 = r#"---
+applies_to: ["client", "server"]
+authors: ["rcoh", "jdisanti"]
+references: ["smithy-rs#445"]
+breaking: true
+new_feature: false
+bug_fix: false
+---
+I made a major change to update the code generator
+"#;
+        let smithy_rs_entry2 = r#"---
+applies_to: ["client", "server"]
+authors: ["external-contrib", "other-external-dev"]
+references: ["smithy-rs#446", "aws-sdk#123"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+I made a change to update the code generator
+"#;
+        let smithy_rs_entry3 = r#"---
+applies_to: ["client", "server"]
+authors: ["another-contrib"]
+references:  ["smithy-rs#200"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+I made a minor change
+"#;
+        let aws_sdk_entry1 = r#"---
+applies_to: ["aws-sdk-rust"]
+authors: ["rcoh"]
+references: ["smithy-rs#445"]
+breaking: true
+new_feature: false
+bug_fix: false
+---
+I made a major change to update the AWS SDK
+"#;
+        let aws_sdk_entry2 = r#"---
+applies_to: ["aws-sdk-rust"]
+authors: ["external-contrib"]
+references: ["smithy-rs#446"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+I made a change to update the code generator
+"#;
+        let smithy_rs_entry4 = r#"---
+applies_to: ["client", "server"]
+authors: ["external-contrib", "other-external-dev"]
+references: ["smithy-rs#446", "smithy-rs#447"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+I made a change to update the code generator
+
+**Update guide:**
+blah blah
+"#;
+
+        // We won't handwrite changelog entries for model updates, and they are still provided in
+        // the TOML format.
+        let model_updates = r#"
+[[aws-sdk-model]]
+module = "aws-sdk-s3"
+version = "0.14.0"
+kind = "Feature"
+message = "Some new API to do X"
+
+[[aws-sdk-model]]
+module = "aws-sdk-ec2"
+version = "0.12.0"
+kind = "Documentation"
+message = "Updated some docs"
+
+[[aws-sdk-model]]
+module = "aws-sdk-ec2"
+version = "0.12.0"
+kind = "Feature"
+message = "Some API change"
+        "#;
+
+        [
+            smithy_rs_entry1,
+            smithy_rs_entry2,
+            smithy_rs_entry3,
+            aws_sdk_entry1,
+            aws_sdk_entry2,
+            smithy_rs_entry4,
+        ]
+        .iter()
+        .enumerate()
+        .for_each(|(i, contents)| {
+            let changelog_entry_markdown_file = temp_dir.path().join(format!("test{i}.md"));
+            fs::write(&changelog_entry_markdown_file, contents.as_bytes()).unwrap();
+        });
+
+        let mut changelog = ChangelogLoader::default()
+            .load_from_dir(temp_dir.path())
+            .expect("valid changelog");
+
+        changelog.merge(
+            ChangelogLoader::default()
+                .parse_str(model_updates)
+                .expect("valid changelog"),
+        );
+
+        let ChangelogEntries {
+            aws_sdk_rust,
+            smithy_rs,
+        } = changelog.into();
+
+        let smithy_rs_rendered = render_full(&smithy_rs, "v0.3.0 (January 4th, 2022)");
+        pretty_assertions::assert_str_eq!(SMITHY_RS_EXPECTED_END_TO_END, smithy_rs_rendered);
+
+        let aws_sdk_rendered = render_full(&aws_sdk_rust, "v0.1.0 (January 4th, 2022)");
+        pretty_assertions::assert_str_eq!(AWS_SDK_EXPECTED_END_TO_END, aws_sdk_rendered);
     }
 
     #[test]
@@ -568,61 +752,19 @@ version = "0.12.0"
 kind = "Feature"
 message = "Some API change"
         "#;
-        let changelog: Changelog = Changelog::parse_str(changelog_toml).expect("valid changelog");
+        let changelog: Changelog = ChangelogLoader::default()
+            .parse_str(changelog_toml)
+            .expect("valid changelog");
         let ChangelogEntries {
             aws_sdk_rust,
             smithy_rs,
         } = changelog.into();
 
         let smithy_rs_rendered = render_full(&smithy_rs, "v0.3.0 (January 4th, 2022)");
-        let smithy_rs_expected = r#"
-v0.3.0 (January 4th, 2022)
-==========================
-**Breaking Changes:**
-- :warning: (all, [smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the code generator
-
-**New this release:**
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib, @other-external-dev) I made a change to update the code generator
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447), @external-contrib, @other-external-dev) I made a change to update the code generator
-
-    **Update guide:**
-    blah blah
-- (all, [smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200), @another-contrib) I made a minor change
-
-**Contributors**
-Thank you for your contributions! ❤
-- @another-contrib ([smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200))
-- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
-- @other-external-dev ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
-
-"#
-        .trim_start();
-        pretty_assertions::assert_str_eq!(smithy_rs_expected, smithy_rs_rendered);
+        pretty_assertions::assert_str_eq!(SMITHY_RS_EXPECTED_END_TO_END, smithy_rs_rendered);
 
         let aws_sdk_rust_rendered = render_full(&aws_sdk_rust, "v0.1.0 (January 4th, 2022)");
-        let aws_sdk_expected = r#"
-v0.1.0 (January 4th, 2022)
-==========================
-**Breaking Changes:**
-- :warning: ([smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the AWS SDK
-
-**New this release:**
-- :tada: ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
-
-**Service Features:**
-- `aws-sdk-ec2` (0.12.0): Some API change
-- `aws-sdk-s3` (0.14.0): Some new API to do X
-
-**Service Documentation:**
-- `aws-sdk-ec2` (0.12.0): Updated some docs
-
-**Contributors**
-Thank you for your contributions! ❤
-- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
-
-"#
-        .trim_start();
-        pretty_assertions::assert_str_eq!(aws_sdk_expected, aws_sdk_rust_rendered);
+        pretty_assertions::assert_str_eq!(AWS_SDK_EXPECTED_END_TO_END, aws_sdk_rust_rendered);
     }
 
     #[test]
@@ -670,7 +812,9 @@ meta = { breaking = false, tada = true, bug = false }
 references = ["smithy-rs#446"]
 author = "rcoh"
 "#;
-        let changelog: Changelog = Changelog::parse_str(sample).expect("valid changelog");
+        let changelog: Changelog = ChangelogLoader::default()
+            .parse_str(sample)
+            .expect("valid changelog");
         let ChangelogEntries {
             aws_sdk_rust: _,
             smithy_rs,

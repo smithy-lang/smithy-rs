@@ -5,9 +5,12 @@
 
 //! This module holds deserializable structs for the hand-authored changelog TOML files used in smithy-rs.
 
+pub mod parser;
+
+use crate::changelog::parser::{ParseIntoChangelog, ParserChain};
 use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::fmt::{self, Display};
+use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -22,7 +25,7 @@ pub enum SdkAffected {
     All,
 }
 
-impl Display for SdkAffected {
+impl fmt::Display for SdkAffected {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SdkAffected::Client => write!(f, "client"),
@@ -277,42 +280,6 @@ impl Changelog {
         self.sdk_models.extend(other.sdk_models);
     }
 
-    pub fn parse_str(value: &str) -> Result<Changelog> {
-        let mut changelog: Changelog =
-            (match toml::from_str(value).context("Invalid TOML changelog format") {
-                Ok(parsed) => Ok(parsed),
-                Err(toml_err) => {
-                    // Remove comments from the top
-                    let value = value
-                        .split('\n')
-                        .filter(|line| !line.trim().starts_with('#'))
-                        .collect::<Vec<_>>()
-                        .join("\n");
-                    match serde_json::from_str(&value).context("Invalid JSON changelog format") {
-                        Ok(parsed) => Ok(parsed),
-                        Err(json_err) => bail!(
-                            "Invalid JSON or TOML changelog format:\n{:?}\n{:?}",
-                            toml_err,
-                            json_err
-                        ),
-                    }
-                }
-            } as Result<Changelog>)?;
-        // all smithry-rs entries should have meta.target set to the default value instead of None
-        for entry in &mut changelog.smithy_rs {
-            if entry.meta.target.is_none() {
-                entry.meta.target = Some(SdkAffected::default());
-            }
-        }
-        Ok(changelog)
-    }
-
-    pub fn load_from_file(path: impl AsRef<Path>) -> Result<Changelog> {
-        let contents = std::fs::read_to_string(path.as_ref())
-            .with_context(|| format!("failed to read {:?}", path.as_ref()))?;
-        Self::parse_str(&contents)
-    }
-
     pub fn to_json_string(&self) -> Result<String> {
         serde_json::to_string_pretty(self).context("failed to serialize changelog JSON")
     }
@@ -350,56 +317,65 @@ impl Changelog {
     }
 }
 
+/// Parses changelog entries into [`Changelog`] using a series of parsers.
+///
+/// Each parser will attempt to parse an input string in order:
+/// * If a parser successfully parses the input string into `Changelog`, it will be returned immediately.
+///   No other parsers will be used.
+/// * Otherwise, if a parser returns an `anyhow::Error`, the next parser will be tried.
+/// * If none of the parsers parse the input string successfully, an error will be returned from the chain.
+#[derive(Debug, Default)]
+pub struct ChangelogLoader {
+    parser_chain: ParserChain,
+}
+
+impl ChangelogLoader {
+    /// Parses the given `value` into a `Changelog`
+    pub fn parse_str(&self, value: impl AsRef<str>) -> Result<Changelog> {
+        self.parser_chain.parse(value.as_ref())
+    }
+
+    /// Parses the contents of a file located at `path` into `Changelog`
+    pub fn load_from_file(&self, path: impl AsRef<Path>) -> Result<Changelog> {
+        let contents = std::fs::read_to_string(path.as_ref())
+            .with_context(|| format!("failed to read {:?}", path.as_ref()))?;
+        self.parse_str(contents)
+    }
+
+    /// Parses the contents of files stored in a directory `dir_path` into `Changelog`
+    ///
+    /// It opens each file in the directory, parses the file contents into `Changelog`,
+    /// and merges it with accumulated `Changelog`. It currently does not support loading
+    /// from recursive directory structures.
+    pub fn load_from_dir(&self, dir_path: impl AsRef<Path>) -> Result<Changelog> {
+        let entries = std::fs::read_dir(dir_path.as_ref())?;
+        let result = entries
+            .into_iter()
+            .filter_map(|entry| {
+                // Convert each entry to its path if it's a file
+                entry.ok().and_then(|entry| {
+                    let path = entry.path();
+                    if path.is_file() {
+                        Some(path)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .try_fold(Changelog::new(), |mut combined_changelog, path| {
+                combined_changelog.merge(self.load_from_file(path)?);
+                Ok::<_, anyhow::Error>(combined_changelog)
+            })?;
+
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::changelog::parser::Toml;
     use anyhow::Context;
-
-    #[test]
-    fn parse_json() {
-        let json = r#"
-            # Example changelog entries
-            # [[aws-sdk-rust]]
-            # message = "Fix typos in module documentation for generated crates"
-            # references = ["smithy-rs#920"]
-            # meta = { "breaking" = false, "tada" = false, "bug" = false }
-            # author = "rcoh"
-            #
-            # [[smithy-rs]]
-            # message = "Fix typos in module documentation for generated crates"
-            # references = ["smithy-rs#920"]
-            # meta = { "breaking" = false, "tada" = false, "bug" = false }
-            # author = "rcoh"
-            {
-                "smithy-rs": [],
-                "aws-sdk-rust": [
-                    {
-                        "message": "Some change",
-                        "meta": { "bug": true, "breaking": false, "tada": false },
-                        "author": "test-dev",
-                        "references": [
-                            "aws-sdk-rust#123",
-                            "smithy-rs#456"
-                        ]
-                    }
-                ],
-                "aws-sdk-model": [
-                    {
-                        "module": "aws-sdk-ec2",
-                        "version": "0.12.0",
-                        "kind": "Feature",
-                        "message": "Some API change"
-                    }
-                ]
-            }
-        "#;
-        let changelog = Changelog::parse_str(json).unwrap();
-        assert!(changelog.smithy_rs.is_empty());
-        assert_eq!(1, changelog.aws_sdk_rust.len());
-        assert_eq!("Some change", changelog.aws_sdk_rust[0].message);
-        assert_eq!(1, changelog.sdk_models.len());
-        assert_eq!("Some API change", changelog.sdk_models[0].message);
-    }
 
     #[test]
     fn errors_are_combined() {
@@ -425,11 +401,13 @@ mod tests {
         let res = changelog.validate(ValidationSet::Development);
         assert!(res.is_err());
         if let Err(e) = res {
-            assert_eq!(e.len(), 3);
+            assert_eq!(3, e.len());
             assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
         }
     }
 
+    // TODO(file-per-change-changelog): Remove this test once we have switched to the new markdown
+    //  format because targets will be explicit and there won't be defaults set.
     #[test]
     fn confirm_smithy_rs_defaults_set() {
         let buffer = r#"
@@ -450,7 +428,7 @@ mod tests {
             author = "fz"
         "#;
         {
-            // loading directly from toml::from_str won't set the default target field
+            // parsing directly using `toml::from_str` won't set the default target field
             let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
             let res = changelog.validate(ValidationSet::Development);
             assert!(res.is_err());
@@ -459,8 +437,8 @@ mod tests {
             }
         }
         {
-            // loading through Chanelog will result in no error
-            let changelog: Changelog = Changelog::parse_str(buffer).expect("valid changelog");
+            // parsing through the `Toml` parser will result in no error
+            let changelog: Changelog = Toml::default().parse(buffer).expect("valid changelog");
             let res = changelog.validate(ValidationSet::Development);
             assert!(res.is_ok());
             if let Err(e) = res {
@@ -468,50 +446,6 @@ mod tests {
             }
             assert_eq!(changelog.smithy_rs[1].meta.target, Some(SdkAffected::All));
         }
-    }
-
-    #[test]
-    fn parse_smithy_ok() {
-        // by default smithy-rs meta data should say change is for both
-        let toml = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-        "#;
-        let changelog = Changelog::parse_str(toml).unwrap();
-        assert_eq!(changelog.smithy_rs.len(), 4);
-        assert_eq!(
-            changelog.smithy_rs[0].meta.target,
-            Some(SdkAffected::Client)
-        );
-        assert_eq!(
-            changelog.smithy_rs[1].meta.target,
-            Some(SdkAffected::Server)
-        );
-        assert_eq!(changelog.smithy_rs[2].meta.target, Some(SdkAffected::All));
-        assert_eq!(changelog.smithy_rs[3].meta.target, Some(SdkAffected::All));
     }
 
     #[test]
@@ -527,7 +461,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(value.meta.target, Some(SdkAffected::Server));
+            assert_eq!(Some(SdkAffected::Server), value.meta.target);
         }
 
         // client target
@@ -541,7 +475,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(value.meta.target, Some(SdkAffected::Client));
+            assert_eq!(Some(SdkAffected::Client), value.meta.target);
         }
         // Both target
         let value = r#"
@@ -554,7 +488,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(value.meta.target, Some(SdkAffected::All));
+            assert_eq!(Some(SdkAffected::All), value.meta.target);
         }
         // an invalid sdk value
         let value = r#"
@@ -579,7 +513,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed as it has none meta.sdk")
                 .unwrap();
-            assert_eq!(value.meta.target, None);
+            assert_eq!(None, value.meta.target);
         }
         // single author
         let value = r#"
@@ -592,7 +526,7 @@ mod tests {
             let value: HandAuthoredEntry = toml::from_str(value)
                 .context("String should have parsed with multiple authors")
                 .unwrap();
-            assert_eq!(value.authors, Authors(vec!["rcoh".to_string()]));
+            assert_eq!(Authors(vec!["rcoh".to_string()]), value.authors);
         }
         // multiple authors
         let value = r#"
@@ -606,8 +540,8 @@ mod tests {
                 .context("String should have parsed with multiple authors")
                 .unwrap();
             assert_eq!(
-                value.authors,
-                Authors(vec!["rcoh".to_string(), "crisidev".to_string()])
+                Authors(vec!["rcoh".to_string(), "crisidev".to_string()]),
+                value.authors
             );
         }
     }
