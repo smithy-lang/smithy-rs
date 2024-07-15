@@ -22,3 +22,15 @@ message = "Add support for `operationContextParams` Endpoints trait"
 references = ["smithy-rs#3755"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "landonxjames"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported AWS SDK clients so that using these types doen not require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#3591"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in generated clients so that using these types doen not require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#3591"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
