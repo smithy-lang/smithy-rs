@@ -29,5 +29,7 @@ pub mod download;
 pub mod error;
 
 /// Types and helpers for I/O
-#[allow(unused)]   // FIXME(aws-sdk-rust#1159) - remove when consumed internally by other modules
 pub mod io;
+
+/// Abstractions for downloading objects from Amazon S3
+pub mod upload;
