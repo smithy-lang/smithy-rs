@@ -38,7 +38,8 @@ class KotlinClientSerdeDecoratorTest {
            foo: SensitiveString,
            e: TestEnum,
            nested: Nested,
-           union: U
+           union: U,
+           document: Document
         }
 
         @sensitive
@@ -59,6 +60,7 @@ class KotlinClientSerdeDecoratorTest {
         }
 
         structure Nested {
+          @required
           int: Integer,
           sensitive: Timestamps,
           notSensitive: AlsoTimestamps,
@@ -104,26 +106,27 @@ class KotlinClientSerdeDecoratorTest {
                         use #{crate}::types::{Nested, U};
                         use #{crate}::serde_impl::support::*;
                         use std::time::UNIX_EPOCH;
-                        use aws_smithy_types::DateTime;
+                        use aws_smithy_types::{DateTime, Document};
                         let input = #{crate}::operation::say_hello::SayHelloInput::builder()
                             .foo("foo-value")
                             .e("A".into())
+                            .document(Document::String("hello!".into()))
                             .nested(Nested::builder()
                                 .int(5)
                                 .sensitive("a", DateTime::from(UNIX_EPOCH))
                                 .not_sensitive("a", DateTime::from(UNIX_EPOCH))
                                 .many_enums("A".into())
-                                .build()
+                                .build().unwrap()
                             )
                             .union(U::Enum("B".into()))
                             .build()
                             .unwrap();
                         let mut settings = #{crate}::serde_impl::support::SerializationSettings::default();
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
-                        assert_eq!(serialized, "{\"foo\":\"foo-value\",\"e\":\"A\",\"nested\":{\"int\":5,\"sensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"notSensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"manyEnums\":[\"A\"]},\"union\":{\"enum\":\"B\"}}");
+                        assert_eq!(serialized, "{\"foo\":\"foo-value\",\"e\":\"A\",\"nested\":{\"int\":5,\"sensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"notSensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"manyEnums\":[\"A\"]},\"union\":{\"enum\":\"B\"},\"document\":\"hello!\"}");
                         settings.redact_sensitive_fields = true;
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
-                        assert_eq!(serialized, "{\"foo\":\"<redacted>\",\"e\":\"<redacted>\",\"nested\":{\"int\":5,\"sensitive\":{\"a\":\"<redacted>\"},\"notSensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"manyEnums\":[\"<redacted>\"]},\"union\":\"<redacted>\"}");
+                        assert_eq!(serialized, "{\"foo\":\"<redacted>\",\"e\":\"<redacted>\",\"nested\":{\"int\":5,\"sensitive\":{\"a\":\"<redacted>\"},\"notSensitive\":{\"a\":\"1970-01-01T00:00:00Z\"},\"manyEnums\":[\"<redacted>\"]},\"union\":\"<redacted>\",\"document\":\"hello!\"}");
                         """,
                         *codegenScope,
                     )
