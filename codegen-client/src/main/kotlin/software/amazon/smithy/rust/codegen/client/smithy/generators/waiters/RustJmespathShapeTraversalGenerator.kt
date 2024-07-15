@@ -128,6 +128,8 @@ data class GeneratedExpression(
 
     internal fun isStringOrEnum(): Boolean = isString() || isEnum()
 
+    internal fun isObject(): Boolean = outputShape is TraversedShape.Object
+
     /** Dereferences this expression if it is a reference. */
     internal fun dereference(namer: SafeNamer): GeneratedExpression =
         if (outputType is RustType.Reference) {
@@ -278,7 +280,7 @@ class JmesPathTraversalCodegenBugException(msg: String?, what: Throwable? = null
  * - Object projections
  * - Multi-select lists (but only when every item in the list is the exact same type)
  * - And/or/not boolean operations
- * - Functions `contains` and `length`. The `keys` function may be supported in the future.
+ * - Functions `contains`, `length`, and `keys`.
  */
 class RustJmespathShapeTraversalGenerator(
     codegenContext: ClientCodegenContext,
@@ -427,6 +429,41 @@ class RustJmespathShapeTraversalGenerator(
                                 },
                     )
                 }
+            }
+
+            "keys" -> {
+                if (expr.arguments.size != 1) {
+                    throw InvalidJmesPathTraversalException("Keys function takes exactly one argument")
+                }
+                val arg = generate(expr.arguments[0], bindings)
+                if (!arg.isObject()) {
+                    throw InvalidJmesPathTraversalException("Argument to `keys` function must be an object type")
+                }
+                GeneratedExpression(
+                    identifier = ident,
+                    outputType = RustType.Vec(RustType.String),
+                    outputShape = TraversedShape.Array(null, TraversedShape.String(null)),
+                    output =
+                        writable {
+                            arg.output(this)
+                            val outputShape = arg.outputShape.shape
+                            when (outputShape) {
+                                is StructureShape -> {
+                                    // Can't iterate a struct in Rust so source the keys from smithy
+                                    val keys =
+                                        outputShape.allMembers.keys.joinToString(",") { "${it.dq()}.to_string()" }
+                                    rust("let $ident = vec![$keys];")
+                                }
+
+                                is MapShape -> {
+                                    rust("let $ident = ${arg.identifier}.keys().map(Clone::clone).collect::<Vec<String>>();")
+                                }
+
+                                else ->
+                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct or a map, got ${outputShape?.type}")
+                            }
+                        },
+                )
             }
 
             else -> throw UnsupportedJmesPathException("The `${expr.name}` function is not supported by smithy-rs")

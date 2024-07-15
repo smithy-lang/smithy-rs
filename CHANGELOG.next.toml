@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Support `stringArray` type in endpoints params"
+references = ["smithy-rs#3742"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Add support for `operationContextParams` Endpoints trait"
+references = ["smithy-rs#3755"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
