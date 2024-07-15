@@ -32,6 +32,7 @@ pub struct ObjectMetadata {
     pub content_range: Option<String>,
     pub content_type: Option<String>,
     pub expires: Option<::aws_smithy_types::DateTime>,
+    pub expires_string: Option<String>,
     pub website_redirect_location: Option<String>,
     pub server_side_encryption: Option<aws_sdk_s3::types::ServerSideEncryption>,
     pub metadata: Option<::std::collections::HashMap<String, String>>,
@@ -85,7 +86,9 @@ impl From<GetObjectOutput> for ObjectMetadata {
             content_language: value.content_language,
             content_range: value.content_range,
             content_type: value.content_type,
+            #[allow(deprecated)]
             expires: value.expires,
+            expires_string: value.expires_string,
             website_redirect_location: value.website_redirect_location,
             server_side_encryption: value.server_side_encryption,
             metadata: value.metadata,
@@ -127,7 +130,9 @@ impl From<HeadObjectOutput> for ObjectMetadata {
             content_language: value.content_language,
             content_range: None,
             content_type: value.content_type,
+            #[allow(deprecated)]
             expires: value.expires,
+            expires_string: value.expires_string,
             website_redirect_location: value.website_redirect_location,
             server_side_encryption: value.server_side_encryption,
             metadata: value.metadata,

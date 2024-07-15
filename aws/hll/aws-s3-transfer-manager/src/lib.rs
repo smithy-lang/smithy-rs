@@ -27,3 +27,7 @@ pub mod download;
 
 /// Error types emitted by `aws-s3-transfer-manager`
 pub mod error;
+
+/// Types and helpers for I/O
+#[allow(unused)]   // FIXME(aws-sdk-rust#1159) - remove when consumed internally by other modules
+pub mod io;

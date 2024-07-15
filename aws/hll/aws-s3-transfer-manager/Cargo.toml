@@ -10,12 +10,12 @@ publish = false
 
 [dependencies]
 async-channel = "2.3.1"
-async-trait = "0.1.80"
-aws-sdk-s3 = { version = "1.36.0", features = ["behavior-version-latest", "test-util"] }
-aws-smithy-http = "0.60.8"
-aws-smithy-runtime-api = "1.7.0"
+async-trait = "0.1.81"
+aws-sdk-s3 = { version = "1.40.0", features = ["behavior-version-latest", "test-util"] }
+aws-smithy-http = "0.60.9"
+aws-smithy-runtime-api = "1.7.1"
 aws-smithy-types = "1.2.0"
-aws-types = "1.3.1"
+aws-types = "1.3.3"
 bytes = "1"
 # FIXME - upgrade to hyper 1.x
 hyper = { version = "0.14.29", features = ["client"] }
@@ -24,8 +24,9 @@ tokio = { version = "1.38.0", features = ["rt-multi-thread", "io-util", "sync", 
 tracing = "0.1"
 
 [dev-dependencies]
-aws-config = { version = "1.5.1", features = ["behavior-version-latest"] }
+aws-config = { version = "1.5.4", features = ["behavior-version-latest"] }
 aws-smithy-mocks-experimental = "0.2.1"
 clap = { version = "4.5.7", default-features = false, features = ["derive", "std", "help"] }
 console-subscriber = "0.3.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tempfile = "3.10.1"
