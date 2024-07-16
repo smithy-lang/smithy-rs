@@ -405,10 +405,33 @@ class RustJmespathShapeTraversalGeneratorTest {
         test("i32s_contains_i16", "contains(lists.integers, primitives.short)", expectFalse)
         test("f32s_contains_f32", "contains(lists.floats, primitives.float)", expectFalse)
 
+        test(
+            "keys_struct", "keys(maps)",
+            simple(
+                "assert_eq!(6, result.len());" +
+                    "assert!(result.contains(&\"booleans\".to_string()));" +
+                    "assert!(result.contains(&\"strings\".to_string()));" +
+                    "assert!(result.contains(&\"integers\".to_string()));" +
+                    "assert!(result.contains(&\"enums\".to_string()));" +
+                    "assert!(result.contains(&\"intEnums\".to_string()));" +
+                    "assert!(result.contains(&\"structs\".to_string()));",
+            ),
+        )
+        test(
+            "keys_map", "keys(maps.strings)",
+            simple(
+                "assert_eq!(2, result.len());" +
+                    "assert!(result.contains(&\"foo\".to_string()));" +
+                    "assert!(result.contains(&\"bar\".to_string()));",
+            ),
+        )
+
         invalid("length()", "Length function takes exactly one argument")
         invalid("length(primitives.integer)", "Argument to `length` function")
         invalid("contains('foo')", "Contains function takes exactly two arguments")
         invalid("contains(primitives.integer, 'foo')", "First argument to `contains`")
+        invalid("keys()", "Keys function takes exactly one argument")
+        invalid("keys(primitives.integer)", "Argument to `keys` function")
         unsupported("contains(lists.structs, `null`)", "Checking for null with `contains`")
         unsupported("contains(lists.structs, lists)", "Checking for anything other than")
         unsupported("abs(`-1`)", "The `abs` function is not supported")
