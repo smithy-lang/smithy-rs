@@ -1,4 +1,4 @@
 # This file lists the names of classes which implement extensions to the rust-client-codegen extension
 # The source code we are extending is found in https://github.com/smithy-lang/smithy-rs/blob/d5ea2cdd91e9b74232e08bd3137e3cd6aa2c3d01/codegen-client/src/main/kotlin/software/amazon/smithy/rust/codegen/client/smithy/customize/ClientCodegenDecorator.kt
 
-software.amazon.smithy.rust.codegen.serde.KotlinClientSerdeDecorator
+software.amazon.smithy.rust.codegen.serde.ClientSerdeDecorator
