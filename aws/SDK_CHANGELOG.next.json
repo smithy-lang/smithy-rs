@@ -18,7 +18,7 @@
         "smithy-rs#3639"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add documentation on the default configuration to `from_env`, `load_from_env`, `defaults`, and `load_from_defaults` in the `aws-config` crate.",
@@ -32,7 +32,7 @@
         "aws-sdk-rust#1162"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Pre-signed requests may now be converted to Http v1.x requests. This requires enabling the `http-1x` feature for the SDK in question.\nThen, call `PresignedRequest::make_http_1x_request` or `PresignedRequest::into_http_1x_request`.\n",
@@ -46,7 +46,7 @@
         "smithy-rs#3696"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`AwsErrorCodeClassifier` for S3 now treats `InternalError` as a transient error to trigger retries.",
@@ -60,7 +60,7 @@
         "aws-sdk-rust#1163"
       ],
       "since-commit": "57ed310e6d21041eb36d825c50032295eef0b630",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add customizations for S3 Expires fields.",
@@ -74,7 +74,7 @@
         "smithy-rs#3730"
       ],
       "since-commit": "fe1b341e8f1a4ee307554f1a63bf62ec72d8c9a3",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon.",
@@ -88,6 +88,20 @@
         "smithy-rs#3744"
       ],
       "since-commit": "56f4c8e9479792b8b52cc394d563ed49a01d1dcc",
+      "age": 2
+    },
+    {
+      "message": "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in AWS SDK clients so that using these types does not require directly depending on `aws-smithy-runtime-api`.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#3591"
+      ],
+      "since-commit": "8d23be1392c46a4d59c2910c3dab00ecaad2cf26",
       "age": 1
     }
   ],
