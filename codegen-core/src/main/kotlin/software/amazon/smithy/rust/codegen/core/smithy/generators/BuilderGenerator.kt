@@ -45,10 +45,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This builder generator is only used by the client.
@@ -353,7 +355,16 @@ class BuilderGenerator(
                 rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own
+                    val fieldValue =
+                        if (shape.shouldRedact(model)) {
+                            REDACTION
+                        } else {
+                            member.redactIfNecessary(
+                                model,
+                                "self.$memberName",
+                            )
+                        }
 
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
