@@ -62,8 +62,10 @@ class StructureGeneratorTest {
             structure Credentials {
                 username: String,
                 password: Password,
-
-                secretKey: SecretKey
+                secretKey: SecretKey,
+                secretValueMap: MapThatContainsSecretValues,
+                secretKeyMap: MapThatContainsSecretKeys,
+                secretList: ListThatContainsSecrets
             }
 
             structure StructWithDoc {
@@ -78,6 +80,20 @@ class StructureGeneratorTest {
             structure StructWithInnerSecretStructure {
                 public: String,
                 private: SecretStructure,
+            }
+
+            map MapThatContainsSecretKeys {
+                key: SecretKey
+                value: String
+            }
+
+            map MapThatContainsSecretValues {
+                key: String
+                value: SecretKey
+            }
+
+            list ListThatContainsSecrets {
+                member: Password
             }
             """.asSmithyModel()
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
@@ -159,15 +175,27 @@ class StructureGeneratorTest {
         TestWorkspace.testProject().unitTest {
             structureGenerator(model, provider, this, credentials).render()
 
-            this.unitTest(
-                "sensitive_fields_redacted",
+            rust(
                 """
+                use std::collections::HashMap;
+
+                let mut secret_map = HashMap::new();
+                secret_map.insert("FirstSecret".to_string(), "don't leak me".to_string());
+                secret_map.insert("SecondSecret".to_string(), "don't leak me".to_string());
+
+                let secret_list = vec!["don't leak me".to_string()];
+
                 let creds = Credentials {
                     username: Some("not_redacted".to_owned()),
                     password: Some("don't leak me".to_owned()),
-                    secret_key: Some("don't leak me".to_owned())
+                    secret_key: Some("don't leak me".to_owned()),
+                    secret_key_map: Some(secret_map.clone()),
+                    secret_value_map: Some(secret_map),
+                    secret_list: Some(secret_list),
                 };
-                assert_eq!(format!("{:?}", creds), "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+
+                assert_eq!(format!("{:?}", creds),
+                "Credentials { username: Some(\"not_redacted\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\", secret_value_map: \"*** Sensitive Data Redacted ***\", secret_key_map: \"*** Sensitive Data Redacted ***\", secret_list: \"*** Sensitive Data Redacted ***\" }");
                 """,
             )
         }.compileAndTest()
@@ -179,8 +207,7 @@ class StructureGeneratorTest {
         TestWorkspace.testProject().unitTest {
             structureGenerator(model, provider, this, secretStructure).render()
 
-            this.unitTest(
-                "sensitive_structure_redacted",
+            rust(
                 """
                 let secret_structure = SecretStructure {
                     secret_field: Some("secret".to_owned()),
