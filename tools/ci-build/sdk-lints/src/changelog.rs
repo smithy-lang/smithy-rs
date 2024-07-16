@@ -6,7 +6,7 @@
 use crate::lint::LintError;
 use crate::{repo_root, Check, Lint};
 use anyhow::Result;
-use smithy_rs_tool_common::changelog::{Changelog, ValidationSet};
+use smithy_rs_tool_common::changelog::{ChangelogLoader, ValidationSet};
 use std::path::{Path, PathBuf};
 
 pub(crate) struct ChangelogNext;
@@ -30,9 +30,14 @@ impl Check for ChangelogNext {
     }
 }
 
+// TODO(file-per-change-changelog): Use `.load_from_dir` to read from the `.changelog` directory
+//  and run the validation only when the directory has at least one changelog entry file, otherwise
+//  a default constructed `ChangeLog` won't pass the validation.
 /// Validate that `CHANGELOG.next.toml` follows best practices
 fn check_changelog_next(path: impl AsRef<Path>) -> std::result::Result<(), Vec<LintError>> {
-    let parsed = Changelog::load_from_file(path).map_err(|e| vec![LintError::via_display(e)])?;
+    let parsed = ChangelogLoader::default()
+        .load_from_file(path)
+        .map_err(|e| vec![LintError::via_display(e)])?;
     parsed
         .validate(ValidationSet::Development)
         .map_err(|errs| {
