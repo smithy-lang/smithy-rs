@@ -64,6 +64,8 @@ impl DeserializeError {
     }
 
     /// More than one union variant was detected, but we never even got to parse the first one.
+    /// We immediately raise this error when detecting a union serialized as a fixed-length CBOR
+    /// map whose length (specified upfront) is a value different than 1.
     pub fn mixed_union_variants(at: usize) -> Self {
         Self {
             _inner: Error::message(

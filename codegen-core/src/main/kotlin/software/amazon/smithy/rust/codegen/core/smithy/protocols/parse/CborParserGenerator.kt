@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -83,7 +84,7 @@ class CborParserGenerator(
             "Decoder" to smithyCbor.resolve("Decoder"),
             "Error" to smithyCbor.resolve("decode::DeserializeError"),
             "HashMap" to RuntimeType.HashMap,
-            "Vec" to RuntimeType.Vec,
+            *preludeScope,
         )
 
     private fun listMemberParserFn(
@@ -97,7 +98,7 @@ class CborParserGenerator(
             fn member(
                 mut list: #{ListSymbol},
                 decoder: &mut #{Decoder},
-            ) -> Result<#{ListSymbol}, #{Error}>
+            ) -> #{Result}<#{ListSymbol}, #{Error}>
             """,
             *codegenScope,
             "ListSymbol" to listSymbol,
@@ -148,7 +149,7 @@ class CborParserGenerator(
             fn pair(
                 mut map: #{MapSymbol},
                 decoder: &mut #{Decoder},
-            ) -> Result<#{MapSymbol}, #{Error}>
+            ) -> #{Result}<#{MapSymbol}, #{Error}>
             """,
             *codegenScope,
             "MapSymbol" to mapSymbol,
@@ -204,7 +205,7 @@ class CborParserGenerator(
             fn pair(
                 mut builder: #{Builder},
                 decoder: &mut #{Decoder}
-            ) -> Result<#{Builder}, #{Error}>
+            ) -> #{Result}<#{Builder}, #{Error}>
             """,
             *codegenScope,
             "Builder" to builderSymbol,
@@ -280,7 +281,7 @@ class CborParserGenerator(
                 """
                 fn pair(
                     decoder: &mut #{Decoder}
-                ) -> Result<#{UnionSymbol}, #{Error}>
+                ) -> #{Result}<#{UnionSymbol}, #{Error}>
                 """,
                 *codegenScope,
                 "UnionSymbol" to returnSymbolToParse.symbol,
@@ -401,7 +402,7 @@ class CborParserGenerator(
         return protocolFunctions.deserializeFn(shape, fnNameSuffix) { fnName ->
             rustTemplate(
                 """
-                pub(crate) fn $fnName(value: &[u8], mut builder: #{Builder}) -> Result<#{Builder}, #{Error}> {
+                pub(crate) fn $fnName(value: &[u8], mut builder: #{Builder}) -> #{Result}<#{Builder}, #{Error}> {
                     #{StructurePairParserFn:W}
                     
                     let decoder = &mut #{Decoder}::new(value);
@@ -518,7 +519,7 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}> {
                         #{ListMemberParserFn:W}
                         
                         #{InitContainerWritable:W}
@@ -561,7 +562,7 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}> {
                         #{MapPairParserFn:W}
                         
                         #{InitContainerWritable:W}
@@ -593,7 +594,7 @@ class CborParserGenerator(
         val parser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
-                    "pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{ReturnType}, #{Error}>",
+                    "pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}>",
                     "ReturnType" to returnSymbolToParse.symbol,
                     *codegenScope,
                 ) {
@@ -631,7 +632,7 @@ class CborParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> Result<#{UnionSymbol}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{UnionSymbol}, #{Error}> {
                         #{UnionPairParserFnWritable}
                         
                         match decoder.map()? {

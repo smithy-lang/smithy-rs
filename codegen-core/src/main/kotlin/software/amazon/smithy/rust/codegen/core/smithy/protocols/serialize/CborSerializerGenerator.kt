@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -59,7 +60,7 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     data class BeforeSerializingStructureMembers(
         val structureShape: StructureShape,
         val encoderBindingName: String,
-    ) : CborSerializerSection("ServerError")
+    ) : CborSerializerSection("BeforeSerializingStructureMembers")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
@@ -79,7 +80,7 @@ class CborSerializerGenerator(
     data class Context<out T : Shape>(
         /** Expression representing the value to write to the encoder */
         var valueExpression: ValueExpression,
-        /** Path in the CBOR to get here, used for errors */
+        /** Shape to serialize */
         val shape: T,
     )
 
@@ -158,6 +159,7 @@ class CborSerializerGenerator(
         arrayOf(
             "Error" to runtimeConfig.serializationError(),
             "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
+            *preludeScope,
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
@@ -178,11 +180,11 @@ class CborSerializerGenerator(
             }
         return protocolFunctions.serializeFn(structureShape, fnNameSuffix = suffix) { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(value: &#{target}) -> Result<Vec<u8>, #{Error}>",
+                "pub fn $fnName(value: &#{target}) -> #{Result}<#{Vec}<u8>, #{Error}>",
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape),
             ) {
-                rustTemplate("let mut encoder = #{Encoder}::new(Vec::new());", *codegenScope)
+                rustTemplate("let mut encoder = #{Encoder}::new(#{Vec}::new());", *codegenScope)
                 // Open a scope in which we can safely shadow the `encoder` variable to bind it to a mutable reference.
                 rustBlock("") {
                     rust("let encoder = &mut encoder;")
@@ -382,7 +384,7 @@ class CborSerializerGenerator(
         val unionSerializer =
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{UnionSymbol}) -> #{Result}<(), #{Error}>",
                     "UnionSymbol" to unionSymbol,
                     *codegenScope,
                 ) {

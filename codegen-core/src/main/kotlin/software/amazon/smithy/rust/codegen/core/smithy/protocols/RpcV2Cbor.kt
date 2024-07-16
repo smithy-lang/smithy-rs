@@ -11,8 +11,6 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.TimestampFormatTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
@@ -89,20 +87,6 @@ class RpcV2CborHttpBindingResolver(
 }
 
 open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope =
-        arrayOf(
-            "Bytes" to RuntimeType.Bytes,
-            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-            "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
-            "JsonError" to
-                CargoDependency.smithyJson(runtimeConfig).toType()
-                    .resolve("deserialize::error::DeserializeError"),
-            "Response" to RuntimeType.Http.resolve("Response"),
-            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-        )
-    private val jsonDeserModule = RustModule.private("json_deser")
-
     override val httpBindingResolver: HttpBindingResolver =
         RpcV2CborHttpBindingResolver(
             codegenContext.model,

@@ -46,10 +46,10 @@ class AddTypeFieldToServerErrorsCborCustomization : CborSerializerCustomization(
                     writable {
                         rust(
                             """
-                        ${section.encoderBindingName}
-                            .str("__type")
-                            .str("${escape(section.structureShape.id.toString())}");
-                        """,
+                            ${section.encoderBindingName}
+                                .str("__type")
+                                .str("${escape(section.structureShape.id.toString())}");
+                            """,
                         )
                     }
                 } else {
