@@ -13,11 +13,11 @@ Python server runtime for Smithy Rust Server Framework.
 publish = true
 
 [dependencies]
-aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
-aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
-aws-smithy-xml = { path = "../aws-smithy-xml" }
+aws-smithy-http = "0.60.8"
+aws-smithy-http-server = { version = "0.63.1", features = ["aws-lambda"] }
+aws-smithy-json = "0.60.7"
+aws-smithy-types = { version = "1.1.8", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
+aws-smithy-xml = "0.60.8"
 bytes = "1.2"
 futures = "0.3"
 http = "0.2"
