@@ -13,10 +13,10 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class SerdeTrait private constructor(
-    val serialize: Boolean,
-    val deserialize: Boolean,
-    val tag: String?,
-    val content: String?,
+    private val serialize: Boolean,
+    private val deserialize: Boolean,
+    private val tag: String?,
+    private val content: String?,
     sourceLocation: SourceLocation,
 ) :
     AbstractTrait(ID, sourceLocation) {
@@ -35,25 +35,26 @@ class SerdeTrait private constructor(
             override fun createTrait(
                 target: ShapeId,
                 value: Node,
-            ): Trait {
-                val serialize = value.expectObjectNode().getBooleanMember("serialize").map { it.value }.orElse(true)
-                val deserialize = value.expectObjectNode().getBooleanMember("deserialize").map { it.value }.orElse(true)
-                val tag = value.expectObjectNode().getStringMember("tag").map { it.value }.orNull()
-                val content = value.expectObjectNode().getStringMember("content").map { it.value }.orNull()
-                val result =
-                    SerdeTrait(
-                        serialize,
-                        deserialize,
-                        tag,
-                        content,
-                        value.sourceLocation,
-                    )
-                result.setNodeCache(value)
-                return result
-            }
+            ): Trait =
+                with(value.expectObjectNode()) {
+                    val serialize = getBooleanMemberOrDefault("serialize", true)
+                    val deserialize = getBooleanMemberOrDefault("deserialize", true)
+                    val tag = getStringMember("tag").orNull()?.value
+                    val content = getStringMember("content").orNull()?.value
+                    val result =
+                        SerdeTrait(
+                            serialize,
+                            deserialize,
+                            tag,
+                            content,
+                            value.sourceLocation,
+                        )
+                    result.setNodeCache(value)
+                    result
+                }
         }
 
         companion object {
-            val ID = ShapeId.from("smithy.rust#serde")!!
+            val ID: ShapeId = ShapeId.from("smithy.rust#serde")
         }
     }
