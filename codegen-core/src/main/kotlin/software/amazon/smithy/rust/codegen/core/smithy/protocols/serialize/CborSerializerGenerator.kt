@@ -193,7 +193,7 @@ class CborSerializerGenerator(
                         includedMembers,
                     )
                 }
-                rust("Ok(encoder.into_writer())")
+                rustTemplate("#{Ok}(encoder.into_writer())", *codegenScope)
             }
         }
     }
@@ -260,7 +260,7 @@ class CborSerializerGenerator(
         val structureSerializer =
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> #{Result}<(), #{Error}>",
                     "StructureSymbol" to symbolProvider.toSymbol(context.shape),
                     *codegenScope,
                 ) {
@@ -405,13 +405,13 @@ class CborSerializerGenerator(
                         }
                         if (codegenTarget.renderUnknownVariant()) {
                             rustTemplate(
-                                "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                                "#{Union}::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return #{Err}(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
                                 "Union" to unionSymbol,
                                 *codegenScope,
                             )
                         }
                     }
-                    rust("Ok(())")
+                    rustTemplate("#{Ok}(())", *codegenScope)
                 }
             }
         rust("#T(encoder, ${context.valueExpression.asRef()})?;", unionSerializer)

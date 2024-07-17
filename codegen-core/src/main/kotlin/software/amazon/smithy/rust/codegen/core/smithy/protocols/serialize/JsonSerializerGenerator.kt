@@ -213,7 +213,7 @@ class JsonSerializerGenerator(
             ) {
                 rustTemplate(
                     """
-                    let mut out = String::new();
+                    let mut out = #{String}::new();
                     let mut object = #{JsonObjectWriter}::new(&mut out);
                     """,
                     *codegenScope,
