@@ -7,15 +7,19 @@ package software.amazon.smithy.rust.codegen.serde
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 object SupportStructures {
-    private val supportModule =
-        RustModule.public("support", Module, documentationOverride = "Support traits and structures for serde")
+    private val supportModule = SerdeModule
 
-    private val serde = CargoDependency.Serde.copy(scope = DependencyScope.Compile, optional = true).toType()
+    private val serde =
+        CargoDependency.Serde.copy(
+            scope = DependencyScope.Compile,
+            optional = true,
+            // remove `derive`
+            features = setOf(),
+        ).toType()
 
     val codegenScope =
         arrayOf(
@@ -207,7 +211,6 @@ object SupportStructures {
 
     private fun serializationSettings() =
         RuntimeType.forInlineFun("SerializationSettings", supportModule) {
-            // TODO(serde): Add a builder for this structure and make it non-exhaustive
             // TODO(serde): Consider removing `derive(Default)`
             rustTemplate(
                 """
@@ -224,10 +227,10 @@ object SupportStructures {
                     ///
                     /// Note: This may alter the type of the serialized output and make it impossible to deserialize as
                     /// numerical fields will be replaced with strings.
-                    pub fn redact_sensitive_fields() -> Self { Self { redact_sensitive_fields: true } }
+                    pub const fn redact_sensitive_fields() -> Self { Self { redact_sensitive_fields: true } }
 
                     /// Preserve the contents of sensitive fields during serializing
-                    pub fn leak_sensitive_fields() -> Self { Self { redact_sensitive_fields: false } }
+                    pub const fn leak_sensitive_fields() -> Self { Self { redact_sensitive_fields: false } }
                 }
                 """,
             )

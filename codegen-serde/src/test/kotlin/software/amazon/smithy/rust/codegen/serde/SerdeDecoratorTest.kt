@@ -109,6 +109,8 @@ class SerdeDecoratorTest {
                 arrayOf(
                     "crate" to RustType.Opaque(ctx.moduleUseName()),
                     "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
+                    // we need the derive feature
+                    "serde" to CargoDependency.Serde.toDevDependency().toType(),
                 )
 
             crate.integrationTest("test_serde") {
@@ -117,7 +119,7 @@ class SerdeDecoratorTest {
                         """
                         use #{crate}::model::{Nested, U, TestEnum};
                         use #{crate}::input::SayHelloInput;
-                        use #{crate}::serde_impl::support::*;
+                        use #{crate}::serde::*;
                         use std::collections::HashMap;
                         use std::time::UNIX_EPOCH;
                         use aws_smithy_types::{DateTime, Document, Blob};
@@ -138,7 +140,7 @@ class SerdeDecoratorTest {
                             .union(Some(U::Enum(TestEnum::B)))
                             .build()
                             .unwrap();
-                        let mut settings = #{crate}::serde_impl::support::SerializationSettings::default();
+                        let mut settings = SerializationSettings::default();
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                         assert_eq!(serialized, ${expectedNoRedactions.dq()});
                         settings.redact_sensitive_fields = true;
@@ -153,8 +155,8 @@ class SerdeDecoratorTest {
                     rustTemplate(
                         """
                         use #{crate}::input::SayHelloInput;
-                        use #{crate}::serde_impl::support::*;
-                        ##[derive(serde::Serialize)]
+                        use #{crate}::serde::*;
+                        ##[derive(#{serde}::Serialize)]
                         struct MyRecord {
                             ##[serde(serialize_with = "serialize_redacted")]
                             redact_field: SayHelloInput,
@@ -231,6 +233,8 @@ class SerdeDecoratorTest {
                 arrayOf(
                     "crate" to RustType.Opaque(ctx.moduleUseName()),
                     "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
+                    // we need the derive feature
+                    "serde" to CargoDependency.Serde.toDevDependency().toType(),
                 )
 
             crate.integrationTest("test_serde") {
@@ -238,7 +242,7 @@ class SerdeDecoratorTest {
                     rustTemplate(
                         """
                         use #{crate}::types::{Nested, U, TestEnum};
-                        use #{crate}::serde_impl::support::*;
+                        use #{crate}::serde::*;
                         use std::time::UNIX_EPOCH;
                         use aws_smithy_types::{DateTime, Document, Blob};
                         let input = #{crate}::operation::say_hello::SayHelloInput::builder()
@@ -257,7 +261,7 @@ class SerdeDecoratorTest {
                             .union(U::Enum("B".into()))
                             .build()
                             .unwrap();
-                        let mut settings = #{crate}::serde_impl::support::SerializationSettings::default();
+                        let mut settings = #{crate}::serde::SerializationSettings::default();
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                         assert_eq!(serialized, ${expectedNoRedactions.dq()});
                         settings.redact_sensitive_fields = true;
@@ -272,8 +276,8 @@ class SerdeDecoratorTest {
                     rustTemplate(
                         """
                         use #{crate}::operation::say_hello::SayHelloInput;
-                        use #{crate}::serde_impl::support::*;
-                        ##[derive(serde::Serialize)]
+                        use #{crate}::serde::*;
+                        ##[derive(#{serde}::Serialize)]
                         struct MyRecord {
                             ##[serde(serialize_with = "serialize_redacted")]
                             redact_field: SayHelloInput,

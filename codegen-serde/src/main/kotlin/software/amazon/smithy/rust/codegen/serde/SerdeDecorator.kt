@@ -19,11 +19,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 val SerdeFeature = Feature("serde", false, listOf("dep:serde"))
-val Module =
+val SerdeModule =
     RustModule.public(
-        "serde_impl",
+        "serde",
         additionalAttributes = listOf(Attribute.featureGate(SerdeFeature.name)),
-        documentationOverride = "Implementations of `serde` for model types",
+        documentationOverride = "Implementations of `serde` for model types. NOTE: These implementations are NOT used for wire serialization as part of a smithy protocol and WILL NOT match the wire format. They are provided for convenience only.",
     )
 
 class ClientSerdeDecorator : ClientCodegenDecorator {
@@ -36,7 +36,7 @@ class ClientSerdeDecorator : ClientCodegenDecorator {
     ) {
         rustCrate.mergeFeature(SerdeFeature)
         val generator = SerializeImplGenerator(codegenContext)
-        rustCrate.withModule(Module) {
+        rustCrate.withModule(SerdeModule) {
             serializationRoots(codegenContext).forEach {
                 generator.generateRootSerializerForShape(
                     it,
@@ -58,7 +58,7 @@ class ServerSerdeDecorator : ServerCodegenDecorator {
     ) {
         rustCrate.mergeFeature(SerdeFeature)
         val generator = SerializeImplGenerator(codegenContext)
-        rustCrate.withModule(Module) {
+        rustCrate.withModule(SerdeModule) {
             serializationRoots(codegenContext).forEach {
                 generator.generateRootSerializerForShape(
                     it,

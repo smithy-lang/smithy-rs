@@ -61,8 +61,8 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         val name = codegenContext.symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape) + "_serde"
         val deps =
             when (shape) {
-                is StructureShape -> RuntimeType.forInlineFun(name, Module, structSerdeImpl(shape))
-                is UnionShape -> RuntimeType.forInlineFun(name, Module, serializeUnionImpl(shape))
+                is StructureShape -> RuntimeType.forInlineFun(name, SerdeModule, structSerdeImpl(shape))
+                is UnionShape -> RuntimeType.forInlineFun(name, SerdeModule, serializeUnionImpl(shape))
                 is TimestampShape -> serializeDateTime(shape)
                 is BlobShape -> serializeBlob(shape)
                 is StringShape, is NumberShape -> directSerde(shape)
@@ -92,7 +92,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             writable {
                 rustTemplate(
                     """
-                    use #{SerializeConfigured};
                     use #{serde}::ser::SerializeMap;
                     let mut map = serializer.serialize_map(Some(#{value}.len()))?;
                     for (k, v) in self.value.0.iter() {
@@ -112,7 +111,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             writable {
                 rustTemplate(
                     """
-                    use #{SerializeConfigured};
                     use #{serde}::ser::SerializeSeq;
                     let mut seq = serializer.serialize_seq(Some(#{value}.len()))?;
                     for v in self.value.0.iter() {
@@ -131,7 +129,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
      * Serialize a type that already implements `Serialize` directly via `value.serialize(serializer)`
      */
     private fun directSerde(shape: Shape): RuntimeType {
-        return RuntimeType.forInlineFun(codegenContext.symbolProvider.toSymbol(shape).rustType().toString(), Module) {
+        return RuntimeType.forInlineFun(codegenContext.symbolProvider.toSymbol(shape).rustType().toString(), SerdeModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 val baseValue =
                     writable { rust("self.value") }.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
@@ -172,14 +170,14 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 codegenContext.symbolProvider.shapeFunctionName(codegenContext.serviceShape, shape)
                     .toPascalCase()
         // awkward hack to recover the symbol referring to the type
-        val type = Module.toType().resolve(name).toSymbol()
+        val type = SerdeModule.toType().resolve(name).toSymbol()
         val base = writable { rust("self.value.0") }
         val serialization =
             implSerializeConfiguredWrapper(type) {
                 body(base)(this)
             }
         val wrapperStruct =
-            RuntimeType.forInlineFun(name, Module) {
+            RuntimeType.forInlineFun(name, SerdeModule) {
                 rustTemplate(
                     """
                     struct $name<'a>(&'a #{Shape});
@@ -223,7 +221,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 rustTemplate(
                     """
                     use #{serde}::ser::SerializeStruct;
-                    use #{SerializeConfigured};
                     """,
                     *SupportStructures.codegenScope,
                 )
@@ -264,7 +261,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             implSerializeConfigured(unionSymbol) {
                 rustTemplate(
                     """
-                    use #{SerializeConfigured};
                     """,
                     *SupportStructures.codegenScope,
                 )
@@ -296,14 +292,14 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
     }
 
     private fun serializeDateTime(shape: TimestampShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeDateTime", Module) {
+        RuntimeType.forInlineFun("SerializeDateTime", SerdeModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rust("serializer.serialize_str(&self.value.to_string())")
             }
         }
 
     private fun serializeBlob(shape: BlobShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeBlob", Module) {
+        RuntimeType.forInlineFun("SerializeBlob", SerdeModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rustTemplate(
                     """
@@ -319,11 +315,10 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         }
 
     private fun serializeDocument(shape: DocumentShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeDocument", Module) {
+        RuntimeType.forInlineFun("SerializeDocument", SerdeModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rustTemplate(
                     """
-                    use #{SerializeConfigured};
                     match self.value {
                          #{Document}::String(v) => serializer.serialize_str(v),
                          #{Document}::Object(v) => {
