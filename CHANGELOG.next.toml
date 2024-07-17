@@ -10,3 +10,11 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Add support for <a href="https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html">the Smithy RPC v2 CBOR protocol</a> both on the client and on the server.
+"""
+references = ["smithy-rs#2544", "smithy-rs#3767"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = ["david-perez", "jjant", "ysaito1001"]
