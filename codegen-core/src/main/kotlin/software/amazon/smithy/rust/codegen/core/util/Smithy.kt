@@ -9,6 +9,8 @@ import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -84,13 +86,12 @@ fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
     }
 
 fun Shape.shouldRedact(model: Model): Boolean =
-    when (this) {
-        is MemberShape ->
-            model.expectShape(target).shouldRedact(model) ||
-                model.expectShape(container)
-                    .shouldRedact(model)
-
-        else -> this.hasTrait<SensitiveTrait>()
+    when {
+        hasTrait<SensitiveTrait>() -> true
+        this is MemberShape -> model.expectShape(target).shouldRedact(model)
+        this is ListShape -> member.shouldRedact(model)
+        this is MapShape -> key.shouldRedact(model) || value.shouldRedact(model)
+        else -> false
     }
 
 const val REDACTION = "\"*** Sensitive Data Redacted ***\""

@@ -10,3 +10,39 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "Support `stringArray` type in endpoints params"
+references = ["smithy-rs#3742"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Add support for `operationContextParams` Endpoints trait"
+references = ["smithy-rs#3755"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
+
+[[aws-sdk-rust]]
+message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in AWS SDK clients so that using these types does not require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#3591"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in generated clients so that using these types does not require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#3591"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix incorrect redaction of `@sensitive` types in maps and lists."
+references = ["smithy-rs#3765",  "smithy-rs#3757"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Fix incorrect redaction of `@sensitive` types in maps and lists."
+references = ["smithy-rs#3765",  "smithy-rs#3757"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "landonxjames"
