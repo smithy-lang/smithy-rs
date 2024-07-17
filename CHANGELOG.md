@@ -1,4 +1,12 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 16th, 2024
+===============
+**New this release:**
+- (client, [smithy-rs#3742](https://github.com/smithy-lang/smithy-rs/issues/3742)) Support `stringArray` type in endpoints params
+- (client, [smithy-rs#3755](https://github.com/smithy-lang/smithy-rs/issues/3755)) Add support for `operationContextParams` Endpoints trait
+- (client, [smithy-rs#3591](https://github.com/smithy-lang/smithy-rs/issues/3591)) `aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in generated clients so that using these types does not require directly depending on `aws-smithy-runtime-api`.
+
+
 July 9th, 2024
 ==============
 **Breaking Changes:**
