@@ -33,9 +33,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 /** StructureGenerator customization sections */
 sealed class StructureSection(name: String) : Section(name) {
@@ -102,9 +104,19 @@ open class StructureGenerator(
         ) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
+
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own
+                    val fieldValue =
+                        if (shape.shouldRedact(model)) {
+                            REDACTION
+                        } else {
+                            member.redactIfNecessary(
+                                model,
+                                "self.$memberName",
+                            )
+                        }
 
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",

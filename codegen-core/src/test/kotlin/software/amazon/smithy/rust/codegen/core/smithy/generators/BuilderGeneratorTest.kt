@@ -124,7 +124,8 @@ internal class BuilderGeneratorTest {
                         .username("admin")
                         .password("pswd")
                         .secret_key("12345");
-                         assert_eq!(format!("{:?}", builder), "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+                         assert_eq!(format!("{:?}", builder),
+                         "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\", secret_value_map: \"*** Sensitive Data Redacted ***\", secret_key_map: \"*** Sensitive Data Redacted ***\", secret_list: \"*** Sensitive Data Redacted ***\" }");
                     """,
                 )
             }
@@ -278,18 +279,21 @@ internal class BuilderGeneratorTest {
             implBlock(provider.toSymbol(inner)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, inner)
             }
-            unitTest("test", additionalAttributes = listOf(Attribute.DenyDeprecated), block = {
-                rust(
-                    // Notice that the builder is instantiated directly, and not through the Inner::builder() method.
-                    // This is because Inner is marked with `deprecated`, so any usage of `Inner` inside the test will
-                    // fail the compilation.
-                    //
-                    // This piece of code would fail though if the Builder inherits the attributes from Inner.
-                    """
-                    let _ = test_inner::Builder::default();
-                    """,
-                )
-            })
+            unitTest(
+                "test", additionalAttributes = listOf(Attribute.DenyDeprecated),
+                block = {
+                    rust(
+                        // Notice that the builder is instantiated directly, and not through the Inner::builder() method.
+                        // This is because Inner is marked with `deprecated`, so any usage of `Inner` inside the test will
+                        // fail the compilation.
+                        //
+                        // This piece of code would fail though if the Builder inherits the attributes from Inner.
+                        """
+                        let _ = test_inner::Builder::default();
+                        """,
+                    )
+                },
+            )
         }
         project.withModule(provider.moduleForBuilder(inner)) {
             BuilderGenerator(model, provider, inner, emptyList()).render(this)

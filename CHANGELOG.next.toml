@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "Fix incorrect redaction of `@sensitive` types in maps and lists."
+references = ["smithy-rs#3765",  "smithy-rs#3757"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "landonxjames"
+
+[[smithy-rs]]
+message = "Fix incorrect redaction of `@sensitive` types in maps and lists."
+references = ["smithy-rs#3765",  "smithy-rs#3757"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "landonxjames"
+
 [[smithy-rs]]
 message = """
 Add support for <a href="https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html">the Smithy RPC v2 CBOR protocol</a> both on the client and on the server.
