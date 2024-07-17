@@ -152,6 +152,7 @@ object RustReservedWords : ReservedWords {
             "yield",
             "try",
         )
+
     // Some things can't be used as a raw identifier, so we can't use the normal escaping strategy
     // https://internals.rust-lang.org/t/raw-identifiers-dont-work-for-all-identifiers/9094/4
     private val keywordEscapingMap =
