@@ -149,9 +149,9 @@ apply ErrorSerializationOperation @httpResponseTests([
         id: "OperationOutputSerializationQuestionablyIncludesTypeField",
         documentation: """
         Despite the operation output being a structure shape with the `@error` trait,
-        `__type` field should, in a strict interpretation of the spec, not be included, 
-        because we're not serializing a server error response. However, we do, because 
-        there shouldn't™️ be any harm in doing so, and it greatly simplifies the 
+        `__type` field should, in a strict interpretation of the spec, not be included,
+        because we're not serializing a server error response. However, we do, because
+        there shouldn't™️ be any harm in doing so, and it greatly simplifies the
         code generator. This test just pins this behavior in case we ever modify it.""",
         protocol: rpcv2Cbor,
         code: 200,
@@ -170,6 +170,12 @@ apply SimpleStructOperation @httpResponseTests([
         id: "SimpleStruct",
         protocol: rpcv2Cbor,
         code: 200, // Not used.
+        body: "v2RibG9iS2Jsb2JieSBibG9iZ2Jvb2xlYW70ZnN0cmluZ3hwVGhlcmUgYXJlIHRocmVlIHRoaW5ncyBhbGwgd2lzZSBtZW4gZmVhcjogdGhlIHNlYSBpbiBzdG9ybSwgYSBuaWdodCB3aXRoIG5vIG1vb24sIGFuZCB0aGUgYW5nZXIgb2YgYSBnZW50bGUgbWFuLmRieXRlGEVlc2hvcnQYRmdpbnRlZ2VyGEdkbG9uZxhIZWZsb2F0+j8wo9dmZG91Ymxl+z/mTQE6kqMFaXRpbWVzdGFtcMH7QdcKq2AAAABkZW51bWdESUFNT05EbHJlcXVpcmVkQmxvYktibG9iYnkgYmxvYm9yZXF1aXJlZEJvb2xlYW70bnJlcXVpcmVkU3RyaW5neHBUaGVyZSBhcmUgdGhyZWUgdGhpbmdzIGFsbCB3aXNlIG1lbiBmZWFyOiB0aGUgc2VhIGluIHN0b3JtLCBhIG5pZ2h0IHdpdGggbm8gbW9vbiwgYW5kIHRoZSBhbmdlciBvZiBhIGdlbnRsZSBtYW4ubHJlcXVpcmVkQnl0ZRhFbXJlcXVpcmVkU2hvcnQYRm9yZXF1aXJlZEludGVnZXIYR2xyZXF1aXJlZExvbmcYSG1yZXF1aXJlZEZsb2F0+j8wo9ducmVxdWlyZWREb3VibGX7P+ZNATqSowVxcmVxdWlyZWRUaW1lc3RhbXDB+0HXCqtgAAAAbHJlcXVpcmVkRW51bWdESUFNT05E/w==",
+        bodyMediaType: "application/cbor",
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor"
+        },
         params: {
             blob: "blobby blob",
             boolean: false,
@@ -211,6 +217,12 @@ apply SimpleStructOperation @httpResponseTests([
         id: "SimpleStructWithOptionsSetToNone",
         protocol: rpcv2Cbor,
         code: 200, // Not used.
+        body: "v2xyZXF1aXJlZEJsb2JLYmxvYmJ5IGJsb2JvcmVxdWlyZWRCb29sZWFu9G5yZXF1aXJlZFN0cmluZ3hwVGhlcmUgYXJlIHRocmVlIHRoaW5ncyBhbGwgd2lzZSBtZW4gZmVhcjogdGhlIHNlYSBpbiBzdG9ybSwgYSBuaWdodCB3aXRoIG5vIG1vb24sIGFuZCB0aGUgYW5nZXIgb2YgYSBnZW50bGUgbWFuLmxyZXF1aXJlZEJ5dGUYRW1yZXF1aXJlZFNob3J0GEZvcmVxdWlyZWRJbnRlZ2VyGEdscmVxdWlyZWRMb25nGEhtcmVxdWlyZWRGbG9hdPo/MKPXbnJlcXVpcmVkRG91Ymxl+z/mTQE6kqMFcXJlcXVpcmVkVGltZXN0YW1wwftB1wqrYAAAAGxyZXF1aXJlZEVudW1nRElBTU9ORP8=",
+        bodyMediaType: "application/cbor",
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor"
+        },
         params: {
             requiredBlob: "blobby blob",
             requiredBoolean: false,

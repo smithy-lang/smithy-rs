@@ -82,6 +82,13 @@ impl DeserializeError {
         }
     }
 
+    /// Returns a custom error with an offset.
+    pub fn custom(message: impl Into<Cow<'static, str>>, at: usize) -> Self {
+        Self {
+            _inner: Error::message(message.into()).at(at),
+        }
+    }
+
     /// An unexpected type was encountered.
     // We handle this one when decoding sparse collections: we have to expect either a `null` or an
     // item, so we try decoding both.
@@ -223,8 +230,14 @@ impl<'b> Decoder<'b> {
                 "expected timestamp tag",
             )))
         } else {
+            // Values that are more granular than millisecond precision SHOULD be truncated to fit
+            // millisecond precision for epoch-seconds:
+            // https://smithy.io/2.0/spec/protocol-traits.html#timestamp-formats
             let epoch_seconds = self.decoder.f64().map_err(DeserializeError::new)?;
-            Ok(DateTime::from_secs_f64(epoch_seconds))
+            let mut result = DateTime::from_secs_f64(epoch_seconds);
+            let subsec_nanos = result.subsec_nanos();
+            result.set_subsec_nanos(subsec_nanos / 1_000_000 * 1_000_000);
+            Ok(result)
         }
     }
 }
