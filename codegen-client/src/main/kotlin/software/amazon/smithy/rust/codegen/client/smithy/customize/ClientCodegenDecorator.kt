@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorC
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger
@@ -93,14 +92,6 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, Cl
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations
-
-    /**
-     * Hook to override the protocol test generator
-     */
-    fun protocolTestGenerator(
-        codegenContext: ClientCodegenContext,
-        baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator = baseGenerator
 }
 
 /**
@@ -174,14 +165,6 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     ): List<ServiceRuntimePluginCustomization> =
         combineCustomizations(baseCustomizations) { decorator, customizations ->
             decorator.serviceRuntimePluginCustomizations(codegenContext, customizations)
-        }
-
-    override fun protocolTestGenerator(
-        codegenContext: ClientCodegenContext,
-        baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator =
-        combineCustomizations(baseGenerator) { decorator, gen ->
-            decorator.protocolTestGenerator(codegenContext, gen)
         }
 
     companion object {

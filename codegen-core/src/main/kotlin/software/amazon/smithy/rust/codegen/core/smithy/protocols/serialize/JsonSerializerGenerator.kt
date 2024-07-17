@@ -47,9 +47,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -212,12 +211,21 @@ class JsonSerializerGenerator(
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape),
             ) {
-                rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+                rustTemplate(
+                    """
+                    let mut out = #{String}::new();
+                    let mut object = #{JsonObjectWriter}::new(&mut out);
+                    """,
+                    *codegenScope,
+                )
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 customizations.forEach { it.section(makeSection(structureShape, "object"))(this) }
-                rust("object.finish();")
-                rustTemplate("Ok(out)", *codegenScope)
+                rust(
+                    """
+                    object.finish();
+                    Ok(out)
+                    """,
+                )
             }
         }
     }
@@ -304,8 +312,7 @@ class JsonSerializerGenerator(
     override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there was no operation output shape in the
         // original (untransformed) model.
-        val syntheticOutputTrait = operationShape.outputShape(model).expectTrait<SyntheticOutputTrait>()
-        if (syntheticOutputTrait.originalId == null) {
+        if (!OperationNormalizer.hadUserModeledOperationOutput(operationShape, model)) {
             return null
         }
 
@@ -485,13 +492,17 @@ class JsonSerializerGenerator(
             rust("let mut $objectName = ${context.writerExpression}.start_object();")
             // We call inner only when context's shape is not the Unit type.
             // If it were, calling inner would generate the following function:
-            //   pub fn serialize_structure_crate_model_unit(
-            //       object: &mut aws_smithy_json::serialize::JsonObjectWriter,
-            //       input: &crate::model::Unit,
-            //   ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
-            //       let (_, _) = (object, input);
-            //       Ok(())
-            //   }
+            //
+            // ```rust
+            // pub fn serialize_structure_crate_model_unit(
+            //     object: &mut aws_smithy_json::serialize::JsonObjectWriter,
+            //     input: &crate::model::Unit,
+            // ) -> Result<(), aws_smithy_http::operation::error::SerializationError> {
+            //     let (_, _) = (object, input);
+            //     Ok(())
+            // }
+            // ```
+            //
             // However, this would cause a compilation error at a call site because it cannot
             // extract data out of the Unit type that corresponds to the variable "input" above.
             if (!context.shape.isTargetUnit()) {

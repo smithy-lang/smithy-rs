@@ -12,8 +12,13 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 /**
  * Indicates that a shape is a synthetic input (see `OperationNormalizer.kt`)
  *
- * All operations are normalized to have an input, even when they are defined without on. This is done for backwards
- * compatibility and to produce a consistent API.
+ * All operations are normalized to have an input, even when they are defined without one.
+ * This is NOT done for backwards-compatibility, as adding an operation input is a breaking change
+ * (see <https://github.com/smithy-lang/smithy/issues/2253#issuecomment-2069943344>).
+ *
+ * It is only done to produce a consistent API.
+ * TODO(https://github.com/smithy-lang/smithy-rs/issues/3577): In the server, we'd like to stop adding
+ *  these synthetic inputs.
  */
 class SyntheticInputTrait(
     val operation: ShapeId,

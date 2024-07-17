@@ -26,8 +26,83 @@ fun generateImports(imports: List<String>): String =
     if (imports.isEmpty()) {
         ""
     } else {
-        "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
+        "\"imports\": [${imports.joinToString(", ") { "\"$it\"" }}],"
     }
+
+val RustKeywords =
+    setOf(
+        "as",
+        "break",
+        "const",
+        "continue",
+        "crate",
+        "else",
+        "enum",
+        "extern",
+        "false",
+        "fn",
+        "for",
+        "if",
+        "impl",
+        "in",
+        "let",
+        "loop",
+        "match",
+        "mod",
+        "move",
+        "mut",
+        "pub",
+        "ref",
+        "return",
+        "self",
+        "Self",
+        "static",
+        "struct",
+        "super",
+        "trait",
+        "true",
+        "type",
+        "unsafe",
+        "use",
+        "where",
+        "while",
+        "async",
+        "await",
+        "dyn",
+        "abstract",
+        "become",
+        "box",
+        "do",
+        "final",
+        "macro",
+        "override",
+        "priv",
+        "typeof",
+        "unsized",
+        "virtual",
+        "yield",
+        "try",
+    )
+
+fun toRustCrateName(input: String): String {
+    if (input.isBlank()) {
+        throw IllegalArgumentException("Rust crate name cannot be empty")
+    }
+    val lowerCased = input.lowercase()
+    // Replace any sequence of characters that are not lowercase letters, numbers, dashes, or underscores with a single underscore.
+    val sanitized = lowerCased.replace(Regex("[^a-z0-9_-]+"), "_")
+    // Trim leading or trailing underscores.
+    val trimmed = sanitized.trim('_')
+    // Check if the resulting string is empty, purely numeric, or a reserved name
+    val finalName =
+        when {
+            trimmed.isEmpty() -> throw IllegalArgumentException("Rust crate name after sanitizing cannot be empty.")
+            trimmed.matches(Regex("\\d+")) -> "n$trimmed" // Prepend 'n' if the name is purely numeric.
+            trimmed in RustKeywords -> "${trimmed}_" // Append an underscore if the name is reserved.
+            else -> trimmed
+        }
+    return finalName
+}
 
 private fun generateSmithyBuild(
     projectDir: String,
@@ -48,7 +123,7 @@ private fun generateSmithyBuild(
                             ${it.extraCodegenConfig ?: ""}
                         },
                         "service": "${it.service}",
-                        "module": "${it.module}",
+                        "module": "${toRustCrateName(it.module)}",
                         "moduleVersion": "0.0.1",
                         "moduleDescription": "test",
                         "moduleAuthors": ["protocoltest@example.com"]
