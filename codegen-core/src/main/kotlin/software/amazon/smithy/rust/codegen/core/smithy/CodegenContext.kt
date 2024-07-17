@@ -53,7 +53,7 @@ abstract class CodegenContext(
      * Several code generators are reused by both the client and server plugins, but only deviate in small and contained
      * parts (e.g. changing a return type or adding an attribute).
      * Instead of splitting the generator in two or setting up an inheritance relationship, sometimes it's best
-     * to just lookup this flag.
+     * to just look up this flag.
      */
     open val target: CodegenTarget,
 ) {

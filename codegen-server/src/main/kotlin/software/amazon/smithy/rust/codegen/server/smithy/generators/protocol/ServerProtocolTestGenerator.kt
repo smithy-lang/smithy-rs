@@ -11,6 +11,7 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
@@ -38,6 +39,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_11
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON_VALIDATION
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR_EXTRAS
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -145,8 +148,15 @@ class ServerProtocolTestGenerator(
                     AWS_JSON_10,
                     "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
                 ),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3723): This affects all protocols
+                FailingTest.MalformedRequestTest(RPC_V2_CBOR_EXTRAS, "AdditionalTokensEmptyStruct"),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3339)
+                FailingTest.ResponseTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/3743): We need to be able to configure
+                //  instantiator so that it uses default _modeled_ values; `""` is not a valid enum value for `defaultEnum`.
+                FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody"),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3735): Null `Document` may come through a request even though its shape is `@required`
                 FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
             )
@@ -223,7 +233,7 @@ class ServerProtocolTestGenerator(
         get() = ExpectFail
     override val brokenTests: Set<BrokenTest>
         get() = BrokenTests
-    override val runOnly: Set<String>
+    override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
         get() = DisabledTests
@@ -258,10 +268,11 @@ class ServerProtocolTestGenerator(
             inputT to outputT
         }
 
-    private val instantiator = ServerInstantiator(codegenContext)
+    private val instantiator = ServerInstantiator(codegenContext, withinTest = true)
 
     private val codegenScope =
         arrayOf(
+            "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
             "Hyper" to RuntimeType.Hyper,
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
@@ -288,20 +299,31 @@ class ServerProtocolTestGenerator(
      * an operation's input shape, the resulting shape is of the form we expect, as defined in the test case.
      */
     private fun RustWriter.renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase) {
+        logger.info("Generating request test: ${httpRequestTestCase.id}")
+
         if (!protocolSupport.requestDeserialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
 
         with(httpRequestTestCase) {
-            renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
+            renderHttpRequest(
+                uri,
+                method,
+                headers,
+                body.orNull(),
+                bodyMediaType.orNull(),
+                protocol,
+                queryParams,
+                host.orNull(),
+            )
         }
         if (protocolSupport.requestBodyDeserialization) {
             makeRequest(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
             checkHandlerWasEntered(this)
         }
 
-        // Explicitly warn if the test case defined parameters that we aren't doing anything with
+        // Explicitly warn if the test case defined parameters that we aren't doing anything with.
         with(httpRequestTestCase) {
             if (authScheme.isPresent) {
                 logger.warning("Test case provided authScheme but this was ignored")
@@ -322,6 +344,8 @@ class ServerProtocolTestGenerator(
         testCase: HttpResponseTestCase,
         shape: StructureShape,
     ) {
+        logger.info("Generating response test: ${testCase.id}")
+
         val operationErrorName = "crate::error::${operationSymbol.name}Error"
 
         if (!protocolSupport.responseSerialization || (
@@ -354,6 +378,8 @@ class ServerProtocolTestGenerator(
      * with the given response.
      */
     private fun RustWriter.renderHttpMalformedRequestTestCase(testCase: HttpMalformedRequestTestCase) {
+        logger.info("Generating malformed request test: ${testCase.id}")
+
         val (_, outputT) = operationInputOutputTypes[operationShape]!!
 
         val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
@@ -361,7 +387,18 @@ class ServerProtocolTestGenerator(
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+                // TODO(https://github.com/smithy-lang/smithy/issues/1932): we send `null` for `bodyMediaType` for now but
+                //  the Smithy protocol test should give it to us.
+                renderHttpRequest(
+                    uri.get(),
+                    method,
+                    headers,
+                    body.orNull(),
+                    bodyMediaType = null,
+                    testCase.protocol,
+                    queryParams,
+                    host.orNull(),
+                )
             }
 
             makeRequest(
@@ -379,6 +416,8 @@ class ServerProtocolTestGenerator(
         method: String,
         headers: Map<String, String>,
         body: String?,
+        bodyMediaType: String?,
+        protocol: ShapeId,
         queryParams: List<String>,
         host: String?,
     ) {
@@ -409,7 +448,26 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
+                    // TODO(https://github.com/smithy-lang/smithy/issues/1932): We're using the `protocol` field as a
+                    // proxy for `bodyMediaType`. This works because `rpcv2Cbor` happens to be the only protocol where
+                    // the body is base64-encoded in the protocol test, but checking `bodyMediaType` should be a more
+                    // resilient check.
+                    val encodedBody =
+                        if (protocol.toShapeId() == ShapeId.from("smithy.protocols#rpcv2Cbor")) {
+                            """
+                        #{Bytes}::from(
+                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
+                                "`body` field of Smithy protocol test is not correctly base64 encoded"
+                            )
+                        )
+                        """
+                        } else {
+                            """
+                        #{Bytes}::from_static($sanitizedBody.as_bytes())
+                        """
+                        }
+
+                    "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {
                     "#{SmithyHttpServer}::body::Body::empty()"
                 }
@@ -426,7 +484,7 @@ class ServerProtocolTestGenerator(
         }
     }
 
-    /** Returns the body of the request test. */
+    /** Returns the body of the operation handler in a request test. */
     private fun checkRequestHandler(
         operationShape: OperationShape,
         httpRequestTestCase: HttpRequestTestCase,
@@ -434,7 +492,7 @@ class ServerProtocolTestGenerator(
         val inputShape = operationShape.inputShape(codegenContext.model)
         val outputShape = operationShape.outputShape(codegenContext.model)
 
-        // Construct expected request.
+        // Construct expected operation input.
         withBlock("let expected = ", ";") {
             instantiator.render(this, inputShape, httpRequestTestCase.params, httpRequestTestCase.headers)
         }
@@ -442,14 +500,14 @@ class ServerProtocolTestGenerator(
         checkRequestParams(inputShape, this)
 
         // Construct a dummy response.
-        withBlock("let response = ", ";") {
+        withBlock("let output = ", ";") {
             instantiator.render(this, outputShape, Node.objectNode())
         }
 
         if (operationShape.errors.isEmpty()) {
-            rust("response")
+            rust("output")
         } else {
-            rust("Ok(response)")
+            rust("Ok(output)")
         }
     }
 
@@ -634,13 +692,13 @@ class ServerProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body.
-                #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )
         } else {
             assertOk(rustWriter) {
-                rustWriter.rust(
+                rust(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",

@@ -7,5 +7,5 @@ pub mod rejection;
 pub mod router;
 pub mod runtime_error;
 
-/// [AWS REST XML Protocol](https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html).
+/// [AWS restXml](https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html) protocol.
 pub struct RestXml;

@@ -28,11 +28,12 @@ class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
     override fun doesSetterTakeInOption(memberShape: MemberShape): Boolean = true
 }
 
-class ClientInstantiator(private val codegenContext: ClientCodegenContext) : Instantiator(
+class ClientInstantiator(private val codegenContext: ClientCodegenContext, withinTest: Boolean = false) : Instantiator(
     codegenContext.symbolProvider,
     codegenContext.model,
     codegenContext.runtimeConfig,
     ClientBuilderKindBehavior(codegenContext),
+    withinTest = false,
 ) {
     fun renderFluentCall(
         writer: RustWriter,
