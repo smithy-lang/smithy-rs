@@ -259,11 +259,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
 
         return writable {
             implSerializeConfigured(unionSymbol) {
-                rustTemplate(
-                    """
-                    """,
-                    *SupportStructures.codegenScope,
-                )
                 rustBlock("match self.value") {
                     shape.members().forEachIndexed { index, member ->
                         val fieldName = member.memberName.dq()

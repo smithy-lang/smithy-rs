@@ -47,13 +47,13 @@ The `serde` trait can be added to all shapes, including operations and services.
 
 Generated crates that include at least one `serde` tagged shape will include a `serde` feature. This will feature gate the module containing the serialization logic. This will provide implementations of `SerializeConfigured` which provides two methods:
 
-```rust
+```rust,ignore
 my_thing.serialize_ref(&settings); // Returns `impl Serialize + 'a`
 my_thing.serialize_owned(settings); // Returns `impl Serialize`
 ```
 
 Once a customer has an object that implements `Serialize` they can then use it with any `Serializer` supported by `serde`.
-```rust
+```rust,ignore
 use generated_crate::serde::SerializeConfigured;
 let my_shape = Shape::builder().field(5).build();
 let settings = SerializationSettings::redact_sensitive_fields();
@@ -68,7 +68,7 @@ The generated code includes two methods:
 > Note: There is nothing in these implementations that rely on implementation details—Customers can implement these methods (or variants of them) themselves.
 
 These have the correct signatures to be used with `serialize_with`:
-```rust
+```rust,ignore
 use generated_crate::serde::serialize_redacted;
 
 #[derive(Serialize)]
@@ -89,7 +89,7 @@ How to actually implement this RFC
 ----------------------------------
 
 In order to provide configurable serialization, this defines the crate-local public trait `SerializeConfigured`:
-```rust
+```rust,ignore
 /// Trait that allows configuring serialization
 /// **This trait should not be implemented directly!** Instead, `impl Serialize for ConfigurableSerdeRef<T>`
 pub trait SerializeConfigured {
@@ -104,7 +104,7 @@ pub trait SerializeConfigured {
 ```
 
 We also need to define `SerializationSettings`. The only setting currently exposed is `redact_sensitive_fields`:
-```rust
+```rust,ignore
 
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default)]
@@ -120,7 +120,7 @@ We MAY add additional configuration options in the future, but will keep the def
 - Change the default format for datetimes (current `HttpDate`)
 
 No objects actually implement `SerializeConfigured`. Instead, the crate defines two private structs:
-```rust
+```rust,ignore
 pub(crate) struct ConfigurableSerde<T> {
     pub(crate) value: T,
     pub(crate) settings: SerializationSettings
@@ -136,7 +136,7 @@ pub(crate) struct ConfigurableSerdeRef<'a, T> {
 > We need to support two use cases—one where the customer wants to maintain ownership of their data and another where the customer wants to create `Box<dyn Serialize>` or other fat pointer. There is a blanket impl for `Serialize` from `ConfigurableSerde` to `ConfigurableSerdeRef`.
 
 The `SerializeConfigured` trait has a blanket impl for `ConfigurableSerdeRef`:
-```rust
+```rust,ignore
 /// Blanket implementation for all `T` that implement `ConfigurableSerdeRef`
 impl<T> SerializeConfigured for T
     where for<'a> ConfigurableSerdeRef<'a, T>: Serialize {
@@ -167,7 +167,7 @@ The job of the code generator is then to implement `ConfigurableSerdeRef` for al
 #### Supporting Sensitive Shapes
 Handling `@sensitive` is done by wrapping memers in `Sensitive<'a T>(&'a T)` during serialization. The `serialize` implementation consults the settings to determine if redaction is required.
 
-```rust
+```rust,ignore
 if let Some(member_1) = &inner.foo {
     s.serialize_field("foo",
         &Sensitive(&member_1.serialize_ref(&self.settings)).serialize_ref(&self.settings),
@@ -183,7 +183,7 @@ For Maps and Lists, we need to be able to handle the case where two different `V
 
 To handle this case, we generate a wrapper struct for collections:
 
-```rust
+```rust,ignore
 struct SomeStructWrapper<'a>(&'a Vec<SomeStruct>);
 ```
 
@@ -193,7 +193,7 @@ We then implement `Serialize` for this wrapper which allows us to control behavi
 
 #### Supporting `DateTime`, `Blob`, `Document`, etc.
 For custom types that do not implement `Serialize`, we generate crate-private implementations, only when actually needed:
-```rust
+```rust,ignore
 impl<'a> Serialize for ConfigurableSerdeRef<'a, DateTime> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
         serializer.serialize_str(&self.value.to_string())
