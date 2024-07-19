@@ -6,5 +6,6 @@
 pub mod entry;
 pub mod init;
 pub mod new_entry;
+pub mod preview_next;
 pub mod render;
 pub mod split;

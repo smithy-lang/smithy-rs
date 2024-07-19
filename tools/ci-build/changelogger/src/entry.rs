@@ -8,12 +8,26 @@ use clap::clap_derive::ArgEnum;
 use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry, SdkModelEntry};
 use smithy_rs_tool_common::git::Git;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 
 #[derive(ArgEnum, Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ChangeSet {
     SmithyRs,
     AwsSdk,
+}
+
+impl Display for ChangeSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ChangeSet::SmithyRs => "smithy-rs",
+                ChangeSet::AwsSdk => "aws-sdk-rust",
+            }
+        )
+    }
 }
 
 pub struct ChangelogEntries {

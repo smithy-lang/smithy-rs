@@ -6,6 +6,7 @@
 use anyhow::Result;
 use changelogger::init::subcommand_init;
 use changelogger::new_entry::subcommand_new_entry;
+use changelogger::preview_next::subcommand_preview_next;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
 use clap::Parser;
@@ -17,6 +18,8 @@ pub enum Args {
     Init(changelogger::init::InitArgs),
     /// Create a new changelog entry Markdown file in the `smithy-rs/.changelog` directory
     NewEntry(changelogger::new_entry::NewEntryArgs),
+    /// Render a preview of changelog entries since the last release
+    PreviewNext(changelogger::preview_next::PreviewNextArgs),
     /// Render a TOML/JSON changelog into GitHub-flavored Markdown
     Render(changelogger::render::RenderArgs),
     /// Split SDK changelog entries into a separate file
@@ -27,6 +30,7 @@ fn main() -> Result<()> {
     match Args::parse() {
         Args::Init(init) => subcommand_init(&init),
         Args::NewEntry(new_entry) => subcommand_new_entry(new_entry),
+        Args::PreviewNext(preview_next) => subcommand_preview_next(preview_next),
         Args::Render(render) => subcommand_render(&render),
         Args::Split(split) => subcommand_split(&split),
     }
@@ -37,6 +41,7 @@ mod tests {
     use super::Args;
     use changelogger::entry::ChangeSet;
     use changelogger::new_entry::NewEntryArgs;
+    use changelogger::preview_next::PreviewNextArgs;
     use changelogger::render::RenderArgs;
     use changelogger::split::SplitArgs;
     use clap::Parser;
@@ -230,6 +235,27 @@ mod tests {
                 "Implement a long-awaited feature for S3",
             ])
             .unwrap()
+        );
+
+        assert_eq!(
+            Args::PreviewNext(PreviewNextArgs {
+                change_set: ChangeSet::SmithyRs
+            }),
+            Args::try_parse_from([
+                "./changelogger",
+                "preview-next",
+                "--change-set",
+                "smithy-rs",
+            ])
+            .unwrap()
+        );
+
+        assert_eq!(
+            Args::PreviewNext(PreviewNextArgs {
+                change_set: ChangeSet::AwsSdk
+            }),
+            Args::try_parse_from(["./changelogger", "preview-next", "--change-set", "aws-sdk",])
+                .unwrap()
         );
     }
 }
