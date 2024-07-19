@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.5.4"
+version = "1.5.5"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -36,7 +36,6 @@ aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 bytes = "1.1.0"
 http = "0.2.4"
-hyper = { version = "0.14.26", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
