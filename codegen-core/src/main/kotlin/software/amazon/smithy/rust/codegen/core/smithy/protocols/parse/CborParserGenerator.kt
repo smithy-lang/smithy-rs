@@ -437,9 +437,6 @@ class CborParserGenerator(
                     #{StructurePairParserFn:W}
 
                     let decoder = &mut #{Decoder}::new(value);
-                    if decoder.position() == value.len() {
-                        return #{Ok}(builder);
-                    }
 
                     #{DecodeStructureMapLoop:W}
 
