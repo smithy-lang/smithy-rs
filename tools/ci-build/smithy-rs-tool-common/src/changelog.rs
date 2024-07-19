@@ -10,6 +10,7 @@ pub mod parser;
 use crate::changelog::parser::{ParseIntoChangelog, ParserChain};
 use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
+use std::collections::HashSet;
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
@@ -69,7 +70,7 @@ pub struct Meta {
     pub target: Option<SdkAffected>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reference {
     pub repo: String,
     pub number: usize,
@@ -130,7 +131,7 @@ enum AuthorsInner {
     Multiple(Vec<String>),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(from = "AuthorsInner", into = "AuthorsInner")]
 pub struct Authors(pub(super) Vec<String>);
 
@@ -317,6 +318,87 @@ impl Changelog {
     }
 }
 
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub enum Target {
+    #[serde(rename = "client")]
+    Client,
+    #[serde(rename = "server")]
+    Server,
+    #[serde(rename = "aws-sdk-rust")]
+    AwsSdk,
+}
+
+impl FromStr for Target {
+    type Err = anyhow::Error;
+
+    fn from_str(sdk: &str) -> std::result::Result<Self, Self::Err> {
+        match sdk.to_lowercase().as_str() {
+            "client" => Ok(Target::Client),
+            "server" => Ok(Target::Server),
+            "aws-sdk-rust" => Ok(Target::AwsSdk),
+            _ => bail!("An invalid type of `Target` {sdk} has been specified"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct FrontMatter {
+    pub applies_to: HashSet<Target>,
+    pub authors: Vec<String>,
+    pub references: Vec<Reference>,
+    pub breaking: bool,
+    pub new_feature: bool,
+    pub bug_fix: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Markdown {
+    pub front_matter: FrontMatter,
+    pub message: String,
+}
+
+impl From<Markdown> for Changelog {
+    fn from(value: Markdown) -> Self {
+        let front_matter = value.front_matter;
+        let entry = HandAuthoredEntry {
+            message: value.message.trim_start().to_owned(),
+            meta: Meta {
+                bug: front_matter.bug_fix,
+                breaking: front_matter.breaking,
+                tada: front_matter.new_feature,
+                target: None,
+            },
+            authors: AuthorsInner::Multiple(front_matter.authors).into(),
+            references: front_matter.references,
+            since_commit: None,
+            age: None,
+        };
+
+        let mut changelog = Changelog::new();
+
+        // Bin `entry` into the appropriate `Vec` based on the `applies_to` field in `front_matter`
+        if front_matter.applies_to.contains(&Target::AwsSdk) {
+            changelog.aws_sdk_rust.push(entry.clone())
+        }
+        if front_matter.applies_to.contains(&Target::Client)
+            && front_matter.applies_to.contains(&Target::Server)
+        {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::All);
+            changelog.smithy_rs.push(entry);
+        } else if front_matter.applies_to.contains(&Target::Client) {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::Client);
+            changelog.smithy_rs.push(entry);
+        } else if front_matter.applies_to.contains(&Target::Server) {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::Server);
+            changelog.smithy_rs.push(entry);
+        }
+
+        changelog
+    }
+}
 /// Parses changelog entries into [`Changelog`] using a series of parsers.
 ///
 /// Each parser will attempt to parse an input string in order:
