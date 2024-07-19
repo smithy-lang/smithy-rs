@@ -25,7 +25,7 @@ author = "landonxjames"
 
 [[smithy-rs]]
 message = """
-Add support for <a href="https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html">the Smithy RPC v2 CBOR protocol</a> both on the client and on the server.
+Add initial support for [the Smithy RPC v2 CBOR protocol](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html) both on the client and on the server. The remaining work, including event streams, is being tracked under [this umbrella issue](https://github.com/smithy-lang/smithy-rs/issues/3573).
 """
 references = ["smithy-rs#2544", "smithy-rs#3767"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
