@@ -11,7 +11,7 @@ use smithy_rs_tool_common::here;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug, Eq, PartialEq)]
-pub struct NewEntryArgs {
+pub struct NewArgs {
     /// Target audience for the change (if not provided, user's editor will open for authoring one)
     #[clap(long)]
     pub applies_to: Option<Vec<Target>>,
@@ -38,8 +38,8 @@ pub struct NewEntryArgs {
     pub basename: Option<PathBuf>,
 }
 
-impl From<NewEntryArgs> for Markdown {
-    fn from(value: NewEntryArgs) -> Self {
+impl From<NewArgs> for Markdown {
+    fn from(value: NewArgs) -> Self {
         Markdown {
             front_matter: FrontMatter {
                 applies_to: value.applies_to.unwrap_or_default().into_iter().collect(),
@@ -54,7 +54,7 @@ impl From<NewEntryArgs> for Markdown {
     }
 }
 
-pub fn subcommand_new_entry(args: NewEntryArgs) -> anyhow::Result<()> {
+pub fn subcommand_new(args: NewArgs) -> anyhow::Result<()> {
     let mut md_full_filename = find_git_repository_root("smithy-rs", ".").context(here!())?;
     md_full_filename.push(".changelog");
     md_full_filename.push(args.basename.clone().unwrap_or(PathBuf::from(format!(
@@ -122,7 +122,7 @@ fn any_required_field_needs_to_be_filled(markdown: &Markdown) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::new_entry::{any_required_field_needs_to_be_filled, new_entry, NewEntryArgs};
+    use crate::new::{any_required_field_needs_to_be_filled, new_entry, NewArgs};
     use smithy_rs_tool_common::changelog::{Reference, Target};
     use std::str::FromStr;
 
@@ -131,7 +131,7 @@ mod tests {
         // make sure `args` populates required fields (so the function
         // `any_required_field_needs_to_be_filled` should return false), otherwise an editor would
         // be opened during the test execution for human input, causing the test to get struck
-        let args = NewEntryArgs {
+        let args = NewArgs {
             applies_to: Some(vec![Target::Client]),
             authors: Some(vec!["ysaito1001".to_owned()]),
             references: Some(vec![Reference::from_str("smithy-rs#1234").unwrap()]),

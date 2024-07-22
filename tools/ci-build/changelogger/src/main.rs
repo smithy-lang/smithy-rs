@@ -5,8 +5,8 @@
 
 use anyhow::Result;
 use changelogger::init::subcommand_init;
-use changelogger::new_entry::subcommand_new_entry;
-use changelogger::preview_next::subcommand_preview_next;
+use changelogger::ls::subcommand_ls;
+use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
 use clap::Parser;
@@ -17,9 +17,9 @@ pub enum Args {
     /// Print to stdout the empty "next" CHANGELOG template
     Init(changelogger::init::InitArgs),
     /// Create a new changelog entry Markdown file in the `smithy-rs/.changelog` directory
-    NewEntry(changelogger::new_entry::NewEntryArgs),
+    New(changelogger::new::NewArgs),
     /// Render a preview of changelog entries since the last release
-    PreviewNext(changelogger::preview_next::PreviewNextArgs),
+    Ls(changelogger::ls::LsArgs),
     /// Render a TOML/JSON changelog into GitHub-flavored Markdown
     Render(changelogger::render::RenderArgs),
     /// Split SDK changelog entries into a separate file
@@ -29,8 +29,8 @@ pub enum Args {
 fn main() -> Result<()> {
     match Args::parse() {
         Args::Init(init) => subcommand_init(&init),
-        Args::NewEntry(new_entry) => subcommand_new_entry(new_entry),
-        Args::PreviewNext(preview_next) => subcommand_preview_next(preview_next),
+        Args::New(new) => subcommand_new(new),
+        Args::Ls(ls) => subcommand_ls(ls),
         Args::Render(render) => subcommand_render(&render),
         Args::Split(split) => subcommand_split(&split),
     }
@@ -40,8 +40,8 @@ fn main() -> Result<()> {
 mod tests {
     use super::Args;
     use changelogger::entry::ChangeSet;
-    use changelogger::new_entry::NewEntryArgs;
-    use changelogger::preview_next::PreviewNextArgs;
+    use changelogger::ls::LsArgs;
+    use changelogger::new::NewArgs;
     use changelogger::render::RenderArgs;
     use changelogger::split::SplitArgs;
     use clap::Parser;
@@ -202,7 +202,7 @@ mod tests {
         );
 
         assert_eq!(
-            Args::NewEntry(NewEntryArgs {
+            Args::New(NewArgs {
                 applies_to: Some(vec![Target::Client, Target::AwsSdk]),
                 authors: Some(vec!["external-contrib".to_owned(), "ysaito1001".to_owned()]),
                 references: Some(vec![
@@ -217,7 +217,7 @@ mod tests {
             }),
             Args::try_parse_from([
                 "./changelogger",
-                "new-entry",
+                "new",
                 "--applies-to",
                 "client",
                 "--applies-to",
@@ -238,24 +238,17 @@ mod tests {
         );
 
         assert_eq!(
-            Args::PreviewNext(PreviewNextArgs {
+            Args::Ls(LsArgs {
                 change_set: ChangeSet::SmithyRs
             }),
-            Args::try_parse_from([
-                "./changelogger",
-                "preview-next",
-                "--change-set",
-                "smithy-rs",
-            ])
-            .unwrap()
+            Args::try_parse_from(["./changelogger", "ls", "--change-set", "smithy-rs",]).unwrap()
         );
 
         assert_eq!(
-            Args::PreviewNext(PreviewNextArgs {
+            Args::Ls(LsArgs {
                 change_set: ChangeSet::AwsSdk
             }),
-            Args::try_parse_from(["./changelogger", "preview-next", "--change-set", "aws-sdk",])
-                .unwrap()
+            Args::try_parse_from(["./changelogger", "ls", "--change-set", "aws-sdk",]).unwrap()
         );
     }
 }

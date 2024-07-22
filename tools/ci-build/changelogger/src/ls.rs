@@ -13,13 +13,13 @@ use smithy_rs_tool_common::here;
 use smithy_rs_tool_common::versions_manifest::CrateVersionMetadataMap;
 
 #[derive(Parser, Debug, Eq, PartialEq)]
-pub struct PreviewNextArgs {
+pub struct LsArgs {
     /// Which set of changes to preview
     #[clap(long, action)]
     pub change_set: ChangeSet,
 }
 
-pub fn subcommand_preview_next(args: PreviewNextArgs) -> anyhow::Result<()> {
+pub fn subcommand_ls(args: LsArgs) -> anyhow::Result<()> {
     let mut dot_changelog = find_git_repository_root("smithy-rs", ".").context(here!())?;
     dot_changelog.push(".changelog");
 
