@@ -27,6 +27,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -72,6 +73,7 @@ class CborParserGenerator(
     private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
+    private val handleNullForNonSparseCollection: (String) -> Writable,
     private val customizations: List<CborParserCustomization> = emptyList(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
@@ -90,8 +92,8 @@ class CborParserGenerator(
             *preludeScope,
         )
 
-    private fun handleNull(
-        collectionKind: CollectionKind,
+    private fun handleNullForCollection(
+        collectionName: String,
         isSparse: Boolean,
     ) = writable {
         if (isSparse) {
@@ -103,25 +105,13 @@ class CborParserGenerator(
                 *codegenScope,
             )
         } else {
-            codegenTarget.ifServer {
-                rustTemplate(
-                    """
-                    return #{Err}(#{Error}::custom("dense ${collectionKind.decoderMethodName()} cannot contain null values", decoder.position()))
-                    """,
-                    *codegenScope,
-                )
-            }
-            codegenTarget.ifClient {
-                // The client should drop a null value in a dense collection, see
-                // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/cbor-maps.smithy#L158
-                rustTemplate(
-                    """
-                    decoder.null()?;
-                    return #{Ok}(${collectionKind.decoderMethodName()})
-                    """,
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                "#{handle_null_for_non_sparse_collection:W}",
+                "handle_null_for_non_sparse_collection" to
+                    handleNullForNonSparseCollection(
+                        collectionName,
+                    ),
+            )
         }
     }
 
@@ -145,13 +135,13 @@ class CborParserGenerator(
                 """
                 let value = match decoder.datatype()? {
                     #{SmithyCbor}::data::Type::Null => {
-                        #{handleNull:W}
+                        #{handleNullForCollection:W}
                     }
                     _ => #{DeserializeMember:W}
                 };
                 """,
                 *codegenScope,
-                "handleNull" to handleNull(CollectionKind.List, isSparseList),
+                "handleNullForCollection" to handleNullForCollection(CollectionKind.List.decoderMethodName(), isSparseList),
                 "DeserializeMember" to
                     writable {
                         conditionalBlock(
@@ -200,13 +190,13 @@ class CborParserGenerator(
                 """
                 let value = match decoder.datatype()? {
                     #{SmithyCbor}::data::Type::Null => {
-                        #{handleNull:W}
+                        #{handleNullForCollection:W}
                     }
                     _ => #{DeserializeMember:W}
                 };
                 """,
                 *codegenScope,
-                "handleNull" to handleNull(CollectionKind.Map, isSparseMap),
+                "handleNullForCollection" to handleNullForCollection(CollectionKind.Map.decoderMethodName(), isSparseMap),
                 "DeserializeMember" to
                     writable {
                         conditionalBlock(

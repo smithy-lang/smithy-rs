@@ -14,6 +14,8 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
@@ -115,7 +117,22 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
         listOf("smithy-protocol" to "rpc-v2-cbor")
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        CborParserGenerator(codegenContext, httpBindingResolver)
+        CborParserGenerator(
+            codegenContext, httpBindingResolver,
+            handleNullForNonSparseCollection = { collectionName: String ->
+                writable {
+                    // The client should drop a null value in a dense collection, see
+                    // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/cbor-maps.smithy#L158
+                    rustTemplate(
+                        """
+                        decoder.null()?;
+                        return #{Ok}($collectionName)
+                        """,
+                        *RuntimeType.preludeScope,
+                    )
+                }
+            },
+        )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         CborSerializerGenerator(codegenContext, httpBindingResolver)

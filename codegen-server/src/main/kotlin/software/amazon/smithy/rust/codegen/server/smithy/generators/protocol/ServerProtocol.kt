@@ -10,8 +10,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -316,6 +318,19 @@ class ServerRpcV2CborProtocol(
     override fun structuredDataParser(): StructuredDataParserGenerator =
         CborParserGenerator(
             serverCodegenContext, httpBindingResolver, returnSymbolToParseFn(serverCodegenContext),
+            handleNullForNonSparseCollection = { collectionName: String ->
+                writable {
+                    rustTemplate(
+                        """
+                        return #{Err}(#{Error}::custom("dense $collectionName cannot contain null values", decoder.position()))
+                        """,
+                        *RuntimeType.preludeScope,
+                        "Error" to
+                            CargoDependency.smithyCbor(runtimeConfig).toType()
+                                .resolve("decode::DeserializeError"),
+                    )
+                }
+            },
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(
                     serverCodegenContext,
