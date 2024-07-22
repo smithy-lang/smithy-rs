@@ -38,6 +38,22 @@ pub struct NewEntryArgs {
     pub basename: Option<PathBuf>,
 }
 
+impl From<NewEntryArgs> for Markdown {
+    fn from(value: NewEntryArgs) -> Self {
+        Markdown {
+            front_matter: FrontMatter {
+                applies_to: value.applies_to.unwrap_or_default().into_iter().collect(),
+                authors: value.authors.unwrap_or_default(),
+                references: value.references.unwrap_or_default(),
+                breaking: value.breaking,
+                new_feature: value.new_feature,
+                bug_fix: value.bug_fix,
+            },
+            message: value.message.unwrap_or_default(),
+        }
+    }
+}
+
 pub fn subcommand_new_entry(args: NewEntryArgs) -> anyhow::Result<()> {
     let mut md_full_filename = find_git_repository_root("smithy-rs", ".").context(here!())?;
     md_full_filename.push(".changelog");
@@ -46,7 +62,7 @@ pub fn subcommand_new_entry(args: NewEntryArgs) -> anyhow::Result<()> {
         fastrand::u32(1_000_000..10_000_000)
     ))));
 
-    let changelog_entry = new_entry(args)?;
+    let changelog_entry = new_entry(Markdown::from(args))?;
     std::fs::write(&md_full_filename, &changelog_entry).with_context(|| {
         format!(
             "failed to write the following changelog entry to {:?}:\n{}",
@@ -64,18 +80,7 @@ pub fn subcommand_new_entry(args: NewEntryArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn new_entry(args: NewEntryArgs) -> anyhow::Result<String> {
-    let markdown = Markdown {
-        front_matter: FrontMatter {
-            applies_to: args.applies_to.unwrap_or_default().into_iter().collect(),
-            authors: args.authors.unwrap_or_default(),
-            references: args.references.unwrap_or_default(),
-            breaking: args.breaking,
-            new_feature: args.new_feature,
-            bug_fix: args.bug_fix,
-        },
-        message: args.message.unwrap_or_default(),
-    };
+fn new_entry(markdown: Markdown) -> anyhow::Result<String> {
     // Due to the inability for `serde_yaml` to output single line array syntax, an array of values
     // will be serialized as follows:
     //
@@ -117,15 +122,15 @@ fn any_required_field_needs_to_be_filled(markdown: &Markdown) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::new_entry::{new_entry, NewEntryArgs};
+    use crate::new_entry::{any_required_field_needs_to_be_filled, new_entry, NewEntryArgs};
     use smithy_rs_tool_common::changelog::{Reference, Target};
     use std::str::FromStr;
 
     #[test]
     fn test_new_entry_from_args() {
         // make sure `args` populates required fields (so the function
-        // `any_required_field_needs_to_be_filled` returns true), otherwise an editor would be
-        // opened during the test execution for human input, causing the test to get struck
+        // `any_required_field_needs_to_be_filled` should return false), otherwise an editor would
+        // be opened during the test execution for human input, causing the test to get struck
         let args = NewEntryArgs {
             applies_to: Some(vec![Target::Client]),
             authors: Some(vec!["ysaito1001".to_owned()]),
@@ -136,9 +141,14 @@ mod tests {
             message: Some("Implement a long-awaited feature for S3".to_owned()),
             basename: None,
         };
+        let markdown = args.into();
+        assert!(
+            !any_required_field_needs_to_be_filled(&markdown),
+            "one or more required fields were not populated"
+        );
 
         let expected = "---\napplies_to:\n- client\nauthors:\n- ysaito1001\nreferences:\n- smithy-rs#1234\nbreaking: false\nnew_feature: true\nbug_fix: false\n---\nImplement a long-awaited feature for S3";
-        let actual = new_entry(args).unwrap();
+        let actual = new_entry(markdown).unwrap();
 
         assert_eq!(expected, &actual);
     }
