@@ -13,13 +13,13 @@ use std::path::PathBuf;
 #[derive(Parser, Debug, Eq, PartialEq)]
 pub struct NewArgs {
     /// Target audience for the change (if not provided, user's editor will open for authoring one)
-    #[clap(long)]
+    #[clap(long, short = 't')]
     pub applies_to: Option<Vec<Target>>,
     /// List of git usernames for the authors of the change (if not provided, user's editor will open for authoring one)
-    #[clap(long = "author")]
+    #[clap(long, short)]
     pub authors: Option<Vec<String>>,
     /// List of relevant issues and PRs (if not provided, user's editor will open for authoring one)
-    #[clap(long = "ref")]
+    #[clap(long, short)]
     pub references: Option<Vec<Reference>>,
     /// Whether or not the change contains a breaking change (defaults to false)
     #[clap(long, action)]
@@ -28,10 +28,10 @@ pub struct NewArgs {
     #[clap(long, action)]
     pub new_feature: bool,
     /// Whether or not the change fixes a bug (defaults to false)
-    #[clap(long, action)]
+    #[clap(long, short, action)]
     pub bug_fix: bool,
     /// The changelog entry message (if not provided, user's editor will open for authoring one)
-    #[clap(long)]
+    #[clap(long, short)]
     pub message: Option<String>,
     /// Basename of a changelog markdown file (defaults to a random 6-digit basename)
     #[clap(long)]
