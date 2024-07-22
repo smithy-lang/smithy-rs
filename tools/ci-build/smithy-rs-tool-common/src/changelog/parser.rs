@@ -92,7 +92,7 @@ impl ParseIntoChangelog for ParserChain {
                 }
             }
         }
-        bail!("no parsers in chain parsed ${value} into `Changelog`")
+        bail!("no parsers in chain parsed \n{value} into `Changelog`")
     }
 }
 
