@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.aws.smoketests.model.AwsSmokeTestModel
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -69,7 +70,7 @@ class SmokeTestsOperationCustomization(
                         Attribute.TokioTest.render(this)
                         this.rustBlock("async fn test_${testCase.id.toSnakeCase()}()") {
                             val instantiator = SmokeTestsInstantiator(codegenContext)
-                            instantiator.renderConf(this, testCase.vendorParams)
+                            instantiator.renderConf(this, testCase)
                             rust("let client = crate::Client::from_conf(conf);")
                             instantiator.renderInput(this, operation, operationInput, testCase.params)
                             instantiator.renderExpectation(this, testCase.expectation)
@@ -99,42 +100,31 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
 ) {
     fun renderConf(
         writer: RustWriter,
-        data: Optional<ObjectNode>,
+        testCase: SmokeTestCase,
     ) {
         writer.rust("let conf = crate::config::Builder::new()")
         writer.indent()
         writer.rust(".behavior_version(crate::config::BehaviorVersion::latest())")
-        data.orNull()?.let { node ->
-            val region = node.getStringMemberOrDefault("region", "us-west-2")
-//            val sigv4aRegionSet = node.getArrayMember("sigv4aRegionSet")
-//                .map { a ->
-//                    a.getElementsAs { el ->
-//                        el.expectStringNode().getValue()
-//                    }
-//                }
-//                .orElse(null)
-//            val useAccountIdRouting = node.getBooleanMemberOrDefault("useAccountIdRouting", true)
-            val useDualstack = node.getBooleanMemberOrDefault("useDualstack", false)
-            val useFips = node.getBooleanMemberOrDefault("useFips", false)
-            val uri = node.getStringMemberOrDefault("uri", null)
-            val useAccelerate = node.getBooleanMemberOrDefault("useAccelerate", false)
-//            val useGlobalEndpoint = node.getBooleanMemberOrDefault("useGlobalEndpoint", false)
-            val forcePathStyle = node.getBooleanMemberOrDefault("forcePathStyle", false)
-            val useArnRegion = node.getBooleanMemberOrDefault("useArnRegion", true)
-            val useMultiRegionAccessPoints = node.getBooleanMemberOrDefault("useMultiRegionAccessPoints", true)
 
-            region?.let { writer.rust(".region(crate::config::Region::new(${it.dq()}))") }
-//            sigv4aRegionSet?.let { writer.rust("._($it)") }
-//            useAccountIdRouting?.let { writer.rust("._($it)") }
-            useDualstack?.let { writer.rust(".use_dual_stack($it)") }
-            useFips?.let { writer.rust(".use_fips($it)") }
-            uri?.let { writer.rust(".endpoint_url($it)") }
-            useAccelerate?.let { writer.rust(".accelerate_($it)") }
-//            useGlobalEndpoint?.let { writer.rust(".use_global_endpoint_($it)")}
-            forcePathStyle?.let { writer.rust(".force_path_style_($it)") }
-            useArnRegion?.let { writer.rust(".use_arn_region($it)") }
-            useMultiRegionAccessPoints?.let { writer.rust(".disable_multi_region_access_points(!$it)") }
+        val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
+        vendorParams.orNull()?.let { params ->
+            writer.rust(".region(crate::config::Region::new(${params.region.dq()}))")
+//            writer.rust(".region(crate::config::Region::new(${params.sigv4aRegionSet.orElse(listOf()).joinToString(", ").dq()}))")
+//            writer.rust(".use_account_id_routing(${params.useAccountIdRouting()})")
+            writer.rust(".use_dual_stack(${params.useDualstack()})")
+            writer.rust(".use_fips(${params.useFips()})")
+            params.uri.orNull()?.let { writer.rust(".endpoint_url($it)") }
         }
+
+        val s3VendorParams = AwsSmokeTestModel.getS3VendorParams(testCase)
+        s3VendorParams.orNull()?.let { params ->
+            writer.rust(".accelerate_(${params.useAccelerate()})")
+//             writer.rust(".use_global_endpoint_(${params.useGlobalEndpoint()})")
+            writer.rust(".force_path_style_(${params.forcePathStyle()})")
+            writer.rust(".use_arn_region(${params.useArnRegion()})")
+            writer.rust(".disable_multi_region_access_points(${params.useMultiRegionAccessPoints().not()})")
+        }
+
         writer.rust(".build();")
         writer.dedent()
     }
