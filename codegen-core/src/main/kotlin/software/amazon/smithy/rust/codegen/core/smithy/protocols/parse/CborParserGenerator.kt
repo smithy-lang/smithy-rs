@@ -36,12 +36,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -82,6 +80,7 @@ class CborParserGenerator(
     private val codegenTarget = codegenContext.target
     private val smithyCbor = CargoDependency.smithyCbor(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val builderInstantiator = codegenContext.builderInstantiator()
     private val codegenScope =
         arrayOf(
             *preludeScope,
@@ -640,17 +639,17 @@ class CborParserGenerator(
                     if (returnSymbolToParse.isUnconstrained) {
                         rust("Ok(builder)")
                     } else {
-                        if (codegenTarget == CodegenTarget.SERVER) {
-                            rust("Ok(builder.build())")
-                        } else {
-                            if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+                        val builder =
+                            builderInstantiator.finalizeBuilder(
+                                "builder", shape,
+                            ) {
                                 rustTemplate(
-                                    "builder.build().map_err(|e| #{Error}::custom(e.to_string(), decoder.position()))",
-                                    *codegenScope,
+                                    """|err| #{Error}::custom(err.to_string(), decoder.position())""", *codegenScope,
                                 )
-                            } else {
-                                rust("Ok(builder.build())")
                             }
+                        rust("##[allow(clippy::needless_question_mark)]")
+                        rustBlock("") {
+                            rust("return Ok(#T);", builder)
                         }
                     }
                 }
