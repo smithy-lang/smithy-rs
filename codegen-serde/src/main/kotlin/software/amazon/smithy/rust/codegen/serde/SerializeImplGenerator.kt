@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
 class SerializeImplGenerator(private val codegenContext: CodegenContext) {
     fun generateRootSerializerForShape(shape: Shape): Writable = serializerFn(shape, null)
@@ -79,7 +80,13 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     else -> PANIC("No serializer supported for $shape")
                 }
             if (wrapper != null && applyTo != null) {
-                rustTemplate("&#{wrapper}(#{applyTo})", "wrapper" to wrapper, "applyTo" to applyTo)
+                rustTemplate(
+                    "&#{wrapper}(#{applyTo})", "wrapper" to wrapper,
+                    "applyTo" to
+                        applyTo.letIf(shape.hasConstraintTrait()) {
+                            it.plus { rust("") }
+                        },
+                )
             } else {
                 deps?.toSymbol().also { addDependency(it) }
                 applyTo?.invoke(this)
@@ -94,7 +101,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     """
                     use #{serde}::ser::SerializeMap;
                     let mut map = serializer.serialize_map(Some(#{value}.len()))?;
-                    for (k, v) in self.value.0.iter() {
+                    for (k, v) in #{value}.iter() {
                         map.serialize_entry(k, #{member})?;
                     }
                     map.end()
@@ -113,7 +120,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     """
                     use #{serde}::ser::SerializeSeq;
                     let mut seq = serializer.serialize_seq(Some(#{value}.len()))?;
-                    for v in self.value.0.iter() {
+                    for v in #{value}.iter() {
                         seq.serialize_element(#{member})?;
                     }
                     seq.end()
@@ -171,7 +178,10 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     .toPascalCase()
         // awkward hack to recover the symbol referring to the type
         val type = SerdeModule.toType().resolve(name).toSymbol()
-        val base = writable { rust("self.value.0") }
+        val base =
+            writable { rust("self.value.0") }.letIf(shape.hasConstraintTrait()) {
+                it.plus { rust(".0") }
+            }
         val serialization =
             implSerializeConfiguredWrapper(type) {
                 body(base)(this)
@@ -190,6 +200,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         return wrapperStruct
     }
 
+    private fun Shape.unwrapConstraints(): Boolean =
+        hasConstraintTrait() && (isBlobShape || isTimestampShape || isDocumentShape)
+
     /**
      * Serialize the field of a structure, union, list or map.
      *
@@ -203,6 +216,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         return writable {
             serializerFn(target) {
                 rust("&$memberRef")
+                if (target.unwrapConstraints()) {
+                    rust(".0")
+                }
             }.plus { rust(".serialize_ref(&self.settings)") }(this)
         }.letIf(target.hasTrait<SensitiveTrait>()) { memberSerialization ->
             memberSerialization.map {

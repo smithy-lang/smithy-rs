@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.rename
 import java.util.Optional
+import kotlin.streams.toList
 
 /**
  * Generate synthetic Input and Output structures for operations.

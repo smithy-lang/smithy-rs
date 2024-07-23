@@ -43,11 +43,31 @@ class SerdeDecoratorTest {
            union: U,
            document: Document,
            blob: SensitiveBlob,
-           constrained: ShortString
+           constrained: Constrained
+        }
+
+        structure Constrained {
+            shortList: ShortList
+            shortMap: ShortMap
+            shortBlob: ShortBlob
+        }
+
+        @length(max: 10)
+        blob ShortBlob
+
+        @length(max: 10)
+        map ShortMap {
+            key: String,
+            value: Nested
         }
 
         @length(max: 10)
         string ShortString
+
+        @length(max: 10)
+        list ShortList {
+            member: Nested
+        }
 
         @sensitive
         blob SensitiveBlob
