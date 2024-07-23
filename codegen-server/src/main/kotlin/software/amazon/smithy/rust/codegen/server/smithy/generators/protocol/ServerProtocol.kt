@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
@@ -330,6 +331,9 @@ class ServerRpcV2CborProtocol(
                                 .resolve("decode::DeserializeError"),
                     )
                 }
+            },
+            shouldWrapBuilderMemberSetterInputWithOption = { member: MemberShape ->
+                codegenContext.symbolProvider.toSymbol(member).isOptional()
             },
             listOf(
                 ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborParserCustomization(

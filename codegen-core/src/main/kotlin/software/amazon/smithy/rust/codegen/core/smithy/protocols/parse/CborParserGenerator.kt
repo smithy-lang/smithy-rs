@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -74,6 +73,7 @@ class CborParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val handleNullForNonSparseCollection: (String) -> Writable,
+    private val shouldWrapBuilderMemberSetterInputWithOption: (MemberShape) -> Boolean = { _ -> true },
     private val customizations: List<CborParserCustomization> = emptyList(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
@@ -237,7 +237,7 @@ class CborParserGenerator(
                         val callBuilderSetMemberFieldWritable =
                             writable {
                                 withBlock("builder.${member.setterName()}(", ")") {
-                                    conditionalBlock("Some(", ")", codegenTarget != CodegenTarget.SERVER || symbolProvider.toSymbol(member).isOptional()) {
+                                    conditionalBlock("Some(", ")", shouldWrapBuilderMemberSetterInputWithOption(member)) {
                                         val symbol = symbolProvider.toSymbol(member)
                                         if (symbol.isRustBoxed()) {
                                             rustBlock("") {
