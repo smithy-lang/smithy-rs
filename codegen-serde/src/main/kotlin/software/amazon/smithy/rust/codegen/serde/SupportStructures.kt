@@ -132,7 +132,7 @@ object SupportStructures {
                 """
                 pub(crate) struct Sensitive<T>(pub(crate) T);
 
-                impl<'a, T> ::serde::Serialize for ConfigurableSerdeRef<'a, Sensitive<T>>
+                impl<'a, T> #{serde}::Serialize for ConfigurableSerdeRef<'a, Sensitive<T>>
                 where
                 T: #{serde}::Serialize,
                 {

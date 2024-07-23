@@ -30,7 +30,6 @@ class SerdeDecoratorTest {
             operations: [SayHello, SayGoodBye],
             version: "1"
         }
-        @optionalAuth
         operation SayHello {
             input: TestInput
             errors: [ValidationException]

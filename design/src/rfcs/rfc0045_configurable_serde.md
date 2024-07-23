@@ -11,7 +11,7 @@ RFC: Implementing `serde::Serialize`
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
 <!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
-This RFC defines how smithy-rs will enable customers to use the [serde](serde.rs) library with generated clients & servers. This is a common request
+This RFC defines how smithy-rs will enable customers to use the [serde](https://serde.rs) library with generated clients & servers. This is a common request
 for myriad reasons, but as we have written about [before](https://github.com/awslabs/aws-sdk-rust/issues/269#issuecomment-1227518721) this is a challenging design area. This RFC proposes a new approach: **Rather than implement `Serialize` directly, add a method to types that returns a type that implements `Serialize`.** This solves a number of issues:
 
   1. It is minimally impactful: It doesn't lock us into one `Serialize` implementation. It contains only one public trait, `SerializeConfigured`. This trait will initially be defined on a per-crate basis to avoid the orphan-trait rule. It doesn't also doesn't have any impact on shared runtime crates (since no types actually need to implement serialize).
@@ -22,9 +22,9 @@ for myriad reasons, but as we have written about [before](https://github.com/aws
 Terminology
 -----------
 
-- **`serde`**: A specific [Rust library](serde.rs) that is commonly used for serialization
+- **`serde`**: A specific [Rust library](https://serde.rs) that is commonly used for serialization
 - **`Serializer`**: The serde design decouples the serialization format (e.g. JSON) from the serialization structure of a particular piece of data. This allows the same Rust code to be serialized to CBOR, JSON, etc. The serialization protocol, e.g. `serde_json`, is referred to as the `Serializer`.
-- **Decorator**: The interface by which code separate from the core code generator can customize codegen behavior.
+- **Decorator**: The interface by which code separated from the core code generator can customize codegen behavior.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
@@ -137,7 +137,7 @@ pub(crate) struct ConfigurableSerdeRef<'a, T> {
 
 The `SerializeConfigured` trait has a blanket impl for `ConfigurableSerdeRef`:
 ```rust,ignore
-/// Blanket implementation for all `T` that implement `ConfigurableSerdeRef`
+/// Blanket implementation for all `T` such that `ConfigurableSerdeRef<'a, T>` implements `Serialize`.
 impl<T> SerializeConfigured for T
     where for<'a> ConfigurableSerdeRef<'a, T>: Serialize {
     fn serialize_owned(

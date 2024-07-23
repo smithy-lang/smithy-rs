@@ -23,7 +23,7 @@ val SerdeModule =
     RustModule.public(
         "serde",
         additionalAttributes = listOf(Attribute.featureGate(SerdeFeature.name)),
-        documentationOverride = "Implementations of `serde` for model types. NOTE: These implementations are NOT used for wire serialization as part of a smithy protocol and WILL NOT match the wire format. They are provided for convenience only.",
+        documentationOverride = "Implementations of `serde` for model types. NOTE: These implementations are NOT used for wire serialization as part of a Smithy protocol and WILL NOT match the wire format. They are provided for convenience only.",
     )
 
 class ClientSerdeDecorator : ClientCodegenDecorator {
