@@ -15,7 +15,7 @@ use smithy_rs_tool_common::versions_manifest::CrateVersionMetadataMap;
 #[derive(Parser, Debug, Eq, PartialEq)]
 pub struct LsArgs {
     /// Which set of changes to preview
-    #[clap(long, action)]
+    #[clap(long, short, action)]
     pub change_set: ChangeSet,
 }
 
