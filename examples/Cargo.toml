@@ -9,7 +9,6 @@ members = [
     "pokemon-service-server-sdk",
     "pokemon-service-client",
     "pokemon-service-client-usage",
-
 ]
 
 [profile.release]

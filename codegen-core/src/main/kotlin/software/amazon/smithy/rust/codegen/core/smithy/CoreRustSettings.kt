@@ -96,13 +96,12 @@ open class CoreRustSettings(
      * @return Returns the found `Service`
      * @throws CodegenException if the service is invalid or not found
      */
-    fun getService(model: Model): ServiceShape {
-        return model
+    fun getService(model: Model): ServiceShape =
+        model
             .getShape(service)
             .orElseThrow { CodegenException("Service shape not found: $service") }
             .asServiceShape()
             .orElseThrow { CodegenException("Shape is not a service: $service") }
-    }
 
     companion object {
         private val LOGGER: Logger = Logger.getLogger(CoreRustSettings::class.java.name)

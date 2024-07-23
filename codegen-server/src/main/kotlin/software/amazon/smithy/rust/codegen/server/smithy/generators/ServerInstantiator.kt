@@ -70,18 +70,25 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
-class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomWritable = NoCustomWritable()) :
+class ServerInstantiator(
+    codegenContext: CodegenContext,
+    customWritable: CustomWritable = NoCustomWritable(),
+    ignoreMissingMembers: Boolean = false,
+    withinTest: Boolean = false,
+) :
     Instantiator(
-        codegenContext.symbolProvider,
-        codegenContext.model,
-        codegenContext.runtimeConfig,
-        ServerBuilderKindBehavior(codegenContext),
-        defaultsForRequiredFields = true,
-        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
-        // Construct with direct pattern to more closely replicate actual server customer usage
-        constructPattern = InstantiatorConstructPattern.DIRECT,
-        customWritable = customWritable,
-    )
+            codegenContext.symbolProvider,
+            codegenContext.model,
+            codegenContext.runtimeConfig,
+            ServerBuilderKindBehavior(codegenContext),
+            defaultsForRequiredFields = true,
+            customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+            // Construct with direct pattern to more closely replicate actual server customer usage
+            constructPattern = InstantiatorConstructPattern.DIRECT,
+            customWritable = customWritable,
+            ignoreMissingMembers = ignoreMissingMembers,
+            withinTest = withinTest,
+        )
 
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,

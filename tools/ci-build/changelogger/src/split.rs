@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use smithy_rs_tool_common::changelog::Changelog;
+use smithy_rs_tool_common::changelog::{Changelog, ChangelogLoader};
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::path::{Path, PathBuf};
 use std::{env, fs, mem};
@@ -14,6 +14,8 @@ use std::{env, fs, mem};
 // SDK changelog entries, but small enough that the SDK changelog file
 // doesn't get too long.
 const MAX_ENTRY_AGE: usize = 5;
+// TODO(file-per-change-changelog): Remove `INTERMEDIATE_SOURCE_HEADER` once we have switched over
+//  to the new markdown format.
 const INTERMEDIATE_SOURCE_HEADER: &str =
     "# This is an intermediate file that will be replaced after automation is complete.\n\
      # It will be used to generate a changelog entry for smithy-rs.\n\
@@ -42,14 +44,20 @@ pub struct SplitArgs {
 }
 
 pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
-    let combined_changelog = Changelog::load_from_file(&args.source).map_err(|errs| {
+    let loader = ChangelogLoader::default();
+    let combined_changelog = if args.source.is_dir() {
+        loader.load_from_dir(&args.source)
+    } else {
+        loader.load_from_file(&args.source)
+    }
+    .map_err(|errs| {
         anyhow::Error::msg(format!(
             "cannot split changelogs with changelog errors: {:#?}",
             errs
         ))
     })?;
     let current_sdk_changelog = if args.destination.exists() {
-        Changelog::load_from_file(&args.destination).map_err(|errs| {
+        loader.load_from_file(&args.destination).map_err(|errs| {
             anyhow::Error::msg(format!(
                 "failed to load existing SDK changelog entries: {:#?}",
                 errs
@@ -65,6 +73,8 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
     );
     let sdk_changelog = merge_sdk_entries(current_sdk_changelog, new_sdk_entries);
 
+    // TODO(file-per-change-changelog): Remove writing to `INTERMEDIATE_SOURCE_HEADER` once we have
+    //  switched over to the new markdown format.
     write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &smithy_rs_entries)
         .context("failed to write source")?;
     write_entries(&args.destination, DEST_HEADER, &sdk_changelog)

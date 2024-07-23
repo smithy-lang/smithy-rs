@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.testutil
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.loader.ModelDiscovery
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -151,7 +152,23 @@ fun String.asSmithyModel(
     disableValidation: Boolean = false,
 ): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
-    val assembler = Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed)
+    val denyModelsContaining =
+        arrayOf(
+            // If Smithy protocol test models are in our classpath, don't load them, since they are fairly large and we
+            // almost never need them.
+            "smithy-protocol-tests",
+        )
+    val urls =
+        ModelDiscovery.findModels().filter { modelUrl ->
+            denyModelsContaining.none {
+                modelUrl.toString().contains(it)
+            }
+        }
+    val assembler = Model.assembler()
+    for (url in urls) {
+        assembler.addImport(url)
+    }
+    assembler.addUnparsedModel(sourceLocation ?: "test.smithy", processed)
     if (disableValidation) {
         assembler.disableValidation()
     }
