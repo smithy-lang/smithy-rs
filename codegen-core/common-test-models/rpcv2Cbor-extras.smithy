@@ -130,7 +130,8 @@ apply ErrorSerializationOperation @httpMalformedRequestTests([
                 "Content-Type": "application/cbor"
             }
             // An empty CBOR map. We're missing a lot of `@required` members!
-            body: "oA=="
+            body: "oA==",
+            bodyMediaType: "application/cbor"
         },
         response: {
             code: 400,
