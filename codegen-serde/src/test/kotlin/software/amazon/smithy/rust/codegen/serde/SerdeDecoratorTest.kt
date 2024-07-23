@@ -42,8 +42,12 @@ class SerdeDecoratorTest {
            nested: Nested,
            union: U,
            document: Document,
-           blob: SensitiveBlob
+           blob: SensitiveBlob,
+           constrained: ShortString
         }
+
+        @length(max: 10)
+        string ShortString
 
         @sensitive
         blob SensitiveBlob
