@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
+import kotlin.streams.toList
 
 private const val SERVICE = "service"
 private const val MODULE_NAME = "module"
