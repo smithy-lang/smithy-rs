@@ -144,9 +144,10 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         TODO("rpcv2Cbor event streams have not yet been implemented")
 
-    override fun needsRequestContentLength(operationShape: OperationShape): Boolean =
-        // Unlike other protocols, RpcV2Cbor also needs to set the `Content-Length` header when the input is an empty structure, see
-        // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/empty-input-output.smithy#L106
-        super.needsRequestContentLength(operationShape) ||
-            !operationShape.inputShape.hasMember()
+    // Unlike other protocols, RpcV2Cbor also needs to set the `Content-Length` header when the input is an empty structure, see
+    // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/empty-input-output.smithy#L106
+    // Since we generate a synthetic empty input when the input of an operation is Unit / no input, this method can
+    // return true unconditionally.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3772): Do not set `Content-Legnth` for event stream operations
+    override fun needsRequestContentLength(operationShape: OperationShape) = true
 }
