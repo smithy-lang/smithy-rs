@@ -8,6 +8,10 @@ use aws_smithy_cbor::Decoder;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 
+// This function is a copy-paste from `json_errors::sanitize_error_code`, therefore the functional
+// tests can be viewed in the unit tests there.
+// Since this is in the `inlineable` crate, there aren't good modules for housing common utilities
+// unless we move this to a Smithy runtime crate.
 fn sanitize_error_code(error_code: &str) -> &str {
     // Trim a trailing URL from the error code, beginning with a `:`
     let error_code = match error_code.find(':') {
