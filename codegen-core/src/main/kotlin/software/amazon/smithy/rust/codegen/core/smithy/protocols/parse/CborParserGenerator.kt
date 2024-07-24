@@ -516,7 +516,7 @@ class CborParserGenerator(
                     if (this@CborParserGenerator.returnSymbolToParse(target).isUnconstrained) {
                         rust("decoder.string()")
                     } else {
-                        rust("decoder.string().map(|s| s.as_str().into())")
+                        rust("decoder.string().map(|s| #T::from(s.as_ref()))", symbolProvider.toSymbol(target))
                     }
                 }
                 false -> rust("decoder.string()")
