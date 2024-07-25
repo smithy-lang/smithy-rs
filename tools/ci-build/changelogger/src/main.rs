@@ -4,7 +4,6 @@
  */
 
 use anyhow::Result;
-use changelogger::init::subcommand_init;
 use changelogger::ls::subcommand_ls;
 use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
@@ -14,8 +13,6 @@ use clap::Parser;
 #[derive(Parser, Debug, Eq, PartialEq)]
 #[clap(name = "changelogger", author, version, about)]
 pub enum Args {
-    /// Print to stdout the empty "next" CHANGELOG template
-    Init(changelogger::init::InitArgs),
     /// Create a new changelog entry Markdown file in the `smithy-rs/.changelog` directory
     New(changelogger::new::NewArgs),
     /// Render a preview of changelog entries since the last release
@@ -28,7 +25,6 @@ pub enum Args {
 
 fn main() -> Result<()> {
     match Args::parse() {
-        Args::Init(init) => subcommand_init(&init),
         Args::New(new) => subcommand_new(new),
         Args::Ls(ls) => subcommand_ls(ls),
         Args::Render(render) => subcommand_render(&render),
@@ -74,8 +70,8 @@ mod tests {
                 change_set: ChangeSet::SmithyRs,
                 independent_versioning: false,
                 source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
+                source_to_truncate: Some(PathBuf::from("fromplace")),
                 release_manifest_output: Some(PathBuf::from("some-manifest")),
                 current_release_versions_manifest: None,
                 previous_release_versions_manifest: None,
@@ -107,8 +103,8 @@ mod tests {
                     PathBuf::from("fromplace"),
                     PathBuf::from("fromanotherplace")
                 ],
-                source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
+                source_to_truncate: Some(PathBuf::from("fromplace")),
                 release_manifest_output: None,
                 current_release_versions_manifest: None,
                 previous_release_versions_manifest: None,
@@ -138,8 +134,8 @@ mod tests {
                 change_set: ChangeSet::AwsSdk,
                 independent_versioning: true,
                 source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
+                source_to_truncate: Some(PathBuf::from("fromplace")),
                 release_manifest_output: None,
                 current_release_versions_manifest: None,
                 previous_release_versions_manifest: Some(PathBuf::from("path/to/versions.toml")),
@@ -169,8 +165,8 @@ mod tests {
                 change_set: ChangeSet::AwsSdk,
                 independent_versioning: true,
                 source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
                 changelog_output: PathBuf::from("some-changelog"),
+                source_to_truncate: Some(PathBuf::from("fromplace")),
                 release_manifest_output: None,
                 current_release_versions_manifest: Some(PathBuf::from(
                     "path/to/current/versions.toml"
