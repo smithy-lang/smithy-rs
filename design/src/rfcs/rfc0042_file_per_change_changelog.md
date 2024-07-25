@@ -1,7 +1,7 @@
 RFC: File-per-change changelog
 ==============================
 
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: client and server
 
@@ -119,15 +119,15 @@ entry on behalf of a contributor).
 Changes checklist
 -----------------
 
-- [ ] Refactor changelogger and smithy-rs-tool-common to separate the changelog
+- [x] Refactor changelogger and smithy-rs-tool-common to separate the changelog
       serialization format from the internal representation used for rendering and splitting.
-- [ ] Implement deserialization for the new Markdown entry format
-- [ ] Incorporate new format into the `changelogger render` subcommand
-- [ ] Incorporate new format into the `changelogger split` subcommand
-- [ ] Port existing `CHANGELOG.next.toml` to individual entries
-- [ ] Update `sdk-lints` to fail if `CHANGELOG.next.toml` exists at all to avoid losing
+- [x] Implement deserialization for the new Markdown entry format
+- [x] Incorporate new format into the `changelogger render` subcommand
+- [x] Incorporate new format into the `changelogger split` subcommand
+- [x] Port existing `CHANGELOG.next.toml` to individual entries
+- [x] Update `sdk-lints` to fail if `CHANGELOG.next.toml` exists at all to avoid losing
       changelog entries during merges.
-- [ ] Dry-run test against the smithy-rs release process.
-- [ ] Dry-run test against the SDK release process.
+- [x] Dry-run test against the smithy-rs release process.
+- [x] Dry-run test against the SDK release process.
 
 [Changes Checklist]: #changes-checklist
