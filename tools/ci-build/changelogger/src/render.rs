@@ -332,7 +332,7 @@ fn update_changelogs(
             .with_context(|| format!("failed to empty directory {:?}", source_to_truncate))
             .and_then(|_| {
                 let dot_example = source_to_truncate.join(".example");
-                fs::write(dot_example.clone(), EXAMPLE_ENTRY.trim())
+                fs::write(dot_example.clone(), EXAMPLE_ENTRY)
                     .with_context(|| format!("failed to create {:?}", dot_example))
             })?;
     }

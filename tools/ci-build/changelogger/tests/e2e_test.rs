@@ -287,7 +287,7 @@ fn render_smithy_rs() {
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), dot_example);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
@@ -395,7 +395,7 @@ fn render_aws_sdk() {
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), dot_example);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
     pretty_assertions::assert_str_eq!(SDK_MODEL_SOURCE_TOML, model_source);
 
     // It should only have one of the SDK changelog entries since
@@ -487,7 +487,7 @@ Change from server
     let dest = fs::read_to_string(&dest_path).unwrap();
 
     // source file should be empty
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), &dot_example);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, &dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
@@ -563,7 +563,7 @@ Change from client
     let dest = fs::read_to_string(&dest_path).unwrap();
 
     // source file should be empty
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), &dot_example);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, &dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
@@ -629,7 +629,7 @@ fn render_crate_versions() {
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), dot_example);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
