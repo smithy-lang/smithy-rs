@@ -23,6 +23,30 @@ impl Lint for ChangelogNext {
 
 impl Check for ChangelogNext {
     fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+        if path.as_ref().exists() {
+            Ok(vec![LintError::new(
+                "the legacy `CHANGELOG.next.toml` should no longer exist",
+            )])
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+pub(crate) struct DotChangelog;
+
+impl Lint for DotChangelog {
+    fn name(&self) -> &str {
+        ".changelog"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(vec![repo_root().join(".changelog")])
+    }
+}
+
+impl Check for DotChangelog {
+    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
         match check_changelog_next(path) {
             Ok(_) => Ok(vec![]),
             Err(errs) => Ok(errs),
@@ -30,13 +54,10 @@ impl Check for ChangelogNext {
     }
 }
 
-// TODO(file-per-change-changelog): Use `.load_from_dir` to read from the `.changelog` directory
-//  and run the validation only when the directory has at least one changelog entry file, otherwise
-//  a default constructed `ChangeLog` won't pass the validation.
-/// Validate that `CHANGELOG.next.toml` follows best practices
+/// Validate that changelog entries in the `.changelog` directory follows best practices
 fn check_changelog_next(path: impl AsRef<Path>) -> std::result::Result<(), Vec<LintError>> {
     let parsed = ChangelogLoader::default()
-        .load_from_file(path)
+        .load_from_dir(path)
         .map_err(|e| vec![LintError::via_display(e)])?;
     parsed
         .validate(ValidationSet::Development)

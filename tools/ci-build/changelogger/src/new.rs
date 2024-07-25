@@ -95,7 +95,8 @@ fn new_entry(markdown: Markdown) -> anyhow::Result<String> {
     // This doesn't present practical issues when rendering changelogs. See
     // https://github.com/dtolnay/serde-yaml/issues/355
     let front_matter = serde_yaml::to_string(&markdown.front_matter)?;
-    let changelog_entry = format!("---\n{}---\n{}", front_matter, markdown.message);
+    // the last `\n` satisfies the `fix end of files` check in `sdk-lints`
+    let changelog_entry = format!("---\n{}---\n{}\n", front_matter, markdown.message);
     let changelog_entry = if any_required_field_needs_to_be_filled(&markdown) {
         edit::edit(changelog_entry).context("failed while editing changelog entry)")?
     } else {
@@ -147,7 +148,7 @@ mod tests {
             "one or more required fields were not populated"
         );
 
-        let expected = "---\napplies_to:\n- client\nauthors:\n- ysaito1001\nreferences:\n- smithy-rs#1234\nbreaking: false\nnew_feature: true\nbug_fix: false\n---\nImplement a long-awaited feature for S3";
+        let expected = "---\napplies_to:\n- client\nauthors:\n- ysaito1001\nreferences:\n- smithy-rs#1234\nbreaking: false\nnew_feature: true\nbug_fix: false\n---\nImplement a long-awaited feature for S3\n";
         let actual = new_entry(markdown).unwrap();
 
         assert_eq!(expected, &actual);
