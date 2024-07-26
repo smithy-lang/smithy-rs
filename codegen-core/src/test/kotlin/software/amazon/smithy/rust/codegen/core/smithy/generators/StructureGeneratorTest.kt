@@ -41,12 +41,6 @@ class StructureGeneratorTest {
                ts: Timestamp,
                inner: Inner,
                byteValue: Byte,
-               sensitiveMap: SensitiveMap
-            }
-
-            map SensitiveMap {
-                key: String
-                value: Password
             }
 
             // Intentionally empty

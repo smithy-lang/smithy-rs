@@ -64,6 +64,7 @@ if (isTestingEnabled.toBoolean()) {
         runtimeOnly(project(":rust-runtime"))
         testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
         testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
+        testImplementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
         testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
     }
 

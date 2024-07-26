@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-class SerdeTrait private constructor(
+class SerdeTrait constructor(
     private val serialize: Boolean,
     private val deserialize: Boolean,
     private val tag: String?,

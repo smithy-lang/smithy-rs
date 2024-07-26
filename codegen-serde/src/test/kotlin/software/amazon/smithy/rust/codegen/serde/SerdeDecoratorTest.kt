@@ -19,6 +19,8 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class SerdeDecoratorTest {
+    private val params =
+        IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#HelloService")
     private val simpleModel =
         """
         namespace com.example
@@ -27,13 +29,28 @@ class SerdeDecoratorTest {
         use smithy.framework#ValidationException
         @awsJson1_0
         service HelloService {
-            operations: [SayHello, SayGoodBye],
+            operations: [SayHello, SayGoodBye, Streaming],
             version: "1"
         }
         operation SayHello {
             input: TestInput
             errors: [ValidationException]
         }
+
+        @serde
+        operation Streaming {
+            input: StreamingInput
+            errors: [ValidationException]
+        }
+
+        structure StreamingInput {
+            @required
+            data: StreamingBlob
+        }
+
+        @streaming
+        blob StreamingBlob
+
         @serde
         structure TestInput {
            foo: SensitiveString,
@@ -85,7 +102,8 @@ class SerdeDecoratorTest {
         @sensitive
         union U {
             nested: Nested,
-            enum: TestEnum
+            enum: TestEnum,
+            other: Unit
         }
 
         structure Nested {
@@ -95,6 +113,7 @@ class SerdeDecoratorTest {
           notSensitive: AlsoTimestamps,
           manyEnums: TestEnumList,
           sparse: SparseList
+          map: SparseMap
         }
 
         list TestEnumList {
@@ -109,6 +128,12 @@ class SerdeDecoratorTest {
         map AlsoTimestamps {
             key: String
             value: Timestamp
+        }
+
+        @sparse
+        map SparseMap {
+            key: String
+            value: SparseList
         }
 
         @sensitive
@@ -127,7 +152,7 @@ class SerdeDecoratorTest {
 
     @Test
     fun generateSerializersThatWorkServer() {
-        serverIntegrationTest(simpleModel, params = IntegrationTestParams(cargoCommand = "cargo test --all-features")) { ctx, crate ->
+        serverIntegrationTest(simpleModel, params = params) { ctx, crate ->
             val codegenScope =
                 arrayOf(
                     "crate" to RustType.Opaque(ctx.moduleUseName()),
@@ -169,6 +194,22 @@ class SerdeDecoratorTest {
                         settings.redact_sensitive_fields = true;
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                         assert_eq!(serialized, ${expectedRedacted.dq()});
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                unitTest("serde_of_bytestream") {
+                    rustTemplate(
+                        """
+                        use #{crate}::input::StreamingInput;
+                        use #{crate}::types::ByteStream;
+                        use #{crate}::serde::*;
+                        let input = StreamingInput::builder().data(ByteStream::from_static(b"123")).build().unwrap();
+                        let settings = SerializationSettings::default();
+                        let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                        assert_eq!(serialized, ${expectedStreaming.dq()});
+
                         """,
                         *codegenScope,
                     )
@@ -241,7 +282,7 @@ class SerdeDecoratorTest {
           "manyEnums": [
             "<redacted>"
           ],
-          "sparse": ["<redacted>", "<redacted>", "<redacted>"]
+          "sparse": [null, "<redacted>", "<redacted>"]
         },
         "union": "<redacted>",
         "document": "hello!",
@@ -249,9 +290,11 @@ class SerdeDecoratorTest {
         }
         """.replace("\\s".toRegex(), "")
 
+    private val expectedStreaming = """{"data":"MTIz"}"""
+
     @Test
     fun generateSerializersThatWorkClient() {
-        clientIntegrationTest(simpleModel, params = IntegrationTestParams(cargoCommand = "cargo test --all-features")) { ctx, crate ->
+        clientIntegrationTest(simpleModel, params = params) { ctx, crate ->
             val codegenScope =
                 arrayOf(
                     "crate" to RustType.Opaque(ctx.moduleUseName()),
@@ -290,6 +333,21 @@ class SerdeDecoratorTest {
                         settings.redact_sensitive_fields = true;
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                         assert_eq!(serialized, ${expectedRedacted.dq()});
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                unitTest("serde_of_bytestream") {
+                    rustTemplate(
+                        """
+                        use #{crate}::operation::streaming::StreamingInput;
+                        use #{crate}::primitives::ByteStream;
+                        use #{crate}::serde::*;
+                        let input = StreamingInput::builder().data(ByteStream::from_static(b"123")).build().unwrap();
+                        let settings = SerializationSettings::default();
+                        let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                        assert_eq!(serialized, ${expectedStreaming.dq()});
                         """,
                         *codegenScope,
                     )
