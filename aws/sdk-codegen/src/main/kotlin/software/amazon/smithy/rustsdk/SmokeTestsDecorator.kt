@@ -6,30 +6,31 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.smoketests.model.AwsSmokeTestModel
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.smoketests.traits.Expectation
@@ -41,44 +42,50 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
     override val name: String = "SmokeTests"
     override val order: Byte = 0
 
-    override fun operationCustomizations(
+    override fun extras(
         codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        baseCustomizations.letIf(operation.hasTrait(SmokeTestsTrait.ID)) {
-            it + SmokeTestsOperationCustomization(codegenContext, operation)
-        }
-}
+        rustCrate: RustCrate,
+    ) {
+        val smokeTestedOperations = codegenContext.model.getOperationShapesWithTrait(SmokeTestsTrait::class.java).toList()
+        if (smokeTestedOperations.isEmpty()) return
 
-class SmokeTestsOperationCustomization(
-    private val codegenContext: ClientCodegenContext,
-    private val operation: OperationShape,
-) : OperationCustomization() {
-    private val smokeTestsTrait = operation.expectTrait<SmokeTestsTrait>()
-    private val testCases: List<SmokeTestCase> = smokeTestsTrait.testCases
-    private val operationInput = operation.inputShape(codegenContext.model)
+        rustCrate.integrationTest("smoketests") {
+            // Don't run the tests in this module unless `RUSTFLAGS="--cfg smoketests"` is passed.
+            Attribute(cfg("smoketests")).render(this, AttributeKind.Inner)
 
-    override fun section(section: OperationSection): Writable {
-        if (testCases.isEmpty()) return emptySection
+            containerDocs(
+                """
+                The tests in this module run against live AWS services. As such,
+                they are disabled by default. To enable them, run the tests with
 
-        return when (section) {
-            is OperationSection.UnitTests ->
-                writable {
-                    testCases.forEach { testCase ->
-                        Attribute(cfg("v2SmokeTests")).render(this)
-                        Attribute.TokioTest.render(this)
-                        this.rustBlock("async fn test_${testCase.id.toSnakeCase()}()") {
-                            val instantiator = SmokeTestsInstantiator(codegenContext)
-                            instantiator.renderConf(this, testCase)
-                            rust("let client = crate::Client::from_conf(conf);")
-                            instantiator.renderInput(this, operation, operationInput, testCase.params)
-                            instantiator.renderExpectation(this, testCase.expectation)
-                        }
+                ```sh
+                RUSTFLAGS="--cfg smoketests" cargo test.
+                ```""",
+            )
+
+            val model = codegenContext.model
+            val moduleUseName = codegenContext.moduleUseName()
+            rust("use $moduleUseName::{ Client, config };")
+
+            for (operationShape in smokeTestedOperations) {
+                val operationName = operationShape.id.name.toSnakeCase()
+                val operationInput = operationShape.inputShape(model)
+                val smokeTestsTrait = operationShape.expectTrait<SmokeTestsTrait>()
+                val testCases: List<SmokeTestCase> = smokeTestsTrait.testCases
+
+                docs("Smoke tests for the `$operationName` operation")
+
+                for (testCase in testCases) {
+                    Attribute.TokioTest.render(this)
+                    this.rustBlock("async fn test_${testCase.id.toSnakeCase()}()") {
+                        val instantiator = SmokeTestsInstantiator(codegenContext)
+                        instantiator.renderConf(this, testCase)
+                        rust("let client = Client::from_conf(conf);")
+                        instantiator.renderInput(this, operationShape, operationInput, testCase.params)
+                        instantiator.renderExpectation(this, model, testCase.expectation)
                     }
                 }
-
-            else -> emptySection
+            }
         }
     }
 }
@@ -102,15 +109,21 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         writer: RustWriter,
         testCase: SmokeTestCase,
     ) {
-        writer.rust("let conf = crate::config::Builder::new()")
+        writer.rust("let conf = config::Builder::new()")
         writer.indent()
-        writer.rust(".behavior_version(crate::config::BehaviorVersion::latest())")
+        writer.rust(".behavior_version(config::BehaviorVersion::latest())")
 
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
-            writer.rust(".region(crate::config::Region::new(${params.region.dq()}))")
+            writer.rust(".region(config::Region::new(${params.region.dq()}))")
+            if (params.sigv4aRegionSet.isPresent) {
+                throw NotImplementedError("sigv4aRegionSet is not supported")
 //            writer.rust(".region(crate::config::Region::new(${params.sigv4aRegionSet.orElse(listOf()).joinToString(", ").dq()}))")
+            }
+            if (params.useAccountIdRouting()) {
+                throw NotImplementedError("useAccountIdRouting is not supported")
 //            writer.rust(".use_account_id_routing(${params.useAccountIdRouting()})")
+            }
             writer.rust(".use_dual_stack(${params.useDualstack()})")
             writer.rust(".use_fips(${params.useFips()})")
             params.uri.orNull()?.let { writer.rust(".endpoint_url($it)") }
@@ -119,7 +132,10 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         val s3VendorParams = AwsSmokeTestModel.getS3VendorParams(testCase)
         s3VendorParams.orNull()?.let { params ->
             writer.rust(".accelerate_(${params.useAccelerate()})")
+            if (params.useGlobalEndpoint()) {
+                throw NotImplementedError("useGlobalEndpoint is not supported")
 //             writer.rust(".use_global_endpoint_(${params.useGlobalEndpoint()})")
+            }
             writer.rust(".force_path_style_(${params.forcePathStyle()})")
             writer.rust(".use_arn_region(${params.useArnRegion()})")
             writer.rust(".disable_multi_region_access_points(${params.useMultiRegionAccessPoints().not()})")
@@ -151,12 +167,27 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
 
     fun renderExpectation(
         writer: RustWriter,
+        model: Model,
         expectation: Expectation,
     ) {
         if (expectation.isSuccess) {
             writer.rust("""res.expect("request should succeed");""")
         } else if (expectation.isFailure) {
-            writer.rust("""res.expect_err("request should fail");""")
+            val expectedErrShape = expectation.failure.orNull()?.errorId?.orNull()
+            println(expectedErrShape)
+            if (expectedErrShape != null) {
+                val failureShape = model.expectShape(expectedErrShape)
+                val errName = codegenContext.symbolProvider.toSymbol(failureShape).name.toSnakeCase()
+                writer.rust(
+                    """
+                    let err = res.expect_err("request should fail");
+                    let err = err.into_service_error();
+                    assert!(err.is_$errName())
+                    """,
+                )
+            } else {
+                writer.rust("""res.expect_err("request should fail");""")
+            }
         }
     }
 }

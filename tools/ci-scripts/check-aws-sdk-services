@@ -7,16 +7,14 @@
 set -eux
 cd aws-sdk
 
-# Check if the VERBOSE environment variable is set
-if [ -n "$ENABLE_V2_SMOKETESTS" ]; then
-    RUN_V2_SMOKETESTS="--cfg v2SmokeTests"
+# Check if the $ENABLE_SMOKETESTS environment variable is set
+if [ -n "$ENABLE_SMOKETESTS" ]; then
+    # Invoking `cargo test` at the root directory implicitly checks for the validity
+    # of the top-level `Cargo.toml`
+    RUSTFLAGS="--cfg smoketests" cargo test --all-features
 else
-    RUN_V2_SMOKETESTS=""
+    cargo test --all-features
 fi
-
-# Invoking `cargo test` at the root directory implicitly checks for the validity
-# of the top-level `Cargo.toml`
-cargo test --all-features -- "$RUN_V2_SMOKETESTS"
 
 for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then

@@ -211,11 +211,5 @@ open class OperationGenerator(
 
         EndpointParamsInterceptorGenerator(codegenContext)
             .render(operationWriter, operationShape)
-
-        OperationUnitTestGenerator(codegenContext).render(
-            operationWriter,
-            operationShape,
-            operationCustomizations,
-        )
     }
 }
