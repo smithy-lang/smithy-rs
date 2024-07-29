@@ -37,6 +37,14 @@ class SerdeDecoratorTest {
             errors: [ValidationException]
         }
 
+        structure Recursive {
+            inner: RecursiveList
+        }
+
+        list RecursiveList {
+            member: Recursive
+        }
+
         @serde
         operation Streaming {
             input: StreamingInput
@@ -59,7 +67,8 @@ class SerdeDecoratorTest {
            union: U,
            document: Document,
            blob: SensitiveBlob,
-           constrained: Constrained
+           constrained: Constrained,
+           recursive: Recursive
         }
 
         structure Constrained {
