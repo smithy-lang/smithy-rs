@@ -41,7 +41,7 @@ object SupportStructures {
                 /// Serialize a value redacting sensitive fields
                 ///
                 /// This function is intended to be used by `serde(serialize_with = "serialize_redacted")`
-                pub fn serialize_redacted<'a, T, S: #{serde}::Serializer>(value: &'a T, serializer: S) -> Result<S::Ok, S::Error>
+                pub fn serialize_redacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
                 {
@@ -64,7 +64,7 @@ object SupportStructures {
                 /// Serialize a value without redacting sensitive fields
                 ///
                 /// This function is intended to be used by `serde(serialize_with = "serialize_unredacted")`
-                pub fn serialize_unredacted<'a, T, S: #{serde}::Serializer>(value: &'a T, serializer: S) -> Result<S::Ok, S::Error>
+                pub fn serialize_unredacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
                 {

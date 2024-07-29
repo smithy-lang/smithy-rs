@@ -128,13 +128,13 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                             rust(
                                 """
                                 match v {
-                                    Some(v) => map.serialize_entry(k, #T)?,
+                                    Some(v) => map.serialize_entry(k, &#T)?,
                                     None => map.serialize_entry(k, &None::<usize>)?
                                 };
                                 """,
                                 member,
                             )
-                        false -> rust("map.serialize_entry(k, #T)?;", member)
+                        false -> rust("map.serialize_entry(k, &#T)?;", member)
                     }
                 }
             writable {
@@ -160,8 +160,8 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             val serializeElement =
                 writable {
                     when (shape.hasTrait<SparseTrait>()) {
-                        false -> rust("seq.serialize_element(#T)?;", member)
-                        true -> rust("match v { Some(v) => seq.serialize_element(#T)?, None => seq.serialize_element(&None::<usize>)? };", member)
+                        false -> rust("seq.serialize_element(&#T)?;", member)
+                        true -> rust("match v { Some(v) => seq.serialize_element(&#T)?, None => seq.serialize_element(&None::<usize>)? };", member)
                     }
                 }
             writable {
@@ -272,15 +272,15 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         val target = codegenContext.model.expectShape(shape.target)
         return writable {
             serializerFn(target) {
-                rust("&$memberRef")
+                rust("$memberRef")
                 if (target.unwrapConstraints()) {
                     rust(".0")
                 }
-            }.plus { rust(".serialize_ref(&self.settings)") }(this)
+            }.plus { rust(".serialize_ref(self.settings)") }(this)
         }.letIf(target.hasTrait<SensitiveTrait>()) { memberSerialization ->
             memberSerialization.map {
                 rustTemplate(
-                    "&#{Sensitive}(#{it}).serialize_ref(&self.settings)",
+                    "&#{Sensitive}(#{it}).serialize_ref(self.settings)",
                     *SupportStructures.codegenScope,
                     "it" to it,
                 )
@@ -312,7 +312,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                         val fieldSerialization =
                             writable {
                                 rustTemplate(
-                                    "s.serialize_field($serializedName, #{member})?;",
+                                    "s.serialize_field($serializedName, &#{member})?;",
                                     "member" to serializeMember(member, field),
                                 )
                             }
@@ -349,7 +349,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                                 true -> rust("serializer.serialize_unit_variant(${unionName.dq()}, $index, $fieldName)")
                                 false ->
                                     rustTemplate(
-                                        "serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, #{member})",
+                                        "serializer.serialize_newtype_variant(${unionName.dq()}, $index, $fieldName, &#{member})",
                                         "member" to serializeMember(member, "inner"),
                                     )
                             }
@@ -379,9 +379,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 rustTemplate(
                     """
                     if serializer.is_human_readable() {
-                        serializer.serialize_str(&#{base64_encode}(&self.value.as_ref()))
+                        serializer.serialize_str(&#{base64_encode}(self.value.as_ref()))
                     } else {
-                        serializer.serialize_bytes(&self.value.as_ref())
+                        serializer.serialize_bytes(self.value.as_ref())
                     }
                     """,
                     "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
@@ -401,7 +401,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                     if serializer.is_human_readable() {
                         serializer.serialize_str(&#{base64_encode}(bytes))
                     } else {
-                        serializer.serialize_bytes(&bytes)
+                        serializer.serialize_bytes(bytes)
                     }
                     """,
                     "base64_encode" to RuntimeType.base64Encode(codegenContext.runtimeConfig),
@@ -420,7 +420,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                              use #{serde}::ser::SerializeMap;
                              let mut map = serializer.serialize_map(Some(v.len()))?;
                              for (k, v) in v {
-                                 map.serialize_entry(k, &v.serialize_ref(&self.settings))?;
+                                 map.serialize_entry(k, &v.serialize_ref(self.settings))?;
                              }
                              map.end()
                          },
@@ -428,7 +428,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                              use #{serde}::ser::SerializeSeq;
                              let mut seq = serializer.serialize_seq(Some(v.len()))?;
                              for e in v {
-                                 seq.serialize_element(&e.serialize_ref(&self.settings))?;
+                                 seq.serialize_element(&e.serialize_ref(self.settings))?;
                              }
                              seq.end()
                          },
