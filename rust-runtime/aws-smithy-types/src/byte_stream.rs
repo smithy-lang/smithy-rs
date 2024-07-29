@@ -324,9 +324,8 @@ impl ByteStream {
 
     /// Returns a reference to the data if it is already available in memory
     pub fn bytes(&self) -> Option<&[u8]> {
-        match &self.inner {
-            Inner { body } => body.bytes(),
-        }
+        let Inner { body } = &self.inner;
+        body.bytes()
     }
 
     /// Return the bounds on the remaining length of the `ByteStream`.
