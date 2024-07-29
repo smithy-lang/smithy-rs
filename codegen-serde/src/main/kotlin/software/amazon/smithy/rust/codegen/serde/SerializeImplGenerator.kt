@@ -181,6 +181,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
 
     /**
      * Serialize a type that already implements `Serialize` directly via `value.serialize(serializer)`
+     * For enums, it adds `as_str()` to convert it into a string directly.
      */
     private fun directSerde(shape: Shape): RuntimeType {
         return RuntimeType.forInlineFun(
@@ -412,7 +413,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                          #{Document}::Object(v) => {
                              use #{serde}::ser::SerializeMap;
                              let mut map = serializer.serialize_map(Some(v.len()))?;
-                             for (k, v) in v.iter() {
+                             for (k, v) in v {
                                  map.serialize_entry(k, &v.serialize_ref(&self.settings))?;
                              }
                              map.end()
@@ -420,7 +421,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                          #{Document}::Array(v) => {
                              use #{serde}::ser::SerializeSeq;
                              let mut seq = serializer.serialize_seq(Some(v.len()))?;
-                             for e in v.iter() {
+                             for e in v {
                                  seq.serialize_element(&e.serialize_ref(&self.settings))?;
                              }
                              seq.end()

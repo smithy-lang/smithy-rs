@@ -14,7 +14,7 @@ For a summarized list of proposed changes, see the [Changes Checklist](#changes-
 This RFC defines how smithy-rs will enable customers to use the [serde](https://serde.rs) library with generated clients & servers. This is a common request
 for myriad reasons, but as we have written about [before](https://github.com/awslabs/aws-sdk-rust/issues/269#issuecomment-1227518721) this is a challenging design area. This RFC proposes a new approach: **Rather than implement `Serialize` directly, add a method to types that returns a type that implements `Serialize`.** This solves a number of issues:
 
-  1. It is minimally impactful: It doesn't lock us into one `Serialize` implementation. It contains only one public trait, `SerializeConfigured`. This trait will initially be defined on a per-crate basis to avoid the orphan-trait rule. It doesn't also doesn't have any impact on shared runtime crates (since no types actually need to implement serialize).
+  1. It is minimally impactful: It doesn't lock us into one `Serialize` implementation. It contains only one public trait, `SerializeConfigured`. This trait will initially be defined on a per-crate basis to avoid the orphan-trait rule. It also doesn't have any impact on shared runtime crates (since no types actually need to implement serialize).
   2. It allows customers to configure serde to their use case. For example, for testing/replay you probably _don't_ want to redact sensitive fields but for logging or other forms of data storage, you may want to redact those fields.
 3. The entire implementation is isolated to a single module, making it trivial to feature-gate out.
 
