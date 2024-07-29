@@ -37,17 +37,55 @@ import software.amazon.smithy.smoketests.traits.Expectation
 import software.amazon.smithy.smoketests.traits.SmokeTestCase
 import software.amazon.smithy.smoketests.traits.SmokeTestsTrait
 import java.util.Optional
+import java.util.logging.Logger
 
 class SmokeTestsDecorator : ClientCodegenDecorator {
     override val name: String = "SmokeTests"
     override val order: Byte = 0
+    private val logger: Logger = Logger.getLogger(javaClass.name)
+
+    private fun isSmokeTestSupported(smokeTestCase: SmokeTestCase): Boolean {
+        AwsSmokeTestModel.getAwsVendorParams(smokeTestCase)?.orNull()?.let { vendorParams ->
+            if (vendorParams.sigv4aRegionSet.isPresent) {
+                logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `sigv4aRegionSet`")
+                return false
+            }
+            if (vendorParams.useAccountIdRouting()) {
+                logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `useAccountIdRouting`")
+                return false
+            }
+        }
+        AwsSmokeTestModel.getS3VendorParams(smokeTestCase)?.orNull()?.let { s3VendorParams ->
+            if (s3VendorParams.useGlobalEndpoint()) {
+                logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `useGlobalEndpoint`")
+                return false
+            }
+        }
+
+        return true
+    }
 
     override fun extras(
         codegenContext: ClientCodegenContext,
         rustCrate: RustCrate,
     ) {
-        val smokeTestedOperations = codegenContext.model.getOperationShapesWithTrait(SmokeTestsTrait::class.java).toList()
-        if (smokeTestedOperations.isEmpty()) return
+        // Get all operations with smoke tests
+        val smokeTestedOperations =
+            codegenContext.model.getOperationShapesWithTrait(SmokeTestsTrait::class.java).toList()
+        val supportedTests =
+            smokeTestedOperations.map { operationShape ->
+                // filter out unsupported smoke tests, logging a warning for each one.
+                val testCases =
+                    operationShape.expectTrait<SmokeTestsTrait>().testCases.filter { smokeTestCase ->
+                        isSmokeTestSupported(smokeTestCase)
+                    }
+
+                operationShape to testCases
+            }
+                // filter out operations with no supported smoke tests
+                .filter { (_, testCases) -> testCases.isNotEmpty() }
+        // Return if there are no supported smoke tests across all operations
+        if (supportedTests.isEmpty()) return
 
         rustCrate.integrationTest("smoketests") {
             // Don't run the tests in this module unless `RUSTFLAGS="--cfg smoketests"` is passed.
@@ -67,11 +105,9 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
             val moduleUseName = codegenContext.moduleUseName()
             rust("use $moduleUseName::{ Client, config };")
 
-            for (operationShape in smokeTestedOperations) {
+            for ((operationShape, testCases) in supportedTests) {
                 val operationName = operationShape.id.name.toSnakeCase()
                 val operationInput = operationShape.inputShape(model)
-                val smokeTestsTrait = operationShape.expectTrait<SmokeTestsTrait>()
-                val testCases: List<SmokeTestCase> = smokeTestsTrait.testCases
 
                 docs("Smoke tests for the `$operationName` operation")
 
@@ -116,14 +152,6 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
             writer.rust(".region(config::Region::new(${params.region.dq()}))")
-            if (params.sigv4aRegionSet.isPresent) {
-                throw NotImplementedError("sigv4aRegionSet is not supported")
-//            writer.rust(".region(crate::config::Region::new(${params.sigv4aRegionSet.orElse(listOf()).joinToString(", ").dq()}))")
-            }
-            if (params.useAccountIdRouting()) {
-                throw NotImplementedError("useAccountIdRouting is not supported")
-//            writer.rust(".use_account_id_routing(${params.useAccountIdRouting()})")
-            }
             writer.rust(".use_dual_stack(${params.useDualstack()})")
             writer.rust(".use_fips(${params.useFips()})")
             params.uri.orNull()?.let { writer.rust(".endpoint_url($it)") }
@@ -132,10 +160,6 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         val s3VendorParams = AwsSmokeTestModel.getS3VendorParams(testCase)
         s3VendorParams.orNull()?.let { params ->
             writer.rust(".accelerate_(${params.useAccelerate()})")
-            if (params.useGlobalEndpoint()) {
-                throw NotImplementedError("useGlobalEndpoint is not supported")
-//             writer.rust(".use_global_endpoint_(${params.useGlobalEndpoint()})")
-            }
             writer.rust(".force_path_style_(${params.forcePathStyle()})")
             writer.rust(".use_arn_region(${params.useArnRegion()})")
             writer.rust(".disable_multi_region_access_points(${params.useMultiRegionAccessPoints().not()})")
