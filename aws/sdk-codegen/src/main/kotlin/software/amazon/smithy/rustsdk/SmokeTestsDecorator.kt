@@ -50,6 +50,8 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
                 logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `sigv4aRegionSet`")
                 return false
             }
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
+            //     update the vendorParams setter and remove this check.
             if (vendorParams.useAccountIdRouting()) {
                 logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `useAccountIdRouting`")
                 return false
