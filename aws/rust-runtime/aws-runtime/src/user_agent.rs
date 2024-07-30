@@ -12,8 +12,10 @@ use std::error::Error;
 use std::fmt;
 
 mod interceptor;
+mod metrics;
 
 pub use interceptor::UserAgentInterceptor;
+pub use metrics::BusinessMetric;
 
 /// AWS User Agent
 ///
