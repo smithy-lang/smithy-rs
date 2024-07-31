@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
@@ -125,10 +124,8 @@ class RequestSerializerGenerator(
         )
     }
 
-    private fun needsContentLength(operationShape: OperationShape): Boolean {
-        return protocol.httpBindingResolver.requestBindings(operationShape)
-            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
-    }
+    private fun needsContentLength(operationShape: OperationShape): Boolean =
+        protocol.needsRequestContentLength(operationShape)
 
     private fun createHttpRequest(operationShape: OperationShape): Writable =
         writable {

@@ -72,17 +72,18 @@ impl Default for ParserChain {
 
 impl ParseIntoChangelog for ParserChain {
     fn parse(&self, value: &str) -> Result<Changelog> {
-        for (name, parser) in &self.parsers {
+        let mut errs = Vec::new();
+        for (_name, parser) in &self.parsers {
             match parser.parse(value) {
                 Ok(parsed) => {
                     return Ok(parsed);
                 }
                 Err(err) => {
-                    tracing::debug!(parser = %name, err = %err, "failed to parse the input string");
+                    errs.push(err.to_string());
                 }
             }
         }
-        bail!("no parsers in chain parsed \n{value} into `Changelog`")
+        bail!("no parsers in chain parsed the following into `Changelog`\n{value}\nwith respective errors: \n{errs:?}")
     }
 }
 

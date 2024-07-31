@@ -14,27 +14,16 @@ import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
-import java.io.File
-import java.nio.file.Path
 
 class ConstraintsMemberShapeTest {
     private val outputModelOnly =
@@ -284,68 +273,19 @@ class ConstraintsMemberShapeTest {
         )
     }
 
-    private fun runServerCodeGen(
-        model: Model,
-        dirToUse: File? = null,
-        writable: Writable,
-    ): Path {
-        val runtimeConfig =
-            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../rust-runtime").absolutePath))
-
-        val (context, dir) =
-            generatePluginContext(
-                model,
-                runtimeConfig = runtimeConfig,
-                overrideTestDir = dirToUse,
-            )
-        val codegenDecorator =
-            CombinedServerCodegenDecorator.fromClasspath(
-                context,
-                ServerRequiredCustomizations(),
-                SmithyValidationExceptionDecorator(),
-                CustomValidationExceptionWithReasonDecorator(),
-            )
-
-        ServerCodegenVisitor(context, codegenDecorator)
-            .execute()
-
-        val codegenContext = serverTestCodegenContext(model)
-        val settings = ServerRustSettings.from(context.model, context.settings)
-        val rustCrate =
-            RustCrate(
-                context.fileManifest,
-                codegenContext.symbolProvider,
-                settings.codegenConfig,
-                codegenContext.expectModuleDocProvider(),
-            )
-
-        // We cannot write to the lib anymore as the RustWriter overwrites it, so writing code directly to check.rs
-        // and then adding a `mod check;` to the lib.rs
-        rustCrate.withModule(RustModule.public("check")) {
-            writable(this)
-            File("$dir/src/check.rs").writeText(toString())
-        }
-
-        val lib = File("$dir/src/lib.rs")
-        val libContents = lib.readText() + "\nmod check;"
-        lib.writeText(libContents)
-
-        return dir
-    }
-
     @Test
     fun `generate code and check member constrained shapes are in the right modules`() {
-        val dir =
-            runServerCodeGen(outputModelOnly) {
-                fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
-                    unitTest(
-                        "builder_module_has_${typeName.toSnakeCase()}",
-                        """
-                        #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
-                        """,
-                    )
-                }
+        serverIntegrationTest(outputModelOnly, IntegrationTestParams(service = "constrainedMemberShape#ConstrainedService")) { codegenContext, rustCrate ->
+            fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
+                unitTest(
+                    "builder_module_has_${typeName.toSnakeCase()}",
+                    """
+                    #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
+                    """,
+                )
+            }
 
+            rustCrate.testModule {
                 // All directly constrained members of the output structure should be in the builder module
                 setOf(
                     "ConstrainedLong",
@@ -394,9 +334,7 @@ class ConstraintsMemberShapeTest {
                     ).generateUseStatements("crate::model::pattern_string_list_override"),
                 )
             }
-
-        val env = mapOf("RUSTFLAGS" to "-A dead_code")
-        "cargo test".runCommand(dir, env)
+        }
     }
 
     /**
