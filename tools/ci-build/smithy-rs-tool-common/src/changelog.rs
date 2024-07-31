@@ -12,6 +12,7 @@ use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Debug;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -418,10 +419,11 @@ impl ChangelogLoader {
     }
 
     /// Parses the contents of a file located at `path` into `Changelog`
-    pub fn load_from_file(&self, path: impl AsRef<Path>) -> Result<Changelog> {
+    pub fn load_from_file(&self, path: impl AsRef<Path> + Debug) -> Result<Changelog> {
         let contents = std::fs::read_to_string(path.as_ref())
             .with_context(|| format!("failed to read {:?}", path.as_ref()))?;
         self.parse_str(contents)
+            .with_context(|| format!("failed to parse the contents in {path:?}"))
     }
 
     /// Parses the contents of files stored in a directory `dir_path` into `Changelog`
@@ -429,7 +431,7 @@ impl ChangelogLoader {
     /// It opens each file in the directory, parses the file contents into `Changelog`,
     /// and merges it with accumulated `Changelog`. It currently does not support loading
     /// from recursive directory structures.
-    pub fn load_from_dir(&self, dir_path: impl AsRef<Path>) -> Result<Changelog> {
+    pub fn load_from_dir(&self, dir_path: impl AsRef<Path> + Debug) -> Result<Changelog> {
         let entries = std::fs::read_dir(dir_path.as_ref())?;
         let result = entries
             .into_iter()
