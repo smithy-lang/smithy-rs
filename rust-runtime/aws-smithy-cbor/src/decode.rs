@@ -297,6 +297,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::Decoder;
+    use aws_smithy_types::date_time::Format;
 
     #[test]
     fn test_definite_str_is_cow_borrowed() {
@@ -366,10 +367,13 @@ mod tests {
         ];
         let mut decoder = Decoder::new(&bytes);
         let timestamp = decoder.timestamp().expect("should decode timestamp");
-        // `timestamp` == 2000-01-02T20:34:56.123Z
         assert_eq!(
             timestamp,
-            aws_smithy_types::date_time::DateTime::from_secs_and_nanos(946845296, 123000000)
+            aws_smithy_types::date_time::DateTime::from_str(
+                "2000-01-02T20:34:56.123Z",
+                Format::DateTime
+            )
+            .unwrap()
         );
     }
 }
