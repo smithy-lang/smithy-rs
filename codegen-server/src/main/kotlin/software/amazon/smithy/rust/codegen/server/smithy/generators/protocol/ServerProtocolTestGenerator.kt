@@ -11,7 +11,6 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
@@ -272,13 +271,15 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope =
         arrayOf(
+            "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
             "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
             "Hyper" to RuntimeType.Hyper,
+            "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-            "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
+            "decode_body_data" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "decode_body_data"),
         )
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
@@ -313,7 +314,6 @@ class ServerProtocolTestGenerator(
                 headers,
                 body.orNull(),
                 bodyMediaType.orNull(),
-                protocol,
                 queryParams,
                 host.orNull(),
             )
@@ -387,15 +387,12 @@ class ServerProtocolTestGenerator(
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-                // TODO(https://github.com/smithy-lang/smithy/issues/1932): we send `null` for `bodyMediaType` for now but
-                //  the Smithy protocol test should give it to us.
                 renderHttpRequest(
                     uri.get(),
                     method,
                     headers,
                     body.orNull(),
-                    bodyMediaType = null,
-                    testCase.protocol,
+                    bodyMediaType.orNull(),
                     queryParams,
                     host.orNull(),
                 )
@@ -417,7 +414,6 @@ class ServerProtocolTestGenerator(
         headers: Map<String, String>,
         body: String?,
         bodyMediaType: String?,
-        protocol: ShapeId,
         queryParams: List<String>,
         host: String?,
     ) {
@@ -448,24 +444,12 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                    // TODO(https://github.com/smithy-lang/smithy/issues/1932): We're using the `protocol` field as a
-                    // proxy for `bodyMediaType`. This works because `rpcv2Cbor` happens to be the only protocol where
-                    // the body is base64-encoded in the protocol test, but checking `bodyMediaType` should be a more
-                    // resilient check.
                     val encodedBody =
-                        if (protocol.toShapeId() == ShapeId.from("smithy.protocols#rpcv2Cbor")) {
-                            """
-                        #{Bytes}::from(
-                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
-                                "`body` field of Smithy protocol test is not correctly base64 encoded"
-                            )
+                        """
+                        #{Bytes}::copy_from_slice(
+                            &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
                         )
                         """
-                        } else {
-                            """
-                        #{Bytes}::from_static($sanitizedBody.as_bytes())
-                        """
-                        }
 
                     "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {
