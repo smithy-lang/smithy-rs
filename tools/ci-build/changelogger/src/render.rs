@@ -475,7 +475,7 @@ fn render_crate_versions(crate_version_metadata_map: CrateVersionMetadataMap, ou
 
 /// Convert a list of changelog entries and crate versions into markdown.
 /// Returns (header, body)
-fn render(
+pub(crate) fn render(
     entries: &[ChangelogEntry],
     crate_version_metadata_map: CrateVersionMetadataMap,
     release_header: &str,

@@ -3,10 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::changelog::{Authors, Changelog, HandAuthoredEntry, Meta, Reference, SdkAffected};
+use crate::changelog::{Changelog, Markdown, SdkAffected};
 use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::fmt::Debug;
 
 pub(crate) trait ParseIntoChangelog: Debug {
@@ -42,75 +40,6 @@ impl ParseIntoChangelog for Json {
             .collect::<Vec<_>>()
             .join("\n");
         serde_json::from_str(&value).context("Invalid JSON changelog format")
-    }
-}
-
-#[derive(Copy, Clone, Debug, Deserialize, Hash, Serialize, PartialEq, Eq)]
-enum Target {
-    #[serde(rename = "client")]
-    Client,
-    #[serde(rename = "server")]
-    Server,
-    #[serde(rename = "aws-sdk-rust")]
-    AwsSdk,
-}
-
-#[derive(Clone, Debug, Default, Deserialize)]
-struct FrontMatter {
-    applies_to: HashSet<Target>,
-    authors: Authors,
-    references: Vec<Reference>,
-    breaking: bool,
-    new_feature: bool,
-    bug_fix: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-struct Markdown {
-    front_matter: FrontMatter,
-    message: String,
-}
-
-impl From<Markdown> for Changelog {
-    fn from(value: Markdown) -> Self {
-        let front_matter = value.front_matter;
-        let entry = HandAuthoredEntry {
-            message: value.message.trim_start().to_owned(),
-            meta: Meta {
-                bug: front_matter.bug_fix,
-                breaking: front_matter.breaking,
-                tada: front_matter.new_feature,
-                target: None,
-            },
-            authors: front_matter.authors,
-            references: front_matter.references,
-            since_commit: None,
-            age: None,
-        };
-
-        let mut changelog = Changelog::new();
-
-        // Bin `entry` into the appropriate `Vec` based on the `applies_to` field in `front_matter`
-        if front_matter.applies_to.contains(&Target::AwsSdk) {
-            changelog.aws_sdk_rust.push(entry.clone())
-        }
-        if front_matter.applies_to.contains(&Target::Client)
-            && front_matter.applies_to.contains(&Target::Server)
-        {
-            let mut entry = entry.clone();
-            entry.meta.target = Some(SdkAffected::All);
-            changelog.smithy_rs.push(entry);
-        } else if front_matter.applies_to.contains(&Target::Client) {
-            let mut entry = entry.clone();
-            entry.meta.target = Some(SdkAffected::Client);
-            changelog.smithy_rs.push(entry);
-        } else if front_matter.applies_to.contains(&Target::Server) {
-            let mut entry = entry.clone();
-            entry.meta.target = Some(SdkAffected::Server);
-            changelog.smithy_rs.push(entry);
-        }
-
-        changelog
     }
 }
 
@@ -153,17 +82,18 @@ impl Default for ParserChain {
 
 impl ParseIntoChangelog for ParserChain {
     fn parse(&self, value: &str) -> Result<Changelog> {
-        for (name, parser) in &self.parsers {
+        let mut errs = Vec::new();
+        for (_name, parser) in &self.parsers {
             match parser.parse(value) {
                 Ok(parsed) => {
                     return Ok(parsed);
                 }
                 Err(err) => {
-                    tracing::debug!(parser = %name, err = %err, "failed to parse the input string");
+                    errs.push(err.to_string());
                 }
             }
         }
-        bail!("no parsers in chain parsed ${value} into `Changelog`")
+        bail!("no parsers in chain parsed the following into `Changelog`\n{value}\nwith respective errors: \n{errs:?}")
     }
 }
 
@@ -335,6 +265,33 @@ This is some **Markdown** content.
                 &changelog.smithy_rs[0].message
             );
             assert!(changelog.aws_sdk_rust.is_empty());
+        }
+        {
+            let markdown = r#"---
+applies_to:
+- client
+- aws-sdk-rust
+authors:
+- ysaito1001
+references:
+- smithy-rs#1234
+breaking: false
+new_feature: false
+bug_fix: true
+---
+Fix a long-standing bug.
+"#;
+            let changelog = Markdown::default().parse(markdown).unwrap();
+            assert_eq!(1, changelog.smithy_rs.len());
+            assert_eq!(
+                Some(SdkAffected::Client),
+                changelog.smithy_rs[0].meta.target
+            );
+            assert_eq!(
+                "Fix a long-standing bug.\n",
+                &changelog.smithy_rs[0].message
+            );
+            assert_eq!(1, changelog.aws_sdk_rust.len());
         }
     }
 }

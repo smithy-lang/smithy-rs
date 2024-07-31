@@ -5,5 +5,7 @@
 
 pub mod entry;
 pub mod init;
+pub mod ls;
+pub mod new;
 pub mod render;
 pub mod split;

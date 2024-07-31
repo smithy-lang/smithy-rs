@@ -5,6 +5,8 @@
 
 use anyhow::Result;
 use changelogger::init::subcommand_init;
+use changelogger::ls::subcommand_ls;
+use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
 use clap::Parser;
@@ -12,19 +14,25 @@ use clap::Parser;
 #[derive(Parser, Debug, Eq, PartialEq)]
 #[clap(name = "changelogger", author, version, about)]
 pub enum Args {
-    /// Split SDK changelog entries into a separate file
-    Split(changelogger::split::SplitArgs),
+    /// Print to stdout the empty "next" CHANGELOG template
+    Init(changelogger::init::InitArgs),
+    /// Create a new changelog entry Markdown file in the `smithy-rs/.changelog` directory
+    New(changelogger::new::NewArgs),
+    /// Render a preview of changelog entries since the last release
+    Ls(changelogger::ls::LsArgs),
     /// Render a TOML/JSON changelog into GitHub-flavored Markdown
     Render(changelogger::render::RenderArgs),
-    /// Print to stdout the empty "next" CHANGELOG template.
-    Init(changelogger::init::InitArgs),
+    /// Split SDK changelog entries into a separate file
+    Split(changelogger::split::SplitArgs),
 }
 
 fn main() -> Result<()> {
     match Args::parse() {
-        Args::Split(split) => subcommand_split(&split),
-        Args::Render(render) => subcommand_render(&render),
         Args::Init(init) => subcommand_init(&init),
+        Args::New(new) => subcommand_new(new),
+        Args::Ls(ls) => subcommand_ls(ls),
+        Args::Render(render) => subcommand_render(&render),
+        Args::Split(split) => subcommand_split(&split),
     }
 }
 
@@ -32,10 +40,14 @@ fn main() -> Result<()> {
 mod tests {
     use super::Args;
     use changelogger::entry::ChangeSet;
+    use changelogger::ls::LsArgs;
+    use changelogger::new::NewArgs;
     use changelogger::render::RenderArgs;
     use changelogger::split::SplitArgs;
     use clap::Parser;
+    use smithy_rs_tool_common::changelog::{Reference, Target};
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     #[test]
     fn args_parsing() {
@@ -187,6 +199,56 @@ mod tests {
                 "path/to/previous/versions.toml"
             ])
             .unwrap()
+        );
+
+        assert_eq!(
+            Args::New(NewArgs {
+                applies_to: Some(vec![Target::Client, Target::AwsSdk]),
+                authors: Some(vec!["external-contrib".to_owned(), "ysaito1001".to_owned()]),
+                references: Some(vec![
+                    Reference::from_str("smithy-rs#1234").unwrap(),
+                    Reference::from_str("aws-sdk-rust#5678").unwrap()
+                ]),
+                breaking: false,
+                new_feature: true,
+                bug_fix: false,
+                message: Some("Implement a long-awaited feature for S3".to_owned()),
+                basename: None,
+            }),
+            Args::try_parse_from([
+                "./changelogger",
+                "new",
+                "--applies-to",
+                "client",
+                "--applies-to",
+                "aws-sdk-rust",
+                "--authors",
+                "external-contrib",
+                "--authors",
+                "ysaito1001",
+                "--references",
+                "smithy-rs#1234",
+                "--references",
+                "aws-sdk-rust#5678",
+                "--new-feature",
+                "--message",
+                "Implement a long-awaited feature for S3",
+            ])
+            .unwrap()
+        );
+
+        assert_eq!(
+            Args::Ls(LsArgs {
+                change_set: ChangeSet::SmithyRs
+            }),
+            Args::try_parse_from(["./changelogger", "ls", "--change-set", "smithy-rs",]).unwrap()
+        );
+
+        assert_eq!(
+            Args::Ls(LsArgs {
+                change_set: ChangeSet::AwsSdk
+            }),
+            Args::try_parse_from(["./changelogger", "ls", "--change-set", "aws-sdk",]).unwrap()
         );
     }
 }
