@@ -70,7 +70,9 @@ class CborParserGenerator(
     private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
+    /** Lambda that controls what to do when seeing a NULL value while parsing an element for a non-sparse collection */
     private val handleNullForNonSparseCollection: (String) -> Writable,
+    /** Lambda that determines whether the input to a builder setter needs to be wrapped in `Some` */
     private val shouldWrapBuilderMemberSetterInputWithOption: (MemberShape) -> Boolean = { _ -> true },
     private val customizations: List<CborParserCustomization> = emptyList(),
 ) : StructuredDataParserGenerator {
