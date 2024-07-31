@@ -134,7 +134,6 @@ dependencies = [
  "anyhow",
  "clap",
  "edit",
- "fastrand",
  "once_cell",
  "ordinal",
  "pretty_assertions",

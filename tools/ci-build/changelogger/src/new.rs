@@ -9,6 +9,7 @@ use smithy_rs_tool_common::changelog::{FrontMatter, Markdown, Reference, Target}
 use smithy_rs_tool_common::git::find_git_repository_root;
 use smithy_rs_tool_common::here;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug, Eq, PartialEq)]
 pub struct NewArgs {
@@ -58,9 +59,12 @@ pub fn subcommand_new(args: NewArgs) -> anyhow::Result<()> {
     let mut md_full_filename = find_git_repository_root("smithy-rs", ".").context(here!())?;
     md_full_filename.push(".changelog");
     md_full_filename.push(args.basename.clone().unwrap_or(PathBuf::from(format!(
-        "{}.md",
-        fastrand::u32(1_000_000..10_000_000)
-    ))));
+            "{:?}.md",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("should get the current Unix epoch time")
+                .as_secs(),
+        ))));
 
     let changelog_entry = new_entry(Markdown::from(args))?;
     std::fs::write(&md_full_filename, &changelog_entry).with_context(|| {
