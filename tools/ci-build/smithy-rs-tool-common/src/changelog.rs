@@ -132,9 +132,18 @@ enum AuthorsInner {
     Multiple(Vec<String>),
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(from = "AuthorsInner", into = "AuthorsInner")]
 pub struct Authors(pub(super) Vec<String>);
+
+impl PartialEq for Authors {
+    fn eq(&self, other: &Self) -> bool {
+        // `true` if two `Authors` contain the same set of authors, regardless of their order
+        self.0.iter().collect::<HashSet<_>>() == other.0.iter().collect::<HashSet<_>>()
+    }
+}
+
+impl Eq for Authors {}
 
 impl From<AuthorsInner> for Authors {
     fn from(value: AuthorsInner) -> Self {
