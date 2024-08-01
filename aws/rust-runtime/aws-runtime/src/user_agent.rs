@@ -30,8 +30,6 @@ pub struct AwsUserAgent {
     os_metadata: OsMetadata,
     language_metadata: LanguageMetadata,
     exec_env_metadata: Option<ExecEnvMetadata>,
-    feature_metadata: Vec<FeatureMetadata>,
-    config_metadata: Vec<ConfigMetadata>,
     business_metrics: BusinessMetrics,
     framework_metadata: Vec<FrameworkMetadata>,
     app_name: Option<AppName>,
@@ -74,8 +72,6 @@ impl AwsUserAgent {
                 extras: Default::default(),
             },
             exec_env_metadata,
-            feature_metadata: Default::default(),
-            config_metadata: Default::default(),
             framework_metadata: Default::default(),
             business_metrics: Default::default(),
             app_name: Default::default(),
@@ -107,8 +103,6 @@ impl AwsUserAgent {
                 extras: Default::default(),
             },
             exec_env_metadata: None,
-            feature_metadata: Vec::new(),
-            config_metadata: Vec::new(),
             business_metrics: Default::default(),
             framework_metadata: Vec::new(),
             app_name: None,
@@ -117,31 +111,51 @@ impl AwsUserAgent {
         }
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `with_business_metric` instead."
+    )]
+    #[allow(unused_mut)]
+    #[allow(deprecated)]
     #[doc(hidden)]
     /// Adds feature metadata to the user agent.
-    pub fn with_feature_metadata(mut self, metadata: FeatureMetadata) -> Self {
-        self.feature_metadata.push(metadata);
+    pub fn with_feature_metadata(mut self, _metadata: FeatureMetadata) -> Self {
         self
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `add_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
     #[doc(hidden)]
     /// Adds feature metadata to the user agent.
-    pub fn add_feature_metadata(&mut self, metadata: FeatureMetadata) -> &mut Self {
-        self.feature_metadata.push(metadata);
+    pub fn add_feature_metadata(&mut self, _metadata: FeatureMetadata) -> &mut Self {
         self
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `with_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
     #[doc(hidden)]
     /// Adds config metadata to the user agent.
-    pub fn with_config_metadata(mut self, metadata: ConfigMetadata) -> Self {
-        self.config_metadata.push(metadata);
+    pub fn with_config_metadata(mut self, _metadata: ConfigMetadata) -> Self {
         self
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `add_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
     #[doc(hidden)]
     /// Adds config metadata to the user agent.
-    pub fn add_config_metadata(&mut self, metadata: ConfigMetadata) -> &mut Self {
-        self.config_metadata.push(metadata);
+    pub fn add_config_metadata(&mut self, _metadata: ConfigMetadata) -> &mut Self {
         self
     }
 
@@ -222,12 +236,6 @@ impl AwsUserAgent {
         write!(ua_value, "{} ", &self.language_metadata).unwrap();
         if let Some(ref env_meta) = self.exec_env_metadata {
             write!(ua_value, "{} ", env_meta).unwrap();
-        }
-        for feature in &self.feature_metadata {
-            write!(ua_value, "{} ", feature).unwrap();
-        }
-        for config in &self.config_metadata {
-            write!(ua_value, "{} ", config).unwrap();
         }
         if !self.business_metrics.is_empty() {
             write!(ua_value, "{} ", &self.business_metrics).unwrap()
@@ -393,6 +401,7 @@ impl fmt::Display for AdditionalMetadataList {
     }
 }
 
+#[deprecated(since = "1.4.0", note = "Replaced by `BusinessMetric`.")]
 #[doc(hidden)]
 /// Metadata about a feature that is being used in the SDK.
 #[derive(Clone, Debug)]
@@ -403,6 +412,7 @@ pub struct FeatureMetadata {
     additional: AdditionalMetadataList,
 }
 
+#[allow(deprecated)]
 impl FeatureMetadata {
     /// Creates `FeatureMetadata`.
     ///
@@ -429,6 +439,7 @@ impl FeatureMetadata {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for FeatureMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // feat-metadata = "ft/" name ["/" version] *(RWS additional-metadata)
@@ -440,6 +451,7 @@ impl fmt::Display for FeatureMetadata {
     }
 }
 
+#[deprecated(since = "1.4.0", note = "Replaced by `BusinessMetric`.")]
 #[doc(hidden)]
 /// Metadata about a config value that is being used in the SDK.
 #[derive(Clone, Debug)]
@@ -449,6 +461,7 @@ pub struct ConfigMetadata {
     value: Option<Cow<'static, str>>,
 }
 
+#[allow(deprecated)]
 impl ConfigMetadata {
     /// Creates `ConfigMetadata`.
     ///
@@ -468,6 +481,7 @@ impl ConfigMetadata {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for ConfigMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // config-metadata = "cfg/" config ["/" value]
@@ -621,54 +635,6 @@ mod test {
         assert_eq!(
             ua.aws_ua_header(),
             "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 exec-env/lambda"
-        );
-        assert_eq!(
-            ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
-        );
-    }
-
-    #[test]
-    fn generate_a_valid_ua_with_features() {
-        let api_metadata = ApiMetadata {
-            service_id: "dynamodb".into(),
-            version: "123",
-        };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_feature_metadata(
-                FeatureMetadata::new("test-feature", Some(Cow::Borrowed("1.0"))).unwrap(),
-            )
-            .with_feature_metadata(
-                FeatureMetadata::new("other-feature", None)
-                    .unwrap()
-                    .with_additional(AdditionalMetadata::new("asdf").unwrap()),
-            );
-        make_deterministic(&mut ua);
-        assert_eq!(
-            ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 ft/test-feature/1.0 ft/other-feature md/asdf"
-        );
-        assert_eq!(
-            ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
-        );
-    }
-
-    #[test]
-    fn generate_a_valid_ua_with_config() {
-        let api_metadata = ApiMetadata {
-            service_id: "dynamodb".into(),
-            version: "123",
-        };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_config_metadata(
-                ConfigMetadata::new("some-config", Some(Cow::Borrowed("5"))).unwrap(),
-            )
-            .with_config_metadata(ConfigMetadata::new("other-config", None).unwrap());
-        make_deterministic(&mut ua);
-        assert_eq!(
-            ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 cfg/some-config/5 cfg/other-config"
         );
         assert_eq!(
             ua.ua_header(),
