@@ -4,21 +4,26 @@
  */
 
 use anyhow::Result;
-use changelogger::init::subcommand_init;
 use changelogger::ls::subcommand_ls;
 use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug, Eq, PartialEq)]
 #[clap(name = "changelogger", author, version, about)]
-pub enum Args {
-    /// Print to stdout the empty "next" CHANGELOG template
-    Init(changelogger::init::InitArgs),
+pub struct Args {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug, Eq, PartialEq)]
+enum Command {
     /// Create a new changelog entry Markdown file in the `smithy-rs/.changelog` directory
+    #[clap(visible_alias("n"))]
     New(changelogger::new::NewArgs),
     /// Render a preview of changelog entries since the last release
+    #[clap(visible_alias("l"))]
     Ls(changelogger::ls::LsArgs),
     /// Render a TOML/JSON changelog into GitHub-flavored Markdown
     Render(changelogger::render::RenderArgs),
@@ -27,18 +32,18 @@ pub enum Args {
 }
 
 fn main() -> Result<()> {
-    match Args::parse() {
-        Args::Init(init) => subcommand_init(&init),
-        Args::New(new) => subcommand_new(new),
-        Args::Ls(ls) => subcommand_ls(ls),
-        Args::Render(render) => subcommand_render(&render),
-        Args::Split(split) => subcommand_split(&split),
+    use Command::*;
+    match Args::parse().command {
+        New(new) => subcommand_new(new),
+        Ls(ls) => subcommand_ls(ls),
+        Render(render) => subcommand_render(&render),
+        Split(split) => subcommand_split(&split),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Args;
+    use super::{Args, Command};
     use changelogger::entry::ChangeSet;
     use changelogger::ls::LsArgs;
     use changelogger::new::NewArgs;
@@ -52,12 +57,14 @@ mod tests {
     #[test]
     fn args_parsing() {
         assert_eq!(
-            Args::Split(SplitArgs {
-                source: PathBuf::from("fromplace"),
-                destination: PathBuf::from("someplace"),
-                since_commit: None,
-                smithy_rs_location: None,
-            }),
+            Args {
+                command: Command::Split(SplitArgs {
+                    source: PathBuf::from("fromplace"),
+                    destination: PathBuf::from("someplace"),
+                    since_commit: None,
+                    smithy_rs_location: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "split",
@@ -70,18 +77,20 @@ mod tests {
         );
 
         assert_eq!(
-            Args::Render(RenderArgs {
-                change_set: ChangeSet::SmithyRs,
-                independent_versioning: false,
-                source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
-                changelog_output: PathBuf::from("some-changelog"),
-                release_manifest_output: Some(PathBuf::from("some-manifest")),
-                current_release_versions_manifest: None,
-                previous_release_versions_manifest: None,
-                date_override: None,
-                smithy_rs_location: None,
-            }),
+            Args {
+                command: Command::Render(RenderArgs {
+                    change_set: ChangeSet::SmithyRs,
+                    independent_versioning: false,
+                    source: vec![PathBuf::from("fromplace")],
+                    changelog_output: PathBuf::from("some-changelog"),
+                    source_to_truncate: Some(PathBuf::from("fromplace")),
+                    release_manifest_output: Some(PathBuf::from("some-manifest")),
+                    current_release_versions_manifest: None,
+                    previous_release_versions_manifest: None,
+                    date_override: None,
+                    smithy_rs_location: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "render",
@@ -100,21 +109,23 @@ mod tests {
         );
 
         assert_eq!(
-            Args::Render(RenderArgs {
-                change_set: ChangeSet::AwsSdk,
-                independent_versioning: true,
-                source: vec![
-                    PathBuf::from("fromplace"),
-                    PathBuf::from("fromanotherplace")
-                ],
-                source_to_truncate: PathBuf::from("fromplace"),
-                changelog_output: PathBuf::from("some-changelog"),
-                release_manifest_output: None,
-                current_release_versions_manifest: None,
-                previous_release_versions_manifest: None,
-                date_override: None,
-                smithy_rs_location: None,
-            }),
+            Args {
+                command: Command::Render(RenderArgs {
+                    change_set: ChangeSet::AwsSdk,
+                    independent_versioning: true,
+                    source: vec![
+                        PathBuf::from("fromplace"),
+                        PathBuf::from("fromanotherplace")
+                    ],
+                    changelog_output: PathBuf::from("some-changelog"),
+                    source_to_truncate: Some(PathBuf::from("fromplace")),
+                    release_manifest_output: None,
+                    current_release_versions_manifest: None,
+                    previous_release_versions_manifest: None,
+                    date_override: None,
+                    smithy_rs_location: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "render",
@@ -134,18 +145,22 @@ mod tests {
         );
 
         assert_eq!(
-            Args::Render(RenderArgs {
-                change_set: ChangeSet::AwsSdk,
-                independent_versioning: true,
-                source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
-                changelog_output: PathBuf::from("some-changelog"),
-                release_manifest_output: None,
-                current_release_versions_manifest: None,
-                previous_release_versions_manifest: Some(PathBuf::from("path/to/versions.toml")),
-                date_override: None,
-                smithy_rs_location: None,
-            }),
+            Args {
+                command: Command::Render(RenderArgs {
+                    change_set: ChangeSet::AwsSdk,
+                    independent_versioning: true,
+                    source: vec![PathBuf::from("fromplace")],
+                    changelog_output: PathBuf::from("some-changelog"),
+                    source_to_truncate: Some(PathBuf::from("fromplace")),
+                    release_manifest_output: None,
+                    current_release_versions_manifest: None,
+                    previous_release_versions_manifest: Some(PathBuf::from(
+                        "path/to/versions.toml"
+                    )),
+                    date_override: None,
+                    smithy_rs_location: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "render",
@@ -165,22 +180,24 @@ mod tests {
         );
 
         assert_eq!(
-            Args::Render(RenderArgs {
-                change_set: ChangeSet::AwsSdk,
-                independent_versioning: true,
-                source: vec![PathBuf::from("fromplace")],
-                source_to_truncate: PathBuf::from("fromplace"),
-                changelog_output: PathBuf::from("some-changelog"),
-                release_manifest_output: None,
-                current_release_versions_manifest: Some(PathBuf::from(
-                    "path/to/current/versions.toml"
-                )),
-                previous_release_versions_manifest: Some(PathBuf::from(
-                    "path/to/previous/versions.toml"
-                )),
-                date_override: None,
-                smithy_rs_location: None,
-            }),
+            Args {
+                command: Command::Render(RenderArgs {
+                    change_set: ChangeSet::AwsSdk,
+                    independent_versioning: true,
+                    source: vec![PathBuf::from("fromplace")],
+                    changelog_output: PathBuf::from("some-changelog"),
+                    source_to_truncate: Some(PathBuf::from("fromplace")),
+                    release_manifest_output: None,
+                    current_release_versions_manifest: Some(PathBuf::from(
+                        "path/to/current/versions.toml"
+                    )),
+                    previous_release_versions_manifest: Some(PathBuf::from(
+                        "path/to/previous/versions.toml"
+                    )),
+                    date_override: None,
+                    smithy_rs_location: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "render",
@@ -202,19 +219,21 @@ mod tests {
         );
 
         assert_eq!(
-            Args::New(NewArgs {
-                applies_to: Some(vec![Target::Client, Target::AwsSdk]),
-                authors: Some(vec!["external-contrib".to_owned(), "ysaito1001".to_owned()]),
-                references: Some(vec![
-                    Reference::from_str("smithy-rs#1234").unwrap(),
-                    Reference::from_str("aws-sdk-rust#5678").unwrap()
-                ]),
-                breaking: false,
-                new_feature: true,
-                bug_fix: false,
-                message: Some("Implement a long-awaited feature for S3".to_owned()),
-                basename: None,
-            }),
+            Args {
+                command: Command::New(NewArgs {
+                    applies_to: Some(vec![Target::Client, Target::AwsSdk]),
+                    authors: Some(vec!["external-contrib".to_owned(), "ysaito1001".to_owned()]),
+                    references: Some(vec![
+                        Reference::from_str("smithy-rs#1234").unwrap(),
+                        Reference::from_str("aws-sdk-rust#5678").unwrap()
+                    ]),
+                    breaking: false,
+                    new_feature: true,
+                    bug_fix: false,
+                    message: Some("Implement a long-awaited feature for S3".to_owned()),
+                    basename: None,
+                })
+            },
             Args::try_parse_from([
                 "./changelogger",
                 "new",
@@ -238,16 +257,20 @@ mod tests {
         );
 
         assert_eq!(
-            Args::Ls(LsArgs {
-                change_set: ChangeSet::SmithyRs
-            }),
+            Args {
+                command: Command::Ls(LsArgs {
+                    change_set: ChangeSet::SmithyRs
+                })
+            },
             Args::try_parse_from(["./changelogger", "ls", "--change-set", "smithy-rs",]).unwrap()
         );
 
         assert_eq!(
-            Args::Ls(LsArgs {
-                change_set: ChangeSet::AwsSdk
-            }),
+            Args {
+                command: Command::Ls(LsArgs {
+                    change_set: ChangeSet::AwsSdk
+                })
+            },
             Args::try_parse_from(["./changelogger", "ls", "--change-set", "aws-sdk",]).unwrap()
         );
     }

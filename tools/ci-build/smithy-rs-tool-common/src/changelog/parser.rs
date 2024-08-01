@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::changelog::{Changelog, Markdown, SdkAffected};
+use crate::changelog::{Changelog, Markdown};
 use anyhow::{bail, Context, Result};
 use std::fmt::Debug;
 
@@ -15,17 +15,7 @@ pub(crate) trait ParseIntoChangelog: Debug {
 pub(super) struct Toml;
 impl ParseIntoChangelog for Toml {
     fn parse(&self, value: &str) -> Result<Changelog> {
-        let mut changelog: Changelog =
-            toml::from_str(value).context("Invalid TOML changelog format")?;
-        // all smithry-rs entries should have meta.target set to the default value instead of None
-        // TODO(file-per-change-changelog): Remove the following fix-up once we have switched over
-        //  to the new markdown format since it won't be needed.
-        for entry in &mut changelog.smithy_rs {
-            if entry.meta.target.is_none() {
-                entry.meta.target = Some(SdkAffected::default());
-            }
-        }
-        Ok(changelog)
+        toml::from_str(value).context("Invalid TOML changelog format")
     }
 }
 
@@ -100,6 +90,7 @@ impl ParseIntoChangelog for ParserChain {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::changelog::{SdkAffected, SdkModelChangeKind, SdkModelEntry};
 
     #[test]
     fn parse_json() {
@@ -149,49 +140,38 @@ mod tests {
 
     #[test]
     fn parse_toml() {
-        // TODO(file-per-change-changelog): We keep the following test string while transitioning
-        //  to the new markdown format. Once we have switched to the new format, only use
-        //  `[[aws-sdk-model]]` in the test string because after the cutover, `[[aws-sdk-rust]]` or
-        //  `[[smithy-rs]]` are not a recommended way of writing changelogs.
         let toml = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
+            [[aws-sdk-model]]
+            module = "aws-sdk-s3"
+            version = "0.14.0"
+            kind = "Feature"
+            message = "Some new API to do X"
+            [[aws-sdk-model]]
+            module = "aws-sdk-ec2"
+            version = "0.12.0"
+            kind = "Documentation"
+            message = "Updated some docs"
         "#;
         let changelog = Toml::default().parse(toml).unwrap();
-        assert_eq!(4, changelog.smithy_rs.len());
+        assert_eq!(2, changelog.sdk_models.len());
         assert_eq!(
-            Some(SdkAffected::Client),
-            changelog.smithy_rs[0].meta.target,
+            SdkModelEntry {
+                module: "aws-sdk-s3".to_string(),
+                version: "0.14.0".to_string(),
+                kind: SdkModelChangeKind::Feature,
+                message: "Some new API to do X".to_string(),
+            },
+            changelog.sdk_models[0]
         );
         assert_eq!(
-            Some(SdkAffected::Server),
-            changelog.smithy_rs[1].meta.target,
+            SdkModelEntry {
+                module: "aws-sdk-ec2".to_string(),
+                version: "0.12.0".to_string(),
+                kind: SdkModelChangeKind::Documentation,
+                message: "Updated some docs".to_string(),
+            },
+            changelog.sdk_models[1]
         );
-        assert_eq!(Some(SdkAffected::All), changelog.smithy_rs[2].meta.target);
-        assert_eq!(Some(SdkAffected::All), changelog.smithy_rs[3].meta.target);
     }
 
     #[test]

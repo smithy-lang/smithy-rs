@@ -21,19 +21,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 
-pub const EXAMPLE_ENTRY: &str = r#"
-# Example changelog entries
-# [[aws-sdk-rust]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-#
-# [[smithy-rs]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
-# author = "rcoh"
+pub const EXAMPLE_ENTRY: &str = r#"# Example changelog entry, Markdown with YAML front matter
+# ---
+# applies_to: ["client", "server", "aws-sdk-rust"] # "aws-sdk-rust" here duplicates this entry into release notes in `aws-sdk-rust`
+# authors: ["rcoh"]
+# references: ["smithy-rs#920"]
+# breaking: false
+# new_feature: false
+# bug_fix: false
+# ---
+# Fix typos in module documentation for generated crates
 "#;
 
 pub const USE_UPDATE_CHANGELOGS: &str =
@@ -62,11 +59,12 @@ pub struct RenderArgs {
     /// Source changelog entries to render
     #[clap(long, action, required(true))]
     pub source: Vec<PathBuf>,
-    /// Which source to overwrite with an empty changelog template
-    #[clap(long, action)]
-    pub source_to_truncate: PathBuf,
+    /// Where to output the rendered changelog entries
     #[clap(long, action)]
     pub changelog_output: PathBuf,
+    /// Optional directory path to the changelog directory to empty, leaving only `.example` in it
+    #[clap(long, action)]
+    pub source_to_truncate: Option<PathBuf>,
     /// Optional path to output a release manifest file to
     #[clap(long, action)]
     pub release_manifest_output: Option<PathBuf>,
@@ -328,13 +326,15 @@ fn update_changelogs(
     update.push_str(&current);
     std::fs::write(&args.changelog_output, update).context("failed to write rendered changelog")?;
 
-    if args.source_to_truncate.is_dir() {
-        fs::remove_dir_all(&args.source_to_truncate)
-            .and_then(|_| fs::create_dir(&args.source_to_truncate))
-            .with_context(|| format!("failed to empty directory {:?}", &args.source_to_truncate))?;
-    } else {
-        fs::write(&args.source_to_truncate, EXAMPLE_ENTRY.trim())
-            .with_context(|| format!("failed to truncate source {:?}", &args.source_to_truncate))?;
+    if let Some(source_to_truncate) = &args.source_to_truncate {
+        fs::remove_dir_all(source_to_truncate)
+            .and_then(|_| fs::create_dir(source_to_truncate))
+            .with_context(|| format!("failed to empty directory {:?}", source_to_truncate))
+            .and_then(|_| {
+                let dot_example = source_to_truncate.join(".example");
+                fs::write(dot_example.clone(), EXAMPLE_ENTRY)
+                    .with_context(|| format!("failed to create {:?}", dot_example))
+            })?;
     }
     eprintln!("Changelogs updated!");
     Ok(())
@@ -565,7 +565,7 @@ Thank you for your contributions! ❤
 "#;
 
     #[test]
-    fn end_to_end_changelog_entry_markdown_files() {
+    fn end_to_end_changelog() {
         let temp_dir = TempDir::new().unwrap();
         let smithy_rs_entry1 = r#"---
 applies_to: ["client", "server"]
@@ -691,83 +691,6 @@ message = "Some API change"
     }
 
     #[test]
-    fn end_to_end_changelog() {
-        let changelog_toml = r#"
-[[smithy-rs]]
-author = ["rcoh", "jdisanti"]
-message = "I made a major change to update the code generator"
-meta = { breaking = true, tada = false, bug = false }
-references = ["smithy-rs#445"]
-
-[[smithy-rs]]
-author = ["external-contrib", "other-external-dev"]
-message = "I made a change to update the code generator"
-meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446", "aws-sdk#123"]
-
-[[smithy-rs]]
-author = "another-contrib"
-message = "I made a minor change"
-meta = { breaking = false, tada = false, bug = false }
-references = ["smithy-rs#200"]
-
-[[aws-sdk-rust]]
-author = "rcoh"
-message = "I made a major change to update the AWS SDK"
-meta = { breaking = true, tada = false, bug = false }
-references = ["smithy-rs#445"]
-
-[[aws-sdk-rust]]
-author = "external-contrib"
-message = "I made a change to update the code generator"
-meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
-
-[[smithy-rs]]
-authors = ["external-contrib", "other-external-dev"]
-message = """
-I made a change to update the code generator
-
-**Update guide:**
-blah blah
-"""
-meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446", "smithy-rs#447"]
-
-[[aws-sdk-model]]
-module = "aws-sdk-s3"
-version = "0.14.0"
-kind = "Feature"
-message = "Some new API to do X"
-
-[[aws-sdk-model]]
-module = "aws-sdk-ec2"
-version = "0.12.0"
-kind = "Documentation"
-message = "Updated some docs"
-
-[[aws-sdk-model]]
-module = "aws-sdk-ec2"
-version = "0.12.0"
-kind = "Feature"
-message = "Some API change"
-        "#;
-        let changelog: Changelog = ChangelogLoader::default()
-            .parse_str(changelog_toml)
-            .expect("valid changelog");
-        let ChangelogEntries {
-            aws_sdk_rust,
-            smithy_rs,
-        } = changelog.into();
-
-        let smithy_rs_rendered = render_full(&smithy_rs, "v0.3.0 (January 4th, 2022)");
-        pretty_assertions::assert_str_eq!(SMITHY_RS_EXPECTED_END_TO_END, smithy_rs_rendered);
-
-        let aws_sdk_rust_rendered = render_full(&aws_sdk_rust, "v0.1.0 (January 4th, 2022)");
-        pretty_assertions::assert_str_eq!(AWS_SDK_EXPECTED_END_TO_END, aws_sdk_rust_rendered);
-    }
-
-    #[test]
     fn test_date_based_release_metadata() {
         let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
         let result = date_based_release_metadata(now, "some-manifest.json");
@@ -778,53 +701,75 @@ message = "Some API change"
 
     #[test]
     fn test_partition_client_server() {
-        let sample = r#"
-[[smithy-rs]]
-author = "external-contrib"
-message = """
+        let smithy_rs_entry1 = r#"---
+applies_to: ["server"]
+authors: ["external-contrib"]
+references: ["smithy-rs#446"]
+breaking: true
+new_feature: true
+bug_fix: false
+---
 this is a multiline
 message
-"""
-meta = { breaking = false, tada = true, bug = false, target = "server" }
-references = ["smithy-rs#446"]
+"#;
+        let smithy_rs_entry2 = r#"---
+applies_to: ["client"]
+authors: ["external-contrib"]
+references: ["smithy-rs#446"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+a client message
+"#;
+        let smithy_rs_entry3 = r#"---
+applies_to: ["client", "server"]
+authors: ["rcoh"]
+references:  ["smithy-rs#446"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+a change for both
+"#;
+        let smithy_rs_entry4 = r#"---
+applies_to: ["client", "server"]
+authors: ["external-contrib", "other-external-dev"]
+references: ["smithy-rs#446", "smithy-rs#447"]
+breaking: false
+new_feature: true
+bug_fix: false
+---
+I made a change to update the code generator
 
+**Update guide:**
+blah blah
+"#;
+        let model_update = r#"
 [[aws-sdk-model]]
 module = "aws-sdk-s3"
 version = "0.14.0"
 kind = "Feature"
 message = "Some new API to do X"
-
-[[smithy-rs]]
-author = "external-contrib"
-message = "a client message"
-meta = { breaking = false, tada = true, bug = false, target = "client" }
-references = ["smithy-rs#446"]
-
-[[smithy-rs]]
-message = "a change for both"
-meta = { breaking = false, tada = true, bug = false, target = "all" }
-references = ["smithy-rs#446"]
-author = "rcoh"
-
-[[smithy-rs]]
-message = "a missing sdk meta"
-meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
-author = "rcoh"
 "#;
-        let changelog: Changelog = ChangelogLoader::default()
-            .parse_str(sample)
-            .expect("valid changelog");
+        let loader = ChangelogLoader::default();
+        let changelog = [
+            smithy_rs_entry1,
+            smithy_rs_entry2,
+            smithy_rs_entry3,
+            smithy_rs_entry4,
+            model_update,
+        ]
+        .iter()
+        .fold(Changelog::new(), |mut combined_changelog, value| {
+            combined_changelog.merge(loader.parse_str(value).expect("String should have parsed"));
+            combined_changelog
+        });
         let ChangelogEntries {
             aws_sdk_rust: _,
             smithy_rs,
         } = changelog.into();
-        let affected = vec![
-            SdkAffected::Server,
-            SdkAffected::Client,
-            SdkAffected::All,
-            SdkAffected::All,
-        ];
+        let affected = vec![SdkAffected::Server, SdkAffected::Client, SdkAffected::All];
         let entries = smithy_rs
             .iter()
             .filter_map(ChangelogEntry::hand_authored)

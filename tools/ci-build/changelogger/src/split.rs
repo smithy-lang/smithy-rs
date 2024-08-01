@@ -14,12 +14,6 @@ use std::{env, fs, mem};
 // SDK changelog entries, but small enough that the SDK changelog file
 // doesn't get too long.
 const MAX_ENTRY_AGE: usize = 5;
-// TODO(file-per-change-changelog): Remove `INTERMEDIATE_SOURCE_HEADER` once we have switched over
-//  to the new markdown format.
-const INTERMEDIATE_SOURCE_HEADER: &str =
-    "# This is an intermediate file that will be replaced after automation is complete.\n\
-     # It will be used to generate a changelog entry for smithy-rs.\n\
-     # Do not commit the contents of this file!\n";
 
 const DEST_HEADER: &str =
     "# This file will be used by automation when cutting a release of the SDK\n\
@@ -67,16 +61,10 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
         Changelog::new()
     };
 
-    let (smithy_rs_entries, new_sdk_entries) = (
-        smithy_rs_entries(combined_changelog.clone()),
-        sdk_entries(args, combined_changelog).context("failed to filter SDK entries")?,
-    );
+    let new_sdk_entries =
+        sdk_entries(args, combined_changelog).context("failed to filter SDK entries")?;
     let sdk_changelog = merge_sdk_entries(current_sdk_changelog, new_sdk_entries);
 
-    // TODO(file-per-change-changelog): Remove writing to `INTERMEDIATE_SOURCE_HEADER` once we have
-    //  switched over to the new markdown format.
-    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &smithy_rs_entries)
-        .context("failed to write source")?;
     write_entries(&args.destination, DEST_HEADER, &sdk_changelog)
         .context("failed to write destination")?;
     Ok(())
@@ -104,12 +92,6 @@ fn sdk_entries(args: &SplitArgs, mut changelog: Changelog) -> Result<Changelog> 
         entry.since_commit = Some(last_commit.to_string());
     }
     Ok(changelog)
-}
-
-fn smithy_rs_entries(mut changelog: Changelog) -> Changelog {
-    changelog.aws_sdk_rust.clear();
-    changelog.sdk_models.clear();
-    changelog
 }
 
 fn merge_sdk_entries(old_changelog: Changelog, new_changelog: Changelog) -> Changelog {

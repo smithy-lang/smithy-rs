@@ -8,19 +8,20 @@ set -eux
 
 SMITHY_RS_DIR="$(pwd)/smithy-rs"
 ARTIFACTS_DIR="$(pwd)/artifacts/smithy-rs-release"
+CHANGELOG_DIR="${SMITHY_RS_DIR}/.changelog"
 mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
-# Split AWS SDK changelog entries into a separate file
+# Duplicate AWS SDK changelog entries into a separate file
 changelogger split \
-    --source CHANGELOG.next.toml \
+    --source "${CHANGELOG_DIR}" \
     --destination aws/SDK_CHANGELOG.next.json
-# Render the remaining smithy-rs changelog entries
+# Render the smithy-rs changelog entries
 changelogger render \
     --independent-versioning \
     --change-set smithy-rs \
-    --source CHANGELOG.next.toml \
-    --source-to-truncate CHANGELOG.next.toml \
+    --source "${CHANGELOG_DIR}" \
+    --source-to-truncate "${CHANGELOG_DIR}" \
     --changelog-output CHANGELOG.md \
     --release-manifest-output "${ARTIFACTS_DIR}"
 # Commit changelog changes if there are any
