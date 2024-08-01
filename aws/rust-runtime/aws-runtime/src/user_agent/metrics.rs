@@ -6,6 +6,11 @@
 use once_cell::sync::Lazy;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt;
+
+const MAX_COMMA_SEPARATED_METRICS_VALUES_LENGTH: usize = 1024;
+#[allow(dead_code)]
+const MAX_METRICS_ID_NUMBER: usize = 350;
 
 macro_rules! iterable_enum {
     ($docs:tt, $enum_name:ident, $( $variant:ident ),*) => {
@@ -85,9 +90,6 @@ impl Iterator for Base64Iterator {
     }
 }
 
-#[allow(dead_code)]
-const MAX_METRICS_ID_NUMBER: usize = 350;
-
 pub(super) static FEATURE_ID_TO_METRIC_VALUE: Lazy<HashMap<BusinessMetric, Cow<'static, str>>> =
     Lazy::new(|| {
         let mut m = HashMap::new();
@@ -126,10 +128,60 @@ iterable_enum!(
     ResolvedAccountId
 );
 
+#[derive(Clone, Debug, Default)]
+pub(super) struct BusinessMetrics(Vec<BusinessMetric>);
+
+impl BusinessMetrics {
+    pub(super) fn push(&mut self, metric: BusinessMetric) {
+        self.0.push(metric);
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+fn drop_unfinished_metrics_to_fit(csv: &str, max_len: usize) -> Cow<'_, str> {
+    if csv.len() <= max_len {
+        Cow::Borrowed(csv)
+    } else {
+        let truncated = &csv[..max_len];
+        if let Some(pos) = truncated.rfind(',') {
+            Cow::Owned(truncated[..pos].to_owned())
+        } else {
+            Cow::Owned(truncated.to_owned())
+        }
+    }
+}
+
+impl fmt::Display for BusinessMetrics {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // business-metrics = "m/" metric_id *(comma metric_id)
+        let metrics_values = self
+            .0
+            .iter()
+            .map(|feature_id| {
+                FEATURE_ID_TO_METRIC_VALUE
+                    .get(feature_id)
+                    .expect("{feature_id:?} should be found in `FEATURE_ID_TO_METRIC_VALUE`")
+                    .clone()
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let metrics_values = drop_unfinished_metrics_to_fit(
+            &metrics_values,
+            MAX_COMMA_SEPARATED_METRICS_VALUES_LENGTH,
+        );
+
+        write!(f, "m/{}", metrics_values)
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::user_agent::metrics::{
-        Base64Iterator, FEATURE_ID_TO_METRIC_VALUE, MAX_METRICS_ID_NUMBER,
+        drop_unfinished_metrics_to_fit, Base64Iterator, FEATURE_ID_TO_METRIC_VALUE,
+        MAX_METRICS_ID_NUMBER,
     };
     use crate::user_agent::BusinessMetric;
     use convert_case::{Boundary, Case, Casing};
@@ -206,5 +258,26 @@ mod tests {
         assert_eq!("A-", ids[127]);
         assert_eq!("BA", ids[128]);
         assert_eq!("Ed", ids[349]);
+    }
+
+    #[test]
+    fn test_drop_unfinished_metrics_to_fit() {
+        let csv = "A,10BC,E";
+        assert_eq!("A", drop_unfinished_metrics_to_fit(csv, 5));
+
+        let csv = "A10B,CE";
+        assert_eq!("A10B", drop_unfinished_metrics_to_fit(csv, 5));
+
+        let csv = "A10BC,E";
+        assert_eq!("A10BC", drop_unfinished_metrics_to_fit(csv, 5));
+
+        let csv = "A10BCE";
+        assert_eq!("A10BC", drop_unfinished_metrics_to_fit(csv, 5));
+
+        let csv = "A";
+        assert_eq!("A", drop_unfinished_metrics_to_fit(csv, 5));
+
+        let csv = "A,B";
+        assert_eq!("A,B", drop_unfinished_metrics_to_fit(csv, 5));
     }
 }

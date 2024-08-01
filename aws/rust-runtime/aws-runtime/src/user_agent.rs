@@ -14,6 +14,7 @@ use std::fmt;
 mod interceptor;
 mod metrics;
 
+use crate::user_agent::metrics::BusinessMetrics;
 pub use interceptor::UserAgentInterceptor;
 pub use metrics::BusinessMetric;
 
@@ -31,6 +32,7 @@ pub struct AwsUserAgent {
     exec_env_metadata: Option<ExecEnvMetadata>,
     feature_metadata: Vec<FeatureMetadata>,
     config_metadata: Vec<ConfigMetadata>,
+    business_metrics: BusinessMetrics,
     framework_metadata: Vec<FrameworkMetadata>,
     app_name: Option<AppName>,
     build_env_additional_metadata: Option<AdditionalMetadata>,
@@ -75,6 +77,7 @@ impl AwsUserAgent {
             feature_metadata: Default::default(),
             config_metadata: Default::default(),
             framework_metadata: Default::default(),
+            business_metrics: Default::default(),
             app_name: Default::default(),
             build_env_additional_metadata,
             additional_metadata: Default::default(),
@@ -106,6 +109,7 @@ impl AwsUserAgent {
             exec_env_metadata: None,
             feature_metadata: Vec::new(),
             config_metadata: Vec::new(),
+            business_metrics: Default::default(),
             framework_metadata: Vec::new(),
             app_name: None,
             build_env_additional_metadata: None,
@@ -138,6 +142,20 @@ impl AwsUserAgent {
     /// Adds config metadata to the user agent.
     pub fn add_config_metadata(&mut self, metadata: ConfigMetadata) -> &mut Self {
         self.config_metadata.push(metadata);
+        self
+    }
+
+    #[doc(hidden)]
+    /// Adds business metric to the user agent.
+    pub fn with_business_metric(mut self, metric: BusinessMetric) -> Self {
+        self.business_metrics.push(metric);
+        self
+    }
+
+    #[doc(hidden)]
+    /// Adds business metric to the user agent.
+    pub fn add_business_metric(&mut self, metric: BusinessMetric) -> &mut Self {
+        self.business_metrics.push(metric);
         self
     }
 
@@ -190,10 +208,10 @@ impl AwsUserAgent {
                     os-metadata RWS
                     language-metadata RWS
                     [env-metadata RWS]
-                    *(feat-metadata RWS)
-                    *(config-metadata RWS)
-                    *(framework-metadata RWS)
+                        ; ordering is not strictly required in the following section
+                    [business-metrics]
                     [appId]
+                    *(framework-metadata RWS)
         */
         let mut ua_value = String::new();
         use std::fmt::Write;
@@ -210,6 +228,9 @@ impl AwsUserAgent {
         }
         for config in &self.config_metadata {
             write!(ua_value, "{} ", config).unwrap();
+        }
+        if !self.business_metrics.is_empty() {
+            write!(ua_value, "{} ", &self.business_metrics).unwrap()
         }
         for framework in &self.framework_metadata {
             write!(ua_value, "{} ", framework).unwrap();
@@ -711,6 +732,37 @@ mod test {
             "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
         );
     }
+
+    #[test]
+    fn generate_a_valid_ua_with_business_metrics() {
+        // single metric ID
+        {
+            let ua = AwsUserAgent::for_tests().with_business_metric(BusinessMetric::ResourceModel);
+            assert_eq!(
+                ua.aws_ua_header(),
+                "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/A"
+            );
+            assert_eq!(
+                ua.ua_header(),
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+            );
+        }
+        // multiple metric IDs
+        {
+            let ua = AwsUserAgent::for_tests()
+                .with_business_metric(BusinessMetric::RetryModeAdaptive)
+                .with_business_metric(BusinessMetric::S3Transfer)
+                .with_business_metric(BusinessMetric::S3ExpressBucket);
+            assert_eq!(
+                ua.aws_ua_header(),
+                "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/F,G,J"
+            );
+            assert_eq!(
+                ua.ua_header(),
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+            );
+        }
+    }
 }
 
 /*
@@ -731,21 +783,25 @@ api-metadata                  = "api/" service-id "/" version
 os-metadata                   = "os/" os-family ["/" version]
 language-metadata             = "lang/" language "/" version *(RWS additional-metadata)
 env-metadata                  = "exec-env/" name
-feat-metadata                 = "ft/" name ["/" version] *(RWS additional-metadata)
-config-metadata               = "cfg/" config ["/" value]
 framework-metadata            = "lib/" name ["/" version] *(RWS additional-metadata)
 app-id                        = "app/" name
 build-env-additional-metadata = "md/" value
+ua-metadata                   = "ua/2.1"
+business-metrics              = "m/" metric_id *(comma metric_id)
+metric_id                     = 1*m_char
+m_char                        = DIGIT / ALPHA / "+" / "-"
+comma                         = ","
 ua-string                     = sdk-metadata RWS
+                                ua-metadata RWS
                                 [api-metadata RWS]
                                 os-metadata RWS
                                 language-metadata RWS
                                 [env-metadata RWS]
-                                *(feat-metadata RWS)
-                                *(config-metadata RWS)
-                                *(framework-metadata RWS)
+                                       ; ordering is not strictly required in the following section
+                                [business-metrics]
                                 [app-id]
                                 [build-env-additional-metadata]
+                                *(framework-metadata RWS)
 
 # New metadata field might be added in the future and they must follow this format
 prefix               = token
