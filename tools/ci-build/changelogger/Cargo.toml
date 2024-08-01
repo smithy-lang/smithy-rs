@@ -2,7 +2,7 @@
 name = "changelogger"
 version = "0.2.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
-description = "A CLI tool render and update changelogs from TOML changelog files"
+description = "A CLI tool render and update changelogs from changelog files"
 edition = "2021"
 license = "Apache-2.0"
 publish = false
