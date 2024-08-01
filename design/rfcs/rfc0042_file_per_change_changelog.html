@@ -175,7 +175,7 @@
                     <main>
                         <h1 id="rfc-file-per-change-changelog"><a class="header" href="#rfc-file-per-change-changelog">RFC: File-per-change changelog</a></h1>
 <blockquote>
-<p>Status: RFC</p>
+<p>Status: Implemented</p>
 <p>Applies to: client and server</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
@@ -268,23 +268,23 @@ should always be an option to override the author in case a maintainer adds a ch
 entry on behalf of a contributor).</p>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Refactor changelogger and smithy-rs-tool-common to separate the changelog
 serialization format from the internal representation used for rendering and splitting.</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Implement deserialization for the new Markdown entry format</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Incorporate new format into the <code>changelogger render</code> subcommand</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Incorporate new format into the <code>changelogger split</code> subcommand</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Port existing <code>CHANGELOG.next.toml</code> to individual entries</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Update <code>sdk-lints</code> to fail if <code>CHANGELOG.next.toml</code> exists at all to avoid losing
 changelog entries during merges.</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Dry-run test against the smithy-rs release process.</li>
-<li><input disabled="" type="checkbox"/>
+<li><input disabled="" type="checkbox" checked=""/>
 Dry-run test against the SDK release process.</li>
 </ul>
 
