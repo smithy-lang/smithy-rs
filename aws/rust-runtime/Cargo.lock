@@ -108,7 +108,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-http"
-version = "0.60.5"
+version = "0.60.6"
 dependencies = [
  "aws-runtime",
 ]
