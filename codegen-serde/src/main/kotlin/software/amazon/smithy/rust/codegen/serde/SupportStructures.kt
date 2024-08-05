@@ -216,7 +216,7 @@ object SupportStructures {
                 """
                 /// Settings for use when serializing structures
                 ##[non_exhaustive]
-                ##[derive(Copy, Clone, Debug, Default)]
+                ##[derive(Clone, Debug, Default)]
                 pub struct SerializationSettings {
                     /// Replace all sensitive fields with `<redacted>` during serialization
                     pub redact_sensitive_fields: bool,

@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -45,12 +46,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeFunctionName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.symbolBuilder
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
 class SerializeImplGenerator(private val codegenContext: CodegenContext) {
@@ -74,6 +78,10 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         if (shape is ServiceShape) {
             return shape.operations.map { serializerFn(model.expectShape(it), null) }.join("\n")
         } else if (shape is OperationShape) {
+            if (shape.isEventStream(model)) {
+                // Don't generate serializers for event streams
+                return writable { }
+            }
             return writable {
                 serializerFn(model.expectShape(shape.inputShape), null)(this)
                 serializerFn(model.expectShape(shape.outputShape), null)(this)
@@ -92,7 +100,8 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                         serializeBlob(shape)
                     }
 
-                is StringShape, is NumberShape, is BooleanShape -> directSerde(shape)
+                is NumberShape -> serializeNumber(shape)
+                is StringShape, is BooleanShape -> directSerde(shape)
                 is DocumentShape -> serializeDocument(shape)
                 else -> null
             }
@@ -108,12 +117,14 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 }
             if (wrapper != null && applyTo != null) {
                 rustTemplate(
-                    "&#{wrapper}(#{applyTo})", "wrapper" to wrapper,
+                    "&#{wrapper}(#{applyTo}#{unwrapConstraints})", "wrapper" to wrapper,
                     "applyTo" to applyTo,
+                    "unwrapConstraints" to shape.unwrapConstraints(),
                 )
             } else {
                 deps?.toSymbol().also { addDependency(it) }
                 applyTo?.invoke(this)
+                shape.unwrapConstraints()(this)
             }
         }
     }
@@ -128,13 +139,14 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                             rust(
                                 """
                                 match v {
-                                    Some(v) => map.serialize_entry(k, &#T)?,
+                                    Some(v) => map.serialize_entry(k.as_str(), &#T)?,
                                     None => map.serialize_entry(k, &None::<usize>)?
                                 };
                                 """,
                                 member,
                             )
-                        false -> rust("map.serialize_entry(k, &#T)?;", member)
+
+                        false -> rust("map.serialize_entry(k.as_str(), &#T)?;", member)
                     }
                 }
             writable {
@@ -161,7 +173,11 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 writable {
                     when (shape.hasTrait<SparseTrait>()) {
                         false -> rust("seq.serialize_element(&#T)?;", member)
-                        true -> rust("match v { Some(v) => seq.serialize_element(&#T)?, None => seq.serialize_element(&None::<usize>)? };", member)
+                        true ->
+                            rust(
+                                "match v { Some(v) => seq.serialize_element(&#T)?, None => seq.serialize_element(&None::<usize>)? };",
+                                member,
+                            )
                     }
                 }
             writable {
@@ -182,7 +198,26 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         }
 
     private fun serdeSubmodule(shape: Shape) =
-        RustModule.pubCrate(codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, shape), parent = SerdeModule)
+        RustModule.pubCrate(
+            codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, shape),
+            parent = SerdeModule,
+        )
+
+    /**
+     * Serialize a type that already implements `Serialize` directly via `value.serialize(serializer)`
+     * For enums, it adds `as_str()` to convert it into a string directly.
+     */
+    private fun serializeNumber(shape: NumberShape): RuntimeType {
+        val numericType = SimpleShapes.getValue(shape::class)
+        return RuntimeType.forInlineFun(
+            numericType.toString(),
+            PrimitiveShapesModule,
+        ) {
+            implSerializeConfigured(symbolBuilder(shape, numericType).build()) {
+                rustTemplate("self.value.serialize(serializer)")
+            }
+        }
+    }
 
     /**
      * Serialize a type that already implements `Serialize` directly via `value.serialize(serializer)`
@@ -195,7 +230,13 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         ) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 val baseValue =
-                    writable { rust("self.value") }.letIf(shape.isStringShape) { it.plus(writable(".as_str()")) }
+                    writable {
+                        rust("self.value")
+                        shape.unwrapConstraints()(this)
+                        if (shape.isStringShape) {
+                            rust(".as_str()")
+                        }
+                    }
                 rustTemplate("#{base}.serialize(serializer)", "base" to baseValue)
             }
         }
@@ -236,7 +277,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         val module = serdeSubmodule(shape)
         val type = module.toType().resolve(name).toSymbol()
         val base =
-            writable { rust("self.value.0") }.letIf(shape.hasConstraintTrait() && codegenContext.target == CodegenTarget.SERVER) {
+            writable { rust("self.value.0") }.letIf(shape.hasConstraintTrait() && constraintTraitsEnabled()) {
                 it.plus { rust(".0") }
             }
         val serialization =
@@ -257,8 +298,20 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         return wrapperStruct
     }
 
-    private fun Shape.unwrapConstraints(): Boolean =
-        codegenContext.target == CodegenTarget.SERVER && hasConstraintTrait() && (isBlobShape || isTimestampShape || isDocumentShape)
+    private fun constraintTraitsEnabled(): Boolean =
+        codegenContext.target == CodegenTarget.SERVER &&
+            (codegenContext.settings as ServerRustSettings).codegenConfig.publicConstrainedTypes
+
+    private fun Shape.unwrapConstraints(): Writable {
+        val shape = this
+        return writable {
+            if (constraintTraitsEnabled() && hasConstraintTrait()) {
+                if (isBlobShape || isTimestampShape || isDocumentShape || shape is NumberShape) {
+                    rust(".0")
+                }
+            }
+        }
+    }
 
     /**
      * Serialize the field of a structure, union, list or map.
@@ -273,9 +326,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         return writable {
             serializerFn(target) {
                 rust("$memberRef")
-                if (target.unwrapConstraints()) {
-                    rust(".0")
-                }
             }.plus { rust(".serialize_ref(self.settings)") }(this)
         }.letIf(target.hasTrait<SensitiveTrait>()) { memberSerialization ->
             memberSerialization.map {

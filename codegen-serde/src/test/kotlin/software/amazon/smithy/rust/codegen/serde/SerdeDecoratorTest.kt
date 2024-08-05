@@ -69,14 +69,23 @@ class SerdeDecoratorTest {
            document: Document,
            blob: SensitiveBlob,
            constrained: Constrained,
-           recursive: Recursive
+           recursive: Recursive,
+           map: EnumKeyedMap
         }
 
         structure Constrained {
             shortList: ShortList
             shortMap: ShortMap
             shortBlob: ShortBlob
+            rangedInt: RangedInteger,
+            rangedLong: RangedLong
         }
+
+        @range(max: 10)
+        integer RangedInteger
+
+        @range(max: 10)
+        long RangedLong
 
         @length(max: 10)
         blob ShortBlob
@@ -85,6 +94,12 @@ class SerdeDecoratorTest {
         map ShortMap {
             key: String,
             value: Nested
+        }
+
+        @length(max: 10)
+        map EnumKeyedMap {
+            key: TestEnum
+            value: TestEnum
         }
 
         @length(max: 10)
