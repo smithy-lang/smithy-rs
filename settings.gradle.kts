@@ -20,6 +20,7 @@ include(":aws:rust-runtime")
 include(":aws:sdk")
 include(":aws:sdk-adhoc-test")
 include(":aws:sdk-codegen")
+include(":fuzzgen")
 
 pluginManagement {
     val smithyGradlePluginVersion: String by settings

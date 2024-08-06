@@ -113,6 +113,7 @@ class CargoTomlGenerator(
                 "features" to cargoFeatures.toMap(),
             ).deepMergeWith(manifestCustomizations)
 
+        println(cargoToml)
         writer.writeWithNoFormatting(TomlWriter().write(cargoToml))
     }
 }

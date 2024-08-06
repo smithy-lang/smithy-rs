@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "maven": {
+    "dependencies": [
+      "software.amazon.smithy.rust.codegen.serde:fuzzgen:0.1.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.50.0"
+    ],
+    "repositories": [
+      {
+        "url": "file://{{ maven_local }}"
+      },
+      {
+        "url": "https://repo1.maven.org/maven2"
+      }
+    ]
+  },
+  "projections": {
+    "harness": {
+      "imports": [ ],
+      "plugins": {
+        "fuzz-harness": {
+          "service": "{{ service }}",
+          "runtimeConfig": {
+            "relativePath": "{{ rust_runtime }}"
+          },
+          "targetCrates": [
+            {% for revision in revisions -%}
+            {
+              "relativePath": "build/smithy/{{ revision }}/rust-server-codegen/",
+              "name": "{{ revision }}"
+            }
+            {% if not loop.last %}, {% endif %}
+            {% endfor %}
+          ]
+        }
+      }
+    }
+  }
+}

@@ -16,15 +16,17 @@ fun String.runCommand(
     workdir: Path? = null,
     environment: Map<String, String> = mapOf(),
     timeout: Long = 3600,
+    redirect:  ProcessBuilder.Redirect = ProcessBuilder.Redirect.PIPE
 ): String {
     val logger = Logger.getLogger("RunCommand")
     logger.fine("Invoking comment $this in `$workdir` with env $environment")
+    println("Invoking comment $this in `$workdir` with env $environment")
     val start = System.currentTimeMillis()
     val parts = this.split("\\s".toRegex())
     val builder =
         ProcessBuilder(*parts.toTypedArray())
-            .redirectOutput(ProcessBuilder.Redirect.PIPE)
-            .redirectError(ProcessBuilder.Redirect.PIPE)
+            .redirectOutput(redirect)
+            .redirectError(redirect)
             .letIf(workdir != null) {
                 it.directory(workdir?.toFile())
             }

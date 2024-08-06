@@ -8,6 +8,7 @@ members = [
     "aws-smithy-compression",
     "aws-smithy-client",
     "aws-smithy-eventstream",
+    "aws-smithy-fuzz",
     "aws-smithy-http",
     "aws-smithy-http-auth",
     "aws-smithy-http-server",

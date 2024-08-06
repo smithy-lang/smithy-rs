@@ -360,6 +360,7 @@ fun RustCrate.testModule(block: Writable) =
     }
 
 fun FileManifest.printGeneratedFiles() {
+    println("Generated files:")
     this.files.forEach { path ->
         println("file:///$path")
     }
