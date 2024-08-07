@@ -31,7 +31,32 @@ enum Kind {
     InvalidUriParts,
     MissingAuthority,
     MissingScheme,
-    NotUtf8(Vec<u8>),
+    NonUtf8Header(NonUtf8Header),
+}
+
+#[derive(Debug)]
+pub(super) struct NonUtf8Header {
+    error: Utf8Error,
+    value: Vec<u8>,
+    name: Option<String>,
+}
+
+impl NonUtf8Header {
+    pub(super) fn new(name: String, value: Vec<u8>, error: Utf8Error) -> Self {
+        Self {
+            error,
+            value,
+            name: Some(name),
+        }
+    }
+
+    pub(super) fn new_missing_name(value: Vec<u8>, error: Utf8Error) -> Self {
+        Self {
+            error,
+            value,
+            name: None,
+        }
+    }
 }
 
 impl HttpError {
@@ -91,9 +116,9 @@ impl HttpError {
         }
     }
 
-    pub(super) fn not_utf8(header_value_bytes: &[u8]) -> Self {
+    pub(super) fn non_utf8_header(non_utf8_header: NonUtf8Header) -> Self {
         Self {
-            kind: Kind::NotUtf8(header_value_bytes.to_owned()),
+            kind: Kind::NonUtf8Header(non_utf8_header),
             source: None,
         }
     }
@@ -111,11 +136,12 @@ impl Display for HttpError {
             InvalidUriParts => write!(f, "endpoint parts are not valid"),
             MissingAuthority => write!(f, "endpoint must contain authority"),
             MissingScheme => write!(f, "endpoint must contain scheme"),
-            NotUtf8(hv) => {
-                let utf8_err: Utf8Error = std::str::from_utf8(hv).expect_err("we've already proven the value is not UTF-8");
-                let hv = String::from_utf8_lossy(hv);
-                let problem_char = utf8_err.valid_up_to();
-                write!(f, "header value `{hv}` contains non-UTF8 octet at index {problem_char}")
+            NonUtf8Header(hv) => {
+                // In some cases, we won't know the key so we default to "<unknown>".
+                let key = hv.name.as_deref().unwrap_or("<unknown>");
+                let value = String::from_utf8_lossy(&hv.value);
+                let index = hv.error.valid_up_to();
+                write!(f, "header `{key}={value}` contains non-UTF8 octet at index {index}")
             },
         }
     }
