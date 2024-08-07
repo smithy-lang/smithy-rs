@@ -42,6 +42,7 @@ pub(super) struct NonUtf8Header {
 }
 
 impl NonUtf8Header {
+    #[cfg(any(feature = "http-1x", feature = "http-02x"))]
     pub(super) fn new(name: String, value: Vec<u8>, error: Utf8Error) -> Self {
         Self {
             error,
