@@ -147,6 +147,14 @@ class InlineDependency(
                 CargoDependency.smithyTypes(runtimeConfig),
             )
 
+        fun cborErrors(runtimeConfig: RuntimeConfig): InlineDependency =
+            forInlineableRustFile(
+                "cbor_errors",
+                CargoDependency.smithyCbor(runtimeConfig),
+                CargoDependency.smithyRuntimeApi(runtimeConfig),
+                CargoDependency.smithyTypes(runtimeConfig),
+            )
+
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
 

@@ -6,7 +6,7 @@
 use anyhow::Context;
 use std::borrow::Cow;
 
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
@@ -119,7 +119,7 @@ pub(crate) trait Lint {
 }
 
 pub(crate) trait Check: Lint {
-    fn check(&self, path: impl AsRef<Path>) -> anyhow::Result<Vec<LintError>>;
+    fn check(&self, path: impl AsRef<Path> + Debug) -> anyhow::Result<Vec<LintError>>;
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]

@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.isUnit
 import software.amazon.smithy.rust.codegen.core.util.outputShape
@@ -157,9 +158,10 @@ class CborSerializerGenerator(
 
     private val codegenScope =
         arrayOf(
+            *preludeScope,
             "Error" to runtimeConfig.serializationError(),
             "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
-            *preludeScope,
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
@@ -210,14 +212,29 @@ class CborSerializerGenerator(
         UNREACHABLE("Only clients use this method when serializing an `@httpPayload`. No protocol using CBOR supports this trait, so we don't need to implement this")
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
-        // Don't generate an operation CBOR serializer if there is no CBOR body.
-        val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
-        if (httpDocumentMembers.isEmpty()) {
+        // Don't generate an operation CBOR serializer if there was no operation input shape in the
+        // original (untransformed) model.
+        if (!OperationNormalizer.hadUserModeledOperationInput(operationShape, model)) {
             return null
         }
 
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
-        TODO("Client implementation should fill this out")
+        val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+        val inputShape = operationShape.inputShape(model)
+        return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
+            ) {
+                rustTemplate("let mut encoder = #{Encoder}::new(Vec::new());", *codegenScope)
+                // Open a scope in which we can safely shadow the `encoder` variable to bind it to a mutable reference
+                // which doesn't require us to pass `&mut encoder` where requested.
+                rustBlock("") {
+                    rust("let encoder = &mut encoder;")
+                    serializeStructure(StructContext("input", inputShape), httpDocumentMembers)
+                }
+                rustTemplate("Ok(#{SdkBody}::from(encoder.into_writer()))", *codegenScope)
+            }
+        }
     }
 
     override fun documentSerializer(): RuntimeType =

@@ -78,6 +78,13 @@ interface Protocol {
      * there are no response headers or statuses available to further inform the error parsing.
      */
     fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType
+
+    /**
+     * Determines whether the `Content-Length` header should be set in an HTTP request.
+     */
+    fun needsRequestContentLength(operationShape: OperationShape): Boolean =
+        httpBindingResolver.requestBindings(operationShape)
+            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
 }
 
 typealias ProtocolMap<T, C> = Map<ShapeId, ProtocolGeneratorFactory<T, C>>

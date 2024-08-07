@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Proto
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -78,6 +79,8 @@ class ClientProtocolTestGenerator(
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientPopulatesDefaultValuesInInput"),
+                FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
             )
 
         private val BrokenTests:
@@ -268,6 +271,7 @@ class ClientProtocolTestGenerator(
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
+        val mediaType = testCase.bodyMediaType.orNull()
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -280,19 +284,19 @@ class ClientProtocolTestGenerator(
             let parsed = de.deserialize_streaming(&mut http_response);
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
-                    #{SdkBody}::from(#{copy_from_slice}(body.bytes().unwrap()))
+                    #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
                 de.deserialize_nonstreaming(&http_response)
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to
-                RT.smithyRuntimeApiClient(rc)
-                    .resolve("client::ser_de::SharedResponseDeserializer"),
-            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+            "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
             "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
+            "MediaType" to RT.protocolTest(rc, "MediaType"),
+            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
+            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SharedResponseDeserializer"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)

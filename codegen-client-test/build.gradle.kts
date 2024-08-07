@@ -24,6 +24,7 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
 dependencies {
     implementation(project(":codegen-client"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
@@ -72,6 +73,12 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
     ClientTest("aws.protocoltests.query#AwsQuery", "aws_query", addMessageToErrors = false),
     ClientTest("aws.protocoltests.ec2#AwsEc2", "ec2_query", addMessageToErrors = false),
+    ClientTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
+    ClientTest(
+        "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+        "rpcv2Cbor_extras",
+        dependsOn = listOf("rpcv2Cbor-extras.smithy")
+    ),
     ClientTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace",

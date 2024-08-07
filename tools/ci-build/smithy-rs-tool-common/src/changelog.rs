@@ -10,7 +10,9 @@ pub mod parser;
 use crate::changelog::parser::{ParseIntoChangelog, ParserChain};
 use anyhow::{bail, Context, Result};
 use serde::{de, Deserialize, Deserializer, Serialize};
+use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Debug;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -69,7 +71,7 @@ pub struct Meta {
     pub target: Option<SdkAffected>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Reference {
     pub repo: String,
     pub number: usize,
@@ -130,9 +132,18 @@ enum AuthorsInner {
     Multiple(Vec<String>),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(from = "AuthorsInner", into = "AuthorsInner")]
 pub struct Authors(pub(super) Vec<String>);
+
+impl PartialEq for Authors {
+    fn eq(&self, other: &Self) -> bool {
+        // `true` if two `Authors` contain the same set of authors, regardless of their order
+        self.0.iter().collect::<HashSet<_>>() == other.0.iter().collect::<HashSet<_>>()
+    }
+}
+
+impl Eq for Authors {}
 
 impl From<AuthorsInner> for Authors {
     fn from(value: AuthorsInner) -> Self {
@@ -225,13 +236,13 @@ impl HandAuthoredEntry {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
 pub enum SdkModelChangeKind {
     Documentation,
     Feature,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Eq, Deserialize, PartialEq, Serialize)]
 pub struct SdkModelEntry {
     /// SDK module name (e.g., "aws-sdk-s3" for S3)
     pub module: String,
@@ -317,6 +328,87 @@ impl Changelog {
     }
 }
 
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub enum Target {
+    #[serde(rename = "client")]
+    Client,
+    #[serde(rename = "server")]
+    Server,
+    #[serde(rename = "aws-sdk-rust")]
+    AwsSdk,
+}
+
+impl FromStr for Target {
+    type Err = anyhow::Error;
+
+    fn from_str(sdk: &str) -> std::result::Result<Self, Self::Err> {
+        match sdk.to_lowercase().as_str() {
+            "client" => Ok(Target::Client),
+            "server" => Ok(Target::Server),
+            "aws-sdk-rust" => Ok(Target::AwsSdk),
+            _ => bail!("An invalid type of `Target` {sdk} has been specified"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct FrontMatter {
+    pub applies_to: HashSet<Target>,
+    pub authors: Vec<String>,
+    pub references: Vec<Reference>,
+    pub breaking: bool,
+    pub new_feature: bool,
+    pub bug_fix: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Markdown {
+    pub front_matter: FrontMatter,
+    pub message: String,
+}
+
+impl From<Markdown> for Changelog {
+    fn from(value: Markdown) -> Self {
+        let front_matter = value.front_matter;
+        let entry = HandAuthoredEntry {
+            message: value.message.trim_start().to_owned(),
+            meta: Meta {
+                bug: front_matter.bug_fix,
+                breaking: front_matter.breaking,
+                tada: front_matter.new_feature,
+                target: None,
+            },
+            authors: AuthorsInner::Multiple(front_matter.authors).into(),
+            references: front_matter.references,
+            since_commit: None,
+            age: None,
+        };
+
+        let mut changelog = Changelog::new();
+
+        // Bin `entry` into the appropriate `Vec` based on the `applies_to` field in `front_matter`
+        if front_matter.applies_to.contains(&Target::AwsSdk) {
+            changelog.aws_sdk_rust.push(entry.clone())
+        }
+        if front_matter.applies_to.contains(&Target::Client)
+            && front_matter.applies_to.contains(&Target::Server)
+        {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::All);
+            changelog.smithy_rs.push(entry);
+        } else if front_matter.applies_to.contains(&Target::Client) {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::Client);
+            changelog.smithy_rs.push(entry);
+        } else if front_matter.applies_to.contains(&Target::Server) {
+            let mut entry = entry.clone();
+            entry.meta.target = Some(SdkAffected::Server);
+            changelog.smithy_rs.push(entry);
+        }
+
+        changelog
+    }
+}
 /// Parses changelog entries into [`Changelog`] using a series of parsers.
 ///
 /// Each parser will attempt to parse an input string in order:
@@ -336,10 +428,11 @@ impl ChangelogLoader {
     }
 
     /// Parses the contents of a file located at `path` into `Changelog`
-    pub fn load_from_file(&self, path: impl AsRef<Path>) -> Result<Changelog> {
+    pub fn load_from_file(&self, path: impl AsRef<Path> + Debug) -> Result<Changelog> {
         let contents = std::fs::read_to_string(path.as_ref())
             .with_context(|| format!("failed to read {:?}", path.as_ref()))?;
         self.parse_str(contents)
+            .with_context(|| format!("failed to parse the contents in {path:?}"))
     }
 
     /// Parses the contents of files stored in a directory `dir_path` into `Changelog`
@@ -347,7 +440,7 @@ impl ChangelogLoader {
     /// It opens each file in the directory, parses the file contents into `Changelog`,
     /// and merges it with accumulated `Changelog`. It currently does not support loading
     /// from recursive directory structures.
-    pub fn load_from_dir(&self, dir_path: impl AsRef<Path>) -> Result<Changelog> {
+    pub fn load_from_dir(&self, dir_path: impl AsRef<Path> + Debug) -> Result<Changelog> {
         let entries = std::fs::read_dir(dir_path.as_ref())?;
         let result = entries
             .into_iter()
@@ -374,174 +467,140 @@ impl ChangelogLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::changelog::parser::Toml;
     use anyhow::Context;
 
     #[test]
     fn errors_are_combined() {
-        let buffer = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = ""
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = ""
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "fz"
+        const ENTRY: &str = r#"
+---
+applies_to: ["aws-sdk-rust"]
+authors: [""]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
         "#;
-        // three errors should be produced, missing authors x 2 and a SdkAffected is not set to default
-        let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
+        let loader = ChangelogLoader::default();
+        let mut changelog = loader.parse_str(ENTRY).unwrap();
+        changelog.merge(loader.parse_str(ENTRY).unwrap());
+        // two errors should be produced, missing authors x 2
         let res = changelog.validate(ValidationSet::Development);
-        assert!(res.is_err());
-        if let Err(e) = res {
-            assert_eq!(3, e.len());
-            assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
-        }
-    }
-
-    // TODO(file-per-change-changelog): Remove this test once we have switched to the new markdown
-    //  format because targets will be explicit and there won't be defaults set.
-    #[test]
-    fn confirm_smithy_rs_defaults_set() {
-        let buffer = r#"
-            [[aws-sdk-rust]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-            [[smithy-rs]]
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "fz"
-        "#;
-        {
-            // parsing directly using `toml::from_str` won't set the default target field
-            let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
-            let res = changelog.validate(ValidationSet::Development);
-            assert!(res.is_err());
-            if let Err(e) = res {
-                assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
-            }
-        }
-        {
-            // parsing through the `Toml` parser will result in no error
-            let changelog: Changelog = Toml::default().parse(buffer).expect("valid changelog");
-            let res = changelog.validate(ValidationSet::Development);
-            assert!(res.is_ok());
-            if let Err(e) = res {
-                panic!("some error has been produced {e:?}");
-            }
-            assert_eq!(changelog.smithy_rs[1].meta.target, Some(SdkAffected::All));
-        }
+        assert_eq!(
+            2,
+            res.err().expect("changelog validation should fail").len()
+        );
     }
 
     #[test]
     fn test_hand_authored_sdk() {
+        let loader = ChangelogLoader::default();
+
         // server target
         let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Server" }
-            author = "rcoh"
-        "#;
+---
+applies_to: ["server"]
+authors: ["rcoh"]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
+"#;
         {
-            let value: HandAuthoredEntry = toml::from_str(value)
+            let changelog = loader
+                .parse_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(Some(SdkAffected::Server), value.meta.target);
+            assert_eq!(
+                Some(SdkAffected::Server),
+                changelog.smithy_rs.first().unwrap().meta.target
+            );
         }
-
         // client target
         let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Client" }
-            author = "rcoh"
-        "#;
+---
+applies_to: ["client"]
+authors: ["rcoh"]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
+"#;
         {
-            let value: HandAuthoredEntry = toml::from_str(value)
+            let changelog = loader
+                .parse_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(Some(SdkAffected::Client), value.meta.target);
+            assert_eq!(
+                Some(SdkAffected::Client),
+                changelog.smithy_rs.first().unwrap().meta.target
+            );
         }
         // Both target
         let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
-            author = "rcoh"
-        "#;
+---
+applies_to: ["server", "client"]
+authors: ["rcoh"]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
+"#;
         {
-            let value: HandAuthoredEntry = toml::from_str(value)
+            let changelog = loader
+                .parse_str(value)
                 .context("String should have parsed")
                 .unwrap();
-            assert_eq!(Some(SdkAffected::All), value.meta.target);
+            assert_eq!(
+                Some(SdkAffected::All),
+                changelog.smithy_rs.first().unwrap().meta.target
+            );
         }
-        // an invalid sdk value
+        // an invalid `applies_to` value
         let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "Some other invalid" }
-            author = "rcoh"
-        "#;
+---
+applies_to: ["Some other invalid"]
+authors: ["rcoh"]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
+"#;
         {
-            let value: Result<HandAuthoredEntry, _> =
-                toml::from_str(value).context("String should not have parsed");
-            assert!(value.is_err());
-        }
-        // missing sdk in the meta tag
-        let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-        "#;
-        {
-            let value: HandAuthoredEntry = toml::from_str(value)
-                .context("String should have parsed as it has none meta.sdk")
-                .unwrap();
-            assert_eq!(None, value.meta.target);
-        }
-        // single author
-        let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            author = "rcoh"
-        "#;
-        {
-            let value: HandAuthoredEntry = toml::from_str(value)
-                .context("String should have parsed with multiple authors")
-                .unwrap();
-            assert_eq!(Authors(vec!["rcoh".to_string()]), value.authors);
+            let changelog = loader
+                .parse_str(value)
+                .context("String should not have parsed");
+            assert!(changelog.is_err());
         }
         // multiple authors
         let value = r#"
-            message = "Fix typos in module documentation for generated crates"
-            references = ["smithy-rs#920"]
-            meta = { "breaking" = false, "tada" = false, "bug" = false }
-            authors = ["rcoh", "crisidev"]
-        "#;
+---
+applies_to: ["client", "server"]
+authors: ["rcoh", "crisidev"]
+references: ["smithy-rs#920"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Fix typos in module documentation for generated crates
+"#;
         {
-            let value: HandAuthoredEntry = toml::from_str(value)
+            let changelog = loader
+                .parse_str(value)
                 .context("String should have parsed with multiple authors")
                 .unwrap();
             assert_eq!(
                 Authors(vec!["rcoh".to_string(), "crisidev".to_string()]),
-                value.authors
+                changelog.smithy_rs.first().unwrap().authors,
             );
         }
     }
