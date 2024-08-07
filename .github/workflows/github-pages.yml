@@ -34,7 +34,7 @@ jobs:
         git config --local user.name "AWS SDK Rust Bot"
         git config --local user.email "aws-sdk-rust-primary@amazon.com"
         git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
-        git fetch origin github-pages
+        REV=$(git rev-parse --short HEAD)
 
         pushd design &>/dev/null
         cargo install mdbook
@@ -42,9 +42,10 @@ jobs:
         mdbook build --dest-dir ../../output
         popd &>/dev/null
 
-        git checkout origin/github-pages -b github-pages
-        rm -rf design
+        git checkout --orphan github-pages
+        git rm --cached -r .
+        git clean -ffdx
         mv ../output design
         git add design
-        git commit -m "Update design docs"
-        git push origin github-pages
+        git commit -m "Design docs @ ${{ github.repository }}@${REV}"
+        git push origin github-pages --force

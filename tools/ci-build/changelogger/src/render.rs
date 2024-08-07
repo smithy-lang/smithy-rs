@@ -529,17 +529,11 @@ mod test {
 
 **New this release:**
 - :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib, @other-external-dev) I made a change to update the code generator
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447), @external-contrib, @other-external-dev) I made a change to update the code generator
-
-    **Update guide:**
-    blah blah
-- (all, [smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200), @another-contrib) I made a minor change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-contrib ([smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200))
-- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
-- @other-external-dev ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [smithy-rs#447](https://github.com/smithy-lang/smithy-rs/issues/447))
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
+- @other-external-dev ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
 
 "#;
 
@@ -587,16 +581,6 @@ bug_fix: false
 ---
 I made a change to update the code generator
 "#;
-        let smithy_rs_entry3 = r#"---
-applies_to: ["client", "server"]
-authors: ["another-contrib"]
-references:  ["smithy-rs#200"]
-breaking: false
-new_feature: false
-bug_fix: false
----
-I made a minor change
-"#;
         let aws_sdk_entry1 = r#"---
 applies_to: ["aws-sdk-rust"]
 authors: ["rcoh"]
@@ -616,19 +600,6 @@ new_feature: true
 bug_fix: false
 ---
 I made a change to update the code generator
-"#;
-        let smithy_rs_entry4 = r#"---
-applies_to: ["client", "server"]
-authors: ["external-contrib", "other-external-dev"]
-references: ["smithy-rs#446", "smithy-rs#447"]
-breaking: false
-new_feature: true
-bug_fix: false
----
-I made a change to update the code generator
-
-**Update guide:**
-blah blah
 "#;
 
         // We won't handwrite changelog entries for model updates, and they are still provided in
@@ -656,10 +627,8 @@ message = "Some API change"
         [
             smithy_rs_entry1,
             smithy_rs_entry2,
-            smithy_rs_entry3,
             aws_sdk_entry1,
             aws_sdk_entry2,
-            smithy_rs_entry4,
         ]
         .iter()
         .enumerate()

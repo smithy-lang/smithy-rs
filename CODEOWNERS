@@ -16,9 +16,9 @@
 /rust-runtime/aws-smithy-http-server-typescript/    @smithy-lang/smithy-rs-server
 
 # Shared ownership
+/.changelog/                                        @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
 /.github/                                           @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
 /CHANGELOG.md                                       @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
-/CHANGELOG.next.toml                                @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
 /README.md                                          @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
 /build.gradle.kts                                   @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
 /buildSrc/                                          @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
