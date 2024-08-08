@@ -1,0 +1,17 @@
+[package]
+name = "rpc-v2-cbor"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatch = { path = "../../build/aws-sdk/sdk/cloudwatch", features = ["behavior-version-latest"] }
+aws-sdk-secretsmanager = { path = "../../build/aws-sdk/sdk/secretsmanager", features = ["behavior-version-latest"] }
+criterion = { version = "0.5", features = ["async_tokio"] }
+futures-util = { version = "0.3.29", default-features = false, features = ["alloc"] }
+rand = "0.8.5"
+tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
+
+[[bench]]
+name = "secrets_manager"
+harness = false
