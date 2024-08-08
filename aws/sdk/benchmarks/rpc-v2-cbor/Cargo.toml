@@ -13,5 +13,9 @@ rand = "0.8.5"
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 
 [[bench]]
+name = "cloudwatch"
+harness = false
+
+[[bench]]
 name = "secrets_manager"
 harness = false
