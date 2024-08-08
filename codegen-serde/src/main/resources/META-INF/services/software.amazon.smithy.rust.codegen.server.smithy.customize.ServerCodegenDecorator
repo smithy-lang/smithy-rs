@@ -1,0 +1,4 @@
+# This file lists the names of classes which implement decorators to the `rust-server-codegen` plugin.
+# The source code we are extending is found in https://github.com/awslabs/smithy-rs/blob/release-2023-04-26/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/customize/ServerCodegenDecorator.kt
+
+software.amazon.smithy.rust.codegen.serde.ServerSerdeDecorator

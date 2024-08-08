@@ -136,7 +136,7 @@ class ProtocolFunctions(
 }
 
 /** Creates a module name for a ser/de function. */
-internal fun RustSymbolProvider.shapeModuleName(
+fun RustSymbolProvider.shapeModuleName(
     serviceShape: ServiceShape?,
     shape: Shape,
 ): String =
