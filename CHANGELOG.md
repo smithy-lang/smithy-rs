@@ -1,4 +1,12 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 8th, 2024
+================
+**New this release:**
+- :bug: (client, [smithy-rs#3767](https://github.com/smithy-lang/smithy-rs/issues/3767)) Fix client error correction to properly parse structure members that target a `Union` containing that structure recursively.
+- :bug: (client, [smithy-rs#3765](https://github.com/smithy-lang/smithy-rs/issues/3765), [smithy-rs#3757](https://github.com/smithy-lang/smithy-rs/issues/3757)) Fix incorrect redaction of `@sensitive` types in maps and lists.
+- (client, [smithy-rs#3779](https://github.com/smithy-lang/smithy-rs/issues/3779)) Improve error messaging when HTTP headers aren't valid UTF-8
+
+
 July 16th, 2024
 ===============
 **New this release:**
