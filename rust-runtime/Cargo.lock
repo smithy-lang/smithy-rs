@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.60.6"
+version = "0.60.7"
 dependencies = [
  "aws-smithy-types 1.2.0",
  "criterion",
@@ -572,6 +572,14 @@ dependencies = [
  "aws-smithy-runtime-api 1.7.1",
  "aws-smithy-types 1.2.0",
  "tokio",
+]
+
+[[package]]
+name = "aws-smithy-observability"
+version = "0.1.0"
+dependencies = [
+ "aws-smithy-runtime-api 1.7.1",
+ "once_cell",
 ]
 
 [[package]]
@@ -1975,6 +1983,7 @@ checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
 name = "inlineable"
 version = "0.1.0"
 dependencies = [
+ "aws-smithy-cbor",
  "aws-smithy-compression",
  "aws-smithy-http 0.60.9",
  "aws-smithy-json 0.60.7",
