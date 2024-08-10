@@ -5,6 +5,7 @@
 
 use aws_sdk_s3::{config::Region, error::DisplayErrorContext, Client, Config};
 use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
+use http::header::AUTHORIZATION;
 
 #[tokio::test]
 async fn test_content_length_enforcement_is_not_applied_to_head_request() {
@@ -25,9 +26,13 @@ async fn test_content_length_enforcement_is_not_applied_to_head_request() {
         .await
         .expect("content length enforcement must not apply to HEAD requests");
 
-    // The body returned will be empty, so we pass an empty string to full_validate.
-    // That way, it'll do a string equality check on the empty strings.
-    http_client.full_validate("").await.unwrap();
+    // The body returned will be empty, so we pass an empty string for `media_type` to
+    // `validate_body_and_headers_except`. That way, it'll do a string equality check on the empty
+    // strings.
+    http_client
+        .validate_body_and_headers_except(&["x-amz-user-agent", AUTHORIZATION.as_str()], "")
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -57,7 +62,13 @@ async fn test_content_length_enforcement_get_request_short() {
     // This will fail with a content-length mismatch error.
     let content_length_err = output.body.collect().await.unwrap_err();
 
-    http_client.full_validate("application/text").await.unwrap();
+    http_client
+        .validate_body_and_headers_except(
+            &["x-amz-user-agent", AUTHORIZATION.as_str()],
+            "application/text",
+        )
+        .await
+        .unwrap();
     assert_eq!(
         DisplayErrorContext(content_length_err).to_string(),
         "streaming error: Invalid Content-Length: Expected 9999 bytes but 10000 bytes were received (Error { kind: StreamingError(ContentLengthError { expected: 9999, received: 10000 }) })"
@@ -91,7 +102,13 @@ async fn test_content_length_enforcement_get_request_long() {
     // This will fail with a content-length mismatch error.
     let content_length_err = output.body.collect().await.unwrap_err();
 
-    http_client.full_validate("application/text").await.unwrap();
+    http_client
+        .validate_body_and_headers_except(
+            &["x-amz-user-agent", AUTHORIZATION.as_str()],
+            "application/text",
+        )
+        .await
+        .unwrap();
     assert_eq!(
         DisplayErrorContext(content_length_err).to_string(),
         "streaming error: Invalid Content-Length: Expected 10001 bytes but 10000 bytes were received (Error { kind: StreamingError(ContentLengthError { expected: 10001, received: 10000 }) })"
