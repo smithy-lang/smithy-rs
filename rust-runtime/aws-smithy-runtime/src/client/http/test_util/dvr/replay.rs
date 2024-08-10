@@ -68,6 +68,11 @@ impl fmt::Debug for ReplayingClient {
     }
 }
 
+enum HeadersToCheck<'a> {
+    Include(&'a [&'a str]),
+    Exclude(Option<&'a [&'a str]>),
+}
+
 impl ReplayingClient {
     fn next_id(&self) -> ConnectionId {
         ConnectionId(self.num_events.fetch_add(1, Ordering::Relaxed))
@@ -84,19 +89,43 @@ impl ReplayingClient {
         checked_headers: &[&str],
         body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
-        self.validate_base(Some(checked_headers), body_comparer)
+        self.validate_base(HeadersToCheck::Include(checked_headers), body_comparer)
             .await
     }
 
     /// Validate that the bodies match, using a given [`MediaType`] for comparison
     ///
-    /// The specified headers are also validated
+    /// The specified headers are also validated. If `checked_headers` is a `None`, it means
+    /// checking all headers.
     pub async fn validate_body_and_headers(
         self,
         checked_headers: Option<&[&str]>,
         media_type: &str,
     ) -> Result<(), Box<dyn Error>> {
-        self.validate_base(checked_headers, |b1, b2| {
+        let headers_to_check = match checked_headers {
+            Some(headers) => HeadersToCheck::Include(headers),
+            None => HeadersToCheck::Exclude(None),
+        };
+        self.validate_base(headers_to_check, |b1, b2| {
+            aws_smithy_protocol_test::validate_body(
+                b1,
+                std::str::from_utf8(b2).unwrap(),
+                MediaType::from(media_type),
+            )
+            .map_err(|e| Box::new(e) as _)
+        })
+        .await
+    }
+
+    /// Validate that the bodies match, using a given [`MediaType`] for comparison
+    ///
+    /// The specified headers are also validated unless listed in `excluded_headers`
+    pub async fn validate_body_and_headers_except(
+        self,
+        excluded_headers: &[&str],
+        media_type: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        self.validate_base(HeadersToCheck::Exclude(Some(excluded_headers)), |b1, b2| {
             aws_smithy_protocol_test::validate_body(
                 b1,
                 std::str::from_utf8(b2).unwrap(),
@@ -109,7 +138,7 @@ impl ReplayingClient {
 
     async fn validate_base(
         self,
-        checked_headers: Option<&[&str]>,
+        checked_headers: HeadersToCheck<'_>,
         body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
         let mut actual_requests =
@@ -133,8 +162,11 @@ impl ReplayingClient {
                 .keys()
                 .map(|k| k.as_str())
                 .filter(|k| match checked_headers {
-                    Some(list) => list.contains(k),
-                    None => true,
+                    HeadersToCheck::Include(headers) => headers.contains(k),
+                    HeadersToCheck::Exclude(excluded) => match excluded {
+                        Some(headers) => !headers.contains(k),
+                        None => true,
+                    },
                 })
                 .flat_map(|key| {
                     let _ = expected.headers().get(key)?;
