@@ -569,7 +569,7 @@ dependencies = [
 name = "aws-smithy-observability"
 version = "0.1.0"
 dependencies = [
- "aws-smithy-runtime-api 1.7.1",
+ "aws-smithy-runtime-api 1.7.2",
  "once_cell",
 ]
 

@@ -3,62 +3,92 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Definitions of high level Telemetry Providers.
+
 use std::sync::Arc;
 
-use crate::{
-    meter::{Meter, MeterProvider},
-    noop::NoopMeterProvider,
-    // noop::NoopMeterProvider,
-};
+use crate::{meter::MeterProvider, noop::NoopMeterProvider};
 
-pub trait TelemetryProvider {
-    // fn tracer_provider() -> &impl TracerProvider;
-
-    fn meter_provider(&self) -> &dyn MeterProvider;
-
-    // fn logger_provider() -> &impl LoggerProvider;
-
-    // fn context_manager() -> &impl ContextManager;
-}
-
-// Wrapper type to hold a implementer of TelemetryProvider in an Arc.
-// The builder for GlobalTelemetryProvider will replace any not specified
-// Providers with a no-op provider.
+/// A struct to hold the various types of telemetry providers
 #[non_exhaustive]
-pub struct GlobalTelemetryProvider {
-    provider: Arc<dyn TelemetryProvider + Send + Sync>,
+pub struct TelemetryProvider {
+    meter_provider: &'static (dyn MeterProvider + Send + Sync),
 }
 
-impl GlobalTelemetryProvider {
-    pub(crate) fn new(telemetry_provider: impl TelemetryProvider + Send + Sync + 'static) -> Self {
-        Self {
-            provider: Arc::new(telemetry_provider),
+/// Utility functions for telemetry providers
+pub trait ProvideTelemetry {
+    /// Get the set [MeterProvider]
+    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync);
+}
+
+impl ProvideTelemetry for TelemetryProvider {
+    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
+        self.meter_provider
+    }
+}
+
+impl TelemetryProvider {
+    /// Returns a builder struct for [TelemetryProvider]
+    pub fn builder() -> TelemetryProviderBuilder {
+        TelemetryProviderBuilder {
+            meter_provider: &NoopMeterProvider,
         }
     }
 }
 
-#[non_exhaustive]
-pub struct GlobalTelemetryProviderBuilder {
-    meter_provider: &'static dyn MeterProvider,
-}
-
-impl GlobalTelemetryProviderBuilder {
-    pub fn meter_provider(&mut self, meter_provider: &'static dyn MeterProvider) {
-        self.meter_provider = meter_provider
+impl Default for TelemetryProvider {
+    fn default() -> Self {
+        Self {
+            meter_provider: &NoopMeterProvider,
+        }
     }
 }
 
+// If we choose to expand our Telemetry provider and make Logging and Tracing
+// configurable at some point in the future we can do that by adding default
+// logger_provider and tracer_providers based on `tracing` to maintain backwards
+// compatibilty with what we have today.
+/// A builder for [TelemetryProvider].
 #[non_exhaustive]
-pub(crate) struct DefaultTelemetryProvider {}
+pub struct TelemetryProviderBuilder {
+    meter_provider: &'static (dyn MeterProvider + Send + Sync),
+}
 
-impl DefaultTelemetryProvider {
-    pub fn new() -> Self {
-        DefaultTelemetryProvider {}
+impl TelemetryProviderBuilder {
+    /// Set the [MeterProvider].
+    pub fn meter_provider(&mut self, meter_provider: &'static (dyn MeterProvider + Send + Sync)) {
+        self.meter_provider = meter_provider;
+    }
+
+    /// Build the [TelemetryProvider].
+    pub fn build(self) -> TelemetryProvider {
+        TelemetryProvider {
+            meter_provider: self.meter_provider,
+        }
     }
 }
 
-impl TelemetryProvider for DefaultTelemetryProvider {
-    fn meter_provider(&self) -> &dyn MeterProvider {
-        &NoopMeterProvider
+/// Wrapper type to hold a implementer of TelemetryProvider in an Arc so that
+/// it can be safely used across threads.
+#[non_exhaustive]
+pub(crate) struct GlobalTelemetryProvider {
+    pub(crate) telemetry_provider: Arc<TelemetryProvider>,
+}
+
+impl GlobalTelemetryProvider {
+    pub(crate) fn new(telemetry_provider: TelemetryProvider) -> Self {
+        Self {
+            telemetry_provider: Arc::new(telemetry_provider),
+        }
+    }
+
+    pub(crate) fn telemetry_provider(&self) -> &Arc<TelemetryProvider> {
+        &self.telemetry_provider
+    }
+}
+
+impl ProvideTelemetry for GlobalTelemetryProvider {
+    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
+        self.telemetry_provider.meter_provider()
     }
 }
