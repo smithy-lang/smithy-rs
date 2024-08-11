@@ -20,4 +20,4 @@ pub mod error;
 pub mod global;
 pub mod meter;
 mod noop;
-mod provider;
+pub mod provider;

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Observability Errors
+
 use std::fmt;
 
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -17,6 +19,7 @@ pub(crate) struct ObservabilityError {
 #[non_exhaustive]
 #[derive(Debug)]
 pub(crate) enum ErrorKind {
+    /// An error setting the `GlobalTelemetryProvider``
     SettingGlobalProvider,
     /// A custom error that does not fall under any other error kind
     Other,
