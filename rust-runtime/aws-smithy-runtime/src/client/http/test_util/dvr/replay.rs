@@ -119,7 +119,7 @@ impl ReplayingClient {
 
     /// Validate that the bodies match, using a given [`MediaType`] for comparison
     ///
-    /// The specified headers are also validated unless listed in `excluded_headers`
+    /// The headers are also validated unless listed in `excluded_headers`
     pub async fn validate_body_and_headers_except(
         self,
         excluded_headers: &[&str],
