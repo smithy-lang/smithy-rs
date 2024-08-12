@@ -18,8 +18,6 @@ import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
-import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
@@ -75,16 +73,15 @@ object ConstrainedMemberTransform {
         val additionalNames = HashSet<ShapeId>()
         val walker = DirectedWalker(model)
 
-        // Find all synthetic input / output structures that have been added by
-        // the OperationNormalizer, get constrained members out of those structures,
-        // convert them into non-constrained members and then pass them to the transformer.
-        // The transformer will add new shapes, and will replace existing member shapes' target
-        // with the newly added shapes.
+        // Begin with the operations listed in the service and traverse the inputs, outputs, and errors specified
+        // in each operation. Extract the target shapes of constrained members from structures, lists, maps, and
+        // unions into standalone shapes with constraints. Update the model by incorporating these extracted shapes
+        // and adjust the target shapes of the original constrained members to reference the newly created
+        // constrained types.
         val transformations =
             model.operationShapes
                 .flatMap { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
                 .mapNotNull { model.expectShape(it).asStructureShape().orElse(null) }
-                .filter { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
                 .flatMap { walker.walkShapes(it) }
                 .filter { it is StructureShape || it is ListShape || it is UnionShape || it is MapShape }
                 .flatMap { it.constrainedMembers() }

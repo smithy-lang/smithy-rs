@@ -24,25 +24,29 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
+import kotlin.streams.toList
 
 class ConstraintsMemberShapeTest {
-    private val outputModelOnly =
+    private val sampleModel =
         """
         namespace constrainedMemberShape
 
+        use smithy.framework#ValidationException
         use aws.protocols#restJson1
         use aws.api#data
 
         @restJson1
         service ConstrainedService {
-            operations: [OperationUsingGet]
+            operations: [SampleOperation]
         }
 
-        @http(uri: "/anOperation", method: "GET")
-        operation OperationUsingGet {
-            output : OperationUsingGetOutput
+        @http(uri: "/anOperation", method: "POST")
+        operation SampleOperation {
+            output: SampleInputOutput
+            input: SampleInputOutput
+            errors: [ValidationException, ErrorWithMemberConstraint]
         }
-        structure OperationUsingGetOutput {
+        structure SampleInputOutput {
             plainLong : Long
             plainInteger : Integer
             plainShort : Short
@@ -148,6 +152,12 @@ class ConstraintsMemberShapeTest {
         string PatternString
         @range(min: 0, max:1000)
         integer RangedInteger
+
+        @error("server")
+        structure ErrorWithMemberConstraint {
+            @range(min: 100, max: 999)
+            statusCode: Integer
+        }
         """.asSmithyModel()
 
     private fun loadModel(model: Model): Model =
@@ -155,16 +165,16 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `non constrained fields should not be changed`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
 
         fun checkFieldTargetRemainsSame(fieldName: String) {
             checkMemberShapeIsSame(
                 transformedModel,
-                outputModelOnly,
-                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
-                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
+                sampleModel,
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
+                "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
-                "OperationUsingGetOutput$fieldName has changed whereas it is not constrained and should have remained same"
+                "SampleInputOutput$fieldName has changed whereas it is not constrained and should have remained same"
             }
         }
 
@@ -189,7 +199,7 @@ class ConstraintsMemberShapeTest {
 
         checkMemberShapeIsSame(
             transformedModel,
-            outputModelOnly,
+            sampleModel,
             "constrainedMemberShape#StructWithConstrainedMember\$long",
             "constrainedMemberShape#StructWithConstrainedMember\$long",
         )
@@ -197,10 +207,10 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `constrained members should have a different target now`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkMemberShapeChanged(
             transformedModel,
-            outputModelOnly,
+            sampleModel,
             "constrainedMemberShape#PatternStringListOverride\$member",
             "constrainedMemberShape#PatternStringListOverride\$member",
         )
@@ -208,9 +218,9 @@ class ConstraintsMemberShapeTest {
         fun checkSyntheticFieldTargetChanged(fieldName: String) {
             checkMemberShapeChanged(
                 transformedModel,
-                outputModelOnly,
-                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
-                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
+                sampleModel,
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
+                "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
                 "constrained member $fieldName should have been changed into a new type."
             }
@@ -219,7 +229,7 @@ class ConstraintsMemberShapeTest {
         fun checkFieldTargetChanged(memberNameWithContainer: String) {
             checkMemberShapeChanged(
                 transformedModel,
-                outputModelOnly,
+                sampleModel,
                 "constrainedMemberShape#$memberNameWithContainer",
                 "constrainedMemberShape#$memberNameWithContainer",
             ) {
@@ -251,36 +261,36 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `extra trait on a constrained member should remain on it`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkShapeHasTrait(
             transformedModel,
-            outputModelOnly,
-            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$constrainedPatternString",
-            "constrainedMemberShape#OperationUsingGetOutput\$constrainedPatternString",
+            sampleModel,
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$constrainedPatternString",
+            "constrainedMemberShape#SampleInputOutput\$constrainedPatternString",
             DataTrait("content", SourceLocation.NONE),
         )
     }
 
     @Test
     fun `required remains on constrained member shape`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkShapeHasTrait(
             transformedModel,
-            outputModelOnly,
-            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$requiredConstrainedString",
-            "constrainedMemberShape#OperationUsingGetOutput\$requiredConstrainedString",
+            sampleModel,
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$requiredConstrainedString",
+            "constrainedMemberShape#SampleInputOutput\$requiredConstrainedString",
             RequiredTrait(),
         )
     }
 
     @Test
     fun `generate code and check member constrained shapes are in the right modules`() {
-        serverIntegrationTest(outputModelOnly, IntegrationTestParams(service = "constrainedMemberShape#ConstrainedService")) { codegenContext, rustCrate ->
+        serverIntegrationTest(sampleModel, IntegrationTestParams(service = "constrainedMemberShape#ConstrainedService")) { codegenContext, rustCrate ->
             fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
                 unitTest(
                     "builder_module_has_${typeName.toSnakeCase()}",
                     """
-                    #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
+                    #[allow(unused_imports)] use crate::output::sample_operation_output::$typeName;
                     """,
                 )
             }
