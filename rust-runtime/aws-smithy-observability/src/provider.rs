@@ -9,22 +9,10 @@ use std::sync::Arc;
 
 use crate::{meter::MeterProvider, noop::NoopMeterProvider};
 
-/// A struct to hold the various types of telemetry providers
+/// A struct to hold the various types of telemetry providers.
 #[non_exhaustive]
 pub struct TelemetryProvider {
     meter_provider: &'static (dyn MeterProvider + Send + Sync),
-}
-
-/// Utility functions for telemetry providers
-pub trait ProvideTelemetry {
-    /// Get the set [MeterProvider]
-    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync);
-}
-
-impl ProvideTelemetry for TelemetryProvider {
-    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
-        self.meter_provider
-    }
 }
 
 impl TelemetryProvider {
@@ -33,6 +21,11 @@ impl TelemetryProvider {
         TelemetryProviderBuilder {
             meter_provider: &NoopMeterProvider,
         }
+    }
+
+    /// Get the set [MeterProvider]
+    pub fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
+        self.meter_provider
     }
 }
 
@@ -84,11 +77,5 @@ impl GlobalTelemetryProvider {
 
     pub(crate) fn telemetry_provider(&self) -> &Arc<TelemetryProvider> {
         &self.telemetry_provider
-    }
-}
-
-impl ProvideTelemetry for GlobalTelemetryProvider {
-    fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
-        self.telemetry_provider.meter_provider()
     }
 }

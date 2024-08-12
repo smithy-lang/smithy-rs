@@ -6,12 +6,12 @@
 //! Metrics are used to gain insight into the operational performance and health of a system in
 //! real time.
 
-use crate::attributes::{Attributes, Context, Double, Long};
+use crate::attributes::{Attributes, Context, Double, Long, UnsignedLong};
 
 /// Provides named instances of [Meter].
 pub trait MeterProvider {
     /// Get or create a named [Meter].
-    fn get_meter(&self, scope: String, attributes: Option<Attributes>) -> &dyn Meter;
+    fn get_meter(&self, scope: String, attributes: Option<&Attributes>) -> &dyn Meter;
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
@@ -56,7 +56,7 @@ pub trait Meter {
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Long>>)>,
+        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = UnsignedLong>>)>,
         units: Option<String>,
         description: Option<String>,
     ) -> &dyn AsyncMeasurementHandle;
@@ -73,19 +73,24 @@ pub trait Meter {
 /// Collects a set of events with an event count and sum for all events.
 pub trait Histogram {
     /// Record a value.
-    fn record(&self, value: Double, attributes: Option<Attributes>, context: Option<&dyn Context>);
+    fn record(&self, value: Double, attributes: Option<&Attributes>, context: Option<&dyn Context>);
 }
 
 /// A counter that monotonically increases.
 pub trait MonotonicCounter {
     /// Increment a counter by a fixed amount.
-    fn add(&self, value: Long, attributes: Option<Attributes>, context: Option<&dyn Context>);
+    fn add(
+        &self,
+        value: UnsignedLong,
+        attributes: Option<&Attributes>,
+        context: Option<&dyn Context>,
+    );
 }
 
 /// A counter that can increase or decrease.
 pub trait UpDownCounter {
     /// Increment or decrement a counter by a fixed amount.
-    fn add(&self, value: Long, attributes: Option<Attributes>, context: Option<&dyn Context>);
+    fn add(&self, value: Long, attributes: Option<&Attributes>, context: Option<&dyn Context>);
 }
 
 /// A measurement that can be taken asynchronously.
@@ -97,7 +102,7 @@ pub trait AsyncMeasurement {
     fn record(
         &self,
         value: Self::Value,
-        attributes: Option<Attributes>,
+        attributes: Option<&Attributes>,
         context: Option<&dyn Context>,
     );
 }

@@ -33,9 +33,9 @@ pub fn set_global_telemetry_provider(new_provider: TelemetryProvider) -> Arc<Tel
 
 /// Get an [Arc] reference to the current global [TelemetryProvider].
 pub fn global_telemetry_provider() -> Arc<TelemetryProvider> {
-    let foo = GLOBAL_TELEMETRY_PROVIDER
+    GLOBAL_TELEMETRY_PROVIDER
         .try_read()
-        .expect("GLOBAL_TELEMETRY_PROVIDER RwLock Poisoned");
-
-    foo.telemetry_provider().clone()
+        .expect("GLOBAL_TELEMETRY_PROVIDER RwLock Poisoned")
+        .telemetry_provider()
+        .clone()
 }
