@@ -29,6 +29,19 @@ data class IntegrationTestParams(
     val cargoCommand: String? = null,
 )
 
+sealed class AdditionalSettings {
+    companion object {
+        val GenerateCodegenComments: ObjectNode =
+            ObjectNode.builder().withMember(
+                "codegen",
+                ObjectNode.builder()
+                    .withMember("debugMode", true)
+                    .build(),
+            ).build()
+    }
+}
+
+
 /**
  * Run cargo test on a true, end-to-end, codegen product of a given model.
  */

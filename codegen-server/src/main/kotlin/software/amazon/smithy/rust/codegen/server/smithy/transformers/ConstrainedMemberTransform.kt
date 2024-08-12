@@ -67,7 +67,7 @@ object ConstrainedMemberTransform {
 
     private val memberConstraintTraitsToOverride = allConstraintTraits - RequiredTrait::class.java
 
-    private fun Shape.hasMemberConstraintTrait() = memberConstraintTraitsToOverride.any(this::hasTrait)
+    fun Shape.hasMemberConstraintTrait() = memberConstraintTraitsToOverride.any(this::hasTrait)
 
     fun transform(model: Model): Model {
         val additionalNames = HashSet<ShapeId>()

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.RustServerCodegenPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.nio.file.Path
+import software.amazon.smithy.model.node.ObjectNode
 
 /**
  * This file is entirely analogous to [software.amazon.smithy.rust.codegen.client.testutil.ClientCodegenIntegrationTest.kt].

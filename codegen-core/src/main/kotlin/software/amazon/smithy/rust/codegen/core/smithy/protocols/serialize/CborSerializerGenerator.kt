@@ -122,12 +122,13 @@ class CborSerializerGenerator(
                 context: StructContext,
                 member: MemberShape,
                 symProvider: RustSymbolProvider,
-            ): MemberContext =
-                MemberContext(
+            ): MemberContext {
+                return MemberContext(
                     encodeKeyExpression(member.memberName),
                     ValueExpression.Value("${context.localName}.${symProvider.toMemberName(member)}"),
                     member,
                 )
+            }
 
             fun unionMember(
                 variantReference: String,
