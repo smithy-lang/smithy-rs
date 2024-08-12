@@ -1,19 +1,18 @@
 [package]
-name = "aws-smithy-observability"
+name = "aws-smithy-observability-otel"
 version = "0.1.0"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
 ]
-description = "Smithy observability implementation."
+description = "Smithy OpenTelemetry observability implementation."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-once_cell = "1.19.0"
+aws-smithy-observability = { path = "../aws-smithy-observability" }
 opentelemetry = {version = "0.24.0", features = ["metrics"]}
-
+opentelemetry_sdk = {version = "0.24.0", features = ["metrics"]}
 
 [package.metadata.docs.rs]
 all-features = true

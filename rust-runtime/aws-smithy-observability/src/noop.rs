@@ -6,7 +6,7 @@
 //! An noop implementation of the Meter traits
 
 use crate::{
-    attributes::{Attributes, Context, Double, Long},
+    attributes::{Attributes, Context, Double, Long, UnsignedLong},
     meter::{
         AsyncMeasurement, AsyncMeasurementHandle, Histogram, Meter, MeterProvider,
         MonotonicCounter, UpDownCounter,
@@ -15,7 +15,7 @@ use crate::{
 
 pub(crate) struct NoopMeterProvider;
 impl MeterProvider for NoopMeterProvider {
-    fn get_meter(&self, _scope: String, _attributes: Option<Attributes>) -> &dyn Meter {
+    fn get_meter(&self, _scope: String, _attributes: Option<&Attributes>) -> &dyn Meter {
         &NoopMeter
     }
 }
@@ -63,7 +63,7 @@ impl Meter for NoopMeter {
     fn create_async_monotonic_counter(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Long>>)>,
+        _callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = UnsignedLong>>)>,
         _units: Option<String>,
         _description: Option<String>,
     ) -> &dyn AsyncMeasurementHandle {
@@ -87,12 +87,18 @@ impl AsyncMeasurementHandle for NoopAsyncMeasurementHandle {
 
 struct NoopUpDownCounter;
 impl UpDownCounter for NoopUpDownCounter {
-    fn add(&self, _value: Long, _attributes: Option<Attributes>, _context: Option<&dyn Context>) {}
+    fn add(&self, _value: Long, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
 }
 
 struct NoopMonotonicCounter;
 impl MonotonicCounter for NoopMonotonicCounter {
-    fn add(&self, _value: Long, _attributes: Option<Attributes>, _context: Option<&dyn Context>) {}
+    fn add(
+        &self,
+        _value: UnsignedLong,
+        _attributes: Option<&Attributes>,
+        _context: Option<&dyn Context>,
+    ) {
+    }
 }
 
 struct NoopHistogram;
@@ -100,7 +106,7 @@ impl Histogram for NoopHistogram {
     fn record(
         &self,
         _value: Double,
-        _attributes: Option<Attributes>,
+        _attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
     }

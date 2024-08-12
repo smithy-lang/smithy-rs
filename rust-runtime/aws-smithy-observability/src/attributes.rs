@@ -9,12 +9,14 @@
 
 use std::collections::HashMap;
 
-/// Helper type aliase to stay aligned with the type names in the spec
+/// Helper type aliase to stay aligned with the type names in the spec.
 pub type Long = i64;
-/// Helper type aliase to stay aligned with the type names in the spec
+/// Helper type aliase to stay aligned with the type names in the spec.
+pub type UnsignedLong = u64;
+/// Helper type aliase to stay aligned with the type names in the spec.
 pub type Double = f64;
 
-/// Marker trait for allowed Attribute value types
+/// Marker trait for allowed Attribute value types.
 pub trait AttributeValueType {
     /// Get the [AttributeValue] variant for the given type.
     fn get_attribute_variant(self) -> AttributeValue;
@@ -41,8 +43,9 @@ impl AttributeValueType for bool {
     }
 }
 
-/// The valid types of values accepted by [Attributes]
+/// The valid types of values accepted by [Attributes].
 #[non_exhaustive]
+#[derive(Clone)]
 pub enum AttributeValue {
     /// Holds an [i64]
     LONG(Long),
@@ -54,34 +57,48 @@ pub enum AttributeValue {
     BOOLEAN(bool),
 }
 
-/// Structured telemetry metadata
+/// Structured telemetry metadata.
+#[non_exhaustive]
+#[derive(Clone)]
 pub struct Attributes {
     attrs: HashMap<String, AttributeValue>,
 }
 
 impl Attributes {
-    /// Set an attribute
+    /// Create a new empty instance of [Attributes].
+    pub fn new() -> Self {
+        Self {
+            attrs: HashMap::new(),
+        }
+    }
+
+    /// Set an attribute.
     pub fn set(&mut self, key: String, value: AttributeValue) {
         self.attrs.insert(key, value);
     }
 
-    /// Get an attribute
+    /// Get an attribute.
     pub fn get(&self, key: String) -> Option<&AttributeValue> {
         self.attrs.get(&key)
+    }
+
+    /// Get all of the attribute key value pairs.
+    pub fn attributes(&self) -> &HashMap<String, AttributeValue> {
+        &self.attrs
     }
 }
 
 /// Delineates a logical scope that has some beginning and end
-/// (e.g. a function or block of code ).
+/// (e.g. a function or block of code).
 pub trait Scope {
-    /// invoke when the scope has ended
+    /// invoke when the scope has ended.
     fn end(&self);
 }
 
 /// A cross cutting concern for carrying execution-scoped values across API
 /// boundaries (both in-process and distributed).
 pub trait Context {
-    /// Make this context the currently active context .
+    /// Make this context the currently active context.
     /// The returned handle is used to return the previous
     /// context (if one existed) as active.
     fn make_current(&self) -> &dyn Scope;
@@ -89,6 +106,6 @@ pub trait Context {
 
 /// Keeps track of the current [Context].
 pub trait ContextManager {
-    ///Get the currently active context
+    ///Get the currently active context.
     fn current(&self) -> &dyn Context;
 }
