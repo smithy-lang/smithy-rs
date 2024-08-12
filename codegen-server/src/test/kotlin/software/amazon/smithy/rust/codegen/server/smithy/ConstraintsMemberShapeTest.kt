@@ -30,22 +30,19 @@ class ConstraintsMemberShapeTest {
         """
         namespace constrainedMemberShape
 
-        use smithy.framework#ValidationException
         use aws.protocols#restJson1
         use aws.api#data
 
         @restJson1
         service ConstrainedService {
-            operations: [SampleOperation]
+            operations: [OperationUsingGet]
         }
 
-        @http(uri: "/anOperation", method: "POST")
-        operation SampleOperation {
-            output: SampleInputOutput
-            input: SampleInputOutput
-            errors: [ValidationException, ErrorWithMemberConstraint]
+        @http(uri: "/anOperation", method: "GET")
+        operation OperationUsingGet {
+            output : OperationUsingGetOutput
         }
-        structure SampleInputOutput {
+        structure OperationUsingGetOutput {
             plainLong : Long
             plainInteger : Integer
             plainShort : Short
@@ -151,12 +148,6 @@ class ConstraintsMemberShapeTest {
         string PatternString
         @range(min: 0, max:1000)
         integer RangedInteger
-
-        @error("server")
-        structure ErrorWithMemberConstraint {
-            @range(min: 100, max: 999)
-            statusCode: Integer
-        }
         """.asSmithyModel()
 
     private fun loadModel(model: Model): Model =
@@ -170,10 +161,10 @@ class ConstraintsMemberShapeTest {
             checkMemberShapeIsSame(
                 transformedModel,
                 outputModelOnly,
-                "constrainedMemberShape.synthetic#SampleInputOutput\$$fieldName",
-                "constrainedMemberShape#SampleInputOutput\$$fieldName",
+                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
+                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
             ) {
-                "SampleInputOutput$fieldName has changed whereas it is not constrained and should have remained same"
+                "OperationUsingGetOutput$fieldName has changed whereas it is not constrained and should have remained same"
             }
         }
 
@@ -218,8 +209,8 @@ class ConstraintsMemberShapeTest {
             checkMemberShapeChanged(
                 transformedModel,
                 outputModelOnly,
-                "constrainedMemberShape.synthetic#SampleInputOutput\$$fieldName",
-                "constrainedMemberShape#SampleInputOutput\$$fieldName",
+                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
+                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
             ) {
                 "constrained member $fieldName should have been changed into a new type."
             }
@@ -264,8 +255,8 @@ class ConstraintsMemberShapeTest {
         checkShapeHasTrait(
             transformedModel,
             outputModelOnly,
-            "constrainedMemberShape.synthetic#SampleInputOutput\$constrainedPatternString",
-            "constrainedMemberShape#SampleInputOutput\$constrainedPatternString",
+            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$constrainedPatternString",
+            "constrainedMemberShape#OperationUsingGetOutput\$constrainedPatternString",
             DataTrait("content", SourceLocation.NONE),
         )
     }
@@ -276,8 +267,8 @@ class ConstraintsMemberShapeTest {
         checkShapeHasTrait(
             transformedModel,
             outputModelOnly,
-            "constrainedMemberShape.synthetic#SampleInputOutput\$requiredConstrainedString",
-            "constrainedMemberShape#SampleInputOutput\$requiredConstrainedString",
+            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$requiredConstrainedString",
+            "constrainedMemberShape#OperationUsingGetOutput\$requiredConstrainedString",
             RequiredTrait(),
         )
     }
@@ -289,7 +280,7 @@ class ConstraintsMemberShapeTest {
                 unitTest(
                     "builder_module_has_${typeName.toSnakeCase()}",
                     """
-                    #[allow(unused_imports)] use crate::output::sample_operation_output::$typeName;
+                    #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
                     """,
                 )
             }
