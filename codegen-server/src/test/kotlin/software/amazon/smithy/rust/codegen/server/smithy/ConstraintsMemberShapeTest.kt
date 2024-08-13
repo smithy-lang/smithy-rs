@@ -27,9 +27,9 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
+import kotlin.streams.toList
 
 class ConstraintsMemberShapeTest {
-
     sealed class TestProtocol(val import: String, val protocolTrait: String){
         data object RestJson : TestProtocol("aws.protocols#restJson1", "@restJson1")
         data object Rpcv2Cbor : TestProtocol("smithy.protocols#rpcv2Cbor", "@rpcv2Cbor")
@@ -41,6 +41,7 @@ class ConstraintsMemberShapeTest {
 
         use smithy.framework#ValidationException
         use ${protocol.import}
+        use aws.protocols#restJson1
         use aws.api#data
 
         ${protocol.protocolTrait}
@@ -55,7 +56,58 @@ class ConstraintsMemberShapeTest {
             errors: [ValidationException, ErrorWithMemberConstraint]
         }
         structure SampleInputOutput {
-            constrainedPatternString : PatternStringList
+            plainLong : Long
+            plainInteger : Integer
+            plainShort : Short
+            plainByte : Byte
+            plainFloat: Float
+            plainString: String
+
+            @range(min: 1, max:100)
+            constrainedLong : Long
+            @range(min: 2, max:100)
+            constrainedInteger : Integer
+            @range(min: 3, max:100)
+            constrainedShort : Short
+            @range(min: 4, max:100)
+            constrainedByte : Byte
+            @length(max: 100)
+            constrainedString: String
+
+            @required
+            @range(min: 5, max:100)
+            requiredConstrainedLong : Long
+            @required
+            @range(min: 6, max:100)
+            requiredConstrainedInteger : Integer
+            @required
+            @range(min: 7, max:100)
+            requiredConstrainedShort : Short
+            @required
+            @range(min: 8, max:100)
+            requiredConstrainedByte : Byte
+            @required
+            @length(max: 101)
+            requiredConstrainedString: String
+
+            patternString : PatternString
+
+            @data("content")
+            @pattern("^[g-m]+${'$'}")
+            constrainedPatternString : PatternString
+
+            plainStringList : PlainStringList
+            patternStringList : PatternStringList
+            patternStringListOverride : PatternStringListOverride
+
+            plainStructField : PlainStructWithInteger
+            structWithConstrainedMember : StructWithConstrainedMember
+            structWithConstrainedMemberOverride : StructWithConstrainedMemberOverride
+
+            patternUnion: PatternUnion
+            patternUnionOverride: PatternUnionOverride
+            patternMap : PatternMap
+            patternMapOverride: PatternMapOverride
         }
         list ListWithIntegerMemberStruct {
             member: PlainStructWithInteger
@@ -131,7 +183,7 @@ class ConstraintsMemberShapeTest {
             checkMemberShapeIsSame(
                 transformedModel,
                 sampleModel,
-                "constrainedMemberShape.synthetic#SampleInputOutput\$$fieldName",
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
                 "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
                 "SampleInputOutput$fieldName has changed whereas it is not constrained and should have remained same"
@@ -179,7 +231,7 @@ class ConstraintsMemberShapeTest {
             checkMemberShapeChanged(
                 transformedModel,
                 sampleModel,
-                "constrainedMemberShape.synthetic#SampleInputOutput\$$fieldName",
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
                 "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
                 "constrained member $fieldName should have been changed into a new type."
@@ -225,7 +277,7 @@ class ConstraintsMemberShapeTest {
         checkShapeHasTrait(
             transformedModel,
             sampleModel,
-            "constrainedMemberShape.synthetic#SampleInputOutput\$constrainedPatternString",
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$constrainedPatternString",
             "constrainedMemberShape#SampleInputOutput\$constrainedPatternString",
             DataTrait("content", SourceLocation.NONE),
         )
@@ -237,7 +289,7 @@ class ConstraintsMemberShapeTest {
         checkShapeHasTrait(
             transformedModel,
             sampleModel,
-            "constrainedMemberShape.synthetic#SampleInputOutput\$requiredConstrainedString",
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$requiredConstrainedString",
             "constrainedMemberShape#SampleInputOutput\$requiredConstrainedString",
             RequiredTrait(),
         )
