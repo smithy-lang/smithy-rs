@@ -66,6 +66,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
         CborSerializerSection("BeforeIteratingOverMapOrCollection")
+
+    /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
+    data class BeforeSerializingNonNullMember(val shape: Shape, val context: CborSerializerGenerator.MemberContext) :
+        CborSerializerSection("BeforeSerializingNonNullMember")
 }
 
 /**
@@ -312,6 +316,14 @@ class CborSerializerGenerator(
             safeName().also { local ->
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     context.valueExpression = ValueExpression.Reference(local)
+                    for (customization in customizations) {
+                        customization.section(
+                            CborSerializerSection.BeforeSerializingNonNullMember(
+                                targetShape,
+                                context,
+                            ),
+                        )(this)
+                    }
                     serializeMemberValue(context, targetShape)
                 }
                 if (context.writeNulls) {

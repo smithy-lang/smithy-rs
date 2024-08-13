@@ -29,18 +29,56 @@ data class IntegrationTestParams(
     val cargoCommand: String? = null,
 )
 
+/**
+ * A helper class to allow setting `codegen` object keys.
+ */
 sealed class AdditionalSettings {
-    companion object {
-        val GenerateCodegenComments: ObjectNode =
+    abstract fun toObjectNode(): ObjectNode
+
+    fun merge(other: AdditionalSettings): AdditionalSettings = MergedSettings(this, other)
+
+    data class GenerateCodegenComments(val debugMode: Boolean = true) : AdditionalSettings() {
+        override fun toObjectNode(): ObjectNode =
             ObjectNode.builder().withMember(
                 "codegen",
                 ObjectNode.builder()
-                    .withMember("debugMode", true)
+                    .withMember("debugMode", debugMode)
                     .build(),
             ).build()
     }
-}
 
+    data class PublicConstraintType(val enabled: Boolean) : AdditionalSettings() {
+        override fun toObjectNode(): ObjectNode =
+            ObjectNode.builder().withMember(
+                "codegen",
+                ObjectNode.builder()
+                    .withMember("publicConstrainedTypes", enabled)
+                    .build(),
+            ).build()
+    }
+
+    /**
+     * Is used for merging different settings.
+     *
+     * ```kotlin
+     *  val debugSettings = AdditionalSettings.GenerateCodegenComments(true)
+     *  val anotherSetting = AdditionalSettings.GenerateCodegenComments(false)
+     *  val multiMergedSettings = debugSettings.merge(constraintSettings).merge(anotherSetting)
+     * ```
+     */
+    private data class MergedSettings(val settings: List<AdditionalSettings>) : AdditionalSettings() {
+        constructor(vararg settings: AdditionalSettings) : this(settings.toList())
+
+        override fun toObjectNode(): ObjectNode {
+            return settings.map { it.toObjectNode() }
+                .reduce { acc, next -> acc.merge(next) }
+        }
+    }
+
+    companion object {
+        fun merge(vararg settings: AdditionalSettings): AdditionalSettings = MergedSettings(*settings)
+    }
+}
 
 /**
  * Run cargo test on a true, end-to-end, codegen product of a given model.
