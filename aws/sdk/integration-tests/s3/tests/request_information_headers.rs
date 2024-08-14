@@ -20,7 +20,6 @@ use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
-use http::header::AUTHORIZATION;
 use std::time::{Duration, UNIX_EPOCH};
 
 // # One SDK operation invocation.

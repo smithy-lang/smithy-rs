@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 type ReplayEvents = Vec<ReplayEvent>;
 
-pub(crate) const DEFAULT_RELAXED_HEADERS: &[&'static str] = &["x-amz-user-agent", "authorization"];
+pub(crate) const DEFAULT_RELAXED_HEADERS: &[&str] = &["x-amz-user-agent", "authorization"];
 
 /// Test data for the [`StaticReplayClient`].
 ///
