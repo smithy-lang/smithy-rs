@@ -4,6 +4,7 @@
  */
 
 use super::{Action, ConnectionId, Direction, Event, NetworkTraffic};
+use crate::client::http::test_util::replay::DEFAULT_RELAXED_HEADERS;
 use aws_smithy_protocol_test::MediaType;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
@@ -81,6 +82,17 @@ impl ReplayingClient {
     /// Validate all headers and bodies
     pub async fn full_validate(self, media_type: &str) -> Result<(), Box<dyn Error>> {
         self.validate_body_and_headers(None, media_type).await
+    }
+
+    /// Convenience method to validate that the bodies match, using a given [`MediaType`] for
+    /// comparison, and that the headers are also match excluding the default relaxed headers
+    ///
+    /// The current default relaxed headers:
+    /// - x-amz-user-agent
+    /// - authorization
+    pub async fn relaxed_validate(self, media_type: &str) -> Result<(), Box<dyn Error>> {
+        self.validate_body_and_headers_except(DEFAULT_RELAXED_HEADERS, media_type)
+            .await
     }
 
     /// Validate actual requests against expected requests

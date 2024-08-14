@@ -104,10 +104,7 @@ async fn three_retries_and_then_success() {
     let resp = resp.expect("valid e2e test");
     assert_eq!(resp.name(), Some("test-bucket"));
     http_client
-        .validate_body_and_headers_except(
-            &["x-amz-user-agent", AUTHORIZATION.as_str()],
-            "application/xml",
-        )
+        .relaxed_validate("application/xml")
         .await
         .unwrap();
 }

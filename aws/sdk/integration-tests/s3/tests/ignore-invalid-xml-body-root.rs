@@ -60,5 +60,5 @@ async fn ignore_invalid_xml_body_root() {
         .await
         .unwrap();
 
-    http_client.assert_requests_match(&["x-amz-user-agent", AUTHORIZATION.as_str()]);
+    http_client.relaxed_requests_match();
 }

@@ -5,7 +5,6 @@
 
 use aws_sdk_s3::{config::Region, error::DisplayErrorContext, Client, Config};
 use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
-use http::header::AUTHORIZATION;
 
 #[tokio::test]
 async fn test_content_length_enforcement_is_not_applied_to_head_request() {
@@ -29,10 +28,7 @@ async fn test_content_length_enforcement_is_not_applied_to_head_request() {
     // The body returned will be empty, so we pass an empty string for `media_type` to
     // `validate_body_and_headers_except`. That way, it'll do a string equality check on the empty
     // strings.
-    http_client
-        .validate_body_and_headers_except(&["x-amz-user-agent", AUTHORIZATION.as_str()], "")
-        .await
-        .unwrap();
+    http_client.relaxed_validate("").await.unwrap();
 }
 
 #[tokio::test]
@@ -63,10 +59,7 @@ async fn test_content_length_enforcement_get_request_short() {
     let content_length_err = output.body.collect().await.unwrap_err();
 
     http_client
-        .validate_body_and_headers_except(
-            &["x-amz-user-agent", AUTHORIZATION.as_str()],
-            "application/text",
-        )
+        .relaxed_validate("application/text")
         .await
         .unwrap();
     assert_eq!(
@@ -103,10 +96,7 @@ async fn test_content_length_enforcement_get_request_long() {
     let content_length_err = output.body.collect().await.unwrap_err();
 
     http_client
-        .validate_body_and_headers_except(
-            &["x-amz-user-agent", AUTHORIZATION.as_str()],
-            "application/text",
-        )
+        .relaxed_validate("application/text")
         .await
         .unwrap();
     assert_eq!(
