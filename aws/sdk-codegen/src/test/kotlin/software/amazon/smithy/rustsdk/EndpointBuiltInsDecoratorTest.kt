@@ -21,23 +21,28 @@ class EndpointBuiltInsDecoratorTest {
         use aws.auth#sigv4
         use aws.protocols#restJson1
         use smithy.rules#endpointRuleSet
+        use smithy.rules#staticContextParams
 
         @service(sdkId: "dontcare")
         @restJson1
         @sigv4(name: "dontcare")
         @auth([sigv4])
+        @suppress(["RuleSetAwsBuiltIn.AWS::Auth::AccountId", "RuleSetAwsBuiltIn.AWS::Auth::AccountIdEndpointMode"])
         @endpointRuleSet({
             "version": "1.0"
             "parameters": {
                 "endpoint": { "required": false, "type": "string", "builtIn": "SDK::Endpoint" },
                 "region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                "accountId": { "required": false, "type": "String", "builtIn": "AWS::Auth::AccountId" },
+                "accountIdEndpointMode": { "required": false, "type": "String", "builtIn": "AWS::Auth::AccountIdEndpointMode" },
             }
             "rules": [
                 {
                     "type": "endpoint"
                     "conditions": [
                         {"fn": "isSet", "argv": [{"ref": "endpoint"}]},
-                        {"fn": "isSet", "argv": [{"ref": "region"}]}
+                        {"fn": "isSet", "argv": [{"ref": "region"}]},
+                        {"fn": "isSet", "argv": [{"ref": "accountId"}]}
                     ],
                     "endpoint": {
                         "url": "{endpoint}"
@@ -72,6 +77,11 @@ class EndpointBuiltInsDecoratorTest {
 
         @http(uri: "/SomeOperation", method: "GET")
         @optionalAuth
+        @staticContextParams(
+            accountIdEndpointMode: {
+                value: "some value"
+            }
+        )
         operation SomeOperation {
             output: SomeOutput
         }
