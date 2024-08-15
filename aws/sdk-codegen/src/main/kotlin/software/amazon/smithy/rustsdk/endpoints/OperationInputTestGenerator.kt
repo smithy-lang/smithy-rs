@@ -211,8 +211,8 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                         Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
                     }
                 }
-                // If the operation does not specify a region we set one
-                if (!operationInput.builtInParams.containsMember("AWS::Region")) {
+                // If the test contains Endpoint built-ins and does not contain an AWS::Region then we set one
+                if (!operationInput.builtInParams.isEmpty && !operationInput.builtInParams.containsMember("AWS::Region")) {
                     rust("let builder = builder.region(::aws_types::region::Region::new(\"foo\"));")
                 }
                 rust("builder.build()")
