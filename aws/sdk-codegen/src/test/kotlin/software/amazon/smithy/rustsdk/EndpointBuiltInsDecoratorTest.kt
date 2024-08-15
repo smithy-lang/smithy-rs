@@ -42,7 +42,17 @@ class EndpointBuiltInsDecoratorTest {
                     "conditions": [
                         {"fn": "isSet", "argv": [{"ref": "endpoint"}]},
                         {"fn": "isSet", "argv": [{"ref": "region"}]},
-                        {"fn": "isSet", "argv": [{"ref": "accountId"}]}
+                        {
+                            "fn": "not",
+                            "argv": [
+                                {
+                                    "fn": "isSet",
+                                    "argv": [
+                                        {"ref": "accountId"}
+                                    ]
+                                }
+                            ]
+                        }
                     ],
                     "endpoint": {
                         "url": "{endpoint}"
