@@ -90,6 +90,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachVali
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RecursiveConstraintViolationBoxer
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RemoveEbsModelValidationException
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ServerProtocolBasedTransformationFactory
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.logging.Logger
 
@@ -134,6 +135,7 @@ open class ServerCodegenVisitor(
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
         model = codegenDecorator.transformModel(service, baseModel, settings)
+        model = ServerProtocolBasedTransformationFactory.createTransformer(protocolShape).transform(model, service)
 
         val serverSymbolProviders =
             ServerSymbolProviders.from(

@@ -13,6 +13,8 @@ use thiserror::Error;
 pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
+//     #[error("error building HTTP response: {0}")]
+//     Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing CBOR-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
@@ -33,7 +35,6 @@ pub enum RequestRejection {
     // `Vec<u8>` here instead of `String`.
     #[error("request does not adhere to modeled constraints")]
     ConstraintViolation(Vec<u8>),
-
     /// Typically happens when the request has headers that are not valid UTF-8.
     #[error("failed to convert request: {0}")]
     HttpConversion(#[from] HttpError),

@@ -30,7 +30,7 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.io.File
 
-enum class Protocol(val trait: AbstractTrait) {
+enum class ModelProtocol(val trait: AbstractTrait) {
     AwsJson10(AwsJson1_0Trait.builder().build()),
     AwsJson11(AwsJson1_1Trait.builder().build()),
     RestJson(RestJson1Trait.builder().build()),
@@ -38,12 +38,16 @@ enum class Protocol(val trait: AbstractTrait) {
     Rpcv2Cbor(Rpcv2CborTrait.builder().build()),
 }
 
-fun loadSmithyConstraintsModel(protocol: Protocol): Pair<ShapeId, Model> {
+fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<ShapeId, Model> {
+    val (serviceShapeId, model) = loadSmithyConstraintsModel()
+    return Pair(serviceShapeId, model.replaceProtocolTrait(serviceShapeId, modelProtocol))
+}
+
+fun loadSmithyConstraintsModel(): Pair<ShapeId, Model> {
     val filePath = "../codegen-core/common-test-models/constraints.smithy"
     val serviceShapeId = ShapeId.from("com.amazonaws.constraints#ConstraintsService")
     val model =
         File(filePath).readText().asSmithyModel()
-            .replaceProtocolTrait(serviceShapeId, protocol)
     return Pair(serviceShapeId, model)
 }
 
@@ -53,24 +57,19 @@ fun loadSmithyConstraintsModel(protocol: Protocol): Pair<ShapeId, Model> {
  */
 fun Model.replaceProtocolTrait(
     serviceShapeId: ShapeId,
-    protocol: Protocol,
+    modelProtocol: ModelProtocol,
 ): Model {
     val serviceBuilder =
         this.expectShape(serviceShapeId, ServiceShape::class.java).toBuilder()
-    for (p in Protocol.values()) {
+    for (p in ModelProtocol.values()) {
         serviceBuilder.removeTrait(p.trait.toShapeId())
     }
-    val service = serviceBuilder.addTrait(protocol.trait).build()
+    val service = serviceBuilder.addTrait(modelProtocol.trait).build()
     return ModelTransformer.create().replaceShapes(this, listOf(service))
 }
 
 fun List<ShapeId>.containsAnyShapeId(ids: Collection<ShapeId>): Boolean {
     return ids.any { id -> this.any { shape -> shape == id } }
-}
-
-fun Model.removeShapes(shapeIdsToRemove: List<ShapeId>): Model {
-    val shapesToRemove = shapeIdsToRemove.map { this.expectShape(it) }
-    return ModelTransformer.create().removeShapes(this, shapesToRemove)
 }
 
 /**

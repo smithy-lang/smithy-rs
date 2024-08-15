@@ -30,14 +30,57 @@ data class IntegrationTestParams(
 )
 
 /**
- * A helper class to allow setting `codegen` object keys.
+ * A helper class to allow setting `codegen` object keys to be passed for `additionalSettings`
+ * field of `IntegrationTestParams`.
+ *
+ * Usage:
+ *
+ * ```kotlin
+ *         serverIntegrationTest(
+ *             model,
+ *             IntegrationTestParams(
+ *                  additionalSettings = AdditionalSettings.builder()
+ *                      .generateCodegenComments()
+ *                      .publicConstrainedTypes()
+ *                      .toObjectNode()
+ *             )),
+ * ```
+ *
+ * Or if there is only one setting:
+ *
+ * ```kotlin
+ *         serverIntegrationTest(
+ *             model,
+ *             IntegrationTestParams(
+ *                  additionalSettings = AdditionalSettings.GenerateCodegenComments(true)
+ *                      .toObjectNode()
+ *             )),
+ * ```
  */
 sealed class AdditionalSettings {
     abstract fun toObjectNode(): ObjectNode
 
-    fun merge(other: AdditionalSettings): AdditionalSettings = MergedSettings(this, other)
+    class Builder {
+        private val settings = mutableListOf<AdditionalSettings>()
 
-    data class GenerateCodegenComments(val debugMode: Boolean = true) : AdditionalSettings() {
+        fun generateCodegenComments(debugMode: Boolean = true): Builder {
+            settings.add(GenerateCodegenComments(debugMode))
+            return this
+        }
+
+        fun publicConstrainedTypes(enabled: Boolean = true): Builder {
+            settings.add(PublicConstraintType(enabled))
+            return this
+        }
+
+        fun build(): AdditionalSettings =
+            if (settings.size == 1) settings.first()
+            else MergedSettings(settings)
+
+        fun toObjectNode(): ObjectNode = build().toObjectNode()
+    }
+
+    data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
         override fun toObjectNode(): ObjectNode =
             ObjectNode.builder().withMember(
                 "codegen",
@@ -76,7 +119,7 @@ sealed class AdditionalSettings {
     }
 
     companion object {
-        fun merge(vararg settings: AdditionalSettings): AdditionalSettings = MergedSettings(*settings)
+        fun builder() = Builder()
     }
 }
 
