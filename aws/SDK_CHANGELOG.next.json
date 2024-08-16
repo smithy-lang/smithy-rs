@@ -6,20 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add customizations for S3 Expires fields.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "smithy-rs#3730"
-      ],
-      "since-commit": "fe1b341e8f1a4ee307554f1a63bf62ec72d8c9a3",
-      "age": 5
-    },
-    {
       "message": "Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon.",
       "meta": {
         "bug": true,
@@ -31,7 +17,7 @@
         "smithy-rs#3744"
       ],
       "since-commit": "56f4c8e9479792b8b52cc394d563ed49a01d1dcc",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in AWS SDK clients so that using these types does not require directly depending on `aws-smithy-runtime-api`.",
@@ -45,7 +31,7 @@
         "smithy-rs#3591"
       ],
       "since-commit": "8d23be1392c46a4d59c2910c3dab00ecaad2cf26",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Allow [AwsUserAgent](https://docs.rs/aws-runtime/1.3.1/aws_runtime/user_agent/struct.AwsUserAgent.html) to incorporate business metrics, which now deprecates the existing feature and config metadata.\n",
@@ -59,7 +45,7 @@
         "smithy-rs#3781"
       ],
       "since-commit": "433e1a00e2d3eadfde78b472d78b30a8f9204dbe",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix incorrect redaction of `@sensitive` types in maps and lists.\n",
@@ -74,7 +60,7 @@
         "smithy-rs#3757"
       ],
       "since-commit": "433e1a00e2d3eadfde78b472d78b30a8f9204dbe",
-      "age": 2
+      "age": 3
     }
   ],
   "aws-sdk-model": []
