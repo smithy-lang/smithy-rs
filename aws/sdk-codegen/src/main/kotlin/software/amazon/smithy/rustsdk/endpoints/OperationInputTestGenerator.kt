@@ -132,6 +132,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
             tokioTest(safeName("operation_input_test_$operationName")) {
                 rustTemplate(
                     """
+                    /* documentation: ${test.documentation.orElse("No docs :(")} */
                     /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
                     /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
                     let (http_client, rcvr) = #{capture_request}(None);
