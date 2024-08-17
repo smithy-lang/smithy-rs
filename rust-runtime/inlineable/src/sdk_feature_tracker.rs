@@ -38,3 +38,70 @@ pub(crate) mod rpc_v2_cbor {
         }
     }
 }
+
+#[allow(dead_code)]
+pub(crate) mod paginator {
+    use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
+    use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+    use aws_smithy_runtime_api::client::runtime_components::{
+        RuntimeComponents, RuntimeComponentsBuilder,
+    };
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+    use aws_smithy_types::config_bag::ConfigBag;
+    use std::borrow::Cow;
+
+    #[derive(Debug)]
+    struct PaginatorFeatureTrackerInterceptor;
+
+    impl PaginatorFeatureTrackerInterceptor {
+        pub(crate) fn new() -> Self {
+            Self
+        }
+    }
+
+    impl Intercept for PaginatorFeatureTrackerInterceptor {
+        fn name(&self) -> &'static str {
+            "PaginatorFeatureTrackerInterceptor"
+        }
+
+        fn modify_before_serialization(
+            &self,
+            _context: &mut BeforeSerializationInterceptorContextMut<'_>,
+            _runtime_components: &RuntimeComponents,
+            cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            cfg.interceptor_state()
+                .store_append::<SmithySdkFeature>(SmithySdkFeature::Paginator);
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    pub(crate) struct PaginatorFeatureTrackerRuntimePlugin {
+        runtime_components: RuntimeComponentsBuilder,
+    }
+
+    impl PaginatorFeatureTrackerRuntimePlugin {
+        pub(crate) fn new() -> Self {
+            Self {
+                runtime_components: RuntimeComponentsBuilder::new(
+                    "PaginatorFeatureTrackerRuntimePlugin",
+                )
+                .with_interceptor(SharedInterceptor::new(
+                    PaginatorFeatureTrackerInterceptor::new(),
+                )),
+            }
+        }
+    }
+
+    impl RuntimePlugin for PaginatorFeatureTrackerRuntimePlugin {
+        fn runtime_components(
+            &self,
+            _: &RuntimeComponentsBuilder,
+        ) -> Cow<'_, RuntimeComponentsBuilder> {
+            Cow::Borrowed(&self.runtime_components)
+        }
+    }
+}

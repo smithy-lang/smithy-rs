@@ -12,6 +12,7 @@ import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.traits.IsTruncatedPaginatorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -217,9 +218,13 @@ class PaginatorGenerator private constructor(
                                 handle.runtime_plugins.clone(),
                                 &handle.conf,
                                 #{None},
-                            );
+                            ).with_operation_plugin(#{PaginatorFeatureTrackerRuntimePlugin}::new());
                             """,
                             *codegenScope,
+                            "PaginatorFeatureTrackerRuntimePlugin" to
+                                RuntimeType.forInlineDependency(
+                                    InlineDependency.sdkFeatureTracker(runtimeConfig),
+                                ).resolve("paginator::PaginatorFeatureTrackerRuntimePlugin"),
                             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                         )
                     },

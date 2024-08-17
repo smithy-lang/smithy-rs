@@ -8,6 +8,7 @@ use aws_smithy_types::config_bag::{Storable, StoreAppend};
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SmithySdkFeature {
+    Paginator,
     GzipRequestCompression,
     ProtocolRpcV2Cbor,
 }

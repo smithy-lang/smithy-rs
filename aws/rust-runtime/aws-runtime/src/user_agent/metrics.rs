@@ -137,6 +137,7 @@ impl ProvideBusinessMetric for SmithySdkFeature {
     fn provide_business_metric(&self) -> Option<BusinessMetric> {
         use SmithySdkFeature::*;
         match self {
+            Paginator => Some(BusinessMetric::Paginator),
             GzipRequestCompression => Some(BusinessMetric::GzipRequestCompression),
             ProtocolRpcV2Cbor => Some(BusinessMetric::ProtocolRpcV2Cbor),
             otherwise => {
