@@ -62,5 +62,8 @@ object AwsRuntimeType {
 
     fun awsRuntime(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntime(runtimeConfig).toType()
 
+    fun awsRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
+        AwsCargoDependency.awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util").toType()
+
     fun awsRuntimeApi(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntimeApi(runtimeConfig).toType()
 }

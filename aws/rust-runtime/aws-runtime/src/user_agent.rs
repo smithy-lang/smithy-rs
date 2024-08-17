@@ -13,6 +13,8 @@ use std::fmt;
 
 mod interceptor;
 mod metrics;
+#[cfg(feature = "test-util")]
+pub mod test_util;
 
 const USER_AGENT_VERSION: &str = "2.1";
 
