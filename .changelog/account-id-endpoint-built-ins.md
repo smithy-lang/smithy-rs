@@ -1,5 +1,5 @@
 ---
-applies_to: ["client"] # "aws-sdk-rust" here duplicates this entry into release notes in `aws-sdk-rust`
+applies_to: ["aws-sdk-rust"]
 authors: ["landonxjames"]
 references: ["smithy-rs#3792"]
 breaking: false
