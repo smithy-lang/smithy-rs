@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-experimental"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Experiments for the smithy-rs ecosystem"
 edition = "2021"
@@ -15,10 +15,11 @@ crypto-aws-lc-fips = ["rustls/fips"]
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 aws-smithy-runtime-api = { features = ["client", "http-1x"], path = "../aws-smithy-runtime-api" }
+aws-smithy-runtime = { features = ["client"], path = "../aws-smithy-runtime" }
 aws-smithy-async = { path = "../aws-smithy-async" }
 hyper = { version = "1", features = ["client", "http1", "http2"] }
 pin-project-lite = "0.2.13"
-hyper-util = "0.1.3"
+hyper-util = "0.1.7"
 http = "1"
 tokio = "1"
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false }
