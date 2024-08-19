@@ -30,7 +30,7 @@ data class IntegrationTestParams(
 )
 
 /**
- * A helper class to allow setting `codegen` object keys to be passed for `additionalSettings`
+ * A helper class to allow setting `codegen` object keys to be passed to the `additionalSettings`
  * field of `IntegrationTestParams`.
  *
  * Usage:
@@ -42,17 +42,6 @@ data class IntegrationTestParams(
  *                  additionalSettings = AdditionalSettings.builder()
  *                      .generateCodegenComments()
  *                      .publicConstrainedTypes()
- *                      .toObjectNode()
- *             )),
- * ```
- *
- * Or if there is only one setting:
- *
- * ```kotlin
- *         serverIntegrationTest(
- *             model,
- *             IntegrationTestParams(
- *                  additionalSettings = AdditionalSettings.GenerateCodegenComments(true)
  *                      .toObjectNode()
  *             )),
  * ```

@@ -21,7 +21,7 @@ class CborConstraintsIntegrationTest {
         val model =
             constraintModel
                 .removeOperations(serviceShape, nonSupportedOperations)
-        // The test should compile. Nothing more needs to be tested.
+        // The test should compile; no further testing is required.
         serverIntegrationTest(
             model,
             IntegrationTestParams(
