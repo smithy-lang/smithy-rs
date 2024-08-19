@@ -82,7 +82,9 @@ fun pubUseSmithyPrimitives(
                 pub use #{ByteStream};
                 pub use #{AggregatedBytes};
                 pub use #{Error} as ByteStreamError;
+                ##[cfg(feature = "rt-tokio")]
                 pub use #{FsBuilder};
+                ##[cfg(feature = "rt-tokio")]
                 pub use #{Length};
                 pub use #{SdkBody};
                 """,
