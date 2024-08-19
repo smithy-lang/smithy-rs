@@ -132,6 +132,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
             tokioTest(safeName("operation_input_test_$operationName")) {
                 rustTemplate(
                     """
+                    /* documentation: ${test.documentation.orElse("No docs :(")} */
                     /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
                     /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
                     let (http_client, rcvr) = #{capture_request}(None);
@@ -210,6 +211,10 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                     } else {
                         Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
                     }
+                }
+                // If the test contains Endpoint built-ins and does not contain an AWS::Region then we set one
+                if (!operationInput.builtInParams.isEmpty && !operationInput.builtInParams.containsMember("AWS::Region")) {
+                    rust("let builder = builder.region(::aws_types::region::Region::new(\"us-east-1\"));")
                 }
                 rust("builder.build()")
             }
