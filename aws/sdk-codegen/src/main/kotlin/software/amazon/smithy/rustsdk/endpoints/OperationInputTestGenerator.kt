@@ -214,7 +214,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                 }
                 // If the test contains Endpoint built-ins and does not contain an AWS::Region then we set one
                 if (!operationInput.builtInParams.isEmpty && !operationInput.builtInParams.containsMember("AWS::Region")) {
-                    rust("let builder = builder.region(::aws_types::region::Region::new(\"foo\"));")
+                    rust("let builder = builder.region(::aws_types::region::Region::new(\"us-east-1\"));")
                 }
                 rust("builder.build()")
             }
