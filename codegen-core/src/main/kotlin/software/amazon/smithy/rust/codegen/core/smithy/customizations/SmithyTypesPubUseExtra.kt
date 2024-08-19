@@ -82,11 +82,15 @@ fun pubUseSmithyPrimitives(
                 pub use #{ByteStream};
                 pub use #{AggregatedBytes};
                 pub use #{Error} as ByteStreamError;
+                pub use #{FsBuilder};
+                pub use #{Length};
                 pub use #{SdkBody};
                 """,
                 "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
                 "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
                 "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
+                "FsBuilder" to RuntimeType.smithyTypes(rc).resolve("byte_stream::FsBuilder"),
+                "Length" to RuntimeType.smithyTypes(rc).resolve("byte_stream::Length"),
                 "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
             )
         }

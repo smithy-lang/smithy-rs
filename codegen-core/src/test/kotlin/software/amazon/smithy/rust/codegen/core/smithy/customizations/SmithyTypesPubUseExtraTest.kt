@@ -147,7 +147,12 @@ class SmithyTypesPubUseExtraTest {
     @Test
     fun `it re-exports ByteStream and AggregatedBytes when a model has streaming`() {
         val streamingTypes =
-            listOf("::aws_smithy_types::byte_stream::ByteStream", "::aws_smithy_types::byte_stream::AggregatedBytes")
+            listOf(
+                "::aws_smithy_types::byte_stream::ByteStream",
+                "::aws_smithy_types::byte_stream::AggregatedBytes",
+                "::aws_smithy_types::byte_stream::FsBuilder",
+                "::aws_smithy_types::byte_stream::Length",
+            )
         val streamingShape = "@streaming blob Streaming"
 
         this.assertDoesntHaveReexports(reexportsWithEmptyModel(), streamingTypes)
