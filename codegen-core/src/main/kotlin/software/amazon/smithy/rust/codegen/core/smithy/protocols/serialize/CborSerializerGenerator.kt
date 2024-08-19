@@ -66,6 +66,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
         CborSerializerSection("BeforeIteratingOverMapOrCollection")
+
+    /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
+    data class BeforeSerializingNonNullMember(val shape: Shape, val context: CborSerializerGenerator.MemberContext) :
+        CborSerializerSection("BeforeSerializingNonNullMember")
 }
 
 /**
@@ -311,6 +315,7 @@ class CborSerializerGenerator(
             safeName().also { local ->
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     context.valueExpression = ValueExpression.Reference(local)
+                    resolveValueExpressionForConstrainedType(targetShape, context)
                     serializeMemberValue(context, targetShape)
                 }
                 if (context.writeNulls) {
@@ -320,11 +325,26 @@ class CborSerializerGenerator(
                 }
             }
         } else {
+            resolveValueExpressionForConstrainedType(targetShape, context)
             with(serializerUtil) {
                 ignoreDefaultsForNumbersAndBools(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }
+        }
+    }
+
+    private fun RustWriter.resolveValueExpressionForConstrainedType(
+        targetShape: Shape,
+        context: MemberContext,
+    ) {
+        for (customization in customizations) {
+            customization.section(
+                CborSerializerSection.BeforeSerializingNonNullMember(
+                    targetShape,
+                    context,
+                ),
+            )(this)
         }
     }
 
@@ -362,7 +382,7 @@ class CborSerializerGenerator(
                     rust("$encoder;") // Encode the member key.
                 }
                 when (target) {
-                    is StructureShape -> serializeStructure(StructContext(value.name, target))
+                    is StructureShape -> serializeStructure(StructContext(value.asRef(), target))
                     is CollectionShape -> serializeCollection(Context(value, target))
                     is MapShape -> serializeMap(Context(value, target))
                     is UnionShape -> serializeUnion(Context(value, target))
