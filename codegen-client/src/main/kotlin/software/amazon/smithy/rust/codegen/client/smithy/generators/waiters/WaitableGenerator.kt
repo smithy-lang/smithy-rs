@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentBuilderConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentBuilderGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -206,7 +207,7 @@ private class WaiterFluentBuilderConfig(
                         self.handle.runtime_plugins.clone(),
                         &self.handle.conf,
                         #{None},
-                    );
+                    ).with_operation_plugin(#{WaiterFeatureTrackerRuntimePlugin}::new());
                     let mut cfg = #{ConfigBag}::base();
                     let runtime_components_builder = runtime_plugins.apply_client_configuration(&mut cfg)
                         .map_err(#{WaiterError}::construction_failure)?;
@@ -241,6 +242,10 @@ private class WaiterFluentBuilderConfig(
                     },
                 "FinalPollAlias" to finalPollTypeAlias(),
                 "WaiterErrorAlias" to waiterErrorTypeAlias(),
+                "WaiterFeatureTrackerRuntimePlugin" to
+                    RuntimeType.forInlineDependency(
+                        InlineDependency.sdkFeatureTracker(runtimeConfig),
+                    ).resolve("waiter::WaiterFeatureTrackerRuntimePlugin"),
             )
         }
 

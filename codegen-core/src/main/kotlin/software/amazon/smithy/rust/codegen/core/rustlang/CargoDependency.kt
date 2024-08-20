@@ -173,6 +173,12 @@ class InlineDependency(
             )
 
         fun constrained(): InlineDependency = forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
+
+        fun sdkFeatureTracker(runtimeConfig: RuntimeConfig): InlineDependency =
+            forInlineableRustFile(
+                "sdk_feature_tracker",
+                CargoDependency.smithyRuntime(runtimeConfig),
+            )
     }
 }
 
