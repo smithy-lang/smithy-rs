@@ -32,6 +32,14 @@ pub(crate) fn kv_from_option_attr(input: Option<&Attributes>) -> Vec<KeyValue> {
         .into()
 }
 
+pub(crate) fn option_attr_from_kv(input: &[KeyValue]) -> Option<Attributes> {
+    if input.len() == 0 {
+        return None;
+    }
+
+    Some(AttributesWrap::from(input).0)
+}
+
 impl<'a> From<AttributesWrap> for Vec<KeyValue> {
     fn from(value: AttributesWrap) -> Self {
         value
