@@ -5,17 +5,18 @@
 
 //! OpenTelemetry based implementations of the Smithy Observability Meter traits.
 
-use std::ops::Deref;
+use std::{ops::Deref, sync::Arc};
 
-use crate::attributes::kv_from_option_attr;
+use crate::attributes::{kv_from_option_attr, option_attr_from_kv};
 use aws_smithy_observability::attributes::{Attributes, Context, Double, Long, UnsignedLong};
 pub use aws_smithy_observability::meter::{
     AsyncMeasurement, AsyncMeasurementHandle, Histogram, Meter, MeterProvider, MonotonicCounter,
     UpDownCounter,
 };
 use opentelemetry::metrics::{
-    Counter as OtelCounter, Histogram as OtelHistogram, Meter as OtelMeter, ObservableCounter,
-    ObservableGauge, ObservableUpDownCounter, UpDownCounter as OtelUpDownCounter,
+    AsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram, Meter as OtelMeter,
+    ObservableCounter, ObservableGauge, ObservableUpDownCounter,
+    UpDownCounter as OtelUpDownCounter,
 };
 // use opentelemetry_sdk::metrics::{
 //     SdkMeter as OtelSdkMeter, SdkMeterProvider as OtelSdkMeterProvider,
@@ -150,6 +151,18 @@ impl Deref for MeterWrap {
     }
 }
 
+struct OtelAsyncMeasurement<T>(dyn AsyncMeasurement<Value = T> + Send + Sync + 'static);
+impl<T> AsyncInstrument<T> for OtelAsyncMeasurement<T> {
+    fn observe(&self, measurement: T, attributes: &[opentelemetry::KeyValue]) {
+        self.0
+            .record(measurement, option_attr_from_kv(attributes).as_ref(), None)
+    }
+
+    fn as_any(&self) -> std::sync::Arc<dyn std::any::Any> {
+        Arc::new(&self.clone())
+    }
+}
+
 impl Meter for MeterWrap {
     fn create_gauge(
         &self,
@@ -160,8 +173,9 @@ impl Meter for MeterWrap {
         units: Option<String>,
         description: Option<String>,
     ) -> &dyn AsyncMeasurementHandle {
+        fn foo(foo: &dyn AsyncInstrument<f64>) {}
         //TODO(smithyObservability): figure out the typing for the callback here
-        let mut builder = self.0.f64_observable_gauge(name);
+        let mut builder = self.0.f64_observable_gauge(name).with_callback(foo);
 
         if let Some(desc) = description {
             builder = builder.with_description(desc);
