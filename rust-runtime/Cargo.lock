@@ -306,7 +306,7 @@ dependencies = [
 name = "aws-smithy-cbor"
 version = "0.60.7"
 dependencies = [
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "criterion",
  "minicbor",
 ]
@@ -337,7 +337,7 @@ name = "aws-smithy-checksums"
 version = "0.60.12"
 dependencies = [
  "aws-smithy-http 0.60.9",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "bytes-utils",
  "crc32c",
@@ -364,7 +364,7 @@ name = "aws-smithy-compression"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "bytes-utils",
  "flate2",
@@ -384,7 +384,7 @@ name = "aws-smithy-eventstream"
 version = "0.60.4"
 dependencies = [
  "arbitrary",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "bytes-utils",
  "crc32fast",
@@ -404,15 +404,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-experimental"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "aws-smithy-async 1.2.1",
  "aws-smithy-runtime 1.7.0",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "h2 0.4.5",
  "http 1.1.0",
- "hyper 1.3.1",
+ "hyper 1.4.1",
  "hyper-rustls 0.27.2",
  "hyper-util",
  "once_cell",
@@ -451,7 +451,7 @@ dependencies = [
  "async-stream",
  "aws-smithy-eventstream 0.60.4",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "bytes-utils",
  "futures-core",
@@ -480,7 +480,7 @@ dependencies = [
  "aws-smithy-http 0.60.9",
  "aws-smithy-json 0.60.7",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "aws-smithy-xml 0.60.8",
  "bytes",
  "futures-util",
@@ -510,7 +510,7 @@ dependencies = [
  "aws-smithy-http 0.60.9",
  "aws-smithy-http-server",
  "aws-smithy-json 0.60.7",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "aws-smithy-xml 0.60.8",
  "bytes",
  "futures",
@@ -550,7 +550,7 @@ version = "0.60.3"
 name = "aws-smithy-json"
 version = "0.60.7"
 dependencies = [
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "proptest",
  "serde_json",
 ]
@@ -570,7 +570,7 @@ version = "0.2.1"
 dependencies = [
  "aws-sdk-s3",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "tokio",
 ]
 
@@ -611,7 +611,7 @@ dependencies = [
 name = "aws-smithy-query"
 version = "0.60.7"
 dependencies = [
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "urlencoding",
 ]
 
@@ -655,7 +655,7 @@ dependencies = [
  "aws-smithy-http 0.60.9",
  "aws-smithy-protocol-test 0.62.0",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "fastrand",
  "futures-util",
@@ -703,7 +703,7 @@ name = "aws-smithy-runtime-api"
 version = "1.7.2"
 dependencies = [
  "aws-smithy-async 1.2.1",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "http 0.2.12",
  "http 1.1.0",
@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
@@ -779,7 +779,7 @@ name = "aws-smithy-types-convert"
 version = "0.60.8"
 dependencies = [
  "aws-smithy-async 1.2.1",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "chrono",
  "futures-core",
  "time",
@@ -791,7 +791,7 @@ version = "0.1.3"
 dependencies = [
  "aws-smithy-http 0.60.9",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "bytes",
  "http 1.1.0",
  "tracing",
@@ -1862,9 +1862,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.3.1"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe575dd17d0862a9a33781c8c4696a55c320909004a67a00fb286ba8b1bc496d"
+checksum = "50dfd22e0e76d0f662d429a5f80fcaf3855009297eab6a0a9f8543834744ba05"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1904,7 +1904,7 @@ checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
 dependencies = [
  "futures-util",
  "http 1.1.0",
- "hyper 1.3.1",
+ "hyper 1.4.1",
  "hyper-util",
  "rustls 0.23.10",
  "rustls-native-certs 0.7.0",
@@ -1916,16 +1916,16 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.5"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b875924a60b96e5d7b9ae7b066540b1dd1cbd90d1828f54c92e02a283351c56"
+checksum = "cde7055719c54e36e95e8719f95883f22072a48ede39db7fc17a4e1d5281e9b9"
 dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
  "http 1.1.0",
  "http-body 1.0.0",
- "hyper 1.3.1",
+ "hyper 1.4.1",
  "pin-project-lite",
  "socket2",
  "tokio",
@@ -1979,8 +1979,9 @@ dependencies = [
  "aws-smithy-compression",
  "aws-smithy-http 0.60.9",
  "aws-smithy-json 0.60.7",
+ "aws-smithy-runtime 1.7.0",
  "aws-smithy-runtime-api 1.7.2",
- "aws-smithy-types 1.2.2",
+ "aws-smithy-types 1.2.3",
  "aws-smithy-xml 0.60.8",
  "bytes",
  "fastrand",

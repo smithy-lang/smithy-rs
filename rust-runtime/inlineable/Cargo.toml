@@ -21,7 +21,8 @@ aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-compression = { path = "../aws-smithy-compression", features = ["http-body-0-4-x"] }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
