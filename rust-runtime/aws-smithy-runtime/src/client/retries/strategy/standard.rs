@@ -327,6 +327,7 @@ fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)] // will be unused with `--no-default-features --features client`
     use std::fmt;
     use std::sync::Mutex;
     use std::time::Duration;
@@ -461,6 +462,7 @@ mod tests {
         assert_eq!(ShouldAttempt::YesAfterDelay(MAX_BACKOFF), actual);
     }
 
+    #[allow(dead_code)] // will be unused with `--no-default-features --features client`
     #[derive(Debug)]
     struct PresetReasonRetryClassifier {
         retry_actions: Mutex<Vec<RetryAction>>,
