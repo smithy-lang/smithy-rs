@@ -4,12 +4,23 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
 set -eux
 cd aws-sdk
 
-# Invoking `cargo test` at the root directory implicitly checks for the validity
-# of the top-level `Cargo.toml`
-cargo test --all-features
+ENABLE_SMOKETESTS="${ENABLE_SMOKETESTS:-false}"
+
+# Check if the $ENABLE_SMOKETESTS environment variable is set
+if [ "$ENABLE_SMOKETESTS" = "true" ]; then
+    # Invoking `cargo test` at the root directory implicitly checks for the validity
+    # of the top-level `Cargo.toml`
+    echo "${C_YELLOW}## Running smoketests...${C_RESET}"
+    RUSTFLAGS="--cfg smoketests" cargo test --all-features
+else
+    cargo test --all-features
+fi
 
 for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then
