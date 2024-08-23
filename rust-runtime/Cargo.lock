@@ -336,7 +336,7 @@ dependencies = [
 name = "aws-smithy-checksums"
 version = "0.60.12"
 dependencies = [
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-types 1.2.4",
  "bytes",
  "bytes-utils",
@@ -407,7 +407,7 @@ name = "aws-smithy-experimental"
 version = "0.1.4"
 dependencies = [
  "aws-smithy-async 1.2.1",
- "aws-smithy-runtime 1.7.0",
+ "aws-smithy-runtime 1.7.1",
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.4",
  "h2 0.4.5",
@@ -446,7 +446,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.60.9"
+version = "0.60.10"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream 0.60.4",
@@ -474,10 +474,10 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.63.2"
+version = "0.63.3"
 dependencies = [
  "aws-smithy-cbor",
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-json 0.60.7",
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.4",
@@ -507,7 +507,7 @@ dependencies = [
 name = "aws-smithy-http-server-python"
 version = "0.63.1"
 dependencies = [
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-http-server",
  "aws-smithy-json 0.60.7",
  "aws-smithy-types 1.2.4",
@@ -648,11 +648,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.7.0"
+version = "1.7.1"
 dependencies = [
  "approx",
  "aws-smithy-async 1.2.1",
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-protocol-test 0.62.0",
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.4",
@@ -789,7 +789,7 @@ dependencies = [
 name = "aws-smithy-wasm"
 version = "0.1.3"
 dependencies = [
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.4",
  "bytes",
@@ -1977,9 +1977,9 @@ version = "0.1.0"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-compression",
- "aws-smithy-http 0.60.9",
+ "aws-smithy-http 0.60.10",
  "aws-smithy-json 0.60.7",
- "aws-smithy-runtime 1.7.0",
+ "aws-smithy-runtime 1.7.1",
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.4",
  "aws-smithy-xml 0.60.8",
