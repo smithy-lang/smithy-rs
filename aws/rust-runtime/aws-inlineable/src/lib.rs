@@ -57,6 +57,7 @@ pub mod endpoint_discovery;
 mod serialization_settings;
 
 /// Parse the Expires and ExpiresString fields correctly
+#[allow(dead_code)]
 pub mod s3_expires_interceptor;
 
 // just so docs work
