@@ -11,7 +11,7 @@ use std::env::current_dir;
 use std::fmt::Display;
 use std::io::{BufRead, BufWriter};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::SystemTime;
 use std::{env, fs};
 
@@ -72,10 +72,14 @@ struct SetupSmithyArgs {
     #[arg(short, long)]
     service: String,
     #[arg(short, long)]
-    workdir: PathBuf,
+    workdir: Option<PathBuf>,
 
     #[arg(short, long)]
     fuzz_runner_local_path: PathBuf,
+
+    /// Rebuild the local clones of smithy-rs
+    #[arg(long)]
+    rebuild_local_targets: bool,
 }
 
 #[derive(Parser)]
@@ -91,6 +95,10 @@ struct FuzzArgs {
 
     #[arg(long)]
     enter_fuzzing_loop: bool,
+
+    /// The number of parallel fuzzers to run
+    #[arg(short, long)]
+    num_fuzzers: Option<usize>,
 }
 
 #[derive(Parser)]
@@ -141,7 +149,12 @@ struct ReplayArgs {
     config_path: String,
 
     /// Invoke only the specified path.
+    #[arg(short, long)]
     invoke_only: Option<String>,
+
+    /// Output results in JSON
+    #[arg(short, long)]
+    json: bool,
 }
 
 #[derive(Deserialize)]
@@ -167,6 +180,12 @@ struct Target {
     shared_library: Option<PathBuf>,
 }
 
+impl Target {
+    fn human_name(&self) -> String {
+        determine_package_name(&self.source.join("Cargo.toml"))
+    }
+}
+
 fn main() {
     tracing_subscriber::fmt::init();
     let cli = Cli::parse();
@@ -183,7 +202,8 @@ fn main() {
 }
 
 fn setup_smithy(args: SetupSmithyArgs) {
-    let maven_locals = args.workdir.join("maven-locals");
+    let workdir = args.workdir.unwrap_or(env::current_dir().unwrap());
+    let maven_locals = workdir.join("maven-locals");
     fs::create_dir_all(&maven_locals).unwrap();
 
     let fuzz_driver_path = maven_locals.join("fuzz-driver");
@@ -204,7 +224,7 @@ fn setup_smithy(args: SetupSmithyArgs) {
         false,
     )
     .unwrap();
-    let fuzzgen_smithy_build_path = args.workdir.join("smithy-build-fuzzgen.json");
+    let fuzzgen_smithy_build_path = workdir.join("smithy-build-fuzzgen.json");
     fs::write(
         &fuzzgen_smithy_build_path,
         assert_valid_json(&fuzzgen_smithy_build),
@@ -212,7 +232,7 @@ fn setup_smithy(args: SetupSmithyArgs) {
     .unwrap();
 
     for revision in args.revision {
-        let revision_dir = clone_smithyrs(&args.workdir, &revision);
+        let revision_dir = clone_smithyrs(&workdir, &revision, args.rebuild_local_targets);
 
         let maven_local_subpath = maven_locals.join(&revision);
         build_revision(&maven_local_subpath, &revision_dir);
@@ -228,12 +248,12 @@ fn setup_smithy(args: SetupSmithyArgs) {
             false,
         )
         .unwrap();
-        let smithy_build_path = args.workdir.join(format!("smithy-build-{revision}.json"));
+        let smithy_build_path = workdir.join(format!("smithy-build-{revision}.json"));
         fs::write(&smithy_build_path, assert_valid_json(&fuzzgen_smithy_build)).unwrap();
-        smithy_build(&args.workdir, &smithy_build_path);
+        smithy_build(&workdir, &smithy_build_path);
     }
     println!("running smithy build for fuzz harness");
-    smithy_build(&args.workdir, &fuzzgen_smithy_build_path);
+    smithy_build(&workdir, &fuzzgen_smithy_build_path);
 }
 
 /// Run smithy build for a given file
@@ -273,7 +293,7 @@ fn smithy_build(workdir: impl AsRef<Path>, smithy_build_json: impl AsRef<Path>) 
 /// * `maven_local`: Path to a revisione-specific maven-local directory to build into
 ///
 /// returns: Path to the cloned directory
-fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str) -> PathBuf {
+fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str, recreate: bool) -> PathBuf {
     let smithy_dir = workdir.as_ref().join("smithy-rs-src");
     if !smithy_dir.exists() {
         exec(
@@ -287,6 +307,10 @@ fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str) -> PathBuf {
     fs::create_dir_all(&copies_dir).unwrap();
 
     let revision_dir = copies_dir.join(revision);
+    if revision_dir.exists() && !recreate {
+        return revision_dir;
+    }
+    exec(Command::new("rm").arg("-rf").arg(&revision_dir));
 
     exec(
         Command::new("git")
@@ -304,7 +328,12 @@ fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str) -> PathBuf {
 }
 
 fn exec(command: &mut Command) {
-    let status = command.spawn().unwrap().wait().unwrap();
+    let status = match command.spawn().unwrap().wait() {
+        Ok(status) => status,
+        Err(e) => {
+            panic!("{:?} failed: {}", command, e)
+        }
+    };
     if !status.success() {
         panic!("command failed: {:?}", command);
     }
@@ -356,34 +385,60 @@ fn fuzz(args: FuzzArgs) {
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
     if args.enter_fuzzing_loop {
         let libraries = force_load_libraries(&config.targets);
-        let target = fs::File::create("log.txt").unwrap();
-        let fuzzing_log = BufWriter::new(target);
-        enter_fuzz_loop(libraries, Some(fuzzing_log))
+        //let target = fs::File::create("log.txt").unwrap();
+        //let fuzzing_log = BufWriter::new(target);
+        enter_fuzz_loop(libraries, None)
     } else {
         eprintln!(
             "Preparing to start fuzzing... {} targets.",
             config.targets.len()
         );
-        let mut cmd = Command::new("cargo");
-        cmd.args(["afl", "fuzz"])
-            .arg("-i")
-            .arg(&config.lexicon)
-            .arg("-o")
-            .arg(&config.afl_output_dir);
+        let base_command = || {
+            let mut cmd = Command::new("cargo");
+            cmd.args(["afl", "fuzz"])
+                .arg("-i")
+                .arg(&config.lexicon)
+                .arg("-o")
+                .arg(&config.afl_output_dir);
 
-        for dict in &config.dictionaries {
-            cmd.arg("-x").arg(dict);
+            for dict in &config.dictionaries {
+                cmd.arg("-x").arg(dict);
+            }
+            cmd
+        };
+
+        let apply_target = |mut cmd: Command| {
+            let current_binary =
+                std::env::current_exe().expect("could not determine current target");
+            cmd.arg(current_binary)
+                .arg("fuzz")
+                .arg("--config-path")
+                .arg(&args.config_path)
+                .arg("--enter-fuzzing-loop");
+            cmd
+        };
+        let mut main_runner = base_command();
+        main_runner.arg("-M").arg("fuzzer0");
+
+        eprintln!(
+            "Switching to AFL with the following command:\n{:?}",
+            main_runner
+        );
+        let mut main = apply_target(main_runner).spawn().unwrap();
+        let mut children = vec![];
+        for idx in 0..args.num_fuzzers.unwrap_or_default() {
+            let mut runner = base_command();
+            runner.arg("-S").arg(format!("fuzzer{}", idx));
+            runner.stderr(Stdio::null()).stdout(Stdio::null());
+            children.push(KillOnDrop(apply_target(runner).spawn().unwrap()));
         }
-
-        let current_binary = std::env::current_exe().expect("could not determine current target");
-        cmd.arg(current_binary)
-            .arg("fuzz")
-            .arg("--config-path")
-            .arg(args.config_path)
-            .arg("--enter-fuzzing-loop");
-
-        eprintln!("Switching to AFL with the following command:\n{:?}", cmd);
-        cmd.spawn().unwrap().wait().unwrap();
+        main.wait().unwrap();
+    }
+}
+struct KillOnDrop(Child);
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        self.0.kill().unwrap();
     }
 }
 
@@ -469,16 +524,16 @@ fn initialize(
 }
 
 fn initialize_target(source: PathBuf) -> Target {
-    let package_name = query_package_name(source.as_ref());
+    let package_id = determine_package_id(source.as_ref());
     Target {
-        package_name,
+        package_name: package_id,
         source,
         shared_library: None,
     }
 }
 
 fn load_all_crashes(output_dir: &Path) -> Vec<PathBuf> {
-    let pattern = output_dir.join("default/crashes*");
+    let pattern = output_dir.join("fuzzer*/crashes*");
 
     eprintln!("searching for crashes in {}", pattern.display());
     let pattern = format!("{}", pattern.display());
@@ -501,51 +556,64 @@ fn replay(
     ReplayArgs {
         config_path,
         invoke_only,
+        json,
     }: ReplayArgs,
 ) {
     let config = fs::read_to_string(config_path).unwrap();
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
-    eprintln!("Replaying crashes.");
     let crashes = if let Some(path) = invoke_only {
         vec![path.into()]
     } else {
         load_all_crashes(&config.afl_output_dir)
     };
+    eprintln!("Replaying {} crashes.", crashes.len());
     for crash in crashes {
-        println!("{}", crash.display());
+        eprintln!("{}", crash.display());
         let data = fs::read(&crash).unwrap();
         let http_request = HttpRequest::from_unknown_bytes(&data);
-        println!("Test case: {:#?}", http_request);
-        let mut results = vec![];
-        #[derive(Debug)]
+        let mut results: HashMap<String, CrashResult> = HashMap::new();
+        #[derive(Debug, Serialize)]
+        #[serde(tag = "type")]
         enum CrashResult {
-            Panic(String),
-            FuzzResult(FuzzResult),
+            Panic { message: String },
+            FuzzResult { result: String },
         }
 
-        for library in config
-            .targets
-            .iter()
-            .flat_map(|t| t.shared_library.as_ref())
-        {
+        for library in &config.targets {
             let result = Command::new(env::current_exe().unwrap())
                 .arg("invoke-test-case")
                 .arg("--shared-library-path")
-                .arg(library)
+                .arg(library.shared_library.as_deref().unwrap())
                 .arg("--test-case")
                 .arg(&crash)
                 .output()
                 .unwrap();
-            match serde_json::from_slice::<FuzzResult>(&result.stdout) {
-                Ok(result) => results.push(CrashResult::FuzzResult(result)),
-                Err(_err) => results.push(CrashResult::Panic(
-                    String::from_utf8_lossy(&result.stderr).to_string(),
-                )),
-            }
+            let result = match serde_json::from_slice::<FuzzResult>(&result.stdout) {
+                Ok(result) => CrashResult::FuzzResult { result: format!("{:?}", result) },
+                Err(_err) => CrashResult::Panic {
+                    message: String::from_utf8_lossy(&result.stderr).to_string(),
+                },
+            };
+            results.insert(library.human_name(), result);
         }
-        println!("{:#?}", results);
+        #[derive(Serialize)]
+        struct Results {
+            test_case: String,
+            results: HashMap<String, CrashResult>,
+        }
+        if json {
+            println!(
+                "{}",
+                serde_json::to_string(&Results {
+                    test_case: format!("{:#?}", http_request.unwrap()),
+                    results
+                })
+                .unwrap()
+            );
+        } else {
+            println!("{:#?}\n----", results);
+        }
     }
-    println!("------------");
 }
 
 fn invoke_testcase(test_case: impl AsRef<Path>, shared_library_path: impl AsRef<Path>) {
@@ -585,12 +653,27 @@ fn enter_fuzz_loop(libraries: Vec<FuzzTarget>, mut log: Option<BufWriter<fs::Fil
                 });
                 for result in &results {
                     if result.response != results[0].response {
+                        if check_for_nondeterminism(data, &libraries) {
+                            break;
+                        }
                         panic!("inconsistent results: {:#?}", results);
                     }
                 }
             }
         }
     });
+}
+
+fn check_for_nondeterminism(data: &[u8], libraries: &[FuzzTarget]) -> bool {
+    for lib in libraries {
+        let sample = (0..10)
+            .map(|_idx| lib.invoke_bytes(&data))
+            .collect::<Vec<_>>();
+        if sample.iter().any(|result| result != &sample[0]) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// Converts a JSON formatted seed to the format expected by AFL
@@ -642,7 +725,12 @@ impl AsRef<Path> for Mode {
     }
 }
 
-fn query_package_name(path: &Path) -> String {
+fn determine_package_name(path: &Path) -> String {
+    let cargo_toml_file = cargo_toml::Manifest::from_path(path).expect("invalid manifest");
+    cargo_toml_file.package.unwrap().name
+}
+
+fn determine_package_id(path: &Path) -> String {
     let metadata = Command::new("cargo")
         .args(["metadata", "--format-version", "1"])
         .current_dir(path)
