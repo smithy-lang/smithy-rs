@@ -345,7 +345,7 @@ mod tests {
         RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, RetryConfig};
+    use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
     #[cfg(feature = "test-util")]
@@ -459,26 +459,6 @@ mod tests {
             .should_attempt_retry(&ctx, &rc, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::YesAfterDelay(MAX_BACKOFF), actual);
-    }
-
-    #[derive(Debug)]
-    struct ServerError;
-    impl fmt::Display for ServerError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "OperationError")
-        }
-    }
-
-    impl std::error::Error for ServerError {}
-
-    impl ProvideErrorKind for ServerError {
-        fn retryable_error_kind(&self) -> Option<ErrorKind> {
-            Some(ErrorKind::ServerError)
-        }
-
-        fn code(&self) -> Option<&str> {
-            None
-        }
     }
 
     #[derive(Debug)]
