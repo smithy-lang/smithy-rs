@@ -19,6 +19,7 @@ pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+pub use aws_smithy_checksums::RequestChecksumCalculation;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -92,6 +93,7 @@ pub struct SdkConfig {
     config_origins: HashMap<&'static str, Origin>,
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
+    request_checksum_calculation: Option<RequestChecksumCalculation>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -120,6 +122,7 @@ pub struct Builder {
     config_origins: HashMap<&'static str, Origin>,
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
+    request_checksum_calculation: Option<RequestChecksumCalculation>,
 }
 
 impl Builder {
@@ -171,6 +174,30 @@ impl Builder {
     /// Set the endpoint URL to use when making requests.
     pub fn set_endpoint_url(&mut self, endpoint_url: Option<String>) -> &mut Self {
         self.endpoint_url = endpoint_url;
+        self
+    }
+
+    /// Set the checksum calculation strategy to use when making requests.
+    /// # Examples
+    /// ```
+    /// use aws_types::SdkConfig;
+    /// use aws_smithy_checksums::RequestChecksumCalculation;
+    /// let config = SdkConfig::builder().request_checksum_calculation(RequestChecksumCalculation::WhenSupported).build();
+    /// ```
+    pub fn request_checksum_calculation(
+        mut self,
+        request_checksum_calculation: RequestChecksumCalculation,
+    ) -> Self {
+        self.set_request_checksum_calculation(Some(request_checksum_calculation));
+        self
+    }
+
+    /// Set the checksum calculation strategy to use when making requests.
+    pub fn set_request_checksum_calculation(
+        &mut self,
+        request_checksum_calculation: Option<RequestChecksumCalculation>,
+    ) -> &mut Self {
+        self.request_checksum_calculation = request_checksum_calculation;
         self
     }
 
@@ -720,6 +747,7 @@ impl Builder {
             config_origins: self.config_origins,
             disable_request_compression: self.disable_request_compression,
             request_min_compression_size_bytes: self.request_min_compression_size_bytes,
+            request_checksum_calculation: self.request_checksum_calculation,
         }
     }
 }
@@ -933,6 +961,7 @@ impl SdkConfig {
             config_origins: self.config_origins,
             disable_request_compression: self.disable_request_compression,
             request_min_compression_size_bytes: self.request_min_compression_size_bytes,
+            request_checksum_calculation: self.request_checksum_calculation,
         }
     }
 }

@@ -36,3 +36,34 @@ impl fmt::Display for UnknownChecksumAlgorithmError {
 }
 
 impl Error for UnknownChecksumAlgorithmError {}
+
+/// A checksum algorithm was unknown
+#[derive(Debug)]
+pub struct UnknownRequestChecksumCalculationError {
+    request_checksum_calculation: String,
+}
+
+impl UnknownRequestChecksumCalculationError {
+    pub(crate) fn new(request_checksum_calculation: impl Into<String>) -> Self {
+        Self {
+            request_checksum_calculation: request_checksum_calculation.into(),
+        }
+    }
+
+    /// The checksum algorithm that is unknown
+    pub fn request_checksum_calculation(&self) -> &str {
+        &self.request_checksum_calculation
+    }
+}
+
+impl fmt::Display for UnknownRequestChecksumCalculationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"unknown request_checksum_calculation value "{}", please pass a known name ("when_supported", "when_required")"#,
+            self.request_checksum_calculation
+        )
+    }
+}
+
+impl Error for UnknownRequestChecksumCalculationError {}

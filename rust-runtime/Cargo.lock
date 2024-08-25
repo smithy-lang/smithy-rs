@@ -344,12 +344,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
+version = "0.60.13"
 version = "0.60.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "598b1689d001c4d4dc3cb386adb07d37786783aee3ac4b324bcadac116bf3d23"
 dependencies = [
- "aws-smithy-http 0.60.10",
- "aws-smithy-types 1.2.4",
+ "aws-smithy-http 0.60.11",
+ "aws-smithy-types 1.2.6",
  "bytes",
  "crc32c",
  "crc32fast",

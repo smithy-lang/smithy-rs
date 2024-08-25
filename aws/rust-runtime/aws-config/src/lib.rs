@@ -234,13 +234,14 @@ mod loader {
     use aws_types::docs_for;
     use aws_types::origin::Origin;
     use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::sdk_config::RequestChecksumCalculation;
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
         app_name, credentials, disable_request_compression, endpoint_url,
-        ignore_configured_endpoint_urls as ignore_ep, region, request_min_compression_size_bytes,
-        retry_config, timeout_config, use_dual_stack, use_fips,
+        ignore_configured_endpoint_urls as ignore_ep, region, request_checksum_calculation,
+        request_min_compression_size_bytes, retry_config, timeout_config, use_dual_stack, use_fips,
     };
     use crate::meta::region::ProvideRegion;
     #[allow(deprecated)]
@@ -289,6 +290,7 @@ mod loader {
         env: Option<Env>,
         fs: Option<Fs>,
         behavior_version: Option<BehaviorVersion>,
+        request_checksum_calculation: Option<RequestChecksumCalculation>,
     }
 
     impl ConfigLoader {
@@ -908,6 +910,19 @@ mod loader {
                 Some(user_cache) => Some(user_cache),
             };
 
+            let request_checksum_calculation = if let Some(request_checksum_calculation) =
+                self.request_checksum_calculation
+            {
+                println!("LNJ checksum explicitly set on config loader: {request_checksum_calculation:#?}");
+                Some(request_checksum_calculation)
+            } else {
+                println!("LNJ loading checksum from request_checksum_calculation_provider");
+                request_checksum_calculation::request_checksum_calculation_provider(&conf).await
+            };
+
+            println!("LNJ final value of checksum {request_checksum_calculation:#?}");
+
+            builder.set_request_checksum_calculation(request_checksum_calculation);
             builder.set_identity_cache(identity_cache);
             builder.set_credentials_provider(credentials_provider);
             builder.set_token_provider(token_provider);

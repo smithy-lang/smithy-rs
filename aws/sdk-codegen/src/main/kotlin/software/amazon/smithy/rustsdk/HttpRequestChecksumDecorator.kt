@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -51,8 +52,18 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
+
+    override fun builderCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<BuilderCustomization>,
+    ): List<BuilderCustomization> {
+        return baseCustomizations
+    }
 }
 
+/**
+ * Extract the name of the operation's input member that indicates which checksum algorithm to use
+ */
 private fun HttpChecksumTrait.requestAlgorithmMember(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
@@ -64,6 +75,9 @@ private fun HttpChecksumTrait.requestAlgorithmMember(
     return codegenContext.symbolProvider.toMemberName(checksumAlgorithmMemberShape)
 }
 
+/**
+ * Extract the name of the operation's input member that indicates which checksum algorithm to use
+ */
 private fun HttpChecksumTrait.checksumAlgorithmToStr(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
@@ -76,14 +90,14 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
         if (requestAlgorithmMember != null) {
             if (isRequestChecksumRequired) {
                 // Checksums are required, fall back to MD5
-                rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("md5"));""")
+                rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
             } else {
                 // Checksums aren't required, don't set a fallback
                 rust("let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str());")
             }
         } else if (isRequestChecksumRequired) {
-            // Checksums are required but a user can't set one, so we set MD5 for them
-            rust("""let checksum_algorithm = Some("md5");""")
+            // Checksums are required but a user can't set one, so we set crc32 for them
+            rust("""let checksum_algorithm = Some("crc32");""")
         }
 
         rustTemplate(
@@ -150,7 +164,58 @@ class HttpRequestChecksumCustomization(
                         }
                     }
                 }
-                else -> { }
+
+                else -> {}
             }
         }
 }
+
+//
+// class HttpRequestChecksumsBuilderCustomization(
+//    private val codegenContext: ClientCodegenContext,
+//    private val operationShape: OperationShape,
+// ) : BuilderCustomization() {
+//
+//    private val runtimeConfig = codegenContext.runtimeConfig
+//
+//    override fun section(section: BuilderSection): Writable =
+//        writable {
+//            // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
+//            val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
+//            val fieldName = "request_checksum_calculation"
+//
+//            when (section) {
+//                is BuilderSection.AdditionalFields -> {
+//                    rustTemplate(
+//                        "$fieldName: Option<String>,",
+//                        "BLAH" to runtimeConfig.smithyRuntimeCrate(),
+//                    )
+//                }
+//
+//                is BuilderSection.AdditionalMethods -> {
+//                    rust(
+//                        """
+//                                pub(crate) fn $fieldName(mut self, $fieldName: impl Into<String>) -> Self {
+//                                    self.$fieldName = Some($fieldName.into());
+//                                    self
+//                                }
+//
+//                                pub(crate) fn set_$fieldName(&mut self, $fieldName: Option<String>) -> &mut Self {
+//                                    self.$fieldName = $fieldName;
+//                                    self
+//                                }
+//                                """,
+//                    )
+//                }
+//
+//                is BuilderSection.AdditionalDebugFields -> {
+//                    rust("""${section.formatterName}.field("$fieldName", &self.$fieldName);""")
+//                }
+//
+//                is BuilderSection.AdditionalFieldsInBuild -> {
+//                    rust("$fieldName: self.$fieldName,")
+//                }
+//            }
+//
+//        }
+// }
