@@ -50,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
 import java.nio.file.Path
+import java.util.Base64
 import kotlin.streams.toList
 
 data class FuzzTarget(val name: String, val relativePath: String) {
@@ -91,7 +92,6 @@ class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
     override fun execute(context: PluginContext) {
         val fuzzSettings = FuzzSettings.fromNode(context.settings)
 
-        val subdir = FileManifest.create(context.fileManifest.resolvePath(Path.of("driver")))
         val model =
             context.model.let(OperationNormalizer::transform)
                 .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
@@ -133,6 +133,14 @@ fun corpus(
     val protocolTests = operations.flatMap { it.getTrait<HttpRequestTestsTrait>()?.testCases ?: listOf() }
     val out = ArrayNode.builder()
     protocolTests.forEach { testCase ->
+        val body: List<NumberNode> =
+            when (testCase.bodyMediaType.orNull()) {
+                "application/cbor" -> {
+                    println("base64 decoding first")
+                    Base64.getDecoder().decode(testCase.body.orNull())?.map { NumberNode.from(it) }
+                }
+                else -> testCase.body.orNull()?.chars()?.toList()?.map { c -> NumberNode.from(c) }
+            } ?: listOf()
         out.withValue(
             ObjectNode.objectNode()
                 .withMember("uri", testCase.uri)
@@ -148,10 +156,7 @@ fun corpus(
                 .withMember("trailers", ObjectNode.objectNode())
                 .withMember(
                     "body",
-                    ArrayNode.fromNodes(
-                        testCase.body.orNull()?.chars()?.toList()?.map { c -> NumberNode.from(c) }
-                            ?: listOf(),
-                    ),
+                    ArrayNode.fromNodes(body),
                 ),
         )
     }
