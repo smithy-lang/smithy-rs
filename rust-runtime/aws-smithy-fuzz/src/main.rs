@@ -7,7 +7,6 @@ use aws_smithy_fuzz::{FuzzResult, FuzzTarget, HttpRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::env::current_dir;
 use std::fmt::Display;
 use std::io::{BufRead, BufWriter};
 use std::path::{Path, PathBuf};
@@ -80,6 +79,12 @@ struct SetupSmithyArgs {
     /// Rebuild the local clones of smithy-rs
     #[arg(long)]
     rebuild_local_targets: bool,
+
+    /// Additional dependencies to use. Usually, these provide the model.
+    ///
+    /// Dependencies should be in the following format: `software.amazon.smithy:smithy-aws-protocol-tests:1.50.0`
+    #[arg(long)]
+    dependency: Vec<String>,
 }
 
 #[derive(Parser)]
@@ -155,6 +160,12 @@ struct ReplayArgs {
     /// Output results in JSON
     #[arg(short, long)]
     json: bool,
+
+    /// Run against the input corpus instead of running against crashes
+    ///
+    /// This is helpful for sanity checking that everything is working properly
+    #[arg(long)]
+    corpus: bool,
 }
 
 #[derive(Deserialize)]
@@ -202,21 +213,73 @@ fn main() {
 }
 
 fn setup_smithy(args: SetupSmithyArgs) {
-    let workdir = args.workdir.unwrap_or(env::current_dir().unwrap());
+    let current_dir = env::current_dir().unwrap();
+    let workdir = match &args.workdir {
+        Some(relative_workdir) => current_dir.join(relative_workdir),
+        None => current_dir.clone(),
+    };
     let maven_locals = workdir.join("maven-locals");
     fs::create_dir_all(&maven_locals).unwrap();
 
     let fuzz_driver_path = maven_locals.join("fuzz-driver");
-    let local_path = current_dir().unwrap().join(&args.fuzz_runner_local_path);
+    let local_path = current_dir.join(&args.fuzz_runner_local_path);
     build_revision(&fuzz_driver_path, &local_path);
 
     let rust_runtime_for_fuzzer = local_path.join("rust-runtime");
 
+    let fuzzgen_smithy_build =
+        generate_smithy_build_json_for_fuzzer(&args, &fuzz_driver_path, &rust_runtime_for_fuzzer);
+    let fuzzgen_smithy_build_path = workdir.join("smithy-build-fuzzgen.json");
+    fs::write(&fuzzgen_smithy_build_path, &fuzzgen_smithy_build).unwrap();
+
+    for revision in &args.revision {
+        let revision_dir = clone_smithyrs(&workdir, &revision, args.rebuild_local_targets);
+
+        let maven_local_subpath = maven_locals.join(&revision);
+        build_revision(&maven_local_subpath, &revision_dir);
+        let fuzzgen_smithy_build =
+            generate_smithy_build_for_target(&maven_local_subpath, &args, &revision, &revision_dir);
+        let smithy_build_path = workdir.join(format!("smithy-build-{revision}.json"));
+        fs::write(&smithy_build_path, assert_valid_json(&fuzzgen_smithy_build)).unwrap();
+        smithy_build(&workdir, &smithy_build_path);
+    }
+    println!("running smithy build for fuzz harness");
+    smithy_build(&workdir, &fuzzgen_smithy_build_path);
+}
+
+fn generate_smithy_build_for_target(
+    maven_local_subpath: &Path,
+    args: &SetupSmithyArgs,
+    revision: &str,
+    revision_dir: &Path,
+) -> String {
+    let mut context = Context::new();
+    context.insert("maven_local", &maven_local_subpath);
+    context.insert("service", &args.service);
+    context.insert("revision", revision);
+    context.insert("rust_runtime", &revision_dir.join("rust-runtime"));
+    context.insert("dependencies", &args.dependency);
+
+    let fuzzgen_smithy_build = Tera::one_off(
+        include_str!("../templates/smithy-build-targetcrate.jinja2"),
+        &context,
+        false,
+    )
+    .unwrap();
+    assert_valid_json(fuzzgen_smithy_build)
+}
+
+fn generate_smithy_build_json_for_fuzzer(
+    args: &SetupSmithyArgs,
+    fuzz_driver_path: &Path,
+    rust_runtime_for_fuzzer: &Path,
+) -> String {
     let mut context = Context::new();
     context.insert("service", &args.service);
     context.insert("revisions", &args.revision);
     context.insert("maven_local", &fuzz_driver_path);
     context.insert("rust_runtime", &rust_runtime_for_fuzzer);
+    context.insert("dependencies", &args.dependency);
 
     let fuzzgen_smithy_build = Tera::one_off(
         include_str!("../templates/smithy-build-fuzzer.jinja2"),
@@ -224,36 +287,7 @@ fn setup_smithy(args: SetupSmithyArgs) {
         false,
     )
     .unwrap();
-    let fuzzgen_smithy_build_path = workdir.join("smithy-build-fuzzgen.json");
-    fs::write(
-        &fuzzgen_smithy_build_path,
-        assert_valid_json(&fuzzgen_smithy_build),
-    )
-    .unwrap();
-
-    for revision in args.revision {
-        let revision_dir = clone_smithyrs(&workdir, &revision, args.rebuild_local_targets);
-
-        let maven_local_subpath = maven_locals.join(&revision);
-        build_revision(&maven_local_subpath, &revision_dir);
-        let mut context = Context::new();
-        context.insert("maven_local", &maven_local_subpath);
-        context.insert("service", &args.service);
-        context.insert("revision", &revision);
-        context.insert("rust_runtime", &revision_dir.join("rust-runtime"));
-
-        let fuzzgen_smithy_build = Tera::one_off(
-            include_str!("../templates/smithy-build-targetcrate.jinja2"),
-            &context,
-            false,
-        )
-        .unwrap();
-        let smithy_build_path = workdir.join(format!("smithy-build-{revision}.json"));
-        fs::write(&smithy_build_path, assert_valid_json(&fuzzgen_smithy_build)).unwrap();
-        smithy_build(&workdir, &smithy_build_path);
-    }
-    println!("running smithy build for fuzz harness");
-    smithy_build(&workdir, &fuzzgen_smithy_build_path);
+    assert_valid_json(fuzzgen_smithy_build)
 }
 
 /// Run smithy build for a given file
@@ -310,13 +344,19 @@ fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str, recreate: bool) -> 
     if revision_dir.exists() && !recreate {
         return revision_dir;
     }
-    exec(Command::new("rm").arg("-rf").arg(&revision_dir));
+    exec(
+        Command::new("rm")
+            .arg("-rf")
+            .arg(&revision_dir)
+            .current_dir(&workdir),
+    );
 
     exec(
         Command::new("git")
             .arg("clone")
             .arg(smithy_dir)
-            .arg(&revision_dir),
+            .arg(&revision_dir)
+            .current_dir(&workdir),
     );
 
     exec(
@@ -328,6 +368,11 @@ fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str, recreate: bool) -> 
 }
 
 fn exec(command: &mut Command) {
+    match command.get_current_dir() {
+        None => panic!("BUG: all commands should set a working directory"),
+        Some(dir) if !dir.is_absolute() => panic!("bug: absolute directory should be set"),
+        _ => {}
+    };
     let status = match command.spawn().unwrap().wait() {
         Ok(status) => status,
         Err(e) => {
@@ -357,8 +402,15 @@ fn build_revision(maven_local: impl AsRef<Path>, smithy_dir: impl AsRef<Path>) {
     )
 }
 
-fn assert_valid_json(data: &str) -> &str {
-    serde_json::from_str::<Value>(data).unwrap();
+fn assert_valid_json<T: AsRef<str>>(data: T) -> T {
+    match serde_json::from_str::<Value>(data.as_ref()) {
+        Err(e) => panic!(
+            "failed to generate valid JSON. this is a bug. {}\n\n{}",
+            e,
+            data.as_ref()
+        ),
+        Ok(_) => {}
+    };
     data
 }
 
@@ -426,7 +478,7 @@ fn fuzz(args: FuzzArgs) {
         );
         let mut main = apply_target(main_runner).spawn().unwrap();
         let mut children = vec![];
-        for idx in 0..args.num_fuzzers.unwrap_or_default() {
+        for idx in 1..args.num_fuzzers.unwrap_or_default() {
             let mut runner = base_command();
             runner.arg("-S").arg(format!("fuzzer{}", idx));
             runner.stderr(Stdio::null()).stdout(Stdio::null());
@@ -534,8 +586,16 @@ fn initialize_target(source: PathBuf) -> Target {
 
 fn load_all_crashes(output_dir: &Path) -> Vec<PathBuf> {
     let pattern = output_dir.join("fuzzer*/crashes*");
+    load_inputs_at_pattern(&pattern)
+}
 
-    eprintln!("searching for crashes in {}", pattern.display());
+fn load_corpus(input_dir: &Path) -> Vec<PathBuf> {
+    let pattern = input_dir.join("corpus");
+    load_inputs_at_pattern(&pattern)
+}
+
+fn load_inputs_at_pattern(pattern: &Path) -> Vec<PathBuf> {
+    eprintln!("searching for test cases in {}", pattern.display());
     let pattern = format!("{}", pattern.display());
     let mut crash_directories = glob::glob(&pattern).unwrap();
     let mut crashes = vec![];
@@ -557,6 +617,7 @@ fn replay(
         config_path,
         invoke_only,
         json,
+        corpus,
     }: ReplayArgs,
 ) {
     let config = fs::read_to_string(config_path).unwrap();
@@ -564,7 +625,10 @@ fn replay(
     let crashes = if let Some(path) = invoke_only {
         vec![path.into()]
     } else {
-        load_all_crashes(&config.afl_output_dir)
+        match corpus {
+            true => load_corpus(&config.afl_input_dir),
+            false => load_all_crashes(&config.afl_output_dir),
+        }
     };
     eprintln!("Replaying {} crashes.", crashes.len());
     for crash in crashes {
@@ -589,7 +653,9 @@ fn replay(
                 .output()
                 .unwrap();
             let result = match serde_json::from_slice::<FuzzResult>(&result.stdout) {
-                Ok(result) => CrashResult::FuzzResult { result: format!("{:?}", result) },
+                Ok(result) => CrashResult::FuzzResult {
+                    result: format!("{:?}", result),
+                },
                 Err(_err) => CrashResult::Panic {
                     message: String::from_utf8_lossy(&result.stderr).to_string(),
                 },
@@ -821,5 +887,30 @@ mod cargo_output {
                 .next()
                 .expect("should be one dylib target"),
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{env::temp_dir, path::PathBuf};
+
+    use crate::{
+        generate_smithy_build_for_target, generate_smithy_build_json_for_fuzzer, setup_smithy,
+        SetupSmithyArgs,
+    };
+
+    #[test]
+    fn does_this_work() {
+        let path = PathBuf::new();
+        let args = SetupSmithyArgs {
+            revision: vec!["main".into()],
+            service: "test-service".to_string(),
+            workdir: Some(temp_dir()),
+            fuzz_runner_local_path: "../".into(),
+            rebuild_local_targets: true,
+            dependency: vec![],
+        };
+        generate_smithy_build_json_for_fuzzer(&args, &path, &path);
+        generate_smithy_build_for_target(&path, &args, "revision", &path);
     }
 }

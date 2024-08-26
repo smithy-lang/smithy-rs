@@ -2,8 +2,8 @@
   "version": "1.0",
   "maven": {
     "dependencies": [
-      "software.amazon.smithy.rust.codegen.server.smithy:codegen-server:0.1.0",
-      "software.amazon.smithy:smithy-aws-protocol-tests:1.50.0"
+      {% for dependency in dependencies -%} "{{ dependency }}", {% endfor %}
+      "software.amazon.smithy.rust.codegen.server.smithy:codegen-server:0.1.0"
     ],
     "repositories": [
       {

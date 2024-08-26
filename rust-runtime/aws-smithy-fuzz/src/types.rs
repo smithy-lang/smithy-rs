@@ -98,7 +98,12 @@ impl Debug for HttpRequest {
 struct TryString<'a>(&'a [u8]);
 impl Debug for TryString<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", String::from_utf8_lossy(self.0))
+        let try_cbor = cbor_diag::parse_bytes(self.0);
+        let str_rep = match try_cbor {
+            Ok(repr) => repr.to_diag_pretty(),
+            Err(e) => String::from_utf8_lossy(self.0).to_string(),
+        };
+        write!(f, "\"{}\"", str_rep)
     }
 }
 

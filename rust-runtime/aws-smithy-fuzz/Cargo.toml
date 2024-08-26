@@ -13,6 +13,8 @@ arbitrary = { version = "1.3.2", features = ["derive"] }
 bincode = "1"
 bytes = "1.7.1"
 cargo_toml = "0.20.4"
+cbor = "0.4.1"
+cbor-diag = "0.1.12"
 clap = { version = "4.5.15", features = ["derive"] }
 ffi-support = "0.4.4"
 futures = "0.3.30"
