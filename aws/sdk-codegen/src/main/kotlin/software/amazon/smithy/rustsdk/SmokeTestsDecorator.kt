@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
@@ -132,7 +133,7 @@ class SmokeTestsBuilderKindBehavior(val codegenContext: CodegenContext) : Instan
 }
 
 class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) : Instantiator(
-    codegenContext.symbolProvider,
+    PublicImportSymbolProvider(codegenContext.symbolProvider, codegenContext.moduleUseName()),
     codegenContext.model,
     codegenContext.runtimeConfig,
     SmokeTestsBuilderKindBehavior(codegenContext),
