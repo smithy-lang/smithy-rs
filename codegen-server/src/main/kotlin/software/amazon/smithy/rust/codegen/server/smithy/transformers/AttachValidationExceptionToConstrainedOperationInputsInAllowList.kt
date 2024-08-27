@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
@@ -49,11 +50,16 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
             // ShapeId.from("com.amazonaws.machinelearning#AmazonML_20141212"),
         )
 
-    fun transform(model: Model): Model {
+    fun transform(
+        model: Model,
+        runtimeConfig: ServerCodegenConfig,
+    ): Model {
         val walker = DirectedWalker(model)
         val operationsWithConstrainedInputWithoutValidationException =
             model.serviceShapes
-                .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
+                .filter {
+                    sherviceShapeIdAllowList.contains(it.toShapeId()) || runtimeConfig.addValidationExceptionToConstrainedOperations
+                }
                 .flatMap { it.operations }
                 .map { model.expectShape(it, OperationShape::class.java) }
                 .filter { operationShape ->

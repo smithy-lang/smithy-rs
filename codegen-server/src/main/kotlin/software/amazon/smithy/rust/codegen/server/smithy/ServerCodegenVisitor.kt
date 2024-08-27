@@ -205,7 +205,9 @@ open class ServerCodegenVisitor(
             .let(RemoveEbsModelValidationException::transform)
             // Attach the `smithy.framework#ValidationException` error to operations whose inputs are constrained,
             // if they belong to a service in an allowlist
-            .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
+            .let {
+                AttachValidationExceptionToConstrainedOperationInputsInAllowList.transform(it, settings.codegenConfig)
+            }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
             // Normalize event stream operations
