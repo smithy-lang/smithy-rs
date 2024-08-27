@@ -102,6 +102,7 @@ class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
                 target
             }
 
+        println("creating the driver...")
         createDriver(model, context.fileManifest, fuzzSettings)
 
         targets.forEach {
@@ -133,11 +134,12 @@ fun corpus(
     val protocolTests = operations.flatMap { it.getTrait<HttpRequestTestsTrait>()?.testCases ?: listOf() }
     val out = ArrayNode.builder()
     protocolTests.forEach { testCase ->
+        println(testCase.bodyMediaType)
         val body: List<NumberNode> =
             when (testCase.bodyMediaType.orNull()) {
                 "application/cbor" -> {
-                    println("base64 decoding first")
-                    Base64.getDecoder().decode(testCase.body.orNull())?.map { NumberNode.from(it) }
+                    println("base64 decoding first (v2)")
+                    Base64.getDecoder().decode(testCase.body.orNull())?.map { NumberNode.from(it.toUByte().toInt()) }
                 }
                 else -> testCase.body.orNull()?.chars()?.toList()?.map { c -> NumberNode.from(c) }
             } ?: listOf()

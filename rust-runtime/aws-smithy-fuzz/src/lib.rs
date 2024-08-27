@@ -164,7 +164,6 @@ fn assert_ready<F: Future>(mut future: F) -> F::Output {
 
 #[cfg(test)]
 mod test {
-    use crate::types::FuzzResult;
     use crate::{make_target, Body};
     use http::Request;
     use std::error::Error;

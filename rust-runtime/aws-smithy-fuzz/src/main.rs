@@ -643,6 +643,21 @@ fn replay(
             FuzzResult { result: String },
         }
 
+        impl Display for CrashResult {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    CrashResult::Panic { message } => {
+                        f.pad("The process paniced!\n")?;
+                        for line in message.lines() {
+                            write!(f, " {}\n", line)?;
+                        }
+                        Ok(())
+                    }
+                    CrashResult::FuzzResult { result } => f.pad(result),
+                }
+            }
+        }
+
         for library in &config.targets {
             let result = Command::new(env::current_exe().unwrap())
                 .arg("invoke-test-case")
@@ -667,17 +682,24 @@ fn replay(
             test_case: String,
             results: HashMap<String, CrashResult>,
         }
+        impl Display for Results {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let test_case = &self.test_case;
+                write!(f, "Test case: {test_case}\n")?;
+                for (target, result) in &self.results {
+                    write!(f, " target: {target}\n{:>2}", result)?;
+                }
+                Ok(())
+            }
+        }
+        let results = Results {
+            test_case: format!("{:#?}", http_request.unwrap()),
+            results,
+        };
         if json {
-            println!(
-                "{}",
-                serde_json::to_string(&Results {
-                    test_case: format!("{:#?}", http_request.unwrap()),
-                    results
-                })
-                .unwrap()
-            );
+            println!("{}", serde_json::to_string(&results).unwrap());
         } else {
-            println!("{:#?}\n----", results);
+            println!("{}\n----", results);
         }
     }
 }

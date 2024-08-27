@@ -7,8 +7,8 @@ AWS Smithy fuzz contains a set of utilities for writing fuzz tests against smith
 2. Install the AFL runtime: `cargo afl config --build`
 2. Install the smithy CLI:
 2. Install aws-smithy-fuzz:
-   3. Locally: `cargo afl install --path .`
-   4. From crates.io: cargo afl install aws-smithy-fuzz
+    - Locally: `cargo afl install --path .`
+    - From crates.io: cargo afl install aws-smithy-fuzz
 
 ## Usage
 This contains a library + a CLI tool to fuzz smithy servers. The library allows setting up a given Smithy server implementation as a `cdylib`. This allows two different versions two by dynamically linked at runtime and executed by the fuzzer.

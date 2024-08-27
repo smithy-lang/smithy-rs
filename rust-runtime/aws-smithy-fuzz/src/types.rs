@@ -101,7 +101,10 @@ impl Debug for TryString<'_> {
         let try_cbor = cbor_diag::parse_bytes(self.0);
         let str_rep = match try_cbor {
             Ok(repr) => repr.to_diag_pretty(),
-            Err(e) => String::from_utf8_lossy(self.0).to_string(),
+            Err(e) => {
+                eprintln!("not cbor: {}", e);
+                String::from_utf8_lossy(self.0).to_string()
+            }
         };
         write!(f, "\"{}\"", str_rep)
     }
