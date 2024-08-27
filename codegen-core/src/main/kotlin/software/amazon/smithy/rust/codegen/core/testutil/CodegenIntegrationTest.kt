@@ -49,21 +49,15 @@ data class IntegrationTestParams(
 sealed class AdditionalSettings {
     abstract fun toObjectNode(): ObjectNode
 
-    abstract class CoreAdditionalSettings protected constructor(settings: List<AdditionalSettings>) : AdditionalSettings() {
-        private val mergedSettings = MergedSettings(settings)
+    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) : AdditionalSettings() {
+        override fun toObjectNode(): ObjectNode {
+            val merged =
+                settings.map { it.toObjectNode() }
+                    .reduce { acc, next -> acc.merge(next) }
 
-        override fun toObjectNode(): ObjectNode = mergedSettings.toObjectNode()
-
-        private data class MergedSettings(val settings: List<AdditionalSettings>) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode {
-                val merged =
-                    settings.map { it.toObjectNode() }
-                        .reduce { acc, next -> acc.merge(next) }
-
-                return ObjectNode.builder()
-                    .withMember("codegen", merged)
-                    .build()
-            }
+            return ObjectNode.builder()
+                .withMember("codegen", merged)
+                .build()
         }
 
         abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
