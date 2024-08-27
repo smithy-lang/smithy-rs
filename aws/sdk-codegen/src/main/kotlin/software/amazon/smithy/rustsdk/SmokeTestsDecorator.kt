@@ -50,12 +50,6 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
                 logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `sigv4aRegionSet`")
                 return false
             }
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
-            //     update the vendorParams setter and remove this check.
-            if (vendorParams.useAccountIdRouting()) {
-                logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `useAccountIdRouting`")
-                return false
-            }
         }
         AwsSmokeTestModel.getS3VendorParams(smokeTestCase)?.orNull()?.let { s3VendorParams ->
             if (s3VendorParams.useGlobalEndpoint()) {
@@ -150,6 +144,10 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         writer.rust("let conf = config::Builder::new()")
         writer.indent()
         writer.rust(".behavior_version(config::BehaviorVersion::latest())")
+
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
+        //  reflect the config setting here, especially to disable it if needed, as it is enabled by default in
+        //  `AwsVendorParams`.
 
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
