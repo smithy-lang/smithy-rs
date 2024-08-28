@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
@@ -48,12 +49,6 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
         AwsSmokeTestModel.getAwsVendorParams(smokeTestCase)?.orNull()?.let { vendorParams ->
             if (vendorParams.sigv4aRegionSet.isPresent) {
                 logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `sigv4aRegionSet`")
-                return false
-            }
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
-            //     update the vendorParams setter and remove this check.
-            if (vendorParams.useAccountIdRouting()) {
-                logger.warning("skipping smoketest `${smokeTestCase.id}` with unsupported vendorParam `useAccountIdRouting`")
                 return false
             }
         }
@@ -138,7 +133,7 @@ class SmokeTestsBuilderKindBehavior(val codegenContext: CodegenContext) : Instan
 }
 
 class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) : Instantiator(
-    codegenContext.symbolProvider,
+    PublicImportSymbolProvider(codegenContext.symbolProvider, codegenContext.moduleUseName()),
     codegenContext.model,
     codegenContext.runtimeConfig,
     SmokeTestsBuilderKindBehavior(codegenContext),
@@ -147,9 +142,16 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         writer: RustWriter,
         testCase: SmokeTestCase,
     ) {
-        writer.rust("let conf = config::Builder::new()")
+        writer.rust(
+            "let config = #{T}::load_defaults(config::BehaviorVersion::latest()).await;",
+            AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toType(),
+        )
+        writer.rust("let conf = config::Config::from(&config).to_builder()")
         writer.indent()
-        writer.rust(".behavior_version(config::BehaviorVersion::latest())")
+
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
+        //  reflect the config setting here, especially to disable it if needed, as it is enabled by default in
+        //  `AwsVendorParams`.
 
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
