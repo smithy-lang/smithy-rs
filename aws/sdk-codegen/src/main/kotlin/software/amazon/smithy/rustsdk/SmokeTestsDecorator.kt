@@ -71,16 +71,20 @@ class SmokeTestsDecorator : ClientCodegenDecorator {
             codegenContext.model.getOperationShapesWithTrait(SmokeTestsTrait::class.java).toList()
         val supportedTests =
             smokeTestedOperations.map { operationShape ->
-                // filter out unsupported smoke tests, logging a warning for each one.
+                // filter out unsupported smoke tests, logging a warning for each one, and sort the remaining tests by
+                // case ID. This ensures deterministic rendering, meaning the test methods are always rendered in a
+                // consistent order.
                 val testCases =
                     operationShape.expectTrait<SmokeTestsTrait>().testCases.filter { smokeTestCase ->
                         isSmokeTestSupported(smokeTestCase)
-                    }
+                    }.sortedBy { smokeTestCase -> smokeTestCase.id }
 
                 operationShape to testCases
             }
                 // filter out operations with no supported smoke tests
                 .filter { (_, testCases) -> testCases.isNotEmpty() }
+                // Similar to sorting test cases above, sort operations by name to ensure consistent ordering.
+                .sortedBy { (operationShape, _) -> operationShape.id.name }
         // Return if there are no supported smoke tests across all operations
         if (supportedTests.isEmpty()) return
 
