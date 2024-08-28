@@ -36,15 +36,15 @@ data class IntegrationTestParams(
  * Usage:
  *
  * ```kotlin
- *         serverIntegrationTest(
- *             model,
- *             IntegrationTestParams(
- *                  additionalSettings =
- *                      ServerAdditionalSettings.builder()
- *                          .generateCodegenComments()
- *                          .publicConstrainedTypes()
- *                          .toObjectNode()
- *             )),
+ * serverIntegrationTest(
+ *     model,
+ *     IntegrationTestParams(
+ *         additionalSettings =
+ *             ServerAdditionalSettings.builder()
+ *                 .generateCodegenComments()
+ *                 .publicConstrainedTypes()
+ *                 .toObjectNode()
+ * )),
  * ```
  */
 sealed class AdditionalSettings {
@@ -90,7 +90,7 @@ class ClientAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
         }
 
-        // Additional settings that are specific to client generation should be defined here
+        // Additional settings that are specific to client generation should be defined here.
 
         companion object {
             fun builder() = Builder()
