@@ -101,7 +101,7 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
     AdditionalSettings.CoreAdditionalSettings(settings) {
         class Builder : CoreAdditionalSettings.Builder<ServerAdditionalSettings>() {
             fun publicConstrainedTypes(enabled: Boolean = true): Builder {
-                settings.add(PublicConstrainedType(enabled))
+                settings.add(PublicConstrainedTypes(enabled))
                 return this
             }
 
@@ -113,7 +113,7 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
-        private data class PublicConstrainedType(val enabled: Boolean) : AdditionalSettings() {
+        private data class PublicConstrainedTypes(val enabled: Boolean) : AdditionalSettings() {
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("publicConstrainedTypes", enabled)
