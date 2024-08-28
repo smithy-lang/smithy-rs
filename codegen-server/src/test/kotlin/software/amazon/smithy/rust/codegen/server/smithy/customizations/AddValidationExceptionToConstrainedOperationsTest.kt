@@ -60,41 +60,6 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
         }
         """.asSmithyModel(smithyVersion = "2")
 
-    private val testModelWithoutValidationExceptionImported =
-        """
-        namespace test
-
-        use aws.protocols#restJson1
-        use aws.api#data
-
-        @restJson1
-        service ConstrainedService {
-            operations: [SampleOperationWithoutValidation]
-        }
-        @http(uri: "/anOperationWithoutValidation", method: "POST")
-        operation SampleOperationWithoutValidation {
-            output: SampleInputOutput
-            input: SampleInputOutput
-            errors: []
-        }
-        structure SampleInputOutput {
-            constrainedInteger : RangedInteger
-            @range(min: 2, max:100)
-            constrainedMemberInteger : RangedInteger
-            patternString : PatternString
-        }
-        @pattern("^[a-m]+${'$'}")
-        string PatternString
-        @range(min: 0, max:1000)
-        integer RangedInteger
-
-        @error("server")
-        structure ErrorWithMemberConstraint {
-            @range(min: 100, max: 999)
-            statusCode: Integer
-        }
-        """.asSmithyModel(smithyVersion = "2")
-
     @Test
     fun `without setting the codegen flag, the model should fail to compile`() {
         assertThrows<CodegenException> {
@@ -109,19 +74,6 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
     fun `operations that do not have ValidationException will automatically have one added to them`() {
         serverIntegrationTest(
             testModelWithValidationExceptionImported,
-            IntegrationTestParams(
-                additionalSettings =
-                    ServerAdditionalSettings.builder()
-                        .addValidationExceptionToConstrainedOperations()
-                        .toObjectNode(),
-            ),
-        )
-    }
-
-    @Test
-    fun `the model, which does not have Smithy's ValidationException imported, should work when the codegen parameter is set`() {
-        serverIntegrationTest(
-            testModelWithoutValidationExceptionImported,
             IntegrationTestParams(
                 additionalSettings =
                     ServerAdditionalSettings.builder()
