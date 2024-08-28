@@ -37,10 +37,10 @@ pub async fn request_checksum_calculation_provider(
          .map_err(
              |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for request_checksum_calculation setting"),
          )
-         // WhenSupported is the default setting
-         .unwrap_or(Some(RequestChecksumCalculation::WhenSupported));
+         .unwrap_or(None);
 
-    // request_checksum_calculation should always have a non-None value
+    // request_checksum_calculation should always have a non-None value and the
+    // default is WhenSupported
     loaded.xor(Some(RequestChecksumCalculation::WhenSupported))
 }
 

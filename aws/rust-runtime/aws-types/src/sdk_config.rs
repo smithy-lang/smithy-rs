@@ -894,6 +894,11 @@ impl SdkConfig {
         self.disable_request_compression
     }
 
+    /// Configured checksum request option.
+    pub fn request_checksum_calculation(&self) -> Option<RequestChecksumCalculation> {
+        self.request_checksum_calculation
+    }
+
     /// Configured minimum request compression size.
     pub fn request_min_compression_size_bytes(&self) -> Option<u32> {
         self.request_min_compression_size_bytes
