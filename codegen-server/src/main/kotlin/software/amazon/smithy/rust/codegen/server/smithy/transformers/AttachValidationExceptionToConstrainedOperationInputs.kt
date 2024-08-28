@@ -108,7 +108,7 @@ object AttachValidationExceptionToConstrainedOperationInputsBasedOnCodegenFlag {
  * Attaches the `smithy.framework#ValidationException` error to operations with constrained inputs
  * if either of the following conditions is met:
  * 1. The operation belongs to a service in the allowlist.
- * 2. The codegen flag to add ValidationException has been set.
+ * 2. The codegen flag `addValidationExceptionToConstrainedOperations` has been set.
  *
  * The error is only attached if the operation does not already have `ValidationException` added.
  */
