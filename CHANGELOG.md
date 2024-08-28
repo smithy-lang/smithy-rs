@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 28th, 2024
+=================
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#3800](https://github.com/smithy-lang/smithy-rs/issues/3800)) Upgrade MSRV to Rust 1.78.0.
+
+**New this release:**
+- :bug: (client, [smithy-rs#3798](https://github.com/smithy-lang/smithy-rs/issues/3798)) Fix the execution order of [modify_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.modify_before_serialization) and [read_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.read_before_serialization) in the orchestrator. The `modify_before_serialization` method now executes before the `read_before_serialization` method. This adjustment may result in changes in behavior depending on how you customize interceptors.
+- (client, [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925)) Backport connection poisoning to hyper 1.x support
+- :bug: (client, [aws-sdk-rust#821](https://github.com/awslabs/aws-sdk-rust/issues/821), [smithy-rs#3797](https://github.com/smithy-lang/smithy-rs/issues/3797)) Fix the [Length::UpTo](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/enum.Length.html) usage in [FsBuilder](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/struct.FsBuilder.html), ensuring that the specified length does not exceed the remaining file length.
+- :bug: (client, [aws-sdk-rust#820](https://github.com/awslabs/aws-sdk-rust/issues/820)) Re-export `ByteStream`'s `Length` and `FsBuilder`. By making these types available directly within a client crate, customers can use `ByteStream::read_from` without needing to import them separately from the `aws-smithy-types` crate.
+
+
 August 16th, 2024
 =================
 
