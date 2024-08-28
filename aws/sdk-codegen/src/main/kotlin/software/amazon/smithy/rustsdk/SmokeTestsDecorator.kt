@@ -142,9 +142,12 @@ class SmokeTestsInstantiator(private val codegenContext: ClientCodegenContext) :
         writer: RustWriter,
         testCase: SmokeTestCase,
     ) {
-        writer.rust("let conf = config::Builder::new()")
+        writer.rust(
+            "let config = #{T}::load_defaults(config::BehaviorVersion::latest()).await;",
+            AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toType(),
+        )
+        writer.rust("let conf = config::Config::from(&config).to_builder()")
         writer.indent()
-        writer.rust(".behavior_version(config::BehaviorVersion::latest())")
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
         //  reflect the config setting here, especially to disable it if needed, as it is enabled by default in
