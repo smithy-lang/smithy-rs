@@ -86,7 +86,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
-import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RecursiveConstraintViolationBoxer
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RemoveEbsModelValidationException
@@ -204,8 +204,8 @@ open class ServerCodegenVisitor(
             // Remove the EBS model's own `ValidationException`, which collides with `smithy.framework#ValidationException`
             .let(RemoveEbsModelValidationException::transform)
             // Attach the `smithy.framework#ValidationException` error to operations whose inputs are constrained,
-            // if they belong to a service in an allowlist
-            .let(AttachValidationExceptionToConstrainedOperationInputsInAllowList::transform)
+            // if either the operation belongs to a service in the allowlist, or the codegen flag to add the exception has been set.
+            .let { AttachValidationExceptionToConstrainedOperationInputs.transform(it, settings) }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
             // Normalize event stream operations

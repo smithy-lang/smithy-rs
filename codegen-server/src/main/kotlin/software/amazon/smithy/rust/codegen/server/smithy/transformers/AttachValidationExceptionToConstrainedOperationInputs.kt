@@ -8,13 +8,40 @@ package software.amazon.smithy.rust.codegen.server.smithy.transformers
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
+
+private fun addValidationExceptionToMatchingServiceShapes(
+    model: Model,
+    filterPredicate: (ServiceShape) -> Boolean,
+): Model {
+    val walker = DirectedWalker(model)
+    val operationsWithConstrainedInputWithoutValidationException =
+        model.serviceShapes
+            .filter(filterPredicate)
+            .flatMap { it.operations }
+            .map { model.expectShape(it, OperationShape::class.java) }
+            .filter { operationShape ->
+                walker.walkShapes(operationShape.inputShape(model))
+                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+            }
+            .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
+
+    return ModelTransformer.create().mapShapes(model) { shape ->
+        if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {
+            shape.toBuilder().addError(SmithyValidationExceptionConversionGenerator.SHAPE_ID).build()
+        } else {
+            shape
+        }
+    }
+}
 
 /**
  * Attach the `smithy.framework#ValidationException` error to operations whose inputs are constrained, if they belong
@@ -32,7 +59,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
  *  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
  */
 object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
-    private val sherviceShapeIdAllowList =
+    private val serviceShapeIdAllowList =
         setOf(
             // These we currently generate server SDKs for.
             ShapeId.from("aws.protocoltests.restjson#RestJson"),
@@ -50,25 +77,47 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
         )
 
     fun transform(model: Model): Model {
-        val walker = DirectedWalker(model)
-        val operationsWithConstrainedInputWithoutValidationException =
-            model.serviceShapes
-                .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
-                .flatMap { it.operations }
-                .map { model.expectShape(it, OperationShape::class.java) }
-                .filter { operationShape ->
-                    // Walk the shapes reachable via this operation input.
-                    walker.walkShapes(operationShape.inputShape(model))
-                        .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
-                }
-                .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
+        return addValidationExceptionToMatchingServiceShapes(
+            model,
+        ) { serviceShapeIdAllowList.contains(it.toShapeId()) }
+    }
+}
 
-        return ModelTransformer.create().mapShapes(model) { shape ->
-            if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {
-                shape.toBuilder().addError(SmithyValidationExceptionConversionGenerator.SHAPE_ID).build()
-            } else {
-                shape
-            }
+/**
+ * Attach the `smithy.framework#ValidationException` error to operations with constrained inputs if the
+ * codegen flag `addValidationExceptionToConstrainedOperations` has been set.
+ */
+object AttachValidationExceptionToConstrainedOperationInputsBasedOnCodegenFlag {
+    fun transform(
+        model: Model,
+        settings: ServerRustSettings,
+    ): Model {
+        if (!settings.codegenConfig.addValidationExceptionToConstrainedOperations) {
+            return model
         }
+
+        val service = settings.getService(model)
+
+        return addValidationExceptionToMatchingServiceShapes(
+            model,
+        ) { it == service }
+    }
+}
+
+/**
+ * Attaches the `smithy.framework#ValidationException` error to operations with constrained inputs
+ * if either of the following conditions is met:
+ * 1. The operation belongs to a service in the allowlist.
+ * 2. The codegen flag `addValidationExceptionToConstrainedOperations` has been set.
+ *
+ * The error is only attached if the operation does not already have `ValidationException` added.
+ */
+object AttachValidationExceptionToConstrainedOperationInputs {
+    fun transform(
+        model: Model,
+        settings: ServerRustSettings,
+    ): Model {
+        val allowListTransformedModel = AttachValidationExceptionToConstrainedOperationInputsInAllowList.transform(model)
+        return AttachValidationExceptionToConstrainedOperationInputsBasedOnCodegenFlag.transform(allowListTransformedModel, settings)
     }
 }
