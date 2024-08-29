@@ -19,7 +19,7 @@ pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-pub use aws_smithy_checksums::RequestChecksumCalculation;
+pub use aws_smithy_checksums::{RequestChecksumCalculation, ResponseChecksumValidation};
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -94,6 +94,7 @@ pub struct SdkConfig {
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
     request_checksum_calculation: Option<RequestChecksumCalculation>,
+    response_checksum_validation: Option<ResponseChecksumValidation>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -123,6 +124,7 @@ pub struct Builder {
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
     request_checksum_calculation: Option<RequestChecksumCalculation>,
+    response_checksum_validation: Option<ResponseChecksumValidation>,
 }
 
 impl Builder {
@@ -198,6 +200,30 @@ impl Builder {
         request_checksum_calculation: Option<RequestChecksumCalculation>,
     ) -> &mut Self {
         self.request_checksum_calculation = request_checksum_calculation;
+        self
+    }
+
+    /// Set the checksum calculation strategy to use for responses.
+    /// # Examples
+    /// ```
+    /// use aws_types::SdkConfig;
+    /// use aws_smithy_checksums::ResponseChecksumValidation;
+    /// let config = SdkConfig::builder().response_checksum_validation(ResponseChecksumValidation::WhenSupported).build();
+    /// ```
+    pub fn response_checksum_validation(
+        mut self,
+        response_checksum_validation: ResponseChecksumValidation,
+    ) -> Self {
+        self.set_response_checksum_validation(Some(response_checksum_validation));
+        self
+    }
+
+    /// Set the checksum calculation strategy to use for responses.
+    pub fn set_response_checksum_validation(
+        &mut self,
+        response_checksum_validation: Option<ResponseChecksumValidation>,
+    ) -> &mut Self {
+        self.response_checksum_validation = response_checksum_validation;
         self
     }
 
@@ -748,6 +774,7 @@ impl Builder {
             disable_request_compression: self.disable_request_compression,
             request_min_compression_size_bytes: self.request_min_compression_size_bytes,
             request_checksum_calculation: self.request_checksum_calculation,
+            response_checksum_validation: self.response_checksum_validation,
         }
     }
 }
@@ -894,9 +921,14 @@ impl SdkConfig {
         self.disable_request_compression
     }
 
-    /// Configured checksum request option.
+    /// Configured checksum request behavior.
     pub fn request_checksum_calculation(&self) -> Option<RequestChecksumCalculation> {
         self.request_checksum_calculation
+    }
+
+    /// Configured checksum response behavior.
+    pub fn response_checksum_validation(&self) -> Option<ResponseChecksumValidation> {
+        self.response_checksum_validation
     }
 
     /// Configured minimum request compression size.
@@ -967,6 +999,7 @@ impl SdkConfig {
             disable_request_compression: self.disable_request_compression,
             request_min_compression_size_bytes: self.request_min_compression_size_bytes,
             request_checksum_calculation: self.request_checksum_calculation,
+            response_checksum_validation: self.response_checksum_validation,
         }
     }
 }

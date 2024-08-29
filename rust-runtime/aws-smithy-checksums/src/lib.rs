@@ -17,8 +17,10 @@
 //! Checksum calculation and verification callbacks.
 
 use crate::error::UnknownChecksumAlgorithmError;
-use crate::error::UnknownRequestChecksumCalculationError;
-use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
+use crate::error::{
+    UnknownRequestChecksumCalculationError, UnknownResponseChecksumValidationError,
+};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::Bytes;
 use std::str::FromStr;
 
@@ -103,7 +105,7 @@ impl ChecksumAlgorithm {
 pub const WHEN_SUPPORTED: &str = "when_supported";
 pub const WHEN_REQUIRED: &str = "when_required";
 
-/// Configure checksum behavior
+/// Configure checksum behavior for requests
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RequestChecksumCalculation {
@@ -126,6 +128,34 @@ impl FromStr for RequestChecksumCalculation {
         } else {
             Err(UnknownRequestChecksumCalculationError::new(
                 request_checksum_calculation,
+            ))
+        }
+    }
+}
+
+/// Configure checksum behavior for responses
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ResponseChecksumValidation {
+    WhenSupported,
+    WhenRequired,
+}
+
+impl Storable for ResponseChecksumValidation {
+    type Storer = StoreReplace<Self>;
+}
+
+impl FromStr for ResponseChecksumValidation {
+    type Err = UnknownResponseChecksumValidationError;
+
+    fn from_str(response_checksum_validation: &str) -> Result<Self, Self::Err> {
+        if response_checksum_validation.eq_ignore_ascii_case(WHEN_SUPPORTED) {
+            Ok(Self::WhenSupported)
+        } else if response_checksum_validation.eq_ignore_ascii_case(WHEN_REQUIRED) {
+            Ok(Self::WhenRequired)
+        } else {
+            Err(UnknownResponseChecksumValidationError::new(
+                response_checksum_validation,
             ))
         }
     }

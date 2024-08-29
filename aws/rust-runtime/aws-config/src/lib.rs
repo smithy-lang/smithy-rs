@@ -239,9 +239,9 @@ mod loader {
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
-        app_name, credentials, disable_request_compression, endpoint_url,
-        ignore_configured_endpoint_urls as ignore_ep, region, request_checksum_calculation,
-        request_min_compression_size_bytes, retry_config, timeout_config, use_dual_stack, use_fips,
+        app_name, checksums, credentials, disable_request_compression, endpoint_url,
+        ignore_configured_endpoint_urls as ignore_ep, region, request_min_compression_size_bytes,
+        retry_config, timeout_config, use_dual_stack, use_fips,
     };
     use crate::meta::region::ProvideRegion;
     #[allow(deprecated)]
@@ -917,7 +917,7 @@ mod loader {
                 Some(request_checksum_calculation)
             } else {
                 println!("LNJ loading checksum from request_checksum_calculation_provider");
-                request_checksum_calculation::request_checksum_calculation_provider(&conf).await
+                checksums::request_checksum_calculation_provider(&conf).await
             };
 
             println!("LNJ final value of checksum {request_checksum_calculation:#?}");

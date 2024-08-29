@@ -65,4 +65,4 @@ pub mod disable_request_compression;
 pub mod request_min_compression_size_bytes;
 
 /// Default "request checksum calculation" provider chain
-pub mod request_checksum_calculation;
+pub mod checksums;

@@ -37,7 +37,7 @@ impl fmt::Display for UnknownChecksumAlgorithmError {
 
 impl Error for UnknownChecksumAlgorithmError {}
 
-/// A checksum algorithm was unknown
+/// Unknown setting for `request_checksum_calculation`
 #[derive(Debug)]
 pub struct UnknownRequestChecksumCalculationError {
     request_checksum_calculation: String,
@@ -50,7 +50,7 @@ impl UnknownRequestChecksumCalculationError {
         }
     }
 
-    /// The checksum algorithm that is unknown
+    /// The unknown value
     pub fn request_checksum_calculation(&self) -> &str {
         &self.request_checksum_calculation
     }
@@ -67,3 +67,34 @@ impl fmt::Display for UnknownRequestChecksumCalculationError {
 }
 
 impl Error for UnknownRequestChecksumCalculationError {}
+
+/// Unknown setting for `response_checksum_validation`
+#[derive(Debug)]
+pub struct UnknownResponseChecksumValidationError {
+    response_checksum_validation: String,
+}
+
+impl UnknownResponseChecksumValidationError {
+    pub(crate) fn new(response_checksum_validation: impl Into<String>) -> Self {
+        Self {
+            response_checksum_validation: response_checksum_validation.into(),
+        }
+    }
+
+    /// The unknown value
+    pub fn response_checksum_validation(&self) -> &str {
+        &self.response_checksum_validation
+    }
+}
+
+impl fmt::Display for UnknownResponseChecksumValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            r#"unknown response_checksum_validation value "{}", please pass a known name ("when_supported", "when_required")"#,
+            self.response_checksum_validation
+        )
+    }
+}
+
+impl Error for UnknownResponseChecksumValidationError {}
