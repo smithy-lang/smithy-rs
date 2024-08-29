@@ -164,8 +164,8 @@ where
             .expect("set from service config");
 
         // Determine if we actually calculate the checksum. If the user setting is WhenSupported (the default)
-        // we always calculate it. If it is WhenRequired we only calculate it if the checksum is marked required
-        // on the trait.
+        // we always calculate it (because this interceptor isn't added if it isn't supported). If it is
+        // WhenRequired we only calculate it if the checksum is marked required on the trait.
         let calculate_checksum = match request_checksum_calculation {
             RequestChecksumCalculation::WhenSupported => true,
             RequestChecksumCalculation::WhenRequired => request_checksum_required,
@@ -173,14 +173,14 @@ where
         };
 
         // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
-        let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg);
+        // If we have made it this far without a checksum being set we set the default as Crc32
+        let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg)
+            .unwrap_or(ChecksumAlgorithm::Crc32);
 
+        // Calculate the checksum if necessary
         if calculate_checksum {
-            // If a checksum algorithm is set we calculate the checksum.
-            if let Some(checksum_algorithm) = checksum_algorithm {
-                let request = context.request_mut();
-                add_checksum_for_request_body(request, checksum_algorithm, cfg)?;
-            }
+            let request = context.request_mut();
+            add_checksum_for_request_body(request, checksum_algorithm, cfg)?;
         }
 
         Ok(())

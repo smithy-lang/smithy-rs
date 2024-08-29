@@ -110,17 +110,12 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
     val isRequestChecksumRequired = this.isRequestChecksumRequired
 
     return {
-        if (requestAlgorithmMember != null) {
-            if (isRequestChecksumRequired) {
-                // Checksums are required, fall back to crc32
-                rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
-            } else {
-                // Checksums aren't required, don't set a fallback
-                rust("let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str());")
-            }
-        } else if (isRequestChecksumRequired) {
+        if (requestAlgorithmMember == null && isRequestChecksumRequired) {
             // Checksums are required but a user can't set one, so we set crc32 for them
             rust("""let checksum_algorithm = Some("crc32");""")
+        } else {
+            // Use checksum algo set by user or crc32 if one has not been set
+            rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
         }
 
         // Parse the checksum_algorithm to a ChecksumAlgorithm enum
