@@ -101,7 +101,7 @@ impl ChecksumAlgorithm {
     }
 }
 
-// Valid RequestChecksumCalculation names
+// Valid names for RequestChecksumCalculation and ResponseChecksumValidation
 pub const WHEN_SUPPORTED: &str = "when_supported";
 pub const WHEN_REQUIRED: &str = "when_required";
 

@@ -222,6 +222,7 @@ mod loader {
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_checksums::{RequestChecksumCalculation, ResponseChecksumValidation};
     use aws_smithy_runtime::client::identity::IdentityCache;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
@@ -234,7 +235,6 @@ mod loader {
     use aws_types::docs_for;
     use aws_types::origin::Origin;
     use aws_types::os_shim_internal::{Env, Fs};
-    use aws_types::sdk_config::RequestChecksumCalculation;
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
 
@@ -291,6 +291,7 @@ mod loader {
         fs: Option<Fs>,
         behavior_version: Option<BehaviorVersion>,
         request_checksum_calculation: Option<RequestChecksumCalculation>,
+        response_checksum_validation: Option<ResponseChecksumValidation>,
     }
 
     impl ConfigLoader {
@@ -910,19 +911,22 @@ mod loader {
                 Some(user_cache) => Some(user_cache),
             };
 
-            let request_checksum_calculation = if let Some(request_checksum_calculation) =
-                self.request_checksum_calculation
-            {
-                println!("LNJ checksum explicitly set on config loader: {request_checksum_calculation:#?}");
-                Some(request_checksum_calculation)
-            } else {
-                println!("LNJ loading checksum from request_checksum_calculation_provider");
-                checksums::request_checksum_calculation_provider(&conf).await
-            };
+            let request_checksum_calculation =
+                if let Some(request_checksum_calculation) = self.request_checksum_calculation {
+                    Some(request_checksum_calculation)
+                } else {
+                    checksums::request_checksum_calculation_provider(&conf).await
+                };
 
-            println!("LNJ final value of checksum {request_checksum_calculation:#?}");
+            let response_checksum_validation =
+                if let Some(response_checksum_validation) = self.response_checksum_validation {
+                    Some(response_checksum_validation)
+                } else {
+                    checksums::response_checksum_validation_provider(&conf).await
+                };
 
             builder.set_request_checksum_calculation(request_checksum_calculation);
+            builder.set_response_checksum_validation(response_checksum_validation);
             builder.set_identity_cache(identity_cache);
             builder.set_credentials_provider(credentials_provider);
             builder.set_token_provider(token_provider);
