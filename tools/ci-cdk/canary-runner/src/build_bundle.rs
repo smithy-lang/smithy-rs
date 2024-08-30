@@ -143,6 +143,9 @@ wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
 wasmtime-wasi-http = "17.0.1"
+
+# The maintainers of this crate made breaking changes in v0.9.4 so we lock this.
+regalloc2 = "=0.9.3"
 "#;
 
 lazy_static! {
