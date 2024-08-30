@@ -4,7 +4,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.AbstractShapeBuilder
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpLabelTrait
@@ -12,6 +11,8 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.utils.SmithyBuilder
 import software.amazon.smithy.utils.ToSmithyBuilder
 
@@ -21,17 +22,27 @@ import software.amazon.smithy.utils.ToSmithyBuilder
  * object that transforms the model and removes specific traits based on the protocol being instantiated.
  */
 object ServerProtocolBasedTransformationFactory {
-    fun createTransformer(protocolShapeId: ShapeId): Transformer =
-        when (protocolShapeId) {
-            Rpcv2CborTrait.ID -> Rpcv2Transformer()
-            else -> IdentityTransformer()
+    fun transform(
+        model: Model,
+        settings: ServerRustSettings,
+    ): Model {
+        val service = settings.getService(model)
+        if (!service.hasTrait<Rpcv2CborTrait>()) {
+            return model
         }
 
-    interface Transformer {
-        fun transform(
-            model: Model,
-            service: ServiceShape,
-        ): Model
+        return ModelTransformer.create().mapShapes(model) { shape ->
+            when (shape) {
+                is OperationShape -> shape.removeTraitIfPresent(HttpTrait.ID)
+                is MemberShape -> {
+                    shape
+                        .removeTraitIfPresent(HttpLabelTrait.ID)
+                        .removeTraitIfPresent(HttpPayloadTrait.ID)
+                }
+
+                else -> shape
+            }
+        }
     }
 
     fun <T : Shape, B> T.removeTraitIfPresent(
@@ -45,38 +56,6 @@ object ServerProtocolBasedTransformationFactory {
             (this.toBuilder() as B).removeTrait(traitId).build()
         } else {
             this
-        }
-    }
-
-    class Rpcv2Transformer() : Transformer {
-        override fun transform(
-            model: Model,
-            service: ServiceShape,
-        ): Model {
-            val transformedModel =
-                ModelTransformer.create().mapShapes(model) { shape ->
-                    when (shape) {
-                        is OperationShape -> shape.removeTraitIfPresent(HttpTrait.ID)
-                        is MemberShape -> {
-                            shape
-                                .removeTraitIfPresent(HttpLabelTrait.ID)
-                                .removeTraitIfPresent(HttpPayloadTrait.ID)
-                        }
-
-                        else -> shape
-                    }
-                }
-
-            return transformedModel
-        }
-    }
-
-    class IdentityTransformer() : Transformer {
-        override fun transform(
-            model: Model,
-            service: ServiceShape,
-        ): Model {
-            return model
         }
     }
 }

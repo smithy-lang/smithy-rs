@@ -3,6 +3,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ModelProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.loadSmithyConstraintsModelForProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.removeOperations
@@ -15,7 +16,7 @@ class CborConstraintsIntegrationTest {
         // Event streaming operations are not supported by `Rpcv2Cbor` implementation.
         // https://github.com/smithy-lang/smithy-rs/issues/3573
         val nonSupportedOperations =
-            listOf("EventStreamsOperation", "StreamingBlobOperation")
+            listOf("StreamingBlobOperation")
                 .map { ShapeId.from("${serviceShape.namespace}#$it") }
         val model =
             constraintModel
@@ -25,6 +26,7 @@ class CborConstraintsIntegrationTest {
             model,
             IntegrationTestParams(
                 service = serviceShape.toString(),
+                additionalSettings = ServerAdditionalSettings.builder().generateCodegenComments().toObjectNode(),
             ),
         ) { _, _ ->
         }
