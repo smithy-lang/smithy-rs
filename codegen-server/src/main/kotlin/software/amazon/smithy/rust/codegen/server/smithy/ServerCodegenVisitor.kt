@@ -134,8 +134,7 @@ open class ServerCodegenVisitor(
                 .protocolFor(context.model, service)
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
-        val protocolTransformedModel = ServerProtocolBasedTransformationFactory.createTransformer(protocolShape).transform(baseModel, service)
-        model = codegenDecorator.transformModel(service, protocolTransformedModel, settings)
+        model = codegenDecorator.transformModel(service, baseModel, settings)
 
         val serverSymbolProviders =
             ServerSymbolProviders.from(
@@ -210,6 +209,8 @@ open class ServerCodegenVisitor(
             .let { AttachValidationExceptionToConstrainedOperationInputs.transform(it, settings) }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
+            // Remove traits that are not supported by the chosen protocol
+            .let { ServerProtocolBasedTransformationFactory.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 

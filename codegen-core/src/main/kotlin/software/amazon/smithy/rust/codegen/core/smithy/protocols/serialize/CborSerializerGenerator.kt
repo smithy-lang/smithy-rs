@@ -204,9 +204,26 @@ class CborSerializerGenerator(
         }
     }
 
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        TODO("We only call this when serializing in event streams, which are not supported yet: https://github.com/smithy-lang/smithy-rs/issues/3573")
+        val target = model.expectShape(member.target)
+        return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(input: &#{target}) -> std::result::Result<#{Vec}<u8>, #{Error}>",
+                *codegenScope,
+                "target" to symbolProvider.toSymbol(target),
+            ) {
+                rustTemplate("let mut encoder = #{Encoder}::new(#{Vec}::new());", *codegenScope)
+                rustBlock("") {
+                    rust("let encoder = &mut encoder;")
+                    when (target) {
+                        is StructureShape -> serializeStructure(StructContext("input", target))
+                        is UnionShape -> serializeUnion(Context(ValueExpression.Reference("input"), target))
+                        else -> throw IllegalStateException("CBOR payloadSerializer only supports structs and unions")
+                    }
+                }
+                rustTemplate("#{Ok}(encoder.into_writer())", *codegenScope)
+            }
+        }
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
@@ -223,6 +240,7 @@ class CborSerializerGenerator(
         }
 
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
+
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
             rustBlockTemplate(

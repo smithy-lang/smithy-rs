@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import io.kotest.inspectors.forAll
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import java.io.File
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
@@ -29,6 +28,7 @@ import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import java.io.File
 
 enum class ModelProtocol(val trait: AbstractTrait) {
     AwsJson10(AwsJson1_0Trait.builder().build()),
