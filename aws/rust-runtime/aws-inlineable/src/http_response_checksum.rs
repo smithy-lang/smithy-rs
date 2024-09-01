@@ -7,10 +7,11 @@
 
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
-use aws_smithy_checksums::ChecksumAlgorithm;
+use aws_smithy_checksums::{ChecksumAlgorithm, ResponseChecksumValidation};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextRef, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -60,9 +61,9 @@ where
         "ResponseChecksumInterceptor"
     }
 
-    fn read_before_serialization(
+    fn modify_before_serialization(
         &self,
-        context: &BeforeSerializationInterceptorContextRef<'_>,
+        context: &mut BeforeSerializationInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
@@ -71,6 +72,8 @@ where
         let mut layer = Layer::new("ResponseChecksumInterceptor");
         layer.store_put(ResponseChecksumInterceptorState { validation_enabled });
         cfg.push_layer(layer);
+
+        // let req = context.input_mut().;
 
         Ok(())
     }
@@ -81,17 +84,39 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
+        println!("LNJ INSIDE RESPONSE CHECKSUM INTERCEPTOR");
         let state = cfg
             .load::<ResponseChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
 
-        if state.validation_enabled {
+        // This value is set by the user on the SdkConfig to indicate their preference
+        let response_checksum_validation = cfg
+            .load::<ResponseChecksumValidation>()
+            .expect("set from service config");
+
+        // If validation has not been explicitly enabled we check the ResponseChecksumValidation
+        // from the SdkConfig. If it is WhenSupported (or unknown) we enable validation and if it
+        // is WhenRequired we leave it disabled.
+        let validation_enabled = if !state.validation_enabled {
+            match response_checksum_validation {
+                ResponseChecksumValidation::WhenRequired => false,
+                ResponseChecksumValidation::WhenSupported | _ => true,
+            }
+        } else {
+            true
+        };
+
+        if validation_enabled {
+            println!("LNJ INSIDE VALIDATION ENABLED");
             let response = context.response_mut();
             let maybe_checksum_headers = check_headers_for_precalculated_checksum(
                 response.headers(),
                 self.response_algorithms,
             );
+
+            println!("LNJ maybe_checksum_headers {maybe_checksum_headers:#?}");
             if let Some((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
+                println!("LNJ WRAPPING BODY");
                 let mut body = SdkBody::taken();
                 mem::swap(&mut body, response.body_mut());
 
@@ -134,6 +159,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &Headers,
     response_algorithms: &[&str],
 ) -> Option<(ChecksumAlgorithm, bytes::Bytes)> {
+    println!("LNJ CHECKING HEADERS: {headers:#?} and ALGOS: {response_algorithms:#?}");
     let checksum_algorithms_to_check =
         aws_smithy_checksums::http::CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
             .into_iter()

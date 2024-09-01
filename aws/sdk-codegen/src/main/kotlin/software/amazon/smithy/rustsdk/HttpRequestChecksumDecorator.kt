@@ -142,8 +142,9 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 // https://smithy.io/2.0/aws/aws-core.html#http-request-checksums
 
 /**
- * Calculate the checksum algorithm based on the trait's `requestAlgorithmMember`. Then instantiate an
- * (inlineable) `http_request_checksum` interceptor with that checksum algorithm.
+ * Calculate the checksum algorithm based on the input member identified by the trait's
+ * `requestAlgorithmMember`. Then instantiate an (inlineable) `http_request_checksum`
+ * interceptor with that checksum algorithm.
  */
 class HttpRequestChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
@@ -281,7 +282,7 @@ class HttpRequestChecksumConfigCustomization(private val codegenContext: ClientC
 /**
  * Determine if the current service contains any operations with the HttpChecksum trait
  */
-private fun serviceHasHttpChecksumOperation(codegenContext: ClientCodegenContext) =
+fun serviceHasHttpChecksumOperation(codegenContext: ClientCodegenContext) =
     codegenContext.serviceShape.allOperations
         .mapNotNull { codegenContext.model.getShape(it).getOrNull() }
         .any {

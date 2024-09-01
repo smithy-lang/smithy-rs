@@ -167,9 +167,8 @@ where
         // we always calculate it (because this interceptor isn't added if it isn't supported). If it is
         // WhenRequired we only calculate it if the checksum is marked required on the trait.
         let calculate_checksum = match request_checksum_calculation {
-            RequestChecksumCalculation::WhenSupported => true,
             RequestChecksumCalculation::WhenRequired => request_checksum_required,
-            _ => true,
+            RequestChecksumCalculation::WhenSupported | _ => true,
         };
 
         // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
