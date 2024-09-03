@@ -24,11 +24,8 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class SmokeTestsDecoratorTest {
     companion object {
-        // Can't use the dollar sign in a multiline string with doing it like this.
-        private const val PREFIX = "\$version: \"2\""
         val model =
             """
-            $PREFIX
             namespace test
 
             use aws.api#service
@@ -97,7 +94,7 @@ class SmokeTestsDecoratorTest {
 
             @error("server")
             structure FooException { }
-            """.asSmithyModel()
+            """.asSmithyModel(smithyVersion = "2")
     }
 
     @Test
