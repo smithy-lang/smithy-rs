@@ -135,7 +135,8 @@ fun renderPrologue(
 
         ```sh
         RUSTFLAGS="--cfg smoketests" cargo test.
-                ```""",
+        ```
+        """,
     )
 
     rust("use $moduleUseName::{Client, config};")
