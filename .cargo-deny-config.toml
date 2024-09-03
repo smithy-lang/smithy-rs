@@ -25,7 +25,7 @@ exceptions = [
     { allow = ["OpenSSL"], name = "ring", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-sys", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-fips-sys", version = "*" },
-    { allow = ["BlueOak-1.0.0"], name = "minicbor", version = "<=0.24.2" },
+    { allow = ["BlueOak-1.0.0"], name = "minicbor", version = "<0.25" },
     # Safe to bump as long as license does not change -------------^
     # See D105255799.
 ]
