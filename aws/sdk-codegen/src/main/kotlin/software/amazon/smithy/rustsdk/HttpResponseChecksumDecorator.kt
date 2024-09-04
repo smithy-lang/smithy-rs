@@ -127,6 +127,7 @@ class HttpResponseChecksumCustomization(
                 }
             val validationModeName = codegenContext.symbolProvider.toMemberName(requestValidationModeMember)
             val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
+            val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
 
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
@@ -161,6 +162,14 @@ class HttpResponseChecksumCustomization(
                                 codegenContext.symbolProvider.toSymbol(
                                     requestValidationModeMemberInner,
                                 ),
+                        )
+                    }
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        val interceptorName = "${operationName}HttpResponseChecksumMutationInterceptor"
+                        rustTemplate(
+                            """
+                            $interceptorName
+                            """,
                         )
                     }
                 }

@@ -10,8 +10,7 @@
 use aws_smithy_checksums::{ChecksumAlgorithm, ResponseChecksumValidation};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut,
-    BeforeSerializationInterceptorContextRef, Input,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -92,7 +91,7 @@ where
         // This value is set by the user on the SdkConfig to indicate their preference
         let response_checksum_validation = cfg
             .load::<ResponseChecksumValidation>()
-            .expect("set from service config");
+            .unwrap_or(&ResponseChecksumValidation::WhenSupported);
 
         // If validation has not been explicitly enabled we check the ResponseChecksumValidation
         // from the SdkConfig. If it is WhenSupported (or unknown) we enable validation and if it

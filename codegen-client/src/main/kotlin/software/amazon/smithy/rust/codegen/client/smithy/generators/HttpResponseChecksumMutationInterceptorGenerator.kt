@@ -21,6 +21,19 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
+/**
+ * This class generates a interceptor for operations with the `httpChecksum` trait that support response validations.
+ * In the `modify_before_serialization` hook the interceptor checks the operation's `requestValidationModeMember`. If
+ * that member is `ENABLED` then we end early and do nothing. If it is not `ENABLED` then it checks the
+ * `response_checksum_validation` set by the user on the SdkConfig. If that is `WhenSupported` (or unknown) then we
+ * update the `requestValidationModeMember` to `ENABLED` and if the value is `WhenRequired` we end without modifying
+ * anything.
+ *
+ * Note that although there is an existing inlineable `ResponseChecksumInterceptor` this logic could not live there.
+ * Since that interceptor is inlineable it does not have access to the name of the `requestValidationModeMember` on the
+ * operation's input, and in certain circumstances we need to mutate that member on the input before serializing the
+ * request and sending it to the service.
+ */
 class HttpResponseChecksumMutationInterceptorGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
@@ -64,23 +77,16 @@ class HttpResponseChecksumMutationInterceptorGenerator(
         // Also return early if there is no requestValidationModeMember on the trait
         val requestValidationModeMember =
             (checksumTrait.requestValidationModeMember(codegenContext, operationShape) ?: return)
-
         val requestValidationModeName = symbolProvider.toSymbol(requestValidationModeMember).name
-
-        val operationName = symbolProvider.toSymbol(operationShape).name
-        val interceptorName = "${operationName}HttpResponseChecksumMutationInterceptor"
-        val responseChecksumValidation =
-            RuntimeType(
-                "ResponseChecksumValidation",
-                CargoDependency.smithyChecksums(codegenContext.runtimeConfig),
-            ).toSymbol().fullName
-
         val requestValidationModeMemberInner =
             if (requestValidationModeMember.isOptional) {
                 codegenContext.model.expectShape(requestValidationModeMember.target)
             } else {
                 requestValidationModeMember
             }
+
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        val interceptorName = "${operationName}HttpResponseChecksumMutationInterceptor"
 
         writer.rustTemplate(
             """
@@ -110,7 +116,7 @@ class HttpResponseChecksumMutationInterceptorGenerator(
                         // This value is set by the user on the SdkConfig to indicate their preference
                         let response_checksum_validation = cfg
                             .load::<#{ResponseChecksumValidation}>()
-                            .expect("set from service config");
+                            .unwrap_or(&#{ResponseChecksumValidation}::WhenSupported);
 
                         match response_checksum_validation {
                             #{ResponseChecksumValidation}::WhenRequired => {}

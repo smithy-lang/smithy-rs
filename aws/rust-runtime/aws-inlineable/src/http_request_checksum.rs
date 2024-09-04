@@ -159,9 +159,10 @@ where
         let request_checksum_required = state.request_checksum_required;
 
         // This value is set by the user on the SdkConfig to indicate their preference
+        // We provide a default here for users that use a client config instead of the SdkConfig
         let request_checksum_calculation = cfg
             .load::<RequestChecksumCalculation>()
-            .expect("set from service config");
+            .unwrap_or(&RequestChecksumCalculation::WhenSupported);
 
         // Determine if we actually calculate the checksum. If the user setting is WhenSupported (the default)
         // we always calculate it (because this interceptor isn't added if it isn't supported). If it is
