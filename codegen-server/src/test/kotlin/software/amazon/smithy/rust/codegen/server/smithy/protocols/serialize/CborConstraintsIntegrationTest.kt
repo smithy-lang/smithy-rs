@@ -12,15 +12,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 class CborConstraintsIntegrationTest {
     @Test
     fun `ensure CBOR implementation works for all constraint types`() {
-        val (serviceShape, constraintModel) = loadSmithyConstraintsModelForProtocol(ModelProtocol.Rpcv2Cbor)
-        // Event streaming operations are not supported by `Rpcv2Cbor` implementation.
-        // https://github.com/smithy-lang/smithy-rs/issues/3573
-        val nonSupportedOperations =
-            listOf("StreamingBlobOperation")
-                .map { ShapeId.from("${serviceShape.namespace}#$it") }
-        val model =
-            constraintModel
-                .removeOperations(serviceShape, nonSupportedOperations)
+        val (serviceShape, model) = loadSmithyConstraintsModelForProtocol(ModelProtocol.Rpcv2Cbor)
         // The test should compile; no further testing is required.
         serverIntegrationTest(
             model,
