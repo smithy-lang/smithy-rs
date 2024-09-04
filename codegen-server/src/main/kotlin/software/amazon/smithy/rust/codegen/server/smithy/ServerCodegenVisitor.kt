@@ -209,7 +209,7 @@ open class ServerCodegenVisitor(
             .let { AttachValidationExceptionToConstrainedOperationInputs.transform(it, settings) }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
-            // Remove traits that are not supported by the chosen protocol
+            // Remove traits that are not supported by the chosen protocol.
             .let { ServerProtocolBasedTransformationFactory.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)

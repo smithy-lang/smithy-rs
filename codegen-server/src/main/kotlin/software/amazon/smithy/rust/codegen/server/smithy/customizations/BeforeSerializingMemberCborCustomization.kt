@@ -13,6 +13,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Value
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.workingWithPublicConstrainedWrapperTupleType
 
+/**
+ * Constrained shapes are wrapped in a Rust tuple struct that implements all necessary checks. However,
+ * for serialization purposes, the inner type of the constrained shape is used for serialization.
+ *
+ * The `BeforeSerializingMemberCborCustomization` class generates a reference to the inner type when the shape being
+ * code-generated is constrained and the `publicConstrainedTypes` codegen flag is set.
+ */
 class BeforeSerializingMemberCborCustomization(private val codegenContext: ServerCodegenContext) : CborSerializerCustomization() {
     override fun section(section: CborSerializerSection): Writable =
         when (section) {

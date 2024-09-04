@@ -38,17 +38,25 @@ enum class ModelProtocol(val trait: AbstractTrait) {
     Rpcv2Cbor(Rpcv2CborTrait.builder().build()),
 }
 
-fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<ShapeId, Model> {
-    val (serviceShapeId, model) = loadSmithyConstraintsModel()
-    return Pair(serviceShapeId, model.replaceProtocolTrait(serviceShapeId, modelProtocol))
+/**
+ * Returns the Smithy constraints model from the common repository, with the specified protocol
+ * applied to the service.
+ */
+fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<Model, ShapeId> {
+    val (model, serviceShapeId) = loadSmithyConstraintsModel()
+    return Pair(model.replaceProtocolTrait(serviceShapeId, modelProtocol), serviceShapeId)
 }
 
-fun loadSmithyConstraintsModel(): Pair<ShapeId, Model> {
+/**
+ * Loads the Smithy constraints model defined in the common repository and returns the model along with
+ * the service shape defined in it.
+ */
+fun loadSmithyConstraintsModel(): Pair<Model, ShapeId> {
     val filePath = "../codegen-core/common-test-models/constraints.smithy"
     val serviceShapeId = ShapeId.from("com.amazonaws.constraints#ConstraintsService")
     val model =
         File(filePath).readText().asSmithyModel()
-    return Pair(serviceShapeId, model)
+    return Pair(model, serviceShapeId)
 }
 
 /**

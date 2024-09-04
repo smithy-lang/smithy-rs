@@ -240,7 +240,6 @@ class CborSerializerGenerator(
         }
 
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
-
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
             rustBlockTemplate(

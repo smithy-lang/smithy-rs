@@ -454,10 +454,10 @@ class CborParserGenerator(
         return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
             rustTemplate(
                 """
-                    pub(crate) fn $fnName(value: &[u8]) -> #{Result}<#{ReturnType}, #{Error}> {
-                        let decoder = &mut #{Decoder}::new(value);
-                        #{DeserializeMember}
-                    }
+                pub(crate) fn $fnName(value: &[u8]) -> #{Result}<#{ReturnType}, #{Error}> {
+                    let decoder = &mut #{Decoder}::new(value);
+                    #{DeserializeMember}
+                }
                 """,
                 "ReturnType" to returnSymbol.symbol,
                 "DeserializeMember" to deserializeMember(member),
