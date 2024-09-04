@@ -47,12 +47,15 @@ internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
             CargoDependency.smithyHttp(this),
             CargoDependency.smithyRuntimeApiClient(this),
             CargoDependency.smithyTypes(this),
+            AwsCargoDependency.awsSigv4(this),
+            CargoDependency.TempFile.toDevDependency(),
         ),
     )
 
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
+    private val defaultAlgorithm = "CRC32"
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -82,6 +85,21 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
                 },
             )
         }
+
+//    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+//        ModelTransformer.create().mapShapes(model) { shape ->
+//            shape.letIf(isChecksumAlgoRequestMember(shape)) {
+//                // Update the default on the CreateMPURequest shape
+//                (shape as MemberShape).toBuilder().addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
+//            }
+//        }
+//
+//
+//    private fun isChecksumAlgoRequestMember(service: ServiceShape, currentShape: Shape): Boolean {
+//        val checksumTrait = currentShape.getTrait<HttpChecksumTrait>() ?: return false
+//
+//        return true
+//    }
 }
 
 /**
