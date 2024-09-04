@@ -28,6 +28,7 @@ import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticEventStreamUnionTrait
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -190,7 +191,7 @@ fun operationShapesThatMustHaveValidationException(
         .filter { operationShape ->
             // Walk the shapes reachable via this operation input.
             walker.walkShapes(operationShape.inputShape(model))
-                .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+                .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() || it.hasEventStreamMember(model) }
         }
         .toSet()
 }
@@ -207,7 +208,6 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     // `ValidationException` attached in `errors`. https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
-    val walker = DirectedWalker(model)
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
         operationShapesThatMustHaveValidationException(model, service)
             .filter { !it.errors.contains(validationExceptionShapeId) }

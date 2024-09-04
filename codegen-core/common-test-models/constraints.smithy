@@ -190,6 +190,7 @@ operation StreamingBlobOperation {
 operation EventStreamsOperation {
     input: EventStreamsOperationInputOutput,
     output: EventStreamsOperationInputOutput,
+    errors: [ValidationException]
 }
 
 structure ConstrainedShapesOperationInputOutput {
