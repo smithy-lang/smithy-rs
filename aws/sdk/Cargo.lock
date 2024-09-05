@@ -9390,7 +9390,7 @@ dependencies = [
 name = "aws-smithy-cbor"
 version = "0.60.7"
 dependencies = [
- "aws-smithy-types 1.2.4",
+ "aws-smithy-types 1.2.2",
  "criterion",
  "minicbor",
 ]
@@ -11207,9 +11207,9 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "minicbor"
-version = "0.24.3"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c934535c9ee967c07139f35fa1a30a4a5bf5b91bf6821cecf079c7d7a067b01"
+checksum = "5f8e213c36148d828083ae01948eed271d03f95f7e72571fa242d78184029af2"
 dependencies = [
  "half 2.4.1",
  "minicbor-derive",
