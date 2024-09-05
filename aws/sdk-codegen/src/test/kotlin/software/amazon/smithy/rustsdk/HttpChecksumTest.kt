@@ -138,10 +138,15 @@ internal class HttpChecksumTest {
         awsSdkIntegrationTest(model) { context, rustCrate ->
 
             val rc = context.runtimeConfig
+            // Create Writables for all test types
             val checksumRequestTestWritables =
                 checksumRequestTests.map { createRequestChecksumCalculationTest(it, context) }.join("\n")
             val checksumResponseSuccTestWritables =
                 checksumResponseSuccTests.map { createResponseChecksumValidationSuccessTest(it, context) }.join("\n")
+            val checksumResponseFailTestWritables =
+                checksumResponseFailTests.map { createResponseChecksumValidationFailureTest(it, context) }.join("\n")
+
+            // Shared imports for all test types
             val testBase =
                 writable {
                     rustTemplate(
@@ -161,16 +166,25 @@ internal class HttpChecksumTest {
                         "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
                     )
                 }
+
+            // Create one integ test per test type
             rustCrate.integrationTest("request_checksums") {
                 testBase.plus(checksumRequestTestWritables)()
             }
 
-            rustCrate.integrationTest("response_succ_checksums") {
+            rustCrate.integrationTest("response_checksums_success") {
                 testBase.plus(checksumResponseSuccTestWritables)()
+            }
+
+            rustCrate.integrationTest("response_checksums_fail") {
+                testBase.plus(checksumResponseFailTestWritables)()
             }
         }
     }
 
+    /**
+     * Generate tests where the request checksum is calculated correctly
+     */
     private fun createRequestChecksumCalculationTest(
         testDef: RequestChecksumCalculationTest,
         context: ClientCodegenContext,
@@ -218,6 +232,9 @@ internal class HttpChecksumTest {
         }
     }
 
+    /**
+     * Generate tests where the response checksum validates successfully
+     */
     private fun createResponseChecksumValidationSuccessTest(
         testDef: ResponseChecksumValidationSuccessTest,
         context: ClientCodegenContext,
@@ -260,7 +277,71 @@ internal class HttpChecksumTest {
             )
         }
     }
+
+    /**
+     * Generate tests where the response checksum fails to validate
+     */
+    private fun createResponseChecksumValidationFailureTest(
+        testDef: ResponseChecksumValidationFailureTest,
+        context: ClientCodegenContext,
+    ): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        val algoLower = testDef.checksumAlgorithm.lowercase()
+        return writable {
+            rustTemplate(
+                """
+                //${testDef.docs}
+                ##[::tokio::test]
+                async fn ${algoLower}_response_checksums_work() {
+                    let (http_client, _rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
+                            .body(SdkBody::from("${testDef.responsePayload}"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let res = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter."))
+                        .checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})
+                        .validation_mode($moduleName::types::ValidationMode::Enabled)
+                        .send()
+                        .await;
+
+                    assert!(res.is_err());
+
+                    let boxed_err = res
+                        .unwrap_err()
+                        .into_source()
+                        .unwrap()
+                        .downcast::<aws_smithy_checksums::body::validate::Error>();
+                    let typed_err = boxed_err.as_ref().unwrap().as_ref();
+
+                    match typed_err {
+                        aws_smithy_checksums::body::validate::Error::ChecksumMismatch { actual, .. } => {
+                            let calculated_checksum = aws_smithy_types::base64::encode(actual);
+                            assert_eq!(calculated_checksum, "${testDef.calculatedChecksum}");
+                        }
+                        _ => panic!("Unknown error type in checksum validation"),
+                    };
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
 }
+
+// Classes and data for test definitions
 
 data class RequestChecksumCalculationTest(
     val docs: String,
@@ -341,13 +422,13 @@ val checksumResponseSuccTests =
             "Crc32C",
             "crUfeA==",
         ),
-    /*
-    ResponseChecksumValidationSuccessTest(
-        "Successful payload validation with Crc64Nvme checksum.",
-        "Hello world",
-        "Crc64Nvme",
-        "uc8X9yrZrD4=",
-    ),*/
+        /*
+        ResponseChecksumValidationSuccessTest(
+            "Successful payload validation with Crc64Nvme checksum.",
+            "Hello world",
+            "Crc64Nvme",
+            "uc8X9yrZrD4=",
+        ),*/
         ResponseChecksumValidationSuccessTest(
             "Successful payload validation with Sha1 checksum.",
             "Hello world",
@@ -366,7 +447,46 @@ data class ResponseChecksumValidationFailureTest(
     val docs: String,
     val responsePayload: String,
     val checksumAlgorithm: String,
-    val algoHeader: String,
-    val checksumHeader: String,
+    val checksumHeaderValue: String,
     val calculatedChecksum: String,
 )
+
+val checksumResponseFailTests =
+    listOf(
+        ResponseChecksumValidationFailureTest(
+            "Failed payload validation with CRC32 checksum.",
+            "Hello world",
+            "Crc32",
+            "bm90LWEtY2hlY2tzdW0=",
+            "i9aeUg==",
+        ),
+        ResponseChecksumValidationFailureTest(
+            "Failed payload validation with CRC32C checksum.",
+            "Hello world",
+            "Crc32C",
+            "bm90LWEtY2hlY2tzdW0=",
+            "crUfeA==",
+        ),
+    /*
+    ResponseChecksumValidationFailureTest(
+        "Failed payload validation with CRC64NVME checksum.",
+        "Hello world",
+        "Crc64Nvme",
+        "bm90LWEtY2hlY2tzdW0=",
+        "uc8X9yrZrD4=",
+    ),*/
+        ResponseChecksumValidationFailureTest(
+            "Failed payload validation with SHA1 checksum.",
+            "Hello world",
+            "Sha1",
+            "bm90LWEtY2hlY2tzdW0=",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+        ),
+        ResponseChecksumValidationFailureTest(
+            "Failed payload validation with SHA256 checksum.",
+            "Hello world",
+            "Sha256",
+            "bm90LWEtY2hlY2tzdW0=",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+        ),
+    )
