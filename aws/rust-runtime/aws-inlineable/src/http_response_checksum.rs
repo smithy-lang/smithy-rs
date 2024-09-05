@@ -89,6 +89,7 @@ where
             .expect("set in `read_before_serialization`");
 
         // This value is set by the user on the SdkConfig to indicate their preference
+        // We provide a default here for users that use a client config instead of the SdkConfig
         let response_checksum_validation = cfg
             .load::<ResponseChecksumValidation>()
             .unwrap_or(&ResponseChecksumValidation::WhenSupported);

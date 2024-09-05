@@ -75,7 +75,10 @@ internal class HttpChecksumTest {
             }
 
             @output
-            structure SomeOutput {}
+            structure SomeOutput {
+                @httpPayload
+                body: Blob
+            }
 
             @http(uri: "/SomeStreamingOperation", method: "POST")
             @optionalAuth
@@ -112,6 +115,7 @@ internal class HttpChecksumTest {
             enum ChecksumAlgorithm {
                 CRC32
                 CRC32C
+                //Value not supported by current smithy version
                 //CRC64NVME
                 SHA1
                 SHA256
@@ -131,72 +135,38 @@ internal class HttpChecksumTest {
     //  for enums work.
     @Test
     fun requestChecksumWorks() {
-        val checksumRequestTests =
-            listOf(
-                RequestChecksumCalculationTest(
-                    "CRC32 checksum calculation works.",
-                    "Hello world",
-                    "Crc32",
-                    "CRC32",
-                    "i9aeUg==",
-                ),
-                RequestChecksumCalculationTest(
-                    "CRC32C checksum calculation works.",
-                    "Hello world",
-                    "Crc32C",
-                    "CRC32C",
-                    "crUfeA==",
-                ),
-                /* We do not yet support Crc64Nvme checksums
-                 RequestChecksumCalculationTest(
-                 "CRC64NVME checksum calculation works.",
-                 "Hello world",
-                 "Crc64Nvme",
-                 "CRC64NVME",
-                 "uc8X9yrZrD4=",
-                 ),
-                 */
-                RequestChecksumCalculationTest(
-                    "SHA1 checksum calculation works.",
-                    "Hello world",
-                    "Sha1",
-                    "SHA1",
-                    "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
-                ),
-                RequestChecksumCalculationTest(
-                    "SHA256 checksum calculation works.",
-                    "Hello world",
-                    "Sha256",
-                    "SHA256",
-                    "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
-                ),
-            )
-
         awsSdkIntegrationTest(model) { context, rustCrate ->
 
             val rc = context.runtimeConfig
-            val testWritables =
+            val checksumRequestTestWritables =
                 checksumRequestTests.map { createRequestChecksumCalculationTest(it, context) }.join("\n")
-            println("LNJ CREATING testBASE")
+            val checksumResponseSuccTestWritables =
+                checksumResponseSuccTests.map { createResponseChecksumValidationSuccessTest(it, context) }.join("\n")
             val testBase =
                 writable {
                     rustTemplate(
                         """
                         ##![cfg(feature = "test-util")]
+                        ##![allow(unused_imports)]
 
                         use #{Blob};
                         use #{Region};
                         use #{pretty_assertions}::assert_eq;
-
+                        use #{SdkBody};
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
                         "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
                         "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),
+                        "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
                     )
                 }
             rustCrate.integrationTest("request_checksums") {
-                testBase.plus(testWritables)()
+                testBase.plus(checksumRequestTestWritables)()
+            }
+
+            rustCrate.integrationTest("response_succ_checksums") {
+                testBase.plus(checksumResponseSuccTestWritables)()
             }
         }
     }
@@ -205,7 +175,6 @@ internal class HttpChecksumTest {
         testDef: RequestChecksumCalculationTest,
         context: ClientCodegenContext,
     ): Writable {
-        println("LNJ TEST")
         val rc = context.runtimeConfig
         val moduleName = context.moduleUseName()
         val algoLower = testDef.checksumAlgorithm.lowercase()
@@ -214,7 +183,7 @@ internal class HttpChecksumTest {
                 """
                 //${testDef.docs}
                 ##[#{tokio}::test]
-                async fn ${algoLower}_checksums_work() {
+                async fn ${algoLower}_request_checksums_work() {
                     let (http_client, rx) = #{capture_request}(None);
                     let config = $moduleName::Config::builder()
                         .region(Region::from_static("doesntmatter"))
@@ -248,6 +217,49 @@ internal class HttpChecksumTest {
             )
         }
     }
+
+    private fun createResponseChecksumValidationSuccessTest(
+        testDef: ResponseChecksumValidationSuccessTest,
+        context: ClientCodegenContext,
+    ): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        val algoLower = testDef.checksumAlgorithm.lowercase()
+        return writable {
+            rustTemplate(
+                """
+                //${testDef.docs}
+                ##[::tokio::test]
+                async fn ${algoLower}_response_checksums_work() {
+                    let (http_client, _rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
+                            .body(SdkBody::from("${testDef.responsePayload}"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let res = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter."))
+                        .checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})
+                        .validation_mode($moduleName::types::ValidationMode::Enabled)
+                        .send()
+                        .await;
+                    assert!(res.is_ok())
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
 }
 
 data class RequestChecksumCalculationTest(
@@ -258,6 +270,47 @@ data class RequestChecksumCalculationTest(
     val checksumHeader: String,
 )
 
+val checksumRequestTests =
+    listOf(
+        RequestChecksumCalculationTest(
+            "CRC32 checksum calculation works.",
+            "Hello world",
+            "Crc32",
+            "CRC32",
+            "i9aeUg==",
+        ),
+        RequestChecksumCalculationTest(
+            "CRC32C checksum calculation works.",
+            "Hello world",
+            "Crc32C",
+            "CRC32C",
+            "crUfeA==",
+        ),
+        /* We do not yet support Crc64Nvme checksums
+         RequestChecksumCalculationTest(
+         "CRC64NVME checksum calculation works.",
+         "Hello world",
+         "Crc64Nvme",
+         "CRC64NVME",
+         "uc8X9yrZrD4=",
+         ),
+         */
+        RequestChecksumCalculationTest(
+            "SHA1 checksum calculation works.",
+            "Hello world",
+            "Sha1",
+            "SHA1",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+        ),
+        RequestChecksumCalculationTest(
+            "SHA256 checksum calculation works.",
+            "Hello world",
+            "Sha256",
+            "SHA256",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+        ),
+    )
+
 data class StreamingRequestChecksumCalculationTest(
     val docs: String,
     val requestPayload: String,
@@ -267,17 +320,53 @@ data class StreamingRequestChecksumCalculationTest(
     val trailerChecksum: String,
 )
 
-data class ResponseChecksumValidationTest(
+data class ResponseChecksumValidationSuccessTest(
+    val docs: String,
+    val responsePayload: String,
+    val checksumAlgorithm: String,
+    val checksumHeaderValue: String,
+)
+
+val checksumResponseSuccTests =
+    listOf(
+        ResponseChecksumValidationSuccessTest(
+            "Successful payload validation with CRC32 checksum.",
+            "Hello world",
+            "Crc32",
+            "i9aeUg==",
+        ),
+        ResponseChecksumValidationSuccessTest(
+            "Successful payload validation with Crc32C checksum.",
+            "Hello world",
+            "Crc32C",
+            "crUfeA==",
+        ),
+    /*
+    ResponseChecksumValidationSuccessTest(
+        "Successful payload validation with Crc64Nvme checksum.",
+        "Hello world",
+        "Crc64Nvme",
+        "uc8X9yrZrD4=",
+    ),*/
+        ResponseChecksumValidationSuccessTest(
+            "Successful payload validation with Sha1 checksum.",
+            "Hello world",
+            "Sha1",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+        ),
+        ResponseChecksumValidationSuccessTest(
+            "Successful payload validation with Sha256 checksum.",
+            "Hello world",
+            "Sha256",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+        ),
+    )
+
+data class ResponseChecksumValidationFailureTest(
     val docs: String,
     val responsePayload: String,
     val checksumAlgorithm: String,
     val algoHeader: String,
     val checksumHeader: String,
-    val validationType: TestResult,
+    val calculatedChecksum: String,
 )
-
-sealed class TestResult
-
-object ResponseChecksumValidationTestSuccess : TestResult()
-
-data class ResponseChecksumValidationTestFailure(val calculatedChecksum: String) : TestResult()
