@@ -78,7 +78,9 @@ pub mod compress {
             }
 
             fn size_hint(&self) -> SizeHint {
-                self.body.size_hint()
+                // We can't return a hint because we don't know exactly how
+                // compression will affect the content length
+                SizeHint::default()
             }
         }
     }
@@ -125,7 +127,9 @@ pub mod compress {
             }
 
             fn size_hint(&self) -> SizeHint {
-                self.body.size_hint()
+                // We can't return a hint because we don't know exactly how
+                // compression will affect the content length
+                SizeHint::default()
             }
         }
     }

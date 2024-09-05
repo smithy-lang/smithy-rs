@@ -135,7 +135,7 @@ impl Intercept for RequestCompressionInterceptor {
                 );
                 return Ok(());
             }
-            tracing::trace!("compressing non-streaming request body...")
+            tracing::trace!("compressing non-streaming request body...");
         } else {
             tracing::trace!("compressing streaming request body...");
         }

@@ -154,7 +154,7 @@ class HttpRequestCompressionDecoratorTest {
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -175,7 +175,7 @@ class HttpRequestCompressionDecoratorTest {
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -194,10 +194,15 @@ class HttpRequestCompressionDecoratorTest {
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
+                        if let Some(content_length) = request.headers().get("content-length").and_then(|len| len.parse::<usize>().ok()) {
+                            if content_length == UNCOMPRESSED_INPUT.len() {
+                                panic!("`content-length` was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload");
+                            }
+                        }
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was compressed
-                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice())
+                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -219,7 +224,7 @@ class HttpRequestCompressionDecoratorTest {
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -237,10 +242,15 @@ class HttpRequestCompressionDecoratorTest {
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
+                        if let Some(content_length) = request.headers().get("content-length").and_then(|len| len.parse::<usize>().ok()) {
+                            if content_length == UNCOMPRESSED_INPUT.len() {
+                                panic!("`content-length` was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload");
+                            }
+                        }
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was compressed
-                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice())
+                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -261,7 +271,7 @@ class HttpRequestCompressionDecoratorTest {
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -304,6 +314,7 @@ class HttpRequestCompressionDecoratorTest {
                             // Assert input body was compressed
                             assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
+
                     """,
                     *preludeScope,
                     "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
