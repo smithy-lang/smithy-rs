@@ -139,6 +139,7 @@ fun codegenIntegrationTest(
     model: Model,
     params: IntegrationTestParams,
     invokePlugin: (PluginContext) -> Unit,
+    environment: Map<String, String> = mapOf(),
 ): Path {
     val (ctx, testDir) =
         generatePluginContext(
@@ -156,7 +157,7 @@ fun codegenIntegrationTest(
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
     val logger = Logger.getLogger("CodegenIntegrationTest")
-    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir)
+    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir, environment = environment)
     logger.fine(out.toString())
     return testDir
 }
