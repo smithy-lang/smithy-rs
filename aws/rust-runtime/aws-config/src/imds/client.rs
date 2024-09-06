@@ -89,7 +89,7 @@ fn user_agent() -> AwsUserAgent {
 /// use aws_config::imds::client::Client;
 /// # async fn docs() {
 /// let client = Client::builder()
-///   .endpoint("http://customidms:456/").expect("valid URI")
+///   .endpoint("http://customimds:456/").expect("valid URI")
 ///   .build();
 /// # }
 /// ```
