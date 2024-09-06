@@ -13,7 +13,7 @@ use aws_smithy_http_server::{
     response::IntoResponse,
 };
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
-use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
+use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*};
 use thiserror::Error;
 
 /// Python error that implements foreign errors.
