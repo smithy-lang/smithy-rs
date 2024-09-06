@@ -6,8 +6,15 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
+import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.traits.DefaultTrait
+import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -33,6 +40,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import kotlin.jvm.optionals.getOrNull
+import kotlin.streams.asSequence
 
 internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
@@ -86,20 +94,27 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
             )
         }
 
-//    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
-//        ModelTransformer.create().mapShapes(model) { shape ->
-//            shape.letIf(isChecksumAlgoRequestMember(shape)) {
-//                // Update the default on the CreateMPURequest shape
-//                (shape as MemberShape).toBuilder().addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
-//            }
-//        }
-//
-//
-//    private fun isChecksumAlgoRequestMember(service: ServiceShape, currentShape: Shape): Boolean {
-//        val checksumTrait = currentShape.getTrait<HttpChecksumTrait>() ?: return false
-//
-//        return true
-//    }
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model {
+        val defaultAlgorithm = "CRC32"
+        val updates = arrayListOf<Shape>()
+
+        model.shapes()
+            .asSequence()
+            .mapNotNull { shape ->
+                val trait = shape.getTrait<HttpChecksumTrait>() ?: return@mapNotNull null
+                val requestAlgorithmMember = trait.requestAlgorithmMember.orNull() ?: return@mapNotNull null
+
+                // Shape is operationShape since it has the checksum trait
+                (shape as OperationShape).inputShape(model).expectMember(requestAlgorithmMember).toBuilder()
+                    .addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
+            }.toCollection(updates)
+
+        return ModelTransformer.create().replaceShapes(model, updates)
+    }
 }
 
 /**
