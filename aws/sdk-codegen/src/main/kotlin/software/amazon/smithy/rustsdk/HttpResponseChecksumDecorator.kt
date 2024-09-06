@@ -221,7 +221,7 @@ class HttpResponseChecksumConfigCustomization(private val codegenContext: Client
                     rustTemplate(
                         """
                         /// Set the [`ResponseChecksumValidation`](#{ResponseChecksumValidation})
-                        /// to configure checksum behavior.
+                        /// to determine when checksum validation will be performed on response payloads.
                         pub fn response_checksum_validation(
                             mut self,
                             response_checksum_validation: #{ResponseChecksumValidation}
@@ -236,7 +236,7 @@ class HttpResponseChecksumConfigCustomization(private val codegenContext: Client
                     rustTemplate(
                         """
                         /// Set the [`ResponseChecksumValidation`](#{ResponseChecksumValidation})
-                        /// to configure checksum behavior.
+                        /// to determine when checksum validation will be performed on response payloads.
                         pub fn set_response_checksum_validation(
                             &mut self,
                             response_checksum_validation: #{Option}<#{ResponseChecksumValidation}>

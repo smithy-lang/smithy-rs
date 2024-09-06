@@ -94,6 +94,10 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
             )
         }
 
+    /**
+     * Add default value of `CRC32` to the `requestAlgorithmMember` shape of all operation inputs that have the
+     * `httpChecksumTrait` with a non-null requestAlgorithmMember`
+     */
     override fun transformModel(
         service: ServiceShape,
         model: Model,
@@ -271,7 +275,7 @@ class HttpRequestChecksumConfigCustomization(private val codegenContext: ClientC
                     rustTemplate(
                         """
                         /// Set the [`RequestChecksumCalculation`](#{RequestChecksumCalculation})
-                        /// to configure checksum behavior.
+                        /// to determine when a checksum will be calculated for request payloads.
                         pub fn request_checksum_calculation(
                             mut self,
                             request_checksum_calculation: #{RequestChecksumCalculation}
@@ -286,7 +290,7 @@ class HttpRequestChecksumConfigCustomization(private val codegenContext: ClientC
                     rustTemplate(
                         """
                         /// Set the [`RequestChecksumCalculation`](#{RequestChecksumCalculation})
-                        /// to configure checksum behavior.
+                        /// to determine when a checksum will be calculated for request payloads.
                         pub fn set_request_checksum_calculation(
                             &mut self,
                             request_checksum_calculation: #{Option}<#{RequestChecksumCalculation}>
