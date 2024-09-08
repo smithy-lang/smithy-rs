@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -140,9 +141,24 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         RuntimeType.cborErrors(runtimeConfig).resolve("parse_error_metadata")
 
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        TODO("rpcv2Cbor event streams have not yet been implemented")
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            // `HeaderMap::new()` doesn't allocate.
+            rustTemplate(
+                """
+                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{DeserializeError}> {
+                    #{cbor_errors}::parse_error_metadata(0, &#{Headers}::new(), payload)
+                }
+                """,
+                "cbor_errors" to RuntimeType.cborErrors(runtimeConfig),
+                "Bytes" to RuntimeType.Bytes,
+                "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+                "DeserializeError" to
+                    CargoDependency.smithyCbor(runtimeConfig).toType()
+                        .resolve("decode::DeserializeError"),
+                "Headers" to RuntimeType.headers(runtimeConfig),
+            )
+        }
 
     // Unlike other protocols, the `rpcv2Cbor` protocol requires that `Content-Length` is always set
     // unless there is no input or if the operation is an event stream, see
