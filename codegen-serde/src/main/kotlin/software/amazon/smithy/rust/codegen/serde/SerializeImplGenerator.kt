@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
@@ -209,12 +211,41 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
      */
     private fun serializeNumber(shape: NumberShape): RuntimeType {
         val numericType = SimpleShapes.getValue(shape::class)
+        return when (shape) {
+            is FloatShape, is DoubleShape -> serializeFloat(shape)
+            else ->
+                RuntimeType.forInlineFun(
+                    numericType.toString(),
+                    PrimitiveShapesModule,
+                ) {
+                    implSerializeConfigured(symbolBuilder(shape, numericType).build()) {
+                        rustTemplate("self.value.serialize(serializer)")
+                    }
+                }
+        }
+    }
+
+    private fun serializeFloat(shape: NumberShape): RuntimeType {
+        val numericType = SimpleShapes.getValue(shape::class)
         return RuntimeType.forInlineFun(
             numericType.toString(),
             PrimitiveShapesModule,
         ) {
             implSerializeConfigured(symbolBuilder(shape, numericType).build()) {
-                rustTemplate("self.value.serialize(serializer)")
+                rustTemplate(
+                    """
+                    if self.value.is_nan() {
+                        serializer.serialize_str("NaN")
+                    } else if *self.value == #{ty}::INFINITY {
+                        serializer.serialize_str("Infinity")
+                    } else if *self.value == #{ty}::NEG_INFINITY {
+                        serializer.serialize_str("-Infinity")
+                    } else {
+                        self.value.serialize(serializer)
+                    }
+                    """,
+                    "ty" to numericType,
+                )
             }
         }
     }
