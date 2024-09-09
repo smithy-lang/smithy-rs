@@ -116,6 +116,7 @@ class HttpResponseChecksumCustomization(
 ) : OperationCustomization() {
     override fun section(section: OperationSection): Writable =
         writable {
+            // Return early if this operation lacks the `httpChecksum` trait or that trait lacks a `requestValidationModeMember`
             val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
             val requestValidationModeMember =
                 checksumTrait.requestValidationModeMember(codegenContext, operationShape) ?: return@writable

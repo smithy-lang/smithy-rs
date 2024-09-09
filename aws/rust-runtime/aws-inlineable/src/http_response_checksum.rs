@@ -83,7 +83,6 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        println!("LNJ INSIDE RESPONSE CHECKSUM INTERCEPTOR");
         let state = cfg
             .load::<ResponseChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
@@ -107,16 +106,13 @@ where
         };
 
         if validation_enabled {
-            println!("LNJ INSIDE VALIDATION ENABLED");
             let response = context.response_mut();
             let maybe_checksum_headers = check_headers_for_precalculated_checksum(
                 response.headers(),
                 self.response_algorithms,
             );
 
-            println!("LNJ maybe_checksum_headers {maybe_checksum_headers:#?}");
             if let Some((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
-                println!("LNJ WRAPPING BODY");
                 let mut body = SdkBody::taken();
                 mem::swap(&mut body, response.body_mut());
 
@@ -159,7 +155,6 @@ pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &Headers,
     response_algorithms: &[&str],
 ) -> Option<(ChecksumAlgorithm, bytes::Bytes)> {
-    println!("LNJ CHECKING HEADERS: {headers:#?} and ALGOS: {response_algorithms:#?}");
     let checksum_algorithms_to_check =
         aws_smithy_checksums::http::CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
             .into_iter()

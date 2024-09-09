@@ -127,12 +127,6 @@ internal class HttpChecksumTest {
             """.asSmithyModel()
     }
 
-//    private val codegenContext = testClientCodegenContext(model)
-//    private val symbolProvider = codegenContext.symbolProvider
-//    private val operationShape = model.lookup<ServiceShape>("com.test#TestService")
-
-    // TODO(flexibleChecksums): We can remove the explicit setting of .checksum_algorithm for crc32 when modeled defaults
-    //  for enums work.
     @Test
     fun requestChecksumWorks() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
@@ -192,6 +186,13 @@ internal class HttpChecksumTest {
         val rc = context.runtimeConfig
         val moduleName = context.moduleUseName()
         val algoLower = testDef.checksumAlgorithm.lowercase()
+        // If the algo is Crc32 don't explicitly set it to test that the default is correctly set
+        val setChecksumAlgo =
+            if (testDef.checksumAlgorithm != "Crc32") {
+                ".checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})"
+            } else {
+                ""
+            }
         return writable {
             rustTemplate(
                 """
@@ -208,7 +209,7 @@ internal class HttpChecksumTest {
                     let client = $moduleName::Client::from_conf(config);
                     let _ = client.some_operation()
                     .body(Blob::new(b"${testDef.requestPayload}"))
-                    .checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})
+                    $setChecksumAlgo
                     .send()
                     .await;
                     let request = rx.expect_request();
@@ -467,14 +468,14 @@ val checksumResponseFailTests =
             "bm90LWEtY2hlY2tzdW0=",
             "crUfeA==",
         ),
-    /*
-    ResponseChecksumValidationFailureTest(
-        "Failed payload validation with CRC64NVME checksum.",
-        "Hello world",
-        "Crc64Nvme",
-        "bm90LWEtY2hlY2tzdW0=",
-        "uc8X9yrZrD4=",
-    ),*/
+        /*
+        ResponseChecksumValidationFailureTest(
+            "Failed payload validation with CRC64NVME checksum.",
+            "Hello world",
+            "Crc64Nvme",
+            "bm90LWEtY2hlY2tzdW0=",
+            "uc8X9yrZrD4=",
+        ),*/
         ResponseChecksumValidationFailureTest(
             "Failed payload validation with SHA1 checksum.",
             "Hello world",

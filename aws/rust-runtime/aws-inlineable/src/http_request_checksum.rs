@@ -155,7 +155,7 @@ where
             .load::<RequestChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
 
-        // This value is from the trait, but is needed for runtimem logic
+        // This value is from the trait, but is needed for runtime logic
         let request_checksum_required = state.request_checksum_required;
 
         // This value is set by the user on the SdkConfig to indicate their preference
@@ -172,13 +172,13 @@ where
             RequestChecksumCalculation::WhenSupported | _ => true,
         };
 
-        // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
-        // If we have made it this far without a checksum being set we set the default as Crc32
-        let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg)
-            .unwrap_or(ChecksumAlgorithm::Crc32);
-
         // Calculate the checksum if necessary
         if calculate_checksum {
+            // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
+            // If we have made it this far without a checksum being set we set the default as Crc32
+            let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg)
+                .unwrap_or(ChecksumAlgorithm::Crc32);
+
             let request = context.request_mut();
             add_checksum_for_request_body(request, checksum_algorithm, cfg)?;
         }

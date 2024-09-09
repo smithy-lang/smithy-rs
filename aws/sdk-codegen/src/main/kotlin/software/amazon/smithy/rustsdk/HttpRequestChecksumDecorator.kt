@@ -196,6 +196,7 @@ class HttpRequestChecksumCustomization(
             val requestAlgorithmMember = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
             val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
             val requestChecksumRequired = checksumTrait.isRequestChecksumRequired
+            val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
 
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
@@ -223,6 +224,14 @@ class HttpRequestChecksumCustomization(
                                         codegenContext,
                                         operationShape,
                                     ),
+                            )
+                        }
+                        section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                            val interceptorName = "${operationName}HttpRequestChecksumMutationInterceptor"
+                            rustTemplate(
+                                """
+                                $interceptorName
+                                """,
                             )
                         }
                     }
