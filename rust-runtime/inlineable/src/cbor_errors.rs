@@ -46,7 +46,7 @@ pub fn parse_error_metadata(
                 // structures that might use different types for the message field.
                 match decoder.str() {
                     Ok(message) => builder.message(message),
-                    Err(_) => builder
+                    Err(_) => builder,
                 }
             }
             _ => {
