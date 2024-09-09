@@ -64,5 +64,5 @@ pub mod disable_request_compression;
 /// Default "request minimum compression size bytes" provider chain
 pub mod request_min_compression_size_bytes;
 
-/// Default "request checksum calculation" provider chain
+/// Default provider chains for request/response checksum configuration
 pub mod checksums;

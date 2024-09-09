@@ -6,15 +6,8 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
-import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.traits.DefaultTrait
-import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -40,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import kotlin.jvm.optionals.getOrNull
-import kotlin.streams.asSequence
 
 internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
@@ -93,32 +85,6 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
                 },
             )
         }
-
-    /**
-     * Add default value of `CRC32` to the `requestAlgorithmMember` shape of all operation inputs that have the
-     * `httpChecksumTrait` with a non-null requestAlgorithmMember`
-     */
-    override fun transformModel(
-        service: ServiceShape,
-        model: Model,
-        settings: ClientRustSettings,
-    ): Model {
-        val defaultAlgorithm = "CRC32"
-        val updates = arrayListOf<Shape>()
-
-        model.shapes()
-            .asSequence()
-            .mapNotNull { shape ->
-                val trait = shape.getTrait<HttpChecksumTrait>() ?: return@mapNotNull null
-                val requestAlgorithmMember = trait.requestAlgorithmMember.orNull() ?: return@mapNotNull null
-
-                // Shape is operationShape since it has the checksum trait
-                (shape as OperationShape).inputShape(model).expectMember(requestAlgorithmMember).toBuilder()
-                    .addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
-            }.toCollection(updates)
-
-        return ModelTransformer.create().replaceShapes(model, updates)
-    }
 }
 
 /**
@@ -155,7 +121,8 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
         }
 
-        // Parse the checksum_algorithm to a ChecksumAlgorithm enum
+        // Parse the checksum_algorithm type from the service's smithy model to a ChecksumAlgorithm enum from the
+        // aws_smithy_checksums crate.
         rustTemplate(
             """
             let checksum_algorithm = match checksum_algorithm {
