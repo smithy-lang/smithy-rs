@@ -25,19 +25,20 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /**
- * This class generates an interceptor for operations with the `httpChecksum` trait that support request checksums.
- * In the `modify_before_serialization` hook the interceptor checks the config's `request_checksum_calculation` value
- * and the trait's `requestChecksumRequired` value. If `request_checksum_calculation` is `WhenSupported` or it is
- * `WhenRequired` and `requestChecksumRequired` is `true` then we check the operation input's  `requestAlgorithmMember`.
- * If that is `None` (so has not been explicitly set by the user) we default it to `Crc32`.
+ * This class generates an interceptor for operations with the `httpChecksum` trait that support response validations.
+ * In the `modify_before_serialization` hook the interceptor checks the operation's `requestValidationModeMember`. If
+ * that member is `ENABLED` then we end early and do nothing. If it is not `ENABLED` then it checks the
+ * `response_checksum_validation` set by the user on the SdkConfig. If that is `WhenSupported` (or unknown) then we
+ * update the `requestValidationModeMember` to `ENABLED` and if the value is `WhenRequired` we end without modifying
+ * anything since there is no way to indicate that a response checksum is required.
  *
- * Note that although there is an existing inlineable `RequestChecksumInterceptor` this logic could not live there.
- * Since that interceptor is inlineable it does not have access to the name of the `requestAlgorithmMember` on the
- * operation's input or the `requestChecksumRequired` value from the trait, and in certain circumstances we need to
- * mutate that member on the input before serializing the request and sending it to the service.
+ * Note that although there is an existing inlineable `ResponseChecksumInterceptor` this logic could not live there.
+ * Since that interceptor is inlineable it does not have access to the name of the `requestValidationModeMember` on the
+ * operation's input, and in certain circumstances we need to mutate that member on the input before serializing the
+ * request and sending it to the service.
  */
-class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
-    override val name: String = "HttpRequestChecksumMutationInterceptorGenerator"
+class HttpResponseChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
+    override val name: String = "HttpResponseChecksumMutationInterceptorGenerator"
     override val order: Byte = 0
 
     override fun operationCustomizations(
@@ -48,15 +49,15 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
         // If the operation doesn't have the HttpChecksum trait we return early
         val checksumTrait = operation.getTrait<HttpChecksumTrait>() ?: return baseCustomizations
         // Also return early if there is no requestValidationModeMember on the trait
-        val requestAlgorithmMember =
-            (checksumTrait.requestAlgorithmMemberShape(codegenContext, operation) ?: return baseCustomizations)
+        val requestValidationModeMember =
+            (checksumTrait.requestValidationModeMemberShape(codegenContext, operation) ?: return baseCustomizations)
 
         return baseCustomizations +
             listOf(
                 InterceptorSection(
                     codegenContext,
                     operation,
-                    requestAlgorithmMember,
+                    requestValidationModeMember,
                     checksumTrait,
                 ),
             )
@@ -65,7 +66,7 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
     private class InterceptorSection(
         private val codegenContext: ClientCodegenContext,
         private val operation: OperationShape,
-        private val requestAlgorithmMember: MemberShape,
+        private val requestValidationModeMember: MemberShape,
         private val checksumTrait: HttpChecksumTrait,
     ) : OperationCustomization() {
         override fun section(section: OperationSection): Writable =
@@ -92,22 +93,22 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
                                 "Output" to interceptors.resolve("context::Output"),
                                 "Error" to interceptors.resolve("context::Error"),
                                 "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
-                                "RequestChecksumCalculation" to
+                                "ResponseChecksumValidation" to
                                     CargoDependency.smithyChecksums(rc).toType()
-                                        .resolve("RequestChecksumCalculation"),
+                                        .resolve("ResponseChecksumValidation"),
                             )
                         }
 
-                    val requestAlgorithmMemberInner =
-                        if (requestAlgorithmMember.isOptional) {
-                            codegenContext.model.expectShape(requestAlgorithmMember.target)
+                    val requestValidationModeName = symbolProvider.toSymbol(requestValidationModeMember).name
+                    val requestValidationModeMemberInner =
+                        if (requestValidationModeMember.isOptional) {
+                            codegenContext.model.expectShape(requestValidationModeMember.target)
                         } else {
-                            requestAlgorithmMember
+                            requestValidationModeMember
                         }
 
                     val operationName = symbolProvider.toSymbol(operation).name
-                    val interceptorName = "${operationName}HttpRequestChecksumMutationInterceptor"
-                    val requestChecksumRequired = checksumTrait.isRequestChecksumRequired
+                    val interceptorName = "${operationName}HttpResponseChecksumMutationInterceptor"
 
                     rustTemplate(
                         """
@@ -130,27 +131,24 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
                                     .downcast_mut::<#{OperationInputType}>()
                                     .ok_or("failed to downcast to #{OperationInputType}")?;
 
-                                // This value is set by the user on the SdkConfig to indicate their preference
-                                let request_checksum_calculation = cfg
-                                    .load::<#{RequestChecksumCalculation}>()
-                                    .unwrap_or(&#{RequestChecksumCalculation}::WhenSupported);
+                                let request_validation_enabled =
+                                    matches!(input.$requestValidationModeName(), Some(#{ValidationModeShape}::Enabled));
 
-                                // From the httpChecksum trait
-                                let http_checksum_required = $requestChecksumRequired;
+                                if !request_validation_enabled {
+                                    // This value is set by the user on the SdkConfig to indicate their preference
+                                    let response_checksum_validation = cfg
+                                        .load::<#{ResponseChecksumValidation}>()
+                                        .unwrap_or(&#{ResponseChecksumValidation}::WhenSupported);
 
-                                // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum we
-                                // default to Crc32. If it is WhenRequired and a checksum is required by the trait we also set the
-                                // default. In all other cases we do nothing.
-                                match (
-                                    request_checksum_calculation,
-                                    http_checksum_required,
-                                    input.checksum_algorithm(),
-                                ) {
-                                    (#{RequestChecksumCalculation}::WhenSupported, _, None)
-                                    | (#{RequestChecksumCalculation}::WhenRequired, true, None) => {
-                                        input.checksum_algorithm = Some(#{ChecksumAlgoShape}::Crc32);
+                                    // If validation setting is WhenSupported (or unknown) we enable response checksum
+                                    // validation. If it is WhenRequired we do not enable (since there is no way to
+                                    // indicate that a response checksum is required).
+                                    match response_checksum_validation {
+                                        #{ResponseChecksumValidation}::WhenRequired => {}
+                                        #{ResponseChecksumValidation}::WhenSupported | _ => {
+                                            input.$requestValidationModeName = Some(#{ValidationModeShape}::Enabled);
+                                        }
                                     }
-                                    _ => {},
                                 }
 
                                 #{Ok}(())
@@ -159,9 +157,9 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
                         """,
                         *codegenScope,
                         "OperationInputType" to codegenContext.symbolProvider.toSymbol(operation.inputShape(model)),
-                        "ChecksumAlgoShape" to
+                        "ValidationModeShape" to
                             codegenContext.symbolProvider.toSymbol(
-                                requestAlgorithmMemberInner,
+                                requestValidationModeMemberInner,
                             ),
                     )
                 }
@@ -170,13 +168,13 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
 }
 
 /**
- * Get the top-level operation input member used to opt-in to best-effort validation of a checksum returned in
+ * Get the top-level operation input member used to opt in to best-effort validation of a checksum returned in
  * the HTTP response of the operation.
  */
-fun HttpChecksumTrait.requestAlgorithmMemberShape(
+fun HttpChecksumTrait.requestValidationModeMemberShape(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
 ): MemberShape? {
-    val requestAlgorithmMember = this.requestAlgorithmMember.orNull() ?: return null
-    return operationShape.inputShape(codegenContext.model).expectMember(requestAlgorithmMember)
+    val requestValidationModeMember = this.requestValidationModeMember.orNull() ?: return null
+    return operationShape.inputShape(codegenContext.model).expectMember(requestValidationModeMember)
 }

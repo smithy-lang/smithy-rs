@@ -215,7 +215,5 @@ open class OperationGenerator(
 
         EndpointParamsInterceptorGenerator(codegenContext)
             .render(operationWriter, operationShape)
-
-        HttpResponseChecksumMutationInterceptorGenerator(codegenContext).render(operationWriter, operationShape)
     }
 }

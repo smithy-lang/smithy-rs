@@ -46,6 +46,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             HttpRequestChecksumDecorator(),
             HttpRequestChecksumMutationInterceptorGenerator(),
             HttpResponseChecksumDecorator(),
+            HttpResponseChecksumMutationInterceptorGenerator(),
             IntegrationTestDecorator(),
             AwsFluentClientDecorator(),
             CrateLicenseDecorator(),
