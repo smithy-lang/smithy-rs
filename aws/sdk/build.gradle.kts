@@ -463,52 +463,68 @@ tasks.register<Copy>("copyCheckedInCargoLock") {
 project.registerCargoCommandsTasks(outputDir.asFile)
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
-//The task name "test" is already registered by one of our plugins
+// The task name "test" is already registered by one of our plugins
 tasks.register("sdkTest") {
     description = "Run Cargo clippy/test/docs against the generated SDK."
     dependsOn("assemble")
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 }
 
-//Tasks for generating individual Cargo.lock files
-fun Project.registerLockfileGeneration(
+// Tasks for updating individual Cargo.lock files
+fun Project.registerCargoUpdateFor(
     dir: File,
     name: String,
 ): TaskProvider<Exec> {
-    return tasks.register<Exec>("generate${name}Lockfile") {
+    return tasks.register<Exec>("cargoUpdate${name}Lockfile") {
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "generate-lockfile")
+        commandLine("cargo", "update")
     }
 }
 
-val generateAwsConfigLockfile = registerLockfileGeneration(awsConfigPath, "AwsConfig")
-val generateAwsRuntimeLockfile = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
-val generateSmithytRuntimeLockfile = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
+val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig")
+val cargoUpdateAwsRuntimeLockfile = registerCargoUpdateFor(awsRustRuntimePath, "AwsRustRuntime")
+val cargoUpdateSmithyRuntimeLockfile = registerCargoUpdateFor(rustRuntimePath, "RustRuntime")
 
-//Generates a lockfile from the aws-sdk-rust repo and copies it into the smithy-rs repo
-val generateAwsSdkRustLockfile = tasks.register<Exec>("generateAwsSdkRustLockfile") {
-    val sdkRustPath: String =
-        properties.get("aws-sdk-rust-path") ?: throw Exception("A -Paws-sdk-rust-path argument must be specified")
-    workingDir(sdkRustPath)
+/**
+ * Updates the lockfile located in the `aws/sdk` directory.
+ *
+ * Previously, we would run `cargo generate-lockfile` in the `aws-sdk-rust` repository and then copy the resulting
+ * `Cargo.lock` into the `smithy-rs` repository. This approach introduced a delay, as new dependencies added to runtime
+ * crates would not be reflected in the SDK lockfile until the runtime crates were released to the `aws-sdk-rust`
+ * repository.
+ *
+ * We now generate a lockfile directly in `aws/sdk/build/aws-sdk`, which suffices for our CI/CD purposes, as it covers
+ * the crate dependencies used by the SDK:
+ * - Smithy runtime crates and inlineables
+ * - Smithy codegen decorators
+ * - Aws runtime crates and inlineables
+ * - Aws SDK codegen decorators
+ * - Service customizations (as long as we have their models in `aws/sdk/aws-models`)
+ */
+val cargoUpdateAwsSdkLockfile = tasks.register<Exec>("cargoUpdateAwsSdkLockfile") {
+    dependsOn("assemble")
+    workingDir(layout.buildDirectory.dir("aws-sdk"))
     environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-    commandLine("cargo", "generate-lockfile")
+    commandLine("cargo", "update")
+    delete(checkedInCargoLock)
     copy {
-        from("${sdkRustPath}/Cargo.lock")
+        from(layout.buildDirectory.file("aws-sdk/Cargo.lock"))
         into(rootProject.projectDir.resolve("aws/sdk"))
     }
 }
 
-//Parent task to generate all the Cargo.lock files
-tasks.register("generateAllLockfiles") {
-    description =
-        "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
-            "the assemble task."
+// Parent task to update all the Cargo.lock files
+tasks.register("cargoUpdateAllLockfiles") {
+    description = """
+        Update Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by the
+        assemble task.
+    """
     finalizedBy(
-        generateAwsSdkRustLockfile,
-        generateAwsConfigLockfile,
-        generateAwsRuntimeLockfile,
-        generateSmithytRuntimeLockfile,
+        cargoUpdateAwsSdkLockfile,
+        cargoUpdateAwsConfigLockfile,
+        cargoUpdateAwsRuntimeLockfile,
+        cargoUpdateSmithyRuntimeLockfile,
     )
 }
 
