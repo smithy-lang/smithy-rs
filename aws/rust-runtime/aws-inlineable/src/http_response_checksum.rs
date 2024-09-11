@@ -72,8 +72,6 @@ where
         layer.store_put(ResponseChecksumInterceptorState { validation_enabled });
         cfg.push_layer(layer);
 
-        // let req = context.input_mut().;
-
         Ok(())
     }
 

@@ -5,19 +5,20 @@
 
 package software.amazon.smithy.rustsdk.customize.s3
 
-import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.EnumShape
-import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.traits.DefaultTrait
-import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.util.letIf
-import java.util.logging.Logger
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.orNull
 
 /**
  * Add a default value to CreateMultiPartUploadRequest's ChecksumAlgorithm
@@ -25,30 +26,96 @@ import java.util.logging.Logger
 class S3MultiPartUploadDecorator : ClientCodegenDecorator {
     override val name: String = "S3MultiPartUpload"
     override val order: Byte = 0
-    private val logger: Logger = Logger.getLogger(javaClass.name)
     private val defaultAlgorithm = "CRC32"
-    private val targetEnumName = "ChecksumAlgorithm"
-    private val requestName = "CreateMultipartUploadRequest"
+
+    private val operationName = "CreateMultipartUpload"
     private val s3Namespace = "com.amazonaws.s3"
 
-    private fun isChecksumAlgorithm(shape: Shape): Boolean =
-        shape is EnumShape && shape.id == ShapeId.from("$s3Namespace#$targetEnumName")
+    private fun isS3MPUOperation(shape: Shape): Boolean =
+        shape is OperationShape && shape.id == ShapeId.from("$s3Namespace#$operationName")
 
-    private fun isChecksumAlgoRequestMember(shape: Shape): Boolean =
-        shape is MemberShape && shape.id == ShapeId.from("$s3Namespace#$requestName$$targetEnumName")
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
+        if (isS3MPUOperation(operation)) {
+            baseCustomizations + listOf(S3MPUChecksumCustomization(codegenContext, operation))
+        } else {
+            baseCustomizations
+        }
+}
 
-    override fun transformModel(
-        service: ServiceShape,
-        model: Model,
-        settings: ClientRustSettings,
-    ): Model =
-        ModelTransformer.create().mapShapes(model) { shape ->
-            shape.letIf(isChecksumAlgorithm(shape)) {
-                // Update root checksum algo enum with a default
-                (shape as EnumShape).toBuilder().addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
-            }.letIf(isChecksumAlgoRequestMember(shape)) {
-                // Update the default on the CreateMPURequest shape
-                (shape as MemberShape).toBuilder().addTrait(DefaultTrait(Node.from(defaultAlgorithm))).build()
+/**
+ * S3 CreateMPU is not modeled with the httpChecksum trait so the checksum_algorithm
+ * value must be defaulted here in an interceptor.
+ */
+private class S3MPUChecksumCustomization(
+    private val codegenContext: ClientCodegenContext,
+    private val operation: OperationShape,
+) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable =
+        writable {
+            val targetEnumName = "ChecksumAlgorithm"
+            val interceptorName = "S3CreateMultipartUploadInterceptor"
+            val rc = codegenContext.runtimeConfig
+            val checksumAlgoShape =
+                operation.inputShape(codegenContext.model).getMember(targetEnumName).orNull() ?: return@writable
+            val checksumAlgoInner = codegenContext.model.expectShape(checksumAlgoShape.target)
+            if (section is OperationSection.AdditionalInterceptors) {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    rust(interceptorName)
+                }
+            }
+            if (section is OperationSection.RuntimePluginSupportingTypes) {
+//                section.defineType(this) {
+                rustTemplate(
+                    """
+                    ##[derive(Debug)]
+                    struct $interceptorName;
+
+                    impl #{Intercept}
+                        for $interceptorName
+                    {
+                        fn name(&self) -> &'static str {
+                            "$interceptorName"
+                        }
+
+                        fn modify_before_serialization(
+                            &self,
+                            context: &mut #{Context},
+                            _runtime_components: &#{RuntimeComponents},
+                            _cfg: &mut #{ConfigBag},
+                        ) -> Result<(), #{BoxError}> {
+                            let input = context
+                                .input_mut()
+                                .downcast_mut::<#{OperationInputType}>()
+                                .expect("Input should be for S3 CreateMultipartUpload");
+
+                            // S3 CreateMPU is not modeled with the httpChecksum trait so the checksum_algorithm
+                            // value must be defaulted here.
+                            if input.checksum_algorithm.is_none() {
+                                input.checksum_algorithm = Some(#{ChecksumAlgo}::Crc32)
+                            }
+
+                            Ok(())
+                        }
+                    }
+                    """.trimIndent(),
+                    "BoxError" to RuntimeType.boxError(rc),
+                    "ConfigBag" to RuntimeType.configBag(rc),
+                    "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
+                    "Context" to RuntimeType.beforeSerializationInterceptorContextMut(rc),
+                    "Intercept" to RuntimeType.intercept(rc),
+                    "OperationInputType" to
+                        codegenContext.symbolProvider.toSymbol(
+                            operation.inputShape(
+                                codegenContext.model,
+                            ),
+                        ),
+                    "ChecksumAlgo" to codegenContext.symbolProvider.toSymbol(checksumAlgoInner),
+                )
+//                }
             }
         }
 }
