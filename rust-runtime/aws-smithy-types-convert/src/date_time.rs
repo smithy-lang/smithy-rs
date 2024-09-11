@@ -102,7 +102,37 @@ let date_time: DateTime = DateTime::from_chrono_utc(chrono_date_time);
 ```
 "##
 )]
+#[cfg_attr(
+    feature = "convert-jiff",
+    doc = r##"
+# Example with `jiff`
+
+Make sure your **Cargo.toml** enables the `convert-jiff` feature:
+```toml
+[dependencies]
+aws-smithy-types-convert = { version = "VERSION", features = ["convert-jiff"] }
+```
+
+Then import [`DateTimeExt`] to use the conversions:
+```rust
+# use aws_smithy_types::DateTime;
+use aws_smithy_types_convert::date_time::DateTimeExt;
+use jiff::Timestamp;
+
+let jiff_timestamp: jiff::Timestamp = DateTime::from_secs(5).to_jiff_timestamp().unwrap();
+let date_time: DateTime = DateTime::from_jiff_timestamp(jiff_timestamp);
+```
+"##
+)]
 pub trait DateTimeExt {
+    /// Converts a [`DateTime`] to a [`jiff::Timestamp`].
+    #[cfg(feature = "convert-jiff")]
+    fn to_jiff_timestamp(&self) -> Result<jiff::Timestamp, Error>;
+
+    /// Converts a [`jiff::Timestamp`] to a [`DateTime`].
+    #[cfg(feature = "convert-jiff")]
+    fn from_jiff_timestamp(timestamp: jiff::Timestamp) -> DateTime;
+
     /// Converts a [`DateTime`] to a [`chrono::DateTime`] with timezone UTC.
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> Result<chrono::DateTime<chrono::Utc>, Error>;
@@ -128,6 +158,23 @@ pub trait DateTimeExt {
 }
 
 impl DateTimeExt for DateTime {
+    #[cfg(feature = "convert-jiff")]
+    fn to_jiff_timestamp(&self) -> Result<jiff::Timestamp, Error> {
+        jiff::Timestamp::new(self.secs(), self.subsec_nanos() as i32).map_err(|err| {
+            Error::out_of_range(format!(
+                "out-of-range seconds {} or invalid nanoseconds {}: {}",
+                self.secs(),
+                self.subsec_nanos(),
+                err
+            ))
+        })
+    }
+
+    #[cfg(feature = "convert-jiff")]
+    fn from_jiff_timestamp(timestamp: jiff::Timestamp) -> DateTime {
+        DateTime::from_secs_and_nanos(timestamp.as_second(), timestamp.subsec_nanosecond() as u32)
+    }
+
     #[cfg(feature = "convert-chrono")]
     fn to_chrono_utc(&self) -> Result<chrono::DateTime<chrono::Utc>, Error> {
         match chrono::DateTime::from_timestamp(self.secs(), self.subsec_nanos()) {

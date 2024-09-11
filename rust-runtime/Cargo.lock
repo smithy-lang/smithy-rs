@@ -794,6 +794,7 @@ dependencies = [
  "aws-smithy-types 1.2.6",
  "chrono",
  "futures-core",
+ "jiff",
  "time",
 ]
 
@@ -2063,6 +2064,12 @@ name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
+
+[[package]]
+name = "jiff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a45489186a6123c128fdf6016183fcfab7113e1820eb813127e036e287233fb"
 
 [[package]]
 name = "jobserver"
