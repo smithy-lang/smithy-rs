@@ -68,7 +68,6 @@ private class S3MPUChecksumCustomization(
                 }
             }
             if (section is OperationSection.RuntimePluginSupportingTypes) {
-//                section.defineType(this) {
                 rustTemplate(
                     """
                     ##[derive(Debug)]
@@ -115,7 +114,6 @@ private class S3MPUChecksumCustomization(
                         ),
                     "ChecksumAlgo" to codegenContext.symbolProvider.toSymbol(checksumAlgoInner),
                 )
-//                }
             }
         }
 }
