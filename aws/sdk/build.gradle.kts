@@ -563,6 +563,29 @@ val cargoUpdateAwsSdkLockfile = tasks.register<Exec>("cargoUpdateAwsSdkLockfile"
     )
 }
 
+tasks.register<Exec>("syncAwsSdkLockfile") {
+    description = """
+       Synchronize the SDK lockfile to ensure that it includes all dependencies specified in runtime lockfiles.
+    """
+    dependsOn("assemble")
+    workingDir(outputDir)
+    environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+    // Using `cargo generate-lockfile` or `cargo update` is not suitable here, as they update dependencies to their
+    // latest versions. Instead, we need to preserve the existing dependencies in the SDK lockfile while incorporating
+    // new dependencies introduced by runtime crates. This can be achieved by running `cargo check` with the lockfile
+    // copied to the `aws/sdk/build/aws-sdk` directory.
+    commandLine("cargo", "check", "--all-features")
+    doLast {
+        // We avoid using `replaceCheckedInSdkLockfile` in favor of `copy` to prevent dependency on
+        // `downgradeAwsSdkLockfile`. Downgrading dependencies is unnecessary when synchronizing the SDK lockfile with
+        // runtime lockfiles.
+        copy {
+            from(generatedSdkLockfile)
+            into(awsSdkPath)
+        }
+    }
+}
+
 // Parent task to update all the Cargo.lock files
 tasks.register("cargoUpdateAllLockfiles") {
     description = """
