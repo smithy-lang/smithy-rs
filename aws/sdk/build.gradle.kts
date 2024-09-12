@@ -39,10 +39,12 @@ val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-ve
 val awsConfigPath = rootProject.projectDir.resolve("aws/rust-runtime/aws-config")
 val rustRuntimePath = rootProject.projectDir.resolve("rust-runtime")
 val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
-val checkedInCargoLock = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
+val awsSdkPath = rootProject.projectDir.resolve("aws/sdk")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
+val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
+val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
 
 dependencies {
@@ -449,15 +451,24 @@ tasks["assemble"].apply {
         "hydrateReadme",
         "relocateChangelog",
     )
-    finalizedBy("copyCheckedInCargoLock")
+    finalizedBy("copyCheckedInSdkLockfile")
     outputs.upToDateWhen { false }
 }
 
-tasks.register<Copy>("copyCheckedInCargoLock") {
-    description = "Copy the checked in Cargo.lock file back to the build directory"
+tasks.register<Copy>("copyCheckedInSdkLockfile") {
+    description = "Copy the checked-in SDK lockfile to the build directory"
     this.outputs.upToDateWhen { false }
-    from(checkedInCargoLock)
+    from(checkedInSdkLockfile)
     into(outputDir)
+}
+
+tasks.register<Copy>("replaceCheckedInSdkLockfile") {
+    description = "Replace the checked-in SDK lockfile by copying the one in the build directory back to `aws/sdk`"
+    dependsOn("copyCheckedInSdkLockfile")
+    dependsOn("downgradeAwsSdkLockfile")
+    this.outputs.upToDateWhen { false }
+    from(generatedSdkLockfile)
+    into(awsSdkPath)
 }
 
 project.registerCargoCommandsTasks(outputDir.asFile)
@@ -470,6 +481,44 @@ tasks.register("sdkTest") {
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 }
 
+/**
+ * Generate tasks for pinning broken dependencies to bypass compatibility issues
+ *
+ * Some dependencies may have compatibility issues that prevent updating to the latest versions.
+ * In such cases, we pin these dependencies to the last known working versions.
+ *
+ * To update broken dependencies (maybe for CI/CD with the latest versions), run a task with the flag, e.g.,
+ * `./gradlew -Paws.sdk.force.update.broken.dependencies aws:sdk:cargoUpdateAllLockfiles`
+ */
+fun Project.registerDowngradeFor(
+    dir: File,
+    name: String,
+): TaskProvider<Exec> {
+    return tasks.register<Exec>("downgrade${name}Lockfile") {
+        onlyIf {
+            properties["aws.sdk.force.update.broken.dependencies"] == null
+        }
+        executable = "sh" // noop to avoid execCommand == null
+        doLast {
+            val crateNameToLastKnownWorkingVersions =
+                mapOf("minicbor" to "0.24.2")
+
+            crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
+                // doesn't matter even if the specified crate does not exist in the lockfile
+                exec {
+                    workingDir(dir)
+                    commandLine("sh", "-c", "cargo update $crate --precise $version || true")
+                }
+            }
+        }
+    }
+}
+
+val downgradeAwsConfigLockfile = registerDowngradeFor(awsConfigPath, "AwsConfig")
+val downgradeAwsRuntimeLockfile = registerDowngradeFor(awsRustRuntimePath, "AwsRustRuntime")
+val downgradeSmithyRuntimeLockfile = registerDowngradeFor(rustRuntimePath, "RustRuntime")
+val downgradeAwsSdkLockfile = registerDowngradeFor(outputDir.asFile, "AwsSdk")
+
 // Tasks for updating individual Cargo.lock files
 fun Project.registerCargoUpdateFor(
     dir: File,
@@ -479,6 +528,7 @@ fun Project.registerCargoUpdateFor(
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "update")
+        finalizedBy("downgrade${name}Lockfile")
     }
 }
 
@@ -504,14 +554,13 @@ val cargoUpdateSmithyRuntimeLockfile = registerCargoUpdateFor(rustRuntimePath, "
  */
 val cargoUpdateAwsSdkLockfile = tasks.register<Exec>("cargoUpdateAwsSdkLockfile") {
     dependsOn("assemble")
-    workingDir(layout.buildDirectory.dir("aws-sdk"))
+    workingDir(outputDir)
     environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
     commandLine("cargo", "update")
-    delete(checkedInCargoLock)
-    copy {
-        from(layout.buildDirectory.file("aws-sdk/Cargo.lock"))
-        into(rootProject.projectDir.resolve("aws/sdk"))
-    }
+    finalizedBy(
+        "downgradeAwsSdkLockfile",
+        "replaceCheckedInSdkLockfile",
+    )
 }
 
 // Parent task to update all the Cargo.lock files
