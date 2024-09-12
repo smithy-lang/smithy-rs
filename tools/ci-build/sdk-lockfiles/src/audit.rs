@@ -183,7 +183,7 @@ pub(super) fn audit(args: AuditArgs) -> Result<()> {
     } else {
         for (pkg, origin_lockfile) in uncovered {
             eprintln!(
-                "`{}` ({}), used by `{}`, is not contained in SDK lockfile!",
+                "`{}` ({}), used by `{}`, is not contained in the SDK lockfile!",
                 pkg.name.as_str(),
                 pkg.version,
                 origin_lockfile,
