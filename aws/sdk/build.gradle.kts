@@ -39,10 +39,12 @@ val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-ve
 val awsConfigPath = rootProject.projectDir.resolve("aws/rust-runtime/aws-config")
 val rustRuntimePath = rootProject.projectDir.resolve("rust-runtime")
 val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
-val checkedInCargoLock = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
+val awsSdkPath = rootProject.projectDir.resolve("aws/sdk")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
+val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
+val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
 
 dependencies {
@@ -449,66 +451,152 @@ tasks["assemble"].apply {
         "hydrateReadme",
         "relocateChangelog",
     )
-    finalizedBy("copyCheckedInCargoLock")
+    finalizedBy("copyCheckedInSdkLockfile")
     outputs.upToDateWhen { false }
 }
 
-tasks.register<Copy>("copyCheckedInCargoLock") {
-    description = "Copy the checked in Cargo.lock file back to the build directory"
+tasks.register<Copy>("copyCheckedInSdkLockfile") {
+    description = "Copy the checked-in SDK lockfile to the build directory"
     this.outputs.upToDateWhen { false }
-    from(checkedInCargoLock)
+    from(checkedInSdkLockfile)
     into(outputDir)
+}
+
+tasks.register<Copy>("replaceCheckedInSdkLockfile") {
+    description = "Replace the checked-in SDK lockfile by copying the one in the build directory back to `aws/sdk`"
+    dependsOn("copyCheckedInSdkLockfile")
+    dependsOn("downgradeAwsSdkLockfile")
+    this.outputs.upToDateWhen { false }
+    from(generatedSdkLockfile)
+    into(awsSdkPath)
 }
 
 project.registerCargoCommandsTasks(outputDir.asFile)
 project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
-//The task name "test" is already registered by one of our plugins
+// The task name "test" is already registered by one of our plugins
 tasks.register("sdkTest") {
     description = "Run Cargo clippy/test/docs against the generated SDK."
     dependsOn("assemble")
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 }
 
-//Tasks for generating individual Cargo.lock files
-fun Project.registerLockfileGeneration(
+/**
+ * Generate tasks for pinning broken dependencies to bypass compatibility issues
+ *
+ * Some dependencies may have compatibility issues that prevent updating to the latest versions.
+ * In such cases, we pin these dependencies to the last known working versions.
+ *
+ * To update broken dependencies (maybe for CI/CD with the latest versions), run a task with the flag, e.g.,
+ * `./gradlew -Paws.sdk.force.update.broken.dependencies aws:sdk:cargoUpdateAllLockfiles`
+ */
+fun Project.registerDowngradeFor(
     dir: File,
     name: String,
 ): TaskProvider<Exec> {
-    return tasks.register<Exec>("generate${name}Lockfile") {
+    return tasks.register<Exec>("downgrade${name}Lockfile") {
+        onlyIf {
+            properties["aws.sdk.force.update.broken.dependencies"] == null
+        }
+        executable = "sh" // noop to avoid execCommand == null
+        doLast {
+            val crateNameToLastKnownWorkingVersions =
+                mapOf("minicbor" to "0.24.2")
+
+            crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
+                // doesn't matter even if the specified crate does not exist in the lockfile
+                exec {
+                    workingDir(dir)
+                    commandLine("sh", "-c", "cargo update $crate --precise $version || true")
+                }
+            }
+        }
+    }
+}
+
+val downgradeAwsConfigLockfile = registerDowngradeFor(awsConfigPath, "AwsConfig")
+val downgradeAwsRuntimeLockfile = registerDowngradeFor(awsRustRuntimePath, "AwsRustRuntime")
+val downgradeSmithyRuntimeLockfile = registerDowngradeFor(rustRuntimePath, "RustRuntime")
+val downgradeAwsSdkLockfile = registerDowngradeFor(outputDir.asFile, "AwsSdk")
+
+// Tasks for updating individual Cargo.lock files
+fun Project.registerCargoUpdateFor(
+    dir: File,
+    name: String,
+): TaskProvider<Exec> {
+    return tasks.register<Exec>("cargoUpdate${name}Lockfile") {
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "generate-lockfile")
+        commandLine("cargo", "update")
+        finalizedBy("downgrade${name}Lockfile")
     }
 }
 
-val generateAwsConfigLockfile = registerLockfileGeneration(awsConfigPath, "AwsConfig")
-val generateAwsRuntimeLockfile = registerLockfileGeneration(awsRustRuntimePath, "AwsRustRuntime")
-val generateSmithytRuntimeLockfile = registerLockfileGeneration(rustRuntimePath, "RustRuntime")
+val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig")
+val cargoUpdateAwsRuntimeLockfile = registerCargoUpdateFor(awsRustRuntimePath, "AwsRustRuntime")
+val cargoUpdateSmithyRuntimeLockfile = registerCargoUpdateFor(rustRuntimePath, "RustRuntime")
 
-//Generates a lockfile from the aws-sdk-rust repo and copies it into the smithy-rs repo
-val generateAwsSdkRustLockfile = tasks.register<Exec>("generateAwsSdkRustLockfile") {
-    val sdkRustPath: String =
-        properties.get("aws-sdk-rust-path") ?: throw Exception("A -Paws-sdk-rust-path argument must be specified")
-    workingDir(sdkRustPath)
+/**
+ * Updates the lockfile located in the `aws/sdk` directory.
+ *
+ * Previously, we would run `cargo generate-lockfile` in the `aws-sdk-rust` repository and then copy the resulting
+ * `Cargo.lock` into the `smithy-rs` repository. This approach introduced a delay, as new dependencies added to runtime
+ * crates would not be reflected in the SDK lockfile until the runtime crates were released to the `aws-sdk-rust`
+ * repository.
+ *
+ * We now generate a lockfile directly in `aws/sdk/build/aws-sdk`, which suffices for our CI/CD purposes, as it covers
+ * the crate dependencies used by the SDK:
+ * - Smithy runtime crates and inlineables
+ * - Smithy codegen decorators
+ * - Aws runtime crates and inlineables
+ * - Aws SDK codegen decorators
+ * - Service customizations (as long as we have their models in `aws/sdk/aws-models`)
+ */
+val cargoUpdateAwsSdkLockfile = tasks.register<Exec>("cargoUpdateAwsSdkLockfile") {
+    dependsOn("assemble")
+    workingDir(outputDir)
     environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-    commandLine("cargo", "generate-lockfile")
-    copy {
-        from("${sdkRustPath}/Cargo.lock")
-        into(rootProject.projectDir.resolve("aws/sdk"))
+    commandLine("cargo", "update")
+    finalizedBy(
+        "downgradeAwsSdkLockfile",
+        "replaceCheckedInSdkLockfile",
+    )
+}
+
+tasks.register<Exec>("syncAwsSdkLockfile") {
+    description = """
+       Synchronize the SDK lockfile to ensure that it includes all dependencies specified in runtime lockfiles.
+    """
+    dependsOn("assemble")
+    workingDir(outputDir)
+    environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+    // Using `cargo generate-lockfile` or `cargo update` is not suitable here, as they update dependencies to their
+    // latest versions. Instead, we need to preserve the existing dependencies in the SDK lockfile while incorporating
+    // new dependencies introduced by runtime crates. This can be achieved by running `cargo check` with the lockfile
+    // copied to the `aws/sdk/build/aws-sdk` directory.
+    commandLine("cargo", "check", "--all-features")
+    doLast {
+        // We avoid using `replaceCheckedInSdkLockfile` in favor of `copy` to prevent dependency on
+        // `downgradeAwsSdkLockfile`. Downgrading dependencies is unnecessary when synchronizing the SDK lockfile with
+        // runtime lockfiles.
+        copy {
+            from(generatedSdkLockfile)
+            into(awsSdkPath)
+        }
     }
 }
 
-//Parent task to generate all the Cargo.lock files
-tasks.register("generateAllLockfiles") {
-    description =
-        "Create Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by" +
-            "the assemble task."
+// Parent task to update all the Cargo.lock files
+tasks.register("cargoUpdateAllLockfiles") {
+    description = """
+        Update Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by the
+        assemble task.
+    """
     finalizedBy(
-        generateAwsSdkRustLockfile,
-        generateAwsConfigLockfile,
-        generateAwsRuntimeLockfile,
-        generateSmithytRuntimeLockfile,
+        cargoUpdateAwsSdkLockfile,
+        cargoUpdateAwsConfigLockfile,
+        cargoUpdateAwsRuntimeLockfile,
+        cargoUpdateSmithyRuntimeLockfile,
     )
 }
 
