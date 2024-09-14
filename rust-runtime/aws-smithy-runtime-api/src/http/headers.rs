@@ -180,24 +180,25 @@ impl Headers {
 impl TryFrom<http_02x::HeaderMap> for Headers {
     type Error = HttpError;
 
+    /// This function attempts to parse header bytes as UTF-8. If that fails we
+    /// try to parse the header value as an ISO 8859 string. Our strategy for parsing
+    /// as 8859 is infallible since it casts each `u8` to a `char` which reinterprets
+    /// it as a UTF-8 codepoint. This works for all 256 possible values of `u8` and
+    /// leaves us with a UTF-8 `String` (with possibly different bytes than the ones
+    /// sent over the wire).
     fn try_from(value: http_02x::HeaderMap) -> Result<Self, Self::Error> {
-        if let Some(utf8_error) = value.iter().find_map(|(k, v)| {
-            std::str::from_utf8(v.as_bytes())
-                .err()
-                .map(|err| NonUtf8Header::new(k.as_str().to_owned(), v.as_bytes().to_vec(), err))
-        }) {
-            Err(HttpError::non_utf8_header(utf8_error))
-        } else {
-            let mut string_safe_headers: http_02x::HeaderMap<HeaderValue> = Default::default();
-            string_safe_headers.extend(
-                value
-                    .into_iter()
-                    .map(|(k, v)| (k, HeaderValue::from_http02x(v).expect("validated above"))),
+        let mut string_safe_headers: http_02x::HeaderMap<HeaderValue> = Default::default();
+        value.iter().for_each(|(k, v)| {
+            let new_value = HeaderValue::from_http02x(v.clone()).unwrap_or(
+                HeaderValue::from_str(iso_8859_to_string(v.as_bytes()).as_str())
+                    .expect("Header should be either UTF-8 or ISO 8859"),
             );
-            Ok(Headers {
-                headers: string_safe_headers,
-            })
-        }
+            string_safe_headers.insert(k, new_value);
+        });
+
+        Ok(Headers {
+            headers: string_safe_headers,
+        })
     }
 }
 
@@ -205,28 +206,28 @@ impl TryFrom<http_02x::HeaderMap> for Headers {
 impl TryFrom<http_1x::HeaderMap> for Headers {
     type Error = HttpError;
 
+    /// This function attempts to parse header bytes as UTF-8. If that fails we
+    /// try to parse the header value as an ISO 8859 string. Our strategy for parsing
+    /// as 8859 is infallible since it casts each `u8` to a `char` which reinterprets
+    /// it as a UTF-8 codepoint. This works for all 256 possible values of `u8` and
+    /// leaves us with a UTF-8 `String` (with possibly different bytes than the ones
+    /// sent over the wire).
     fn try_from(value: http_1x::HeaderMap) -> Result<Self, Self::Error> {
-        if let Some(utf8_error) = value.iter().find_map(|(k, v)| {
-            std::str::from_utf8(v.as_bytes())
-                .err()
-                .map(|err| NonUtf8Header::new(k.as_str().to_owned(), v.as_bytes().to_vec(), err))
-        }) {
-            Err(HttpError::non_utf8_header(utf8_error))
-        } else {
-            let mut string_safe_headers: http_02x::HeaderMap<HeaderValue> = Default::default();
-            string_safe_headers.extend(value.into_iter().map(|(k, v)| {
-                (
-                    k.map(|v| {
-                        http_02x::HeaderName::from_bytes(v.as_str().as_bytes())
-                            .expect("known valid")
-                    }),
-                    HeaderValue::from_http1x(v).expect("validated above"),
-                )
-            }));
-            Ok(Headers {
-                headers: string_safe_headers,
-            })
-        }
+        let mut string_safe_headers: http_02x::HeaderMap<HeaderValue> = Default::default();
+        value.iter().for_each(|(k, v)| {
+            let new_value = HeaderValue::from_http1x(v.clone()).unwrap_or(
+                HeaderValue::from_str(iso_8859_to_string(v.as_bytes()).as_str())
+                    .expect("Header should be either UTF-8 or ISO 8859"),
+            );
+            let new_key =
+                http_02x::HeaderName::from_bytes(k.as_str().as_bytes()).expect("known valid");
+
+            string_safe_headers.insert(new_key, new_value);
+        });
+
+        Ok(Headers {
+            headers: string_safe_headers,
+        })
     }
 }
 
@@ -465,6 +466,11 @@ fn header_value(value: MaybeStatic, panic_safe: bool) -> Result<HeaderValue, Htt
         }
     };
     HeaderValue::from_http02x(header)
+}
+
+/// Interpret each byte as a unicode codepoint and then build a `String` from these codepoints
+fn iso_8859_to_string(s: &[u8]) -> String {
+    s.iter().map(|&c| c as char).collect::<String>()
 }
 
 #[cfg(test)]
