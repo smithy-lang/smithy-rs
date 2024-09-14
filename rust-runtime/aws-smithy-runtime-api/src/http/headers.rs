@@ -555,6 +555,80 @@ mod tests {
             .is_err());
     }
 
+    #[test]
+    fn iso_8859_header_parses_correctly_from_http_1x() {
+        // Contains the ISO-8859 single byte multiplication symbol 215
+        let iso_8859_header_bytes: &[u8] = &[
+            105, 110, 108, 105, 110, 101, 59, 32, 102, 105, 108, 101, 110, 97, 109, 101, 61, 115,
+            97, 109, 112, 108, 101, 95, 54, 52, 48, 215, 52, 50, 54, 46, 106, 112, 101, 103,
+        ];
+
+        // This replaces the ISO-8859 single byte multiplication character with the two byte
+        // UTF-8 codepoint `[195, 151]` for the multiplication symbol
+        let utf8_header_bytes: &[u8] = &[
+            105, 110, 108, 105, 110, 101, 59, 32, 102, 105, 108, 101, 110, 97, 109, 101, 61, 115,
+            97, 109, 112, 108, 101, 95, 54, 52, 48, 195, 151, 52, 50, 54, 46, 106, 112, 101, 103,
+        ];
+
+        let mut http_1_headers = http_1x::HeaderMap::new();
+
+        let header_value =
+            http_1x::HeaderValue::from_bytes(iso_8859_header_bytes).expect("valid header bytes");
+        http_1_headers.insert("content-disposition", header_value);
+
+        let aws_headers = Headers::try_from(http_1_headers);
+
+        assert!(aws_headers.is_ok());
+
+        let aws_headers = aws_headers.unwrap();
+
+        let parsed_header_bytes = aws_headers
+            .headers
+            .get("content-disposition")
+            .unwrap()
+            .as_str()
+            .as_bytes();
+
+        assert_eq!(parsed_header_bytes, utf8_header_bytes);
+    }
+
+    #[test]
+    fn iso_8859_header_parses_correctly_from_http_02x() {
+        // Contains the ISO-8859 single byte multiplication symbol 215
+        let iso_8859_header_bytes: &[u8] = &[
+            105, 110, 108, 105, 110, 101, 59, 32, 102, 105, 108, 101, 110, 97, 109, 101, 61, 115,
+            97, 109, 112, 108, 101, 95, 54, 52, 48, 215, 52, 50, 54, 46, 106, 112, 101, 103,
+        ];
+
+        // This replaces the ISO-8859 single byte multiplication character with the two byte
+        // UTF-8 codepoint `[195, 151]` for the multiplication symbol
+        let utf8_header_bytes: &[u8] = &[
+            105, 110, 108, 105, 110, 101, 59, 32, 102, 105, 108, 101, 110, 97, 109, 101, 61, 115,
+            97, 109, 112, 108, 101, 95, 54, 52, 48, 195, 151, 52, 50, 54, 46, 106, 112, 101, 103,
+        ];
+
+        let mut http_02_headers = http_02x::HeaderMap::new();
+
+        let header_value =
+            http_02x::HeaderValue::from_bytes(iso_8859_header_bytes).expect("valid header bytes");
+        http_02_headers.insert("content-disposition", header_value);
+
+        let aws_headers = Headers::try_from(http_02_headers);
+
+        assert!(aws_headers.is_ok());
+
+        let aws_headers = aws_headers.unwrap();
+
+        let parsed_header_bytes = aws_headers
+            .headers
+            .get("content-disposition")
+            .unwrap()
+            .as_str()
+            .as_bytes();
+
+        assert_eq!(parsed_header_bytes, utf8_header_bytes);
+    }
+
     proptest::proptest! {
         #[test]
         fn insert_header_prop_test(input in ".*") {
