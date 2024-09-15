@@ -469,6 +469,7 @@ fn header_value(value: MaybeStatic, panic_safe: bool) -> Result<HeaderValue, Htt
 }
 
 /// Interpret each byte as a unicode codepoint and then build a `String` from these codepoints
+#[allow(dead_code)]
 fn iso_8859_to_string(s: &[u8]) -> String {
     s.iter().map(|&c| c as char).collect::<String>()
 }
