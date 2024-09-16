@@ -56,7 +56,7 @@ fn is_consumed_by_aws_sdk(
         return false;
     }
 
-    let dependencies = graph
+    let consumers = graph
         .edges_directed(
             node_index,
             cargo_lock::dependency::graph::EdgeDirection::Incoming,
@@ -64,14 +64,14 @@ fn is_consumed_by_aws_sdk(
         .map(|edge| edge.source())
         .collect::<Vec<_>>();
 
-    for dependency_node_index in dependencies.iter() {
-        let package = &graph[*dependency_node_index];
+    for consumer_node_index in consumers.iter() {
+        let package = &graph[*consumer_node_index];
         tracing::debug!("visiting `{}`", package.name.as_str());
         if new_dependency_for_aws_sdk(package.name.as_str()) {
             tracing::debug!("it's a new dependency for the AWS SDK!");
             return true;
         }
-        if is_consumed_by_aws_sdk(graph, *dependency_node_index, visited) {
+        if is_consumed_by_aws_sdk(graph, *consumer_node_index, visited) {
             return true;
         }
     }
