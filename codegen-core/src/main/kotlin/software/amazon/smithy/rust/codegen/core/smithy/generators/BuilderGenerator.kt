@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -91,7 +92,7 @@ fun MemberShape.enforceRequired(
     }
     val shape = this
     val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
-    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
+    val field = field.letIf(!isOptional) { it.map { t -> rust("Some(#T)", t) } }
     val error =
         OperationBuildError(codegenContext.runtimeConfig).missingField(
             codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
@@ -100,10 +101,7 @@ fun MemberShape.enforceRequired(
         when (codegenContext.model.expectShape(this.target)) {
             is StringShape ->
                 writable {
-                    rustTemplate(
-                        "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
-                        "field" to field,
-                    )
+                    rust("#T.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())", field)
                 }
 
             else -> field
@@ -221,7 +219,11 @@ class BuilderGenerator(
             implBlockWriter.docs("This method will fail if any of the following fields are not set:")
             trulyRequiredMembers.forEach {
                 val memberName = symbolProvider.toMemberName(it)
-                implBlockWriter.docs("- [`$memberName`](#T::$memberName)", symbolProvider.symbolForBuilder(shape))
+                implBlockWriter.docsTemplate(
+                    // We have to remove the `r##` prefix in the path b/c Rustdoc doesn't support it.
+                    "- [`$memberName`](#{struct}::${memberName.removePrefix("r##")})",
+                    "struct" to symbolProvider.symbolForBuilder(shape),
+                )
             }
         }
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
