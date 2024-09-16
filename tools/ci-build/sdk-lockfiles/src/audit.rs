@@ -16,7 +16,7 @@ use std::env;
 use std::iter;
 use std::path::PathBuf;
 
-// A list of AWS runtime crate must be in sync with
+// A list of the names of AWS runtime crates (crate versions do not need to match) must be in sync with
 // https://github.com/smithy-lang/smithy-rs/blob/0f9b9aba386ea3063912a0464ba6a1fd7c596018/buildSrc/src/main/kotlin/CrateSet.kt#L42-L53
 const AWS_SDK_RUNTIMES: &[&str] = &[
     "aws-config",
@@ -31,8 +31,8 @@ const AWS_SDK_RUNTIMES: &[&str] = &[
     "aws-types",
 ];
 
-// A list of server runtime crates must be in sync with
-// https://github.com/smithy-lang/smithy-rs/blob/0f9b9aba386ea3063912a0464ba6a1fd7c596018/buildSrc/src/main/kotlin/CrateSet.kt#L85-L87
+// A list of the names of server specific runtime crates (crate versions do not need to match) must be in sync with
+// https://github.com/smithy-lang/smithy-rs/blob/main/buildSrc/src/main/kotlin/CrateSet.kt#L42
 const SERVER_SPECIFIC_RUNTIMES: &[&str] = &[
     "aws-smithy-http-server",
     "aws-smithy-http-server-python",

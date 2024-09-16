@@ -39,6 +39,8 @@ object CrateSet {
         }
     }
 
+    // If we make changes to `AWS_SDK_RUNTIME`, also update the list in
+    // https://github.com/smithy-lang/smithy-rs/blob/main/tools/ci-build/sdk-lockfiles/src/audit.rs#L22
     val AWS_SDK_RUNTIME =
         listOf(
             "aws-config",
@@ -79,13 +81,16 @@ object CrateSet {
 
     val AWS_SDK_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON
 
-    val SERVER_SMITHY_RUNTIME =
-        SMITHY_RUNTIME_COMMON +
-            listOf(
-                Crate("aws-smithy-http-server", UNSTABLE_VERSION_PROP_NAME),
-                Crate("aws-smithy-http-server-python", UNSTABLE_VERSION_PROP_NAME),
-                Crate("aws-smithy-http-server-typescript", UNSTABLE_VERSION_PROP_NAME),
-            )
+    // If we make changes to `SERVER_SPECIFIC_SMITHY_RUNTIME`, also update the list in
+    // https://github.com/smithy-lang/smithy-rs/blob/main/tools/ci-build/sdk-lockfiles/src/audit.rs#L38
+    private val SERVER_SPECIFIC_SMITHY_RUNTIME =
+        listOf(
+            Crate("aws-smithy-http-server", UNSTABLE_VERSION_PROP_NAME),
+            Crate("aws-smithy-http-server-python", UNSTABLE_VERSION_PROP_NAME),
+            Crate("aws-smithy-http-server-typescript", UNSTABLE_VERSION_PROP_NAME),
+        )
+
+    val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + SERVER_SPECIFIC_SMITHY_RUNTIME
 
     val ENTIRE_SMITHY_RUNTIME = (AWS_SDK_SMITHY_RUNTIME + SERVER_SMITHY_RUNTIME).toSortedSet(compareBy { it.name })
 
