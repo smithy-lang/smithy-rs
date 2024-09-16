@@ -47,7 +47,11 @@ fn new_dependency_for_aws_sdk(crate_name: &str) -> bool {
 
 // Recursively traverses a chain of dependencies originating from a potential new dependency. Returns true as soon as
 // it encounters a crate name that matches a runtime crate used by the AWS SDK.
-fn visit(graph: &Graph, node_index: NodeIndex, visited: &mut BTreeSet<NodeIndex>) -> bool {
+fn is_consumed_by_aws_sdk(
+    graph: &Graph,
+    node_index: NodeIndex,
+    visited: &mut BTreeSet<NodeIndex>,
+) -> bool {
     if !visited.insert(node_index) {
         return false;
     }
@@ -67,7 +71,7 @@ fn visit(graph: &Graph, node_index: NodeIndex, visited: &mut BTreeSet<NodeIndex>
             tracing::debug!("it's a new dependency for the AWS SDK!");
             return true;
         }
-        if visit(graph, *dependency_node_index, visited) {
+        if is_consumed_by_aws_sdk(graph, *dependency_node_index, visited) {
             return true;
         }
     }
@@ -95,7 +99,7 @@ fn new_dependency(lockfile: &Lockfile, target: &str) -> bool {
     for index in &indices {
         let mut visited: BTreeSet<NodeIndex> = BTreeSet::new();
         tracing::debug!("traversing a dependency chain for `{}`...", target);
-        if visit(tree.graph(), *index, &mut visited) {
+        if is_consumed_by_aws_sdk(tree.graph(), *index, &mut visited) {
             return true;
         }
     }
