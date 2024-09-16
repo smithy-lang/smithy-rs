@@ -85,17 +85,12 @@ fn new_dependency(lockfile: &Lockfile, target: &str) -> bool {
             target
     );
     let tree = lockfile.dependency_tree().unwrap();
-    let indices: Vec<_> = [target.to_owned()]
+    let package = lockfile
+        .packages
         .iter()
-        .map(|dep| {
-            let package = lockfile
-                .packages
-                .iter()
-                .find(|pkg| pkg.name.as_str() == dep)
-                .unwrap();
-            tree.nodes()[&package.into()]
-        })
-        .collect();
+        .find(|pkg| pkg.name.as_str() == target)
+        .expect("{target} must be in dependencies listed in `lockfile`");
+    let indices = vec![tree.nodes()[&package.into()]];
 
     for index in &indices {
         let mut visited: BTreeSet<NodeIndex> = BTreeSet::new();
