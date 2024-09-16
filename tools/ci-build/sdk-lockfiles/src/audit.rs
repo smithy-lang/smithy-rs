@@ -18,14 +18,12 @@ use std::path::PathBuf;
 
 // A list of AWS runtime crate must be in sync with
 // https://github.com/smithy-lang/smithy-rs/blob/0f9b9aba386ea3063912a0464ba6a1fd7c596018/buildSrc/src/main/kotlin/CrateSet.kt#L42-L53
-// plus `aws-inlineable`
 const AWS_SDK_RUNTIMES: &[&str] = &[
     "aws-config",
     "aws-credential-types",
     "aws-endpoint",
     "aws-http",
     "aws-hyper",
-    "aws-inlineable",
     "aws-runtime",
     "aws-runtime-api",
     "aws-sig-auth",
@@ -43,7 +41,6 @@ const SERVER_SPECIFIC_RUNTIMES: &[&str] = &[
 
 fn new_dependency_for_aws_sdk(crate_name: &str) -> bool {
     AWS_SDK_RUNTIMES.contains(&crate_name)
-        || crate_name == "inlineable"
         || (crate_name.starts_with("aws-smithy-")
             && !SERVER_SPECIFIC_RUNTIMES.contains(&crate_name))
 }
@@ -307,17 +304,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "inlineable"
-version = "0.1.0"
+name = "aws-smithy-compression"
+version = "0.0.1"
 dependencies = [
- "md-5"
+ "flate2"
 ]
 
 [[package]]
-name = "md-5"
-version = "0.10.6"
+name = "flate2"
+version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
+checksum = "324a1be68054ef05ad64b861cc9eaf1d623d2d8cb25b4bf2cb9cdd902b4bf253"
 
 [[package]]
 name = "minicbor"
@@ -329,7 +326,7 @@ checksum = "5f8e213c36148d828083ae01948eed271d03f95f7e72571fa242d78184029af2"
             .unwrap();
 
             assert_eq!(
-                vec!["md-5", "minicbor"],
+                vec!["flate2", "minicbor"],
                 audit_runtime_lockfile_covered_by_sdk_lockfile(
                     &runtime_lockfile,
                     &sdk_dependency_set(),
@@ -352,18 +349,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-inlineable"
-version = "0.1.0"
-dependencies = [
- "ahash",
- "lru"
-]
-
-[[package]]
 name = "aws-sigv4"
 version = "1.2.3"
 dependencies = [
+ "ahash",
  "aws-credential-types",
+ "lru",
  "p256",
 ]
 
