@@ -11,8 +11,10 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
@@ -134,7 +136,7 @@ fun renderPrologue(
         they are disabled by default. To enable them, run the tests with
 
         ```sh
-        RUSTFLAGS="--cfg smoketests" cargo test.
+        RUSTFLAGS="--cfg smoketests" cargo test
         ```
         """,
     )
@@ -167,6 +169,17 @@ class SmokeTestsInstantiator(
     ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+    private val builtInParamNames: List<String> by lazy {
+        val index = EndpointRulesetIndex.of(codegenContext.model)
+        val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
+        val builtInParams: Parameters = (rulesOrNull?.parameters ?: Parameters.builder().build())
+        val temp: MutableList<String> = mutableListOf()
+        builtInParams.forEach { temp.add(it.builtIn.get()) }
+        temp
+    }
+    private val fipsName = "AWS::UseFIPS"
+    private val dualStackName = "AWS::UseDualStack"
+    private val rc = codegenContext.runtimeConfig
 
     fun render(
         writer: RustWriter,
@@ -191,9 +204,18 @@ class SmokeTestsInstantiator(
 
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
-            rust(".region(config::Region::new(${params.region.dq()}))")
-            rust(".use_dual_stack(${params.useDualstack()})")
-            rust(".use_fips(${params.useFips()})")
+            rustTemplate(
+                ".region(#{Region}::new(${params.region.dq()}))",
+                "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+            )
+
+            if (builtInParamNames.contains(dualStackName)) {
+                rust(".use_dual_stack(${params.useDualstack()})")
+            }
+            if (builtInParamNames.contains(fipsName)) {
+                rust(".use_fips(${params.useFips()})")
+            }
+
             params.uri.orNull()?.let { rust(".endpoint_url($it)") }
         }
 
