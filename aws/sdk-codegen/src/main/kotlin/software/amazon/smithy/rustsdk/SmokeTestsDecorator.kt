@@ -44,6 +44,7 @@ import software.amazon.smithy.smoketests.traits.SmokeTestCase
 import software.amazon.smithy.smoketests.traits.SmokeTestsTrait
 import java.util.Optional
 import java.util.logging.Logger
+import kotlin.jvm.optionals.getOrElse
 
 class SmokeTestsDecorator : ClientCodegenDecorator {
     override val name: String = "SmokeTests"
@@ -174,7 +175,7 @@ class SmokeTestsInstantiator(
         val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
         val builtInParams: Parameters = (rulesOrNull?.parameters ?: Parameters.builder().build())
         val temp: MutableList<String> = mutableListOf()
-        builtInParams.forEach { temp.add(it.builtIn.get()) }
+        builtInParams.forEach { temp.add(it.builtIn.getOrElse { "" }) }
         temp
     }
     private val fipsName = "AWS::UseFIPS"
