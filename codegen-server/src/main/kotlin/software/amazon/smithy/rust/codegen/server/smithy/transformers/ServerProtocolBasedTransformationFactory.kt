@@ -24,8 +24,12 @@ import software.amazon.smithy.utils.ToSmithyBuilder
 
 /**
  * Each protocol may not support all of the features that Smithy allows. For instance, `rpcv2Cbor`
- * does not support HTTP bindings. `ServerProtocolBasedTransformationFactory` is a factory
+ * does not support HTTP bindings other than `@httpError`. `ServerProtocolBasedTransformationFactory` is a factory
  * object that transforms the model and removes specific traits based on the protocol being instantiated.
+ *
+ * In the long term, this class will be removed, and each protocol should be resilient enough to ignore extra
+ * traits that the model is annotated with. This will be addressed when we fix issue
+ * [#2979](https://github.com/smithy-lang/smithy-rs/issues/2979).
  */
 object ServerProtocolBasedTransformationFactory {
     fun transform(

@@ -53,9 +53,9 @@ fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<Mo
  */
 fun loadSmithyConstraintsModel(): Pair<Model, ShapeId> {
     val filePath = "../codegen-core/common-test-models/constraints.smithy"
-    val serviceShapeId = ShapeId.from("com.amazonaws.constraints#ConstraintsService")
     val model =
         File(filePath).readText().asSmithyModel()
+    val serviceShapeId = model.shapes().filter { it.isServiceShape }.findFirst().orElseThrow().id
     return Pair(model, serviceShapeId)
 }
 
