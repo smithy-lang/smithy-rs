@@ -6,49 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "`aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in AWS SDK clients so that using these types does not require directly depending on `aws-smithy-runtime-api`.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3591"
-      ],
-      "since-commit": "8d23be1392c46a4d59c2910c3dab00ecaad2cf26",
-      "age": 5
-    },
-    {
-      "message": "Allow [AwsUserAgent](https://docs.rs/aws-runtime/1.3.1/aws_runtime/user_agent/struct.AwsUserAgent.html) to incorporate business metrics, which now deprecates the existing feature and config metadata.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3781"
-      ],
-      "since-commit": "433e1a00e2d3eadfde78b472d78b30a8f9204dbe",
-      "age": 4
-    },
-    {
-      "message": "Fix incorrect redaction of `@sensitive` types in maps and lists.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "smithy-rs#3765",
-        "smithy-rs#3757"
-      ],
-      "since-commit": "433e1a00e2d3eadfde78b472d78b30a8f9204dbe",
-      "age": 4
-    },
-    {
       "message": "Upgrade MSRV to Rust 1.78.0.\n",
       "meta": {
         "bug": false,
@@ -60,7 +17,7 @@
         "smithy-rs#3800"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Add minimal support for `AWS::Auth::AccountId` and `AWS::Auth::AccountIdEndpointMode` endpoint built-ins\n",
@@ -74,7 +31,7 @@
         "smithy-rs#3792"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Fix the execution order of [modify_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.modify_before_serialization) and [read_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.read_before_serialization) in the orchestrator. The `modify_before_serialization` method now executes before the `read_before_serialization` method. This adjustment may result in changes in behavior depending on how you customize interceptors.\n",
@@ -88,7 +45,7 @@
         "smithy-rs#3798"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Fix the [Length::UpTo](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/enum.Length.html) usage in [FsBuilder](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/struct.FsBuilder.html), ensuring that the specified length does not exceed the remaining file length.\n",
@@ -103,7 +60,7 @@
         "smithy-rs#3797"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Re-export `ByteStream`'s `Length` and `FsBuilder`. By making these types available directly within a client crate, customers can use `ByteStream::read_from` without needing to import them separately from the `aws-smithy-types` crate.\n",
@@ -117,6 +74,46 @@
         "aws-sdk-rust#820"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
+      "age": 3
+    },
+    {
+      "message": "Remove stalled stream protection from transcribe-streaming operations.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "aws-sdk-rust#1181"
+      ],
+      "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
+      "age": 1
+    },
+    {
+      "message": "deprecate http-02x presign APIs in favor of http-1x equivalents\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
+      "age": 1
+    },
+    {
+      "message": "Update Smoketest codegeneration to be endpoint built-in aware.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#3836"
+      ],
+      "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
       "age": 1
     }
   ],

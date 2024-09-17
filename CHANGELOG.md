@@ -1,4 +1,34 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 17th, 2024
+====================
+
+September 9th, 2024
+===================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3813](https://github.com/smithy-lang/smithy-rs/issues/3813)) Operations with event stream member shapes must include `ValidationException` in the errors list. This is necessary because the member shape is a required field, and the builder for the operation input or output returns a `std::result::Result` with the error set to `crate::model::ValidationExceptionField`.
+
+**New this release:**
+- :tada: (server, [smithy-rs#3803](https://github.com/smithy-lang/smithy-rs/issues/3803)) Setting the `addValidationExceptionToConstrainedOperations` codegen flag adds `aws.smithy.framework#ValidationException` to operations with constrained inputs that do not already have this exception added.
+
+    Sample `smithy-build-template.json`:
+
+    ```
+    {
+        "...",
+        "plugins": {
+            "rust-server-codegen": {
+                "service": "ServiceToGenerateSDKFor",
+                    "module": "amzn-sample-server-sdk",
+                    "codegen": {
+                        "addValidationExceptionToConstrainedOperations": true,
+                    }
+            }
+        }
+    }
+    ```
+- :bug: (all, [smithy-rs#3805](https://github.com/smithy-lang/smithy-rs/issues/3805)) Fix bug in `DateTime::from_secs_f64` where certain floating point values could lead to a panic.
+
+
 August 28th, 2024
 =================
 **Breaking Changes:**
