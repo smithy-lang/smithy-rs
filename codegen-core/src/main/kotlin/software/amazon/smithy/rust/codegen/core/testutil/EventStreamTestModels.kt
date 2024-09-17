@@ -131,7 +131,7 @@ object EventStreamTestModels {
         return String(encodedBytes)
     }
 
-    private fun createCBORFromJSON(jsonString: String): ByteArray {
+    private fun createCborFromJson(jsonString: String): ByteArray {
         val jsonMapper = ObjectMapper()
         val cborMapper = ObjectMapper(CBORFactory())
         // Parse JSON string to a generic type.
