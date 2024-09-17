@@ -1,9 +1,9 @@
 ---
 applies_to:
-  - smithy-rs
+  - aws-sdk-rust
 authors:
   - landonxjames
-references: []
+references: [smithy-rs#3836]
 breaking: false
 new_feature: false
 bug_fix: true
