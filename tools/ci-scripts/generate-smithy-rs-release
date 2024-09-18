@@ -34,6 +34,8 @@ git diff --staged --quiet || \
 
 echo "Synchronizing the SDK lockfile with runtime lockfiles and with crate dependencies specified in CargoDependency.kt..."
 ./gradlew aws:sdk:syncAwsSdkLockfile
+# Verify that crate dependencies in runtime lockfiles are covered by the updated SDK lockfile
+sdk-lockfiles audit
 # Commit the updated SDK lockfile
 git add aws/sdk/Cargo.lock
 git diff --staged --quiet && \
