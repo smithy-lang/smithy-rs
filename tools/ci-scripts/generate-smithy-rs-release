@@ -38,12 +38,11 @@ echo "Synchronizing the SDK lockfile with runtime lockfiles and with crate depen
 sdk-lockfiles audit
 # Commit the updated SDK lockfile
 git add aws/sdk/Cargo.lock
-git diff --staged --quiet && \
+git diff --staged --quiet || \
   git -c 'user.name=AWS SDK Rust Bot' \
       -c 'user.email=aws-sdk-rust-primary@amazon.com' \
       commit aws/sdk/Cargo.lock \
-      -m "Synchronize the SDK lockfile" \
-  || true
+      -m "Synchronize the SDK lockfile"
 
 # Generate the crates to publish
 ./gradlew rust-runtime:assemble
