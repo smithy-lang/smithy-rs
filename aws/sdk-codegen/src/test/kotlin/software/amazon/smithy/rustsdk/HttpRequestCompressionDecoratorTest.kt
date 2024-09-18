@@ -194,11 +194,6 @@ class HttpRequestCompressionDecoratorTest {
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
-                        if let Some(content_length) = request.headers().get("content-length").and_then(|len| len.parse::<usize>().ok()) {
-                            if content_length == UNCOMPRESSED_INPUT.len() {
-                                panic!("`content-length` was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload");
-                            }
-                        }
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was compressed
@@ -242,11 +237,6 @@ class HttpRequestCompressionDecoratorTest {
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
-                        if let Some(content_length) = request.headers().get("content-length").and_then(|len| len.parse::<usize>().ok()) {
-                            if content_length == UNCOMPRESSED_INPUT.len() {
-                                panic!("`content-length` was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload");
-                            }
-                        }
 
                         let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                         // Assert input body was compressed
@@ -310,11 +300,71 @@ class HttpRequestCompressionDecoratorTest {
 
                             let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
                             // Assert input body is different from uncompressed input
-                            assert_ne!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
+                            assert_ne!(UNCOMPRESSED_INPUT, compressed_body.as_slice(), "input was not compressed");
                             // Assert input body was compressed
                             assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
 
+                    ##[#{tokio}::test]
+                    async fn test_compressed_content_length() {
+                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let config = $moduleName::Config::builder()
+                            .region(Region::from_static("doesntmatter"))
+                            .with_test_defaults()
+                            .http_client(http_client)
+                            .disable_request_compression(false)
+                            .request_min_compression_size_bytes(0)
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
+                        let request = rx.expect_request();
+                        // Check that the content-length header is set correctly.
+                        if let Some(content_length) = request
+                            .headers()
+                            .get("content-length")
+                            .and_then(|len| len.parse::<usize>().ok())
+                        {
+                            assert_ne!(
+                                content_length, UNCOMPRESSED_INPUT.len(),
+                                "`content-length` of in-memory payload was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload"
+                            );
+                            assert_eq!(COMPRESSED_OUTPUT.len(), content_length);
+                        }
+
+                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let config = $moduleName::Config::builder()
+                            .region(Region::from_static("doesntmatter"))
+                            .with_test_defaults()
+                            .http_client(http_client)
+                            .disable_request_compression(false)
+                            .request_min_compression_size_bytes(0)
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_streaming_operation()
+                            .body(ByteStream::from_static(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
+                        let request = rx.expect_request();
+                        // Check that the content-length header is set correctly.
+                        if let Some(content_length) = request
+                            .headers()
+                            .get("content-length")
+                            .and_then(|len| len.parse::<usize>().ok())
+                        {
+                            assert_ne!(
+                                content_length, UNCOMPRESSED_INPUT.len(),
+                                "`content-length` of streaming payload was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload"
+                            );
+                            assert_eq!(COMPRESSED_OUTPUT.len(), content_length);
+                        }
+                    }
                     """,
                     *preludeScope,
                     "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
