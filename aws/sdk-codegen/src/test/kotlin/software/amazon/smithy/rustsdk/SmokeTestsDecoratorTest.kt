@@ -120,6 +120,22 @@ class SmokeTestsDecoratorTest {
                 }
             })
             """
+
+        val traitsWithNeither =
+            """
+            @service(sdkId: "dontcare")
+            @restJson1
+            @sigv4(name: "dontcare")
+            @auth([sigv4])
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {
+                    "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                }
+            })
+            """
+
         val serviceDef = """
             service TestService {
                 version: "2023-01-01",
@@ -177,6 +193,7 @@ class SmokeTestsDecoratorTest {
         val model = (imports + traitsWithAllBuiltIns + serviceDef).asSmithyModel(smithyVersion = "2")
         val modelWithNoDualStack = (imports + traitsWithNoDualStack + serviceDef).asSmithyModel(smithyVersion = "2")
         val modelWithNoFips = (imports + traitsWithNoFips + serviceDef).asSmithyModel(smithyVersion = "2")
+        val modelWithNeitherBuiltIn = (imports + traitsWithNeither + serviceDef).asSmithyModel(smithyVersion = "2")
     }
 
     @Test
@@ -192,6 +209,11 @@ class SmokeTestsDecoratorTest {
     @Test
     fun smokeTestSdkCodegenNoFips() {
         testSmokeTestsWithModel(modelWithNoFips)
+    }
+
+    @Test
+    fun smokeTestSdkCodegenNeitherBuiltIn() {
+        testSmokeTestsWithModel(modelWithNeitherBuiltIn)
     }
 
     fun testSmokeTestsWithModel(model: Model) {
