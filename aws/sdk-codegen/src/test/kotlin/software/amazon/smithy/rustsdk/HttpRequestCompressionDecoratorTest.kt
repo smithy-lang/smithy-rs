@@ -15,11 +15,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class HttpRequestCompressionDecoratorTest {
     companion object {
-        // Can't use the dollar sign in a multiline string with doing it like this.
-        private const val PREFIX = "\$version: \"2\""
         val model =
             """
-            $PREFIX
             namespace test
 
             use aws.api#service
@@ -100,7 +97,7 @@ class HttpRequestCompressionDecoratorTest {
 
             @output
             structure SomeIncompressibleOutput {}
-            """.asSmithyModel()
+            """.asSmithyModel(smithyVersion = "2.0")
     }
 
     @Test
@@ -147,14 +144,22 @@ class HttpRequestCompressionDecoratorTest {
                             .build();
 
                         let client = $moduleName::Client::from_conf(config);
-                        let _ = client.not_a_compressible_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let _ = client
+                            .not_a_compressible_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is not set.
-                        assert_eq!(None, request.headers().get("content-encoding"));
+                        assert_eq!(None, request.headers().get(#{http}::header::CONTENT_ENCODING));
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -168,14 +173,25 @@ class HttpRequestCompressionDecoratorTest {
                             .build();
 
                         let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is not set to "gzip"
-                        assert_ne!(Some("gzip"), request.headers().get("content-encoding"));
+                        assert_ne!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -189,15 +205,26 @@ class HttpRequestCompressionDecoratorTest {
                             .request_min_compression_size_bytes(128)
                             .build();
 
-                            let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
-                        assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
+                        assert_eq!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was compressed
-                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice())
+                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -211,15 +238,26 @@ class HttpRequestCompressionDecoratorTest {
                             .request_min_compression_size_bytes(256)
                             .build();
 
-                            let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is not set to "gzip"
-                        assert_ne!(Some("gzip"), request.headers().get("content-encoding"));
+                        assert_ne!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -232,15 +270,26 @@ class HttpRequestCompressionDecoratorTest {
                             .request_min_compression_size_bytes(128)
                             .build();
 
-                            let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is set to "gzip"
-                        assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
+                        assert_eq!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was compressed
-                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice())
+                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -253,15 +302,26 @@ class HttpRequestCompressionDecoratorTest {
                             .disable_request_compression(false)
                             .build();
 
-                            let client = $moduleName::Client::from_conf(config);
-                        let _ = client.some_operation().body(Blob::new(UNCOMPRESSED_INPUT)).send().await;
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is not set to "gzip"
-                        assert_ne!(Some("gzip"), request.headers().get("content-encoding"));
+                        assert_ne!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                        let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
                         // Assert input body was not compressed
-                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice())
+                        assert_eq!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
                     }
 
                     ##[#{tokio}::test]
@@ -276,39 +336,116 @@ class HttpRequestCompressionDecoratorTest {
                             .request_min_compression_size_bytes(128)
                             .build();
 
-                            let client = $moduleName::Client::from_conf(config);
-                            // ByteStreams created from a file are streaming and have a known size
-                            let mut file = #{tempfile}::NamedTempFile::new().unwrap();
-                            use std::io::Write;
-                            file.write_all(UNCOMPRESSED_INPUT).unwrap();
+                        let client = $moduleName::Client::from_conf(config);
+                        // ByteStreams created from a file are streaming
+                        let mut file = #{tempfile}::NamedTempFile::new().unwrap();
+                        use std::io::Write;
+                        file.write_all(UNCOMPRESSED_INPUT).unwrap();
 
-                            let body = ByteStream::read_from()
-                                .path(file.path())
-                                .buffer_size(1024)
-                                .length(#{Length}::Exact(UNCOMPRESSED_INPUT.len() as u64))
-                                .build()
-                                .await
-                                .unwrap();
-                            let _ = client
-                                .some_streaming_operation()
-                                .body(body)
-                                .send()
-                                .await;
-                            let request = rx.expect_request();
-                            // Check that the content-encoding header is set to "gzip"
-                            assert_eq!(Some("gzip"), request.headers().get("content-encoding"));
+                        let body = ByteStream::read_from()
+                            .path(file.path())
+                            .buffer_size(1024)
+                            .length(::aws_smithy_types::byte_stream::Length::Exact(
+                                UNCOMPRESSED_INPUT.len() as u64,
+                            ))
+                            .build()
+                            .await
+                            .unwrap();
+                        let _ = client.some_streaming_operation().body(body).send().await;
+                        let request = rx.expect_request();
+                        // Check that the content-encoding header is set to "gzip"
+                        assert_eq!(
+                            Some("gzip"),
+                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                        );
 
-                            let compressed_body = ByteStream::from(request.into_body()).collect().await.unwrap().to_vec();
-                            // Assert input body is different from uncompressed input
-                            assert_ne!(UNCOMPRESSED_INPUT, compressed_body.as_slice());
-                            // Assert input body was compressed
-                            assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
+                        let compressed_body = ByteStream::from(request.into_body())
+                            .collect()
+                            .await
+                            .unwrap()
+                            .to_vec();
+                        // Assert input body is different from uncompressed input
+                        assert_ne!(
+                            UNCOMPRESSED_INPUT,
+                            compressed_body.as_slice(),
+                            "input was not compressed"
+                        );
+                        // Assert input body was compressed
+                        assert_eq!(COMPRESSED_OUTPUT, compressed_body.as_slice());
+                    }
+
+                    ##[#{tokio}::test]
+                    async fn test_compressed_content_length() {
+                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let config = $moduleName::Config::builder()
+                            .region(Region::from_static("doesntmatter"))
+                            .with_test_defaults()
+                            .http_client(http_client)
+                            .disable_request_compression(false)
+                            .request_min_compression_size_bytes(0)
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client
+                            .some_operation()
+                            .body(Blob::new(UNCOMPRESSED_INPUT))
+                            .send()
+                            .await;
+                        let request = rx.expect_request();
+                        // Check that the content-length header is set correctly.
+                        if let Some(content_length) = request
+                            .headers()
+                            .get(#{http}::header::CONTENT_LENGTH)
+                            .and_then(|len| len.parse::<usize>().ok())
+                        {
+                            assert_ne!(
+                                content_length, UNCOMPRESSED_INPUT.len(),
+                                "`content-length` of in-memory payload was incorrectly set to the length of the uncompressed input but should have been set to the length of the compressed payload"
+                            );
+                            assert_eq!(COMPRESSED_OUTPUT.len(), content_length);
+                        }
+
+                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let config = $moduleName::Config::builder()
+                            .region(Region::from_static("doesntmatter"))
+                            .with_test_defaults()
+                            .http_client(http_client)
+                            .disable_request_compression(false)
+                            .request_min_compression_size_bytes(0)
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(config);
+                        // ByteStreams created from a file are streaming
+                        let mut file = #{tempfile}::NamedTempFile::new().unwrap();
+                        use std::io::Write;
+                        file.write_all(UNCOMPRESSED_INPUT).unwrap();
+
+                        let body = ByteStream::read_from()
+                            .path(file.path())
+                            .buffer_size(1024)
+                            .length(::aws_smithy_types::byte_stream::Length::Exact(
+                                UNCOMPRESSED_INPUT.len() as u64,
+                            ))
+                            .build()
+                            .await
+                            .unwrap();
+                        let _ = client.some_streaming_operation().body(body).send().await;
+                        let request = rx.expect_request();
+
+                        assert!(
+                            request
+                                .headers()
+                                .get(#{http}::header::CONTENT_LENGTH)
+                                .is_none(),
+                            "expected that no content length header is set because the request is streaming."
+                        );
                     }
                     """,
                     *preludeScope,
                     "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
                     "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
                     "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                    "http" to CargoDependency.Http.toType(),
                     "tokio" to CargoDependency.Tokio.toType(),
                     "capture_request" to RuntimeType.captureRequest(rc),
                     "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),

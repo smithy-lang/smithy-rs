@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.2.3"
+version = "1.2.4"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.60.10"
+version = "0.60.11"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -298,7 +298,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.8"
+version = "0.60.9"
 dependencies = [
  "xmlparser",
 ]
