@@ -12,6 +12,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # This job will be a no-op if an image was already built on main by another workflow.
+  acquire-base-image:
+    name: Acquire Base Image
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ysaito/automate-updating-lockfiles
+        fetch-depth: 0
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v4
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
   update-lockfiles-branch-name:
     name: Generate release branch name
     runs-on: ubuntu-latest
