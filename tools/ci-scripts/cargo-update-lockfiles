@@ -1,0 +1,39 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+if [ -z "$1" ]; then
+  echo "You need to specify the name of a branch for updating lockfiles"
+  exit 1
+else
+  update_lockfiles_branch="$1"
+fi
+
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+
+pushd "${SMITHY_RS_DIR}"
+
+git config --local user.name "AWS SDK Rust Bot"
+git config --local user.email "aws-sdk-rust-primary@amazon.com"
+
+git fetch --unshallow
+git checkout origin/main
+git checkout -b "${update_lockfiles_branch}"
+
+./gradlew aws:sdk:cargoUpdateAllLockfiles
+git add aws/rust-runtime/Cargo.lock \
+    aws/rust-runtime/aws-config/Cargo.lock \
+    aws/sdk/Cargo.lock \
+    rust-runtime/Cargo.lock
+
+git diff --staged --quiet || \
+    git commit \
+        -m "Run cargo update on the runtime lockfiles and the SDK lockfile"
+
+git push origin HEAD
+
+popd
