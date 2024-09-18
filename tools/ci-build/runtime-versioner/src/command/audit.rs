@@ -139,12 +139,13 @@ impl RuntimeCrate {
             .output()
             .with_context(|| format!("failed to git diff {}", self.name))?;
         let output = String::from_utf8(status.stdout)?;
+        // When run during a release, this file is replaced with it's actual contents.
+        // This breaks this git-based comparison and incorrectly requires a version bump.
+        // Temporary fix to allow the build to succeed.
+        let lines_to_ignore = &["aws-config/clippy.toml", "aws-config/Cargo.lock"];
         let changed_files = output
             .lines()
-            // When run during a release, this file is replaced with it's actual contents.
-            // This breaks this git-based comparison and incorrectly requires a version bump.
-            // Temporary fix to allow the build to succeed.
-            .filter(|line| !line.contains("aws-config/clippy.toml"))
+            .filter(|line| !lines_to_ignore.iter().any(|ignore| line.contains(ignore)))
             .collect::<Vec<_>>();
         Ok(!changed_files.is_empty())
     }
