@@ -34,7 +34,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
-        ref: main
+        ref: ysaito/automate-updating-lockfiles
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Cargo update all lockfiles
