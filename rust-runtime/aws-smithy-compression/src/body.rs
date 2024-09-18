@@ -212,8 +212,9 @@ mod test {
             let compress_request =
                 CompressionAlgorithm::Gzip.into_impl_http_body_0_4_x(&compression_options);
             let body = SdkBody::from(UNCOMPRESSED_INPUT);
-            let mut compressed_body = CompressedBody::new(body, compress_request);
-            let compressed_sdk_body = compressed_body.into_compressed_sdk_body().unwrap();
+            let compressed_sdk_body = CompressedBody::new(body, compress_request)
+                .into_compressed_sdk_body()
+                .unwrap();
 
             // Verify data is compressed as expected
             assert_eq!(
