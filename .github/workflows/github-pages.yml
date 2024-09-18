@@ -48,6 +48,7 @@ jobs:
   push-updated-lockfiles-to-branch:
     name: push-to-branch
     needs:
+    - acquire-base-image
     - update-lockfiles-branch-name
     runs-on: ubuntu-latest
     steps:
