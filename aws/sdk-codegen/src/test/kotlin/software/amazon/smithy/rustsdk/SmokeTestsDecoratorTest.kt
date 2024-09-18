@@ -225,7 +225,9 @@ class SmokeTestsDecoratorTest {
             // `SdkSmokeTestsRustClientCodegenPlugin` only uses the minimal set of codegen decorators, which results
             // in a significant amount of unused code. This can cause `clippy` to fail with the `--deny warnings`
             // setting enabled by default in `.crate/config.toml` in test workspaces.
-            // To work around this issue, we unset `RUSTFLAGS` to allow unused and dead code.
+            // To work around this issue, we unset `RUSTFLAGS` to allow unused and dead code. To perform a compilation
+            // only test, we don't need to set `mapOf(Pair("RUSTFLAGS", "--cfg smoketests"))` since that would
+            // cause the tests to actually run (against a non-existent service) and fail.
             environment = mapOf(Pair("RUSTFLAGS", "")),
             test = { codegenContext, crate ->
                 // It should compile. We can't run the tests because they don't target a real service.
