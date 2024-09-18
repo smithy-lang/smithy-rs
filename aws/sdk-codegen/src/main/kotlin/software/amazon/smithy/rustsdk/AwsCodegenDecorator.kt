@@ -28,6 +28,7 @@ import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sso.SSODecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
 import software.amazon.smithy.rustsdk.customize.timestream.TimestreamDecorator
+import software.amazon.smithy.rustsdk.customize.transcribestreaming.TranscribeStreamingDecorator
 import software.amazon.smithy.rustsdk.endpoints.AwsEndpointsStdLib
 import software.amazon.smithy.rustsdk.endpoints.OperationInputTestDecorator
 import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
@@ -88,6 +89,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         SSODecorator().onlyApplyTo("com.amazonaws.sso#SWBPortalService"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamwrite#Timestream_20181101"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamquery#Timestream_20181101"),
+        TranscribeStreamingDecorator().onlyApplyTo("com.amazonaws.transcribestreaming#Transcribe"),
         // Only build docs-rs for linux to reduce load on docs.rs
         listOf(
             DocsRsMetadataDecorator(
