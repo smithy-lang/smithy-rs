@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
-        ref: ysaito/automate-updating-lockfiles
+        ref: test-automate-updating-lockfiles
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
@@ -55,7 +55,7 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
-        ref: ysaito/automate-updating-lockfiles
+        ref: test-automate-updating-lockfiles
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
     - name: Cargo update all lockfiles
