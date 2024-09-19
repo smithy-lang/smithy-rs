@@ -523,8 +523,10 @@ val downgradeAwsSdkLockfile = registerDowngradeFor(outputDir.asFile, "AwsSdk")
 fun Project.registerCargoUpdateFor(
     dir: File,
     name: String,
+    dependsOn: List<String> = emptyList(),
 ): TaskProvider<Exec> {
     return tasks.register<Exec>("cargoUpdate${name}Lockfile") {
+        dependsOn(dependsOn)
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "update")
@@ -532,7 +534,7 @@ fun Project.registerCargoUpdateFor(
     }
 }
 
-val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig")
+val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig", listOf("assemble"))
 val cargoUpdateAwsRuntimeLockfile = registerCargoUpdateFor(awsRustRuntimePath, "AwsRustRuntime")
 val cargoUpdateSmithyRuntimeLockfile = registerCargoUpdateFor(rustRuntimePath, "RustRuntime")
 
@@ -592,11 +594,9 @@ tasks.register("cargoUpdateAllLockfiles") {
         Update Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by the
         assemble task.
     """
-    // `cargoUpdateAwsSdkLockfile` must be executed before `cargoUpdateAwsConfigLockfile` since the `aws-config` crate
-    // depends on those generated in the `aws/sdk/build/aws-sdk/sdk` directory
-    dependsOn(cargoUpdateAwsSdkLockfile)
     finalizedBy(
-        //cargoUpdateAwsConfigLockfile,
+        cargoUpdateAwsSdkLockfile,
+        cargoUpdateAwsConfigLockfile,
         cargoUpdateAwsRuntimeLockfile,
         cargoUpdateSmithyRuntimeLockfile,
     )
