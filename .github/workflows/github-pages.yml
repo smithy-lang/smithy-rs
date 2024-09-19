@@ -96,6 +96,8 @@ jobs:
         action: cargo-update-lockfiles
         action-arguments: ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }}
     - name: Create pull request
+      working-directory: smithy-rs
+      shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
       run: |
