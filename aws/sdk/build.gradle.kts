@@ -592,8 +592,10 @@ tasks.register("cargoUpdateAllLockfiles") {
         Update Cargo.lock files for aws-config, aws/rust-runtime, rust-runtime, and the workspace created by the
         assemble task.
     """
+    // `cargoUpdateAwsSdkLockfile` must be executed before `cargoUpdateAwsConfigLockfile` since the `aws-config` crate
+    // depends on those generated in the `aws/sdk/build/aws-sdk/sdk` directory
+    dependsOn(cargoUpdateAwsSdkLockfile)
     finalizedBy(
-        cargoUpdateAwsSdkLockfile,
         cargoUpdateAwsConfigLockfile,
         cargoUpdateAwsRuntimeLockfile,
         cargoUpdateSmithyRuntimeLockfile,
