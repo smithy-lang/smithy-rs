@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -42,7 +43,13 @@ object ServerRustModule {
     val Output = RustModule.public("output")
     val Types = RustModule.public("types")
     val Server = RustModule.public("server")
-    val Service = RustModule.private("service")
+
+    // `aws-smithy-http-server::service` is now exported as part of `pub use aws-smithy-http-server::*` in the generated crate,
+    // which raises a warning when using the `service` module in `lib.rs` of the generated crate. The `#[allow(hidden_glob_reexports)]`
+    // attribute is applied to the `mod service` usage to suppress the compiler warning. However, when addressing issue #2455,
+    // ensure there are no name collisions between the modules defined in the generated crates and those re-exported from `aws-smithy-http-server`.
+    // Once that is done, the `AllowHiddenGlobReExports` attribute should be removed.
+    val Service = RustModule.private("service", additionalAttributes = listOf(Attribute.AllowHiddenGlobReExports))
 
     val UnconstrainedModule =
         software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule
