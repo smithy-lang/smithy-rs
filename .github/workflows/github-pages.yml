@@ -73,49 +73,36 @@ jobs:
         aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
         docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
 
-  update-lockfiles-branch-name:
-    name: Generate release branch name
-    runs-on: ubuntu-latest
-    outputs:
-      branch_name: ${{ steps.branch-name-generation.outputs.branch_name }}
-    steps:
-    - name: Get or create release branch
-      id: branch-name-generation
-      shell: bash
-      run: |
-        update_lockfiles_branch="update-all-lockfiles-$(date +%s)"
-        echo "branch_name=${update_lockfiles_branch}" > $GITHUB_OUTPUT
-
-  push-updated-lockfiles-to-branch:
-    name: push-to-branch
+  create-pull-request-for-updating-lockfiles:
+    name: Create a Pull Request for updating lockfiles
     needs:
     - acquire-base-image
-    - update-lockfiles-branch-name
     runs-on: ubuntu-latest
     steps:
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
-        ref: test-automate-updating-lockfiles
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Create branch name for updating lockfiles
+      id: branch-name-for-updating-lockfiles
+      shell: bash
+      run: |
+        branch_name="update-all-lockfiles-$(date +%s)"
+        echo "branch_name=${branch_name}" > $GITHUB_OUTPUT
     - name: Cargo update all lockfiles
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: cargo-update-lockfiles
-        action-arguments: ${{ needs.update-lockfiles-branch-name.outputs.branch_name }}
-
-  create-pull-request:
-    name: Create pull request
-    needs:
-    - update-lockfiles-branch-name
-    - push-updated-lockfiles-to-branch
-    runs-on: ubuntu-latest
-    steps:
+        action-arguments: ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }}
     - name: Create pull request
       env:
         GITHUB_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-        BRANCH_NAME: ${{ needs.update-lockfiles-branch-name.outputs.branch_name }}
       run: |
-        echo ${BRANCH_NAME}
-        echo ${{ needs.update-lockfiles-branch-name.outputs.branch_name }}
+        gh pr create \
+          --title "Update the runtime lockfiles and the SDK lockfile" \
+          --body 'If the CI fails, please commit the necessary fixes to this PR until all checks pass. If required, add an entry to [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/6b42eb5ca00a2dc9c46562452e495a2ec2e43d0f/aws/sdk/build.gradle.kts#L503-L504).' \
+          --base test-automate-updating-lockfiles \
+          --head ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} \
+          --label "needs-sdk-review" \
+          --draft
