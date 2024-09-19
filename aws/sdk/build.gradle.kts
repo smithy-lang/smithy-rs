@@ -596,7 +596,7 @@ tasks.register("cargoUpdateAllLockfiles") {
     // depends on those generated in the `aws/sdk/build/aws-sdk/sdk` directory
     dependsOn(cargoUpdateAwsSdkLockfile)
     finalizedBy(
-        cargoUpdateAwsConfigLockfile,
+        //cargoUpdateAwsConfigLockfile,
         cargoUpdateAwsRuntimeLockfile,
         cargoUpdateSmithyRuntimeLockfile,
     )
