@@ -21,7 +21,7 @@ git config --local user.name "AWS SDK Rust Bot"
 git config --local user.email "aws-sdk-rust-primary@amazon.com"
 
 git fetch --unshallow
-git checkout origin/main
+git checkout test-automate-updating-lockfiles
 git checkout -b "${update_lockfiles_branch}"
 
 ./gradlew aws:sdk:cargoUpdateAllLockfiles
