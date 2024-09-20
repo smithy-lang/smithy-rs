@@ -69,7 +69,7 @@ open class ServerRootGenerator(
             //! ## Using $serviceName
             //!
             //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`](#{Tower}::Service)
-            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](crate::routing::LambdaHandler).
+            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](crate::server::routing::LambdaHandler).
             //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
@@ -94,7 +94,7 @@ open class ServerRootGenerator(
             //! ###### Running on Lambda
             //!
             //! ```rust,ignore
-            //! use $crateName::routing::LambdaHandler;
+            //! use $crateName::server::routing::LambdaHandler;
             //! use $crateName::$serviceName;
             //!
             //! ## async fn dummy() {
@@ -118,10 +118,10 @@ open class ServerRootGenerator(
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
             //! ```rust,no_run
-            //! ## use $crateName::plugin::IdentityPlugin as LoggingPlugin;
-            //! ## use $crateName::plugin::IdentityPlugin as MetricsPlugin;
+            //! ## use $crateName::server::plugin::IdentityPlugin as LoggingPlugin;
+            //! ## use $crateName::server::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
-            //! use $crateName::plugin::HttpPlugins;
+            //! use $crateName::server::plugin::HttpPlugins;
             //! use $crateName::{$serviceName, ${serviceName}Config, $builderName};
             //!
             //! let http_plugins = HttpPlugins::new()
@@ -131,14 +131,14 @@ open class ServerRootGenerator(
             //! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);
             //! ```
             //!
-            //! Check out [`crate::plugin`] to learn more about plugins.
+            //! Check out [`crate::server::plugin`] to learn more about plugins.
             //!
             //! #### Handlers
             //!
             //! [`$builderName`] provides a setter method for each operation in your Smithy model. The setter methods expect an async function as input, matching the signature for the corresponding operation in your Smithy model.
             //! We call these async functions **handlers**. This is where your application business logic lives.
             //!
-            //! Every handler must take an `Input`, and optional [`extractor arguments`](crate::request), while returning:
+            //! Every handler must take an `Input`, and optional [`extractor arguments`](crate::server::request), while returning:
             //!
             //! * A `Result<Output, Error>` if your operation has modeled errors, or
             //! * An `Output` otherwise.
@@ -160,7 +160,7 @@ open class ServerRootGenerator(
             //! ## struct Error;
             //! ## struct State;
             //! ## use std::net::SocketAddr;
-            //! use $crateName::request::{extension::Extension, connect_info::ConnectInfo};
+            //! use $crateName::server::request::{extension::Extension, connect_info::ConnectInfo};
             //!
             //! async fn handler_with_no_extensions(input: Input) -> Output {
             //!     todo!()
