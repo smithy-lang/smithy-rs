@@ -1,15 +1,26 @@
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      base_branch:
+        description: The name of the branch on which to run `cargo update` for lockfiles
+        required: true
+        type: string
+      force_update_on_broken_dependencies:
+        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading to the last known working versions
+        required: true
+        type: boolean
+    secrets:
+      DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: true
+      SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN:
+        required: true
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
 
 name: Update GitHub Pages
 
 env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
-
-# Allow only one doc pages build to run at a time for the entire smithy-rs repo
-concurrency:
-  group: github-pages-yml
-  cancel-in-progress: true
 
 jobs:
   save-docker-login-token:
@@ -94,7 +105,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: cargo-update-lockfiles
-        action-arguments: ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }}
+        action-arguments: ${{ inputs.base_branch }} ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} ${{ inputs.force_update_on_broken_dependencies }}
     - name: Create pull request
       working-directory: smithy-rs
       shell: bash
