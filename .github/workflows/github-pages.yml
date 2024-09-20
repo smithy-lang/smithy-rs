@@ -103,7 +103,7 @@ jobs:
       run: |
         gh pr create \
           --title "Update the runtime lockfiles and the SDK lockfile" \
-          --body 'If the CI fails, commit the necessary fixes to this PR until all checks pass. If required, add an entry to [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/6b42eb5ca00a2dc9c46562452e495a2ec2e43d0f/aws/sdk/build.gradle.kts#L503-L504).' \
+          --body 'If CI fails, commit the necessary fixes to this PR until all checks pass.\nIf required, update entries in [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/6b42eb5ca00a2dc9c46562452e495a2ec2e43d0f/aws/sdk/build.gradle.kts#L503-L504).' \
           --base test-automate-updating-lockfiles \
           --head ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} \
           --label "needs-sdk-review" \
