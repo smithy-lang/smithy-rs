@@ -6,7 +6,7 @@ on:
         required: true
         type: string
       force_update_on_broken_dependencies:
-        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading to the last known working versions
+        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading them to the last known working versions
         required: true
         type: boolean
     secrets:
@@ -114,8 +114,7 @@ jobs:
       run: |
         gh pr create \
           --title 'Run `cargo update` on the runtime lockfiles and the SDK lockfile' \
-          --body 'If CI fails, commit the necessary fixes to this PR until all checks pass.\nIf required, update entries in [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/6b42eb5ca00a2dc9c46562452e495a2ec2e43d0f/aws/sdk/build.gradle.kts#L503-L504).' \
+          --body 'If CI fails, commit the necessary fixes to this PR until all checks pass. If required, update entries in [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/6b42eb5ca00a2dc9c46562452e495a2ec2e43d0f/aws/sdk/build.gradle.kts#L503-L504).' \
           --base ${{ inputs.base_branch }} \
           --head ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} \
-          --label "needs-sdk-review" \
-          --draft
+          --label "needs-sdk-review"

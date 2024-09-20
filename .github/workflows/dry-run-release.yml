@@ -14,7 +14,7 @@ on:
         required: true
         type: string
       force_update_on_broken_dependencies:
-        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading to the last known working versions
+        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading them to the last known working versions
         required: true
         type: boolean
         default: true # Defaults to true because we typically want to see how upgrading broken dependencies to the latest behaves when this manual workflow is triggered
