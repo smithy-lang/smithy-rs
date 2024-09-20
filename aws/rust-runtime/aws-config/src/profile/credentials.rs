@@ -610,6 +610,11 @@ mod test {
     make_test!(sso_credentials);
     #[cfg(feature = "sso")]
     make_test!(sso_token);
+
+    make_test!(assume_role_override_global_env_url);
+    make_test!(assume_role_override_service_env_url);
+    make_test!(assume_role_override_global_profile_url);
+    make_test!(assume_role_override_service_profile_url);
 }
 
 #[cfg(all(test, feature = "sso"))]
