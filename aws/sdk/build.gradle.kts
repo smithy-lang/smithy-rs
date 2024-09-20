@@ -523,8 +523,10 @@ val downgradeAwsSdkLockfile = registerDowngradeFor(outputDir.asFile, "AwsSdk")
 fun Project.registerCargoUpdateFor(
     dir: File,
     name: String,
+    dependsOn: List<String> = emptyList(),
 ): TaskProvider<Exec> {
     return tasks.register<Exec>("cargoUpdate${name}Lockfile") {
+        dependsOn(dependsOn)
         workingDir(dir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "update")
@@ -532,7 +534,7 @@ fun Project.registerCargoUpdateFor(
     }
 }
 
-val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig")
+val cargoUpdateAwsConfigLockfile = registerCargoUpdateFor(awsConfigPath, "AwsConfig", listOf("assemble"))
 val cargoUpdateAwsRuntimeLockfile = registerCargoUpdateFor(awsRustRuntimePath, "AwsRustRuntime")
 val cargoUpdateSmithyRuntimeLockfile = registerCargoUpdateFor(rustRuntimePath, "RustRuntime")
 
