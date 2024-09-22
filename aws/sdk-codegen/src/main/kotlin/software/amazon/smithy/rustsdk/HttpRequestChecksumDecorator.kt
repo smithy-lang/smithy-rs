@@ -220,8 +220,8 @@ class HttpRequestChecksumConfigCustomization(private val codegenContext: ClientC
             *preludeScope,
             "RequestChecksumCalculation" to
                 configReexport(
-                    RuntimeType.smithyChecksums(rc)
-                        .resolve("RequestChecksumCalculation"),
+                    RuntimeType.smithyTypes(rc)
+                        .resolve("checksum_config::RequestChecksumCalculation"),
                 ),
         )
 

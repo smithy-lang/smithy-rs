@@ -17,10 +17,7 @@
 //! Checksum calculation and verification callbacks.
 
 use crate::error::UnknownChecksumAlgorithmError;
-use crate::error::{
-    UnknownRequestChecksumCalculationError, UnknownResponseChecksumValidationError,
-};
-use aws_smithy_types::config_bag::{Storable, StoreReplace};
+
 use bytes::Bytes;
 use std::str::FromStr;
 
@@ -97,81 +94,6 @@ impl ChecksumAlgorithm {
             Self::Md5 => MD5_NAME,
             Self::Sha1 => SHA_1_NAME,
             Self::Sha256 => SHA_256_NAME,
-        }
-    }
-}
-
-// Valid names for RequestChecksumCalculation and ResponseChecksumValidation
-pub const WHEN_SUPPORTED: &str = "when_supported";
-pub const WHEN_REQUIRED: &str = "when_required";
-
-/// Determines when a checksum will be calculated for request payloads. Values are:
-/// * [RequestChecksumCalculation::WhenSupported] - (default) When set, a checksum will be
-/// calculated for all request payloads of operations modeled with the
-/// `httpChecksum` trait where `requestChecksumRequired` is `true` and/or a
-/// `requestAlgorithmMember` is modeled.
-/// * [RequestChecksumCalculation::WhenRequired] - When set, a checksum will only be calculated for
-/// request payloads of operations modeled with the  `httpChecksum` trait where
-/// `requestChecksumRequired` is `true` or where a requestAlgorithmMember
-/// is modeled and supplied.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum RequestChecksumCalculation {
-    WhenSupported,
-    WhenRequired,
-}
-
-impl Storable for RequestChecksumCalculation {
-    type Storer = StoreReplace<Self>;
-}
-
-impl FromStr for RequestChecksumCalculation {
-    type Err = UnknownRequestChecksumCalculationError;
-
-    fn from_str(request_checksum_calculation: &str) -> Result<Self, Self::Err> {
-        if request_checksum_calculation.eq_ignore_ascii_case(WHEN_SUPPORTED) {
-            Ok(Self::WhenSupported)
-        } else if request_checksum_calculation.eq_ignore_ascii_case(WHEN_REQUIRED) {
-            Ok(Self::WhenRequired)
-        } else {
-            Err(UnknownRequestChecksumCalculationError::new(
-                request_checksum_calculation,
-            ))
-        }
-    }
-}
-
-/// Determines when checksum validation will be performed on response payloads. Values are:
-/// * [ResponseChecksumValidation::WhenSupported] - (default) When set, checksum validation is performed on all
-/// response payloads of operations modeled with the `httpChecksum` trait where
-/// `responseAlgorithms` is modeled, except when no modeled checksum algorithms
-/// are supported.
-/// * [ResponseChecksumValidation::WhenRequired] - When set, checksum validation is not performed on
-/// response payloads of operations unless the checksum algorithm is supported and
-/// the `requestValidationModeMember` member is set to `ENABLED`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum ResponseChecksumValidation {
-    WhenSupported,
-    WhenRequired,
-}
-
-impl Storable for ResponseChecksumValidation {
-    type Storer = StoreReplace<Self>;
-}
-
-impl FromStr for ResponseChecksumValidation {
-    type Err = UnknownResponseChecksumValidationError;
-
-    fn from_str(response_checksum_validation: &str) -> Result<Self, Self::Err> {
-        if response_checksum_validation.eq_ignore_ascii_case(WHEN_SUPPORTED) {
-            Ok(Self::WhenSupported)
-        } else if response_checksum_validation.eq_ignore_ascii_case(WHEN_REQUIRED) {
-            Ok(Self::WhenRequired)
-        } else {
-            Err(UnknownResponseChecksumValidationError::new(
-                response_checksum_validation,
-            ))
         }
     }
 }

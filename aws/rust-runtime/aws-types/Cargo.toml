@@ -17,7 +17,6 @@ aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", optional = true }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-aws-smithy-checksums = {path = "../../../rust-runtime/aws-smithy-checksums"}
 tracing = "0.1"
 # cargo does not support optional test dependencies, so to completely disable rustls
 # we need to add the webpki-roots feature here.

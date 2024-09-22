@@ -19,13 +19,15 @@ pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-pub use aws_smithy_checksums::{RequestChecksumCalculation, ResponseChecksumValidation};
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
 pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
+pub use aws_smithy_types::checksum_config::{
+    RequestChecksumCalculation, ResponseChecksumValidation,
+};
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 use std::collections::HashMap;
@@ -183,7 +185,7 @@ impl Builder {
     /// # Examples
     /// ```
     /// use aws_types::SdkConfig;
-    /// use aws_smithy_checksums::RequestChecksumCalculation;
+    /// use aws_smithy_types::checksum_config::RequestChecksumCalculation;
     /// let config = SdkConfig::builder().request_checksum_calculation(RequestChecksumCalculation::WhenSupported).build();
     /// ```
     pub fn request_checksum_calculation(
@@ -207,7 +209,7 @@ impl Builder {
     /// # Examples
     /// ```
     /// use aws_types::SdkConfig;
-    /// use aws_smithy_checksums::ResponseChecksumValidation;
+    /// use aws_smithy_types::checksum_config::ResponseChecksumValidation;
     /// let config = SdkConfig::builder().response_checksum_validation(ResponseChecksumValidation::WhenSupported).build();
     /// ```
     pub fn response_checksum_validation(

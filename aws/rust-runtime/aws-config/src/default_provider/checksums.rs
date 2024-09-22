@@ -81,9 +81,10 @@ mod test {
     #[allow(deprecated)]
     use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
-    use aws_smithy_checksums::ResponseChecksumValidation;
+    use aws_smithy_types::checksum_config::{
+        RequestChecksumCalculation, ResponseChecksumValidation,
+    };
     use aws_types::os_shim_internal::{Env, Fs};
-    use aws_types::sdk_config::RequestChecksumCalculation;
     use tracing_test::traced_test;
 
     #[tokio::test]

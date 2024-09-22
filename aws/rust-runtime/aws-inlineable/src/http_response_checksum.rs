@@ -7,7 +7,7 @@
 
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
-use aws_smithy_checksums::{ChecksumAlgorithm, ResponseChecksumValidation};
+use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
@@ -16,6 +16,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::checksum_config::ResponseChecksumValidation;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use std::{fmt, mem};
 

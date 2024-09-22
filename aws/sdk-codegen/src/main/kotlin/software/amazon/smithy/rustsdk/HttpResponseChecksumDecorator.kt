@@ -191,8 +191,8 @@ class HttpResponseChecksumConfigCustomization(private val codegenContext: Client
             *preludeScope,
             "ResponseChecksumValidation" to
                 configReexport(
-                    RuntimeType.smithyChecksums(rc)
-                        .resolve("ResponseChecksumValidation"),
+                    RuntimeType.smithyTypes(rc)
+                        .resolve("checksum_config::ResponseChecksumValidation"),
                 ),
         )
 

@@ -93,8 +93,8 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
                                 "Error" to interceptors.resolve("context::Error"),
                                 "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
                                 "RequestChecksumCalculation" to
-                                    CargoDependency.smithyChecksums(rc).toType()
-                                        .resolve("RequestChecksumCalculation"),
+                                    CargoDependency.smithyTypes(rc).toType()
+                                        .resolve("checksum_config::RequestChecksumCalculation"),
                             )
                         }
 

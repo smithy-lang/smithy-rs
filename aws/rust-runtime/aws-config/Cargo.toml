@@ -33,7 +33,6 @@ aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
-aws-smithy-checksums = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-checksums" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 bytes = "1.1.0"
 http = "0.2.4"
