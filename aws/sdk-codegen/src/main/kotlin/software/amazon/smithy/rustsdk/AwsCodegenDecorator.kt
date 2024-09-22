@@ -24,7 +24,6 @@ import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExpiresDecorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExpressDecorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExtendedRequestIdDecorator
-import software.amazon.smithy.rustsdk.customize.s3.S3MultiPartUploadDecorator
 import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sso.SSODecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
@@ -86,7 +85,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
             S3ExtendedRequestIdDecorator(),
             IsTruncatedPaginatorDecorator(),
             S3ExpiresDecorator(),
-            S3MultiPartUploadDecorator(),
         ),
         S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
         STSDecorator().onlyApplyTo("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),

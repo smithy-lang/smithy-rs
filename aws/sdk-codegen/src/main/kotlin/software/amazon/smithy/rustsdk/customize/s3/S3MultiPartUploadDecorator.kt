@@ -6,10 +6,7 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -19,32 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
-
-/**
- * Add a default value to CreateMultiPartUploadRequest's ChecksumAlgorithm
- */
-class S3MultiPartUploadDecorator : ClientCodegenDecorator {
-    override val name: String = "S3MultiPartUpload"
-    override val order: Byte = 0
-    private val defaultAlgorithm = "CRC32"
-
-    private val operationName = "CreateMultipartUpload"
-    private val s3Namespace = "com.amazonaws.s3"
-
-    private fun isS3MPUOperation(shape: Shape): Boolean =
-        shape is OperationShape && shape.id == ShapeId.from("$s3Namespace#$operationName")
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        if (isS3MPUOperation(operation)) {
-            baseCustomizations + listOf(S3MPUChecksumCustomization(codegenContext, operation))
-        } else {
-            baseCustomizations
-        }
-}
 
 /**
  * S3 CreateMPU is not modeled with the httpChecksum trait so the checksum_algorithm

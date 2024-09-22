@@ -93,7 +93,8 @@ where
 
         // If validation has not been explicitly enabled we check the ResponseChecksumValidation
         // from the SdkConfig. If it is WhenSupported (or unknown) we enable validation and if it
-        // is WhenRequired we leave it disabled.
+        // is WhenRequired we leave it disabled since there is no way to indicate that a response
+        // checksum is required.
         let validation_enabled = if !state.validation_enabled {
             match response_checksum_validation {
                 ResponseChecksumValidation::WhenRequired => false,
