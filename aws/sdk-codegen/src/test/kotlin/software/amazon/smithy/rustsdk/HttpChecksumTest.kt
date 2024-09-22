@@ -139,6 +139,8 @@ internal class HttpChecksumTest {
                 checksumResponseSuccTests.map { createResponseChecksumValidationSuccessTest(it, context) }.join("\n")
             val checksumResponseFailTestWritables =
                 checksumResponseFailTests.map { createResponseChecksumValidationFailureTest(it, context) }.join("\n")
+            val checksumStreamingRequestTestWritables =
+                streamingRequestTests.map { createStreamingRequestChecksumCalculationTest(it, context) }.join("\n")
 
             // Shared imports for all test types
             val testBase =
@@ -152,6 +154,8 @@ internal class HttpChecksumTest {
                         use #{Region};
                         use #{pretty_assertions}::assert_eq;
                         use #{SdkBody};
+                        use std::io::Write;
+                        use http_body::Body;
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
@@ -172,6 +176,10 @@ internal class HttpChecksumTest {
 
             rustCrate.integrationTest("response_checksums_fail") {
                 testBase.plus(checksumResponseFailTestWritables)()
+            }
+
+            rustCrate.integrationTest("streaming_request_checksums") {
+                testBase.plus(checksumStreamingRequestTestWritables)()
             }
         }
     }
@@ -224,6 +232,85 @@ internal class HttpChecksumTest {
                         .expect("algo header should exist");
 
                     assert_eq!(algo_header, "${testDef.algoHeader}");
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
+
+    /**
+     * Generate tests where the request is streaming and checksum is calculated correctly
+     */
+    private fun createStreamingRequestChecksumCalculationTest(
+        testDef: StreamingRequestChecksumCalculationTest,
+        context: ClientCodegenContext,
+    ): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        val algoLower = testDef.checksumAlgorithm.lowercase()
+        // If the algo is Crc32 don't explicitly set it to test that the default is correctly set
+        val setChecksumAlgo =
+            if (testDef.checksumAlgorithm != "Crc32") {
+                ".checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})"
+            } else {
+                ""
+            }
+        return writable {
+            rustTemplate(
+                """
+                //${testDef.docs}
+                ##[#{tokio}::test]
+                async fn ${algoLower}_request_checksums_work() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+
+                    let mut file = tempfile::NamedTempFile::new().unwrap();
+                    file.as_file_mut()
+                    .write_all("${testDef.requestPayload}".as_bytes())
+                    .unwrap();
+
+                    let streaming_body = aws_smithy_types::byte_stream::ByteStream::read_from()
+                        .path(&file)
+                        .build()
+                        .await
+                        .unwrap();
+
+                    let _operation = client
+                        .some_streaming_operation()
+                        .body(streaming_body)
+                        $setChecksumAlgo
+                        .send()
+                        .await;
+
+
+                    let request = rx.expect_request();
+
+                    let headers = request.headers();
+
+                    assert_eq!(
+                        headers.get("x-amz-trailer").unwrap(),
+                        "x-amz-checksum-$algoLower",
+                    );
+                    assert_eq!(headers.get("content-encoding").unwrap(), "aws-chunked");
+
+                    let mut body = request.body().try_clone().expect("body is retryable");
+
+                    let mut body_data = bytes::BytesMut::new();
+                    while let Some(data) = body.data().await {
+                        body_data.extend_from_slice(&data.unwrap())
+                    }
+
+                    let body_string = std::str::from_utf8(&body_data).unwrap();
+                    assert!(body_string.contains("x-amz-checksum-$algoLower:${testDef.trailerChecksum}"));
                 }
                 """,
                 *preludeScope,
@@ -397,10 +484,42 @@ data class StreamingRequestChecksumCalculationTest(
     val docs: String,
     val requestPayload: String,
     val checksumAlgorithm: String,
-    val contentHeader: String,
-    val trailerHeader: String,
     val trailerChecksum: String,
 )
+
+val streamingRequestTests =
+    listOf(
+        StreamingRequestChecksumCalculationTest(
+            "CRC32 streaming checksum calculation works.",
+            "Hello world",
+            "Crc32",
+            "i9aeUg==",
+        ),
+        StreamingRequestChecksumCalculationTest(
+            "CRC32C streaming checksum calculation works.",
+            "Hello world",
+            "Crc32C",
+            "crUfeA==",
+        ),
+//    StreamingRequestChecksumCalculationTest(
+//        "CRC64NVME streaming checksum calculation works.",
+//        "Hello world",
+//        "Crc64Nvme",
+//        "uc8X9yrZrD4=",
+//    ),
+        StreamingRequestChecksumCalculationTest(
+            "SHA1 streaming checksum calculation works.",
+            "Hello world",
+            "Sha1",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+        ),
+        StreamingRequestChecksumCalculationTest(
+            "SHA256 streaming checksum calculation works.",
+            "Hello world",
+            "Sha256",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+        ),
+    )
 
 data class ResponseChecksumValidationSuccessTest(
     val docs: String,
