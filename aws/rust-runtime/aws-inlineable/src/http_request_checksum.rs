@@ -169,7 +169,8 @@ where
         // WhenRequired we only calculate it if the checksum is marked required on the trait.
         let calculate_checksum = match request_checksum_calculation {
             RequestChecksumCalculation::WhenRequired => request_checksum_required,
-            RequestChecksumCalculation::WhenSupported | _ => true,
+            RequestChecksumCalculation::WhenSupported => true,
+            _ => true,
         };
 
         // Calculate the checksum if necessary
@@ -209,7 +210,7 @@ fn add_checksum_for_request_body(
 
             // If the header has not already been set we set it. If it was already set by the user
             // we do nothing and maintain their set value.
-            if let None = request.headers().get(checksum.header_name()) {
+            if request.headers().get(checksum.header_name()).is_none() {
                 tracing::debug!("applying {checksum_algorithm:?} of the request body as a header");
                 checksum.update(data);
 
@@ -239,7 +240,7 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
     let checksum = checksum_algorithm.into_impl();
 
     // If the user already set the header value then do nothing and return early
-    if let Some(_) = request.headers().get(checksum.header_name()) {
+    if request.headers().get(checksum.header_name()).is_some() {
         return Ok(());
     }
 

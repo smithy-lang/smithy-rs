@@ -98,7 +98,8 @@ where
         let validation_enabled = if !state.validation_enabled {
             match response_checksum_validation {
                 ResponseChecksumValidation::WhenRequired => false,
-                ResponseChecksumValidation::WhenSupported | _ => true,
+                ResponseChecksumValidation::WhenSupported => true,
+                _ => true,
             }
         } else {
             true

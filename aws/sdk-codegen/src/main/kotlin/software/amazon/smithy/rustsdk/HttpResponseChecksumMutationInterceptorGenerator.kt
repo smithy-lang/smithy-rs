@@ -143,6 +143,7 @@ class HttpResponseChecksumMutationInterceptorGenerator : ClientCodegenDecorator 
                                     // If validation setting is WhenSupported (or unknown) we enable response checksum
                                     // validation. If it is WhenRequired we do not enable (since there is no way to
                                     // indicate that a response checksum is required).
+                                    ##[allow(clippy::wildcard_in_or_patterns)]
                                     match response_checksum_validation {
                                         #{ResponseChecksumValidation}::WhenRequired => {}
                                         #{ResponseChecksumValidation}::WhenSupported | _ => {
