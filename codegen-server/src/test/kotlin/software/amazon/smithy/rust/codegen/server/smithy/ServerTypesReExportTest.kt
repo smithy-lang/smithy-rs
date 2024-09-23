@@ -1,12 +1,14 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class ServerTypesReExportTest {
@@ -36,6 +38,9 @@ class ServerTypesReExportTest {
                         "#[allow(unused_imports)] use $prefix::$it;"
                     }
 
+                // Ensure all types that were exported before version 0.64 and used
+                // under the `{generated_sdk_crate_name}::server` namespace remain available.
+                // Additionally, include all types requested by customers.
                 unitTest(
                     "types_exists_in_server_module",
                     setOf(
@@ -60,7 +65,8 @@ class ServerTypesReExportTest {
                         "instrumentation",
                         "protocol",
                         "Extension",
-                        ).generateUseStatements("crate::server"),
+                        "scope",
+                    ).generateUseStatements("crate::server"),
                 )
             }
         }

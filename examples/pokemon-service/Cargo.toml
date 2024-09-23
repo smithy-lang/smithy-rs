@@ -15,7 +15,6 @@ tower = "0.4"
 tracing = "0.1"
 
 # Local paths
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["request-id"] }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
@@ -33,4 +32,6 @@ hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
-pokemon-service-client = { path = "../pokemon-service-client/", features = ["behavior-version-latest"] }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }
