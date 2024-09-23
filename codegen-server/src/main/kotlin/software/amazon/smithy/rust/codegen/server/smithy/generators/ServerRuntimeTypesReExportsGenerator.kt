@@ -22,7 +22,7 @@ class ServerRuntimeTypesReExportsGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            // Re-export all types from the `aws-smithy-http-server` crate under the `server` module.
+            // Re-export all types from the `aws-smithy-http-server` crate.
             pub use #{SmithyHttpServer}::*;
             """,
             *codegenScope,
