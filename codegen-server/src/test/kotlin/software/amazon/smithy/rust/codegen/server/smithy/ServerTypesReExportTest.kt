@@ -5,6 +5,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -15,15 +17,13 @@ class ServerTypesReExportTest {
     private val sampleModel =
         """
         namespace amazon
-
         use aws.protocols#restJson1
 
         @restJson1
         service SampleService {
             operations: [SampleOperation]
         }
-
-        @http(uri: "/anOperation", method: "GET")
+        @http(uri: "/sample", method: "GET")
         operation SampleOperation {
             output := {}
         }
@@ -68,6 +68,28 @@ class ServerTypesReExportTest {
                         "scope",
                     ).generateUseStatements("crate::server"),
                 )
+
+                unitTest(
+                    "request_id_reexports",
+                    additionalAttributes = listOf(Attribute.featureGate("request-id")),
+                ) {
+                    rustTemplate(
+                        """
+                        ##[allow(unused_imports)] use crate::server::request::request_id::ServerRequestId;
+                        """,
+                    )
+                }
+
+                unitTest(
+                    "aws_lambda_reexports",
+                    additionalAttributes = listOf(Attribute.featureGate("aws-lambda")),
+                ) {
+                    rustTemplate(
+                        """
+                        ##[allow(unused_imports)] use crate::server::{request::lambda::Context, routing::LambdaHandler};
+                        """,
+                    )
+                }
             }
         }
     }
