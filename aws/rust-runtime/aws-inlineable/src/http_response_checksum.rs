@@ -10,7 +10,7 @@
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -61,9 +61,9 @@ where
         "ResponseChecksumInterceptor"
     }
 
-    fn modify_before_serialization(
+    fn read_before_serialization(
         &self,
-        context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        context: &BeforeSerializationInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {

@@ -36,7 +36,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  * operation's input or the `requestChecksumRequired` value from the trait, and in certain circumstances we need to
  * mutate that member on the input before serializing the request and sending it to the service.
  */
-class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
+class HttpRequestChecksumMutationInterceptorDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksumMutationInterceptorGenerator"
     override val order: Byte = 0
 
@@ -77,7 +77,6 @@ class HttpRequestChecksumMutationInterceptorGenerator : ClientCodegenDecorator {
                         codegenContext.runtimeConfig.let { rc ->
                             val runtimeApi = CargoDependency.smithyRuntimeApiClient(rc).toType()
                             val interceptors = runtimeApi.resolve("client::interceptors")
-                            val orchestrator = runtimeApi.resolve("client::orchestrator")
 
                             arrayOf(
                                 *preludeScope,

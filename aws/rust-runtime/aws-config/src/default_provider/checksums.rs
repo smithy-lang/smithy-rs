@@ -164,6 +164,16 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    async fn default_works_request() {
+        let conf = ProviderConfig::empty();
+        assert_eq!(
+            request_checksum_calculation_provider(&conf).await,
+            Some(RequestChecksumCalculation::WhenSupported)
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
     async fn log_error_on_invalid_value_response() {
         let conf = ProviderConfig::empty().with_env(Env::from_slice(&[(
             "AWS_RESPONSE_CHECKSUM_VALIDATION",
@@ -234,6 +244,16 @@ mod test {
         assert_eq!(
             response_checksum_validation_provider(&conf).await,
             Some(ResponseChecksumValidation::WhenRequired)
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn default_works_response() {
+        let conf = ProviderConfig::empty();
+        assert_eq!(
+            response_checksum_validation_provider(&conf).await,
+            Some(ResponseChecksumValidation::WhenSupported)
         );
     }
 }
