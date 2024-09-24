@@ -5,6 +5,12 @@
 
 //! Types that allow users to indicate their preferences for checksum calculation and validation
 
+// Note: These types would likely make more sense in `aws-smithy-checksums` and were originally
+// added there. But we have lints protecting against exporting non-stable types from stable crates
+// and the checksums crate is not yet 1.0, so these types cannot live there for now. In the future
+// if we do decide to 1.0 the checksums crate we can move these types there and re-export them here
+// to maintain the current behavior.
+
 use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
