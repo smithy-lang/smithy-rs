@@ -307,11 +307,11 @@ jobs:
             "OPENSSL_INCLUDE_DIR",
         ]
         [target.powerpc-unknown-linux-gnu]
-        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
         [target.powerpc-unknown-linux-gnu.env]
         passthrough = ["OPENSSL_DIR"]
         [target.powerpc64-unknown-linux-gnu]
-        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
         [target.powerpc64-unknown-linux-gnu.env]
         passthrough = ["OPENSSL_DIR"]
         EOF
