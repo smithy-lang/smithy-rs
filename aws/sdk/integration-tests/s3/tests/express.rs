@@ -183,7 +183,12 @@ async fn presigning() {
         ][..],
         &query_params
     );
-    assert_eq!(presigned.headers().count(), 0);
+    // Presigned request has one header and that is the x-amz-checksum-mode
+    // header with default value ENABLED
+    assert_eq!(presigned.headers().count(), 1);
+    let headers = presigned.headers().collect::<Vec<(&str, &str)>>();
+    assert_eq!(headers.get(0).unwrap().0, "x-amz-checksum-mode");
+    assert_eq!(headers.get(0).unwrap().1, "ENABLED");
 }
 
 fn operation_request_with_checksum(
