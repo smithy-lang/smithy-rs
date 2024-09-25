@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
@@ -32,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import kotlin.jvm.optionals.getOrNull
 
 internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     RuntimeType.forInlineDependency(
@@ -295,9 +295,8 @@ class HttpRequestChecksumConfigCustomization(private val codegenContext: ClientC
 /**
  * Determine if the current service contains any operations with the HttpChecksum trait
  */
-fun serviceHasHttpChecksumOperation(codegenContext: ClientCodegenContext) =
-    codegenContext.serviceShape.allOperations
-        .mapNotNull { codegenContext.model.getShape(it).getOrNull() }
-        .any {
-            it.hasTrait<HttpChecksumTrait>()
-        }
+fun serviceHasHttpChecksumOperation(codegenContext: ClientCodegenContext): Boolean {
+    val index = TopDownIndex.of(codegenContext.model)
+    val ops = index.getContainedOperations(codegenContext.serviceShape.id)
+    return ops.any { it.hasTrait<HttpChecksumTrait>() }
+}
