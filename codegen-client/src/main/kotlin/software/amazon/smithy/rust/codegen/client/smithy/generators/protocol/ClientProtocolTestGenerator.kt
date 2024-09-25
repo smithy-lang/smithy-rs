@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Broke
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
@@ -84,20 +83,7 @@ class ClientProtocolTestGenerator(
             )
 
         private val BrokenTests:
-            Set<BrokenTest> =
-            setOf(
-                BrokenTest.ResponseTest(
-                    ServiceShapeId.REST_JSON,
-                    "RestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse",
-                    howToFixItFn = ::fixRestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse,
-                    inAtLeast = setOf("1.50.0"),
-                    trackedIn =
-                        setOf(
-                            // TODO(https://github.com/smithy-lang/smithy/pull/2341)
-                            "https://github.com/smithy-lang/smithy/pull/2341",
-                        ),
-                ),
-            )
+            Set<BrokenTest> = setOf()
 
         private fun fixRestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse(
             testCase: TestCase.ResponseTest,
@@ -296,7 +282,9 @@ class ClientProtocolTestGenerator(
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
-            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+            "SharedResponseDeserializer" to
+                RT.smithyRuntimeApiClient(rc)
+                    .resolve("client::ser_de::SharedResponseDeserializer"),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
