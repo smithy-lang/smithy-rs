@@ -155,7 +155,9 @@ class SigV4AuthDecoratorTest {
                         let client = $moduleUseName::Client::from_conf(config);
                         let _ = client.some_operation().something(#{ByteStream}::from_static(b"Hello, world!")).send().await;
 
-                        http_client.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&["authorization"]);
+                        let auth_header = http_client.actual_requests().next().unwrap().headers().get(http::header::AUTHORIZATION).unwrap();
+                        assert!(auth_header.contains("AWS4-ECDSA-P256-SHA256"));
                         """,
                         "ByteStream" to RuntimeType.byteStream(rc),
                         "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc).resolve("Credentials"),
