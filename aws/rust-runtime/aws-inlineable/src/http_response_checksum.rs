@@ -8,6 +8,7 @@
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
 use aws_smithy_checksums::ChecksumAlgorithm;
+use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
@@ -130,6 +131,21 @@ where
                 mem::swap(&mut body, response.body_mut());
             }
         }
+
+        // Set the user-agent feature metric for the response checksum config
+        match response_checksum_validation {
+            ResponseChecksumValidation::WhenSupported => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenSupported);
+            }
+            ResponseChecksumValidation::WhenRequired => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenRequired);
+            }
+            unsupported => tracing::warn!(
+                more_info = "Unsupported value of ResponseChecksumValidation when setting user-agent metrics",
+                unsupported = ?unsupported),
+        };
 
         Ok(())
     }
