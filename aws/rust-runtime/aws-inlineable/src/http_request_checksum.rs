@@ -153,7 +153,7 @@ where
     /// Calculate a checksum and modify the request to include the checksum as a header
     /// (for in-memory request bodies) or a trailer (for streaming request bodies).
     /// Streaming bodies must be sized or this will return an error.
-    fn modify_before_signing(
+    fn modify_before_retry_loop(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
@@ -198,6 +198,7 @@ where
                     cfg.interceptor_state()
                         .store_append(SmithySdkFeature::FlexibleChecksumsReqCrc32c);
                 }
+                #[allow(deprecated)]
                 ChecksumAlgorithm::Md5 => {
                     tracing::warn!(more_info = "Unsupported ChecksumAlgorithm MD5 set");
                 }

@@ -79,6 +79,25 @@ where
         layer.store_put(ResponseChecksumInterceptorState { validation_enabled });
         cfg.push_layer(layer);
 
+        let response_checksum_validation = cfg
+            .load::<ResponseChecksumValidation>()
+            .unwrap_or(&ResponseChecksumValidation::WhenSupported);
+
+        // Set the user-agent feature metric for the response checksum config
+        match response_checksum_validation {
+            ResponseChecksumValidation::WhenSupported => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenSupported);
+            }
+            ResponseChecksumValidation::WhenRequired => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenRequired);
+            }
+            unsupported => tracing::warn!(
+                more_info = "Unsupported value of ResponseChecksumValidation when setting user-agent metrics",
+                unsupported = ?unsupported),
+        };
+
         Ok(())
     }
 
@@ -131,21 +150,6 @@ where
                 mem::swap(&mut body, response.body_mut());
             }
         }
-
-        // Set the user-agent feature metric for the response checksum config
-        match response_checksum_validation {
-            ResponseChecksumValidation::WhenSupported => {
-                cfg.interceptor_state()
-                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenSupported);
-            }
-            ResponseChecksumValidation::WhenRequired => {
-                cfg.interceptor_state()
-                    .store_append(SmithySdkFeature::FlexibleChecksumsResWhenRequired);
-            }
-            unsupported => tracing::warn!(
-                more_info = "Unsupported value of ResponseChecksumValidation when setting user-agent metrics",
-                unsupported = ?unsupported),
-        };
 
         Ok(())
     }

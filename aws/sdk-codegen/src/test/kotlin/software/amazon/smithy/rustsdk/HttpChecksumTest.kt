@@ -141,6 +141,7 @@ internal class HttpChecksumTest {
                 checksumResponseFailTests.map { createResponseChecksumValidationFailureTest(it, context) }.join("\n")
             val checksumStreamingRequestTestWritables =
                 streamingRequestTests.map { createStreamingRequestChecksumCalculationTest(it, context) }.join("\n")
+            val miscTests = createMiscellaneousTests(context)
 
             // Shared imports for all test types
             val testBase =
@@ -156,18 +157,42 @@ internal class HttpChecksumTest {
                         use #{SdkBody};
                         use std::io::Write;
                         use http_body::Body;
+                        use #{HttpRequest};
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
                         "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
                         "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),
                         "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+                        "HttpRequest" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpRequest"),
+                    )
+                }
+
+            val uaExtractor =
+                writable {
+                    rustTemplate(
+                        """
+                        fn get_sdk_metric_str(req: &HttpRequest) -> &str {
+                            req.headers()
+                                .get("x-amz-user-agent")
+                                .unwrap()
+                                .split(" ")
+                                .filter_map(|sec| {
+                                    if sec.starts_with("m/") {
+                                        Some(&sec[2..])
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<&str>>()[0]
+                        }
+                        """.trimIndent(),
                     )
                 }
 
             // Create one integ test per test type
             rustCrate.integrationTest("request_checksums") {
-                testBase.plus(checksumRequestTestWritables)()
+                testBase.plus(checksumRequestTestWritables).plus(uaExtractor)()
             }
 
             rustCrate.integrationTest("response_checksums_success") {
@@ -180,6 +205,10 @@ internal class HttpChecksumTest {
 
             rustCrate.integrationTest("streaming_request_checksums") {
                 testBase.plus(checksumStreamingRequestTestWritables)()
+            }
+
+            rustCrate.integrationTest("misc_tests") {
+                testBase.plus(uaExtractor).plus(miscTests)()
             }
         }
     }
@@ -232,6 +261,10 @@ internal class HttpChecksumTest {
                         .expect("algo header should exist");
 
                     assert_eq!(algo_header, "${testDef.algoHeader}");
+
+                    // Check the user-agent metrics for the selected algo
+                    let sdk_metrics = get_sdk_metric_str(&request);
+                    assert!(sdk_metrics.contains("${testDef.algoFeatureId}"));
                 }
                 """,
                 *preludeScope,
@@ -427,6 +460,128 @@ internal class HttpChecksumTest {
             )
         }
     }
+
+    /**
+     * Generate miscellaneous tests
+     */
+    private fun createMiscellaneousTests(context: ClientCodegenContext): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        return writable {
+            rustTemplate(
+                """
+                // The following tests confirm that the user-agent business metrics header is correctly
+                // set for the request/response checksum config values
+                ##[::tokio::test]
+                async fn request_config_ua_required() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .request_checksum_calculation(
+                            aws_types::sdk_config::RequestChecksumCalculation::WhenRequired,
+                        )
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = get_sdk_metric_str(&request);
+                    assert!(sdk_metrics.contains("a"));
+                    assert!(!sdk_metrics.contains("Z"));
+                }
+
+                ##[::tokio::test]
+                async fn request_config_ua_supported() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = get_sdk_metric_str(&request);
+                    assert!(sdk_metrics.contains("Z"));
+                    assert!(!sdk_metrics.contains("a"));
+                }
+
+                ##[::tokio::test]
+                async fn response_config_ua_supported() {
+                    let (http_client, rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-crc32", "i9aeUg==")
+                            .body(SdkBody::from("Hello world"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = get_sdk_metric_str(&request);
+                    assert!(sdk_metrics.contains("b"));
+                    assert!(!sdk_metrics.contains("c"));
+                }
+
+                ##[::tokio::test]
+                async fn response_config_ua_required() {
+                    let (http_client, rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-crc32", "i9aeUg==")
+                            .body(SdkBody::from("Hello world"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .response_checksum_validation(
+                            aws_types::sdk_config::ResponseChecksumValidation::WhenRequired,
+                        )
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = get_sdk_metric_str(&request);
+                    assert!(sdk_metrics.contains("c"));
+                    assert!(!sdk_metrics.contains("b"));
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
 }
 
 // Classes and data for test definitions
@@ -437,6 +592,7 @@ data class RequestChecksumCalculationTest(
     val checksumAlgorithm: String,
     val algoHeader: String,
     val checksumHeader: String,
+    val algoFeatureId: String,
 )
 
 val checksumRequestTests =
@@ -447,6 +603,7 @@ val checksumRequestTests =
             "Crc32",
             "CRC32",
             "i9aeUg==",
+            "U",
         ),
         RequestChecksumCalculationTest(
             "CRC32C checksum calculation works.",
@@ -454,6 +611,7 @@ val checksumRequestTests =
             "Crc32C",
             "CRC32C",
             "crUfeA==",
+            "V",
         ),
         /* We do not yet support Crc64Nvme checksums
          RequestChecksumCalculationTest(
@@ -462,6 +620,7 @@ val checksumRequestTests =
          "Crc64Nvme",
          "CRC64NVME",
          "uc8X9yrZrD4=",
+         "W",
          ),
          */
         RequestChecksumCalculationTest(
@@ -470,6 +629,7 @@ val checksumRequestTests =
             "Sha1",
             "SHA1",
             "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+            "X",
         ),
         RequestChecksumCalculationTest(
             "SHA256 checksum calculation works.",
@@ -477,6 +637,7 @@ val checksumRequestTests =
             "Sha256",
             "SHA256",
             "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+            "Y",
         ),
     )
 
