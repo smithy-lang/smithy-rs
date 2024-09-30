@@ -120,6 +120,7 @@ class HttpResponseChecksumCustomization(
             val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
             val requestValidationModeMember =
                 checksumTrait.requestValidationModeMember(codegenContext, operationShape) ?: return@writable
+            val requestValidationModeName = codegenContext.symbolProvider.toSymbol(requestValidationModeMember).name
             val requestValidationModeMemberInner =
                 if (requestValidationModeMember.isOptional) {
                     codegenContext.model.expectShape(requestValidationModeMember.target)
@@ -150,6 +151,34 @@ class HttpResponseChecksumCustomization(
                             }
                                     let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
                                     matches!(input.$validationModeName(), #{Some}(#{ValidationModeShape}::Enabled))
+                                },
+                                |input: &mut #{Input}, cfg: &#{ConfigBag}|  {
+                                    let input = input
+                                        .downcast_mut::<#{OperationInputType}>()
+                                        .ok_or("failed to downcast to #{OperationInputType}")?;
+
+                                    let request_validation_enabled =
+                                        matches!(input.$requestValidationModeName(), Some(#{ValidationModeShape}::Enabled));
+
+                                    if !request_validation_enabled {
+                                        // This value is set by the user on the SdkConfig to indicate their preference
+                                        let response_checksum_validation = cfg
+                                            .load::<#{ResponseChecksumValidation}>()
+                                            .unwrap_or(&#{ResponseChecksumValidation}::WhenSupported);
+
+                                        // If validation setting is WhenSupported (or unknown) we enable response checksum
+                                        // validation. If it is WhenRequired we do not enable (since there is no way to
+                                        // indicate that a response checksum is required).
+                                        ##[allow(clippy::wildcard_in_or_patterns)]
+                                        match response_checksum_validation {
+                                            #{ResponseChecksumValidation}::WhenRequired => {}
+                                            #{ResponseChecksumValidation}::WhenSupported | _ => {
+                                                input.$requestValidationModeName = Some(#{ValidationModeShape}::Enabled);
+                                            }
+                                        }
+                                    }
+
+                                    #{Ok}(())
                                 }
                             )
                             """,
@@ -163,14 +192,20 @@ class HttpResponseChecksumCustomization(
                                 codegenContext.symbolProvider.toSymbol(
                                     requestValidationModeMemberInner,
                                 ),
-                        )
-                    }
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                        val interceptorName = "${operationName}HttpResponseChecksumMutationInterceptor"
-                        rustTemplate(
-                            """
-                            $interceptorName
-                            """,
+                            "OperationInputType" to
+                                codegenContext.symbolProvider.toSymbol(
+                                    operationShape.inputShape(
+                                        codegenContext.model,
+                                    ),
+                                ),
+                            "ValidationModeShape" to
+                                codegenContext.symbolProvider.toSymbol(
+                                    requestValidationModeMemberInner,
+                                ),
+                            "ResponseChecksumValidation" to
+                                CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
+                                    .resolve("checksum_config::ResponseChecksumValidation"),
+                            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
                         )
                     }
                 }

@@ -10,7 +10,7 @@
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -28,12 +28,13 @@ impl Storable for ResponseChecksumInterceptorState {
     type Storer = StoreReplace<Self>;
 }
 
-pub(crate) struct ResponseChecksumInterceptor<VE> {
+pub(crate) struct ResponseChecksumInterceptor<VE, CM> {
     response_algorithms: &'static [&'static str],
     validation_enabled: VE,
+    checksum_mutator: CM,
 }
 
-impl<VE> fmt::Debug for ResponseChecksumInterceptor<VE> {
+impl<VE, CM> fmt::Debug for ResponseChecksumInterceptor<VE, CM> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ResponseChecksumInterceptor")
             .field("response_algorithms", &self.response_algorithms)
@@ -41,32 +42,36 @@ impl<VE> fmt::Debug for ResponseChecksumInterceptor<VE> {
     }
 }
 
-impl<VE> ResponseChecksumInterceptor<VE> {
+impl<VE, CM> ResponseChecksumInterceptor<VE, CM> {
     pub(crate) fn new(
         response_algorithms: &'static [&'static str],
         validation_enabled: VE,
+        checksum_mutator: CM,
     ) -> Self {
         Self {
             response_algorithms,
             validation_enabled,
+            checksum_mutator,
         }
     }
 }
 
-impl<VE> Intercept for ResponseChecksumInterceptor<VE>
+impl<VE, CM> Intercept for ResponseChecksumInterceptor<VE, CM>
 where
     VE: Fn(&Input) -> bool + Send + Sync,
+    CM: Fn(&mut Input, &ConfigBag) -> Result<(), BoxError> + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "ResponseChecksumInterceptor"
     }
 
-    fn read_before_serialization(
+    fn modify_before_serialization(
         &self,
-        context: &BeforeSerializationInterceptorContextRef<'_>,
+        context: &mut BeforeSerializationInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
+        let _ = (self.checksum_mutator)(context.input_mut(), cfg);
         let validation_enabled = (self.validation_enabled)(context.input());
 
         let mut layer = Layer::new("ResponseChecksumInterceptor");

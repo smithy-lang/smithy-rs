@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
@@ -346,4 +347,16 @@ fun serviceHasHttpChecksumOperation(codegenContext: ClientCodegenContext): Boole
     val index = TopDownIndex.of(codegenContext.model)
     val ops = index.getContainedOperations(codegenContext.serviceShape.id)
     return ops.any { it.hasTrait<HttpChecksumTrait>() }
+}
+
+/**
+ * Get the top-level operation input member used to opt-in to best-effort validation of a checksum returned in
+ * the HTTP response of the operation.
+ */
+fun HttpChecksumTrait.requestAlgorithmMemberShape(
+    codegenContext: ClientCodegenContext,
+    operationShape: OperationShape,
+): MemberShape? {
+    val requestAlgorithmMember = this.requestAlgorithmMember.orNull() ?: return null
+    return operationShape.inputShape(codegenContext.model).expectMember(requestAlgorithmMember)
 }
