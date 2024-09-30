@@ -1,0 +1,34 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Update lockfiles manually
+run-name: ${{ github.workflow }} (${{ inputs.base_branch }})
+on:
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: The name of the branch on which to run `cargo update` for lockfiles
+        required: true
+        type: string
+      force_update_on_broken_dependencies:
+        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading them to the last known working versions
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.base_branch }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-update-runtime-lockfiles-and-sdk-lockfile:
+    name: Run cargo update on the runtime lockfiles and the SDK lockfile
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/pull-request-updating-lockfiles.yml
+    with:
+      base_branch: ${{ inputs.base_branch }}
+      force_update_on_broken_dependencies: ${{ inputs.force_update_on_broken_dependencies }}
+    secrets:
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}

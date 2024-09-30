@@ -170,6 +170,8 @@ class SmokeTestsInstantiator(
     ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
+
+    // Get list of the built-ins actually included in the model
     private val builtInParamNames: List<String> by lazy {
         val index = EndpointRulesetIndex.of(codegenContext.model)
         val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
@@ -210,6 +212,8 @@ class SmokeTestsInstantiator(
                 "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
             )
 
+            // The `use_dual_stack` and `use_fips` fields will only exist on the endpoint params if they built-ins are
+            // included in the model, so we check for that before setting them.
             if (builtInParamNames.contains(dualStackName)) {
                 rust(".use_dual_stack(${params.useDualstack()})")
             }

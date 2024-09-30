@@ -1,0 +1,47 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <base-branch> <branch-name-for-updating-lockfiles> <whether forcing update on broken dependencies (true/false)>"
+    exit 1
+fi
+
+base_branch=$1
+branch_name_for_updating_lockfiles=$2
+force_update_on_broken_dependencies=$3
+
+SMITHY_RS_DIR="$(pwd)/smithy-rs"
+
+pushd "${SMITHY_RS_DIR}"
+
+git config --local user.name "AWS SDK Rust Bot"
+git config --local user.email "aws-sdk-rust-primary@amazon.com"
+
+git fetch --unshallow
+git checkout "${base_branch}"
+git checkout -b "${branch_name_for_updating_lockfiles}"
+
+if [[ "${force_update_on_broken_dependencies}" == "true" ]]
+then
+  ./gradlew -Paws.sdk.force.update.broken.dependencies aws:sdk:cargoUpdateAllLockfiles
+else
+  ./gradlew aws:sdk:cargoUpdateAllLockfiles
+fi
+
+git add aws/rust-runtime/Cargo.lock \
+    aws/rust-runtime/aws-config/Cargo.lock \
+    aws/sdk/Cargo.lock \
+    rust-runtime/Cargo.lock
+
+git diff --staged --quiet || \
+    git commit \
+        -m "Run cargo update on the runtime lockfiles and the SDK lockfile"
+
+git push origin HEAD
+
+popd

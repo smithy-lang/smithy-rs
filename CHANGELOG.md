@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 26th, 2024
+====================
+**New this release:**
+- :bug: (client, [smithy-rs#3820](https://github.com/smithy-lang/smithy-rs/issues/3820)) Fixed a bug with the content length of compressed payloads that caused such requests to hang.
+
+
 September 17th, 2024
 ====================
 

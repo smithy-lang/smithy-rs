@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -24,8 +25,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class SmokeTestsDecoratorTest {
     companion object {
-        val model =
-            """
+        val imports = """
             namespace test
 
             use aws.api#service
@@ -33,7 +33,96 @@ class SmokeTestsDecoratorTest {
             use aws.auth#sigv4
             use aws.protocols#restJson1
             use smithy.rules#endpointRuleSet
+        """
+        val traitsWithAllBuiltIns =
+            """
+            @service(sdkId: "dontcare")
+            @restJson1
+            @sigv4(name: "dontcare")
+            @auth([sigv4])
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {
+                    "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                    "Endpoint": {
+                      "builtIn": "SDK::Endpoint",
+                      "required": false,
+                      "documentation": "Override the endpoint used to send this request",
+                      "type": "String"
+                    },
+                    "UseFIPS": {
+                      "builtIn": "AWS::UseFIPS",
+                      "required": true,
+                      "default": false,
+                      "type": "Boolean"
+                    },
+                    "UseDualStack": {
+                      "builtIn": "AWS::UseDualStack",
+                      "required": true,
+                      "default": false,
+                      "type": "Boolean"
+                    },
+                }
+            })
+            """
 
+        val traitsWithNoDualStack =
+            """
+            @service(sdkId: "dontcare")
+            @restJson1
+            @sigv4(name: "dontcare")
+            @auth([sigv4])
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {
+                    "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                    "Endpoint": {
+                      "builtIn": "SDK::Endpoint",
+                      "required": false,
+                      "documentation": "Override the endpoint used to send this request",
+                      "type": "String"
+                    },
+                    "UseFIPS": {
+                      "builtIn": "AWS::UseFIPS",
+                      "required": true,
+                      "default": false,
+                      "type": "Boolean"
+                    },
+                }
+            })
+            """
+
+        val traitsWithNoFips =
+            """
+            @service(sdkId: "dontcare")
+            @restJson1
+            @sigv4(name: "dontcare")
+            @auth([sigv4])
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {
+                    "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
+                    "Endpoint": {
+                      "builtIn": "SDK::Endpoint",
+                      "required": false,
+                      "documentation": "Override the endpoint used to send this request",
+                      "type": "String"
+                    },
+                    "UseDualStack": {
+                      "builtIn": "AWS::UseDualStack",
+                      "required": true,
+                      "default": false,
+                      "type": "Boolean"
+                    },
+                }
+            })
+            """
+
+        val traitsWithNeither =
+            """
             @service(sdkId: "dontcare")
             @restJson1
             @sigv4(name: "dontcare")
@@ -45,6 +134,9 @@ class SmokeTestsDecoratorTest {
                     "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
                 }
             })
+            """
+
+        val serviceDef = """
             service TestService {
                 version: "2023-01-01",
                 operations: [SomeOperation]
@@ -54,6 +146,7 @@ class SmokeTestsDecoratorTest {
                 {
                     id: "SomeOperationSuccess",
                     params: {}
+                    vendorParamsShape: "aws.test#AwsVendorParams",
                     vendorParams: {
                         region: "us-west-2"
                     }
@@ -62,6 +155,7 @@ class SmokeTestsDecoratorTest {
                 {
                     id: "SomeOperationFailure",
                     params: {}
+                    vendorParamsShape: "aws.test#AwsVendorParams",
                     vendorParams: {
                         region: "us-west-2"
                     }
@@ -70,6 +164,7 @@ class SmokeTestsDecoratorTest {
                 {
                     id: "SomeOperationFailureExplicitShape",
                     params: {}
+                    vendorParamsShape: "aws.test#AwsVendorParams",
                     vendorParams: {
                         region: "us-west-2"
                     }
@@ -94,11 +189,34 @@ class SmokeTestsDecoratorTest {
 
             @error("server")
             structure FooException { }
-            """.asSmithyModel(smithyVersion = "2")
+        """
+        val model = (imports + traitsWithAllBuiltIns + serviceDef).asSmithyModel(smithyVersion = "2")
+        val modelWithNoDualStack = (imports + traitsWithNoDualStack + serviceDef).asSmithyModel(smithyVersion = "2")
+        val modelWithNoFips = (imports + traitsWithNoFips + serviceDef).asSmithyModel(smithyVersion = "2")
+        val modelWithNeitherBuiltIn = (imports + traitsWithNeither + serviceDef).asSmithyModel(smithyVersion = "2")
     }
 
     @Test
     fun smokeTestSdkCodegen() {
+        testSmokeTestsWithModel(model)
+    }
+
+    @Test
+    fun smokeTestSdkCodegenNoDualStack() {
+        testSmokeTestsWithModel(modelWithNoDualStack)
+    }
+
+    @Test
+    fun smokeTestSdkCodegenNoFips() {
+        testSmokeTestsWithModel(modelWithNoFips)
+    }
+
+    @Test
+    fun smokeTestSdkCodegenNeitherBuiltIn() {
+        testSmokeTestsWithModel(modelWithNeitherBuiltIn)
+    }
+
+    fun testSmokeTestsWithModel(model: Model) {
         val codegenContext = testClientCodegenContext(model)
         val smokeTestedOperations = operationToTestCases(model)
         awsSdkIntegrationTest(
@@ -107,9 +225,11 @@ class SmokeTestsDecoratorTest {
             // `SdkSmokeTestsRustClientCodegenPlugin` only uses the minimal set of codegen decorators, which results
             // in a significant amount of unused code. This can cause `clippy` to fail with the `--deny warnings`
             // setting enabled by default in `.crate/config.toml` in test workspaces.
-            // To work around this issue, we unset `RUSTFLAGS` to allow unused and dead code.
+            // To work around this issue, we unset `RUSTFLAGS` to allow unused and dead code. To perform a compilation
+            // only test, we don't need to set `mapOf(Pair("RUSTFLAGS", "--cfg smoketests"))` since that would
+            // cause the tests to actually run (against a non-existent service) and fail.
             environment = mapOf(Pair("RUSTFLAGS", "")),
-            test = { _, crate ->
+            test = { codegenContext, crate ->
                 // It should compile. We can't run the tests because they don't target a real service.
                 // They are skipped because the `smoketests` flag is unset for `rustc` in the `cargo test`
                 // invocation specified by `awsIntegrationTestParams`.
@@ -123,7 +243,12 @@ class SmokeTestsDecoratorTest {
                                 // will suffice for the test.
                                 configBuilderInitializer = { ->
                                     writable {
-                                        rust("let conf = config::Builder::new()")
+                                        rust(
+                                            """
+                                            let conf = config::Builder::new().build();
+                                            let params = ${codegenContext.moduleUseName()}::config::endpoint::Params::builder()
+                                            """.trimIndent(),
+                                        )
                                     }
                                 },
                             )

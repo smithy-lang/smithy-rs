@@ -98,6 +98,7 @@ impl Intercept for RequestCompressionInterceptor {
         layer.store_put(RequestCompressionInterceptorState {
             options: Some(options),
         });
+
         cfg.push_layer(layer);
 
         Ok(())
@@ -126,7 +127,8 @@ impl Intercept for RequestCompressionInterceptor {
         //
         // Because compressing small amounts of data can actually increase its size,
         // we check to see if the data is big enough to make compression worthwhile.
-        if let Some(known_size) = http_body::Body::size_hint(request.body()).exact() {
+        let size_hint = http_body::Body::size_hint(request.body()).exact();
+        if let Some(known_size) = size_hint {
             if known_size < options.min_compression_size_bytes() as u64 {
                 tracing::trace!(
                     min_compression_size_bytes = options.min_compression_size_bytes(),
@@ -135,16 +137,15 @@ impl Intercept for RequestCompressionInterceptor {
                 );
                 return Ok(());
             }
-            tracing::trace!("compressing non-streaming request body...")
+            tracing::trace!("compressing sized request body...");
         } else {
-            tracing::trace!("compressing streaming request body...");
+            tracing::trace!("compressing unsized request body...");
         }
 
         wrap_request_body_in_compressed_body(
             request,
             CompressionAlgorithm::Gzip.into_impl_http_body_0_4_x(&options),
         )?;
-
         cfg.interceptor_state()
             .store_append::<SmithySdkFeature>(SmithySdkFeature::GzipRequestCompression);
 
@@ -162,11 +163,24 @@ fn wrap_request_body_in_compressed_body(
     );
     let mut body = {
         let body = mem::replace(request.body_mut(), SdkBody::taken());
-        body.map(move |body| {
-            let body = CompressedBody::new(body, request_compress_impl.clone());
 
-            SdkBody::from_body_0_4(body)
-        })
+        if body.is_streaming() {
+            request.headers_mut().remove(http::header::CONTENT_LENGTH);
+            body.map(move |body| {
+                let body = CompressedBody::new(body, request_compress_impl.clone());
+                SdkBody::from_body_0_4(body)
+            })
+        } else {
+            let body = CompressedBody::new(body, request_compress_impl.clone());
+            let body = body.into_compressed_sdk_body().map_err(BuildError::other)?;
+
+            let content_length = body.content_length().expect("this payload is in-memory");
+            request
+                .headers_mut()
+                .insert(http::header::CONTENT_LENGTH, content_length.to_string());
+
+            body
+        }
     };
     mem::swap(request.body_mut(), &mut body);
 

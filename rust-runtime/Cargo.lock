@@ -369,13 +369,14 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-compression"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "aws-smithy-runtime-api 1.7.2",
  "aws-smithy-types 1.2.6",
  "bytes",
  "bytes-utils",
  "flate2",
+ "futures-util",
  "http 0.2.12",
  "http 1.1.0",
  "http-body 0.4.6",
