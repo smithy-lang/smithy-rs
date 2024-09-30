@@ -69,7 +69,14 @@ open class ServerRootGenerator(
             //! ## Using $serviceName
             //!
             //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`](#{Tower}::Service)
-            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](crate::server::routing::LambdaHandler).
+            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`]
+            //! or used in AWS Lambda
+            ##![cfg_attr(
+                feature = "aws-lambda",
+                doc = " via [`LambdaHandler`](crate::server::routing::LambdaHandler).")]
+            ##![cfg_attr(
+                not(feature = "aws-lambda"),
+                doc = " by enabling the `aws-lambda` feature flag and utilizing the `LambdaHandler`.")]
             //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
