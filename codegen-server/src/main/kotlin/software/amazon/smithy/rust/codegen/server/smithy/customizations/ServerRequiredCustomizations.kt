@@ -51,8 +51,16 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         rustCrate.mergeFeature(
             Feature(
                 "aws-lambda",
-                true,
+                false,
                 listOf("aws-smithy-http-server/aws-lambda"),
+            ),
+        )
+
+        rustCrate.mergeFeature(
+            Feature(
+                "request-id",
+                true,
+                listOf("aws-smithy-http-server/request-id"),
             ),
         )
 

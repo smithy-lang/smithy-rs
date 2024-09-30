@@ -10,8 +10,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, Plugin};
-use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
+use pokemon_service_server_sdk::{
+    server::plugin::{HttpMarker, HttpPlugins, Plugin},
+    PokemonService, PokemonServiceConfig,
+};
 use tower::{Layer, Service};
 
 use aws_smithy_runtime::client::http::test_util::capture_request;
