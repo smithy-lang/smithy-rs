@@ -160,29 +160,71 @@ class HttpRequestChecksumCustomization(
         writable {
             // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
             val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
-            val requestAlgorithmMember = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
+            val requestAlgorithmMember =
+                checksumTrait.requestAlgorithmMemberShape(codegenContext, operationShape) ?: return@writable
+            val requestAlgorithmMemberName = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
             val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
             val requestChecksumRequired = checksumTrait.isRequestChecksumRequired
             val operationName = codegenContext.symbolProvider.toSymbol(operationShape).name
+            val requestAlgorithmMemberInner =
+                if (requestAlgorithmMember.isOptional) {
+                    codegenContext.model.expectShape(requestAlgorithmMember.target)
+                } else {
+                    requestAlgorithmMember
+                }
 
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
-                    if (requestAlgorithmMember != null) {
+                    if (requestAlgorithmMemberName != null) {
                         section.registerInterceptor(runtimeConfig, this) {
                             val runtimeApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                             rustTemplate(
                                 """
-                                #{RequestChecksumInterceptor}::new(|input: &#{Input}| {
+                                #{RequestChecksumInterceptor}::new(
+                                |input: &#{Input}| {
                                     let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
-                                    let checksum_algorithm = input.$requestAlgorithmMember();
+                                    let checksum_algorithm = input.$requestAlgorithmMemberName();
                                     #{checksum_algorithm_to_str}
                                     #{Result}::<_, #{BoxError}>::Ok((checksum_algorithm, $requestChecksumRequired))
-                                })
+                                },
+                                |input: &mut #{Input}, cfg: &#{ConfigBag}| {
+                                let input = input
+                                    .downcast_mut::<#{OperationInputType}>()
+                                    .ok_or("failed to downcast to #{OperationInputType}")?;
+
+                                // This value is set by the user on the SdkConfig to indicate their preference
+                                let request_checksum_calculation = cfg
+                                    .load::<#{RequestChecksumCalculation}>()
+                                    .unwrap_or(&#{RequestChecksumCalculation}::WhenSupported);
+
+                                // From the httpChecksum trait
+                                let http_checksum_required = $requestChecksumRequired;
+
+                                // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum we
+                                // default to Crc32. If it is WhenRequired and a checksum is required by the trait we also set the
+                                // default. In all other cases we do nothing.
+                                match (
+                                    request_checksum_calculation,
+                                    http_checksum_required,
+                                    input.checksum_algorithm(),
+                                ) {
+                                    (#{RequestChecksumCalculation}::WhenSupported, _, None)
+                                    | (#{RequestChecksumCalculation}::WhenRequired, true, None) => {
+                                        input.checksum_algorithm = Some(#{ChecksumAlgoShape}::Crc32);
+                                    }
+                                    _ => {},
+                                }
+
+                                Ok(())
+                                }
+
+                                )
                                 """,
                                 *preludeScope,
                                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                                 "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
                                 "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
+                                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
                                 "RequestChecksumInterceptor" to
                                     runtimeConfig.awsInlineableHttpRequestChecksum()
                                         .resolve("RequestChecksumInterceptor"),
@@ -191,14 +233,19 @@ class HttpRequestChecksumCustomization(
                                         codegenContext,
                                         operationShape,
                                     ),
-                            )
-                        }
-                        section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                            val interceptorName = "${operationName}HttpRequestChecksumMutationInterceptor"
-                            rustTemplate(
-                                """
-                                $interceptorName
-                                """,
+                                "RequestChecksumCalculation" to
+                                    CargoDependency.smithyTypes(runtimeConfig).toType()
+                                        .resolve("checksum_config::RequestChecksumCalculation"),
+                                "ChecksumAlgoShape" to
+                                    codegenContext.symbolProvider.toSymbol(
+                                        requestAlgorithmMemberInner,
+                                    ),
+                                "OperationInputType" to
+                                    codegenContext.symbolProvider.toSymbol(
+                                        operationShape.inputShape(
+                                            codegenContext.model,
+                                        ),
+                                    ),
                             )
                         }
                     }

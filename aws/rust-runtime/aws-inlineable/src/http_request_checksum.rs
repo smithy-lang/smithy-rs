@@ -14,7 +14,7 @@ use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut, Input,
+    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -102,36 +102,42 @@ impl DefaultRequestChecksumOverride {
     }
 }
 
-pub(crate) struct RequestChecksumInterceptor<AP> {
+pub(crate) struct RequestChecksumInterceptor<AP, CM> {
     algorithm_provider: AP,
+    checksum_mutator: CM,
 }
 
-impl<AP> fmt::Debug for RequestChecksumInterceptor<AP> {
+impl<AP, CM> fmt::Debug for RequestChecksumInterceptor<AP, CM> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RequestChecksumInterceptor").finish()
     }
 }
 
-impl<AP> RequestChecksumInterceptor<AP> {
-    pub(crate) fn new(algorithm_provider: AP) -> Self {
-        Self { algorithm_provider }
+impl<AP, CM> RequestChecksumInterceptor<AP, CM> {
+    pub(crate) fn new(algorithm_provider: AP, checksum_mutator: CM) -> Self {
+        Self {
+            algorithm_provider,
+            checksum_mutator,
+        }
     }
 }
 
-impl<AP> Intercept for RequestChecksumInterceptor<AP>
+impl<AP, CM> Intercept for RequestChecksumInterceptor<AP, CM>
 where
     AP: Fn(&Input) -> Result<(Option<ChecksumAlgorithm>, bool), BoxError> + Send + Sync,
+    CM: Fn(&mut Input, &ConfigBag) -> Result<(), BoxError> + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "RequestChecksumInterceptor"
     }
 
-    fn read_before_serialization(
+    fn modify_before_serialization(
         &self,
-        context: &BeforeSerializationInterceptorContextRef<'_>,
+        context: &mut BeforeSerializationInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
+        let _ = (self.checksum_mutator)(context.input_mut(), cfg);
         let checksum_algorithm = (self.algorithm_provider)(context.input())?;
         let mut layer = Layer::new("RequestChecksumInterceptor");
         layer.store_put(RequestChecksumInterceptorState {
