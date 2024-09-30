@@ -82,11 +82,12 @@ sealed class RustModule {
             parent: RustModule = LibRs,
             documentationOverride: String? = null,
             additionalAttributes: List<Attribute> = emptyList(),
+            inline: Boolean = false,
         ): LeafModule =
             new(
                 name,
                 visibility = Visibility.PUBLIC,
-                inline = false,
+                inline = inline,
                 parent = parent,
                 documentationOverride = documentationOverride,
                 additionalAttributes = additionalAttributes,

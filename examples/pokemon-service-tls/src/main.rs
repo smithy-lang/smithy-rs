@@ -24,9 +24,6 @@
 
 use std::{fs::File, future, io::BufReader, net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{
-    request::connect_info::ConnectInfo, routing::Connected, AddExtensionLayer,
-};
 use clap::Parser;
 use futures_util::stream::StreamExt;
 use tokio_rustls::{
@@ -38,7 +35,11 @@ use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, get_storage,
     setup_tracing, stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::{input, output, PokemonService, PokemonServiceConfig};
+use pokemon_service_server_sdk::{
+    input, output,
+    server::{request::connect_info::ConnectInfo, routing::Connected, AddExtensionLayer},
+    PokemonService, PokemonServiceConfig,
+};
 use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
 
 #[derive(Parser, Debug)]
