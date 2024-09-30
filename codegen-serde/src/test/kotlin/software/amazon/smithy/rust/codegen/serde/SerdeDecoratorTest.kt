@@ -70,7 +70,9 @@ class SerdeDecoratorTest {
            blob: SensitiveBlob,
            constrained: Constrained,
            recursive: Recursive,
-           map: EnumKeyedMap
+           map: EnumKeyedMap,
+           float: Float,
+           double: Double
         }
 
         structure Constrained {
@@ -134,6 +136,8 @@ class SerdeDecoratorTest {
         structure Nested {
           @required
           int: Integer,
+          float: Float,
+          double: Double,
           sensitive: Timestamps,
           notSensitive: AlsoTimestamps,
           manyEnums: TestEnumList,
@@ -202,8 +206,12 @@ class SerdeDecoratorTest {
                             .e(Some(TestEnum::A))
                             .document(Some(Document::String("hello!".into())))
                             .blob(Some(Blob::new("hello")))
+                            .float(Some(f32::INFINITY))
+                            .double(Some(f64::NAN))
                             .nested(Some(Nested::builder()
                                 .int(5)
+                                .float(Some(f32::NEG_INFINITY))
+                                .double(Some(f64::NEG_INFINITY))
                                 .sensitive(Some(sensitive_map.clone()))
                                 .not_sensitive(Some(sensitive_map))
                                 .many_enums(Some(vec![TestEnum::A]))
@@ -274,6 +282,8 @@ class SerdeDecoratorTest {
         "e": "A",
         "nested": {
           "int": 5,
+          "float": "-Infinity",
+          "double": "-Infinity",
           "sensitive": {
             "a": "1970-01-01T00:00:00Z"
           },
@@ -289,7 +299,9 @@ class SerdeDecoratorTest {
           "enum": "B"
         },
         "document": "hello!",
-        "blob": "aGVsbG8="
+        "blob": "aGVsbG8=",
+        "float": "Infinity",
+        "double": "NaN"
     }""".replace("\\s".toRegex(), "")
 
     private val expectedRedacted =
@@ -298,6 +310,8 @@ class SerdeDecoratorTest {
         "e": "<redacted>",
         "nested": {
           "int": 5,
+          "float": "-Infinity",
+          "double": "-Infinity",
           "sensitive": {
             "a": "<redacted>"
           },
@@ -311,7 +325,9 @@ class SerdeDecoratorTest {
         },
         "union": "<redacted>",
         "document": "hello!",
-        "blob": "<redacted>"
+        "blob": "<redacted>",
+        "float": "Infinity",
+        "double": "NaN"
         }
         """.replace("\\s".toRegex(), "")
 
@@ -343,8 +359,12 @@ class SerdeDecoratorTest {
                                 .e("A".into())
                                 .document(Document::String("hello!".into()))
                                 .blob(Blob::new("hello"))
+                                .float(f32::INFINITY)
+                                .double(f64::NAN)
                                 .nested(Nested::builder()
                                     .int(5)
+                                    .float(f32::NEG_INFINITY)
+                                    .double(f64::NEG_INFINITY)
                                     .sensitive("a", DateTime::from(UNIX_EPOCH))
                                     .not_sensitive("a", DateTime::from(UNIX_EPOCH))
                                     .many_enums("A".into())
@@ -355,11 +375,15 @@ class SerdeDecoratorTest {
                                 .build()
                                 .unwrap();
                             let mut settings = #{crate}::serde::SerializationSettings::default();
+                            settings.out_of_range_floats_as_strings = true;
                             let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                             assert_eq!(serialized, ${expectedNoRedactions.dq()});
                             settings.redact_sensitive_fields = true;
                             let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                             assert_eq!(serialized, ${expectedRedacted.dq()});
+                            settings.out_of_range_floats_as_strings = false;
+                            let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                            assert_ne!(serialized, ${expectedRedacted.dq()});
                             """,
                             *codegenScope,
                         )
