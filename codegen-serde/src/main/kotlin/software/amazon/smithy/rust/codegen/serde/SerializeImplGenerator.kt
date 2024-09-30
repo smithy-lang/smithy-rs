@@ -234,6 +234,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             implSerializeConfigured(symbolBuilder(shape, numericType).build()) {
                 rustTemplate(
                     """
+                    if !self.settings.out_of_range_floats_as_strings {
+                        return self.value.serialize(serializer)
+                    }
                     if self.value.is_nan() {
                         serializer.serialize_str("NaN")
                     } else if *self.value == #{ty}::INFINITY {

@@ -381,6 +381,9 @@ class SerdeDecoratorTest {
                             settings.redact_sensitive_fields = true;
                             let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                             assert_eq!(serialized, ${expectedRedacted.dq()});
+                            settings.out_of_range_floats_as_strings = false;
+                            let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                            assert_ne!(serialized, ${expectedRedacted.dq()});
                             """,
                             *codegenScope,
                         )
