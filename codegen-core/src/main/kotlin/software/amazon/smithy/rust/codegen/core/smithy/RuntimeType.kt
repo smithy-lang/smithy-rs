@@ -279,14 +279,12 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
         val Http = CargoDependency.Http.toType()
         val HttpBody = CargoDependency.HttpBody.toType()
-        val HttpHeaderMap = Http.resolve("HeaderMap")
         val HttpRequest = Http.resolve("Request")
         val HttpRequestBuilder = Http.resolve("request::Builder")
         val HttpResponse = Http.resolve("Response")
         val HttpResponseBuilder = Http.resolve("response::Builder")
         val Hyper = CargoDependency.Hyper.toType()
         val LazyStatic = CargoDependency.LazyStatic.toType()
-        val Md5 = CargoDependency.Md5.toType()
         val OnceCell = CargoDependency.OnceCell.toType()
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()
@@ -294,12 +292,12 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Serde = CargoDependency.Serde.toType()
         val SerdeDeserialize = Serde.resolve("Deserialize")
         val SerdeSerialize = Serde.resolve("Serialize")
-        val RegexLite = CargoDependency.RegexLite.toType()
         val Tokio = CargoDependency.Tokio.toType()
         val TokioStream = CargoDependency.TokioStream.toType()
         val Tower = CargoDependency.Tower.toType()
         val Tracing = CargoDependency.Tracing.toType()
         val TracingTest = CargoDependency.TracingTest.toType()
+        val TracingSubscriber = CargoDependency.TracingSubscriber.toType()
 
         // codegen types
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
@@ -311,8 +309,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyCbor(runtimeConfig: RuntimeConfig) = CargoDependency.smithyCbor(runtimeConfig).toType()
 
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
-
-        fun smithyCompression(runtimeConfig: RuntimeConfig) = CargoDependency.smithyCompression(runtimeConfig).toType()
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = CargoDependency.smithyEventStream(runtimeConfig).toType()
 
@@ -444,7 +440,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))
 
         fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) =
-            RuntimeType.forInlineDependency(InlineDependency.defaultAuthPlugin(runtimeConfig))
+            forInlineDependency(InlineDependency.defaultAuthPlugin(runtimeConfig))
                 .resolve("DefaultAuthOptionsPlugin")
 
         fun labelFormat(
@@ -502,9 +498,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
         }
 
+        fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
+            CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType().resolve("client::http::test_util")
+
         fun captureRequest(runtimeConfig: RuntimeConfig) =
-            CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
-                .resolve("client::http::test_util::capture_request")
+            smithyRuntimeTestUtil(runtimeConfig).resolve("capture_request")
 
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType("crate::${inlineDependency.name}", inlineDependency)
