@@ -29,7 +29,7 @@ internal class RustToolChainTomlTest {
             input:= {}
             output:= {}
         }
-    """.asSmithyModel(smithyVersion = "2")
+        """.asSmithyModel(smithyVersion = "2")
 
     @Test
     fun `override test directory in integration test has a rust-toolchain toml file`() {
