@@ -436,15 +436,15 @@ fn cbor_values_equal(
 
         // Convert `ciborium::Map` to sorted `BTreeMap` and then compare the sorted maps.
         (ciborium::Value::Map(a_map), ciborium::Value::Map(b_map)) => {
-            let a_btree = ciborium_map_to_btreemap(a_map)?;
-            let b_btree = ciborium_map_to_btreemap(b_map)?;
+            let a_hashmap = ciborium_map_to_hashmap(a_map)?;
+            let b_hashmap = ciborium_map_to_hashmap(b_map)?;
 
-            if a_btree.len() != b_btree.len() {
+            if a_hashmap.len() != b_hashmap.len() {
                 false
             } else {
                 // Each key in `a` should exist in `b`, and the values should match.
-                a_btree.iter().try_fold(true, |acc, (a_key, a_value)| {
-                    b_btree
+                a_hashmap.iter().try_fold(true, |acc, (a_key, a_value)| {
+                    b_hashmap
                         .get(a_key)
                         .map(|b_value| {
                             cbor_values_equal(a_value, b_value).map(|equal| acc && equal)
@@ -464,30 +464,26 @@ fn cbor_values_equal(
     Ok(result)
 }
 
-/// Transforms a `ciborium::Value::Map` into a `BTreeMap<&String, &ciborium::Value>` sorted by keys.
+/// Converts a `ciborium::Value::Map` into a `HashMap<&String, &ciborium::Value>`.
 ///
 /// CBOR maps (`Value::Map`) are internally represented as vectors of key-value pairs,
-/// and their direct comparison is affected by the order of these pairs.
-/// Since CBOR specification treats maps as unordered collections,
-/// this function converts the vector into a `BTreeMap`, which maintains
-/// the entries in a sorted order based on the keys.
-/// This allows for consistent, order-independent comparisons between maps.
-fn ciborium_map_to_btreemap(
+/// and direct comparison is affected by the order of these pairs.
+/// Since the CBOR specification treats maps as unordered collections,
+/// this function transforms the vector into a `HashMap`, for order-independent comparisons
+/// between maps.
+fn ciborium_map_to_hashmap(
     cbor_map: &[(ciborium::Value, ciborium::Value)],
-) -> Result<std::collections::BTreeMap<&String, &ciborium::Value>, ProtocolTestFailure> {
-    let mut btree = std::collections::BTreeMap::new();
-    for (key, value) in cbor_map {
-        match key {
-            ciborium::Value::Text(key_str) => btree.insert(key_str, value),
-            _ => {
-                return Err(ProtocolTestFailure::InvalidBodyFormat {
-                    expected: "a text key as map entry".to_string(),
-                    found: format!("{:?}", key),
-                })
-            }
-        };
-    }
-    Ok(btree)
+) -> Result<std::collections::HashMap<&String, &ciborium::Value>, ProtocolTestFailure> {
+    cbor_map
+        .iter()
+        .map(|(key, value)| match key {
+            ciborium::Value::Text(key_str) => Ok((key_str, value)),
+            _ => Err(ProtocolTestFailure::InvalidBodyFormat {
+                expected: "a text key as map entry".to_string(),
+                found: format!("{:?}", key),
+            }),
+        })
+        .collect()
 }
 
 fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
