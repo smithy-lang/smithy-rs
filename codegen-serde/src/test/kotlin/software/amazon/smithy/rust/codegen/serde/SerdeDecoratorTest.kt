@@ -341,7 +341,7 @@ class SerdeDecoratorTest {
                     arrayOf(
                         "crate" to RustType.Opaque(ctx.moduleUseName()),
                         "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
-                        "serde_cbor" to CargoDependency("serde_cbor", CratesIo("0.11.2")).toDevDependency().toType(),
+                        "ciborium" to CargoDependency.Ciborium.toType(),
                         // we need the derive feature
                         "serde" to CargoDependency.Serde.toDevDependency().toType(),
                     )
@@ -437,7 +437,9 @@ class SerdeDecoratorTest {
                             use #{crate}::serde::*;
                             let input = StreamingInput::builder().data(ByteStream::from_static(b"123")).build().unwrap();
                             let settings = SerializationSettings::default();
-                            let serialized = #{serde_cbor}::to_vec(&input.serialize_ref(&settings)).expect("failed to serialize");
+                            let mut serialized = Vec::new();
+                            #{ciborium}::ser::into_writer(&input.serialize_ref(&settings), &mut serialized)
+                                .expect("failed to serialize input into CBOR format using `ciborium`");
                             assert_eq!(serialized, b"\xa1ddataC123");
                             """,
                             *codegenScope,

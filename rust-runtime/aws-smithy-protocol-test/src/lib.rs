@@ -422,9 +422,9 @@ fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     let decoded = base64_simd::STANDARD
         .decode_to_vec(expected_body)
         .expect("smithy protocol test `body` property is not properly base64 encoded");
-    let expected_cbor_value: serde_cbor::Value =
-        serde_cbor::from_slice(decoded.as_slice()).expect("expected value must be valid CBOR");
-    let actual_cbor_value: serde_cbor::Value = serde_cbor::from_slice(actual_body.as_ref())
+    let expected_cbor_value: ciborium::value::Value =
+        ciborium::from_reader(decoded.as_slice()).expect("expected value must be valid CBOR");
+    let actual_cbor_value: ciborium::value::Value = ciborium::from_reader(actual_body.as_ref())
         .map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
             expected: "cbor".to_owned(),
             found: format!("{} {:?}", e, actual_body),
@@ -597,6 +597,18 @@ mod tests {
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   6 }"#;
         validate_body(actual, expected, MediaType::Json).expect_err("bodies do not match");
+    }
+
+    #[test]
+    fn test_validate_cbor_body() {
+        // The following is the CBOR representation of `{"abc": 5 }`.
+        let actual = [0xbf, 0x63, 0x61, 0x62, 0x63, 0x05, 0xff];
+        // The following is the CBOR representation of `{"abc": 5 }` using a definite length map.
+        let expected = [0xA1, 0x63, 0x61, 0x62, 0x63, 0x05];
+        let expected_base64 = base64_simd::STANDARD.encode_to_string(expected);
+
+        validate_body(actual, expected_base64.as_str(), MediaType::Cbor)
+            .expect("expected base64-encoded CBOR value did not match");
     }
 
     #[test]
