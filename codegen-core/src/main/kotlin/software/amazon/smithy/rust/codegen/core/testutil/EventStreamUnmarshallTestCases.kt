@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import java.util.Base64
 
 object EventStreamUnmarshallTestCases {
     fun RustWriter.writeUnmarshallTestCases(
@@ -109,7 +110,7 @@ object EventStreamUnmarshallTestCases {
                     "event",
                     "MessageWithStruct",
                     "${testCase.responseContentType}",
-                    br##"${testCase.validTestStruct}"##
+                    ${testCase.generateRustPayloadInitializer(testCase.validTestStruct)}
                 );
                 let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
@@ -140,7 +141,7 @@ object EventStreamUnmarshallTestCases {
                     "event",
                     "MessageWithUnion",
                     "${testCase.responseContentType}",
-                    br##"${testCase.validTestUnion}"##
+                    ${testCase.generateRustPayloadInitializer(testCase.validTestUnion)}
                 );
                 let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
@@ -221,7 +222,7 @@ object EventStreamUnmarshallTestCases {
                     "event",
                     "MessageWithNoHeaderPayloadTraits",
                     "${testCase.responseContentType}",
-                    br##"${testCase.validMessageWithNoHeaderPayloadTraits}"##
+                    ${testCase.generateRustPayloadInitializer(testCase.validMessageWithNoHeaderPayloadTraits)}
                 );
                 let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
@@ -246,7 +247,7 @@ object EventStreamUnmarshallTestCases {
                     "exception",
                     "SomeError",
                     "${testCase.responseContentType}",
-                    br##"${testCase.validSomeError}"##
+                    ${testCase.generateRustPayloadInitializer(testCase.validSomeError)}
                 );
                 let result = $generator::new().unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
@@ -267,13 +268,42 @@ object EventStreamUnmarshallTestCases {
                 "event",
                 "MessageWithBlob",
                 "wrong-content-type",
-                br#"${testCase.validTestStruct}"#
+                ${testCase.generateRustPayloadInitializer(testCase.validTestStruct)}
             );
             let result = $generator::new().unmarshall(&message);
             assert!(result.is_err(), "expected error, got: {:?}", result);
             assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
             """,
         )
+    }
+
+    /**
+     * Generates a Rust-compatible initializer string for a given payload.
+     *
+     * This function handles two different scenarios based on the event stream message content type:
+     *
+     * 1. For CBOR payloads (content type "application/cbor"):
+     *    - The input payload is expected to be a base64 encoded CBOR value.
+     *    - It decodes the base64 string and generates a Rust byte array initializer.
+     *    - The output format is: &[0xFFu8, 0xFFu8, ...] where FF are hexadecimal values.
+     *
+     * 2. For all other content types:
+     *    - It returns a Rust raw string literal initializer.
+     *    - The output format is: br##"original_payload"##
+     */
+    fun EventStreamTestModels.TestCase.generateRustPayloadInitializer(payload: String): String {
+        return if (this.eventStreamMessageContentType == "application/cbor") {
+            Base64.getDecoder().decode(payload)
+                .joinToString(
+                    prefix = "&[",
+                    postfix = "]",
+                    transform = { "0x${it.toUByte().toString(16).padStart(2, '0')}u8" },
+                )
+        } else {
+            """
+            br##"$payload"##
+            """
+        }
     }
 }
 

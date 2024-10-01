@@ -66,6 +66,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
         CborSerializerSection("BeforeIteratingOverMapOrCollection")
+
+    /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
+    data class BeforeSerializingNonNullMember(val shape: Shape, val context: CborSerializerGenerator.MemberContext) :
+        CborSerializerSection("BeforeSerializingNonNullMember")
 }
 
 /**
@@ -200,9 +204,26 @@ class CborSerializerGenerator(
         }
     }
 
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3573)
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        TODO("We only call this when serializing in event streams, which are not supported yet: https://github.com/smithy-lang/smithy-rs/issues/3573")
+        val target = model.expectShape(member.target)
+        return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(input: &#{target}) -> std::result::Result<#{Vec}<u8>, #{Error}>",
+                *codegenScope,
+                "target" to symbolProvider.toSymbol(target),
+            ) {
+                rustTemplate("let mut encoder = #{Encoder}::new(#{Vec}::new());", *codegenScope)
+                rustBlock("") {
+                    rust("let encoder = &mut encoder;")
+                    when (target) {
+                        is StructureShape -> serializeStructure(StructContext("input", target))
+                        is UnionShape -> serializeUnion(Context(ValueExpression.Reference("input"), target))
+                        else -> throw IllegalStateException("CBOR payloadSerializer only supports structs and unions")
+                    }
+                }
+                rustTemplate("#{Ok}(encoder.into_writer())", *codegenScope)
+            }
+        }
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
@@ -311,6 +332,7 @@ class CborSerializerGenerator(
             safeName().also { local ->
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     context.valueExpression = ValueExpression.Reference(local)
+                    resolveValueExpressionForConstrainedType(targetShape, context)
                     serializeMemberValue(context, targetShape)
                 }
                 if (context.writeNulls) {
@@ -320,11 +342,26 @@ class CborSerializerGenerator(
                 }
             }
         } else {
+            resolveValueExpressionForConstrainedType(targetShape, context)
             with(serializerUtil) {
                 ignoreDefaultsForNumbersAndBools(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }
+        }
+    }
+
+    private fun RustWriter.resolveValueExpressionForConstrainedType(
+        targetShape: Shape,
+        context: MemberContext,
+    ) {
+        for (customization in customizations) {
+            customization.section(
+                CborSerializerSection.BeforeSerializingNonNullMember(
+                    targetShape,
+                    context,
+                ),
+            )(this)
         }
     }
 
@@ -362,7 +399,7 @@ class CborSerializerGenerator(
                     rust("$encoder;") // Encode the member key.
                 }
                 when (target) {
-                    is StructureShape -> serializeStructure(StructContext(value.name, target))
+                    is StructureShape -> serializeStructure(StructContext(value.asRef(), target))
                     is CollectionShape -> serializeCollection(Context(value, target))
                     is MapShape -> serializeMap(Context(value, target))
                     is UnionShape -> serializeUnion(Context(value, target))

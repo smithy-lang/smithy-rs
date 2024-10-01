@@ -48,7 +48,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.util.PANIC
-import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -447,7 +446,24 @@ class CborParserGenerator(
     }
 
     override fun payloadParser(member: MemberShape): RuntimeType {
-        UNREACHABLE("No protocol using CBOR serialization supports payload binding")
+        val shape = model.expectShape(member.target)
+        val returnSymbol = returnSymbolToParse(shape)
+        check(shape is UnionShape || shape is StructureShape) {
+            "Payload parser should only be used on structure and union shapes."
+        }
+        return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
+            rustTemplate(
+                """
+                pub(crate) fn $fnName(value: &[u8]) -> #{Result}<#{ReturnType}, #{Error}> {
+                    let decoder = &mut #{Decoder}::new(value);
+                    #{DeserializeMember}
+                }
+                """,
+                "ReturnType" to returnSymbol.symbol,
+                "DeserializeMember" to deserializeMember(member),
+                *codegenScope,
+            )
+        }
     }
 
     override fun operationParser(operationShape: OperationShape): RuntimeType? {

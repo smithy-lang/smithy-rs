@@ -32,7 +32,7 @@ pub fn parse_error_metadata(
     _response_headers: &Headers,
     response_body: &[u8],
 ) -> Result<ErrorMetadataBuilder, DeserializeError> {
-    fn error_code(
+    fn error_code_and_message(
         mut builder: ErrorMetadataBuilder,
         decoder: &mut Decoder,
     ) -> Result<ErrorMetadataBuilder, DeserializeError> {
@@ -40,6 +40,14 @@ pub fn parse_error_metadata(
             "__type" => {
                 let code = decoder.str()?;
                 builder.code(sanitize_error_code(&code))
+            }
+            "message" | "Message" | "errorMessage" => {
+                // Silently skip if `message` is not a string. This allows for custom error
+                // structures that might use different types for the message field.
+                match decoder.str() {
+                    Ok(message) => builder.message(message),
+                    Err(_) => builder,
+                }
             }
             _ => {
                 decoder.skip()?;
@@ -60,13 +68,13 @@ pub fn parse_error_metadata(
                     break;
                 }
                 _ => {
-                    builder = error_code(builder, decoder)?;
+                    builder = error_code_and_message(builder, decoder)?;
                 }
             };
         },
         Some(n) => {
             for _ in 0..n {
-                builder = error_code(builder, decoder)?;
+                builder = error_code_and_message(builder, decoder)?;
             }
         }
     };
