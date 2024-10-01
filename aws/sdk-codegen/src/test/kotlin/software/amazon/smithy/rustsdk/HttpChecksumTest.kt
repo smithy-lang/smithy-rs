@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.plus
@@ -130,8 +131,10 @@ internal class HttpChecksumTest {
     @Test
     fun requestChecksumWorks() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
-
+            // Allows us to use the user-agent test-utils in aws-runtime
+            rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
             val rc = context.runtimeConfig
+
             // Create Writables for all test types
             val checksumRequestTestWritables =
                 checksumRequestTests.map { createRequestChecksumCalculationTest(it, context) }.join("\n")
@@ -158,6 +161,8 @@ internal class HttpChecksumTest {
                         use std::io::Write;
                         use http_body::Body;
                         use #{HttpRequest};
+                        use #{UaAssert};
+                        use #{UaExtract};
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
@@ -165,34 +170,18 @@ internal class HttpChecksumTest {
                         "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),
                         "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
                         "HttpRequest" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpRequest"),
-                    )
-                }
-
-            val uaExtractor =
-                writable {
-                    rustTemplate(
-                        """
-                        fn get_sdk_metric_str(req: &HttpRequest) -> &str {
-                            req.headers()
-                                .get("x-amz-user-agent")
-                                .unwrap()
-                                .split(" ")
-                                .filter_map(|sec| {
-                                    if sec.starts_with("m/") {
-                                        Some(&sec[2..])
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<&str>>()[0]
-                        }
-                        """.trimIndent(),
+                        "UaAssert" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                        "UaExtract" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::test_util::extract_ua_values"),
                     )
                 }
 
             // Create one integ test per test type
             rustCrate.integrationTest("request_checksums") {
-                testBase.plus(checksumRequestTestWritables).plus(uaExtractor)()
+                testBase.plus(checksumRequestTestWritables)()
             }
 
             rustCrate.integrationTest("response_checksums_success") {
@@ -208,7 +197,7 @@ internal class HttpChecksumTest {
             }
 
             rustCrate.integrationTest("misc_tests") {
-                testBase.plus(uaExtractor).plus(miscTests)()
+                testBase.plus(miscTests)()
             }
         }
     }
@@ -263,8 +252,13 @@ internal class HttpChecksumTest {
                     assert_eq!(algo_header, "${testDef.algoHeader}");
 
                     // Check the user-agent metrics for the selected algo
-                    let sdk_metrics = get_sdk_metric_str(&request);
-                    assert!(sdk_metrics.contains("${testDef.algoFeatureId}"));
+                    assert_ua_contains_metric_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                        &["${testDef.algoFeatureId}"],
+                    );
                 }
                 """,
                 *preludeScope,
@@ -462,7 +456,8 @@ internal class HttpChecksumTest {
     }
 
     /**
-     * Generate miscellaneous tests
+     * Generate miscellaneous tests, currently mostly focused on the inclusion of the checksum config metrics in the
+     * user-agent header
      */
     private fun createMiscellaneousTests(context: ClientCodegenContext): Writable {
         val rc = context.runtimeConfig
@@ -492,9 +487,14 @@ internal class HttpChecksumTest {
                         .await;
                     let request = rx.expect_request();
 
-                    let sdk_metrics = get_sdk_metric_str(&request);
-                    assert!(sdk_metrics.contains("a"));
-                    assert!(!sdk_metrics.contains("Z"));
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"a"));
+                    assert!(!sdk_metrics.contains(&"Z"));
                 }
 
                 ##[::tokio::test]
@@ -514,9 +514,14 @@ internal class HttpChecksumTest {
                         .await;
                     let request = rx.expect_request();
 
-                    let sdk_metrics = get_sdk_metric_str(&request);
-                    assert!(sdk_metrics.contains("Z"));
-                    assert!(!sdk_metrics.contains("a"));
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"Z"));
+                    assert!(!sdk_metrics.contains(&"a"));
                 }
 
                 ##[::tokio::test]
@@ -541,9 +546,14 @@ internal class HttpChecksumTest {
                         .await;
                     let request = rx.expect_request();
 
-                    let sdk_metrics = get_sdk_metric_str(&request);
-                    assert!(sdk_metrics.contains("b"));
-                    assert!(!sdk_metrics.contains("c"));
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"b"));
+                    assert!(!sdk_metrics.contains(&"c"));
                 }
 
                 ##[::tokio::test]
@@ -571,9 +581,14 @@ internal class HttpChecksumTest {
                         .await;
                     let request = rx.expect_request();
 
-                    let sdk_metrics = get_sdk_metric_str(&request);
-                    assert!(sdk_metrics.contains("c"));
-                    assert!(!sdk_metrics.contains("b"));
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"c"));
+                    assert!(!sdk_metrics.contains(&"b"));
                 }
                 """,
                 *preludeScope,
