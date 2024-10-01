@@ -434,7 +434,8 @@ fn cbor_values_equal(
             })?
         }
 
-        // Convert `ciborium::Map` to sorted `BTreeMap` and then compare the sorted maps.
+        // Convert `ciborium::Value::Map` to a `HashMap`, and then compare the values of
+        // each key in `a` with those in `b`.
         (ciborium::Value::Map(a_map), ciborium::Value::Map(b_map)) => {
             let a_hashmap = ciborium_map_to_hashmap(a_map)?;
             let b_hashmap = ciborium_map_to_hashmap(b_map)?;
