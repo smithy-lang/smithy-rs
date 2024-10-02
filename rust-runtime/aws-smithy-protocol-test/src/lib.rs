@@ -415,17 +415,17 @@ fn try_json_eq(expected: &str, actual: &str) -> Result<(), ProtocolTestFailure> 
     }
 }
 
-/// Compares two `ciborium::Value` instances for semantic equality.
+/// Compares two `ciborium::value::Value` instances for semantic equality.
 ///
 /// This function recursively compares two CBOR values, correctly handling arrays and maps
 /// according to the CBOR specification. Arrays are compared element-wise in order,
 /// while maps are compared without considering the order of key-value pairs.
 fn cbor_values_equal(
-    a: &ciborium::Value,
-    b: &ciborium::Value,
+    a: &ciborium::value::Value,
+    b: &ciborium::value::Value,
 ) -> Result<bool, ProtocolTestFailure> {
     let result = match (a, b) {
-        (ciborium::Value::Array(a_array), ciborium::Value::Array(b_array)) => {
+        (ciborium::value::Value::Array(a_array), ciborium::value::Value::Array(b_array)) => {
             // Both arrays should be equal in size.
             a_array.len() == b_array.len() &&
             // Compare arrays element-wise.
@@ -434,9 +434,9 @@ fn cbor_values_equal(
             })?
         }
 
-        // Convert `ciborium::Value::Map` to a `HashMap`, and then compare the values of
+        // Convert `ciborium::value::Value::Map` to a `HashMap`, and then compare the values of
         // each key in `a` with those in `b`.
-        (ciborium::Value::Map(a_map), ciborium::Value::Map(b_map)) => {
+        (ciborium::value::Value::Map(a_map), ciborium::value::Value::Map(b_map)) => {
             let a_hashmap = ciborium_map_to_hashmap(a_map)?;
             let b_hashmap = ciborium_map_to_hashmap(b_map)?;
 
@@ -455,7 +455,7 @@ fn cbor_values_equal(
             }
         }
 
-        (ciborium::Value::Float(a_float), ciborium::Value::Float(b_float)) => {
+        (ciborium::value::Value::Float(a_float), ciborium::value::Value::Float(b_float)) => {
             a_float == b_float || a_float.is_nan() && b_float.is_nan()
         }
 
@@ -465,7 +465,7 @@ fn cbor_values_equal(
     Ok(result)
 }
 
-/// Converts a `ciborium::Value::Map` into a `HashMap<&String, &ciborium::Value>`.
+/// Converts a `ciborium::value::Value::Map` into a `HashMap<&String, &ciborium::value::Value>`.
 ///
 /// CBOR maps (`Value::Map`) are internally represented as vectors of key-value pairs,
 /// and direct comparison is affected by the order of these pairs.
@@ -473,12 +473,12 @@ fn cbor_values_equal(
 /// this function transforms the vector into a `HashMap`, for order-independent comparisons
 /// between maps.
 fn ciborium_map_to_hashmap(
-    cbor_map: &[(ciborium::Value, ciborium::Value)],
-) -> Result<std::collections::HashMap<&String, &ciborium::Value>, ProtocolTestFailure> {
+    cbor_map: &[(ciborium::value::Value, ciborium::value::Value)],
+) -> Result<std::collections::HashMap<&String, &ciborium::value::Value>, ProtocolTestFailure> {
     cbor_map
         .iter()
         .map(|(key, value)| match key {
-            ciborium::Value::Text(key_str) => Ok((key_str, value)),
+            ciborium::value::Value::Text(key_str) => Ok((key_str, value)),
             _ => Err(ProtocolTestFailure::InvalidBodyFormat {
                 expected: "a text key as map entry".to_string(),
                 found: format!("{:?}", key),
@@ -494,14 +494,12 @@ fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     let decoded = base64_simd::STANDARD
         .decode_to_vec(expected_body)
         .expect("smithy protocol test `body` property is not properly base64 encoded");
-    let expected_cbor_value: ciborium::Value =
-        ciborium::from_reader(decoded.as_slice()).expect("expected value must be valid CBOR");
-    let actual_cbor_value: ciborium::Value =
-        ciborium::from_reader(actual_body.as_ref()).map_err(|e| {
-            ProtocolTestFailure::InvalidBodyFormat {
-                expected: "cbor".to_owned(),
-                found: format!("{} {:?}", e, actual_body),
-            }
+    let expected_cbor_value: ciborium::value::Value =
+        ciborium::de::from_reader(decoded.as_slice()).expect("expected value must be valid CBOR");
+    let actual_cbor_value: ciborium::value::Value = ciborium::de::from_reader(actual_body.as_ref())
+        .map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
+            expected: "cbor".to_owned(),
+            found: format!("{} {:?}", e, actual_body),
         })?;
     let actual_body_base64 = base64_simd::STANDARD.encode_to_string(&actual_body);
 
