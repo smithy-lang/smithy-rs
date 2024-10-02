@@ -17,6 +17,7 @@
 //! Checksum calculation and verification callbacks.
 
 use crate::error::UnknownChecksumAlgorithmError;
+
 use bytes::Bytes;
 use std::str::FromStr;
 
@@ -33,9 +34,11 @@ pub const MD5_NAME: &str = "md5";
 
 /// We only support checksum calculation and validation for these checksum algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChecksumAlgorithm {
     Crc32,
     Crc32c,
+    #[deprecated]
     Md5,
     Sha1,
     Sha256,
@@ -49,7 +52,6 @@ impl FromStr for ChecksumAlgorithm {
     /// - "crc32c"
     /// - "sha1"
     /// - "sha256"
-    /// - "md5"
     ///
     /// Passing an invalid name will return an error.
     fn from_str(checksum_algorithm: &str) -> Result<Self, Self::Err> {
@@ -62,7 +64,8 @@ impl FromStr for ChecksumAlgorithm {
         } else if checksum_algorithm.eq_ignore_ascii_case(SHA_256_NAME) {
             Ok(Self::Sha256)
         } else if checksum_algorithm.eq_ignore_ascii_case(MD5_NAME) {
-            Ok(Self::Md5)
+            // MD5 is now an alias for the default Crc32 since it is deprecated
+            Ok(Self::Crc32)
         } else {
             Err(UnknownChecksumAlgorithmError::new(checksum_algorithm))
         }
@@ -75,7 +78,8 @@ impl ChecksumAlgorithm {
         match self {
             Self::Crc32 => Box::<Crc32>::default(),
             Self::Crc32c => Box::<Crc32c>::default(),
-            Self::Md5 => Box::<Md5>::default(),
+            #[allow(deprecated)]
+            Self::Md5 => Box::<Crc32>::default(),
             Self::Sha1 => Box::<Sha1>::default(),
             Self::Sha256 => Box::<Sha256>::default(),
         }
@@ -86,6 +90,7 @@ impl ChecksumAlgorithm {
         match self {
             Self::Crc32 => CRC_32_NAME,
             Self::Crc32c => CRC_32_C_NAME,
+            #[allow(deprecated)]
             Self::Md5 => MD5_NAME,
             Self::Sha1 => SHA_1_NAME,
             Self::Sha256 => SHA_256_NAME,
