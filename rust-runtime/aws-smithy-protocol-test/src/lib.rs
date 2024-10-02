@@ -415,6 +415,88 @@ fn try_json_eq(expected: &str, actual: &str) -> Result<(), ProtocolTestFailure> 
     }
 }
 
+/// Compares two `ciborium::value::Value` instances for semantic equality.
+///
+/// This function recursively compares two CBOR values, correctly handling arrays and maps
+/// according to the CBOR specification. Arrays are compared element-wise in order,
+/// while maps are compared without considering the order of key-value pairs.
+fn cbor_values_equal(
+    a: &ciborium::value::Value,
+    b: &ciborium::value::Value,
+) -> Result<bool, ProtocolTestFailure> {
+    match (a, b) {
+        (ciborium::value::Value::Array(a_array), ciborium::value::Value::Array(b_array)) => {
+            // Both arrays should be equal in size.
+            if a_array.len() != b_array.len() {
+                return Ok(false);
+            }
+            // Compare arrays element-wise.
+            for (a_elem, b_elem) in a_array.iter().zip(b_array.iter()) {
+                if !cbor_values_equal(a_elem, b_elem)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
+        }
+
+        // Convert `ciborium::value::Value::Map` to a `HashMap`, and then compare the values of
+        // each key in `a` with those in `b`.
+        (ciborium::value::Value::Map(a_map), ciborium::value::Value::Map(b_map)) => {
+            if a_map.len() != b_map.len() {
+                return Ok(false);
+            }
+
+            let b_hashmap = ciborium_map_to_hashmap(b_map)?;
+            // Each key in `a` should exist in `b`, and the values should match.
+            for a_key_value in a_map.iter() {
+                let (a_key, a_value) = get_text_key_value(a_key_value)?;
+                match b_hashmap.get(a_key) {
+                    Some(b_value) => {
+                        if !cbor_values_equal(a_value, b_value)? {
+                            return Ok(false);
+                        }
+                    }
+                    None => return Ok(false),
+                }
+            }
+            Ok(true)
+        }
+
+        (ciborium::value::Value::Float(a_float), ciborium::value::Value::Float(b_float)) => {
+            Ok(a_float == b_float || (a_float.is_nan() && b_float.is_nan()))
+        }
+
+        _ => Ok(a == b),
+    }
+}
+
+/// Converts a `ciborium::value::Value::Map` into a `HashMap<&String, &ciborium::value::Value>`.
+///
+/// CBOR maps (`Value::Map`) are internally represented as vectors of key-value pairs,
+/// and direct comparison is affected by the order of these pairs.
+/// Since the CBOR specification treats maps as unordered collections,
+/// this function transforms the vector into a `HashMap`, for order-independent comparisons
+/// between maps.
+fn ciborium_map_to_hashmap(
+    cbor_map: &[(ciborium::value::Value, ciborium::value::Value)],
+) -> Result<std::collections::HashMap<&String, &ciborium::value::Value>, ProtocolTestFailure> {
+    cbor_map.iter().map(get_text_key_value).collect()
+}
+
+/// Extracts a string key and its associated value from a CBOR key-value pair.
+/// Returns a `ProtocolTestFailure::InvalidBodyFormat` error if the key is not a text value.
+fn get_text_key_value(
+    (key, value): &(ciborium::value::Value, ciborium::value::Value),
+) -> Result<(&String, &ciborium::value::Value), ProtocolTestFailure> {
+    match key {
+        ciborium::value::Value::Text(key_str) => Ok((key_str, value)),
+        _ => Err(ProtocolTestFailure::InvalidBodyFormat {
+            expected: "a text key as map entry".to_string(),
+            found: format!("{:?}", key),
+        }),
+    }
+}
+
 fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     actual_body: T,
     expected_body: &str,
@@ -422,16 +504,16 @@ fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
     let decoded = base64_simd::STANDARD
         .decode_to_vec(expected_body)
         .expect("smithy protocol test `body` property is not properly base64 encoded");
-    let expected_cbor_value: serde_cbor::Value =
-        serde_cbor::from_slice(decoded.as_slice()).expect("expected value must be valid CBOR");
-    let actual_cbor_value: serde_cbor::Value = serde_cbor::from_slice(actual_body.as_ref())
+    let expected_cbor_value: ciborium::value::Value =
+        ciborium::de::from_reader(decoded.as_slice()).expect("expected value must be valid CBOR");
+    let actual_cbor_value: ciborium::value::Value = ciborium::de::from_reader(actual_body.as_ref())
         .map_err(|e| ProtocolTestFailure::InvalidBodyFormat {
             expected: "cbor".to_owned(),
             found: format!("{} {:?}", e, actual_body),
         })?;
     let actual_body_base64 = base64_simd::STANDARD.encode_to_string(&actual_body);
 
-    if expected_cbor_value != actual_cbor_value {
+    if !cbor_values_equal(&expected_cbor_value, &actual_cbor_value)? {
         let expected_body_annotated_hex: String = cbor_diag::parse_bytes(&decoded)
             .expect("smithy protocol test `body` property is not valid CBOR")
             .to_hex();
@@ -597,6 +679,46 @@ mod tests {
         let expected = r#"{"abc": 5 }"#;
         let actual = r#"   {"abc":   6 }"#;
         validate_body(actual, expected, MediaType::Json).expect_err("bodies do not match");
+    }
+
+    #[test]
+    fn test_validate_cbor_body() {
+        let base64_encode = |v: &[u8]| base64_simd::STANDARD.encode_to_string(v);
+
+        // The following is the CBOR representation of `{"abc": 5 }`.
+        let actual = [0xbf, 0x63, 0x61, 0x62, 0x63, 0x05, 0xff];
+        // The following is the base64-encoded CBOR representation of `{"abc": 5 }` using a definite length map.
+        let expected_base64 = base64_encode(&[0xA1, 0x63, 0x61, 0x62, 0x63, 0x05]);
+
+        validate_body(actual, expected_base64.as_str(), MediaType::Cbor)
+            .expect("unexpected mismatch between CBOR definite and indefinite map encodings");
+
+        // The following is the CBOR representation of `{"a":1, "b":2}`.
+        let actual = [0xBF, 0x61, 0x61, 0x01, 0x61, 0x62, 0x02, 0xFF];
+        // The following is the base64-encoded CBOR representation of `{"b":2, "a":1}`.
+        let expected_base64 = base64_encode(&[0xBF, 0x61, 0x62, 0x02, 0x61, 0x61, 0x01, 0xFF]);
+        validate_body(actual, expected_base64.as_str(), MediaType::Cbor)
+            .expect("different ordering in CBOR decoded maps do not match");
+
+        // The following is the CBOR representation of `{"a":[1,2,{"b":3, "c":4}]}`.
+        let actual = [
+            0xBF, 0x61, 0x61, 0x9F, 0x01, 0x02, 0xBF, 0x61, 0x62, 0x03, 0x61, 0x63, 0x04, 0xFF,
+            0xFF, 0xFF,
+        ];
+        // The following is the base64-encoded CBOR representation of `{"a":[1,2,{"c":4, "b":3}]}`.
+        let expected_base64 = base64_encode(&[
+            0xBF, 0x61, 0x61, 0x9F, 0x01, 0x02, 0xBF, 0x61, 0x63, 0x04, 0x61, 0x62, 0x03, 0xFF,
+            0xFF, 0xFF,
+        ]);
+        validate_body(actual, expected_base64.as_str(), MediaType::Cbor)
+            .expect("different ordering in CBOR decoded maps do not match");
+
+        // The following is the CBOR representation of `{"a":[1,2]}`.
+        let actual = [0xBF, 0x61, 0x61, 0x9F, 0x01, 0x02, 0xFF, 0xFF];
+        // The following is the CBOR representation of `{"a":[2,1]}`.
+        let expected_base64 = base64_encode(&[0xBF, 0x61, 0x61, 0x9F, 0x02, 0x01, 0xFF, 0xFF]);
+        validate_body(actual, expected_base64.as_str(), MediaType::Cbor)
+            .expect_err("arrays in CBOR should follow strict ordering");
     }
 
     #[test]
