@@ -424,45 +424,50 @@ fn cbor_values_equal(
     a: &ciborium::value::Value,
     b: &ciborium::value::Value,
 ) -> Result<bool, ProtocolTestFailure> {
-    let result = match (a, b) {
+    match (a, b) {
         (ciborium::value::Value::Array(a_array), ciborium::value::Value::Array(b_array)) => {
             // Both arrays should be equal in size.
-            a_array.len() == b_array.len() &&
+            if a_array.len() != b_array.len() {
+                return Ok(false);
+            }
             // Compare arrays element-wise.
-            a_array.iter().zip(b_array.iter()).try_fold(true, |acc, (a_elem, b_elem)| {
-                cbor_values_equal(a_elem, b_elem).map(|equal| acc && equal)
-            })?
+            for (a_elem, b_elem) in a_array.iter().zip(b_array.iter()) {
+                if !cbor_values_equal(a_elem, b_elem)? {
+                    return Ok(false);
+                }
+            }
+            Ok(true)
         }
 
         // Convert `ciborium::value::Value::Map` to a `HashMap`, and then compare the values of
         // each key in `a` with those in `b`.
         (ciborium::value::Value::Map(a_map), ciborium::value::Value::Map(b_map)) => {
-            let a_hashmap = ciborium_map_to_hashmap(a_map)?;
-            let b_hashmap = ciborium_map_to_hashmap(b_map)?;
-
-            if a_hashmap.len() != b_hashmap.len() {
-                false
-            } else {
-                // Each key in `a` should exist in `b`, and the values should match.
-                a_hashmap.iter().try_fold(true, |acc, (a_key, a_value)| {
-                    b_hashmap
-                        .get(a_key)
-                        .map(|b_value| {
-                            cbor_values_equal(a_value, b_value).map(|equal| acc && equal)
-                        })
-                        .unwrap_or(Ok(false))
-                })?
+            if a_map.len() != b_map.len() {
+                return Ok(false);
             }
+
+            let b_hashmap = ciborium_map_to_hashmap(b_map)?;
+            // Each key in `a` should exist in `b`, and the values should match.
+            for a_key_value in a_map.iter() {
+                let (a_key, a_value) = get_text_key_value(a_key_value)?;
+                match b_hashmap.get(a_key) {
+                    Some(b_value) => {
+                        if !cbor_values_equal(a_value, b_value)? {
+                            return Ok(false);
+                        }
+                    }
+                    None => return Ok(false),
+                }
+            }
+            Ok(true)
         }
 
         (ciborium::value::Value::Float(a_float), ciborium::value::Value::Float(b_float)) => {
-            a_float == b_float || a_float.is_nan() && b_float.is_nan()
+            Ok(a_float == b_float || (a_float.is_nan() && b_float.is_nan()))
         }
 
-        _ => a == b,
-    };
-
-    Ok(result)
+        _ => Ok(a == b),
+    }
 }
 
 /// Converts a `ciborium::value::Value::Map` into a `HashMap<&String, &ciborium::value::Value>`.
@@ -475,16 +480,21 @@ fn cbor_values_equal(
 fn ciborium_map_to_hashmap(
     cbor_map: &[(ciborium::value::Value, ciborium::value::Value)],
 ) -> Result<std::collections::HashMap<&String, &ciborium::value::Value>, ProtocolTestFailure> {
-    cbor_map
-        .iter()
-        .map(|(key, value)| match key {
-            ciborium::value::Value::Text(key_str) => Ok((key_str, value)),
-            _ => Err(ProtocolTestFailure::InvalidBodyFormat {
-                expected: "a text key as map entry".to_string(),
-                found: format!("{:?}", key),
-            }),
-        })
-        .collect()
+    cbor_map.iter().map(get_text_key_value).collect()
+}
+
+/// Extracts a string key and its associated value from a CBOR key-value pair.
+/// Returns a `ProtocolTestFailure::InvalidBodyFormat` error if the key is not a text value.
+fn get_text_key_value(
+    (key, value): &(ciborium::value::Value, ciborium::value::Value),
+) -> Result<(&String, &ciborium::value::Value), ProtocolTestFailure> {
+    match key {
+        ciborium::value::Value::Text(key_str) => Ok((key_str, value)),
+        _ => Err(ProtocolTestFailure::InvalidBodyFormat {
+            expected: "a text key as map entry".to_string(),
+            found: format!("{:?}", key),
+        }),
+    }
 }
 
 fn try_cbor_eq<T: AsRef<[u8]> + Debug>(
