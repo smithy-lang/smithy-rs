@@ -12,6 +12,7 @@ use aws_runtime::{auth::SigV4OperationSigningConfig, content_encoding::header_va
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
+use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, Input,
@@ -152,7 +153,7 @@ where
     /// Calculate a checksum and modify the request to include the checksum as a header
     /// (for in-memory request bodies) or a trailer (for streaming request bodies).
     /// Streaming bodies must be sized or this will return an error.
-    fn modify_before_signing(
+    fn modify_before_retry_loop(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
@@ -187,9 +188,65 @@ where
             let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg)
                 .unwrap_or(ChecksumAlgorithm::Crc32);
 
+            // Set the user-agent metric for the selected checksum algorithm
+            match checksum_algorithm {
+                ChecksumAlgorithm::Crc32 => {
+                    cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::FlexibleChecksumsReqCrc32);
+                }
+                ChecksumAlgorithm::Crc32c => {
+                    cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::FlexibleChecksumsReqCrc32c);
+                }
+                #[allow(deprecated)]
+                ChecksumAlgorithm::Md5 => {
+                    tracing::warn!(more_info = "Unsupported ChecksumAlgorithm MD5 set");
+                }
+                ChecksumAlgorithm::Sha1 => {
+                    cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::FlexibleChecksumsReqSha1);
+                }
+                ChecksumAlgorithm::Sha256 => {
+                    cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::FlexibleChecksumsReqSha256);
+                }
+                unsupported => tracing::warn!(
+                    more_info = "Unsupported value of ChecksumAlgorithm detected when setting user-agent metrics",
+                    unsupported = ?unsupported),
+            }
+
             let request = context.request_mut();
             add_checksum_for_request_body(request, checksum_algorithm, cfg)?;
         }
+
+        Ok(())
+    }
+
+    /// Set the user-agent metrics for `RequestChecksumCalculation` here to avoid ownership issues
+    /// with the mutable borrow of cfg in `modify_before_signing`
+    fn read_after_serialization(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let request_checksum_calculation = cfg
+            .load::<RequestChecksumCalculation>()
+            .unwrap_or(&RequestChecksumCalculation::WhenSupported);
+
+        match request_checksum_calculation {
+            RequestChecksumCalculation::WhenSupported => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsReqWhenSupported);
+            }
+            RequestChecksumCalculation::WhenRequired => {
+                cfg.interceptor_state()
+                    .store_append(SmithySdkFeature::FlexibleChecksumsReqWhenRequired);
+            }
+            unsupported => tracing::warn!(
+                    more_info = "Unsupported value of RequestChecksumCalculation when setting user-agent metrics",
+                    unsupported = ?unsupported),
+        };
 
         Ok(())
     }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.plus
@@ -130,8 +131,10 @@ internal class HttpChecksumTest {
     @Test
     fun requestChecksumWorks() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
-
+            // Allows us to use the user-agent test-utils in aws-runtime
+            rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
             val rc = context.runtimeConfig
+
             // Create Writables for all test types
             val checksumRequestTestWritables =
                 checksumRequestTests.map { createRequestChecksumCalculationTest(it, context) }.join("\n")
@@ -141,6 +144,7 @@ internal class HttpChecksumTest {
                 checksumResponseFailTests.map { createResponseChecksumValidationFailureTest(it, context) }.join("\n")
             val checksumStreamingRequestTestWritables =
                 streamingRequestTests.map { createStreamingRequestChecksumCalculationTest(it, context) }.join("\n")
+            val miscTests = createMiscellaneousTests(context)
 
             // Shared imports for all test types
             val testBase =
@@ -156,12 +160,22 @@ internal class HttpChecksumTest {
                         use #{SdkBody};
                         use std::io::Write;
                         use http_body::Body;
+                        use #{HttpRequest};
+                        use #{UaAssert};
+                        use #{UaExtract};
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
                         "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
                         "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),
                         "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+                        "HttpRequest" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpRequest"),
+                        "UaAssert" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                        "UaExtract" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::test_util::extract_ua_values"),
                     )
                 }
 
@@ -180,6 +194,10 @@ internal class HttpChecksumTest {
 
             rustCrate.integrationTest("streaming_request_checksums") {
                 testBase.plus(checksumStreamingRequestTestWritables)()
+            }
+
+            rustCrate.integrationTest("misc_tests") {
+                testBase.plus(miscTests)()
             }
         }
     }
@@ -232,6 +250,15 @@ internal class HttpChecksumTest {
                         .expect("algo header should exist");
 
                     assert_eq!(algo_header, "${testDef.algoHeader}");
+
+                    // Check the user-agent metrics for the selected algo
+                    assert_ua_contains_metric_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                        &["${testDef.algoFeatureId}"],
+                    );
                 }
                 """,
                 *preludeScope,
@@ -427,6 +454,149 @@ internal class HttpChecksumTest {
             )
         }
     }
+
+    /**
+     * Generate miscellaneous tests, currently mostly focused on the inclusion of the checksum config metrics in the
+     * user-agent header
+     */
+    private fun createMiscellaneousTests(context: ClientCodegenContext): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        return writable {
+            rustTemplate(
+                """
+                // The following tests confirm that the user-agent business metrics header is correctly
+                // set for the request/response checksum config values
+                ##[::tokio::test]
+                async fn request_config_ua_required() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .request_checksum_calculation(
+                            aws_types::sdk_config::RequestChecksumCalculation::WhenRequired,
+                        )
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"a"));
+                    assert!(!sdk_metrics.contains(&"Z"));
+                }
+
+                ##[::tokio::test]
+                async fn request_config_ua_supported() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"Z"));
+                    assert!(!sdk_metrics.contains(&"a"));
+                }
+
+                ##[::tokio::test]
+                async fn response_config_ua_supported() {
+                    let (http_client, rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-crc32", "i9aeUg==")
+                            .body(SdkBody::from("Hello world"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"b"));
+                    assert!(!sdk_metrics.contains(&"c"));
+                }
+
+                ##[::tokio::test]
+                async fn response_config_ua_required() {
+                    let (http_client, rx) = #{capture_request}(Some(
+                        http::Response::builder()
+                            .header("x-amz-checksum-crc32", "i9aeUg==")
+                            .body(SdkBody::from("Hello world"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .response_checksum_validation(
+                            aws_types::sdk_config::ResponseChecksumValidation::WhenRequired,
+                        )
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client
+                        .some_operation()
+                        .body(Blob::new(b"Doesn't matter"))
+                        .send()
+                        .await;
+                    let request = rx.expect_request();
+
+                    let sdk_metrics = extract_ua_values(
+                        &request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("UA header should be present"),
+                    ).expect("UA header should be present");
+                    assert!(sdk_metrics.contains(&"c"));
+                    assert!(!sdk_metrics.contains(&"b"));
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
 }
 
 // Classes and data for test definitions
@@ -437,6 +607,7 @@ data class RequestChecksumCalculationTest(
     val checksumAlgorithm: String,
     val algoHeader: String,
     val checksumHeader: String,
+    val algoFeatureId: String,
 )
 
 val checksumRequestTests =
@@ -447,6 +618,7 @@ val checksumRequestTests =
             "Crc32",
             "CRC32",
             "i9aeUg==",
+            "U",
         ),
         RequestChecksumCalculationTest(
             "CRC32C checksum calculation works.",
@@ -454,6 +626,7 @@ val checksumRequestTests =
             "Crc32C",
             "CRC32C",
             "crUfeA==",
+            "V",
         ),
         /* We do not yet support Crc64Nvme checksums
          RequestChecksumCalculationTest(
@@ -462,6 +635,7 @@ val checksumRequestTests =
          "Crc64Nvme",
          "CRC64NVME",
          "uc8X9yrZrD4=",
+         "W",
          ),
          */
         RequestChecksumCalculationTest(
@@ -470,6 +644,7 @@ val checksumRequestTests =
             "Sha1",
             "SHA1",
             "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+            "X",
         ),
         RequestChecksumCalculationTest(
             "SHA256 checksum calculation works.",
@@ -477,6 +652,7 @@ val checksumRequestTests =
             "Sha256",
             "SHA256",
             "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+            "Y",
         ),
     )
 
