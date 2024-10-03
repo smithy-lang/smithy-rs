@@ -96,16 +96,13 @@ fn package_with_name(name: &str) -> Package {
 //
 // The following set serves as an allowlist whose entries should not be reported as audit errors.
 static FALSE_POSITIVES: Lazy<HashSet<SuspectDependency>> = Lazy::new(|| {
-    let mut false_positives = HashSet::new();
-    false_positives.insert(SuspectDependency::new(
-        package_with_name("aws-smithy-experimental"),
-        package_with_name("pin-project"),
-    ));
-    false_positives.insert(SuspectDependency::new(
-        package_with_name("aws-smithy-experimental"),
-        package_with_name("pin-project-internal"),
-    ));
-    false_positives
+    include_str!("../false-positives.txt")
+        .lines()
+        .map(|line| {
+            let parts: Vec<&str> = line.split("->").map(|s| s.trim()).collect();
+            SuspectDependency::new(package_with_name(parts[0]), package_with_name(parts[1]))
+        })
+        .collect()
 });
 
 // A list of the names of AWS runtime crates (crate versions do not need to match) must be in sync with
