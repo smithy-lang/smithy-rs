@@ -11,18 +11,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 class ScopeMacroGenerator(
     private val codegenContext: ServerCodegenContext,
 ) {
-    private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope =
-        arrayOf(
-            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-        )
-
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
     private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
@@ -37,7 +30,7 @@ class ScopeMacroGenerator(
 
             // When writing `macro_rules!` we add whitespace between `$` and the arguments to avoid Kotlin templating.
 
-            // To acheive the desired API we need to calculate the set theoretic complement `B \ A`.
+            // To achieve the desired API we need to calculate the set theoretic complement `B \ A`.
             // The macro below, for rules prefixed with `@`, encodes a state machine which performs this.
             // The initial state is `(A) () (B)`, where `A` and `B` are lists of elements of `A` and `B`.
             // The rules, in order:
@@ -87,9 +80,9 @@ class ScopeMacroGenerator(
 
             rustTemplate(
                 """
-                /// A macro to help with scoping [plugins](#{SmithyHttpServer}::plugin) to a subset of all operations.
+                /// A macro to help with scoping [plugins](crate::server::plugin) to a subset of all operations.
                 ///
-                /// In contrast to [`aws_smithy_http_server::scope`](#{SmithyHttpServer}::scope), this macro has knowledge
+                /// In contrast to [`crate::server::scope`](crate::server::scope), this macro has knowledge
                 /// of the service and any operations _not_ specified will be placed in the opposing group.
                 ///
                 /// ## Example
@@ -109,7 +102,7 @@ class ScopeMacroGenerator(
                 ///     }
                 /// }
                 ///
-                /// ## use #{SmithyHttpServer}::plugin::{Plugin, Scoped};
+                /// ## use $crateName::server::plugin::{Plugin, Scoped};
                 /// ## use $crateName::scope;
                 /// ## struct MockPlugin;
                 /// ## impl<S, Op, T> Plugin<S, Op, T> for MockPlugin { type Output = u32; fn apply(&self, input: T) -> u32 { 3 } }
@@ -125,13 +118,13 @@ class ScopeMacroGenerator(
                     // Completed, render impls
                     (@ $ name: ident, $ contains: ident () ($($ temp: ident)*) ($($ not_member: ident)*)) => {
                         $(
-                            impl #{SmithyHttpServer}::plugin::scoped::Membership<$ temp> for $ name {
-                                type Contains = #{SmithyHttpServer}::plugin::scoped::$ contains;
+                            impl $ crate::server::plugin::scoped::Membership<$ temp> for $ name {
+                                type Contains = $ crate::server::plugin::scoped::$ contains;
                             }
                         )*
                         $(
-                            impl #{SmithyHttpServer}::plugin::scoped::Membership<$ not_member> for $ name {
-                                type Contains = #{SmithyHttpServer}::plugin::scoped::$ contains;
+                            impl $ crate::server::plugin::scoped::Membership<$ not_member> for $ name {
+                                type Contains = $ crate::server::plugin::scoped::$ contains;
                             }
                         )*
                     };
@@ -147,7 +140,7 @@ class ScopeMacroGenerator(
                         }
                     ) => {
                         use $ crate::operation_shape::*;
-                        #{SmithyHttpServer}::scope! {
+                        $ crate::server::scope! {
                             $(##[$ attrs])*
                             $ vis struct $ name {
                                 includes: [$($ include),*],
@@ -164,7 +157,7 @@ class ScopeMacroGenerator(
                     ) => {
                         use $ crate::operation_shape::*;
 
-                        #{SmithyHttpServer}::scope! {
+                        $ crate::server::scope! {
                             $(##[$ attrs])*
                             $ vis struct $ name {
                                 includes: [],
@@ -175,7 +168,6 @@ class ScopeMacroGenerator(
                     };
                 }
                 """,
-                *codegenScope,
                 "FurtherTests" to furtherTests,
             )
         }

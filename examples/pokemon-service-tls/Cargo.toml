@@ -19,7 +19,6 @@ rustls-pemfile = "1.0.2"
 futures-util = { version = "0.3.29", default-features = false }
 
 # Local paths
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
@@ -35,4 +34,7 @@ hyper-tls = { version = "0.5" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
-pokemon-service-client = { path = "../pokemon-service-client/" }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }
+

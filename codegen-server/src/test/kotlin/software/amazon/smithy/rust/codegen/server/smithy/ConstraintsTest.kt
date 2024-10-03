@@ -6,17 +6,103 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import io.kotest.inspectors.forAll
+import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.AbstractTrait
+import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
+import java.io.File
+
+enum class ModelProtocol(val trait: AbstractTrait) {
+    AwsJson10(AwsJson1_0Trait.builder().build()),
+    AwsJson11(AwsJson1_1Trait.builder().build()),
+    RestJson(RestJson1Trait.builder().build()),
+    RestXml(RestXmlTrait.builder().build()),
+    Rpcv2Cbor(Rpcv2CborTrait.builder().build()),
+}
+
+/**
+ * Returns the Smithy constraints model from the common repository, with the specified protocol
+ * applied to the service.
+ */
+fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<Model, ShapeId> {
+    val (model, serviceShapeId) = loadSmithyConstraintsModel()
+    return Pair(model.replaceProtocolTrait(serviceShapeId, modelProtocol), serviceShapeId)
+}
+
+/**
+ * Loads the Smithy constraints model defined in the common repository and returns the model along with
+ * the service shape defined in it.
+ */
+fun loadSmithyConstraintsModel(): Pair<Model, ShapeId> {
+    val filePath = "../codegen-core/common-test-models/constraints.smithy"
+    val model =
+        File(filePath).readText().asSmithyModel()
+    val serviceShapeId = model.shapes().filter { it.isServiceShape }.findFirst().orElseThrow().id
+    return Pair(model, serviceShapeId)
+}
+
+/**
+ * Removes all existing protocol traits annotated on the given service,
+ * then sets the provided `protocol` as the sole protocol trait for the service.
+ */
+fun Model.replaceProtocolTrait(
+    serviceShapeId: ShapeId,
+    modelProtocol: ModelProtocol,
+): Model {
+    val serviceBuilder =
+        this.expectShape(serviceShapeId, ServiceShape::class.java).toBuilder()
+    for (p in ModelProtocol.values()) {
+        serviceBuilder.removeTrait(p.trait.toShapeId())
+    }
+    val service = serviceBuilder.addTrait(modelProtocol.trait).build()
+    return ModelTransformer.create().replaceShapes(this, listOf(service))
+}
+
+fun List<ShapeId>.containsAnyShapeId(ids: Collection<ShapeId>): Boolean {
+    return ids.any { id -> this.any { shape -> shape == id } }
+}
+
+/**
+ * Removes the given operations from the model.
+ */
+fun Model.removeOperations(
+    serviceShapeId: ShapeId,
+    operationsToRemove: List<ShapeId>,
+): Model {
+    val service = this.expectShape(serviceShapeId, ServiceShape::class.java)
+    val serviceBuilder = service.toBuilder()
+    // The operation must exist in the service.
+    service.operations.map { it.toShapeId() }.containsAll(operationsToRemove) shouldBe true
+    // Remove all operations.
+    for (opToRemove in operationsToRemove) {
+        serviceBuilder.removeOperation(opToRemove)
+    }
+    val changedModel = ModelTransformer.create().replaceShapes(this, listOf(serviceBuilder.build()))
+    // The operation must not exist in the updated service.
+    val changedService = changedModel.expectShape(serviceShapeId, ServiceShape::class.java)
+    changedService.operations.size shouldBeGreaterThan 0
+    changedService.operations.map { it.toShapeId() }.containsAnyShapeId(operationsToRemove) shouldBe false
+
+    return changedModel
+}
 
 class ConstraintsTest {
     private val model =
