@@ -17,7 +17,7 @@
         "smithy-rs#3800"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add minimal support for `AWS::Auth::AccountId` and `AWS::Auth::AccountIdEndpointMode` endpoint built-ins\n",
@@ -31,7 +31,7 @@
         "smithy-rs#3792"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix the execution order of [modify_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.modify_before_serialization) and [read_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.read_before_serialization) in the orchestrator. The `modify_before_serialization` method now executes before the `read_before_serialization` method. This adjustment may result in changes in behavior depending on how you customize interceptors.\n",
@@ -45,7 +45,7 @@
         "smithy-rs#3798"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix the [Length::UpTo](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/enum.Length.html) usage in [FsBuilder](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/struct.FsBuilder.html), ensuring that the specified length does not exceed the remaining file length.\n",
@@ -60,7 +60,7 @@
         "smithy-rs#3797"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Re-export `ByteStream`'s `Length` and `FsBuilder`. By making these types available directly within a client crate, customers can use `ByteStream::read_from` without needing to import them separately from the `aws-smithy-types` crate.\n",
@@ -74,7 +74,7 @@
         "aws-sdk-rust#820"
       ],
       "since-commit": "d64aea29ad48d7bddb5a7511f3f1175c478e2c1e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Remove stalled stream protection from transcribe-streaming operations.\n",
@@ -88,7 +88,7 @@
         "aws-sdk-rust#1181"
       ],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 2
+      "age": 3
     },
     {
       "message": "deprecate http-02x presign APIs in favor of http-1x equivalents\n",
@@ -100,7 +100,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Update Smoketest codegeneration to be endpoint built-in aware.\n",
@@ -114,7 +114,7 @@
         "smithy-rs#3836"
       ],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fixed a bug with the content length of compressed payloads that caused such requests to hang.\n",
@@ -128,7 +128,7 @@
         "smithy-rs#3820"
       ],
       "since-commit": "2f29209c1ecfd8a848dc0745dbce6b510c898d9a",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
