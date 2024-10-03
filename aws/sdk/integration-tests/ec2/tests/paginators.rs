@@ -22,6 +22,7 @@ fn validate_query_string(expected: &str, actual: &str) {
     let expected = expected.split('&').collect::<HashSet<&str>>();
     let actual = actual.split('&').collect::<HashSet<&str>>();
     assert_eq!(expected, actual);
+    assert_eq!(expected.len(), actual.len());
 }
 
 /// See https://github.com/awslabs/aws-sdk-rust/issues/391
