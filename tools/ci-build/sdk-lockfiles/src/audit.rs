@@ -21,10 +21,12 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 // Struct representing a potential dependency that may eventually be reported as an error by `audit`,
-// indicating that the crate `to` is not covered by the SDK lockfile
+// indicating that the crate `to` is not covered by the SDK lockfile even though `to` is reported as a dependency
+// of the crate `from` in a runtime lockfile.
 //
-// This dependency might be an indirect dependency where the crate `from` transitively depends on the crate `to`.
-// Given collected `SuspectDependency`s, `audit` consults `FALSE_POSITIVES`
+// This dependency might be an indirect dependency, meaning that the crate `from` transitively depends on the crate `to`.
+// Given collected `SuspectDependency` instances, the `audit` subcommand refers to `FALSE_POSITIVES` to determine
+// whether a `SuspectDependency` should be reported as an audit error.
 struct SuspectDependency {
     from: Package,
     to: Package,
