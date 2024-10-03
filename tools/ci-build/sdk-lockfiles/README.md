@@ -31,12 +31,35 @@ Error: there are lockfile audit failures
 
 This tool is intended for automated use.
 
-## Limitation
+## Limitations
+### Unable to audit dependencies in `CargoDependency.kt`
 The `sdk-lockfiles` tool does not verify whether new dependencies introduced in [CargoDependency.kt](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/src/main/kotlin/software/amazon/smithy/rust/codegen/core/rustlang/CargoDependency.kt)
 are included in the SDK lockfile. This is because dependencies in `CargoDependency.kt` are represented as a Kotlin data
 class. Consequently, dependencies added via the code generator, `inlineable`, or `aws-inlineable` are not considered by
 `sdk-lockfiles`.
 
-This limitation is acceptable for our operational purposes. Our release script always executes
-`./gradlew aws:sdk:syncAwsSdkLockfile`, which ensures that any dependencies added in `CargoDependency.kt` are properly
+This limitation is acceptable for our operational purposes. Our release script [always executes
+`./gradlew aws:sdk:syncAwsSdkLockfile`](https://github.com/smithy-lang/smithy-rs/blob/b62000e4d733ca06bc98fd9b57c91468718b8f9f/tools/ci-scripts/generate-smithy-rs-release#L36), which ensures that any dependencies added in `CargoDependency.kt` are properly
 reflected in the SDK lockfile.
+
+### False positives
+The `sdk-lockfiles` tool may report false positives based on the contents of a lockfile. For example, if a section of
+the lockfile appears as follows
+```
+  pin-project v1.1.5
+  ├── tower v0.4.13
+  │   ├── aws-smithy-experimental v0.1.4
+  │   ├── aws-smithy-http-server v0.63.3
+  │   │   └── aws-smithy-http-server-python v0.63.2
+  │   ├── aws-smithy-http-server-python v0.63.2
+  ...
+```
+the tool cannot identify which dependent crate of `tower` enables `tower`'s Cargo feature to include `pin-project`.
+In the case above, `aws-smithy-experimental` does not enable this feature, while `aws-smithy-http-server` does.
+Among the Smithy runtime crates above, only `aws-smithy-experimental` is used by SDKs. When `aws-smithy-experimental`
+is compiled for a generated SDK without server-related Smithy runtime crates, `pin-project` will not appear in the
+SDK lockfile. Therefore, while it may appear that `aws-smithy-experimental` depends on `pin-project`, it is a false
+positive for the audit.
+
+To address this limitation, we maintain a list of known false positives in `false-positives.txt`. Any dependency
+included in this file will not be flagged as an audit error.
