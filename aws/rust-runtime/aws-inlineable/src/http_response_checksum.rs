@@ -72,7 +72,7 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let _ = (self.checksum_mutator)(context.input_mut(), cfg);
+        (self.checksum_mutator)(context.input_mut(), cfg)?;
         let validation_enabled = (self.validation_enabled)(context.input());
 
         let mut layer = Layer::new("ResponseChecksumInterceptor");

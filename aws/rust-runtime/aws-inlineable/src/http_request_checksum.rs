@@ -138,7 +138,7 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let _ = (self.checksum_mutator)(context.input_mut(), cfg);
+        (self.checksum_mutator)(context.input_mut(), cfg)?;
         let checksum_algorithm = (self.algorithm_provider)(context.input())?;
         let mut layer = Layer::new("RequestChecksumInterceptor");
         layer.store_put(RequestChecksumInterceptorState {
