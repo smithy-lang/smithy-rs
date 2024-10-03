@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 3rd, 2024
+=================
+**Breaking Changes:**
+- :warning: (server) The generated crates no longer have the `aws-lambda` feature flag enabled by default. This prevents the [aws-lambda](https://docs.rs/crate/aws-smithy-http-server/0.63.3/features#aws-lambda) feature from being automatically enabled in [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) when the SDK is not intended for AWS Lambda.
+
+**New this release:**
+- :tada: (server) All relevant types from [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) are now re-exported within the generated crates. This removes the need to explicitly depend on [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) in service handler code and prevents compilation errors caused by version mismatches.
+
+- :tada: (all, [smithy-rs#3573](https://github.com/smithy-lang/smithy-rs/issues/3573)) Support for the [rpcv2Cbor](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html) protocol has been added, allowing services to serialize RPC payloads as CBOR (Concise Binary Object Representation), improving performance and efficiency in data transmission.
+
+
 September 26th, 2024
 ====================
 **New this release:**
