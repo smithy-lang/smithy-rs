@@ -507,7 +507,7 @@ where
 /// generated Smithy clients.
 ///
 /// ```no_run,ignore
-/// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+/// use aws_smithy_http_client::hyper_014::HyperClientBuilder;
 ///
 /// let http_client = HyperClientBuilder::new().build_https();
 ///
@@ -531,7 +531,7 @@ where
 /// - CA trust root certificates (illustrated using WebPKI below)
 ///
 /// ```no_run,ignore
-/// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+/// use aws_smithy_http_client::hyper_014::HyperClientBuilder;
 ///
 /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
 ///     .with_webpki_roots()
@@ -821,8 +821,8 @@ mod timeout_middleware {
     }
 
     #[cfg(test)]
-    mod test {
-        use crate::client::HyperConnector;
+    pub(crate) mod test {
+        use crate::hyper_014::HyperConnector;
         use aws_smithy_async::assert_elapsed;
         use aws_smithy_async::future::never::Never;
         use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
@@ -853,7 +853,7 @@ mod timeout_middleware {
         /// Returned futures will return Pending forever
         #[non_exhaustive]
         #[derive(Clone, Default, Debug)]
-        struct NeverConnects;
+        pub(crate) struct NeverConnects;
         impl hyper_0_14::service::Service<http_02x::Uri> for NeverConnects {
             type Response = TcpStream;
             type Error = ConnectorError;
@@ -995,10 +995,10 @@ mod timeout_middleware {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(test)]
 mod test {
-    use crate::client::http::hyper_014::{HyperClientBuilder, HyperConnector};
-    use crate::client::http::test_util::NeverTcpConnector;
+    use crate::hyper_014::timeout_middleware::test::NeverConnects;
+    use crate::hyper_014::{HyperClientBuilder, HyperConnector};
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnectorSettings};
@@ -1021,7 +1021,7 @@ mod test {
             let count = creation_count.clone();
             move || {
                 count.fetch_add(1, Ordering::Relaxed);
-                NeverTcpConnector::new()
+                NeverConnects::default()
             }
         });
 
