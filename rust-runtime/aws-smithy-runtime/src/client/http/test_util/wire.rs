@@ -43,7 +43,6 @@ use crate::client::http::hyper_014::HyperClientBuilder;
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
-use aws_smithy_runtime_api::shared::IntoShared;
 use bytes::Bytes;
 use hyper_0_14::client::connect::dns::Name;
 use hyper_0_14::server::conn::AddrStream;
@@ -149,6 +148,7 @@ macro_rules! ev {
     };
 }
 
+use aws_smithy_runtime_api::shared::IntoShared;
 pub use {ev, match_events, matcher};
 
 #[non_exhaustive]

@@ -1,0 +1,44 @@
+[package]
+name = "aws-smithy-http-client"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "HTTP client abstractions for generated smithy clients"
+version = "0.1.0"
+license = "Apache-2.0"
+edition = "2021"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[features]
+tls-rustls = ["dep:hyper-rustls", "dep:rustls"]
+
+[dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
+
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
+h2 = { version = "0.3", default-features = false }
+http-02x = { package = "http", version = "0.2.8" }
+http-body-04x = { package = "http-body", version = "0.4.4" }
+hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, features = ["client", "http1", "http2", "tcp", "stream"] }
+hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
+rustls = { version = "0.21.8", optional = true }
+tokio = { version = "1.25", features = [] }
+
+once_cell = "1.18.0"
+pin-project-lite = "0.2.14"
+tracing = "0.1.40"
+
+[dev-dependencies]
+aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
+tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true

@@ -285,50 +285,66 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-smithy-protocol-test"
-version = "0.62.0"
-dependencies = [
- "assert-json-diff",
- "aws-smithy-runtime-api",
- "base64-simd",
- "cbor-diag",
- "http 0.2.12",
- "pretty_assertions",
- "regex-lite",
- "roxmltree",
- "serde_cbor",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "aws-smithy-runtime"
-version = "1.7.1"
+name = "aws-smithy-http-client"
+version = "0.1.0"
 dependencies = [
  "aws-smithy-async",
- "aws-smithy-http",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
- "bytes",
- "fastrand",
  "h2",
  "http 0.2.12",
  "http-body 0.4.6",
- "http-body 1.0.1",
- "httparse",
  "hyper",
  "hyper-rustls",
  "once_cell",
  "pin-project-lite",
- "pin-utils",
  "rustls",
  "tokio",
  "tracing",
 ]
 
 [[package]]
+name = "aws-smithy-protocol-test"
+version = "0.63.0"
+dependencies = [
+ "assert-json-diff",
+ "aws-smithy-runtime-api",
+ "base64-simd",
+ "cbor-diag",
+ "ciborium",
+ "http 0.2.12",
+ "pretty_assertions",
+ "regex-lite",
+ "roxmltree",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "aws-smithy-runtime"
+version = "1.8.0"
+dependencies = [
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-http-client",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "fastrand",
+ "http 0.2.12",
+ "http-body 0.4.6",
+ "http-body 1.0.1",
+ "httparse",
+ "once_cell",
+ "pin-project-lite",
+ "pin-utils",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aws-smithy-runtime-api"
-version = "1.7.2"
+version = "1.7.3"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -343,7 +359,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.6"
+version = "1.2.7"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -508,7 +524,7 @@ dependencies = [
  "bs58",
  "chrono",
  "data-encoding",
- "half 2.4.1",
+ "half",
  "nom",
  "num-bigint",
  "num-rational",
@@ -568,7 +584,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
- "half 2.4.1",
+ "half",
 ]
 
 [[package]]
@@ -987,12 +1003,6 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
-
-[[package]]
-name = "half"
-version = "1.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "half"
@@ -1952,16 +1962,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99fce0ffe7310761ca6bf9faf5115afbc19688edd00171d81b1bb1b116c63e09"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half 1.8.3",
- "serde",
 ]
 
 [[package]]
