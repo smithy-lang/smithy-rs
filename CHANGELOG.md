@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 4th, 2024
+=================
+
 October 3rd, 2024
 =================
 **Breaking Changes:**
