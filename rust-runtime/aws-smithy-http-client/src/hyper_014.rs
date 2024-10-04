@@ -34,10 +34,12 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-#[cfg(feature = "tls-rustls")]
+#[cfg(feature = "legacy-tls-rustls")]
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
+    use legacy_hyper_rustls as hyper_rustls;
+    use legacy_rustls as rustls;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
@@ -98,13 +100,13 @@ pub fn default_connector(
     settings: &HttpConnectorSettings,
     sleep: Option<SharedAsyncSleep>,
 ) -> Option<SharedHttpConnector> {
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "legacy-tls-rustls")]
     {
         tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new default connector");
         let hyper = default_connector::base(settings, sleep).build_https();
         Some(SharedHttpConnector::new(hyper))
     }
-    #[cfg(not(feature = "tls-rustls"))]
+    #[cfg(not(feature = "legacy-tls-rustls"))]
     {
         tracing::trace!(settings = ?settings, sleep = ?sleep, "no default connector available");
         None
@@ -113,12 +115,12 @@ pub fn default_connector(
 
 /// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
 pub fn default_client() -> Option<SharedHttpClient> {
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "legacy-tls-rustls")]
     {
         tracing::trace!("creating a new default hyper 0.14.x client");
         Some(HyperClientBuilder::new().build_https())
     }
-    #[cfg(not(feature = "tls-rustls"))]
+    #[cfg(not(feature = "legacy-tls-rustls"))]
     {
         tracing::trace!("no default connector available");
         None
@@ -202,7 +204,7 @@ impl HyperConnectorBuilder {
     }
 
     /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "legacy-tls-rustls")]
     pub fn build_https(self) -> HyperConnector {
         self.build(default_connector::https())
     }
@@ -580,7 +582,7 @@ impl HyperClientBuilder {
     ///
     /// The trusted certificates will be loaded later when this becomes the selected
     /// HTTP client for a Smithy client.
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "legacy-tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
         self.build_with_fn(default_connector::https)
     }
@@ -588,7 +590,7 @@ impl HyperClientBuilder {
     /// Create a [`SharedHttpClient`] from this builder and a given connector.
     ///
     #[cfg_attr(
-        feature = "tls-rustls",
+        feature = "legacy-tls-rustls",
         doc = "Use [`build_https`](HyperClientBuilder::build_https) if you don't want to provide a custom TCP connector."
     )]
     pub fn build<C>(self, tcp_connector: C) -> SharedHttpClient

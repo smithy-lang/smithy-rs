@@ -21,5 +21,6 @@
 )]
 
 /// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
+#[cfg(feature = "hyper-014")]
 #[deprecated = "hyper 0.14.x support is deprecated, please migrate to 1.x client"]
 pub mod hyper_014;
