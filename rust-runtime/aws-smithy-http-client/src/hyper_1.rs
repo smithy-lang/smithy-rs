@@ -5,8 +5,8 @@
 
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_runtime::client::http::connection_poisoning::CaptureSmithyConnection;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
@@ -26,7 +26,7 @@ use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use client::connect::Connection;
 use h2::Reason;
-use http::{Extensions, Uri};
+use http_1x::{Extensions, Uri};
 use hyper::rt::{Read, Write};
 use hyper_util::client::legacy as client;
 use hyper_util::client::legacy::connect::dns::Name;
@@ -46,13 +46,17 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{fmt, vec};
 
+/// Choice of underlying cryptography library
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[non_exhaustive]
 pub enum CryptoMode {
+    /// Crypto based on [ring](https://github.com/briansmith/ring)
     #[cfg(feature = "crypto-ring")]
     Ring,
+    /// Crypto based on [aws-lc](https://github.com/aws/aws-lc-rs)
     #[cfg(feature = "crypto-aws-lc")]
     AwsLc,
+    /// FIPS compliant variant of [aws-lc](https://github.com/aws/aws-lc-rs)
     #[cfg(feature = "crypto-aws-lc-fips")]
     AwsLcFips,
 }
@@ -113,8 +117,8 @@ mod cached_connectors {
     use hyper_util::client::legacy as client;
     use hyper_util::client::legacy::connect::dns::GaiResolver;
 
-    use crate::hyper_1_0::build_connector::make_tls;
-    use crate::hyper_1_0::{CryptoMode, Inner};
+    use crate::hyper_1::build_connector::make_tls;
+    use crate::hyper_1::{CryptoMode, Inner};
 
     #[cfg(feature = "crypto-ring")]
     pub(crate) static HTTPS_NATIVE_ROOTS_RING: once_cell::sync::Lazy<
@@ -149,7 +153,7 @@ mod cached_connectors {
 }
 
 mod build_connector {
-    use crate::hyper_1_0::{HyperUtilResolver, Inner};
+    use crate::hyper_1::{HyperUtilResolver, Inner};
     use aws_smithy_runtime_api::client::dns::ResolveDns;
     use client::connect::HttpConnector;
     use hyper_util::client::legacy as client;
@@ -246,10 +250,12 @@ pub struct HyperConnectorBuilder<Crypto = CryptoUnset> {
     crypto: Crypto,
 }
 
+/// Initial builder state, [`CryptoMode`] choice required
 #[derive(Default)]
 #[non_exhaustive]
 pub struct CryptoUnset {}
 
+/// Crypto implementation selected
 pub struct CryptoProviderSelected {
     crypto_provider: Inner,
 }
@@ -272,6 +278,7 @@ impl Inner {
 
 #[cfg(any(feature = "crypto-aws-lc", feature = "crypto-ring"))]
 impl HyperConnectorBuilder<CryptoProviderSelected> {
+    /// Build a [`HyperConnector`] that will use the given DNS resolver implementation.
     pub fn build_from_resolver<R: ResolveDns + Clone + 'static>(
         self,
         resolver: R,
@@ -672,6 +679,7 @@ impl HyperClientBuilder<CryptoUnset> {
         Self::default()
     }
 
+    /// Set the cryptography implementation to use
     pub fn crypto_mode(self, provider: CryptoMode) -> HyperClientBuilder<CryptoProviderSelected> {
         HyperClientBuilder {
             client_builder: self.client_builder,
@@ -727,7 +735,7 @@ mod timeout_middleware {
     use std::task::{Context, Poll};
     use std::time::Duration;
 
-    use http::Uri;
+    use http_1x::Uri;
     use pin_project_lite::pin_project;
 
     use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
@@ -892,9 +900,9 @@ mod timeout_middleware {
         }
     }
 
-    impl<I, B> tower::Service<http::Request<B>> for HttpReadTimeout<I>
+    impl<I, B> tower::Service<http_1x::Request<B>> for HttpReadTimeout<I>
     where
-        I: tower::Service<http::Request<B>>,
+        I: tower::Service<http_1x::Request<B>>,
         I::Error: Send + Sync + Error + 'static,
     {
         type Response = I::Response;
@@ -905,7 +913,7 @@ mod timeout_middleware {
             self.inner.poll_ready(cx).map_err(|err| err.into())
         }
 
-        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        fn call(&mut self, req: http_1x::Request<B>) -> Self::Future {
             match &self.timeout {
                 Some((sleep, duration)) => {
                     let sleep = sleep.sleep(*duration);
@@ -1101,14 +1109,14 @@ mod test {
     use std::sync::Arc;
     use std::task::{Context, Poll};
 
-    use http::Uri;
+    use http_1x::Uri;
     use hyper::rt::ReadBufCursor;
     use hyper_util::client::legacy::connect::Connected;
 
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
-    use crate::hyper_1_0::timeout_middleware::test::NeverConnects;
+    use crate::hyper_1::timeout_middleware::test::NeverConnects;
 
     use super::*;
 

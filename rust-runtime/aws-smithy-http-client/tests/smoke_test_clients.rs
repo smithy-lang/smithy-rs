@@ -10,7 +10,7 @@
 ))]
 
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_experimental::hyper_1_0::{CryptoMode, HyperClientBuilder};
+use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;

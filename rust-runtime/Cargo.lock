@@ -413,24 +413,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-experimental"
-version = "0.1.4"
-dependencies = [
- "aws-smithy-async 1.2.1",
- "aws-smithy-runtime 1.8.0",
- "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.7",
- "h2 0.4.6",
- "http 1.1.0",
- "hyper 1.4.1",
- "hyper-rustls 0.27.3",
- "hyper-util",
- "once_cell",
- "pin-project-lite",
- "rustls 0.23.12",
- "tokio",
- "tower",
- "tracing",
-]
+version = "0.2.0"
 
 [[package]]
 name = "aws-smithy-http"
@@ -488,15 +471,21 @@ dependencies = [
  "aws-smithy-async 1.2.1",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.7",
- "h2 0.3.26",
+ "h2 0.4.6",
  "http 0.2.12",
+ "http 1.1.0",
  "http-body 0.4.6",
  "hyper 0.14.30",
+ "hyper 1.4.1",
  "hyper-rustls 0.24.2",
+ "hyper-rustls 0.27.3",
+ "hyper-util",
  "once_cell",
  "pin-project-lite",
  "rustls 0.21.12",
+ "rustls 0.23.12",
  "tokio",
+ "tower 0.5.1",
  "tracing",
 ]
 
@@ -525,7 +514,7 @@ dependencies = [
  "serde_urlencoded",
  "thiserror",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-http",
  "tracing",
  "uuid",
@@ -563,7 +552,7 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tokio-stream",
  "tokio-test",
- "tower",
+ "tower 0.4.13",
  "tower-test",
  "tracing",
  "tracing-appender",
@@ -1972,7 +1961,7 @@ dependencies = [
  "pin-project-lite",
  "socket2",
  "tokio",
- "tower",
+ "tower 0.4.13",
  "tower-service",
  "tracing",
 ]
@@ -2145,7 +2134,7 @@ dependencies = [
  "serde_path_to_error",
  "tokio",
  "tokio-stream",
- "tower",
+ "tower 0.4.13",
  "tracing",
 ]
 
@@ -2416,9 +2405,12 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.19.0"
+version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92"
+checksum = "82881c4be219ab5faaf2ad5e5e5ecdff8c66bd7402ca3160975c93b24961afd1"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "oorandom"
@@ -2574,6 +2566,12 @@ checksum = "81b30686a7d9c3e010b84284bdd26a29f2138574f52f5eb6f794fc0ad924e705"
 dependencies = [
  "plotters-backend",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc9c68a3f6da06753e9335d63e27f6b9754dd1920d941135b7ea8224f141adb2"
 
 [[package]]
 name = "powerfmt"
@@ -3639,6 +3637,16 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
+dependencies = [
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]

@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_experimental::hyper_1_0::{CryptoMode, HyperClientBuilder};
-#[tokio::main]
+use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
 
+#[tokio::main]
 async fn main() {
     // feature = crypto-aws-lc
     let _client = HyperClientBuilder::new()
