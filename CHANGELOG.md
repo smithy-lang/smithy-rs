@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 5th, 2024
+=================
+**New this release:**
+- :bug: (client, [smithy-rs#3852](https://github.com/smithy-lang/smithy-rs/issues/3852)) Fix AWS SDK generation examples in README in the `aws/sdk` directory.
+
+
 October 4th, 2024
 =================
 

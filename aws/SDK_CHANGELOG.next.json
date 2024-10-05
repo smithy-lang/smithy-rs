@@ -17,7 +17,7 @@
         "aws-sdk-rust#1181"
       ],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "deprecate http-02x presign APIs in favor of http-1x equivalents\n",
@@ -29,7 +29,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Update Smoketest codegeneration to be endpoint built-in aware.\n",
@@ -43,7 +43,7 @@
         "smithy-rs#3836"
       ],
       "since-commit": "c622e5e97b199cc2382a4fbc14a9773e9ea1766c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fixed a bug with the content length of compressed payloads that caused such requests to hang.\n",
@@ -57,7 +57,7 @@
         "smithy-rs#3820"
       ],
       "since-commit": "2f29209c1ecfd8a848dc0745dbce6b510c898d9a",
-      "age": 3
+      "age": 4
     }
   ],
   "aws-sdk-model": []
