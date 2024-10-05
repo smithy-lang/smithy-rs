@@ -64,7 +64,8 @@ val DECORATORS: List<ClientCodegenDecorator> =
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
-            SmokeTestsDecorator(),
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
+            // SmokeTestsDecorator(),
         ),
         // S3 needs `AwsErrorCodeClassifier` to handle an `InternalError` as a transient error. We need to customize
         // that behavior for S3 in a way that does not conflict with the globally applied `RetryClassifierDecorator`.
