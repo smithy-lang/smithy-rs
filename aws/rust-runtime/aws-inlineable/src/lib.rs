@@ -65,3 +65,5 @@ pub mod s3_expires_interceptor;
 /// allow docs to work
 #[derive(Debug)]
 pub struct Client;
+
+pub mod rds_signer;

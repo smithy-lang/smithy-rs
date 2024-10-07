@@ -220,7 +220,7 @@ impl Checksum for Sha1 {
 }
 
 #[derive(Debug, Default)]
-struct Sha256 {
+pub struct Sha256 {
     hasher: sha2::Sha256,
 }
 

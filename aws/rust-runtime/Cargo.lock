@@ -131,6 +131,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "aws-types",
  "bytes",
  "fastrand",
  "hex",
@@ -145,6 +146,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -195,7 +197,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -240,7 +242,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.60.12"
+version = "0.60.13"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -286,17 +288,17 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.62.0"
+version = "0.63.0"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
  "base64-simd",
  "cbor-diag",
+ "ciborium",
  "http 0.2.12",
  "pretty_assertions",
  "regex-lite",
  "roxmltree",
- "serde_cbor",
  "serde_json",
  "thiserror",
 ]
@@ -508,7 +510,7 @@ dependencies = [
  "bs58",
  "chrono",
  "data-encoding",
- "half 2.4.1",
+ "half",
  "nom",
  "num-bigint",
  "num-rational",
@@ -568,7 +570,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
- "half 2.4.1",
+ "half",
 ]
 
 [[package]]
@@ -987,12 +989,6 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
-
-[[package]]
-name = "half"
-version = "1.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "half"
@@ -1961,16 +1957,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8e3592472072e6e22e0a54d5904d9febf8508f65fb8552499a1abc7d1078c3a"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half 1.8.3",
- "serde",
 ]
 
 [[package]]

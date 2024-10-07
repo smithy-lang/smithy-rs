@@ -19,6 +19,7 @@ import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.lambda.LambdaDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
+import software.amazon.smithy.rustsdk.customize.rds.RdsDecorator
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExpiresDecorator
@@ -77,6 +78,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),
         GlacierDecorator().onlyApplyTo("com.amazonaws.glacier#Glacier"),
         LambdaDecorator().onlyApplyTo("com.amazonaws.lambda#AWSGirApiService"),
+        RdsDecorator().onlyApplyTo("com.amazonaws.rds#AmazonRDSv19"),
         Route53Decorator().onlyApplyTo("com.amazonaws.route53#AWSDnsV20130401"),
         "com.amazonaws.s3#AmazonS3".applyDecorators(
             S3Decorator(),
