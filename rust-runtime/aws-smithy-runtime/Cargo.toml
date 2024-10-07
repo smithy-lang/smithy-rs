@@ -17,7 +17,16 @@ tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-tls-
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
-test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json", "dep:indexmap"]
+test-util = [
+    "aws-smithy-runtime-api/test-util",
+    "dep:aws-smithy-protocol-test",
+    "dep:tracing-subscriber",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:indexmap",
+    # for now we need hyper-0-14 explicitly still as it's used internally
+    "dep:hyper-0-14"
+]
 wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
 
 [dependencies]

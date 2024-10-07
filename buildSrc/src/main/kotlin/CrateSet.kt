@@ -64,6 +64,7 @@ object CrateSet {
             "aws-smithy-client",
             "aws-smithy-eventstream",
             "aws-smithy-http",
+            "aws-smithy-http-client",
             "aws-smithy-http-auth",
             "aws-smithy-http-tower",
             "aws-smithy-json",
