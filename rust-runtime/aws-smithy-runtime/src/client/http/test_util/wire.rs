@@ -39,6 +39,7 @@
 
 #![allow(missing_docs)]
 
+#[allow(deprecated)]
 use crate::client::http::hyper_014::HyperClientBuilder;
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
@@ -281,6 +282,7 @@ impl WireMockServer {
     ///
     /// **Note**: This must be used in tandem with [`Self::dns_resolver`]
     pub fn http_client(&self) -> SharedHttpClient {
+        #[allow(deprecated)]
         HyperClientBuilder::new()
             .build(hyper_0_14::client::HttpConnector::new_with_resolver(
                 self.dns_resolver(),
