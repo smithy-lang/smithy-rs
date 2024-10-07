@@ -34,7 +34,6 @@ class RdsDecorator : ClientCodegenDecorator {
                         Visibility.PUBLIC,
                         AwsCargoDependency.awsSigv4(rc),
                         CargoDependency.smithyRuntimeApiClient(rc),
-                        CargoDependency.smithyAsync(rc),
                         CargoDependency.smithyAsync(rc).toDevDependency().withFeature("test-util"),
                         CargoDependency.Url,
                     ),

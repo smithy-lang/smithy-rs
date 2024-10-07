@@ -19,7 +19,7 @@ http_1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
 # https://github.com/tkaitchuck/aHash/issues/200
 # when built with `cargo update -Z minimal-versions`
 ahash = { version = "0.8.11", default-features = false }
-aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
+aws-credential-types = { path = "../aws-credential-types" }
 aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-types = { path = "../aws-types" }
@@ -45,6 +45,7 @@ tracing = "0.1"
 url = "2.5.2"
 
 [dev-dependencies]
+aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }

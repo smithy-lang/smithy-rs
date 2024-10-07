@@ -5,7 +5,7 @@
 
 //! Code related to creating signed URLs for logging in to RDS.
 //!
-//! For more information, see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Connecting.html
+//! For more information, see <https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.Connecting.html>
 
 use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
 use aws_sigv4::http_request;
@@ -82,7 +82,7 @@ impl Signer {
 
         let mut url = url::Url::parse(&url).unwrap();
         for (name, value) in signing_instructions.params() {
-            url.query_pairs_mut().append_pair(name, &value);
+            url.query_pairs_mut().append_pair(name, value);
         }
 
         let response = url.to_string().split_off("https://".len());
