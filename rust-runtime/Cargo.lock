@@ -460,7 +460,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aws-smithy-async 1.2.1",
  "aws-smithy-runtime-api 1.7.3",
