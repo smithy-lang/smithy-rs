@@ -101,7 +101,7 @@ impl From<(u64, Duration)> for Throughput {
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 enum BinLabel {
     // IMPORTANT: The order of these enums matters since it represents their priority:
-    // Pending > TransferredBytes > NoPolling > Empty
+    // TransferredBytes > Pending > NoPolling > Empty
     //
     /// There is no data in this bin.
     Empty,
@@ -109,13 +109,11 @@ enum BinLabel {
     /// No polling took place during this bin.
     NoPolling,
 
+    /// The user/remote was not providing/consuming data fast enough during this bin.
+    Pending,
+
     /// This many bytes were transferred during this bin.
     TransferredBytes,
-
-    /// The user/remote was not providing/consuming data fast enough during this bin.
-    ///
-    /// The number is the number of bytes transferred, if this replaced TransferredBytes.
-    Pending,
 }
 
 /// Represents a bin (or a cell) in a linear grid that represents a small chunk of time.
@@ -139,8 +137,8 @@ impl Bin {
 
     fn merge(&mut self, other: Bin) -> &mut Self {
         // Assign values based on this priority order (highest priority higher up):
-        //   1. Pending
-        //   2. TransferredBytes
+        //   1. TransferredBytes
+        //   2. Pending
         //   3. NoPolling
         //   4. Empty
         self.label = if other.label > self.label {
@@ -409,6 +407,14 @@ impl ThroughputLogs {
 mod test {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn test_log_buffer_bin_label_priority() {
+        use BinLabel::*;
+        assert!(Empty < NoPolling);
+        assert!(NoPolling < Pending);
+        assert!(Pending < TransferredBytes);
+    }
 
     #[test]
     fn test_throughput_eq() {
