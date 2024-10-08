@@ -21,7 +21,7 @@ hyper-1 = [
     "aws-smithy-runtime-api/http-1x",
     "aws-smithy-types/http-body-1-x",
     "dep:hyper",
-    "dep:hyper-utl",
+    "dep:hyper-util",
     "dep:http-1x",
     "dep:tower",
     "dep:rustls"
