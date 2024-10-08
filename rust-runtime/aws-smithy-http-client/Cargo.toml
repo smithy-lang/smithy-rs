@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.0.0"
+version = "0.1.0"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -20,6 +20,8 @@ hyper-014 = [
 hyper-1 = [
     "aws-smithy-runtime-api/http-1x",
     "aws-smithy-types/http-body-1-x",
+    "dep:hyper",
+    "dep:hyper-utl",
     "dep:http-1x",
     "dep:tower",
     "dep:rustls"
@@ -47,7 +49,7 @@ hyper-util = { version = "0.1.7", optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
-tower = { version = "0.5", optional = true }
+tower = { version = "0.5.1", optional = true }
 # end hyper 1.x stack deps
 
 # legacy hyper-0.14.x stack the SDK/runtime GA'd with
@@ -87,6 +89,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[package.metadata.smithy-rs-release-tooling]
-stable = true
