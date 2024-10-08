@@ -20,10 +20,16 @@
     rust_2018_idioms
 )]
 
+// ideally hyper_014 would just be exposed as is but due to
+// https://github.com/rust-lang/rust/issues/47238 we get clippy warnings we can't suppress
+pub(crate) mod hyper_legacy;
+
 /// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
 #[cfg(feature = "hyper-014")]
 #[deprecated = "hyper 0.14.x support is deprecated, please migrate to 1.x client"]
-pub mod hyper_014;
+pub mod hyper_014 {
+    pub use crate::hyper_legacy::*;
+}
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/1925) - do we even want to name this/tie this to hyper?
 

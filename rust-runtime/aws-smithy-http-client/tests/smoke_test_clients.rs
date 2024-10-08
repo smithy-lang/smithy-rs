@@ -64,10 +64,7 @@ async fn custom_dns_client() {
             let count = self.count.clone();
             DnsFuture::new(async move {
                 count.fetch_add(1, Ordering::Relaxed);
-                let result = inner
-                    .call(name)
-                    .await
-                    .map_err(|err| ResolveDnsError::new(err))?;
+                let result = inner.call(name).await.map_err(ResolveDnsError::new)?;
                 Ok(result.map(|addr| addr.ip()).collect::<Vec<_>>())
             })
         }

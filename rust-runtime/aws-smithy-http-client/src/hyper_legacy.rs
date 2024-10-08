@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::hyper_014::timeout_middleware::HttpTimeoutError;
+use crate::hyper_legacy::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -997,8 +997,8 @@ mod timeout_middleware {
 
 #[cfg(test)]
 mod test {
-    use crate::hyper_014::timeout_middleware::test::NeverConnects;
-    use crate::hyper_014::{HyperClientBuilder, HyperConnector};
+    use crate::hyper_legacy::timeout_middleware::test::NeverConnects;
+    use crate::hyper_legacy::{HyperClientBuilder, HyperConnector};
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnectorSettings};
