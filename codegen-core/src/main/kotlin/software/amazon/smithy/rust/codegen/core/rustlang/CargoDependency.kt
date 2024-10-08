@@ -365,6 +365,10 @@ data class CargoDependency(
 
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
 
+        fun smithyHttpClient(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-http-client")
+                .withFeature("crypto-ring")
+
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
 
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
@@ -375,10 +379,6 @@ data class CargoDependency(
         fun smithyRuntime(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-runtime")
                 .withFeature("client")
-
-        fun smithyExperimental(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.smithyRuntimeCrate("smithy-experimental")
-                .withFeature("crypto-ring")
 
         fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")

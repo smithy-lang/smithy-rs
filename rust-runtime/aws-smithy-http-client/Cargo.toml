@@ -22,6 +22,7 @@ hyper-1 = [
     "aws-smithy-types/http-body-1-x",
     "dep:hyper",
     "dep:hyper-util",
+    "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
     "dep:rustls"
