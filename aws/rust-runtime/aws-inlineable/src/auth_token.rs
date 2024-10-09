@@ -14,34 +14,80 @@ use aws_sigv4::sign::v4;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::Identity;
 use aws_types::region::Region;
+use std::fmt;
 use std::fmt::Debug;
+use std::ops::Deref;
 use std::time::Duration;
 
 const ACTION: &str = "connect";
 const SERVICE: &str = "rds-db";
 
 /// A signer that generates an auth token for a database.
+///
+/// ## Example
+///
+/// ```no_run
+/// use crate::auth_token::{AuthTokenGenerator, Config};
+///
+/// #[tokio::main]
+/// async fn main() {
+///    let cfg = aws_config::load_defaults(BehaviorVersion::latest()).await;
+///    let generator = AuthTokenGenerator::new(
+///        Config::builder()
+///            .hostname("zhessler-test-db.cp7a4mblr2ig.us-east-1.rds.amazonaws.com")
+///            .port(5432)
+///            .username("zhessler")
+///            .build()
+///            .expect("cfg is valid"),
+///    );
+///    let token = generator.auth_token(&cfg).await.unwrap();
+///    println!("{token}");
+/// }
+/// ```
 #[derive(Debug)]
-pub struct Signer {
-    config: SignerConfig,
+pub struct AuthTokenGenerator {
+    config: Config,
 }
 
-impl Signer {
-    /// Given a `SignerConfig`, create a new RDS database login URL signer.
-    pub fn new(config: SignerConfig) -> Self {
+/// An auth token usable as a password for an RDS database.
+///
+/// This struct can be converted into a `&str` using the `Deref` trait or by calling `to_string()`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct AuthToken {
+    inner: String,
+}
+
+impl Deref for AuthToken {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl fmt::Display for AuthToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl AuthTokenGenerator {
+    /// Given a `Config`, create a new RDS database login URL signer.
+    pub fn new(config: Config) -> Self {
         Self { config }
     }
 
     /// Return a signed URL usable as an auth token.
-    pub async fn get_auth_token(
+    pub async fn auth_token(
         &self,
         config: &aws_types::sdk_config::SdkConfig,
-    ) -> Result<String, BoxError> {
+    ) -> Result<AuthToken, BoxError> {
         let credentials = self
             .config
             .credentials()
             .or(config.credentials_provider().as_ref())
-            .ok_or("credentials are required to create an RDS login URL")?
+            .ok_or("credentials are required to create a signed URL for RDS")?
             .provide_credentials()
             .await?;
         let identity: Identity = credentials.into();
@@ -72,7 +118,6 @@ impl Signer {
             ACTION,
             self.config.username()
         );
-
         let signable_request =
             SignableRequest::new("GET", &url, std::iter::empty(), SignableBody::empty())
                 .expect("signable request");
@@ -84,16 +129,15 @@ impl Signer {
         for (name, value) in signing_instructions.params() {
             url.query_pairs_mut().append_pair(name, value);
         }
+        let inner = url.to_string().split_off("https://".len());
 
-        let response = url.to_string().split_off("https://".len());
-
-        Ok(response)
+        Ok(AuthToken { inner })
     }
 }
 
 /// Configuration for an RDS auth URL signer.
-#[derive(Debug)]
-pub struct SignerConfig {
+#[derive(Debug, Clone)]
+pub struct Config {
     /// The AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
     credentials: Option<SharedCredentialsProvider>,
 
@@ -110,10 +154,10 @@ pub struct SignerConfig {
     username: String,
 }
 
-impl SignerConfig {
+impl Config {
     /// Create a new `SignerConfigBuilder`.
-    pub fn builder() -> SignerConfigBuilder {
-        SignerConfigBuilder::default()
+    pub fn builder() -> ConfigBuilder {
+        ConfigBuilder::default()
     }
 
     /// The AWS credentials to sign requests with.
@@ -142,9 +186,9 @@ impl SignerConfig {
     }
 }
 
-/// A builder for [`SignerConfig`]s.
+/// A builder for [`Config`]s.
 #[derive(Debug, Default)]
-pub struct SignerConfigBuilder {
+pub struct ConfigBuilder {
     /// The AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
     credentials: Option<SharedCredentialsProvider>,
 
@@ -161,7 +205,7 @@ pub struct SignerConfigBuilder {
     username: Option<String>,
 }
 
-impl SignerConfigBuilder {
+impl ConfigBuilder {
     /// Set the AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
     pub fn credentials(mut self, credentials: SharedCredentialsProvider) -> Self {
         self.credentials = Some(credentials);
@@ -194,8 +238,8 @@ impl SignerConfigBuilder {
 
     /// Consume this builder, returning an error if required fields are missing.
     /// Otherwise, return a new `SignerConfig`.
-    pub fn build(self) -> Result<SignerConfig, BoxError> {
-        Ok(SignerConfig {
+    pub fn build(self) -> Result<Config, BoxError> {
+        Ok(Config {
             credentials: self.credentials,
             hostname: self.hostname.ok_or("A hostname is required")?,
             port: self.port.ok_or("a port is required")?,
@@ -207,36 +251,35 @@ impl SignerConfigBuilder {
 
 #[cfg(test)]
 mod test {
-    use super::{Signer, SignerConfig};
+    use super::{AuthTokenGenerator, Config};
     use aws_credential_types::provider::SharedCredentialsProvider;
     use aws_credential_types::Credentials;
     use aws_smithy_async::test_util::ManualTimeSource;
     use aws_types::region::Region;
     use aws_types::SdkConfig;
-    use std::time::SystemTime;
+    use std::ops::Deref;
+    use std::time::{Duration, UNIX_EPOCH};
 
     #[tokio::test]
     async fn signing_works() {
-        // Should generate the same result as running the following AWS CLI command:
-        // aws rds generate-db-auth-token \
-        // --hostname iamauth-databasecluster.cluster-abcdefg222hq.us-east-1.rds.amazonaws.com \
-        // --port 3306 --username mydbuser --region us-east-1
-        let time_source = ManualTimeSource::new(SystemTime::UNIX_EPOCH);
+        let time_source = ManualTimeSource::new(UNIX_EPOCH + Duration::from_secs(1724709600));
         let sdk_config = SdkConfig::builder()
-            .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+            .credentials_provider(SharedCredentialsProvider::new(Credentials::new(
+                "akid", "secret", None, None, "test",
+            )))
             .time_source(time_source)
             .build();
-        let signer = Signer::new(
-            SignerConfig::builder()
-                .hostname("dontcare.fake-region-1.rds.amazonaws.com")
+        let signer = AuthTokenGenerator::new(
+            Config::builder()
+                .hostname("prod-instance.us-east-1.rds.amazonaws.com")
                 .port(3306)
-                .region(Region::new("fake-region-1"))
-                .username("mydbuser")
+                .region(Region::new("us-east-1"))
+                .username("peccy")
                 .build()
                 .unwrap(),
         );
 
-        let signed_url = signer.get_auth_token(&sdk_config).await.unwrap();
-        assert_eq!(signed_url, "dontcare.fake-region-1.rds.amazonaws.com:3306/?Action=connect&DBUser=mydbuser&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F19700101%2Ffake-region-1%2Frds-db%2Faws4_request&X-Amz-Date=19700101T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=32562254e5a540b51186f885e7df18188f5e963133f081c95668f8ce6d17c6c1");
+        let signed_url = signer.auth_token(&sdk_config).await.unwrap();
+        assert_eq!(signed_url.deref(), "prod-instance.us-east-1.rds.amazonaws.com:3306/?Action=connect&DBUser=peccy&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=akid%2F20240826%2Fus-east-1%2Frds-db%2Faws4_request&X-Amz-Date=20240826T220000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=dd0cba843009474347af724090233265628ace491ea17ce3eb3da098b983ad89");
     }
 }
