@@ -527,7 +527,7 @@ mod test {
         assert_eq!(ThroughputReport::NoPolling, report);
     }
 
-    // Transferred bytes MUST take priority over pending
+    // Transferred bytes MUST take priority over pending when reporting throughput
     #[test]
     fn mixed_bag_mostly_pending() {
         let start = SystemTime::UNIX_EPOCH;
@@ -576,5 +576,28 @@ mod test {
         let mut tl = ThroughputLogs::new(Duration::from_secs(1), t1);
 
         tl.push_pending(t0);
+    }
+
+    #[test]
+    fn test_label_transferred_bytes_should_not_be_overwritten_by_pending() {
+        let start = SystemTime::UNIX_EPOCH;
+        // Each `Bin`'s resolution is 100ms (1s / BIN_COUNT), where `BIN_COUNT` is 10
+        let mut logs = ThroughputLogs::new(Duration::from_secs(1), start);
+
+        // push `TransferredBytes` and then `Pending` in the same first `Bin`
+        logs.push_bytes_transferred(start + Duration::from_millis(10), 10);
+        logs.push_pending(start + Duration::from_millis(20));
+
+        let BinCounts {
+            empty,
+            no_polling,
+            transferred,
+            pending,
+        } = logs.buffer.counts();
+
+        assert_eq!(9, empty);
+        assert_eq!(0, no_polling);
+        assert_eq!(1, transferred); // `transferred` should still be there
+        assert_eq!(0, pending); // while `pending` should cease to exist, failing to overwrite `transferred`
     }
 }
