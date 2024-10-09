@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 9th, 2024
+=================
+**New this release:**
+- :bug: (client, [smithy-rs#3871](https://github.com/smithy-lang/smithy-rs/issues/3871), [aws-sdk-rust#1202](https://github.com/awslabs/aws-sdk-rust/issues/1202)) Fix minimum throughput detection for downloads to avoid incorrectly raising an error while the user is consuming data at a slow but steady pace.
+
+
 October 5th, 2024
 =================
 **New this release:**
