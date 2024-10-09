@@ -112,7 +112,9 @@ object TestWorkspace {
     private val subprojects = mutableListOf<String>()
 
     private val cargoLock: File by lazy {
-        Paths.get("").toAbsolutePath().toFile().resolve("aws/sdk/Cargo.lock")
+        // `Paths.get("").toAbsolutePath()` will point to the Gradle _sub_-project directory from which the tests
+        // are being run.
+        Paths.get("").toAbsolutePath().parent.toFile().resolve("aws/sdk/Cargo.lock")
     }
 
     init {
