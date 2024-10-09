@@ -15,6 +15,7 @@ import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.generated.BuildEnvironment
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -43,10 +44,9 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
-import software.amazon.smithy.rust.codegen.core.generated.RustMsrv
-import java.nio.file.Paths
 
 val TestModuleDocProvider =
     object : ModuleDocProvider {
@@ -71,7 +71,7 @@ private fun tempDir(directory: File? = null): File {
  * This function returns the minimum supported Rust version, as specified in the `gradle.properties` file
  * located at the root of the project.
  */
-fun msrv(): String = RustMsrv.MSRV
+fun msrv(): String = BuildEnvironment.MSRV
 
 /**
  * Generates the `rust-toolchain.toml` file in the specified directory.
@@ -112,9 +112,7 @@ object TestWorkspace {
     private val subprojects = mutableListOf<String>()
 
     private val cargoLock: File by lazy {
-        // `Paths.get("").toAbsolutePath()` will point to the Gradle _sub_-project directory from which the tests
-        // are being run.
-        Paths.get("").toAbsolutePath().parent.toFile().resolve("aws/sdk/Cargo.lock")
+        File(BuildEnvironment.PROJECT_DIR).resolve("aws/sdk/Cargo.lock")
     }
 
     init {
