@@ -5,7 +5,7 @@
 
 //! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
 
-use aws_smithy_http_server::{
+use pokemon_service_server_sdk::server::{
     operation::OperationShape,
     plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack},
     service::ServiceShape,

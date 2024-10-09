@@ -18,8 +18,9 @@ tower = "0.4"
 # Local paths
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
 aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
-pokemon-service-client = { path = "../pokemon-service-client" }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
 
 [dev-dependencies]

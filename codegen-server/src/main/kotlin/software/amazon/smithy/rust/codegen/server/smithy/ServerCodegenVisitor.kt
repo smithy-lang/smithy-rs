@@ -90,6 +90,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachVali
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RecursiveConstraintViolationBoxer
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.RemoveEbsModelValidationException
+import software.amazon.smithy.rust.codegen.server.smithy.transformers.ServerProtocolBasedTransformationFactory
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReachableFromOperationInputTagger
 import java.util.logging.Logger
 
@@ -208,6 +209,8 @@ open class ServerCodegenVisitor(
             .let { AttachValidationExceptionToConstrainedOperationInputs.transform(it, settings) }
             // Tag aggregate shapes reachable from operation input
             .let(ShapesReachableFromOperationInputTagger::transform)
+            // Remove traits that are not supported by the chosen protocol.
+            .let { ServerProtocolBasedTransformationFactory.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 

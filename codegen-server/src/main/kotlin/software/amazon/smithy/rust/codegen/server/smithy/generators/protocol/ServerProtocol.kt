@@ -47,6 +47,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddTypeFieldToServerErrorsCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeEncodingMapOrCollectionCborCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeSerializingMemberCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
@@ -349,6 +350,7 @@ class ServerRpcV2CborProtocol(
             listOf(
                 BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext),
                 AddTypeFieldToServerErrorsCborCustomization(),
+                BeforeSerializingMemberCborCustomization(serverCodegenContext),
             ),
         )
     }

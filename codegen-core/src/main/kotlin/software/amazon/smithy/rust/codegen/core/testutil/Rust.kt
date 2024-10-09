@@ -40,9 +40,11 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
+import java.io.FileInputStream
 import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import java.util.Properties
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
@@ -54,6 +56,8 @@ val TestModuleDocProvider =
             }
     }
 
+val projectRootDir by lazy { File("git rev-parse --show-toplevel".runCommand().replace("\n", "")) }
+
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
  */
@@ -63,6 +67,38 @@ private fun tempDir(directory: File? = null): File {
     } else {
         createTempDirectory("smithy-test").toFile()
     }
+}
+
+/**
+ * This function returns the minimum supported Rust version, as specified in the `gradle.properties` file
+ * located at the root of the project.
+ */
+fun msrv(): String {
+    val properties = Properties()
+    val propertiesFilePath = projectRootDir.resolve("gradle.properties")
+
+    FileInputStream(propertiesFilePath).use { inputStream ->
+        properties.load(inputStream)
+    }
+
+    return properties.getProperty("rust.msrv")
+}
+
+/**
+ * Generates the `rust-toolchain.toml` file in the specified directory.
+ *
+ * The compiler version is set in `gradle.properties` under the `rust.msrv` property.
+ * The Gradle task `GenerateMsrvTask` generates the Kotlin class
+ * `software.amazon.smithy.rust.codegen.core.Msrv` and writes the value of `rust.msrv` into it.
+ */
+private fun File.generateRustToolchainToml() {
+    resolve("rust-toolchain.toml").writeText(
+        // Help rust select the right version when we run cargo test.
+        """
+        [toolchain]
+        channel = "${msrv()}"
+        """.trimIndent(),
+    )
 }
 
 /**
@@ -87,8 +123,7 @@ object TestWorkspace {
     private val subprojects = mutableListOf<String>()
 
     private val cargoLock: File by lazy {
-        val projectDir = "git rev-parse --show-toplevel".runCommand().replace("\n", "")
-        File(projectDir).resolve("aws/sdk/Cargo.lock")
+        projectRootDir.resolve("aws/sdk/Cargo.lock")
     }
 
     init {
@@ -121,12 +156,7 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent(),
             )
-            newProject.resolve("rust-toolchain.toml").writeText(
-                // help rust select the right version when we run cargo test
-                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
-                //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.78.0\"\n",
-            )
+            newProject.generateRustToolchainToml()
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
             newProject.resolve("src/lib.rs").writeText("")
@@ -181,7 +211,11 @@ fun generatePluginContext(
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
 ): Pair<PluginContext, Path> {
-    val testDir = overrideTestDir ?: TestWorkspace.subproject()
+    val testDir =
+        overrideTestDir?.apply {
+            mkdirs()
+            generateRustToolchainToml()
+        } ?: TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
