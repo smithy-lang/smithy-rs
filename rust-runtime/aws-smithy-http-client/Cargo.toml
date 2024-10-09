@@ -25,13 +25,12 @@ hyper-1 = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
-    "dep:rustls"
 ]
 
 # FIXME - s2n-tls option, distinguish between rustls and s2n
-crypto-ring = ["dep:rustls", "rustls?/ring", "hyper-1"]
-crypto-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "hyper-1"]
-crypto-aws-lc-fips = ["dep:rustls", "rustls?/fips", "hyper-1"]
+crypto-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
+crypto-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "hyper-1"]
+crypto-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
