@@ -23,7 +23,7 @@
                 "20210810T003833Z"
               ],
               "host": [
-                "sts.us-east-1.amazonaws.com"
+                "http://aws.service-profile-override"
               ],
               "x-amz-user-agent": [
                 "aws-sdk-rust/0.1.0 api/sts/0.0.14-alpha os/macos lang/rust/1.55.0-nightly"
