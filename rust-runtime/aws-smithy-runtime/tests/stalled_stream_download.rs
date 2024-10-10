@@ -231,12 +231,12 @@ async fn user_polls_pending_followed_by_data_for_every_bin_in_throughput_logs() 
             // the same `Bin`.
             loop {
                 tick!(time, Duration::from_millis(50));
-                // We don't `unwrap` here since it will eventually fail when the server exits due to the client shutting
-                // down due to a minimum throughput detection error.
-                let _ = tx_client.send(()).await;
-                tick!(time, Duration::from_millis(50));
                 // We don't `unwrap` here since it will eventually fail when the client shuts down due to the minimum
                 // throughput detection error.
+                let _ = tx_client.send(()).await;
+                tick!(time, Duration::from_millis(50));
+                // We don't `unwrap` here since it will eventually fail when the server exits due to the client shutting
+                // down due to a minimum throughput detection error.
                 let _ = tx_server.send(()).await;
             }
         }
