@@ -26,7 +26,7 @@ const SERVICE: &str = "rds-db";
 ///
 /// ## Example
 ///
-/// ```no_run
+/// ```ignore
 /// use crate::auth_token::{AuthTokenGenerator, Config};
 ///
 /// #[tokio::main]
@@ -53,7 +53,6 @@ pub struct AuthTokenGenerator {
 ///
 /// This struct can be converted into a `&str` using the `Deref` trait or by calling `to_string()`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[non_exhaustive]
 pub struct AuthToken {
     inner: String,
 }

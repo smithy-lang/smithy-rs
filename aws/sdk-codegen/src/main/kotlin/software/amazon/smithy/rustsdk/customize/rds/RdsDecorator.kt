@@ -29,8 +29,9 @@ class RdsDecorator : ClientCodegenDecorator {
             rust(
                 "// include #T;",
                 RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile(
-                        "rds_signer",
+                    InlineAwsDependency.forRustFileAs(
+                        "rds_auth_token",
+                        "auth_token",
                         Visibility.PUBLIC,
                         AwsCargoDependency.awsSigv4(rc),
                         CargoDependency.smithyRuntimeApiClient(rc),
