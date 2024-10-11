@@ -287,7 +287,6 @@ mod test {
     use aws_smithy_async::test_util::ManualTimeSource;
     use aws_types::region::Region;
     use aws_types::SdkConfig;
-    use std::ops::Deref;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[tokio::test]
