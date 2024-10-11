@@ -131,10 +131,11 @@ fn date_based_release_metadata(
     ReleaseMetadata {
         title: date_title(&now),
         tag: format!(
-            "release-{year}-{month:02}-{day:02}",
+            "release-{year}-{month:02}-{day:02}-{epoch}",
             year = now.date().year(),
             month = u8::from(now.date().month()),
-            day = now.date().day()
+            day = now.date().day(),
+            epoch = now.unix_timestamp(),
         ),
         manifest_name: manifest_name.into(),
     }
@@ -664,7 +665,7 @@ message = "Some API change"
         let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
         let result = date_based_release_metadata(now, "some-manifest.json");
         assert_eq!("March 3rd, 1973", result.title);
-        assert_eq!("release-1973-03-03", result.tag);
+        assert_eq!("release-1973-03-03-100000000", result.tag);
         assert_eq!("some-manifest.json", result.manifest_name);
     }
 
