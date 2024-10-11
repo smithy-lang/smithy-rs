@@ -16,7 +16,6 @@ use aws_smithy_runtime_api::client::identity::Identity;
 use aws_types::region::Region;
 use std::fmt;
 use std::fmt::Debug;
-use std::ops::Deref;
 use std::time::Duration;
 
 const ACTION: &str = "connect";
@@ -57,10 +56,10 @@ pub struct AuthToken {
     inner: String,
 }
 
-impl Deref for AuthToken {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
+impl AuthToken {
+    /// Return the auth token as a `&str`.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
         &self.inner
     }
 }
@@ -85,7 +84,7 @@ impl AuthTokenGenerator {
         let credentials = self
             .config
             .credentials()
-            .or(config.credentials_provider().as_ref())
+            .or(config.credentials_provider())
             .ok_or("credentials are required to create a signed URL for RDS")?
             .provide_credentials()
             .await?;
@@ -99,7 +98,9 @@ impl AuthTokenGenerator {
         let time = config.time_source().ok_or("a time source is required")?;
 
         let mut signing_settings = SigningSettings::default();
-        signing_settings.expires_in = Some(Duration::from_secs(900));
+        signing_settings.expires_in = Some(Duration::from_secs(
+            self.config.expires_in().unwrap_or(900).min(900),
+        ));
         signing_settings.signature_location = http_request::SignatureLocation::QueryParams;
 
         let signing_params = v4::SigningParams::builder()
@@ -137,20 +138,27 @@ impl AuthTokenGenerator {
 /// Configuration for an RDS auth URL signer.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// The AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
+    /// The AWS credentials to sign requests with.
+    ///
+    /// Uses the default credential provider chain if not specified.
     credentials: Option<SharedCredentialsProvider>,
 
     /// The hostname of the database to connect to.
     hostname: String,
 
     /// The port number the database is listening on.
-    port: u32,
+    port: u64,
 
     /// The region the database is located in. Uses the region inferred from the runtime if omitted.
     region: Option<Region>,
 
     /// The username to login as.
     username: String,
+
+    /// The number of seconds the signed URL should be valid for.
+    ///
+    /// Maxes at 900 seconds.
+    expires_in: Option<u64>,
 }
 
 impl Config {
@@ -160,8 +168,8 @@ impl Config {
     }
 
     /// The AWS credentials to sign requests with.
-    pub fn credentials(&self) -> Option<&SharedCredentialsProvider> {
-        self.credentials.as_ref()
+    pub fn credentials(&self) -> Option<SharedCredentialsProvider> {
+        self.credentials.clone()
     }
 
     /// The hostname of the database to connect to.
@@ -170,7 +178,7 @@ impl Config {
     }
 
     /// The port number the database is listening on.
-    pub fn port(&self) -> u32 {
+    pub fn port(&self) -> u64 {
         self.port
     }
 
@@ -183,31 +191,45 @@ impl Config {
     pub fn username(&self) -> &str {
         &self.username
     }
+
+    /// The number of seconds the signed URL should be valid for.
+    ///
+    /// Maxes out at 900 seconds.
+    pub fn expires_in(&self) -> Option<u64> {
+        self.expires_in
+    }
 }
 
 /// A builder for [`Config`]s.
 #[derive(Debug, Default)]
 pub struct ConfigBuilder {
-    /// The AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
+    /// The AWS credentials to create the auth token with.
+    ///
+    /// Uses the default credential provider chain if not specified.
     credentials: Option<SharedCredentialsProvider>,
 
     /// The hostname of the database to connect to.
     hostname: Option<String>,
 
     /// The port number the database is listening on.
-    port: Option<u32>,
+    port: Option<u64>,
 
     /// The region the database is located in. Uses the region inferred from the runtime if omitted.
     region: Option<Region>,
 
     /// The database username to login as.
     username: Option<String>,
+
+    /// The number of seconds the auth token should be valid for.
+    expires_in: Option<u64>,
 }
 
 impl ConfigBuilder {
-    /// Set the AWS credentials to sign requests with. Uses the default credential provider chain if not specified.
-    pub fn credentials(mut self, credentials: SharedCredentialsProvider) -> Self {
-        self.credentials = Some(credentials);
+    /// The AWS credentials to create the auth token with.
+    ///
+    /// Uses the default credential provider chain if not specified.
+    pub fn credentials(mut self, credentials: impl ProvideCredentials + 'static) -> Self {
+        self.credentials = Some(SharedCredentialsProvider::new(credentials));
         self
     }
 
@@ -218,7 +240,7 @@ impl ConfigBuilder {
     }
 
     /// The port number the database is listening on.
-    pub fn port(mut self, port: u32) -> Self {
+    pub fn port(mut self, port: u64) -> Self {
         self.port = Some(port);
         self
     }
@@ -235,6 +257,14 @@ impl ConfigBuilder {
         self
     }
 
+    /// The number of seconds the signed URL should be valid for.
+    ///
+    /// Maxes out at 900 seconds.
+    pub fn expires_in(mut self, expires_in: u64) -> Self {
+        self.expires_in = Some(expires_in);
+        self
+    }
+
     /// Consume this builder, returning an error if required fields are missing.
     /// Otherwise, return a new `SignerConfig`.
     pub fn build(self) -> Result<Config, BoxError> {
@@ -244,6 +274,7 @@ impl ConfigBuilder {
             port: self.port.ok_or("a port is required")?,
             region: self.region,
             username: self.username.ok_or("a username is required")?,
+            expires_in: self.expires_in,
         })
     }
 }
@@ -279,6 +310,6 @@ mod test {
         );
 
         let signed_url = signer.auth_token(&sdk_config).await.unwrap();
-        assert_eq!(signed_url.deref(), "prod-instance.us-east-1.rds.amazonaws.com:3306/?Action=connect&DBUser=peccy&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=akid%2F20240826%2Fus-east-1%2Frds-db%2Faws4_request&X-Amz-Date=20240826T220000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=dd0cba843009474347af724090233265628ace491ea17ce3eb3da098b983ad89");
+        assert_eq!(signed_url.as_str(), "prod-instance.us-east-1.rds.amazonaws.com:3306/?Action=connect&DBUser=peccy&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=akid%2F20240826%2Fus-east-1%2Frds-db%2Faws4_request&X-Amz-Date=20240826T220000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=dd0cba843009474347af724090233265628ace491ea17ce3eb3da098b983ad89");
     }
 }
