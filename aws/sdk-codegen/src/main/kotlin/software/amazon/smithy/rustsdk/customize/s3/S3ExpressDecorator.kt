@@ -314,10 +314,6 @@ private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
 
 private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
     arrayOf(
-        // Used by lru, and this forces it to be a later version that avoids
-        // https://github.com/tkaitchuck/aHash/issues/200
-        // when built with `cargo update -Z minimal-versions`
-        CargoDependency.AHash,
         AwsCargoDependency.awsCredentialTypes(runtimeConfig),
         AwsCargoDependency.awsRuntime(runtimeConfig),
         AwsCargoDependency.awsSigv4(runtimeConfig),

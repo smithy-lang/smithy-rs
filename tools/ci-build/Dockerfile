@@ -93,7 +93,7 @@ RUN set -eux; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
-ARG cargo_deny_version=0.14.20
+ARG cargo_deny_version=0.16.1
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
