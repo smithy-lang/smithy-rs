@@ -373,6 +373,12 @@ impl StableCratesExposeStableCrates {
                     !(name == "aws-smithy-runtime"
                         && ["tower_service", "serde"].contains(&tpe.as_str()))
                 })
+                // TODO(tooling): When tooling allows, specify this at the crate level. These
+                // are gated by the hyper-014 feature and carryover from relocating hyper-014.x
+                // support from aws-smithy-runtime
+                .filter(|tpe| {
+                    !(name == "aws-smithy-http-client" && ["tower_service"].contains(&tpe.as_str()))
+                })
                 .map(|crte| {
                     LintError::new(format!(
                         "stable crate {name} exposed {crte} which is unstable"

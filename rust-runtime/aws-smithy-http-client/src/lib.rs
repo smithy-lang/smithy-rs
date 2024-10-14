@@ -22,6 +22,7 @@
 
 // ideally hyper_014 would just be exposed as is but due to
 // https://github.com/rust-lang/rust/issues/47238 we get clippy warnings we can't suppress
+#[cfg(feature = "hyper-014")]
 pub(crate) mod hyper_legacy;
 
 /// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
