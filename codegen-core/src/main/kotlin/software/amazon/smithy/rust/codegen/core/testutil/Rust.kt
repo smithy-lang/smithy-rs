@@ -15,6 +15,7 @@ import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.generated.BuildEnvironment
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -40,11 +41,10 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
-import java.io.FileInputStream
 import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
-import java.util.Properties
+import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
@@ -55,8 +55,6 @@ val TestModuleDocProvider =
                 docs("Some test documentation\n\nSome more details...")
             }
     }
-
-val projectRootDir by lazy { File("git rev-parse --show-toplevel".runCommand().replace("\n", "")) }
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -73,23 +71,14 @@ private fun tempDir(directory: File? = null): File {
  * This function returns the minimum supported Rust version, as specified in the `gradle.properties` file
  * located at the root of the project.
  */
-fun msrv(): String {
-    val properties = Properties()
-    val propertiesFilePath = projectRootDir.resolve("gradle.properties")
-
-    FileInputStream(propertiesFilePath).use { inputStream ->
-        properties.load(inputStream)
-    }
-
-    return properties.getProperty("rust.msrv")
-}
+fun msrv(): String = BuildEnvironment.MSRV
 
 /**
  * Generates the `rust-toolchain.toml` file in the specified directory.
  *
  * The compiler version is set in `gradle.properties` under the `rust.msrv` property.
- * The Gradle task `GenerateMsrvTask` generates the Kotlin class
- * `software.amazon.smithy.rust.codegen.core.Msrv` and writes the value of `rust.msrv` into it.
+ * The Gradle task `generateRustMsrvFile` generates the Kotlin class
+ * `software.amazon.smithy.rust.codegen.core.generated.RustMsrv.kt` and writes the value of `rust.msrv` into it.
  */
 private fun File.generateRustToolchainToml() {
     resolve("rust-toolchain.toml").writeText(
@@ -123,7 +112,7 @@ object TestWorkspace {
     private val subprojects = mutableListOf<String>()
 
     private val cargoLock: File by lazy {
-        projectRootDir.resolve("aws/sdk/Cargo.lock")
+        File(BuildEnvironment.PROJECT_DIR).resolve("aws/sdk/Cargo.lock")
     }
 
     init {

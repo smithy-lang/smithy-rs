@@ -9,9 +9,10 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.paths.shouldExist
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.generated.BuildEnvironment
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
-import software.amazon.smithy.rust.codegen.core.testutil.projectRootDir
+import java.io.File
 import java.nio.file.Files.createTempDirectory
 import java.util.regex.Pattern
 
@@ -48,7 +49,7 @@ internal class RustToolChainTomlTest {
 
         // Read the MSRV written in `gradle.properties` file.
         val msrvPattern = Pattern.compile("rust\\.msrv=(.+)")
-        val gradlePropertiesPath = projectRootDir.resolve("gradle.properties")
+        val gradlePropertiesPath = File(BuildEnvironment.PROJECT_DIR).resolve("gradle.properties")
         val msrv =
             gradlePropertiesPath.useLines { lines ->
                 lines.firstNotNullOfOrNull { line ->
@@ -75,12 +76,11 @@ internal class RustToolChainTomlTest {
 
                 // There should be a [toolchain] table, and it must have a key called 'channel' whose value must
                 // match the `rust.msrv` specified in gradle.properties.
-                toolchainSection != null &&
-                    toolchainSection.any { line ->
-                        channelPattern.matcher(line).let { matcher ->
-                            matcher.find() && matcher.group(1) == msrv
-                        }
+                toolchainSection.any { line ->
+                    channelPattern.matcher(line).let { matcher ->
+                        matcher.find() && matcher.group(1) == msrv
                     }
+                }
             }
 
         channelMatches.shouldBeTrue()
