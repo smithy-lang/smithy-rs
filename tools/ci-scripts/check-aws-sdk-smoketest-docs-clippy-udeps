@@ -14,7 +14,7 @@ RUSTDOCFLAGS="--cfg docsrs" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --doc
 
 cargo clippy --all-features
 # running `cargo hack` runs this in the prod workspace and ensures that each crate is run individually
-cargo +"${RUST_NIGHTLY_VERSION}" hack udeps --all-features
+cargo +"${RUST_NIGHTLY_VERSION}" hack udeps --all-features --all-targets
 popd &>/dev/null
 
 # Move the smoketest artifacts into smithy-rs and check the integration tests
