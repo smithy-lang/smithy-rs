@@ -30,6 +30,7 @@ object CrateSet {
             "aws-smithy-runtime-api",
             "aws-smithy-runtime",
             "aws-smithy-types",
+            "aws-smithy-http-client",
         )
 
     val version = { name: String ->
@@ -64,6 +65,7 @@ object CrateSet {
             "aws-smithy-client",
             "aws-smithy-eventstream",
             "aws-smithy-http",
+            "aws-smithy-http-client",
             "aws-smithy-http-auth",
             "aws-smithy-http-tower",
             "aws-smithy-json",

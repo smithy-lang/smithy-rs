@@ -53,6 +53,7 @@ where
 /// Runtime plugin that provides a default connector.
 pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
     let _default: Option<SharedHttpClient> = None;
+    #[allow(deprecated)]
     #[cfg(feature = "connector-hyper-0-14-x")]
     let _default = crate::client::http::hyper_014::default_client();
 

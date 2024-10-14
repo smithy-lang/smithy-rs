@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_experimental::hyper_1_0::{CryptoMode, HyperClientBuilder};
+use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
 
 fn main() {
     let _client = HyperClientBuilder::new()

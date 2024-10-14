@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_experimental::hyper_1_0::{CryptoMode, HyperClientBuilder};
+use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
 use std::net::{IpAddr, Ipv4Addr};
 

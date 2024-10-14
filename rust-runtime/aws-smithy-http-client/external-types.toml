@@ -1,0 +1,13 @@
+allowed_external_types = [
+    "aws_smithy_runtime_api::*",
+    "aws_smithy_async::*",
+
+    # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `hyper-014` feature
+    "hyper::client::client::Builder",
+    "hyper::client::connect::Connection",
+    "tokio::io::async_read::AsyncRead",
+    "tokio::io::async_write::AsyncWrite",
+    "http::uri::Uri",
+    # Used in trait bounds for legacy hyper connector build method
+    "tower_service::Service",
+]

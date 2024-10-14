@@ -1,0 +1,93 @@
+[package]
+name = "aws-smithy-http-client"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "HTTP client abstractions for generated smithy clients"
+version = "1.0.0"
+license = "Apache-2.0"
+edition = "2021"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[features]
+legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
+hyper-014 = [
+    "aws-smithy-runtime-api/http-02x",
+    "aws-smithy-types/http-body-0-4-x",
+    "dep:http-02x",
+    "dep:http-body-04x",
+    "dep:hyper-0-14",
+]
+
+hyper-1 = [
+    "aws-smithy-runtime-api/http-1x",
+    "aws-smithy-types/http-body-1-x",
+    "dep:hyper",
+    "dep:hyper-util",
+    "hyper-util?/client-legacy",
+    "dep:http-1x",
+    "dep:tower",
+]
+
+# FIXME - s2n-tls option, distinguish between rustls and s2n
+crypto-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
+crypto-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "hyper-1"]
+crypto-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1"]
+
+[dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
+h2 = { version = "0.4", default-features = false }
+# FIXME - do we need tokio enabled by default?
+tokio = { version = "1", features = [] }
+once_cell = "1.20.1"
+pin-project-lite = "0.2.14"
+tracing = "0.1"
+
+# hyper 1.x stack
+hyper = { version = "1", features = ["client", "http1", "http2"], optional = true }
+hyper-util = { version = "0.1.7", optional = true }
+http-1x = { package = "http", version = "1" , optional = true }
+hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
+rustls = { version = "0.23", default-features = false, optional = true }
+tower = { version = "0.5.1", optional = true }
+# end hyper 1.x stack deps
+
+# legacy hyper-0.14.x stack the SDK/runtime GA'd with
+http-02x = { package = "http", version = "0.2.8", optional = true}
+http-body-04x = { package = "http-body", version = "0.4.4" , optional = true}
+hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, features = ["client", "http1", "http2", "tcp", "stream"], optional = true }
+legacy-hyper-rustls = { package = "hyper-rustls", version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
+legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }
+# end legacy stack deps
+
+[dev-dependencies]
+aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
+
+
+[[example]]
+name = "client-ring"
+required-features = ["crypto-ring"]
+doc-scrape-examples = true
+
+[[example]]
+name = "client-aws-lc"
+required-features = ["crypto-aws-lc", "crypto-aws-lc-fips"]
+doc-scrape-examples = true
+
+[[example]]
+name = "custom-dns"
+required-features = ["crypto-ring"]
+doc-scrape-examples = true
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

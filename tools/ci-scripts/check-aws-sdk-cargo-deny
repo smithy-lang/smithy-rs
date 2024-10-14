@@ -10,6 +10,7 @@ cd aws-sdk
 # Remove examples from workspace since they don't have license metadata
 sed -i '/"examples\//d' Cargo.toml
 
+cargo deny --version
 cargo deny --all-features check \
   --hide-inclusion-graph \
   --config ../smithy-rs/.cargo-deny-config.toml \

@@ -78,10 +78,12 @@ pub struct RecordingClient {
 impl RecordingClient {
     /// Construct a recording connection wrapping a default HTTPS implementation without any timeouts.
     pub fn https() -> Self {
+        #[allow(deprecated)]
         use crate::client::http::hyper_014::HyperConnector;
         Self {
             data: Default::default(),
             num_events: Arc::new(AtomicUsize::new(0)),
+            #[allow(deprecated)]
             inner: SharedHttpConnector::new(HyperConnector::builder().build_https()),
         }
     }

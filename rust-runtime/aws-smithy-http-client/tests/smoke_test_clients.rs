@@ -10,7 +10,7 @@
 ))]
 
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_experimental::hyper_1_0::{CryptoMode, HyperClientBuilder};
+use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -64,10 +64,7 @@ async fn custom_dns_client() {
             let count = self.count.clone();
             DnsFuture::new(async move {
                 count.fetch_add(1, Ordering::Relaxed);
-                let result = inner
-                    .call(name)
-                    .await
-                    .map_err(|err| ResolveDnsError::new(err))?;
+                let result = inner.call(name).await.map_err(ResolveDnsError::new)?;
                 Ok(result.map(|addr| addr.ip()).collect::<Vec<_>>())
             })
         }

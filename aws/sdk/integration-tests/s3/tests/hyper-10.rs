@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_experimental::hyper_1_0::CryptoMode;
+use aws_smithy_http_client::hyper_1::CryptoMode;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 
 #[tokio::test]
 #[ignore]
 async fn hyper_10_end_to_end() {
-    let http_client = aws_smithy_experimental::hyper_1_0::HyperClientBuilder::default()
+    let http_client = aws_smithy_http_client::hyper_1::HyperClientBuilder::default()
         .crypto_mode(CryptoMode::Ring)
         .build_https();
     let conf = aws_config::defaults(BehaviorVersion::latest())
