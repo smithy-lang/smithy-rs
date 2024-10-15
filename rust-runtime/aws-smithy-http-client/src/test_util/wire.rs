@@ -12,8 +12,8 @@
 //! # Examples
 //! ```no_run
 //! use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
-//! use aws_smithy_runtime::client::http::test_util::wire::{check_matches, ReplayedEvent, WireMockServer};
-//! use aws_smithy_runtime::{match_events, ev};
+//! use aws_smithy_http_client::test_util::wire::{check_matches, ReplayedEvent, WireMockServer};
+//! use aws_smithy_http_client::{match_events, ev};
 //! # async fn example() {
 //!
 //! // This connection binds to a local address
@@ -40,7 +40,7 @@
 #![allow(missing_docs)]
 
 #[allow(deprecated)]
-use crate::client::http::hyper_014::HyperClientBuilder;
+use crate::hyper_014::HyperClientBuilder;
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -97,19 +97,14 @@ pub fn check_matches(events: &[RecordedEvent], matchers: &[Matcher]) {
 macro_rules! matcher {
     ($expect:tt) => {
         (
-            Box::new(
-                |event: &$crate::client::http::test_util::wire::RecordedEvent| {
-                    if !matches!(event, $expect) {
-                        return Err(format!(
-                            "expected `{}` but got {:?}",
-                            stringify!($expect),
-                            event
-                        )
-                        .into());
-                    }
-                    Ok(())
-                },
-            ),
+            Box::new(|event: &$crate::test_util::wire::RecordedEvent| {
+                if !matches!(event, $expect) {
+                    return Err(
+                        format!("expected `{}` but got {:?}", stringify!($expect), event).into(),
+                    );
+                }
+                Ok(())
+            }),
             stringify!($expect),
         )
     };
@@ -120,7 +115,7 @@ macro_rules! matcher {
 macro_rules! match_events {
         ($( $expect:pat),*) => {
             |events| {
-                $crate::client::http::test_util::wire::check_matches(events, &[$( $crate::matcher!($expect) ),*]);
+                $crate::test_util::wire::check_matches(events, &[$( $crate::matcher!($expect) ),*]);
             }
         };
     }
@@ -129,22 +124,22 @@ macro_rules! match_events {
 #[macro_export]
 macro_rules! ev {
     (http($status:expr)) => {
-        $crate::client::http::test_util::wire::RecordedEvent::Response(
-            $crate::client::http::test_util::wire::ReplayedEvent::HttpResponse {
+        $crate::test_util::wire::RecordedEvent::Response(
+            $crate::test_util::wire::ReplayedEvent::HttpResponse {
                 status: $status,
                 ..
             },
         )
     };
     (dns) => {
-        $crate::client::http::test_util::wire::RecordedEvent::DnsLookup(_)
+        $crate::test_util::wire::RecordedEvent::DnsLookup(_)
     };
     (connect) => {
-        $crate::client::http::test_util::wire::RecordedEvent::NewConnection
+        $crate::test_util::wire::RecordedEvent::NewConnection
     };
     (timeout) => {
-        $crate::client::http::test_util::wire::RecordedEvent::Response(
-            $crate::client::http::test_util::wire::ReplayedEvent::Timeout,
+        $crate::test_util::wire::RecordedEvent::Response(
+            $crate::test_util::wire::ReplayedEvent::Timeout,
         )
     };
 }
@@ -184,7 +179,7 @@ impl ReplayedEvent {
 
 /// Test server that binds to 127.0.0.1:0
 ///
-/// See the [module docs](crate::client::http::test_util::wire) for a usage example.
+/// See the [module docs](crate::test_util::wire) for a usage example.
 ///
 /// Usage:
 /// - Call [`WireMockServer::start`] to start the server

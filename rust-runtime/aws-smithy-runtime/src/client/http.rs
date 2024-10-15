@@ -6,8 +6,9 @@
 /// Interceptor for connection poisoning.
 pub mod connection_poisoning;
 
+// FIXME - deprecate and re-export from aws-smithy-runtime
 #[cfg(feature = "test-util")]
-pub mod test_util;
+// pub mod test_util;
 
 /// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
 ///

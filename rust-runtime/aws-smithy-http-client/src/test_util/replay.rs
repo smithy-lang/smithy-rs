@@ -119,7 +119,7 @@ impl ValidateRequest {
 /// # Example
 ///
 /// ```no_run
-/// use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+/// use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
 /// use aws_smithy_types::body::SdkBody;
 ///
 /// let http_client = StaticReplayClient::new(vec![
@@ -281,17 +281,17 @@ impl HttpClient for StaticReplayClient {
 
 #[cfg(test)]
 mod test {
-    use crate::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use crate::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_types::body::SdkBody;
 
     #[test]
     fn create_from_either_http_type() {
         let _client = StaticReplayClient::new(vec![ReplayEvent::new(
-            http1::Request::builder()
+            http_1x::Request::builder()
                 .uri("test")
                 .body(SdkBody::from("hello"))
                 .unwrap(),
-            http1::Response::builder()
+            http_1x::Response::builder()
                 .status(200)
                 .body(SdkBody::from("hello"))
                 .unwrap(),

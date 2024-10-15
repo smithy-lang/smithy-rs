@@ -12,7 +12,7 @@
 //! respond with a given response, then capture request can also be useful since
 //! you can optionally give it a response to return.
 #![cfg_attr(
-    feature = "connector-hyper-0-14-x",
+    feature = "hyper-014",
     doc = "- [`dvr`]: If you want to record real-world traffic and then replay it later, then DVR's"
 )]
 //! [`RecordingClient`](dvr::RecordingClient) and [`ReplayingClient`](dvr::ReplayingClient)
@@ -29,7 +29,7 @@
 //! - [`NeverClient`]: Useful for testing timeouts, where you want the client to never respond.
 //!
 #![cfg_attr(
-    feature = "connector-hyper-0-14-x",
+    feature = "hyper-014",
     doc = "
 There is also the [`NeverTcpConnector`], which makes it easy to test connect/read timeouts.
 
@@ -39,7 +39,7 @@ Finally, for socket-level mocking, see the [`wire`] module.
 mod capture_request;
 pub use capture_request::{capture_request, CaptureRequestHandler, CaptureRequestReceiver};
 
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 pub mod dvr;
 
 mod replay;
@@ -51,8 +51,8 @@ pub use infallible::infallible_client_fn;
 mod never;
 pub use never::NeverClient;
 
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 pub use never::NeverTcpConnector;
 
-#[cfg(all(feature = "connector-hyper-0-14-x", feature = "wire-mock"))]
+#[cfg(all(feature = "hyper-014", feature = "wire-mock"))]
 pub mod wire;

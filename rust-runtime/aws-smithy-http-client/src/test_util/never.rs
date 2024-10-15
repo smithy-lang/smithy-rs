@@ -62,11 +62,11 @@ impl HttpClient for NeverClient {
 
 /// A TCP connector that never connects.
 // In the future, this can be available for multiple hyper version feature flags, with the impls gated between individual features
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 #[derive(Clone, Debug, Default)]
 pub struct NeverTcpConnector;
 
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 impl NeverTcpConnector {
     /// Creates a new `NeverTcpConnector`.
     pub fn new() -> Self {
@@ -74,7 +74,7 @@ impl NeverTcpConnector {
     }
 }
 
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 impl hyper_0_14::service::Service<http_02x::Uri> for NeverTcpConnector {
     type Response = connection::NeverTcpConnection;
     type Error = aws_smithy_runtime_api::box_error::BoxError;
@@ -97,7 +97,7 @@ impl hyper_0_14::service::Service<http_02x::Uri> for NeverTcpConnector {
     }
 }
 
-#[cfg(feature = "connector-hyper-0-14-x")]
+#[cfg(feature = "hyper-014")]
 mod connection {
     use hyper_0_14::client::connect::{Connected, Connection};
     use std::io::Error;
@@ -145,10 +145,10 @@ mod connection {
     }
 }
 
-#[cfg(all(test, feature = "connector-hyper-0-14-x"))]
+#[cfg(all(test, feature = "hyper-014"))]
 #[tokio::test]
 async fn never_tcp_connector_plugs_into_hyper_014() {
-    use crate::client::http::hyper_014::HyperClientBuilder;
+    use crate::hyper_014::HyperClientBuilder;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;

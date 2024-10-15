@@ -4,7 +4,7 @@
  */
 
 use super::{Action, ConnectionId, Direction, Event, NetworkTraffic};
-use crate::client::http::test_util::replay::DEFAULT_RELAXED_HEADERS;
+use crate::test_util::replay::DEFAULT_RELAXED_HEADERS;
 use aws_smithy_protocol_test::MediaType;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{

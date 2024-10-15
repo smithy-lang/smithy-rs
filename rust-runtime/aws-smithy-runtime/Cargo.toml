@@ -16,6 +16,7 @@ connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-tls-rustls", "connector-hyper-0-14-x"]
 rt-tokio = ["tokio/rt"]
 
+# FIXME - update once we know what this looks like from aws-smithy-http-client (also run udeps)
 # Features for testing
 test-util = [
     "aws-smithy-runtime-api/test-util",
