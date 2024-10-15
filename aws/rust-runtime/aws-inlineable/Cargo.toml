@@ -15,10 +15,6 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 http_1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
 
 [dependencies]
-# Used by lru, and this forces it to be a later version that avoids
-# https://github.com/tkaitchuck/aHash/issues/200
-# when built with `cargo update -Z minimal-versions`
-ahash = { version = "0.8.11", default-features = false }
 aws-credential-types = { path = "../aws-credential-types" }
 aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 aws-sigv4 = { path = "../aws-sigv4" }
@@ -36,7 +32,7 @@ http-body = "0.4.5"
 http-1x = { package = "http", version = "1", optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true }
 hmac = "0.12"
-lru = "0.12.2"
+lru = "0.12.5"
 ring = "0.17.5"
 sha2 = "0.10"
 tokio = "1.23.1"
