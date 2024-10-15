@@ -81,6 +81,9 @@ pub struct RenderArgs {
     // working directory will be used to attempt to find it.
     #[clap(long, action)]
     pub smithy_rs_location: Option<PathBuf>,
+    // Location of the aws-sdk-rust repository, used exclusively to retrieve existing release tags.
+    #[clap(long, required_if_eq("change-set", "aws-sdk"))]
+    pub aws_sdk_rust_location: Option<PathBuf>,
 
     // For testing only
     #[clap(skip)]
@@ -92,16 +95,27 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
 
     let current_dir = env::current_dir()?;
     let repo_root: PathBuf = find_git_repository_root(
-        &format!("{}", args.change_set),
+        "smithy-rs",
         args.smithy_rs_location
             .as_deref()
             .unwrap_or(current_dir.as_path()),
     )
     .context("failed to find smithy-rs repo root")?;
-    let smithy_rs = GitCLI::new(&repo_root)?;
-    let current_tag = smithy_rs.get_current_tag()?;
+
+    let current_tag = {
+        let cli_for_tag = if let Some(aws_sdk_rust_repo_root) = &args.aws_sdk_rust_location {
+            GitCLI::new(
+                &find_git_repository_root("aws-sdk-rust", aws_sdk_rust_repo_root)
+                    .context("failed to find aws-sdk-rust repo root")?,
+            )?
+        } else {
+            GitCLI::new(&repo_root)?
+        };
+        cli_for_tag.get_current_tag()?
+    };
     let next_release_tag = next_tag(now, &current_tag);
 
+    let smithy_rs = GitCLI::new(&repo_root)?;
     if args.independent_versioning {
         let smithy_rs_metadata = date_based_release_metadata(
             now,

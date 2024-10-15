@@ -292,6 +292,7 @@ fn render_smithy_rs() {
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -399,6 +400,7 @@ fn render_aws_sdk() {
         current_release_versions_manifest: None,
         previous_release_versions_manifest: Some(previous_versions_manifest_path),
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -492,6 +494,7 @@ Change from server
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -568,6 +571,7 @@ Change from client
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -634,6 +638,7 @@ fn render_crate_versions() {
         current_release_versions_manifest: Some(current_versions_manifest_path),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
