@@ -243,7 +243,7 @@ jobs:
           publisher publish -y --location .
         fi
     # This step is not idempotent and MUST be performed last, as it will generate a new release in the `smithy-rs`
-    # repository with the release tag that will always be unique, based on the current UNIX epoch time.
+    # repository with the release tag that is always unique and has an increasing numerical suffix.
     - name: Tag release
       uses: actions/github-script@v7
       with:
