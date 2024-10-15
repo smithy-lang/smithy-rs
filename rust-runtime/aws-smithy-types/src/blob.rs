@@ -31,6 +31,24 @@ impl AsRef<[u8]> for Blob {
     }
 }
 
+impl Into<Vec<u8>> for Blob {
+    fn into(self) -> Vec<u8> {
+        self.into_inner()
+    }
+}
+
+impl Into<Blob> for Vec<u8> {
+    fn into(self) -> Blob {
+        Blob::new(self)
+    }
+}
+
+impl Into<Blob> for &[u8] {
+    fn into(self) -> Blob {
+        Blob::new(self)
+    }
+}
+
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;
