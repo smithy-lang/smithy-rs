@@ -119,6 +119,11 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
     }
 }
 
+// Generate a unique date-based release tag
+//
+// This function generates a date-based release tag and compares it to `current_tag`.
+// If the generated tag is a substring of `current_tag`, it indicates that a release has already occurred on that day.
+// In this case, the function ensures uniqueness by appending a numerical suffix to `current_tag`.
 fn next_tag(now: OffsetDateTime, current_tag: &ReleaseTag) -> String {
     let date_based_release_tag = format!(
         "release-{year}-{month:02}-{day:02}",
@@ -129,13 +134,17 @@ fn next_tag(now: OffsetDateTime, current_tag: &ReleaseTag) -> String {
 
     let current_tag = current_tag.as_str();
     if current_tag.starts_with(&date_based_release_tag) {
-        bump_release_tag_prefix(current_tag)
+        bump_release_tag_suffix(current_tag)
     } else {
         date_based_release_tag
     }
 }
 
-fn bump_release_tag_prefix(current_tag: &str) -> String {
+// Bump `current_tag` by adding or incrementing a numerical suffix
+//
+// This is a private function that is only called by `next_tag`.
+// It assumes that `current_tag` follows the format `release-YYYY-MM-DD`.
+fn bump_release_tag_suffix(current_tag: &str) -> String {
     if let Some(pos) = current_tag.rfind('.') {
         let prefix = &current_tag[..pos];
         let suffix = &current_tag[pos + 1..];
@@ -542,7 +551,8 @@ pub(crate) fn render(
 #[cfg(test)]
 mod test {
     use super::{
-        date_based_release_metadata, next_tag, render, Changelog, ChangelogEntries, ChangelogEntry,
+        bump_release_tag_suffix, date_based_release_metadata, next_tag, render, Changelog,
+        ChangelogEntries, ChangelogEntry,
     };
     use smithy_rs_tool_common::changelog::ChangelogLoader;
     use smithy_rs_tool_common::release_tag::ReleaseTag;
@@ -856,6 +866,20 @@ message = "Some new API to do X"
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(release_notes, expected_body);
+    }
+
+    #[test]
+    fn test_bump_release_tag_suffix() {
+        for (expected, input) in &[
+            ("release-2024-07-18.2", "release-2024-07-18"),
+            ("release-2024-07-18.3", "release-2024-07-18.2"),
+            (
+                "release-2024-07-18.4294967295", // u32::MAX
+                "release-2024-07-18.4294967294",
+            ),
+        ] {
+            assert_eq!(*expected, &bump_release_tag_suffix(*input));
+        }
     }
 
     #[test]
