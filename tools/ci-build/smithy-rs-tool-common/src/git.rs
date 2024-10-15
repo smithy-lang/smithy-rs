@@ -411,7 +411,7 @@ impl Git for GitCLI {
         command.current_dir(&self.repo_path);
 
         let output = command.output()?;
-        handle_failure("get current tag", &output)?;
+        handle_failure("get_current_tag", &output)?;
         let (stdout, _) = output_text(&output);
         ReleaseTag::from_str(stdout.trim())
     }
