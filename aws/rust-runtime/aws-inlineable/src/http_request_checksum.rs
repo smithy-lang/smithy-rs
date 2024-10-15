@@ -139,11 +139,12 @@ where
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         (self.checksum_mutator)(context.input_mut(), cfg)?;
-        let checksum_algorithm = (self.algorithm_provider)(context.input())?;
+        let (checksum_algorithm, request_checksum_required) =
+            (self.algorithm_provider)(context.input())?;
         let mut layer = Layer::new("RequestChecksumInterceptor");
         layer.store_put(RequestChecksumInterceptorState {
-            checksum_algorithm: checksum_algorithm.0,
-            request_checksum_required: checksum_algorithm.1,
+            checksum_algorithm,
+            request_checksum_required,
         });
         cfg.push_layer(layer);
 

@@ -87,9 +87,7 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
      * Copy the `response_checksum_validation` value from the `SdkConfig` to the client config
      */
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        if (!serviceHasHttpChecksumOperation(codegenContext)) {
-            listOf()
-        } else {
+        if (serviceHasHttpChecksumOperation(codegenContext)) {
             listOf(
                 adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                     rust(
@@ -99,6 +97,8 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
                     )
                 },
             )
+        } else {
+            listOf()
         }
 }
 
