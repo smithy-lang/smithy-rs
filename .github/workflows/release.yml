@@ -181,6 +181,7 @@ jobs:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Generate release artifacts
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -207,7 +208,7 @@ jobs:
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
           # been processed.
-          git fetch --unshallow
+          git fetch
           if [[ "${DRY_RUN}" == "true" ]]; then
             # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
             # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
