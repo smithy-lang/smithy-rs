@@ -187,7 +187,7 @@ async fn presigning() {
     // header with default value ENABLED
     assert_eq!(presigned.headers().count(), 1);
     let headers = presigned.headers().collect::<Vec<(&str, &str)>>();
-    assert_eq!(headers.get(0).unwrap(), ("x-amz-checksum-mode", "ENABLED"));
+    assert_eq!(headers.get(0).unwrap(), &("x-amz-checksum-mode", "ENABLED"));
 }
 
 fn operation_request_with_checksum(
