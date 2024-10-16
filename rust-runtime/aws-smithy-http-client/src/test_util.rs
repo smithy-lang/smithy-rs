@@ -36,6 +36,7 @@ There is also the [`NeverTcpConnector`], which makes it easy to test connect/rea
 Finally, for socket-level mocking, see the [`wire`] module.
 "
 )]
+
 mod capture_request;
 pub use capture_request::{capture_request, CaptureRequestHandler, CaptureRequestReceiver};
 

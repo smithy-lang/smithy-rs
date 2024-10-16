@@ -38,7 +38,10 @@ test-util = [
     "dep:serde",
     "dep:serde_json",
     "dep:indexmap",
-    "dep:bytes"
+    "dep:bytes",
+    # for capture_request
+    "dep:http-1x",
+    "aws-smithy-runtime-api/http-1x"
 ]
 
 legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
