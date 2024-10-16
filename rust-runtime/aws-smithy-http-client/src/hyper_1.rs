@@ -706,7 +706,7 @@ impl HyperClientBuilder<CryptoUnset> {
     }
 }
 
-fn build_with_fn<C, F>(
+pub(crate) fn build_with_fn<C, F>(
     client_builder: Option<hyper_util::client::legacy::Builder>,
     tcp_connector_fn: F,
 ) -> SharedHttpClient

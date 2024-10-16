@@ -29,7 +29,7 @@
 //! - [`NeverClient`]: Useful for testing timeouts, where you want the client to never respond.
 //!
 #![cfg_attr(
-    feature = "hyper-014",
+    any(feature = "hyper-014", feature = "hyper-1"),
     doc = "
 There is also the [`NeverTcpConnector`], which makes it easy to test connect/read timeouts.
 
@@ -51,7 +51,7 @@ pub use infallible::infallible_client_fn;
 mod never;
 pub use never::NeverClient;
 
-#[cfg(feature = "hyper-014")]
+#[cfg(any(feature = "hyper-014", feature = "hyper-1"))]
 pub use never::NeverTcpConnector;
 
 #[cfg(all(feature = "hyper-014", feature = "wire-mock"))]
