@@ -65,6 +65,9 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
+        # `generate-smithy-rs-release` requires access to previous tags to determine if a numerical suffix is needed
+        # to make the release tag unique
+        fetch-depth: 0
     # The models from aws-sdk-rust are needed to generate the full SDK for CI
     - uses: actions/checkout@v4
       with:

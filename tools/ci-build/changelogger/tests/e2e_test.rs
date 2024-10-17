@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 
 const SOURCE_MARKDOWN1: &str = r#"---
 applies_to: ["aws-sdk-rust"]
@@ -136,6 +136,18 @@ fn create_fake_repo_root(
         .unwrap();
         release_commits.push(git.get_head_revision().unwrap());
     }
+
+    handle_failure(
+        "git-tag",
+        &Command::new("git")
+            .arg("tag")
+            .arg("release-1970-01-01")
+            .current_dir(path)
+            .output()
+            .unwrap(),
+    )
+    .unwrap();
+
     (release_commits.remove(0), release_commits.remove(0))
 }
 
@@ -280,6 +292,7 @@ fn render_smithy_rs() {
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -309,7 +322,7 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
+  "tagName": "release-1970-01-01.2",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n",
   "prerelease": false
@@ -383,10 +396,11 @@ fn render_aws_sdk() {
         changelog_output: dest_path.clone(),
         source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
-        date_override: Some(OffsetDateTime::UNIX_EPOCH),
+        date_override: Some(OffsetDateTime::UNIX_EPOCH + Duration::days(1)),
         current_release_versions_manifest: None,
         previous_release_versions_manifest: Some(previous_versions_manifest_path),
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -402,7 +416,7 @@ fn render_aws_sdk() {
     // the other should be filtered out by the `since_commit` attribute
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
-January 1st, 1970
+January 2nd, 1970
 =================
 **New this release:**
 - :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change
@@ -424,8 +438,8 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
-  "name": "January 1st, 1970",
+  "tagName": "release-1970-01-02",
+  "name": "January 2nd, 1970",
   "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567))\n\n",
   "prerelease": false
 }"#,
@@ -480,6 +494,7 @@ Change from server
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -556,6 +571,7 @@ Change from client
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -622,6 +638,7 @@ fn render_crate_versions() {
         current_release_versions_manifest: Some(current_versions_manifest_path),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
@@ -662,7 +679,7 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
+  "tagName": "release-1970-01-01.2",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
   "prerelease": false

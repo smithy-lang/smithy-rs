@@ -89,6 +89,7 @@ mod tests {
                     previous_release_versions_manifest: None,
                     date_override: None,
                     smithy_rs_location: None,
+                    aws_sdk_rust_location: None,
                 })
             },
             Args::try_parse_from([
@@ -124,6 +125,7 @@ mod tests {
                     previous_release_versions_manifest: None,
                     date_override: None,
                     smithy_rs_location: None,
+                    aws_sdk_rust_location: Some(PathBuf::from("aws-sdk-rust-location")),
                 })
             },
             Args::try_parse_from([
@@ -140,6 +142,8 @@ mod tests {
                 "fromplace",
                 "--changelog-output",
                 "some-changelog",
+                "--aws-sdk-rust-location",
+                "aws-sdk-rust-location",
             ])
             .unwrap()
         );
@@ -159,6 +163,7 @@ mod tests {
                     )),
                     date_override: None,
                     smithy_rs_location: None,
+                    aws_sdk_rust_location: Some(PathBuf::from("aws-sdk-rust-location")),
                 })
             },
             Args::try_parse_from([
@@ -174,7 +179,9 @@ mod tests {
                 "--changelog-output",
                 "some-changelog",
                 "--previous-release-versions-manifest",
-                "path/to/versions.toml"
+                "path/to/versions.toml",
+                "--aws-sdk-rust-location",
+                "aws-sdk-rust-location",
             ])
             .unwrap()
         );
@@ -196,6 +203,7 @@ mod tests {
                     )),
                     date_override: None,
                     smithy_rs_location: None,
+                    aws_sdk_rust_location: Some(PathBuf::from("aws-sdk-rust-location")),
                 })
             },
             Args::try_parse_from([
@@ -213,7 +221,9 @@ mod tests {
                 "--current-release-versions-manifest",
                 "path/to/current/versions.toml",
                 "--previous-release-versions-manifest",
-                "path/to/previous/versions.toml"
+                "path/to/previous/versions.toml",
+                "--aws-sdk-rust-location",
+                "aws-sdk-rust-location",
             ])
             .unwrap()
         );
