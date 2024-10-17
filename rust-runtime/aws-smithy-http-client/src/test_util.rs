@@ -55,5 +55,6 @@ pub use never::NeverClient;
 #[cfg(any(feature = "hyper-014", feature = "hyper-1"))]
 pub use never::NeverTcpConnector;
 
+mod body;
 #[cfg(all(feature = "hyper-014", feature = "wire-mock"))]
 pub mod wire;

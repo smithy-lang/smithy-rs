@@ -129,11 +129,11 @@ mod test {
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_types::body::SdkBody;
 
-    #[cfg(feature = "hyper-014")]
+    #[cfg(feature = "legacy-test-util")]
     #[tokio::test]
     async fn test_can_plug_in_http_02x() {
         use super::capture_request;
-        let (capture_client, request) = capture_request(Some(
+        let (capture_client, _request) = capture_request(Some(
             http_02x::Response::builder()
                 .status(202)
                 .body(SdkBody::empty())
@@ -147,7 +147,7 @@ mod test {
     #[tokio::test]
     async fn test_can_plug_in_http_1x() {
         use super::capture_request;
-        let (capture_client, request) = capture_request(Some(
+        let (capture_client, _request) = capture_request(Some(
             http_1x::Response::builder()
                 .status(202)
                 .body(SdkBody::empty())

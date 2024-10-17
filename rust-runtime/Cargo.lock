@@ -472,6 +472,7 @@ dependencies = [
  "http 0.2.12",
  "http 1.1.0",
  "http-body 0.4.6",
+ "http-body 1.0.1",
  "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-rustls 0.24.2",

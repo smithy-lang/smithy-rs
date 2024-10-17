@@ -41,7 +41,16 @@ test-util = [
     "dep:bytes",
     # for capture_request
     "dep:http-1x",
-    "aws-smithy-runtime-api/http-1x"
+    "aws-smithy-runtime-api/http-1x",
+    # for dvr
+    "dep:http-body-1x",
+    "aws-smithy-types/http-body-1-x",
+]
+
+legacy-test-util = [
+    "test-util",
+    "dep:http-02x",
+    "aws-smithy-runtime-api/http-02x"
 ]
 
 legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
@@ -67,6 +76,7 @@ tracing = "0.1"
 hyper = { version = "1", features = ["client", "http1", "http2"], optional = true }
 hyper-util = { version = "0.1.7", optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
+http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 tower = { version = "0.5.1", optional = true }
