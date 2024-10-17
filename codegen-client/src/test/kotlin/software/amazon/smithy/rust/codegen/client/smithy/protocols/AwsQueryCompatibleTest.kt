@@ -10,7 +10,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AwsQueryCompatibleTest {
@@ -172,6 +175,61 @@ class AwsQueryCompatibleTest {
                             .toType().resolve("client::http::test_util::infallible_client_fn"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
+            }
+        }
+    }
+
+    @Test
+    fun `request header should include x-amzn-query-mode when the service has the awsQueryCompatible trait`() {
+        val model =
+            """
+            namespace test
+            use aws.protocols#awsJson1_0
+            use aws.protocols#awsQueryCompatible
+
+            @awsQueryCompatible
+            @awsJson1_0
+            service TestService {
+                version: "2023-02-20",
+                operations: [SomeOperation]
+            }
+
+            operation SomeOperation {
+                input: SomeOperationInputOutput,
+                output: SomeOperationInputOutput,
+                errors: [InvalidThingException],
+            }
+
+            structure SomeOperationInputOutput {
+                a: String,
+                b: Integer
+            }
+
+            @error("client")
+            structure InvalidThingException {
+                message: String
+            }
+            """.asSmithyModel(smithyVersion = "2")
+
+        clientIntegrationTest(model) { context, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("test_request_header_should_include_x_amzn_query_mode") {
+                    rustTemplate(
+                        """
+                        let (http_client, rx) = #{capture_request}(#{None});
+                        let config = crate::Config::builder()
+                            .http_client(http_client)
+                            .endpoint_url("http://localhost:1234/SomeOperation")
+                            .build();
+                        let client = crate::Client::from_conf(config);
+                        let _ = dbg!(client.some_operation().send().await);
+                        let request = rx.expect_request();
+                        assert_eq!("true", request.headers().get("x-amzn-query-mode").unwrap());
+                        """,
+                        *RuntimeType.preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
+                    )
+                }
             }
         }
     }
