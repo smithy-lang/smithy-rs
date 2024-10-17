@@ -305,6 +305,13 @@ fn smithy_build(workdir: impl AsRef<Path>, smithy_build_json: impl AsRef<Path>) 
     // https://github.com/smithy-lang/smithy/issues/2376
     let _ = fs::remove_file(workdir.as_ref().join("build/smithy").join("classpath.json"));
 
+    let home_dir = homedir::my_home().unwrap().unwrap();
+    exec(
+        Command::new("rm")
+            .arg("-r")
+            .arg(format!("{}/.m2", home_dir.display()))
+            .current_dir(&workdir),
+    );
     exec(
         Command::new("smithy")
             .arg("build")
