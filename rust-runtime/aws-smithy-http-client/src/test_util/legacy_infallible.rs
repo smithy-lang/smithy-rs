@@ -21,12 +21,11 @@ use std::sync::Arc;
 /// # Examples
 ///
 /// ```rust
-/// # use http_1x as http;
-/// use aws_smithy_http_client::test_util::infallible_client_fn;
-/// let http_client = infallible_client_fn(|_req| http::Response::builder().status(200).body("OK!").unwrap());
+/// use aws_smithy_http_client::test_util::legacy_infallible::infallible_client_fn;
+/// let http_client = infallible_client_fn(|_req| http_02x::Response::builder().status(200).body("OK!").unwrap());
 /// ```
 pub fn infallible_client_fn<B>(
-    f: impl Fn(http_1x::Request<SdkBody>) -> http_1x::Response<B> + Send + Sync + 'static,
+    f: impl Fn(http_02x::Request<SdkBody>) -> http_02x::Response<B> + Send + Sync + 'static,
 ) -> SharedHttpClient
 where
     B: Into<SdkBody>,
@@ -38,7 +37,7 @@ where
 struct InfallibleClientFn {
     #[allow(clippy::type_complexity)]
     response: Arc<
-        dyn Fn(http_1x::Request<SdkBody>) -> Result<http_1x::Response<SdkBody>, ConnectorError>
+        dyn Fn(http_02x::Request<SdkBody>) -> Result<http_02x::Response<SdkBody>, ConnectorError>
             + Send
             + Sync,
     >,
@@ -52,7 +51,7 @@ impl fmt::Debug for InfallibleClientFn {
 
 impl InfallibleClientFn {
     fn new<B: Into<SdkBody>>(
-        f: impl Fn(http_1x::Request<SdkBody>) -> http_1x::Response<B> + Send + Sync + 'static,
+        f: impl Fn(http_02x::Request<SdkBody>) -> http_02x::Response<B> + Send + Sync + 'static,
     ) -> Self {
         Self {
             response: Arc::new(move |request| Ok(f(request).map(|b| b.into()))),
@@ -63,7 +62,7 @@ impl InfallibleClientFn {
 impl HttpConnector for InfallibleClientFn {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         HttpConnectorFuture::ready(
-            (self.response)(request.try_into_http1x().unwrap())
+            (self.response)(request.try_into_http02x().unwrap())
                 .map(|res| HttpResponse::try_from(res).unwrap()),
         )
     }

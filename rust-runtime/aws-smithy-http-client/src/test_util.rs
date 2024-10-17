@@ -49,6 +49,10 @@ pub use replay::{ReplayEvent, StaticReplayClient};
 mod infallible;
 pub use infallible::infallible_client_fn;
 
+#[allow(missing_docs)]
+#[cfg(feature = "legacy-test-util")]
+pub mod legacy_infallible;
+
 mod never;
 pub use never::NeverClient;
 
