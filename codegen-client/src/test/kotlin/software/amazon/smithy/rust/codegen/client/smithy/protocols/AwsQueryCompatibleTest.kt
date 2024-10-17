@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -14,20 +13,22 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
-import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class AwsQueryCompatibleTest {
-    @Test
-    fun `aws-query-compatible json with aws query error should allow for retrieving error code and type from custom header`() {
-        val model =
-            """
+    companion object {
+        const val prologue = """
             namespace test
             use aws.protocols#awsJson1_0
             use aws.protocols#awsQueryCompatible
             use aws.protocols#awsQueryError
+        """
 
-            @awsQueryCompatible
-            @awsJson1_0
+        const val awsjson10Trait = "@awsJson1_0"
+        const val awsQueryCompatibleTrait = "@awsQueryCompatible"
+
+        fun testService(withAwsQueryError: Boolean = true) =
+            """
             service TestService {
                 version: "2023-02-20",
                 operations: [SomeOperation]
@@ -43,28 +44,37 @@ class AwsQueryCompatibleTest {
                 a: String,
                 b: Integer
             }
-
-            @awsQueryError(
-                code: "InvalidThing",
-                httpResponseCode: 400,
-            )
-            @error("client")
-            structure InvalidThingException {
-                message: String
-            }
-            """.asSmithyModel()
-
-        clientIntegrationTest(model) { context, rustCrate ->
-            val operation: OperationShape = context.model.lookup("test#SomeOperation")
-            rustCrate.withModule(context.symbolProvider.moduleForShape(operation)) {
-                rustTemplate(
+            """.letIf(withAwsQueryError) {
+                it +
                     """
-                    ##[cfg(test)]
-                    ##[#{tokio}::test]
-                    async fn should_parse_code_and_type_fields() {
-                        use aws_smithy_types::body::SdkBody;
+                    @awsQueryError(
+                        code: "InvalidThing",
+                        httpResponseCode: 400,
+                    )
+                    """
+            }.let {
+                it +
+                    """
+                    @error("client")
+                    structure InvalidThingException {
+                            message: String
+                    }
+                    """
+            }
+    }
 
-                        let response = |_: http::Request<SdkBody>| {
+    @Test
+    fun `aws-query-compatible json with aws query error should allow for retrieving error code and type from custom header`() {
+        val model =
+            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService()).asSmithyModel(
+                smithyVersion = "2",
+            )
+        clientIntegrationTest(model) { context, rustCrate ->
+            rustCrate.testModule {
+                tokioTest("should_parse_code_and_type_fields") {
+                    rustTemplate(
+                        """
+                        let response = |_: http::Request<#{SdkBody}>| {
                             http::Response::builder()
                                 .header(
                                     "x-amzn-query-error",
@@ -72,7 +82,7 @@ class AwsQueryCompatibleTest {
                                 )
                                 .status(400)
                                 .body(
-                                    SdkBody::from(
+                                    #{SdkBody}::from(
                                         r##"{
                                             "__type": "com.amazonaws.sqs##QueueDoesNotExist",
                                             "message": "Some user-visible message"
@@ -89,17 +99,18 @@ class AwsQueryCompatibleTest {
                         );
                         let error = dbg!(client.some_operation().send().await).err().unwrap().into_service_error();
                         assert_eq!(
-                            Some("AWS.SimpleQueueService.NonExistentQueue"),
+                            #{Some}("AWS.SimpleQueueService.NonExistentQueue"),
                             error.meta().code(),
                         );
-                        assert_eq!(Some("Sender"), error.meta().extra("type"));
-                    }
-                    """,
-                    "infallible_client_fn" to
-                        CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                            .toType().resolve("client::http::test_util::infallible_client_fn"),
-                    "tokio" to CargoDependency.Tokio.toType(),
-                )
+                        assert_eq!(#{Some}("Sender"), error.meta().extra("type"));
+                        """,
+                        *RuntimeType.preludeScope,
+                        "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
+                        "infallible_client_fn" to
+                            CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                                .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    )
+                }
             }
         }
     }
@@ -107,50 +118,19 @@ class AwsQueryCompatibleTest {
     @Test
     fun `aws-query-compatible json without aws query error should allow for retrieving error code from payload`() {
         val model =
-            """
-            namespace test
-            use aws.protocols#awsJson1_0
-            use aws.protocols#awsQueryCompatible
-
-            @awsQueryCompatible
-            @awsJson1_0
-            service TestService {
-                version: "2023-02-20",
-                operations: [SomeOperation]
-            }
-
-            operation SomeOperation {
-                input: SomeOperationInputOutput,
-                output: SomeOperationInputOutput,
-                errors: [InvalidThingException],
-            }
-
-            structure SomeOperationInputOutput {
-                a: String,
-                b: Integer
-            }
-
-            @error("client")
-            structure InvalidThingException {
-                message: String
-            }
-            """.asSmithyModel()
-
+            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService(withAwsQueryError = false)).asSmithyModel(
+                smithyVersion = "2",
+            )
         clientIntegrationTest(model) { context, rustCrate ->
-            val operation: OperationShape = context.model.lookup("test#SomeOperation")
-            rustCrate.withModule(context.symbolProvider.moduleForShape(operation)) {
-                rustTemplate(
-                    """
-                    ##[cfg(test)]
-                    ##[#{tokio}::test]
-                    async fn should_parse_code_from_payload() {
-                        use aws_smithy_types::body::SdkBody;
-
-                        let response = |_: http::Request<SdkBody>| {
+            rustCrate.testModule {
+                tokioTest("should_parse_code_from_payload") {
+                    rustTemplate(
+                        """
+                        let response = |_: http::Request<#{SdkBody}>| {
                             http::Response::builder()
                                 .status(400)
                                 .body(
-                                    SdkBody::from(
+                                    #{SdkBody}::from(
                                         r##"{
                                             "__type": "com.amazonaws.sqs##QueueDoesNotExist",
                                             "message": "Some user-visible message"
@@ -166,15 +146,16 @@ class AwsQueryCompatibleTest {
                                 .build()
                         );
                         let error = dbg!(client.some_operation().send().await).err().unwrap().into_service_error();
-                        assert_eq!(Some("QueueDoesNotExist"), error.meta().code());
-                        assert_eq!(None, error.meta().extra("type"));
-                    }
-                    """,
-                    "infallible_client_fn" to
-                        CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                            .toType().resolve("client::http::test_util::infallible_client_fn"),
-                    "tokio" to CargoDependency.Tokio.toType(),
-                )
+                        assert_eq!(#{Some}("QueueDoesNotExist"), error.meta().code());
+                        assert_eq!(#{None}, error.meta().extra("type"));
+                        """,
+                        *RuntimeType.preludeScope,
+                        "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
+                        "infallible_client_fn" to
+                            CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                                .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    )
+                }
             }
         }
     }
@@ -182,35 +163,9 @@ class AwsQueryCompatibleTest {
     @Test
     fun `request header should include x-amzn-query-mode when the service has the awsQueryCompatible trait`() {
         val model =
-            """
-            namespace test
-            use aws.protocols#awsJson1_0
-            use aws.protocols#awsQueryCompatible
-
-            @awsQueryCompatible
-            @awsJson1_0
-            service TestService {
-                version: "2023-02-20",
-                operations: [SomeOperation]
-            }
-
-            operation SomeOperation {
-                input: SomeOperationInputOutput,
-                output: SomeOperationInputOutput,
-                errors: [InvalidThingException],
-            }
-
-            structure SomeOperationInputOutput {
-                a: String,
-                b: Integer
-            }
-
-            @error("client")
-            structure InvalidThingException {
-                message: String
-            }
-            """.asSmithyModel(smithyVersion = "2")
-
+            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService()).asSmithyModel(
+                smithyVersion = "2",
+            )
         clientIntegrationTest(model) { context, rustCrate ->
             rustCrate.testModule {
                 tokioTest("test_request_header_should_include_x_amzn_query_mode") {
