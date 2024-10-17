@@ -30,8 +30,8 @@ REVISION_1=main
 REVISION_2=76d5afb42d545ca2f5cbe90a089681135da935d3
 rm -rf maven-locals && mkdir maven-locals
 # Build two different versions of smithy-rs and publish them to two separate local directories
-git clone git@github.com:smithy-lang/smithy-rs.git smithy-rs1 && (cd smithy-rs1 && git checkout $REVISION_1 && ./gradlew publishToMavenLocal -Dmaven.repo.local=$(cd ../maven-locals && pwd)/$REVISION_1)
-git clone git@github.com:smithy-lang/smithy-rs.git smithy-rs2 && (cd smithy-rs2 && git checkout $REVISION_2 && ./gradlew publishToMavenLocal -Dmaven.repo.local=$(cd ../maven-locals && pwd)/$REVISION_2)
+git clone https://github.com/smithy-lang/smithy-rs.git smithy-rs1 && (cd smithy-rs1 && git checkout $REVISION_1 && ./gradlew publishToMavenLocal -Dmaven.repo.local=$(cd ../maven-locals && pwd)/$REVISION_1)
+git clone https://github.com/smithy-lang/smithy-rs.git smithy-rs2 && (cd smithy-rs2 && git checkout $REVISION_2 && ./gradlew publishToMavenLocal -Dmaven.repo.local=$(cd ../maven-locals && pwd)/$REVISION_2)
 ```
 
 For each of these, use the smithy CLI to generate a server implementation using something like this:

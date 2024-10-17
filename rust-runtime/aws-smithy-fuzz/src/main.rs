@@ -332,7 +332,7 @@ fn clone_smithyrs(workdir: impl AsRef<Path>, revision: &str, recreate: bool) -> 
     if !smithy_dir.exists() {
         exec(
             Command::new("git")
-                .args(["clone", "git@github.com:smithy-lang/smithy-rs.git"])
+                .args(["clone", "https://github.com/smithy-lang/smithy-rs.git"])
                 .arg(&smithy_dir)
                 .current_dir(&workdir),
         );
