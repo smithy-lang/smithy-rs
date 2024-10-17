@@ -5,7 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.serde
 
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
@@ -16,8 +18,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class SerdeDecoratorTest {
     private val params =
@@ -178,6 +182,57 @@ class SerdeDecoratorTest {
         }
         structure NotSerde {}
         """.asSmithyModel(smithyVersion = "2")
+
+    @Test
+    fun `decorator should traverse resources`() {
+        val model = """
+            namespace com.example
+            use smithy.rust#serde
+            use aws.protocols#awsJson1_0
+            
+            @awsJson1_0
+            @serde
+            service MyResourceService {
+                resources: [MyResource]
+            }
+            
+            resource MyResource {
+                read: ReadMyResource
+            }
+            
+            @readonly
+            operation ReadMyResource {
+                input := { }
+            }
+        """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyResourceService")
+        serverIntegrationTest(model, params = params) { ctx, crate ->
+            val codegenScope =
+                arrayOf(
+                    "crate" to RustType.Opaque(ctx.moduleUseName()),
+                    "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
+                    // we need the derive feature
+                    "serde" to CargoDependency.Serde.toDevDependency().toType(),
+                )
+
+            crate.integrationTest("test_serde") {
+                unitTest("input_serialized") {
+                    rustTemplate(
+                        """
+                        use #{crate}::input::ReadMyResourceInput;
+                        use #{crate}::serde::*;
+                        let input = ReadMyResourceInput { };
+                        let settings = SerializationSettings::default();
+                        let _serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
+    }
 
     @Test
     fun generateSerializersThatWorkServer() {
