@@ -5,9 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.serde
 
-import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
@@ -18,10 +16,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class SerdeDecoratorTest {
     private val params =
@@ -185,7 +181,8 @@ class SerdeDecoratorTest {
 
     @Test
     fun `decorator should traverse resources`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             use smithy.rust#serde
             use aws.protocols#awsJson1_0
