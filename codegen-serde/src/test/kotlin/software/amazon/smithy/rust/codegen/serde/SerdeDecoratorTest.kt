@@ -180,6 +180,58 @@ class SerdeDecoratorTest {
         """.asSmithyModel(smithyVersion = "2")
 
     @Test
+    fun `decorator should traverse resources`() {
+        val model =
+            """
+            namespace com.example
+            use smithy.rust#serde
+            use aws.protocols#awsJson1_0
+            
+            @awsJson1_0
+            @serde
+            service MyResourceService {
+                resources: [MyResource]
+            }
+            
+            resource MyResource {
+                read: ReadMyResource
+            }
+            
+            @readonly
+            operation ReadMyResource {
+                input := { }
+            }
+        """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyResourceService")
+        serverIntegrationTest(model, params = params) { ctx, crate ->
+            val codegenScope =
+                arrayOf(
+                    "crate" to RustType.Opaque(ctx.moduleUseName()),
+                    "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
+                    // we need the derive feature
+                    "serde" to CargoDependency.Serde.toDevDependency().toType(),
+                )
+
+            crate.integrationTest("test_serde") {
+                unitTest("input_serialized") {
+                    rustTemplate(
+                        """
+                        use #{crate}::input::ReadMyResourceInput;
+                        use #{crate}::serde::*;
+                        let input = ReadMyResourceInput { };
+                        let settings = SerializationSettings::default();
+                        let _serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun generateSerializersThatWorkServer() {
         serverIntegrationTest(simpleModel, params = params) { ctx, crate ->
             val codegenScope =
