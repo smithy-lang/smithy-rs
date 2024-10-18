@@ -494,6 +494,16 @@ class EnumGeneratorTest {
                         // intentional no-op
                     }
 
+                override fun implFromForStrForUnnamedEnum(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
+
+                override fun implFromStrForUnnamedEnum(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
+
                 override fun additionalEnumMembers(context: EnumGeneratorContext): Writable =
                     writable {
                         rust("// additional enum members")
