@@ -49,6 +49,7 @@ pub use replay::{ReplayEvent, StaticReplayClient};
 mod infallible;
 pub use infallible::infallible_client_fn;
 
+// infallible based on http_02x stack had to be duplicated to avoid breaking API changes
 #[allow(missing_docs)]
 #[cfg(feature = "legacy-test-util")]
 pub mod legacy_infallible;
@@ -60,5 +61,5 @@ pub use never::NeverClient;
 pub use never::NeverTcpConnector;
 
 mod body;
-#[cfg(all(feature = "hyper-014", feature = "wire-mock"))]
+#[cfg(all(feature = "hyper-1", feature = "wire-mock"))]
 pub mod wire;

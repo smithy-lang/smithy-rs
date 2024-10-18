@@ -28,9 +28,13 @@ hyper-1 = [
 
 wire-mock = [
     "test-util",
-    # FIXME - replace/deprecate
-    "hyper-014",
-    "hyper-0-14?/server",
+    "hyper-1",
+    "hyper-util?/server",
+    "hyper-util?/server-auto",
+    "hyper-util?/service",
+    "hyper-util?/server-graceful",
+    "tokio/macros",
+    "dep:http-body-util",
 ]
 
 test-util = [
@@ -95,6 +99,7 @@ bytes = { version = "1", optional = true }
 serde = { version = "1.0.210", features = ["derive"], optional = true }
 serde_json = { version = "1.0.128", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.6.0", features = ["serde"], optional = true }
+http-body-util = { version = "0.1.2", optional = true }
 # end test util stack
 
 [dev-dependencies]

@@ -39,23 +39,24 @@
 
 #![allow(missing_docs)]
 
-#[allow(deprecated)]
-use crate::hyper_014::HyperClientBuilder;
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use bytes::Bytes;
-use hyper_0_14::client::connect::dns::Name;
-use hyper_0_14::server::conn::AddrStream;
-use hyper_0_14::service::{make_service_fn, service_fn, Service};
+use http_body_util::Full;
+use hyper::service::service_fn;
+use hyper_util::client::legacy::connect::dns::Name;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::graceful::{GracefulConnection, GracefulShutdown};
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::error::Error;
+use std::future::Future;
 use std::iter::Once;
-use std::net::{SocketAddr, TcpListener};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
-use tokio::spawn;
+use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 
 /// An event recorded by [`WireMockServer`].
@@ -144,7 +145,6 @@ macro_rules! ev {
     };
 }
 
-use aws_smithy_runtime_api::shared::IntoShared;
 pub use {ev, match_events, matcher};
 
 #[non_exhaustive]
@@ -194,11 +194,40 @@ pub struct WireMockServer {
     shutdown_hook: oneshot::Sender<()>,
 }
 
+#[derive(Debug, Clone)]
+struct SharedGraceful {
+    graceful: Arc<Mutex<Option<hyper_util::server::graceful::GracefulShutdown>>>,
+}
+
+impl SharedGraceful {
+    fn new() -> Self {
+        Self {
+            graceful: Arc::new(Mutex::new(Some(GracefulShutdown::new()))),
+        }
+    }
+
+    fn watch<C: GracefulConnection>(&self, conn: C) -> impl Future<Output = C::Output> {
+        let graceful = self.graceful.lock().unwrap();
+        graceful
+            .as_ref()
+            .expect("graceful not shutdown")
+            .watch(conn)
+    }
+
+    async fn shutdown(&self) {
+        let graceful = { self.graceful.lock().unwrap().take() };
+
+        if let Some(graceful) = graceful {
+            graceful.shutdown().await;
+        }
+    }
+}
+
 impl WireMockServer {
     /// Start a wire mock server with the given events to replay.
     pub async fn start(mut response_events: Vec<ReplayedEvent>) -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let (tx, rx) = oneshot::channel();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let (tx, mut rx) = oneshot::channel();
         let listener_addr = listener.local_addr().unwrap();
         response_events.reverse();
         let response_events = Arc::new(Mutex::new(response_events));
@@ -206,48 +235,74 @@ impl WireMockServer {
         let wire_events = Arc::new(Mutex::new(vec![]));
         let wire_log_for_service = wire_events.clone();
         let poisoned_conns: Arc<Mutex<HashSet<SocketAddr>>> = Default::default();
-        let make_service = make_service_fn(move |connection: &AddrStream| {
+        let graceful = SharedGraceful::new();
+        let conn_builder = Arc::new(hyper_util::server::conn::auto::Builder::new(
+            TokioExecutor::new(),
+        ));
+
+        let server = async move {
             let poisoned_conns = poisoned_conns.clone();
             let events = handler_events.clone();
             let wire_log = wire_log_for_service.clone();
-            let remote_addr = connection.remote_addr();
-            tracing::info!("established connection: {:?}", connection);
-            wire_log.lock().unwrap().push(RecordedEvent::NewConnection);
-            async move {
-                Ok::<_, Infallible>(service_fn(move |_: http_02x::Request<hyper_0_14::Body>| {
-                    if poisoned_conns.lock().unwrap().contains(&remote_addr) {
-                        tracing::error!("poisoned connection {:?} was reused!", &remote_addr);
-                        panic!("poisoned connection was reused!");
+            loop {
+                tokio::select! {
+                    Ok((stream, remote_addr)) = listener.accept() => {
+                        tracing::info!("established connection: {:?}", remote_addr);
+                        let poisoned_conns = poisoned_conns.clone();
+                        let events = events.clone();
+                        let wire_log = wire_log.clone();
+                        wire_log.lock().unwrap().push(RecordedEvent::NewConnection);
+                        let io = TokioIo::new(stream);
+
+                        let svc = service_fn(move |_req| {
+                            let poisoned_conns = poisoned_conns.clone();
+                            let events = events.clone();
+                            let wire_log = wire_log.clone();
+                            async move {
+                                if poisoned_conns.lock().unwrap().contains(&remote_addr) {
+                                    tracing::error!("poisoned connection {:?} was reused!", &remote_addr);
+                                    panic!("poisoned connection was reused!");
+                                }
+                                let next_event = events.clone().lock().unwrap().pop();
+                                let next_event = next_event
+                                    .unwrap_or_else(|| panic!("no more events! Log: {:?}", wire_log));
+
+                                wire_log
+                                    .lock()
+                                    .unwrap()
+                                    .push(RecordedEvent::Response(next_event.clone()));
+
+                                if next_event == ReplayedEvent::Timeout {
+                                    tracing::info!("{} is poisoned", remote_addr);
+                                    poisoned_conns.lock().unwrap().insert(remote_addr);
+                                }
+                                tracing::debug!("replying with {:?}", next_event);
+                                let event = generate_response_event(next_event).await;
+                                dbg!(event)
+                            }
+                        });
+
+                        let conn_builder = conn_builder.clone();
+                        let graceful = graceful.clone();
+                        tokio::spawn(async move {
+                            let conn = conn_builder.serve_connection(io, svc);
+                            let fut = graceful.watch(conn);
+                            if let Err(e) = fut.await {
+                                panic!("Error serving connection: {:?}", e);
+                            }
+                        });
+                    },
+                    _ = &mut rx => {
+                        tracing::info!("wire server: shutdown signalled");
+                        graceful.shutdown().await;
+                        tracing::info!("wire server: shutdown complete!");
+                        break;
                     }
-                    let next_event = events.clone().lock().unwrap().pop();
-                    let wire_log = wire_log.clone();
-                    let poisoned_conns = poisoned_conns.clone();
-                    async move {
-                        let next_event = next_event
-                            .unwrap_or_else(|| panic!("no more events! Log: {:?}", wire_log));
-                        wire_log
-                            .lock()
-                            .unwrap()
-                            .push(RecordedEvent::Response(next_event.clone()));
-                        if next_event == ReplayedEvent::Timeout {
-                            tracing::info!("{} is poisoned", remote_addr);
-                            poisoned_conns.lock().unwrap().insert(remote_addr);
-                        }
-                        tracing::debug!("replying with {:?}", next_event);
-                        let event = generate_response_event(next_event).await;
-                        dbg!(event)
-                    }
-                }))
+                }
             }
-        });
-        let server = hyper_0_14::Server::from_tcp(listener)
-            .unwrap()
-            .serve(make_service)
-            .with_graceful_shutdown(async {
-                rx.await.ok();
-                tracing::info!("server shutdown!");
-            });
-        spawn(server);
+        };
+
+        tokio::spawn(server);
         Self {
             event_log: wire_events,
             bind_addr: listener_addr,
@@ -277,12 +332,10 @@ impl WireMockServer {
     ///
     /// **Note**: This must be used in tandem with [`Self::dns_resolver`]
     pub fn http_client(&self) -> SharedHttpClient {
-        #[allow(deprecated)]
-        HyperClientBuilder::new()
-            .build(hyper_0_14::client::HttpConnector::new_with_resolver(
-                self.dns_resolver(),
-            ))
-            .into_shared()
+        let resolver = self.dns_resolver();
+        crate::hyper_1::build_with_fn(None, move || {
+            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(resolver.clone())
+        })
     }
 
     /// Endpoint to use when connecting
@@ -303,11 +356,11 @@ impl WireMockServer {
 
 async fn generate_response_event(
     event: ReplayedEvent,
-) -> Result<http_02x::Response<hyper_0_14::Body>, Infallible> {
+) -> Result<http_1x::Response<Full<Bytes>>, Infallible> {
     let resp = match event {
-        ReplayedEvent::HttpResponse { status, body } => http_02x::Response::builder()
+        ReplayedEvent::HttpResponse { status, body } => http_1x::Response::builder()
             .status(status)
-            .body(hyper_0_14::Body::from(body))
+            .body(Full::new(body))
             .unwrap(),
         ReplayedEvent::Timeout => {
             Never::new().await;
@@ -326,7 +379,7 @@ pub struct LoggingDnsResolver {
     socket_addr: SocketAddr,
 }
 
-impl Service<Name> for LoggingDnsResolver {
+impl tower::Service<Name> for LoggingDnsResolver {
     type Response = Once<SocketAddr>;
     type Error = Infallible;
     type Future = BoxFuture<'static, Self::Response, Self::Error>;
