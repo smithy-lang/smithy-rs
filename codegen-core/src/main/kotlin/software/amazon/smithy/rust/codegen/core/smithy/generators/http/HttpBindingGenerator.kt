@@ -617,17 +617,26 @@ class HttpBindingGenerator(
             )(this)
         }
 
-        rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
-            this.renderHeaderValue(
-                headerName,
-                loopVariable,
-                model.expectShape(shape.member.target),
-                isMultiValuedHeader = true,
-                timestampFormat,
-                renderErrorMessage,
-                serializeIfDefault = true,
-                shape.member,
-            )
+        rustTemplate(
+            """
+            // Empty vecs in headers are serialized as the empty string
+            if ${context.valueExpression.asRef()}.is_empty() {
+                builder = builder.header("$headerName", "");
+            }""",
+        )
+        rustBlock("else") {
+            rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
+                this.renderHeaderValue(
+                    headerName,
+                    loopVariable,
+                    model.expectShape(shape.member.target),
+                    isMultiValuedHeader = true,
+                    timestampFormat,
+                    renderErrorMessage,
+                    serializeIfDefault = true,
+                    shape.member,
+                )
+            }
         }
     }
 
@@ -671,14 +680,12 @@ class HttpBindingGenerator(
             val safeName = safeName("formatted")
             rustTemplate(
                 """
-                let $safeName = $formatted;
-                if !$safeName.is_empty() {
-                    let header_value = $safeName;
-                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
-                        #{invalid_field_error:W}
-                    })?;
-                    builder = builder.header("$headerName", header_value);
-                }
+                let header_value = $formatted;
+                let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
+                    #{invalid_field_error:W}
+                })?;
+                builder = builder.header("$headerName", header_value);
+
                 """,
                 "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                 "invalid_field_error" to renderErrorMessage("header_value"),
