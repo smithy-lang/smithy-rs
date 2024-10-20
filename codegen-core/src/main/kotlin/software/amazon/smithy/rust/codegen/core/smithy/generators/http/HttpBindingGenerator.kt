@@ -620,7 +620,7 @@ class HttpBindingGenerator(
         rustTemplate(
             """
             // Empty vecs in headers are serialized as the empty string
-            if ${context.valueExpression.asRef()}.is_empty() {
+            if ${context.valueExpression.name}.is_empty() {
                 builder = builder.header("$headerName", "");
             }""",
         )
