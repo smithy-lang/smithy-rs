@@ -26,6 +26,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::error::operation::BuildError;
 use http::HeaderValue;
 use http_body::Body;
+use std::str::FromStr;
 use std::{fmt, mem};
 
 /// Errors related to constructing checksum-validated HTTP requests
@@ -54,9 +55,9 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct RequestChecksumInterceptorState {
-    checksum_algorithm: Option<ChecksumAlgorithm>,
+    checksum_algorithm: Option<String>,
     /// This value is set in the model on the `httpChecksum` trait
     request_checksum_required: bool,
 }
@@ -125,7 +126,7 @@ impl<AP, CM> RequestChecksumInterceptor<AP, CM> {
 
 impl<AP, CM> Intercept for RequestChecksumInterceptor<AP, CM>
 where
-    AP: Fn(&Input) -> Result<(Option<ChecksumAlgorithm>, bool), BoxError> + Send + Sync,
+    AP: Fn(&Input) -> (Option<String>, bool) + Send + Sync,
     CM: Fn(&mut Input, &ConfigBag) -> Result<(), BoxError> + Send + Sync,
 {
     fn name(&self) -> &'static str {
@@ -140,7 +141,8 @@ where
     ) -> Result<(), BoxError> {
         (self.checksum_mutator)(context.input_mut(), cfg)?;
         let (checksum_algorithm, request_checksum_required) =
-            (self.algorithm_provider)(context.input())?;
+            (self.algorithm_provider)(context.input());
+
         let mut layer = Layer::new("RequestChecksumInterceptor");
         layer.store_put(RequestChecksumInterceptorState {
             checksum_algorithm,
@@ -160,12 +162,24 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
+        // If the user manually set a checksum value we short circuit
+        if user_set_checksum_header(context.request()) {
+            return Ok(());
+        }
+
         let state = cfg
             .load::<RequestChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
 
         // This value is from the trait, but is needed for runtime logic
         let request_checksum_required = state.request_checksum_required;
+
+        // If the algorithm fails to parse it is not one we support and we error
+        let checksum_algorithm = state
+            .checksum_algorithm
+            .clone()
+            .map(|s| ChecksumAlgorithm::from_str(s.as_str()))
+            .transpose()?;
 
         // This value is set by the user on the SdkConfig to indicate their preference
         // We provide a default here for users that use a client config instead of the SdkConfig
@@ -186,7 +200,7 @@ where
         if calculate_checksum {
             // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
             // If we have made it this far without a checksum being set we set the default as Crc32
-            let checksum_algorithm = incorporate_custom_default(state.checksum_algorithm, cfg)
+            let checksum_algorithm = incorporate_custom_default(checksum_algorithm, cfg)
                 .unwrap_or(ChecksumAlgorithm::Crc32);
 
             // Set the user-agent metric for the selected checksum algorithm
@@ -251,6 +265,16 @@ where
 
         Ok(())
     }
+}
+
+// Check if user provided a checksum value
+fn user_set_checksum_header(request: &HttpRequest) -> bool {
+    for algo_header in aws_smithy_checksums::http::REQUEST_CHECKSUM_ALGORITHM_HEADERS {
+        if let Some(_) = request.headers().get(algo_header) {
+            return true;
+        }
+    }
+    false
 }
 
 fn incorporate_custom_default(

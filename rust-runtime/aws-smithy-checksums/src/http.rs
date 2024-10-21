@@ -13,10 +13,11 @@ use crate::{
     SHA_256_NAME,
 };
 
-pub static CRC_32_HEADER_NAME: &str = "x-amz-checksum-crc32";
-pub static CRC_32_C_HEADER_NAME: &str = "x-amz-checksum-crc32c";
-pub static SHA_1_HEADER_NAME: &str = "x-amz-checksum-sha1";
-pub static SHA_256_HEADER_NAME: &str = "x-amz-checksum-sha256";
+pub const CRC_32_HEADER_NAME: &str = "x-amz-checksum-crc32";
+pub const CRC_32_C_HEADER_NAME: &str = "x-amz-checksum-crc32c";
+pub const SHA_1_HEADER_NAME: &str = "x-amz-checksum-sha1";
+pub const SHA_256_HEADER_NAME: &str = "x-amz-checksum-sha256";
+pub const CRC_64_NVME_HEADER_NAME: &str = "x-amz-checksum-crc64nvme";
 
 // Preserved for compatibility purposes. This should never be used by users, only within smithy-rs
 pub(crate) static MD5_HEADER_NAME: &str = "content-md5";
@@ -26,6 +27,16 @@ pub(crate) static MD5_HEADER_NAME: &str = "content-md5";
 /// to check them in order based on how fast each checksum is to calculate.
 pub const CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER: [&str; 4] =
     [CRC_32_C_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME];
+
+// List of algorithm header names that the request interceptor can check against to see if user has manually
+// set a checksum value
+pub const REQUEST_CHECKSUM_ALGORITHM_HEADERS: [&str; 5] = [
+    CRC_32_HEADER_NAME,
+    CRC_32_C_HEADER_NAME,
+    SHA_1_HEADER_NAME,
+    SHA_256_HEADER_NAME,
+    CRC_64_NVME_HEADER_NAME,
+];
 
 /// Checksum algorithms are use to validate the integrity of data. Structs that implement this trait
 /// can be used as checksum calculators. This trait requires Send + Sync because these checksums are

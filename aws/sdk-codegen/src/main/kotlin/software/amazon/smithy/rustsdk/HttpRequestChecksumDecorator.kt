@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -122,22 +121,6 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
         }
 
-        // Parse the checksum_algorithm type from the service's smithy model to a ChecksumAlgorithm enum from the
-        // aws_smithy_checksums crate.
-        rustTemplate(
-            """
-            let checksum_algorithm = match checksum_algorithm {
-                Some(algo) => Some(
-                    algo.parse::<#{ChecksumAlgorithm}>()
-                    .map_err(#{BuildError}::other)?
-                ),
-                None => None,
-            };
-            """,
-            "BuildError" to runtimeConfig.operationBuildError(),
-            "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
-        )
-
         // If a request checksum is not required and there's no way to set one, do nothing
         // This happens when an operation only supports response checksums
     }
@@ -186,7 +169,7 @@ class HttpRequestChecksumCustomization(
                                     let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
                                     let checksum_algorithm = input.$requestAlgorithmMemberName();
                                     #{checksum_algorithm_to_str}
-                                    #{Result}::<_, #{BoxError}>::Ok((checksum_algorithm, $requestChecksumRequired))
+                                    (checksum_algorithm.map(|s| s.to_string()), $requestChecksumRequired)
                                 },
                                 |input: &mut #{Input}, cfg: &#{ConfigBag}| {
                                 let input = input
