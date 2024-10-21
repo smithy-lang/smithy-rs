@@ -97,5 +97,8 @@ class AwsQueryCompatible(
         awsJson.parseEventStreamErrorMetadata(operationShape)
 
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
+        listOf(
+            "x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}",
+            "x-amzn-query-mode" to "true",
+        )
 }
