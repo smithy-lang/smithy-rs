@@ -204,7 +204,7 @@ impl ProviderConfig {
     /// parsed already (e.g. by calling [`ProviderConfig::profile()`]). This is an
     /// imperfect mapping and should be used sparingly.
     pub(crate) fn client_config(&self) -> SdkConfig {
-        let profiles = self.parsed_profile.get().map(|v| v.as_ref().ok()).flatten();
+        let profiles = self.parsed_profile.get().and_then(|v| v.as_ref().ok());
         let service_config = EnvServiceConfig {
             env: self.env(),
             env_config_sections: profiles.cloned().unwrap_or_default(),
