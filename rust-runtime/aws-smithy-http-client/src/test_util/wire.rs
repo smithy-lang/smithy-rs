@@ -258,12 +258,12 @@ impl WireMockServer {
                             let poisoned_conns = poisoned_conns.clone();
                             let events = events.clone();
                             let wire_log = wire_log.clone();
+                            if poisoned_conns.lock().unwrap().contains(&remote_addr) {
+                                tracing::error!("poisoned connection {:?} was reused!", &remote_addr);
+                                panic!("poisoned connection was reused!");
+                            }
+                            let next_event = events.clone().lock().unwrap().pop();
                             async move {
-                                if poisoned_conns.lock().unwrap().contains(&remote_addr) {
-                                    tracing::error!("poisoned connection {:?} was reused!", &remote_addr);
-                                    panic!("poisoned connection was reused!");
-                                }
-                                let next_event = events.clone().lock().unwrap().pop();
                                 let next_event = next_event
                                     .unwrap_or_else(|| panic!("no more events! Log: {:?}", wire_log));
 
@@ -398,5 +398,22 @@ impl tower::Service<Name> for LoggingDnsResolver {
                 .push(RecordedEvent::DnsLookup(req.to_string()));
             Ok(std::iter::once(socket_addr))
         })
+    }
+}
+
+#[cfg(any(feature = "legacy-test-util", feature = "hyper-014"))]
+impl hyper_0_14::service::Service<hyper_0_14::client::connect::dns::Name> for LoggingDnsResolver {
+    type Response = Once<SocketAddr>;
+    type Error = Infallible;
+    type Future = BoxFuture<'static, Self::Response, Self::Error>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        <LoggingDnsResolver as tower::Service<Name>>::poll_ready(self, cx)
+    }
+
+    fn call(&mut self, req: hyper_0_14::client::connect::dns::Name) -> Self::Future {
+        use std::str::FromStr;
+        let adapter = Name::from_str(req.as_str()).expect("valid conversion");
+        <LoggingDnsResolver as tower::Service<Name>>::call(self, adapter)
     }
 }

@@ -40,6 +40,9 @@ Finally, for socket-level mocking, see the [`wire`] module.
 mod capture_request;
 pub use capture_request::{capture_request, CaptureRequestHandler, CaptureRequestReceiver};
 
+#[cfg(feature = "legacy-test-util")]
+pub use capture_request::legacy_capture_request;
+
 #[cfg(feature = "hyper-014")]
 pub mod dvr;
 

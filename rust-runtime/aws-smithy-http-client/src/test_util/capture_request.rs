@@ -104,7 +104,7 @@ pub fn capture_request(
 ) -> (CaptureRequestHandler, CaptureRequestReceiver) {
     let (tx, rx) = oneshot::channel();
     let http_resp: HttpResponse = match response {
-        Some(resp) => resp.try_into().expect("valid HttpRequest"),
+        Some(resp) => resp.try_into().expect("valid HttpResponse"),
         None => http_1x::Response::builder()
             .status(200)
             .body(SdkBody::empty())
@@ -119,6 +119,14 @@ pub fn capture_request(
         }))),
         CaptureRequestReceiver { receiver: rx },
     )
+}
+
+#[allow(missing_docs)]
+#[cfg(feature = "legacy-test-util")]
+pub fn legacy_capture_request(
+    response: Option<http_02x::Response<SdkBody>>,
+) -> (CaptureRequestHandler, CaptureRequestReceiver) {
+    capture_request(response)
 }
 
 #[cfg(test)]

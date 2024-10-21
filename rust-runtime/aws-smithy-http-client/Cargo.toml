@@ -24,6 +24,10 @@ hyper-1 = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+
+    # FIXME - should not be needed in base http implementation, only for https and only for specific tls impl
+    "dep:rustls",
+    "dep:hyper-rustls",
 ]
 
 wire-mock = [
