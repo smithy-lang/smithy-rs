@@ -12,7 +12,7 @@
 //! respond with a given response, then capture request can also be useful since
 //! you can optionally give it a response to return.
 #![cfg_attr(
-    feature = "hyper-014",
+    feature = "hyper-1",
     doc = "- [`dvr`]: If you want to record real-world traffic and then replay it later, then DVR's"
 )]
 //! [`RecordingClient`](dvr::RecordingClient) and [`ReplayingClient`](dvr::ReplayingClient)
@@ -43,7 +43,6 @@ pub use capture_request::{capture_request, CaptureRequestHandler, CaptureRequest
 #[cfg(feature = "legacy-test-util")]
 pub use capture_request::legacy_capture_request;
 
-#[cfg(feature = "hyper-014")]
 pub mod dvr;
 
 mod replay;
