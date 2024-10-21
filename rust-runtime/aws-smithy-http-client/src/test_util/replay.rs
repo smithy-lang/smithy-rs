@@ -149,7 +149,7 @@ impl ValidateRequest {
 /// ```
 ///
 /// [`assert_requests_match`]: StaticReplayClient::assert_requests_match
-/// [DVR]: crate::client::http::test_util::dvr
+/// [DVR]: crate::test_util::dvr
 #[derive(Clone, Debug)]
 pub struct StaticReplayClient {
     data: Arc<Mutex<ReplayEvents>>,
