@@ -42,8 +42,6 @@ http-body-04x = { package = "http-body", version = "0.4.4" }
 http-body-1x = { package = "http-body", version = "1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
 httparse = "1.8.0"
-hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 once_cell = "1.18.0"
 pin-project-lite = "0.2.7"
 pin-utils = "0.1.0"
@@ -64,6 +62,7 @@ pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
+# FIXME - migrate to hyper-1
 hyper_0_14 = { package = "hyper", version = "0.14.27", features = ["client", "server", "tcp", "http1", "http2"] }
 http1 = { package = "http", version = "1" }
 

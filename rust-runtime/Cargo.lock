@@ -688,7 +688,6 @@ dependencies = [
  "http-body 1.0.1",
  "httparse",
  "hyper 0.14.31",
- "hyper-rustls 0.24.2",
  "once_cell",
  "pin-project-lite",
  "pin-utils",
