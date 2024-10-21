@@ -84,6 +84,8 @@ class ClientProtocolTestGenerator(
 
         private val BrokenTests:
             Set<BrokenTest> =
+            // The two tests below were fixed in "https://github.com/smithy-lang/smithy/pull/2423", but the fixes didn't make
+            // it into the build artifact for 1.52
             setOf(
                 BrokenTest.ResponseTest(
                     ServiceShapeId.REST_XML,

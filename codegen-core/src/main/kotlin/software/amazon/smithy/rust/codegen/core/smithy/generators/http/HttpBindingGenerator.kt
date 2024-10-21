@@ -576,7 +576,7 @@ class HttpBindingGenerator(
         // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
         // If a header is multivalued, we always want to serialize its primitive members, regardless of their
         // values.
-        ifSome(memberSymbol, ValueExpression.Reference("&input.$memberName")) { variableName ->
+        ifSome(memberSymbol, ValueExpression.Reference("input.$memberName")) { variableName ->
             if (targetShape is CollectionShape) {
                 renderMultiValuedHeader(
                     model,
@@ -619,7 +619,7 @@ class HttpBindingGenerator(
 
         rustTemplate(
             """
-            // Empty vec in header is serialized as the empty string
+            // Empty vec in header is serialized as an empty string
             if ${context.valueExpression.name}.is_empty() {
                 builder = builder.header("$headerName", "");
             }""",
