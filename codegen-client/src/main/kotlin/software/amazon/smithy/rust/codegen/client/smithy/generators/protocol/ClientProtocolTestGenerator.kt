@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
-import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -28,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Broke
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
@@ -83,18 +83,50 @@ class ClientProtocolTestGenerator(
             )
 
         private val BrokenTests:
-            Set<BrokenTest> = setOf()
+            Set<BrokenTest> =
+            setOf(
+                BrokenTest.ResponseTest(
+                    ServiceShapeId.REST_XML,
+                    "NestedXmlMapWithXmlNameDeserializes",
+                    howToFixItFn = ::fixRestXMLInvalidRootNodeResponse,
+                    inAtLeast = setOf("1.52.0"),
+                    trackedIn =
+                        setOf(
+                            "https://github.com/smithy-lang/smithy/pull/2423",
+                        ),
+                ),
+                BrokenTest.RequestTest(
+                    ServiceShapeId.REST_XML,
+                    "NestedXmlMapWithXmlNameSerializes",
+                    howToFixItFn = ::fixRestXMLInvalidRootNodeRequest,
+                    inAtLeast = setOf("1.52.0"),
+                    trackedIn =
+                        setOf(
+                            "https://github.com/smithy-lang/smithy/pull/2423",
+                        ),
+                ),
+            )
 
-        private fun fixRestJsonClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse(
-            testCase: TestCase.ResponseTest,
-        ): TestCase.ResponseTest {
-            val fixedParams =
-                testCase.testCase.params.toBuilder().withMember("defaultTimestamp", NumberNode.from(2)).build()
+        private fun fixRestXMLInvalidRootNodeResponse(testCase: TestCase.ResponseTest): TestCase.ResponseTest {
+            val fixedBody =
+                testCase.testCase.body.get()
+                    .replace("NestedXmlMapWithXmlNameResponse", "NestedXmlMapWithXmlNameInputOutput")
             return TestCase.ResponseTest(
                 testCase.testCase.toBuilder()
-                    .params(fixedParams)
+                    .body(fixedBody)
                     .build(),
                 testCase.targetShape,
+            )
+        }
+
+        private fun fixRestXMLInvalidRootNodeRequest(testCase: TestCase.RequestTest): TestCase.RequestTest {
+            val fixedBody =
+                testCase.testCase.body.get()
+                    .replace("NestedXmlMapWithXmlNameRequest", "NestedXmlMapWithXmlNameInputOutput")
+            return TestCase.RequestTest(
+                testCase.testCase.toBuilder()
+                    .body(fixedBody)
+                    .build(),
             )
         }
     }

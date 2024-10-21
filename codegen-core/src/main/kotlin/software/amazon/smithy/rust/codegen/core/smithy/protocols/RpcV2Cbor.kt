@@ -112,7 +112,7 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("smithy-protocol" to "rpc-v2-cbor")
+        listOf("smithy-protocol" to "rpc-v2-cbor", "accept" to "application/cbor")
 
     override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("smithy-protocol" to "rpc-v2-cbor")
