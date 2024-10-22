@@ -9,6 +9,7 @@ import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -28,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -143,9 +145,12 @@ class HttpRequestChecksumCustomization(
     override fun section(section: OperationSection): Writable =
         writable {
             // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
+            // if there is no request algorithm member or if there is no httpHeader for the request algorithm
             val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
             val requestAlgorithmMember =
                 checksumTrait.requestAlgorithmMemberShape(codegenContext, operationShape) ?: return@writable
+            val requestAlgoHeader =
+                requestAlgorithmMember.getTrait<HttpHeaderTrait>()?.value ?: return@writable
             val requestAlgorithmMemberName = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
             val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
             val requestChecksumRequired = checksumTrait.isRequestChecksumRequired
@@ -172,36 +177,43 @@ class HttpRequestChecksumCustomization(
                                     (checksum_algorithm.map(|s| s.to_string()), $requestChecksumRequired)
                                 },
                                 |input: &mut #{Input}, cfg: &#{ConfigBag}| {
-                                let input = input
-                                    .downcast_mut::<#{OperationInputType}>()
-                                    .ok_or("failed to downcast to #{OperationInputType}")?;
+                                    let mut set_default = false;
+                                    let input = input
+                                        .downcast_mut::<#{OperationInputType}>()
+                                        .ok_or("failed to downcast to #{OperationInputType}")?;
 
-                                // This value is set by the user on the SdkConfig to indicate their preference
-                                let request_checksum_calculation = cfg
-                                    .load::<#{RequestChecksumCalculation}>()
-                                    .unwrap_or(&#{RequestChecksumCalculation}::WhenSupported);
+                                    // This value is set by the user on the SdkConfig to indicate their preference
+                                    let request_checksum_calculation = cfg
+                                        .load::<#{RequestChecksumCalculation}>()
+                                        .unwrap_or(&#{RequestChecksumCalculation}::WhenSupported);
 
-                                // From the httpChecksum trait
-                                let http_checksum_required = $requestChecksumRequired;
+                                    // From the httpChecksum trait
+                                    let http_checksum_required = $requestChecksumRequired;
 
-                                // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum we
-                                // default to Crc32. If it is WhenRequired and a checksum is required by the trait we also set the
-                                // default. In all other cases we do nothing.
-                                match (
-                                    request_checksum_calculation,
-                                    http_checksum_required,
-                                    input.checksum_algorithm(),
-                                ) {
-                                    (#{RequestChecksumCalculation}::WhenSupported, _, None)
-                                    | (#{RequestChecksumCalculation}::WhenRequired, true, None) => {
-                                        input.checksum_algorithm = Some(#{ChecksumAlgoShape}::Crc32);
+                                    // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum we
+                                    // default to Crc32. If it is WhenRequired and a checksum is required by the trait we also set the
+                                    // default. In all other cases we do nothing.
+                                    match (
+                                        request_checksum_calculation,
+                                        http_checksum_required,
+                                        input.$requestAlgorithmMemberName(),
+                                    ) {
+                                        (#{RequestChecksumCalculation}::WhenSupported, _, None)
+                                        | (#{RequestChecksumCalculation}::WhenRequired, true, None) => {
+                                            input.$requestAlgorithmMemberName = Some(#{ChecksumAlgoShape}::Crc32);
+                                            set_default = true;
+                                        }
+                                        _ => {},
                                     }
-                                    _ => {},
-                                }
 
-                                Ok(())
+                                    // We return an indicator of whether we set the default and the request header that the
+                                    // default is set as so that we can unset it later if we determine the user has manually
+                                    // provided a checksum value. We cannot determine that now because the model does not
+                                    // provide a list of the members where a manual checksum could be stored, so we have to
+                                    // rely on the x-amz-checksum-{checksumName} headers specified in the SEP and those are
+                                    // not available until after serialization.
+                                    Ok((set_default, ${requestAlgoHeader.dq()}.to_string()))
                                 }
-
                                 )
                                 """,
                                 *preludeScope,
