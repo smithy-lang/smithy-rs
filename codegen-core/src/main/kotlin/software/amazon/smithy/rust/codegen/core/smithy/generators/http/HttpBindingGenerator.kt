@@ -491,6 +491,7 @@ class HttpBindingGenerator(
     fun generateAddHeadersFn(
         shape: Shape,
         httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
+        serializeEmptyHeaders: Boolean = false,
     ): RuntimeType? {
         val (headerBindings, prefixHeaderBinding) =
             when (httpMessageType) {
@@ -538,7 +539,7 @@ class HttpBindingGenerator(
                 """,
                 *codegenScope,
             ) {
-                headerBindings.forEach { httpBinding -> renderHeaders(httpBinding) }
+                headerBindings.forEach { httpBinding -> renderHeaders(httpBinding, serializeEmptyHeaders) }
                 if (prefixHeaderBinding != null) {
                     renderPrefixHeader(prefixHeaderBinding)
                 }
@@ -547,7 +548,10 @@ class HttpBindingGenerator(
         }
     }
 
-    private fun RustWriter.renderHeaders(httpBinding: HttpBinding) {
+    private fun RustWriter.renderHeaders(
+        httpBinding: HttpBinding,
+        serializeEmptyHeaders: Boolean,
+    ) {
         check(httpBinding.location == HttpLocation.HEADER)
         val memberShape = httpBinding.member
         val targetShape = model.expectShape(memberShape.target)
@@ -576,7 +580,7 @@ class HttpBindingGenerator(
         // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
         // If a header is multivalued, we always want to serialize its primitive members, regardless of their
         // values.
-        ifSome(memberSymbol, ValueExpression.Reference("input.$memberName")) { variableName ->
+        ifSome(memberSymbol, ValueExpression.Reference("&input.$memberName")) { variableName ->
             if (targetShape is CollectionShape) {
                 renderMultiValuedHeader(
                     model,
@@ -585,6 +589,7 @@ class HttpBindingGenerator(
                     targetShape,
                     timestampFormat,
                     renderErrorMessage,
+                    serializeEmptyHeaders,
                 )
             } else {
                 renderHeaderValue(
@@ -596,6 +601,7 @@ class HttpBindingGenerator(
                     renderErrorMessage,
                     serializeIfDefault = memberSymbol.isOptional(),
                     memberShape,
+                    serializeEmptyHeaders,
                 )
             }
         }
@@ -608,6 +614,7 @@ class HttpBindingGenerator(
         shape: CollectionShape,
         timestampFormat: TimestampFormatTrait.Format,
         renderErrorMessage: (String) -> Writable,
+        serializeEmptyHeaders: Boolean,
     ) {
         val loopVariable = ValueExpression.Reference(safeName("inner"))
         val context = HeaderValueSerializationContext(value, shape)
@@ -617,14 +624,30 @@ class HttpBindingGenerator(
             )(this)
         }
 
-        rustTemplate(
-            """
-            // Empty vec in header is serialized as an empty string
-            if ${context.valueExpression.name}.is_empty() {
-                builder = builder.header("$headerName", "");
+        if (serializeEmptyHeaders) {
+            rustTemplate(
+                """
+                // Empty vec in header is serialized as an empty string
+                if ${context.valueExpression.name}.is_empty() {
+                    builder = builder.header("$headerName", "");
             }""",
-        )
-        rustBlock("else") {
+            )
+            rustBlock("else") {
+                rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
+                    this.renderHeaderValue(
+                        headerName,
+                        loopVariable,
+                        model.expectShape(shape.member.target),
+                        isMultiValuedHeader = true,
+                        timestampFormat,
+                        renderErrorMessage,
+                        serializeIfDefault = true,
+                        shape.member,
+                        serializeEmptyHeaders,
+                    )
+                }
+            }
+        } else {
             rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
                 this.renderHeaderValue(
                     headerName,
@@ -635,6 +658,7 @@ class HttpBindingGenerator(
                     renderErrorMessage,
                     serializeIfDefault = true,
                     shape.member,
+                    serializeEmptyHeaders,
                 )
             }
         }
@@ -656,6 +680,7 @@ class HttpBindingGenerator(
         renderErrorMessage: (String) -> Writable,
         serializeIfDefault: Boolean,
         memberShape: MemberShape,
+        serializeEmptyHeaders: Boolean,
     ) {
         val context = HeaderValueSerializationContext(value, shape)
         for (customization in customizations) {
@@ -678,18 +703,36 @@ class HttpBindingGenerator(
                     isMultiValuedHeader = isMultiValuedHeader,
                 )
             val safeName = safeName("formatted")
-            rustTemplate(
-                """
-                let header_value = $formatted;
-                let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
-                    #{invalid_field_error:W}
-                })?;
-                builder = builder.header("$headerName", header_value);
 
-                """,
-                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
-                "invalid_field_error" to renderErrorMessage("header_value"),
-            )
+            if (serializeEmptyHeaders) {
+                rustTemplate(
+                    """
+                    let header_value = $formatted;
+                    let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
+                        #{invalid_field_error:W}
+                    })?;
+                    builder = builder.header("$headerName", header_value);
+
+                    """,
+                    "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                    "invalid_field_error" to renderErrorMessage("header_value"),
+                )
+            } else {
+                rustTemplate(
+                    """
+                    let $safeName = $formatted;
+                    if !$safeName.is_empty() {
+                        let header_value = $safeName;
+                        let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
+                            #{invalid_field_error:W}
+                        })?;
+                        builder = builder.header("$headerName", header_value);
+                    }
+                    """,
+                    "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                    "invalid_field_error" to renderErrorMessage("header_value"),
+                )
+            }
         }
         if (serializeIfDefault) {
             block(context.valueExpression)
