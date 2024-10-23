@@ -8,7 +8,6 @@ edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
-legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
 hyper-014 = [
     "aws-smithy-runtime-api/http-02x",
     "aws-smithy-types/http-body-0-4-x",
@@ -25,7 +24,44 @@ hyper-1 = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+
+    # FIXME - should not be needed in base http implementation, only for https and only for specific tls impl
+    "dep:rustls",
+    "dep:hyper-rustls",
 ]
+
+wire-mock = [
+    "test-util",
+    "hyper-1",
+    "hyper-util?/server",
+    "hyper-util?/server-auto",
+    "hyper-util?/service",
+    "hyper-util?/server-graceful",
+    "tokio/macros",
+    "dep:http-body-util",
+]
+
+test-util = [
+    "dep:aws-smithy-protocol-test",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:indexmap",
+    "dep:bytes",
+    # for capture_request
+    "dep:http-1x",
+    "aws-smithy-runtime-api/http-1x",
+    # for dvr
+    "dep:http-body-1x",
+    "aws-smithy-types/http-body-1-x",
+]
+
+legacy-test-util = [
+    "test-util",
+    "dep:http-02x",
+    "aws-smithy-runtime-api/http-02x"
+]
+
+legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
 
 # FIXME - s2n-tls option, distinguish between rustls and s2n
 crypto-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
@@ -36,9 +72,10 @@ crypto-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 h2 = { version = "0.4", default-features = false }
 # FIXME - do we need tokio enabled by default?
-tokio = { version = "1", features = [] }
+tokio = { version = "1.40", features = [] }
 once_cell = "1.20.1"
 pin-project-lite = "0.2.14"
 tracing = "0.1"
@@ -47,6 +84,7 @@ tracing = "0.1"
 hyper = { version = "1", features = ["client", "http1", "http2"], optional = true }
 hyper-util = { version = "0.1.7", optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
+http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 tower = { version = "0.5.1", optional = true }
@@ -59,6 +97,14 @@ hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false,
 legacy-hyper-rustls = { package = "hyper-rustls", version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }
 # end legacy stack deps
+
+# test util stack
+bytes = { version = "1", optional = true }
+serde = { version = "1.0.210", features = ["derive"], optional = true }
+serde_json = { version = "1.0.128", features = ["preserve_order"], optional = true }
+indexmap = { version = "2.6.0", features = ["serde"], optional = true }
+http-body-util = { version = "0.1.2", optional = true }
+# end test util stack
 
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }

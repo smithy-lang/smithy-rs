@@ -15,7 +15,6 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
-use http_body_04x::Body;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -74,12 +73,12 @@ pub struct RecordingClient {
     pub(crate) inner: SharedHttpConnector,
 }
 
-#[cfg(feature = "tls-rustls")]
+#[cfg(feature = "legacy-tls-rustls")]
 impl RecordingClient {
     /// Construct a recording connection wrapping a default HTTPS implementation without any timeouts.
     pub fn https() -> Self {
         #[allow(deprecated)]
-        use crate::client::http::hyper_014::HyperConnector;
+        use crate::hyper_014::HyperConnector;
         Self {
             data: Default::default(),
             num_events: Arc::new(AtomicUsize::new(0)),
@@ -132,13 +131,13 @@ fn record_body(
     direction: Direction,
     event_bus: Arc<Mutex<Vec<Event>>>,
 ) -> JoinHandle<()> {
-    let (sender, output_body) = hyper_0_14::Body::channel();
-    let real_body = std::mem::replace(body, SdkBody::from_body_0_4(output_body));
+    let (sender, output_body) = crate::test_util::body::channel_body();
+    let real_body = std::mem::replace(body, output_body);
     tokio::spawn(async move {
         let mut real_body = real_body;
         let mut sender = sender;
         loop {
-            let data = real_body.data().await;
+            let data = crate::test_util::body::next_data_frame(&mut real_body).await;
             match data {
                 Some(Ok(data)) => {
                     event_bus.lock().unwrap().push(Event {

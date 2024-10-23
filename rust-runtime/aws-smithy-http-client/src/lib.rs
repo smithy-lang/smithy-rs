@@ -11,6 +11,7 @@
 //!
 //! # Crate Features
 //!
+//! - `hyper-014`: (Deprecated) HTTP client implementation based on hyper-0.14.x.
 //! - `test-util`: Enables utilities for unit tests. DO NOT ENABLE IN PRODUCTION.
 
 #![warn(
@@ -37,3 +38,6 @@ pub mod hyper_014 {
 /// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
 #[cfg(feature = "hyper-1")]
 pub mod hyper_1;
+
+#[cfg(feature = "test-util")]
+pub mod test_util;
