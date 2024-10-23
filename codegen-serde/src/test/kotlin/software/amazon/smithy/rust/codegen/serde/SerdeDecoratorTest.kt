@@ -7,9 +7,13 @@ package software.amazon.smithy.rust.codegen.serde
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.feature
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -226,6 +230,32 @@ class SerdeDecoratorTest {
                         """,
                         *codegenScope,
                     )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `feature should not be added if trait is not used`() {
+        val model =
+            """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+            
+            @awsJson1_0
+            service MyService {
+                operations: [MyOperation]
+            }
+            
+            operation MyOperation { }
+        """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyService")
+        serverIntegrationTest(model, params = params) { _, crate ->
+            crate.integrationTest("test_serde") {
+                unitTest("fails_if_serde_feature_exists", additionalAttributes = listOf(Attribute(cfg(feature("serde"))))) {
+                    rust("assert!(false);")
                 }
             }
         }
