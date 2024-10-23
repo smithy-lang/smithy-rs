@@ -25,9 +25,10 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
-import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
@@ -224,7 +225,7 @@ class ConstraintsTest {
     }
 
     @Test
-    fun `unnamed enum should have ConstraintViolation`() {
+    fun `unnamed and named enums should validate and have an associated ConstraintViolation error type`() {
         val model =
             """
             namespace test
@@ -239,57 +240,16 @@ class ConstraintsTest {
             @http(uri: "/dailySummary", method: "POST")
             operation SampleOp {
                 input := {
-                    day: WeeklySummary
+                    unnamedDay: UnnamedDayOfWeek
+                    namedDay: DayOfWeek
                 }
                 errors: [ValidationException]
             }
-
-            structure WeeklySummary {
-                day: DayOfWeek,
-            }
-
             @enum([
                 { value: "MONDAY" },
                 { value: "TUESDAY" }
             ])
-            string DayOfWeek
-            """.asSmithyModel(smithyVersion = "2")
-
-        // Simply compiling the crate is sufficient as a test.
-        serverIntegrationTest(
-            model,
-            IntegrationTestParams(
-                service = "test#SampleService",
-            ),
-        ) { _, _ ->
-        }
-    }
-
-    @Test
-    fun `named enum should have ConstraintViolation`() {
-        val model =
-            """
-            namespace test
-            use aws.protocols#restJson1
-            use smithy.framework#ValidationException
-
-            @restJson1
-            service SampleService {
-                operations: [SampleOp]
-            }
-
-            @http(uri: "/dailySummary", method: "POST")
-            operation SampleOp {
-                input := {
-                    day: WeeklySummary
-                }
-                errors: [ValidationException]
-            }
-
-            structure WeeklySummary {
-                day: DayOfWeek,
-            }
-
+            string UnnamedDayOfWeek
             @enum([
                 { value: "MONDAY", name: "MONDAY" },
                 { value: "TUESDAY", name: "TUESDAY" }
@@ -297,82 +257,25 @@ class ConstraintsTest {
             string DayOfWeek
             """.asSmithyModel(smithyVersion = "2")
 
-        // Simply compiling the crate is sufficient as a test.
         serverIntegrationTest(
             model,
             IntegrationTestParams(
                 service = "test#SampleService",
             ),
-        ) { _, _ ->
-        }
-    }
-
-    @Test
-    fun `KeyList should work`() {
-        val model =
-            """
-            namespace test
-            use aws.protocols#restJson1
-            use smithy.framework#ValidationException
-
-            @restJson1
-            service SampleService {
-                operations: [BatchGetItem]
+        ) { _, crate ->
+            crate.unitTest("value_should_be_validated") {
+                rustTemplate(
+                    """
+                    let x: Result<crate::model::DayOfWeek, crate::model::day_of_week::ConstraintViolation> =
+                        "Friday".try_into();
+                    assert!(x.is_err());
+                    
+                    let x: Result<crate::model::UnnamedDayOfWeek, crate::model::unnamed_day_of_week::ConstraintViolation> =
+                        "Friday".try_into();
+                    assert!(x.is_err());
+                """,
+                )
             }
-
-            @http(uri: "/dailySummary", method: "POST")
-            operation BatchGetItem {
-                input : BatchGetItemInput
-                errors: [ValidationException]
-            }
-            structure BatchGetItemInput {
-                RequestItems: KeyList
-            }
-            @length(
-                min: 1
-                max: 100
-            )
-            list KeyList {
-                member: Key
-            }
-            map Key {
-                key: AttributeName
-                value: SomeValue
-            }
-            @length(
-                min: 0
-                max: 65535
-            )
-            string AttributeName
-            string SomeValue
-
-            //union AttributeValue {
-            //    M: MapAttributeValue
-            //    L: ListAttributeValue
-            //}
-            //map MapAttributeValue {
-            //    key: AttributeName
-            //    value: AttributeValue
-            //}
-            //list ListAttributeValue {
-            //    member: AttributeValue
-            //}
-            """.asSmithyModel(smithyVersion = "2")
-
-        val dir = File("/Users/fahadzub/kaam/baykar/smithy-gen/keys")
-        if (dir.exists()) {
-            dir.deleteRecursively()
-        }
-
-        // Simply compiling the crate is sufficient as a test.
-        serverIntegrationTest(
-            model,
-            IntegrationTestParams(
-                service = "test#SampleService",
-                additionalSettings = ServerAdditionalSettings.builder().generateCodegenComments(true).toObjectNode(),
-                overrideTestDir = dir,
-            ),
-        ) { _, _ ->
         }
     }
 }
