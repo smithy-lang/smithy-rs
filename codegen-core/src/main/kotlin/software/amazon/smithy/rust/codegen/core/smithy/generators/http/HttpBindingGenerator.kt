@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -624,30 +625,16 @@ class HttpBindingGenerator(
             )(this)
         }
 
-        if (serializeEmptyHeaders) {
-            rustTemplate(
-                """
-                // Empty vec in header is serialized as an empty string
-                if ${context.valueExpression.name}.is_empty() {
-                    builder = builder.header("$headerName", "");
-            }""",
-            )
-            rustBlock("else") {
-                rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
-                    this.renderHeaderValue(
-                        headerName,
-                        loopVariable,
-                        model.expectShape(shape.member.target),
-                        isMultiValuedHeader = true,
-                        timestampFormat,
-                        renderErrorMessage,
-                        serializeIfDefault = true,
-                        shape.member,
-                        serializeEmptyHeaders,
-                    )
-                }
-            }
-        } else {
+        // Conditionally wrap the header generation in a block that handles empty header values if
+        // `serializeEmptyHeaders` is true
+        conditionalBlock(
+            """
+            // Empty vec in header is serialized as an empty string
+            if ${context.valueExpression.name}.is_empty() {
+                builder = builder.header("$headerName", "");
+            } else {""",
+            "}", conditional = serializeEmptyHeaders,
+        ) {
             rustBlock("for ${loopVariable.name} in ${context.valueExpression.asRef()}") {
                 this.renderHeaderValue(
                     headerName,
@@ -704,30 +691,18 @@ class HttpBindingGenerator(
                 )
             val safeName = safeName("formatted")
 
-            if (serializeEmptyHeaders) {
+            // If `serializeEmptyHeaders` is false we wrap header serialization in a `!foo.is_empty()` check and skip
+            // serialization if the header value is empty
+            rust("let $safeName = $formatted;")
+            conditionalBlock("if !$safeName.is_empty() {", "}", conditional = !serializeEmptyHeaders) {
                 rustTemplate(
                     """
-                    let header_value = $formatted;
+                    let header_value = $safeName;
                     let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
                         #{invalid_field_error:W}
                     })?;
                     builder = builder.header("$headerName", header_value);
 
-                    """,
-                    "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
-                    "invalid_field_error" to renderErrorMessage("header_value"),
-                )
-            } else {
-                rustTemplate(
-                    """
-                    let $safeName = $formatted;
-                    if !$safeName.is_empty() {
-                        let header_value = $safeName;
-                        let header_value: #{HeaderValue} = header_value.parse().map_err(|err| {
-                            #{invalid_field_error:W}
-                        })?;
-                        builder = builder.header("$headerName", header_value);
-                    }
                     """,
                     "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
                     "invalid_field_error" to renderErrorMessage("header_value"),
