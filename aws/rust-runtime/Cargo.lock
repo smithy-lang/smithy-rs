@@ -124,6 +124,7 @@ dependencies = [
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "aws-types",
  "bytes",
  "fastrand",
  "hex",
@@ -138,6 +139,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]
@@ -188,7 +190,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -233,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.60.12"
+version = "0.60.13"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -352,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.7"
+version = "1.2.8"
 dependencies = [
  "base64-simd",
  "bytes",
