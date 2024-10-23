@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.serde
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -61,6 +62,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
 class SerializeImplGenerator(private val codegenContext: CodegenContext) {
     private val model = codegenContext.model
+    private val topIndex = TopDownIndex.of(model)
 
     fun generateRootSerializerForShape(shape: Shape): Writable = serializerFn(shape, null)
 
@@ -78,7 +80,9 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         applyTo: Writable?,
     ): Writable {
         if (shape is ServiceShape) {
-            return shape.operations.map { serializerFn(model.expectShape(it), null) }.join("\n")
+            return topIndex.getContainedOperations(shape).map {
+                serializerFn(it, null)
+            }.join("\n")
         } else if (shape is OperationShape) {
             if (shape.isEventStream(model)) {
                 // Don't generate serializers for event streams

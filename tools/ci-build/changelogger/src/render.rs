@@ -14,6 +14,7 @@ use smithy_rs_tool_common::changelog::{
     ValidationSet,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
+use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::versions_manifest::{CrateVersionMetadataMap, VersionsManifest};
 use std::env;
 use std::fmt::Write;
@@ -80,6 +81,9 @@ pub struct RenderArgs {
     // working directory will be used to attempt to find it.
     #[clap(long, action)]
     pub smithy_rs_location: Option<PathBuf>,
+    // Location of the aws-sdk-rust repository, used exclusively to retrieve existing release tags.
+    #[clap(long, required_if_eq("change-set", "aws-sdk"))]
+    pub aws_sdk_rust_location: Option<PathBuf>,
 
     // For testing only
     #[clap(skip)]
@@ -97,15 +101,73 @@ pub fn subcommand_render(args: &RenderArgs) -> Result<()> {
             .unwrap_or(current_dir.as_path()),
     )
     .context("failed to find smithy-rs repo root")?;
-    let smithy_rs = GitCLI::new(&repo_root)?;
 
+    let current_tag = {
+        let cli_for_tag = if let Some(aws_sdk_rust_repo_root) = &args.aws_sdk_rust_location {
+            GitCLI::new(
+                &find_git_repository_root("aws-sdk-rust", aws_sdk_rust_repo_root)
+                    .context("failed to find aws-sdk-rust repo root")?,
+            )?
+        } else {
+            GitCLI::new(&repo_root)?
+        };
+        cli_for_tag.get_current_tag()?
+    };
+    let next_release_tag = next_tag(now, &current_tag);
+
+    let smithy_rs = GitCLI::new(&repo_root)?;
     if args.independent_versioning {
-        let smithy_rs_metadata =
-            date_based_release_metadata(now, "smithy-rs-release-manifest.json");
-        let sdk_metadata = date_based_release_metadata(now, "aws-sdk-rust-release-manifest.json");
+        let smithy_rs_metadata = date_based_release_metadata(
+            now,
+            next_release_tag.clone(),
+            "smithy-rs-release-manifest.json",
+        );
+        let sdk_metadata = date_based_release_metadata(
+            now,
+            next_release_tag,
+            "aws-sdk-rust-release-manifest.json",
+        );
         update_changelogs(args, &smithy_rs, &smithy_rs_metadata, &sdk_metadata)
     } else {
         bail!("the --independent-versioning flag must be set; synchronized versioning no longer supported");
+    }
+}
+
+// Generate a unique date-based release tag
+//
+// This function generates a date-based release tag and compares it to `current_tag`.
+// If the generated tag is a substring of `current_tag`, it indicates that a release has already occurred on that day.
+// In this case, the function ensures uniqueness by appending a numerical suffix to `current_tag`.
+fn next_tag(now: OffsetDateTime, current_tag: &ReleaseTag) -> String {
+    let date_based_release_tag = format!(
+        "release-{year}-{month:02}-{day:02}",
+        year = now.date().year(),
+        month = u8::from(now.date().month()),
+        day = now.date().day()
+    );
+
+    let current_tag = current_tag.as_str();
+    if current_tag.starts_with(&date_based_release_tag) {
+        bump_release_tag_suffix(current_tag)
+    } else {
+        date_based_release_tag
+    }
+}
+
+// Bump `current_tag` by adding or incrementing a numerical suffix
+//
+// This is a private function that is only called by `next_tag`.
+// It assumes that `current_tag` follows the format `release-YYYY-MM-DD`.
+fn bump_release_tag_suffix(current_tag: &str) -> String {
+    if let Some(pos) = current_tag.rfind('.') {
+        let prefix = &current_tag[..pos];
+        let suffix = &current_tag[pos + 1..];
+        let suffix = suffix
+            .parse::<u32>()
+            .expect("should parse numerical suffix");
+        format!("{}.{}", prefix, suffix + 1)
+    } else {
+        format!("{}.{}", current_tag, 2)
     }
 }
 
@@ -126,16 +188,12 @@ struct ReleaseManifest {
 
 fn date_based_release_metadata(
     now: OffsetDateTime,
+    tag: String,
     manifest_name: impl Into<String>,
 ) -> ReleaseMetadata {
     ReleaseMetadata {
         title: date_title(&now),
-        tag: format!(
-            "release-{year}-{month:02}-{day:02}",
-            year = now.date().year(),
-            month = u8::from(now.date().month()),
-            day = now.date().day()
-        ),
+        tag,
         manifest_name: manifest_name.into(),
     }
 }
@@ -506,14 +564,19 @@ pub(crate) fn render(
 
 #[cfg(test)]
 mod test {
-    use super::{date_based_release_metadata, render, Changelog, ChangelogEntries, ChangelogEntry};
+    use super::{
+        bump_release_tag_suffix, date_based_release_metadata, next_tag, render, Changelog,
+        ChangelogEntries, ChangelogEntry,
+    };
     use smithy_rs_tool_common::changelog::ChangelogLoader;
+    use smithy_rs_tool_common::release_tag::ReleaseTag;
     use smithy_rs_tool_common::{
         changelog::SdkAffected,
         package::PackageCategory,
         versions_manifest::{CrateVersion, CrateVersionMetadataMap},
     };
     use std::fs;
+    use std::str::FromStr;
     use tempfile::TempDir;
     use time::OffsetDateTime;
 
@@ -662,7 +725,8 @@ message = "Some API change"
     #[test]
     fn test_date_based_release_metadata() {
         let now = OffsetDateTime::from_unix_timestamp(100_000_000).unwrap();
-        let result = date_based_release_metadata(now, "some-manifest.json");
+        let result =
+            date_based_release_metadata(now, "release-1973-03-03".to_owned(), "some-manifest.json");
         assert_eq!("March 3rd, 1973", result.title);
         assert_eq!("release-1973-03-03", result.tag);
         assert_eq!("some-manifest.json", result.manifest_name);
@@ -816,5 +880,41 @@ message = "Some new API to do X"
 "#
         .trim_start();
         pretty_assertions::assert_str_eq!(release_notes, expected_body);
+    }
+
+    #[test]
+    fn test_bump_release_tag_suffix() {
+        for (expected, input) in &[
+            ("release-2024-07-18.2", "release-2024-07-18"),
+            ("release-2024-07-18.3", "release-2024-07-18.2"),
+            (
+                "release-2024-07-18.4294967295", // u32::MAX
+                "release-2024-07-18.4294967294",
+            ),
+        ] {
+            assert_eq!(*expected, &bump_release_tag_suffix(*input));
+        }
+    }
+
+    #[test]
+    fn test_next_tag() {
+        // `now` falls on 2024-10-14
+        let now = OffsetDateTime::from_unix_timestamp(1_728_938_598).unwrap();
+        assert_eq!(
+            "release-2024-10-14",
+            &next_tag(now, &ReleaseTag::from_str("release-2024-10-13").unwrap()),
+        );
+        assert_eq!(
+            "release-2024-10-14.2",
+            &next_tag(now, &ReleaseTag::from_str("release-2024-10-14").unwrap()),
+        );
+        assert_eq!(
+            "release-2024-10-14.3",
+            &next_tag(now, &ReleaseTag::from_str("release-2024-10-14.2").unwrap()),
+        );
+        assert_eq!(
+            "release-2024-10-14.10",
+            &next_tag(now, &ReleaseTag::from_str("release-2024-10-14.9").unwrap()),
+        );
     }
 }

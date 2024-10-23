@@ -1,5 +1,6 @@
 allowed_external_types = [
-    "aws_credential_types::provider::credentials::ProvideCredentials",
+    "aws_types::*",
+    "aws_credential_types::*",
     "aws_smithy_http::*",
     "aws_smithy_runtime_api::*",
 
