@@ -375,9 +375,10 @@ impl StableCratesExposeStableCrates {
                 })
                 // TODO(tooling): When tooling allows, specify this at the crate level. These
                 // are gated by the hyper-014 feature and carryover from relocating hyper-014.x
-                // support from aws-smithy-runtime
+                // support from aws-smithy-runtime. hyper_util is only exposed as part of test_util trait impl
                 .filter(|tpe| {
-                    !(name == "aws-smithy-http-client" && ["tower_service"].contains(&tpe.as_str()))
+                    !(name == "aws-smithy-http-client"
+                        && ["tower_service", "serde", "hyper_util"].contains(&tpe.as_str()))
                 })
                 .map(|crte| {
                     LintError::new(format!(

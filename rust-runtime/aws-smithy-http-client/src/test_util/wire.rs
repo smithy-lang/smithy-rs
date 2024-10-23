@@ -322,10 +322,10 @@ impl WireMockServer {
     pub fn dns_resolver(&self) -> LoggingDnsResolver {
         let event_log = self.event_log.clone();
         let bind_addr = self.bind_addr;
-        LoggingDnsResolver {
+        LoggingDnsResolver(InnerDnsResolver {
             log: event_log,
             socket_addr: bind_addr,
-        }
+        })
     }
 
     /// Prebuilt [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) with correctly wired DNS resolver.
@@ -334,7 +334,9 @@ impl WireMockServer {
     pub fn http_client(&self) -> SharedHttpClient {
         let resolver = self.dns_resolver();
         crate::hyper_1::build_with_fn(None, move || {
-            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(resolver.clone())
+            hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
+                resolver.clone().0,
+            )
         })
     }
 
@@ -374,12 +376,16 @@ async fn generate_response_event(
 ///
 /// Regardless of what hostname is requested, it will always return the same socket address.
 #[derive(Clone, Debug)]
-pub struct LoggingDnsResolver {
+pub struct LoggingDnsResolver(InnerDnsResolver);
+
+// internal implementation so we don't have to expose hyper_util
+#[derive(Clone, Debug)]
+struct InnerDnsResolver {
     log: Arc<Mutex<Vec<RecordedEvent>>>,
     socket_addr: SocketAddr,
 }
 
-impl tower::Service<Name> for LoggingDnsResolver {
+impl tower::Service<Name> for InnerDnsResolver {
     type Response = Once<SocketAddr>;
     type Error = Infallible;
     type Future = BoxFuture<'static, Self::Response, Self::Error>;
@@ -408,12 +414,12 @@ impl hyper_0_14::service::Service<hyper_0_14::client::connect::dns::Name> for Lo
     type Future = BoxFuture<'static, Self::Response, Self::Error>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        <LoggingDnsResolver as tower::Service<Name>>::poll_ready(self, cx)
+        self.0.poll_ready(cx)
     }
 
     fn call(&mut self, req: hyper_0_14::client::connect::dns::Name) -> Self::Future {
         use std::str::FromStr;
         let adapter = Name::from_str(req.as_str()).expect("valid conversion");
-        <LoggingDnsResolver as tower::Service<Name>>::call(self, adapter)
+        self.0.call(adapter)
     }
 }
