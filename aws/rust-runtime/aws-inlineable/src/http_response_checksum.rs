@@ -242,8 +242,8 @@ fn is_part_level_checksum(checksum: &str) -> bool {
             continue;
         }
 
-        // Yup, it's a part-level checksum
-        if ch == '-' {
+        // We saw a number first followed by the dash, yup, it's a part-level checksum
+        if found_number && ch == '-' {
             if found_dash {
                 // Found a second dash?? This isn't a part-level checksum.
                 return false;
@@ -313,5 +313,17 @@ mod tests {
         assert!(!is_part_level_checksum("abcd==-"));
         assert!(!is_part_level_checksum("abcd==--11"));
         assert!(!is_part_level_checksum("abcd==-AA"));
+    }
+
+    #[test]
+    fn part_level_checksum_detection_works() {
+        let a_real_checksum = is_part_level_checksum("C9A5A6878D97B48CC965C1E41859F034-14");
+        assert!(a_real_checksum);
+        let close_but_not_quite = is_part_level_checksum("a4-");
+        assert!(!close_but_not_quite);
+        let backwards = is_part_level_checksum("14-C9A5A6878D97B48CC965C1E41859F034");
+        assert!(!backwards);
+        let double_dash = is_part_level_checksum("C9A5A6878D97B48CC965C1E41859F03-4-14");
+        assert!(!double_dash);
     }
 }
