@@ -5,7 +5,7 @@
 
 use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
 use aws_sdk_ec2::{config::Credentials, config::Region, types::InstanceType, Client, Config};
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_types::body::SdkBody;
 use std::collections::HashSet;

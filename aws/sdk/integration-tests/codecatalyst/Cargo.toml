@@ -12,6 +12,7 @@ publish = false
 
 [dependencies]
 aws-sdk-codecatalyst = { path = "../../build/aws-sdk/sdk/codecatalyst", features = ["behavior-version-latest", "test-util"] }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "wire-mock", "test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["wire-mock", "test-util"] }
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

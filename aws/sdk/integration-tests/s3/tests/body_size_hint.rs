@@ -11,7 +11,7 @@ use aws_sdk_s3::{
     primitives::{ByteStream, SdkBody},
     Client,
 };
-use aws_smithy_runtime::client::http::test_util::{capture_request, infallible_client_fn};
+use aws_smithy_http_client::test_util::{capture_request, infallible_client_fn};
 use http_body::Body;
 
 #[tokio::test]

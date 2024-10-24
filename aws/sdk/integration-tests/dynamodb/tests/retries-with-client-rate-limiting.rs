@@ -9,7 +9,7 @@ use aws_sdk_dynamodb::config::{
 use aws_sdk_dynamodb::{config::retry::RetryConfig, error::ProvideErrorMetadata};
 use aws_smithy_async::test_util::instant_time_and_sleep;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime::client::retries::RetryPartition;
 use aws_smithy_types::body::SdkBody;
 use std::time::{Duration, SystemTime};

@@ -13,10 +13,8 @@ use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::SdkBody;
 use aws_sdk_s3::types::ChecksumAlgorithm;
 use aws_sdk_s3::{Client, Config};
-use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
-use aws_smithy_runtime::client::http::test_util::{
-    capture_request, ReplayEvent, StaticReplayClient,
-};
+use aws_smithy_http_client::test_util::dvr::ReplayingClient;
+use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_types::endpoint::Endpoint;
 use http::Uri;

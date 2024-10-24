@@ -10,7 +10,7 @@ use aws_sdk_s3::config::{
     SharedAsyncSleep, Sleep, StalledStreamProtectionConfig,
 };
 use aws_sdk_s3::primitives::SdkBody;
-use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+use aws_smithy_http_client::test_util::infallible_client_fn;
 
 use aws_sdk_s3::error::DisplayErrorContext;
 use aws_smithy_async::rt::sleep::AsyncSleep;

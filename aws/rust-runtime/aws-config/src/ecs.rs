@@ -498,7 +498,7 @@ mod test {
     use aws_credential_types::Credentials;
     use aws_smithy_async::future::never::Never;
     use aws_smithy_async::rt::sleep::TokioSleep;
-    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime_api::client::dns::DnsFuture;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::shared::IntoShared;

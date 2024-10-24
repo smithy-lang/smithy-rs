@@ -100,6 +100,12 @@ impl CaptureRequestReceiver {
 /// );
 /// ```
 pub fn capture_request(
+    response: Option<http_1x::Response<SdkBody>>,
+) -> (CaptureRequestHandler, CaptureRequestReceiver) {
+    capture_request_inner(response)
+}
+
+fn capture_request_inner(
     response: Option<impl TryInto<HttpResponse, Error = HttpError>>,
 ) -> (CaptureRequestHandler, CaptureRequestReceiver) {
     let (tx, rx) = oneshot::channel();
@@ -126,7 +132,7 @@ pub fn capture_request(
 pub fn legacy_capture_request(
     response: Option<http_02x::Response<SdkBody>>,
 ) -> (CaptureRequestHandler, CaptureRequestReceiver) {
-    capture_request(response)
+    capture_request_inner(response)
 }
 
 #[cfg(test)]
@@ -138,8 +144,8 @@ mod test {
     #[cfg(feature = "legacy-test-util")]
     #[tokio::test]
     async fn test_can_plug_in_http_02x() {
-        use super::capture_request;
-        let (capture_client, _request) = capture_request(Some(
+        use super::legacy_capture_request;
+        let (capture_client, _request) = legacy_capture_request(Some(
             http_02x::Response::builder()
                 .status(202)
                 .body(SdkBody::empty())

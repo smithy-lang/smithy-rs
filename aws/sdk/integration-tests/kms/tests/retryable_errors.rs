@@ -6,7 +6,7 @@
 use aws_credential_types::Credentials;
 use aws_runtime::retries::classifiers::AwsErrorCodeClassifier;
 use aws_sdk_kms as kms;
-use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+use aws_smithy_http_client::test_util::infallible_client_fn;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::result::SdkError;

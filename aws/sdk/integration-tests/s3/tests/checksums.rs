@@ -8,12 +8,11 @@
 use aws_config::SdkConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region, StalledStreamProtectionConfig};
+use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::ChecksumMode;
 use aws_sdk_s3::{operation::get_object::GetObjectOutput, types::ChecksumAlgorithm};
 use aws_sdk_s3::{Client, Config};
-use aws_smithy_runtime::client::http::test_util::{
-    capture_request, ReplayEvent, StaticReplayClient,
-};
+use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
 use aws_smithy_types::body::SdkBody;
 use http::header::AUTHORIZATION;
 use http::{HeaderValue, Uri};
@@ -319,14 +318,14 @@ async fn test_sha256_checksum_on_streaming_request() {
     .await
 }
 
-async fn collect_body_into_string(mut body: aws_smithy_types::body::SdkBody) -> String {
+async fn collect_body_into_string(body: aws_smithy_types::body::SdkBody) -> String {
     use bytes::Buf;
     use bytes_utils::SegmentedBuf;
-    use http_body::Body;
     use std::io::Read;
 
+    let mut stream = ByteStream::new(body);
     let mut output = SegmentedBuf::new();
-    while let Some(buf) = body.data().await {
+    while let Some(buf) = stream.next().await {
         output.push(buf.unwrap());
     }
 

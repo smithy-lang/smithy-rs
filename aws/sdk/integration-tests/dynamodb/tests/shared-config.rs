@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_dynamodb::config::{Credentials, Region, StalledStreamProtectionConfig};
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use http::Uri;
 
 /// Iterative test of loading clients from shared configuration

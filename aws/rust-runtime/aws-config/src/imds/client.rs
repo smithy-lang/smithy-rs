@@ -582,9 +582,7 @@ pub(crate) mod test {
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
-    use aws_smithy_runtime::client::http::test_util::{
-        capture_request, ReplayEvent, StaticReplayClient,
-    };
+    use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,

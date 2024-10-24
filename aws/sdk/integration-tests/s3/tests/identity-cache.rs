@@ -12,7 +12,7 @@ use aws_credential_types::{
     Credentials,
 };
 use aws_sdk_s3::Client;
-use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+use aws_smithy_http_client::test_util::infallible_client_fn;
 
 // NOTE: These tests are _not_ S3 specific and would apply to any AWS SDK but due to the need to consume `aws-config`
 // (which depends on relocated runtime crates) we can't make this an `awsSdkIntegrationTest(..)`.
