@@ -111,8 +111,9 @@ open class RpcV2Cbor(val codegenContext: CodegenContext) : Protocol {
     // using floating point seconds from the epoch.
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
+    // The accept header is required by the spec (and by all of the protocol tests)
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("smithy-protocol" to "rpc-v2-cbor")
+        listOf("smithy-protocol" to "rpc-v2-cbor", "accept" to "application/cbor")
 
     override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("smithy-protocol" to "rpc-v2-cbor")
