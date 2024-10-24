@@ -9,6 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# TODO(hyper1) - deprecate legacy hyper features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
