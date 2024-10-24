@@ -33,19 +33,7 @@ class ClientSerdeDecorator : ClientCodegenDecorator {
     override fun extras(
         codegenContext: ClientCodegenContext,
         rustCrate: RustCrate,
-    ) {
-        rustCrate.mergeFeature(SerdeFeature)
-        val generator = SerializeImplGenerator(codegenContext)
-        rustCrate.withModule(SerdeModule) {
-            serializationRoots(codegenContext).forEach {
-                generator.generateRootSerializerForShape(
-                    it,
-                )(this)
-            }
-            addDependency(SupportStructures.serializeRedacted().toSymbol())
-            addDependency(SupportStructures.serializeUnredacted().toSymbol())
-        }
-    }
+    ) = extrasCommon(codegenContext, rustCrate)
 }
 
 class ServerSerdeDecorator : ServerCodegenDecorator {
@@ -55,14 +43,21 @@ class ServerSerdeDecorator : ServerCodegenDecorator {
     override fun extras(
         codegenContext: ServerCodegenContext,
         rustCrate: RustCrate,
-    ) {
+    ) = extrasCommon(codegenContext, rustCrate)
+}
+
+// Just a common function to keep things DRY.
+private fun extrasCommon(
+    codegenContext: CodegenContext,
+    rustCrate: RustCrate,
+) {
+    val roots = serializationRoots(codegenContext)
+    if (roots.isNotEmpty()) {
         rustCrate.mergeFeature(SerdeFeature)
         val generator = SerializeImplGenerator(codegenContext)
         rustCrate.withModule(SerdeModule) {
-            serializationRoots(codegenContext).forEach {
-                generator.generateRootSerializerForShape(
-                    it,
-                )(this)
+            roots.forEach {
+                generator.generateRootSerializerForShape(it)(this)
             }
             addDependency(SupportStructures.serializeRedacted().toSymbol())
             addDependency(SupportStructures.serializeUnredacted().toSymbol())

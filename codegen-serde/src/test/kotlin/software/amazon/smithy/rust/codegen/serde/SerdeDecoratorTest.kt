@@ -7,9 +7,13 @@ package software.amazon.smithy.rust.codegen.serde
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.feature
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -178,6 +182,84 @@ class SerdeDecoratorTest {
         }
         structure NotSerde {}
         """.asSmithyModel(smithyVersion = "2")
+
+    @Test
+    fun `decorator should traverse resources`() {
+        val model =
+            """
+            namespace com.example
+            use smithy.rust#serde
+            use aws.protocols#awsJson1_0
+            
+            @awsJson1_0
+            @serde
+            service MyResourceService {
+                resources: [MyResource]
+            }
+            
+            resource MyResource {
+                read: ReadMyResource
+            }
+            
+            @readonly
+            operation ReadMyResource {
+                input := { }
+            }
+        """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyResourceService")
+        serverIntegrationTest(model, params = params) { ctx, crate ->
+            val codegenScope =
+                arrayOf(
+                    "crate" to RustType.Opaque(ctx.moduleUseName()),
+                    "serde_json" to CargoDependency("serde_json", CratesIo("1")).toDevDependency().toType(),
+                    // we need the derive feature
+                    "serde" to CargoDependency.Serde.toDevDependency().toType(),
+                )
+
+            crate.integrationTest("test_serde") {
+                unitTest("input_serialized") {
+                    rustTemplate(
+                        """
+                        use #{crate}::input::ReadMyResourceInput;
+                        use #{crate}::serde::*;
+                        let input = ReadMyResourceInput { };
+                        let settings = SerializationSettings::default();
+                        let _serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `feature should not be added if trait is not used`() {
+        val model =
+            """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+            
+            @awsJson1_0
+            service MyService {
+                operations: [MyOperation]
+            }
+            
+            operation MyOperation { }
+        """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyService")
+        serverIntegrationTest(model, params = params) { _, crate ->
+            crate.integrationTest("test_serde") {
+                unitTest("fails_if_serde_feature_exists", additionalAttributes = listOf(Attribute(cfg(feature("serde"))))) {
+                    rust("assert!(false);")
+                }
+            }
+        }
+    }
 
     @Test
     fun generateSerializersThatWorkServer() {

@@ -181,12 +181,18 @@ jobs:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Generate release artifacts
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-smithy-rs-release
     - name: Download all artifacts
       uses: ./smithy-rs/.github/actions/download-all-artifacts
+    # This step is not idempotent, as it pushes release artifacts to the `smithy-rs-release-1.x.y` branch. However,
+    # if this step succeeds but a subsequent step fails, retrying the release workflow is "safe" in that it does not
+    # create any inconsistent states; this step would simply fail because the release branch would be ahead of `main`
+    # due to previously pushed artifacts.
+    # To successfully retry a release, revert the commits in the release branch that pushed the artifacts.
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
@@ -202,7 +208,7 @@ jobs:
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
           # been processed.
-          git fetch --unshallow
+          git fetch
           if [[ "${DRY_RUN}" == "true" ]]; then
             # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
             # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
@@ -214,18 +220,7 @@ jobs:
           fi
         fi
         echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
-    - name: Tag release
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-        script: |
-          const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
-          await createReleaseScript({
-            github,
-            isDryRun: ${{ inputs.dry_run }},
-            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
-            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
-          });
+    # This step is idempotent; the `publisher` will not publish a crate if the version is already published on crates.io.
     - name: Publish to crates.io
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
@@ -247,7 +242,23 @@ jobs:
         else
           publisher publish -y --location .
         fi
+    # This step is not idempotent and MUST be performed last, as it will generate a new release in the `smithy-rs`
+    # repository with the release tag that is always unique and has an increasing numerical suffix.
+    - name: Tag release
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        script: |
+          const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
+          await createReleaseScript({
+            github,
+            isDryRun: ${{ inputs.dry_run }},
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
+            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
+          });
 
+  # If this step fails for any reason, there's no need to retry the release workflow, as this step is auxiliary
+  # and the release itself was successful. Instead, manually trigger `backport-pull-request.yml`.
   open-backport-pull-request:
     name: Open backport pull request to merge the release branch back to main
     needs:
