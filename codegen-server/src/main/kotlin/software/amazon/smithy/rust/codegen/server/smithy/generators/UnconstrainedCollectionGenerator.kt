@@ -117,16 +117,74 @@ class UnconstrainedCollectionGenerator(
                         } else {
                             ""
                         }
+
+                    /**
+                     * This example demonstrates a list shape that is directly constrained, while its member shape is
+                     * indirectly constrained:
+                     * ```smithy
+                     * @length(min: 1, max: 100)
+                     * list ItemList {
+                     *     member: Item
+                     * }
+                     * list Item {
+                     *     member: ItemName
+                     * }
+                     * @length(min: 1, max: 100)
+                     * string ItemName
+                     * ```
+                     *
+                     * For this model, two `pub(crate)` types are generated for the `Item` shape:
+                     * - `ItemUnconstrained`: represents the non-validated version
+                     * - `ItemConstrained`: represents the validated version
+                     *
+                     * Similarly, for `ItemList`:
+                     * - `ItemListUnconstrained`: a `pub(crate)` type representing the non-validated version
+                     * - `ItemList`: the publicly exposed validated version
+                     *
+                     * A `TryFrom` implementation must be generated to convert from `ItemListUnconstrained` to `ItemList`.
+                     * Since the final type exposed to the user is `struct ItemList(Vec<Vec<ItemName>>)`, the conversion
+                     * process involves two steps:
+                     * 1. Converting each element of the vector from `ItemUnconstrained` to `ItemConstrained` to validate
+                     *    constraints
+                     * 2. Converting the resulting `Vec<ItemConstrained>` to `Vec<Vec<ItemName>>`
+                     */
+                    val constrainedValueTypeIsNotFinalType =
+                        resolvesToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
+
+                    val finalType =
+                        if (constrainedValueTypeIsNotFinalType) {
+                            constrainedShapeSymbolProvider.toSymbol(shape.member)
+                        } else {
+                            constrainedMemberSymbol
+                        }
+
                     val constrainValueWritable =
                         writable {
                             conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
-                                rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
+                                rustTemplate(
+                                    """
+                                    inner.try_into()
+                                        #{FinalMapping}
+                                        .map_err(|inner_violation| (idx, inner_violation))
+                                    """,
+                                    "FinalMapping" to
+                                        writable {
+                                            if (constrainedValueTypeIsNotFinalType) {
+                                                rustTemplate(
+                                                    ".map(|c : #{ConstrainedMemberSymbol}| c.into())",
+                                                    "ConstrainedMemberSymbol" to constrainedMemberSymbol,
+                                                )
+                                            } else {
+                                                rust("")
+                                            }
+                                        },
+                                )
                             }
                         }
 
                     rustTemplate(
                         """
-                        let res: Result<#{Vec}<#{ConstrainedMemberSymbol}>, (usize, #{InnerConstraintViolationSymbol}) > = value
+                        let res: Result<#{Vec}<#{FinalType}>, (usize, #{InnerConstraintViolationSymbol}) > = value
                             .0
                             .into_iter()
                             .enumerate()
@@ -139,7 +197,7 @@ class UnconstrainedCollectionGenerator(
                             .map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
                         """,
                         "Vec" to RuntimeType.Vec,
-                        "ConstrainedMemberSymbol" to constrainedMemberSymbol,
+                        "FinalType" to finalType,
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                         "ConstrainValueWritable" to constrainValueWritable,
                     )
