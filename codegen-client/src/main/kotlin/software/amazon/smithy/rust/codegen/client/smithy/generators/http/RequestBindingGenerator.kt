@@ -91,7 +91,7 @@ class RequestBindingGenerator(
      */
     fun renderUpdateHttpBuilder(implBlockWriter: RustWriter) {
         uriBase(implBlockWriter)
-        val addHeadersFn = httpBindingGenerator.generateAddHeadersFn(operationShape)
+        val addHeadersFn = httpBindingGenerator.generateAddHeadersFn(operationShape, serializeEmptyHeaders = true)
         val hasQuery = uriQuery(implBlockWriter)
         Attribute.AllowClippyUnnecessaryWraps.render(implBlockWriter)
         implBlockWriter.rustBlockTemplate(

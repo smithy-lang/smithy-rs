@@ -10,7 +10,7 @@ const assert = require("assert");
 const fs = require("fs");
 
 const smithy_rs_repo = {
-    owner: "awslabs",
+    owner: "smithy-lang",
     repo: "smithy-rs",
 };
 

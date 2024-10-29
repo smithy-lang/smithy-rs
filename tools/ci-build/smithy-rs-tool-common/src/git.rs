@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::release_tag::ReleaseTag;
 use crate::shell::{handle_failure, output_text};
 use anyhow::{bail, Context, Result};
 use std::borrow::Cow;
@@ -10,6 +11,7 @@ use std::ffi::OsStr;
 use std::fmt::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 use tracing::debug;
 use tracing::warn;
 
@@ -134,6 +136,9 @@ pub trait Git: Send + Sync {
 
     /// Returns list of changed files.
     fn changed_files(&self) -> Result<Vec<PathBuf>>;
+
+    /// Finds the most recent tag that is reachable from `HEAD`.
+    fn get_current_tag(&self) -> Result<ReleaseTag>;
 }
 
 enum CommitInfo {
@@ -396,6 +401,19 @@ impl Git for GitCLI {
         handle_failure("changed_files", &output)?;
         let (stdout, _) = output_text(&output);
         Ok(split_file_names(&stdout))
+    }
+
+    fn get_current_tag(&self) -> Result<ReleaseTag> {
+        let mut command = Command::new(&self.binary_name);
+        command.arg("describe");
+        command.arg("--tags");
+        command.arg("--abbrev=0");
+        command.current_dir(&self.repo_path);
+
+        let output = command.output()?;
+        handle_failure("get_current_tag", &output)?;
+        let (stdout, _) = output_text(&output);
+        ReleaseTag::from_str(stdout.trim())
     }
 }
 
