@@ -17,7 +17,6 @@ service ConstraintsService {
         ConstrainedHttpBoundShapesOperation,
         ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
-        ConstrainedListWithIndirectlyConstrainedAggregateOperation,
 
         // `httpQueryParams` and `httpPrefixHeaders` are structurually
         // exclusive, so we need one operation per target shape type
@@ -81,13 +80,6 @@ operation ConstrainedHttpPayloadBoundShapeOperation {
 operation ConstrainedRecursiveShapesOperation {
     input: ConstrainedRecursiveShapesOperationInputOutput,
     output: ConstrainedRecursiveShapesOperationInputOutput,
-    errors: [ValidationException]
-}
-
-@http(uri: "/constrained-list-with-indirectly-constrained-aggregate", method: "POST")
-operation ConstrainedListWithIndirectlyConstrainedAggregateOperation {
-    input: ConstrainedListWithIndirectlyConstrainedAggregateInputOutput,
-    output: ConstrainedListWithIndirectlyConstrainedAggregateInputOutput,
     errors: [ValidationException]
 }
 
@@ -341,28 +333,6 @@ structure ConstrainedHttpPayloadBoundShapeOperationInputOutput {
     @required
     @httpPayload
     httpPayloadBoundConstrainedShape: ConA
-}
-
-structure ConstrainedListWithIndirectlyConstrainedAggregateInputOutput {
-    a: ListWithIndirectlyConstrainedList,
-    b: ListWithIndirectlyConstrainedMap
-}
-
-@length(min:1, max: 10)
-list ListWithIndirectlyConstrainedList {
-    member: IndirectlyConstrainedList
-}
-list IndirectlyConstrainedList {
-    member: LengthString
-}
-
-@length(min:1, max: 10)
-list ListWithIndirectlyConstrainedMap {
-    member: IndirectlyConstrainedMap
-}
-map IndirectlyConstrainedMap {
-    key: LengthString,
-    value: LengthString
 }
 
 structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
