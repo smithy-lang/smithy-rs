@@ -10,8 +10,7 @@ use crate::http::HttpChecksum;
 use aws_smithy_http::header::append_merge_header_maps;
 use aws_smithy_types::body::SdkBody;
 
-use http::HeaderMap;
-use http_body::SizeHint;
+use http_body::{Frame, SizeHint};
 use pin_project_lite::pin_project;
 
 use std::pin::Pin;
@@ -40,48 +39,44 @@ impl http_body::Body for ChecksumBody<SdkBody> {
     type Data = bytes::Bytes;
     type Error = aws_smithy_types::body::Error;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
-        match this.checksum {
-            Some(checksum) => {
-                let poll_res = this.body.poll_data(cx);
-                if let Poll::Ready(Some(Ok(data))) = &poll_res {
-                    checksum.update(data);
+
+        match this.body.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) if frame.is_data() => {
+                let data = frame.into_data().expect("unreachable");
+                match this.checksum {
+                    Some(checksum) => {
+                        checksum.update(&data);
+                        Poll::Ready(Some(Ok(Frame::data(data))))
+                    }
+                    None => unreachable!("This can only fail if poll_data is called again after poll_trailers, which is invalid"),
                 }
-
-                poll_res
             }
-            None => unreachable!("This can only fail if poll_data is called again after poll_trailers, which is invalid"),
+            Poll::Ready(Some(Ok(non_data_frame))) => match non_data_frame.into_trailers() {
+                Ok(inner_trailers) => {
+                    if let Some(checksum) = this.checksum.take() {
+                        let merged = append_merge_header_maps(inner_trailers, checksum.headers());
+                        Poll::Ready(Some(Ok(Frame::trailers(merged))))
+                    } else {
+                        Poll::Ready(Some(Ok(Frame::trailers(inner_trailers))))
+                    }
+                }
+                Err(non_trailer_frame) => Poll::Ready(Some(Ok(non_trailer_frame))),
+            },
+            Poll::Ready(None) => {
+                if let Some(checksum) = this.checksum.take() {
+                    Poll::Ready(Some(Ok(Frame::trailers(checksum.headers()))))
+                } else {
+                    Poll::Ready(None)
+                }
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Pending => Poll::Pending,
         }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        let this = self.project();
-        let poll_res = this.body.poll_trailers(cx);
-
-        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
-            let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                checksum.headers()
-            } else {
-                return Poll::Ready(Ok(None));
-            };
-
-            return match maybe_inner_trailers {
-                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
-                    inner_trailers,
-                    checksum_headers,
-                )))),
-                None => Poll::Ready(Ok(Some(checksum_headers))),
-            };
-        }
-
-        poll_res
     }
 
     fn is_end_stream(&self) -> bool {
@@ -102,8 +97,6 @@ mod tests {
     use aws_smithy_types::base64;
     use aws_smithy_types::body::SdkBody;
     use bytes::Buf;
-    use bytes_utils::SegmentedBuf;
-    use http_body::Body;
     use std::fmt::Write;
     use std::io::Read;
 
@@ -121,32 +114,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_checksum_body() {
+        use http_body_util::BodyExt;
         let input_text = "This is some test text for an SdkBody";
         let body = SdkBody::from(input_text);
         let checksum = CRC_32_NAME
             .parse::<ChecksumAlgorithm>()
             .unwrap()
             .into_impl();
-        let mut body = ChecksumBody::new(body, checksum);
+        let body = ChecksumBody::new(body, checksum);
 
-        let mut output = SegmentedBuf::new();
-        while let Some(buf) = body.data().await {
-            output.push(buf.unwrap());
-        }
+        let collected = body.collect().await.expect("body and trailers valid");
 
-        let mut output_text = String::new();
-        output
-            .reader()
-            .read_to_string(&mut output_text)
-            .expect("Doesn't cause IO errors");
-        // Verify data is complete and unaltered
-        assert_eq!(input_text, output_text);
-
-        let trailers = body
-            .trailers()
-            .await
-            .expect("checksum generation was without error")
-            .expect("trailers were set");
+        let trailers = collected.trailers().expect("trailers were set").to_owned();
         let checksum_trailer = trailers
             .get(CRC_32_HEADER_NAME)
             .expect("trailers contain crc32 checksum");
@@ -154,5 +133,14 @@ mod tests {
 
         // Known correct checksum for the input "This is some test text for an SdkBody"
         assert_eq!("0x99B01F72", checksum_trailer);
+
+        let mut output_text = String::new();
+        collected
+            .to_bytes()
+            .reader()
+            .read_to_string(&mut output_text)
+            .expect("Doesn't cause IO errors");
+        // Verify data is complete and unaltered
+        assert_eq!(input_text, output_text);
     }
 }

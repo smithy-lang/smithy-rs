@@ -22,7 +22,7 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::error::operation::BuildError;
-use http::HeaderValue;
+use http_1x::HeaderValue;
 use http_body::Body;
 use std::{fmt, mem};
 
@@ -221,6 +221,8 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
             let aws_chunked_body_options =
                 AwsChunkedBodyOptions::new(original_body_size, vec![trailer_len]);
 
+            let body = aws_smithy_http::compat::Http1toHttp04::new(body);
+
             let body = AwsChunkedBody::new(body, aws_chunked_body_options);
 
             SdkBody::from_body_0_4(body)
@@ -235,20 +237,20 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
     let headers = request.headers_mut();
 
     headers.insert(
-        http::header::HeaderName::from_static("x-amz-trailer"),
+        http_1x::header::HeaderName::from_static("x-amz-trailer"),
         checksum_algorithm.into_impl().header_name(),
     );
 
     headers.insert(
-        http::header::CONTENT_LENGTH,
+        http_1x::header::CONTENT_LENGTH,
         HeaderValue::from(encoded_content_length),
     );
     headers.insert(
-        http::header::HeaderName::from_static("x-amz-decoded-content-length"),
+        http_1x::header::HeaderName::from_static("x-amz-decoded-content-length"),
         HeaderValue::from(original_body_size),
     );
     headers.insert(
-        http::header::CONTENT_ENCODING,
+        http_1x::header::CONTENT_ENCODING,
         HeaderValue::from_str(AWS_CHUNKED)
             .map_err(BuildError::other)
             .expect("\"aws-chunked\" will always be a valid HeaderValue"),
@@ -275,7 +277,7 @@ mod tests {
     async fn test_checksum_body_is_retryable() {
         let input_text = "Hello world";
         let chunk_len_hex = format!("{:X}", input_text.len());
-        let mut request: HttpRequest = http::Request::builder()
+        let mut request: HttpRequest = http_1x::Request::builder()
             .body(SdkBody::retryable(move || SdkBody::from(input_text)))
             .unwrap()
             .try_into()

@@ -10,6 +10,7 @@
 //! **Note**: This requires `http0-compat` to be enabled.
 //!
 //! ```rust
+//! # use http_1x as http;
 //! # use aws_credential_types::Credentials;
 //! use aws_smithy_runtime_api::client::identity::Identity;
 //! # use aws_sigv4::http_request::SignableBody;
@@ -17,7 +18,6 @@
 //! fn test() -> Result<(), aws_sigv4::http_request::SigningError> {
 //! use aws_sigv4::http_request::{sign, SigningSettings, SigningParams, SignableRequest};
 //! use aws_sigv4::sign::v4;
-//! use http0;
 //! use std::time::SystemTime;
 //!
 //! // Set up information and settings for the signing

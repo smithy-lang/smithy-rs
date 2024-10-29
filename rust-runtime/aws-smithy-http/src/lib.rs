@@ -45,3 +45,8 @@ pub mod query_writer;
 pub mod event_stream;
 
 mod urlencode;
+
+#[cfg(feature = "compat")]
+#[allow(missing_docs)]
+#[doc(hidden)]
+pub mod compat;

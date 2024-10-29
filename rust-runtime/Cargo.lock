@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.60.13"
+version = "0.70.0"
 dependencies = [
  "aws-smithy-http 0.70.0",
  "aws-smithy-types 1.2.8",
@@ -346,8 +346,9 @@ dependencies = [
  "crc32c",
  "crc32fast",
  "hex",
- "http 0.2.12",
- "http-body 0.4.6",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
  "md-5",
  "pin-project-lite",
  "pretty_assertions",
@@ -446,6 +447,7 @@ dependencies = [
  "http 0.2.12",
  "http 1.1.0",
  "http-body 0.4.6",
+ "http-body 1.0.1",
  "hyper 0.14.31",
  "once_cell",
  "percent-encoding",
@@ -2011,7 +2013,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "futures-util",
- "http 0.2.12",
+ "http 1.1.0",
  "http-body 0.4.6",
  "md-5",
  "once_cell",

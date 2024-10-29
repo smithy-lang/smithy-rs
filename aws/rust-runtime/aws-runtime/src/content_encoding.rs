@@ -5,7 +5,6 @@
 
 use bytes::{Bytes, BytesMut};
 use http_02x::{HeaderMap, HeaderValue};
-use http_body_04x::{Body, SizeHint};
 use pin_project_lite::pin_project;
 
 use std::pin::Pin;
@@ -197,9 +196,9 @@ fn total_rendered_length_of_trailers(trailer_map: Option<&HeaderMap>) -> u64 {
     }
 }
 
-impl<Inner> Body for AwsChunkedBody<Inner>
+impl<Inner> http_body_04x::Body for AwsChunkedBody<Inner>
 where
-    Inner: Body<Data = Bytes, Error = aws_smithy_types::body::Error>,
+    Inner: http_body_04x::Body<Data = Bytes, Error = aws_smithy_types::body::Error>,
 {
     type Data = Bytes;
     type Error = aws_smithy_types::body::Error;
@@ -296,8 +295,8 @@ where
         self.state == AwsChunkedBodyState::Closed
     }
 
-    fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.encoded_length())
+    fn size_hint(&self) -> http_body_04x::SizeHint {
+        http_body_04x::SizeHint::with_exact(self.encoded_length())
     }
 }
 
@@ -380,7 +379,7 @@ mod tests {
         }
     }
 
-    impl Body for SputteringBody {
+    impl http_body_04x::Body for SputteringBody {
         type Data = Bytes;
         type Error = aws_smithy_types::body::Error;
 
