@@ -153,7 +153,7 @@ class UnconstrainedCollectionGenerator(
 
                     val finalType =
                         if (constrainedValueTypeIsNotFinalType) {
-                            constrainedShapeSymbolProvider.toSymbol(shape.member)
+                            symbolProvider.toSymbol(shape.member)
                         } else {
                             constrainedMemberSymbol
                         }
@@ -161,24 +161,23 @@ class UnconstrainedCollectionGenerator(
                     val constrainValueWritable =
                         writable {
                             conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
-                                rustTemplate(
-                                    """
-                                    inner.try_into()
-                                        #{FinalMapping}
-                                        .map_err(|inner_violation| (idx, inner_violation))
-                                    """,
-                                    "FinalMapping" to
-                                        writable {
-                                            if (constrainedValueTypeIsNotFinalType) {
-                                                rustTemplate(
-                                                    ".map(|c : #{ConstrainedMemberSymbol}| c.into())",
-                                                    "ConstrainedMemberSymbol" to constrainedMemberSymbol,
-                                                )
-                                            } else {
-                                                rust("")
-                                            }
-                                        },
-                                )
+                                if (constrainedValueTypeIsNotFinalType) {
+                                    rustTemplate(
+                                        """
+                                        #{ConstrainedMemberSymbol}::try_from(inner)
+                                            .map(|inner_constrained| inner_constrained.into())
+                                            .map_err(|inner_violation| (idx, inner_violation))
+                                        """,
+                                        "ConstrainedMemberSymbol" to constrainedMemberSymbol,
+                                    )
+                                } else {
+                                    rustTemplate(
+                                        """
+                                        inner.try_into()
+                                            .map_err(|inner_violation| (idx, inner_violation))
+                                        """,
+                                    )
+                                }
                             }
                         }
 

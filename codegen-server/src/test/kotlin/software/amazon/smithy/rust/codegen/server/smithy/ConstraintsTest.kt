@@ -223,6 +223,7 @@ class ConstraintsTest {
         primitiveBoolean.isDirectlyConstrained(symbolProvider) shouldBe false
     }
 
+    // TODO(#3895): Move tests that use `generateAndCompileServer` into `constraints.smithy` once issue is resolved
     private fun generateAndCompileServer(
         model: Model,
         pubConstraints: Boolean = true,
