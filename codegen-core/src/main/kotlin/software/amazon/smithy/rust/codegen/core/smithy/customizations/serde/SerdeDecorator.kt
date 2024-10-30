@@ -32,12 +32,13 @@ fun extrasCommon(
     val roots = serializationRoots(codegenContext)
     if (roots.isNotEmpty()) {
         rustCrate.mergeFeature(SerdeFeature)
-        val generator = SerializeImplGenerator(
-            codegenContext,
-            constraintTraitsEnabled,
-            unwrapConstraints,
-            hasConstraintTrait,
-        )
+        val generator =
+            SerializeImplGenerator(
+                codegenContext,
+                constraintTraitsEnabled,
+                unwrapConstraints,
+                hasConstraintTrait,
+            )
         rustCrate.withModule(SerdeModule) {
             roots.forEach {
                 generator.generateRootSerializerForShape(it)(this)

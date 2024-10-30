@@ -20,44 +20,44 @@ class SerdeTrait(
     sourceLocation: SourceLocation,
 ) :
     AbstractTrait(ID, sourceLocation) {
-        override fun createNode(): Node {
-            val builder =
-                Node.objectNodeBuilder()
-                    .sourceLocation(sourceLocation)
-                    .withMember("serialize", serialize)
-                    .withMember("deserialize", deserialize)
-                    .withMember("tag", tag)
-                    .withMember("content", content)
-            return builder.build()
-        }
-
-        class Provider : AbstractTrait.Provider(ID) {
-            override fun createTrait(
-                target: ShapeId,
-                value: Node,
-            ): Trait =
-                with(value.expectObjectNode()) {
-                    val serialize = getBooleanMemberOrDefault("serialize", true)
-                    val deserialize = getBooleanMemberOrDefault("deserialize", false)
-                    val tag = getStringMember("tag").orElse(null)?.value
-                    val content = getStringMember("content").orElse(null)?.value
-                    if (deserialize) {
-                        throw SmithyBuildException("deserialize is not currently supported.")
-                    }
-                    val result =
-                        SerdeTrait(
-                            serialize,
-                            deserialize,
-                            tag,
-                            content,
-                            value.sourceLocation,
-                        )
-                    result.setNodeCache(value)
-                    result
-                }
-        }
-
-        companion object {
-            val ID: ShapeId = ShapeId.from("smithy.rust#serde")
-        }
+    override fun createNode(): Node {
+        val builder =
+            Node.objectNodeBuilder()
+                .sourceLocation(sourceLocation)
+                .withMember("serialize", serialize)
+                .withMember("deserialize", deserialize)
+                .withMember("tag", tag)
+                .withMember("content", content)
+        return builder.build()
     }
+
+    class Provider : AbstractTrait.Provider(ID) {
+        override fun createTrait(
+            target: ShapeId,
+            value: Node,
+        ): Trait =
+            with(value.expectObjectNode()) {
+                val serialize = getBooleanMemberOrDefault("serialize", true)
+                val deserialize = getBooleanMemberOrDefault("deserialize", false)
+                val tag = getStringMember("tag").orElse(null)?.value
+                val content = getStringMember("content").orElse(null)?.value
+                if (deserialize) {
+                    throw SmithyBuildException("deserialize is not currently supported.")
+                }
+                val result =
+                    SerdeTrait(
+                        serialize,
+                        deserialize,
+                        tag,
+                        content,
+                        value.sourceLocation,
+                    )
+                result.setNodeCache(value)
+                result
+            }
+    }
+
+    companion object {
+        val ID: ShapeId = ShapeId.from("smithy.rust#serde")
+    }
+}

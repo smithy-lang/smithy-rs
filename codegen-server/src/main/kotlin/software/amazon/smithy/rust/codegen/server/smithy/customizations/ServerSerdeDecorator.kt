@@ -32,9 +32,7 @@ class ServerSerdeDecorator : ServerCodegenDecorator {
                     }
                 }
             },
-            hasConstraintTrait = { shape -> shape.hasConstraintTrait() }
+            hasConstraintTrait = { shape -> shape.hasConstraintTrait() },
         )
     }
 }
-
-

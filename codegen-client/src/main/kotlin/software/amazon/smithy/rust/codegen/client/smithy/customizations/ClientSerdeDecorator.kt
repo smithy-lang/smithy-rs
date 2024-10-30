@@ -21,4 +21,3 @@ class ClientSerdeDecorator : ClientCodegenDecorator {
         hasConstraintTrait = { _ -> false },
     )
 }
-

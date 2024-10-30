@@ -30,7 +30,7 @@ class SerdeProtocolTestTest {
                     deserialize = false,
                     tag = null,
                     content = null,
-                    sourceLocation = SourceLocation.NONE
+                    sourceLocation = SourceLocation.NONE,
                 ),
             ).build()
         return ModelTransformer.create().mapShapes(this) { serviceShape ->
