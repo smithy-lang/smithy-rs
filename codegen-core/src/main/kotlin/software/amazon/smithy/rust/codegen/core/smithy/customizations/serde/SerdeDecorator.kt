@@ -25,7 +25,7 @@ val SerdeModule =
 fun extrasCommon(
     codegenContext: CodegenContext,
     rustCrate: RustCrate,
-    constraintTraitsEnabled: Boolean,
+    publicConstrainedTypes: Boolean,
     unwrapConstraints: (Shape) -> Writable,
     hasConstraintTrait: (Shape) -> Boolean,
 ) {
@@ -35,7 +35,7 @@ fun extrasCommon(
         val generator =
             SerializeImplGenerator(
                 codegenContext,
-                constraintTraitsEnabled,
+                publicConstrainedTypes,
                 unwrapConstraints,
                 hasConstraintTrait,
             )

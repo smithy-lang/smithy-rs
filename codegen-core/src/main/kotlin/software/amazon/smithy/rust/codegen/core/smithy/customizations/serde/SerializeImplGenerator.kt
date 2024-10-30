@@ -125,11 +125,9 @@ class SerializeImplGenerator(
                 }
             if (wrapper != null && applyTo != null) {
                 rustTemplate(
-                    "&#{wrapper}(#{applyTo}#{unwrapConstraints})",
+                    "&#{wrapper}(#{applyTo})",
                     "wrapper" to wrapper,
                     "applyTo" to applyTo,
-                    // TODO `unwrapConstraints` should never unwrap here since we should be working with a list or map shape
-                    "unwrapConstraints" to unwrapConstraints(shape),
                 )
             } else {
                 deps?.toSymbol().also { addDependency(it) }
