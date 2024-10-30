@@ -41,8 +41,8 @@ class SerdeProtocolTestTest {
     }
 
     @Test
-    fun testRestJson() {
-        val serviceShapeId = ShapeId.from("aws.protocoltests.restjson#RestJson")
+    fun testRpcV2Cbor() {
+        val serviceShapeId = ShapeId.from("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol")
         val model = Model.assembler().discoverModels().assemble().result.get().attachSerdeToService(serviceShapeId)
         serverIntegrationTest(
             model,
