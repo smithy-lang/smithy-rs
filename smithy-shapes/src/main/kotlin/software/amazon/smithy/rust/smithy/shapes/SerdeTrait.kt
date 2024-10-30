@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.serde
+package software.amazon.smithy.rust.smithy.shapes
 
 import software.amazon.smithy.build.SmithyBuildException
 import software.amazon.smithy.model.SourceLocation
@@ -11,9 +11,8 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.util.orNull
 
-class SerdeTrait constructor(
+class SerdeTrait(
     private val serialize: Boolean,
     private val deserialize: Boolean,
     private val tag: String?,
@@ -40,8 +39,8 @@ class SerdeTrait constructor(
                 with(value.expectObjectNode()) {
                     val serialize = getBooleanMemberOrDefault("serialize", true)
                     val deserialize = getBooleanMemberOrDefault("deserialize", false)
-                    val tag = getStringMember("tag").orNull()?.value
-                    val content = getStringMember("content").orNull()?.value
+                    val tag = getStringMember("tag").orElse(null)?.value
+                    val content = getStringMember("content").orElse(null)?.value
                     if (deserialize) {
                         throw SmithyBuildException("deserialize is not currently supported.")
                     }

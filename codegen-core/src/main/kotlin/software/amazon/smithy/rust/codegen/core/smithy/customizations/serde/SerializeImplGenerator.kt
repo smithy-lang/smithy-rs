@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.serde
+package software.amazon.smithy.rust.codegen.core.smithy.customizations.serde
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.TopDownIndex
@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -57,10 +56,13 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
-import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
 
-class SerializeImplGenerator(private val codegenContext: CodegenContext) {
+class SerializeImplGenerator(
+    private val codegenContext: CodegenContext,
+    private val constraintTraitsEnabled: Boolean,
+    private val unwrapConstraints: (Shape) -> Writable,
+    private val hasConstraintTrait: (Shape) -> Boolean,
+) {
     private val model = codegenContext.model
     private val topIndex = TopDownIndex.of(model)
 
@@ -123,14 +125,16 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 }
             if (wrapper != null && applyTo != null) {
                 rustTemplate(
-                    "&#{wrapper}(#{applyTo}#{unwrapConstraints})", "wrapper" to wrapper,
+                    "&#{wrapper}(#{applyTo}#{unwrapConstraints})",
+                    "wrapper" to wrapper,
                     "applyTo" to applyTo,
-                    "unwrapConstraints" to shape.unwrapConstraints(),
+                    // TODO `unwrapConstraints` should never unwrap here since we should be working with a list or map shape
+                    "unwrapConstraints" to unwrapConstraints(shape),
                 )
             } else {
                 deps?.toSymbol().also { addDependency(it) }
                 applyTo?.invoke(this)
-                shape.unwrapConstraints()(this)
+                unwrapConstraints(shape)(this)
             }
         }
     }
@@ -270,7 +274,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 val baseValue =
                     writable {
                         rust("self.value")
-                        shape.unwrapConstraints()(this)
+                        unwrapConstraints(shape)(this)
                         if (shape.isStringShape) {
                             rust(".as_str()")
                         }
@@ -315,7 +319,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         val module = serdeSubmodule(shape)
         val type = module.toType().resolve(name).toSymbol()
         val base =
-            writable { rust("self.value.0") }.letIf(shape.hasConstraintTrait() && constraintTraitsEnabled()) {
+            writable { rust("self.value.0") }.letIf(hasConstraintTrait(shape) && constraintTraitsEnabled) {
                 it.plus { rust(".0") }
             }
         val serialization =
@@ -334,21 +338,6 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 )
             }
         return wrapperStruct
-    }
-
-    private fun constraintTraitsEnabled(): Boolean =
-        codegenContext.target == CodegenTarget.SERVER &&
-            (codegenContext.settings as ServerRustSettings).codegenConfig.publicConstrainedTypes
-
-    private fun Shape.unwrapConstraints(): Writable {
-        val shape = this
-        return writable {
-            if (constraintTraitsEnabled() && hasConstraintTrait()) {
-                if (isBlobShape || isTimestampShape || isDocumentShape || shape is NumberShape) {
-                    rust(".0")
-                }
-            }
-        }
     }
 
     /**
@@ -455,14 +444,14 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
     }
 
     private fun serializeDateTime(shape: TimestampShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeDateTime", Companion.PrimitiveShapesModule) {
+        RuntimeType.forInlineFun("SerializeDateTime", PrimitiveShapesModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rust("serializer.serialize_str(&self.value.to_string())")
             }
         }
 
     private fun serializeBlob(shape: BlobShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeBlob", Companion.PrimitiveShapesModule) {
+        RuntimeType.forInlineFun("SerializeBlob", PrimitiveShapesModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rustTemplate(
                     """
@@ -478,7 +467,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         }
 
     private fun serializeByteStream(shape: BlobShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeByteStream", Companion.PrimitiveShapesModule) {
+        RuntimeType.forInlineFun("SerializeByteStream", PrimitiveShapesModule) {
             implSerializeConfigured(RuntimeType.byteStream(codegenContext.runtimeConfig).toSymbol()) {
                 // This doesn't work yet—there is no way to get data out of a ByteStream from a sync context
                 rustTemplate(
@@ -498,7 +487,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         }
 
     private fun serializeDocument(shape: DocumentShape): RuntimeType =
-        RuntimeType.forInlineFun("SerializeDocument", Companion.PrimitiveShapesModule) {
+        RuntimeType.forInlineFun("SerializeDocument", PrimitiveShapesModule) {
             implSerializeConfigured(codegenContext.symbolProvider.toSymbol(shape)) {
                 rustTemplate(
                     """
