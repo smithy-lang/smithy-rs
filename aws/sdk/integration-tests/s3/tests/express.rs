@@ -17,7 +17,7 @@ use aws_smithy_http_client::test_util::dvr::ReplayingClient;
 use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_types::endpoint::Endpoint;
-use http::Uri;
+use http_1x::Uri;
 
 async fn test_client<F>(update_builder: F) -> Client
 where
@@ -104,8 +104,8 @@ async fn mixed_auths() {
         .unwrap();
 }
 
-fn create_session_request() -> http::Request<SdkBody> {
-    http::Request::builder()
+fn create_session_request() -> http_1x::Request<SdkBody> {
+    http_1x::Request::builder()
         .uri("https://s3express-test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com/?session")
         .header("x-amz-create-session-mode", "ReadWrite")
         .method("GET")
@@ -113,8 +113,8 @@ fn create_session_request() -> http::Request<SdkBody> {
         .unwrap()
 }
 
-fn create_session_response() -> http::Response<SdkBody> {
-    http::Response::builder()
+fn create_session_response() -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
         .status(200)
         .body(SdkBody::from(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -187,8 +187,8 @@ async fn presigning() {
 fn operation_request_with_checksum(
     query: &str,
     kv: Option<(&str, &str)>,
-) -> http::Request<SdkBody> {
-    let mut b = http::Request::builder()
+) -> http_1x::Request<SdkBody> {
+    let mut b = http_1x::Request::builder()
         .uri(&format!("https://s3express-test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com/{query}"))
         .method("GET");
     if let Some((key, value)) = kv {
@@ -197,8 +197,8 @@ fn operation_request_with_checksum(
     b.body(SdkBody::empty()).unwrap()
 }
 
-fn response_ok() -> http::Response<SdkBody> {
-    http::Response::builder()
+fn response_ok() -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
         .status(200)
         .body(SdkBody::empty())
         .unwrap()

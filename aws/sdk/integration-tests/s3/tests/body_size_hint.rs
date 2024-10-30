@@ -12,7 +12,7 @@ use aws_sdk_s3::{
     Client,
 };
 use aws_smithy_http_client::test_util::{capture_request, infallible_client_fn};
-use http_body::Body;
+use http_body_1x::Body;
 
 #[tokio::test]
 async fn download_body_size_hint_check() {
@@ -25,7 +25,7 @@ async fn download_body_size_hint_check() {
     );
 
     let http_client = infallible_client_fn(move |_| {
-        http::Response::builder()
+        http_1x::Response::builder()
             .status(200)
             .body((test_body)())
             .unwrap()

@@ -51,21 +51,21 @@ impl ClassifyRetry for CustomizationTestClassifier {
     }
 }
 
-fn req() -> http::Request<SdkBody> {
-    http::Request::builder()
+fn req() -> http_1x::Request<SdkBody> {
+    http_1x::Request::builder()
         .body(SdkBody::from("request body"))
         .unwrap()
 }
 
-fn ok() -> http::Response<SdkBody> {
-    http::Response::builder()
+fn ok() -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
         .status(200)
         .body(SdkBody::from("Hello!"))
         .unwrap()
 }
 
-fn err() -> http::Response<SdkBody> {
-    http::Response::builder()
+fn err() -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
         .status(500)
         .body(SdkBody::from("This was an error"))
         .unwrap()

@@ -15,7 +15,7 @@ use bytes::Bytes;
 use kms::operation::create_alias::CreateAliasError;
 
 async fn make_err(
-    response: impl Fn() -> http::Response<Bytes> + Send + Sync + 'static,
+    response: impl Fn() -> http_1x::Response<Bytes> + Send + Sync + 'static,
 ) -> SdkError<CreateAliasError, HttpResponse> {
     let http_client = infallible_client_fn(move |_| response());
     let conf = kms::Config::builder()
@@ -35,7 +35,7 @@ async fn make_err(
 #[tokio::test]
 async fn errors_are_retryable() {
     let err = make_err(|| {
-        http::Response::builder()
+        http_1x::Response::builder()
             .status(400)
             .body(Bytes::from_static(
                 br#"{ "code": "LimitExceededException" }"#,
@@ -56,7 +56,7 @@ async fn errors_are_retryable() {
 #[tokio::test]
 async fn unmodeled_errors_are_retryable() {
     let err = make_err(|| {
-        http::Response::builder()
+        http_1x::Response::builder()
             .status(400)
             .body(Bytes::from_static(br#"{ "code": "ThrottlingException" }"#))
             .unwrap()

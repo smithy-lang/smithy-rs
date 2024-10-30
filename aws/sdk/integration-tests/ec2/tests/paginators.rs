@@ -36,7 +36,7 @@ async fn paginators_handle_empty_tokens() {
             <spotPriceHistorySet/>
             <nextToken></nextToken>
         </DescribeSpotPriceHistoryResponse>"#;
-    let response = http::Response::builder()
+    let response = http_1x::Response::builder()
         .status(200)
         .body(SdkBody::from(response))
         .unwrap();
@@ -69,7 +69,7 @@ async fn paginators_handle_unset_tokens() {
             <requestId>edf3e86c-4baf-47c1-9228-9a5ea09542e8</requestId>
             <spotPriceHistorySet/>
         </DescribeSpotPriceHistoryResponse>"#;
-    let response = http::Response::builder()
+    let response = http_1x::Response::builder()
         .status(200)
         .body(SdkBody::from(response))
         .unwrap();

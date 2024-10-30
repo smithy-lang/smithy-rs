@@ -68,7 +68,7 @@ async fn test_clients_from_service_config() {
 async fn test_missing_behavior_version() {
     use aws_sdk_s3::config::Region;
     let http_client =
-        infallible_client_fn(|_req| http::Response::builder().body(SdkBody::empty()).unwrap());
+        infallible_client_fn(|_req| http_1x::Response::builder().body(SdkBody::empty()).unwrap());
 
     let config = Config::builder()
         .region(Region::new("us-east-1"))

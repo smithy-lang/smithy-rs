@@ -14,8 +14,8 @@ use aws_sdk_s3::{operation::get_object::GetObjectOutput, types::ChecksumAlgorith
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
 use aws_smithy_types::body::SdkBody;
-use http::header::AUTHORIZATION;
-use http::{HeaderValue, Uri};
+use http_1x::header::AUTHORIZATION;
+use http_1x::{HeaderValue, Uri};
 use std::time::{Duration, UNIX_EPOCH};
 use tracing_test::traced_test;
 
@@ -27,7 +27,7 @@ fn new_checksum_validated_response_test_connection(
     checksum_header_value: &'static str,
 ) -> StaticReplayClient {
     StaticReplayClient::new(vec![ReplayEvent::new(
-        http::Request::builder()
+        http_1x::Request::builder()
             .header("x-amz-checksum-mode", "ENABLED")
             .header(
                 "user-agent",
@@ -48,7 +48,7 @@ fn new_checksum_validated_response_test_connection(
             ))
             .body(SdkBody::empty())
             .unwrap(),
-        http::Response::builder()
+        http_1x::Response::builder()
             .header("x-amz-request-id", "4B4NGF0EAWN0GE63")
             .header("content-length", "11")
             .header("etag", "\"3e25960a79dbc69b674cd4ec67a72c62\"")
@@ -63,7 +63,7 @@ fn new_checksum_validated_response_test_connection(
                 "kPl+IVVZAwsN8ePUyQJZ40WD9dzaqtr4eNESArqE68GSKtVvuvCTDe+SxhTT+JTUqXB1HL4OxNM=",
             )
             .header("accept-ranges", "bytes")
-            .status(http::StatusCode::from_u16(200).unwrap())
+            .status(http_1x::StatusCode::from_u16(200).unwrap())
             .body(SdkBody::from(r#"Hello world"#))
             .unwrap(),
     )])
@@ -343,7 +343,7 @@ async fn collect_body_into_string(body: aws_smithy_types::body::SdkBody) -> Stri
 async fn test_get_multipart_upload_part_checksum_validation() {
     let expected_checksum = "cpjwid==-12";
     let (http_client, rcvr) = capture_request(Some(
-        http::Response::builder()
+        http_1x::Response::builder()
             .header("etag", "\"3e25960a79dbc69b674cd4ec67a72c62\"")
             .header("x-amz-checksum-crc32", expected_checksum)
             .body(SdkBody::empty())
@@ -390,7 +390,7 @@ async fn test_get_multipart_upload_part_checksum_validation() {
 async fn test_response_checksum_ignores_invalid_base64() {
     let expected_checksum = "{}{!!#{})!{)@$(}";
     let (http_client, rcvr) = capture_request(Some(
-        http::Response::builder()
+        http_1x::Response::builder()
             .header("etag", "\"3e25960a79dbc69b674cd4ec67a72c62\"")
             .header("x-amz-checksum-crc32", expected_checksum)
             .body(SdkBody::empty())

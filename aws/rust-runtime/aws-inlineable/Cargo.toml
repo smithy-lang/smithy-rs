@@ -28,7 +28,8 @@ aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features =
 bytes = "1"
 fastrand = "2.0.0"
 hex = "0.4.3"
-http-02x = { package = "http", version = "0.2.9" }
+# FIXME(hyper1) - due to the way codegen generates crate dependencies right now we have to match the codegen names used for theses
+http = { package = "http", version = "0.2.9" }
 http-body = "0.4.5"
 http-1x = { package = "http", version = "1" }
 http-body-1x = { package = "http-body", version = "1", optional = true }

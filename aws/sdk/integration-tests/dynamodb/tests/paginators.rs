@@ -44,15 +44,17 @@ async fn paginators_pass_args() {
     ));
 }
 
-fn mk_request(body: &'static str) -> http::Request<SdkBody> {
-    http::Request::builder()
+fn mk_request(body: &'static str) -> http_1x::Request<SdkBody> {
+    http_1x::Request::builder()
         .uri("https://dynamodb.us-east-1.amazonaws.com/")
         .body(SdkBody::from(body))
         .unwrap()
 }
 
-fn mk_response(body: &'static str) -> http::Response<SdkBody> {
-    http::Response::builder().body(SdkBody::from(body)).unwrap()
+fn mk_response(body: &'static str) -> http_1x::Response<SdkBody> {
+    http_1x::Response::builder()
+        .body(SdkBody::from(body))
+        .unwrap()
 }
 
 #[tokio::test(flavor = "current_thread")]

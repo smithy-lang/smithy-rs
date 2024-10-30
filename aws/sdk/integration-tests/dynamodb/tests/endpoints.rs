@@ -6,7 +6,7 @@
 use aws_sdk_dynamodb::config::{self, Credentials, Region};
 use aws_smithy_http_client::test_util::capture_request;
 use aws_types::SdkConfig;
-use http::Uri;
+use http_1x::Uri;
 
 async fn expect_uri(
     conf: SdkConfig,

@@ -2013,6 +2013,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "futures-util",
+ "http 0.2.12",
  "http 1.1.0",
  "http-body 0.4.6",
  "md-5",
