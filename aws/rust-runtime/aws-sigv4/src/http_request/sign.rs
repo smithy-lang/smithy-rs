@@ -206,7 +206,7 @@ impl SigningInstructions {
         }
 
         if !new_query.is_empty() {
-            let mut query = aws_smithy_http::query_writer::QueryWriter::new(&request.uri());
+            let mut query = aws_smithy_http::query_writer::QueryWriter::new(request.uri());
             for (name, value) in new_query {
                 query.insert(name, &value);
             }

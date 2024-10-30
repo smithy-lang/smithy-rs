@@ -17,7 +17,8 @@ compat = ["dep:http-02x"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x"] }
+# FIXME(hyper1) - _somewhere_ in codegen relies on http-02x feature enabled via this crate, find and fix
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x", "http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 bytes = "1"
 bytes-utils = "0.1"
