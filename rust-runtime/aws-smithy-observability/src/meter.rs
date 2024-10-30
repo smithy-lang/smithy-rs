@@ -22,10 +22,11 @@ pub trait Meter {
         name: String,
         // TODO(smithyObservability): compare this definition to the Boxed version below
         // callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>)>,
-        callback: &dyn Fn(&dyn AsyncMeasurement<Value = Double>),
+        // callback: &(dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync),
+        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle;
+    ) -> Box<dyn AsyncMeasurementHandle>;
 
     /// Create a new [UpDownCounter].
     fn create_up_down_counter(
