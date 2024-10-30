@@ -1,5 +1,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations.serde
 
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -25,9 +26,7 @@ val SerdeModule =
 fun extrasCommon(
     codegenContext: CodegenContext,
     rustCrate: RustCrate,
-    publicConstrainedTypes: Boolean,
     unwrapConstraints: (Shape) -> Writable,
-    hasConstraintTrait: (Shape) -> Boolean,
 ) {
     val roots = serializationRoots(codegenContext)
     if (roots.isNotEmpty()) {
@@ -35,9 +34,7 @@ fun extrasCommon(
         val generator =
             SerializeImplGenerator(
                 codegenContext,
-                publicConstrainedTypes,
                 unwrapConstraints,
-                hasConstraintTrait,
             )
         rustCrate.withModule(SerdeModule) {
             roots.forEach {

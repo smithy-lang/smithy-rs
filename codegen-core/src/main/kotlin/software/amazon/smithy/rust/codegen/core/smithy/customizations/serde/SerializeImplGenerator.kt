@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations.serde
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -59,9 +60,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class SerializeImplGenerator(
     private val codegenContext: CodegenContext,
-    private val constraintTraitsEnabled: Boolean,
     private val unwrapConstraints: (Shape) -> Writable,
-    private val hasConstraintTrait: (Shape) -> Boolean,
 ) {
     private val model = codegenContext.model
     private val topIndex = TopDownIndex.of(model)
@@ -317,9 +316,7 @@ class SerializeImplGenerator(
         val module = serdeSubmodule(shape)
         val type = module.toType().resolve(name).toSymbol()
         val base =
-            writable { rust("self.value.0") }.letIf(hasConstraintTrait(shape) && constraintTraitsEnabled) {
-                it.plus { rust(".0") }
-            }
+            writable { rust("self.value.0") }.plus(unwrapConstraints(shape))
         val serialization =
             implSerializeConfiguredWrapper(type) {
                 body(base)(this)
