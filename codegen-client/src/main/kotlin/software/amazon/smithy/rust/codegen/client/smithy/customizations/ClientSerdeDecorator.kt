@@ -16,8 +16,7 @@ class ClientSerdeDecorator : ClientCodegenDecorator {
     ) = extrasCommon(
         codegenContext,
         rustCrate,
-        publicConstrainedTypes = false,
+        // Constraints don't affect client codegen.
         unwrapConstraints = { writable { } },
-        hasConstraintTrait = { _ -> false },
     )
 }

@@ -1,6 +1,5 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations.serde
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature

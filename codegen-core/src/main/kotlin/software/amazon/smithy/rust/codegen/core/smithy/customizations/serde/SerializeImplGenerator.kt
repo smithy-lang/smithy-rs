@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations.serde
 
 import software.amazon.smithy.codegen.core.Symbol
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
