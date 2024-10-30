@@ -151,16 +151,25 @@ impl Deref for MeterWrap {
     }
 }
 
-struct OtelAsyncMeasurement<T>(dyn AsyncMeasurement<Value = T> + Send + Sync + 'static);
-impl<T> AsyncInstrument<T> for OtelAsyncMeasurement<T> {
-    fn observe(&self, measurement: T, attributes: &[opentelemetry::KeyValue]) {
-        self.0
-            .record(measurement, option_attr_from_kv(attributes).as_ref(), None)
-    }
+struct OtelAsyncInstrument<'a, T>(&'a (dyn AsyncInstrument<T> + Send + Sync));
+impl<T> AsyncMeasurement for OtelAsyncInstrument<'_, T> {
+    type Value = T;
 
-    fn as_any(&self) -> std::sync::Arc<dyn std::any::Any> {
-        Arc::new(&self.clone())
+    fn record(
+        &self,
+        value: Self::Value,
+        attributes: Option<&Attributes>,
+        _context: Option<&dyn Context>,
+    ) {
+        &self.0.observe(value, &kv_from_option_attr(attributes));
     }
+}
+
+struct OtelObservableGauge<T>(ObservableGauge<T>);
+impl<T> AsyncMeasurementHandle for OtelObservableGauge<T> {
+    // Otel Rust doesn't appear to support unregistering callbacks yet so this is a noop for now
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
 }
 
 impl Meter for MeterWrap {
@@ -169,13 +178,22 @@ impl Meter for MeterWrap {
         name: String,
         // TODO(smithyObservability): compare this definition to the Boxed version below
         // callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>)>,
-        callback: &dyn Fn(&dyn AsyncMeasurement<Value = Double>),
+        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle {
-        fn foo(foo: &dyn AsyncInstrument<f64>) {}
+    ) -> Box<dyn AsyncMeasurementHandle> {
+        // let help = move |foo: &dyn AsyncInstrument<f64>| {
+        //     let blah = Box::new(OtelAsyncInstrument(foo));
+        //     callback(blah);
+        // };
+
         //TODO(smithyObservability): figure out the typing for the callback here
-        let mut builder = self.0.f64_observable_gauge(name).with_callback(foo);
+        let mut builder = self.0.f64_observable_gauge(name).with_callback(
+            move |foo: &dyn AsyncInstrument<f64>| {
+                let blah = Box::new(OtelAsyncInstrument(foo));
+                callback(blah);
+            },
+        );
 
         if let Some(desc) = description {
             builder = builder.with_description(desc);
@@ -185,7 +203,9 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u)
         }
 
-        todo!()
+        let gauge = builder.init();
+
+        Box::new(OtelObservableGauge(gauge))
     }
 
     fn create_up_down_counter(

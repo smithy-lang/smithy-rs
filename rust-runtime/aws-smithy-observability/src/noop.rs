@@ -25,11 +25,11 @@ impl Meter for NoopMeter {
     fn create_gauge(
         &self,
         _name: String,
-        _callback: &dyn Fn(&dyn AsyncMeasurement<Value = Double>),
+        _callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle {
-        &NoopAsyncMeasurementHandle
+    ) -> Box<dyn AsyncMeasurementHandle> {
+        Box::new(NoopAsyncMeasurementHandle)
     }
 
     fn create_up_down_counter(
