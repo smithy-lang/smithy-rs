@@ -5,22 +5,20 @@
 
 //! OpenTelemetry based implementations of the Smithy Observability Meter traits.
 
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
 
-use crate::attributes::{kv_from_option_attr, option_attr_from_kv};
+use crate::attributes::kv_from_option_attr;
 use aws_smithy_observability::attributes::{Attributes, Context, Double, Long, UnsignedLong};
 pub use aws_smithy_observability::meter::{
     AsyncMeasurement, AsyncMeasurementHandle, Histogram, Meter, MeterProvider, MonotonicCounter,
     UpDownCounter,
 };
 use opentelemetry::metrics::{
-    AsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram, Meter as OtelMeter,
-    ObservableCounter, ObservableGauge, ObservableUpDownCounter,
-    UpDownCounter as OtelUpDownCounter,
+    AsyncInstrument as OtelAsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram,
+    Meter as OtelMeter, MeterProvider as OtelMeterProvider,
+    ObservableCounter as OtelObservableCounter, ObservableGauge as OtelObservableGauge,
+    ObservableUpDownCounter as OtelObservableUpDownCounter, UpDownCounter as OtelUpDownCounter,
 };
-// use opentelemetry_sdk::metrics::{
-//     SdkMeter as OtelSdkMeter, SdkMeterProvider as OtelSdkMeterProvider,
-// };
 
 struct UpDownCounterWrap(OtelUpDownCounter<i64>);
 impl Deref for UpDownCounterWrap {
@@ -33,7 +31,7 @@ impl Deref for UpDownCounterWrap {
 
 impl UpDownCounter for UpDownCounterWrap {
     fn add(&self, value: Long, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
-        let _ = &self.0.add(value, &kv_from_option_attr(attributes));
+        self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
 
@@ -53,7 +51,7 @@ impl Histogram for HistogramWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
-        let _ = &self.0.record(value, &kv_from_option_attr(attributes));
+        self.0.record(value, &kv_from_option_attr(attributes));
     }
 }
 
@@ -72,13 +70,13 @@ impl MonotonicCounter for MonotonicCounterWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
-        let _ = &self.0.add(value, &kv_from_option_attr(attributes));
+        self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
 
-struct GaugeWrap(ObservableGauge<f64>);
+struct GaugeWrap(OtelObservableGauge<f64>);
 impl Deref for GaugeWrap {
-    type Target = ObservableGauge<f64>;
+    type Target = OtelObservableGauge<f64>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -94,13 +92,19 @@ impl AsyncMeasurement for GaugeWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
-        let _ = &self.0.observe(value, &kv_from_option_attr(attributes));
+        self.0.observe(value, &kv_from_option_attr(attributes));
     }
 }
 
-struct AsyncUpDownCounterWrap(ObservableUpDownCounter<i64>);
+impl AsyncMeasurementHandle for GaugeWrap {
+    // Otel Rust doesn't appear to support unregistering callbacks yet so this is a noop for now
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
+struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
 impl Deref for AsyncUpDownCounterWrap {
-    type Target = ObservableUpDownCounter<i64>;
+    type Target = OtelObservableUpDownCounter<i64>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -116,13 +120,19 @@ impl AsyncMeasurement for AsyncUpDownCounterWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
-        let _ = &self.0.observe(value, &kv_from_option_attr(attributes));
+        self.0.observe(value, &kv_from_option_attr(attributes));
     }
 }
 
-struct AsyncMonotonicCounterWrap(ObservableCounter<u64>);
+impl AsyncMeasurementHandle for AsyncUpDownCounterWrap {
+    // Otel Rust doesn't appear to support unregistering callbacks yet so this is a noop for now
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
+struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
 impl Deref for AsyncMonotonicCounterWrap {
-    type Target = ObservableCounter<u64>;
+    type Target = OtelObservableCounter<u64>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -138,7 +148,27 @@ impl AsyncMeasurement for AsyncMonotonicCounterWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
-        let _ = &self.0.observe(value, &kv_from_option_attr(attributes));
+        self.0.observe(value, &kv_from_option_attr(attributes));
+    }
+}
+
+impl AsyncMeasurementHandle for AsyncMonotonicCounterWrap {
+    // Otel Rust doesn't appear to support unregistering callbacks yet so this is a noop for now
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
+struct AsyncInstrumentWrap<'a, T>(&'a (dyn OtelAsyncInstrument<T> + Send + Sync));
+impl<T> AsyncMeasurement for AsyncInstrumentWrap<'_, T> {
+    type Value = T;
+
+    fn record(
+        &self,
+        value: Self::Value,
+        attributes: Option<&Attributes>,
+        _context: Option<&dyn Context>,
+    ) {
+        self.0.observe(value, &kv_from_option_attr(attributes));
     }
 }
 
@@ -151,47 +181,17 @@ impl Deref for MeterWrap {
     }
 }
 
-struct OtelAsyncInstrument<'a, T>(&'a (dyn AsyncInstrument<T> + Send + Sync));
-impl<T> AsyncMeasurement for OtelAsyncInstrument<'_, T> {
-    type Value = T;
-
-    fn record(
-        &self,
-        value: Self::Value,
-        attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
-    ) {
-        &self.0.observe(value, &kv_from_option_attr(attributes));
-    }
-}
-
-struct OtelObservableGauge<T>(ObservableGauge<T>);
-impl<T> AsyncMeasurementHandle for OtelObservableGauge<T> {
-    // Otel Rust doesn't appear to support unregistering callbacks yet so this is a noop for now
-    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
-    fn stop(&self) {}
-}
-
 impl Meter for MeterWrap {
     fn create_gauge(
         &self,
         name: String,
-        // TODO(smithyObservability): compare this definition to the Boxed version below
-        // callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>)>,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
     ) -> Box<dyn AsyncMeasurementHandle> {
-        // let help = move |foo: &dyn AsyncInstrument<f64>| {
-        //     let blah = Box::new(OtelAsyncInstrument(foo));
-        //     callback(blah);
-        // };
-
-        //TODO(smithyObservability): figure out the typing for the callback here
-        let mut builder = self.0.f64_observable_gauge(name).with_callback(
-            move |foo: &dyn AsyncInstrument<f64>| {
-                let blah = Box::new(OtelAsyncInstrument(foo));
-                callback(blah);
+        let mut builder = self.f64_observable_gauge(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<f64>| {
+                callback(&AsyncInstrumentWrap(input));
             },
         );
 
@@ -200,12 +200,10 @@ impl Meter for MeterWrap {
         }
 
         if let Some(u) = units {
-            builder = builder.with_unit(u)
+            builder = builder.with_unit(u);
         }
 
-        let gauge = builder.init();
-
-        Box::new(OtelObservableGauge(gauge))
+        Box::new(GaugeWrap(builder.init()))
     }
 
     fn create_up_down_counter(
@@ -213,18 +211,41 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn UpDownCounter {
-        todo!()
+    ) -> Box<dyn UpDownCounter> {
+        let mut builder = self.i64_up_down_counter(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Box::new(UpDownCounterWrap(builder.init()))
     }
 
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Long>>)>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Long>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle {
-        todo!()
+    ) -> Box<dyn AsyncMeasurementHandle> {
+        let mut builder = self.i64_observable_up_down_counter(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<i64>| {
+                callback(&AsyncInstrumentWrap(input));
+            },
+        );
+
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Box::new(AsyncUpDownCounterWrap(builder.init()))
     }
 
     fn create_counter(
@@ -232,18 +253,41 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn MonotonicCounter {
-        todo!()
+    ) -> Box<dyn MonotonicCounter> {
+        let mut builder = self.u64_counter(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Box::new(MonotonicCounterWrap(builder.init()))
     }
 
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = UnsignedLong>>)>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = UnsignedLong>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle {
-        todo!()
+    ) -> Box<dyn AsyncMeasurementHandle> {
+        let mut builder = self.u64_observable_counter(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<u64>| {
+                callback(&AsyncInstrumentWrap(input));
+            },
+        );
+
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Box::new(AsyncMonotonicCounterWrap(builder.init()))
     }
 
     fn create_histogram(
@@ -251,7 +295,16 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn Histogram {
-        todo!()
+    ) -> Box<dyn Histogram> {
+        let mut builder = self.f64_histogram(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Box::new(HistogramWrap(builder.init()))
     }
 }
