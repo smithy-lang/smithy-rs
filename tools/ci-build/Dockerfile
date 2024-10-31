@@ -110,7 +110,7 @@ ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.11
+ARG cargo_check_external_types_version=0.1.13
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
