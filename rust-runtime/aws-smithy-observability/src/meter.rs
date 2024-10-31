@@ -23,10 +23,10 @@ pub trait Meter {
         // TODO(smithyObservability): compare this definition to the Boxed version below
         // callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>)>,
         // callback: &(dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync),
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurementHandle>;
+    ) -> Box<dyn AsyncMeasurement<Value = Double>>;
 
     /// Create a new [UpDownCounter].
     fn create_up_down_counter(
@@ -34,16 +34,16 @@ pub trait Meter {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn UpDownCounter;
+    ) -> Box<dyn UpDownCounter>;
 
     /// Create a new AsyncUpDownCounter.
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Long>>)>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Long>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle;
+    ) -> Box<dyn AsyncMeasurement<Value = Long>>;
 
     /// Create a new [MonotonicCounter].
     fn create_counter(
@@ -51,16 +51,16 @@ pub trait Meter {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn MonotonicCounter;
+    ) -> Box<dyn MonotonicCounter>;
 
     /// Create a new AsyncMonotonicCounter.
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = UnsignedLong>>)>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = UnsignedLong>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn AsyncMeasurementHandle;
+    ) -> Box<dyn AsyncMeasurement<Value = UnsignedLong>>;
 
     /// Create a new [Histogram].
     fn create_histogram(
@@ -68,7 +68,7 @@ pub trait Meter {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> &dyn Histogram;
+    ) -> Box<dyn Histogram>;
 }
 
 /// Collects a set of events with an event count and sum for all events.
@@ -106,10 +106,7 @@ pub trait AsyncMeasurement {
         attributes: Option<&Attributes>,
         context: Option<&dyn Context>,
     );
-}
 
-/// A handle to an [AsyncMeasurement].
-pub trait AsyncMeasurementHandle {
     /// Stop recording , unregister callback.
     fn stop(&self);
 }
