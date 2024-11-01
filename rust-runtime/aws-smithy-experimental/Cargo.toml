@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-experimental"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Experiments for the smithy-rs ecosystem"
 edition = "2021"
@@ -59,3 +59,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 [package.metadata.cargo-udeps.ignore]
 # used only in doc strings
 normal = ["fs_extra"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crypto_unstable)'] }
