@@ -28,16 +28,6 @@ pub(crate) static MD5_HEADER_NAME: &str = "content-md5";
 pub const CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER: [&str; 4] =
     [CRC_32_C_NAME, CRC_32_NAME, SHA_1_NAME, SHA_256_NAME];
 
-// List of algorithm header names that the request interceptor can check against to see if user has manually
-// set a checksum value
-pub const REQUEST_CHECKSUM_ALGORITHM_HEADERS: [&str; 5] = [
-    CRC_32_HEADER_NAME,
-    CRC_32_C_HEADER_NAME,
-    SHA_1_HEADER_NAME,
-    SHA_256_HEADER_NAME,
-    CRC_64_NVME_HEADER_NAME,
-];
-
 /// Checksum algorithms are use to validate the integrity of data. Structs that implement this trait
 /// can be used as checksum calculators. This trait requires Send + Sync because these checksums are
 /// often used in a threaded context.

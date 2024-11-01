@@ -20,6 +20,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::http::Request;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::RequestChecksumCalculation;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
@@ -57,13 +58,10 @@ impl std::error::Error for Error {}
 
 #[derive(Debug, Clone)]
 struct RequestChecksumInterceptorState {
+    /// The checksum algorithm to calculate
     checksum_algorithm: Option<String>,
     /// This value is set in the model on the `httpChecksum` trait
     request_checksum_required: bool,
-    /// Indicates whether we set the default request algorithm value
-    set_default: bool,
-    /// The header where the request algorithm is serialized
-    request_algo_header: String,
 }
 impl Storable for RequestChecksumInterceptorState {
     type Storer = StoreReplace<Self>;
@@ -131,7 +129,7 @@ impl<AP, CM> RequestChecksumInterceptor<AP, CM> {
 impl<AP, CM> Intercept for RequestChecksumInterceptor<AP, CM>
 where
     AP: Fn(&Input) -> (Option<String>, bool) + Send + Sync,
-    CM: Fn(&mut Input, &ConfigBag) -> Result<(bool, String), BoxError> + Send + Sync,
+    CM: Fn(&mut Request, &ConfigBag) -> Result<bool, BoxError> + Send + Sync,
 {
     fn name(&self) -> &'static str {
         "RequestChecksumInterceptor"
@@ -143,7 +141,6 @@ where
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let (set_default, request_algo_header) = (self.checksum_mutator)(context.input_mut(), cfg)?;
         let (checksum_algorithm, request_checksum_required) =
             (self.algorithm_provider)(context.input());
 
@@ -151,8 +148,6 @@ where
         layer.store_put(RequestChecksumInterceptorState {
             checksum_algorithm,
             request_checksum_required,
-            set_default,
-            request_algo_header,
         });
         cfg.push_layer(layer);
 
@@ -172,18 +167,11 @@ where
             .load::<RequestChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
 
-        // If the user manually set a checksum value we short circuit
-        if user_set_checksum_header(context.request()) {
-            // If we set the default algo we remove it (because we should not do anything if the user provided their own checksum value)
-            // We cannot avoid setting it initially because to set it we need both model and runtime information, so it must be set in the code
-            // generated closure passed in to this interceptor. But codegen doesn't have access to the checksum headers to check if the user
-            // has manually set a checksum (and nothing in the model indicates which input members might hold those checksums).
-            if state.set_default {
-                context
-                    .request_mut()
-                    .headers_mut()
-                    .remove(state.request_algo_header.as_str());
-            }
+        let user_set_checksum_value = (self.checksum_mutator)(context.request_mut(), cfg)
+            .expect("Checksum header mutation should not fail");
+
+        // If the user manually set a checksum header we short circuit
+        if user_set_checksum_value {
             return Ok(());
         }
 
@@ -281,17 +269,6 @@ where
 
         Ok(())
     }
-}
-
-/// Check if user provided a checksum valu. If they did we clear the checksum algo header
-/// since we are not calculating the ones calculating the checksum
-fn user_set_checksum_header(request: &HttpRequest) -> bool {
-    for algo_header in aws_smithy_checksums::http::REQUEST_CHECKSUM_ALGORITHM_HEADERS {
-        if let Some(_) = request.headers().get(algo_header) {
-            return true;
-        }
-    }
-    false
 }
 
 fn incorporate_custom_default(

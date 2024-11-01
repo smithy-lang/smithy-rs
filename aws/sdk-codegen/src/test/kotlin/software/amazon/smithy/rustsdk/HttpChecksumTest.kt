@@ -46,18 +46,18 @@ internal class HttpChecksumTest {
             })
             service TestService {
                 version: "2023-01-01",
-                operations: [SomeOperation, SomeStreamingOperation]
+                operations: [HttpChecksumOperation, HttpChecksumStreamingOperation]
             }
 
-            @http(uri: "/SomeOperation", method: "POST")
+            @http(uri: "/HttpChecksumOperation", method: "POST")
             @optionalAuth
             @httpChecksum(
                 requestChecksumRequired: true,
                 requestAlgorithmMember: "checksumAlgorithm",
                 requestValidationModeMember: "validationMode",
-                responseAlgorithms: ["CRC32", "CRC32C", "SHA1", "SHA256"]
+                responseAlgorithms: ["CRC32", "CRC32C", "CRC64NVME", "SHA1", "SHA256"]
             )
-            operation SomeOperation {
+            operation HttpChecksumOperation {
                 input: SomeInput,
                 output: SomeOutput
             }
@@ -76,20 +76,17 @@ internal class HttpChecksumTest {
             }
 
             @output
-            structure SomeOutput {
-                @httpPayload
-                body: Blob
-            }
+            structure SomeOutput {}
 
-            @http(uri: "/SomeStreamingOperation", method: "POST")
+            @http(uri: "/HttpChecksumStreamingOperation", method: "POST")
             @optionalAuth
             @httpChecksum(
                 requestChecksumRequired: true,
                 requestAlgorithmMember: "checksumAlgorithm",
                 requestValidationModeMember: "validationMode",
-                responseAlgorithms: ["CRC32", "CRC32C", "SHA1", "SHA256"]
+                responseAlgorithms: ["CRC32", "CRC32C", "CRC64NVME", "SHA1", "SHA256"]
             )
-            operation SomeStreamingOperation {
+            operation HttpChecksumStreamingOperation {
                 input: SomeStreamingInput,
                 output: SomeStreamingOutput
             }
@@ -116,8 +113,7 @@ internal class HttpChecksumTest {
             enum ChecksumAlgorithm {
                 CRC32
                 CRC32C
-                //Value not supported by current smithy version
-                //CRC64NVME
+                CRC64NVME
                 SHA1
                 SHA256
             }
@@ -233,7 +229,7 @@ internal class HttpChecksumTest {
                         .build();
 
                     let client = $moduleName::Client::from_conf(config);
-                    let _ = client.some_operation()
+                    let _ = client.http_checksum_operation()
                     .body(Blob::new(b"${testDef.requestPayload}"))
                     $setChecksumAlgo
                     .send()
@@ -241,7 +237,7 @@ internal class HttpChecksumTest {
                     let request = rx.expect_request();
                     let ${algoLower}_header = request.headers()
                         .get("x-amz-checksum-$algoLower")
-                        .expect("$algoLower header should exist");
+                        .expect("x-amz-checksum-$algoLower header should exist");
 
                     assert_eq!(${algoLower}_header, "${testDef.checksumHeader}");
 
@@ -312,12 +308,11 @@ internal class HttpChecksumTest {
                         .unwrap();
 
                     let _operation = client
-                        .some_streaming_operation()
+                        .http_checksum_streaming_operation()
                         .body(streaming_body)
                         $setChecksumAlgo
                         .send()
                         .await;
-
 
                     let request = rx.expect_request();
 
@@ -377,7 +372,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let res = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter."))
                         .checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})
                         .validation_mode($moduleName::types::ValidationMode::Enabled)
@@ -423,7 +418,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let res = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter."))
                         .checksum_algorithm($moduleName::types::ChecksumAlgorithm::${testDef.checksumAlgorithm})
                         .validation_mode($moduleName::types::ValidationMode::Enabled)
@@ -481,7 +476,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let _ = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter"))
                         .send()
                         .await;
@@ -508,7 +503,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let _ = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter"))
                         .send()
                         .await;
@@ -540,7 +535,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let _ = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter"))
                         .send()
                         .await;
@@ -575,7 +570,7 @@ internal class HttpChecksumTest {
 
                     let client = $moduleName::Client::from_conf(config);
                     let _ = client
-                        .some_operation()
+                        .http_checksum_operation()
                         .body(Blob::new(b"Doesn't matter"))
                         .send()
                         .await;

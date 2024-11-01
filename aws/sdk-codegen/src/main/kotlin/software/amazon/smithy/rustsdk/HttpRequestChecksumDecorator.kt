@@ -176,11 +176,26 @@ class HttpRequestChecksumCustomization(
                                     #{checksum_algorithm_to_str}
                                     (checksum_algorithm.map(|s| s.to_string()), $requestChecksumRequired)
                                 },
-                                |input: &mut #{Input}, cfg: &#{ConfigBag}| {
-                                    let mut set_default = false;
-                                    let input = input
-                                        .downcast_mut::<#{OperationInputType}>()
-                                        .ok_or("failed to downcast to #{OperationInputType}")?;
+                                |request: &mut #{Request}, cfg: &#{ConfigBag}| {
+                                    // We check if the user has set any of the checksum values manually
+                                    let mut user_set_checksum_value = false;
+                                    let headers_to_check = request.headers().iter().filter_map(|(name, _val)| {
+                                        if name.starts_with("x-amz-checksum-") {
+                                            Some(name)
+                                        } else {
+                                            None
+                                        }
+                                    });
+                                    for algo_header in headers_to_check {
+                                        if let Some(_) = request.headers().get(algo_header) {
+                                            user_set_checksum_value = true;
+                                        }
+                                    }
+
+                                    // We check if the user set the checksum algo manually
+                                    let user_set_checksum_algo = request.headers()
+                                        .get(${requestAlgoHeader.dq()})
+                                        .is_some();
 
                                     // This value is set by the user on the SdkConfig to indicate their preference
                                     let request_checksum_calculation = cfg
@@ -190,35 +205,32 @@ class HttpRequestChecksumCustomization(
                                     // From the httpChecksum trait
                                     let http_checksum_required = $requestChecksumRequired;
 
-                                    // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum we
-                                    // default to Crc32. If it is WhenRequired and a checksum is required by the trait we also set the
-                                    // default. In all other cases we do nothing.
+                                    // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum value or algo
+                                    // we default to Crc32. If it is WhenRequired and a checksum is required by the trait and the user has not
+                                    // set a checksum value or algo we also set the default. In all other cases we do nothing.
                                     match (
                                         request_checksum_calculation,
                                         http_checksum_required,
-                                        input.$requestAlgorithmMemberName(),
+                                        user_set_checksum_value,
+                                        user_set_checksum_algo
                                     ) {
-                                        (#{RequestChecksumCalculation}::WhenSupported, _, None)
-                                        | (#{RequestChecksumCalculation}::WhenRequired, true, None) => {
-                                            input.$requestAlgorithmMemberName = Some(#{ChecksumAlgoShape}::Crc32);
-                                            set_default = true;
+                                        (#{RequestChecksumCalculation}::WhenSupported, _, false, false)
+                                        | (#{RequestChecksumCalculation}::WhenRequired, true, false, false) => {
+                                            request.headers_mut().insert(${requestAlgoHeader.dq()}, "CRC32");
                                         }
                                         _ => {},
                                     }
 
-                                    // We return an indicator of whether we set the default and the request header that the
-                                    // default is set as so that we can unset it later if we determine the user has manually
-                                    // provided a checksum value. We cannot determine that now because the model does not
-                                    // provide a list of the members where a manual checksum could be stored, so we have to
-                                    // rely on the x-amz-checksum-{checksumName} headers specified in the SEP and those are
-                                    // not available until after serialization.
-                                    Ok((set_default, ${requestAlgoHeader.dq()}.to_string()))
+                                    // We return a bool indicating if the user did set the checksum value, if they did
+                                    // we can short circuit and exit the interceptor early.
+                                    Ok(user_set_checksum_value)
                                 }
                                 )
                                 """,
                                 *preludeScope,
                                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                                 "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
+                                "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
                                 "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
                                 "ConfigBag" to RuntimeType.configBag(runtimeConfig),
                                 "RequestChecksumInterceptor" to
