@@ -97,7 +97,7 @@ ARG cargo_deny_version=0.16.1
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.47
+ARG cargo_udeps_version=0.1.52
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
