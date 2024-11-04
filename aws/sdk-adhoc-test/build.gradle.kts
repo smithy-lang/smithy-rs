@@ -29,6 +29,8 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
+val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
+
 dependencies {
     implementation(project(":aws:sdk-codegen"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
@@ -84,8 +86,15 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
+tasks.register<Copy>("copyCheckedInSdkLockfile") {
+    description = "Copy the checked-in SDK lockfile to the build directory"
+    this.outputs.upToDateWhen { false }
+    from(checkedInSdkLockfile)
+    into(layout.buildDirectory.dir(workingDirUnderBuildDir))
+}
+
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].dependsOn("generateCargoWorkspace").finalizedBy("copyCheckedInSdkLockfile")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
