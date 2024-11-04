@@ -85,16 +85,10 @@ val allCodegenTests = listOf(
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
-
-tasks.register<Copy>("copyCheckedInSdkLockfile") {
-    description = "Copy the checked-in SDK lockfile to the build directory"
-    this.outputs.upToDateWhen { false }
-    from(checkedInSdkLockfile)
-    into(layout.buildDirectory.dir(workingDirUnderBuildDir))
-}
+project.registerCopyCheckedInCargoLockfileTask(checkedInSdkLockfile, layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].dependsOn("generateCargoWorkspace").finalizedBy("copyCheckedInSdkLockfile")
+tasks["assemble"].dependsOn("generateCargoWorkspace").finalizedBy("copyCheckedInCargoLockfile")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
