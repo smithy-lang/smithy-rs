@@ -11,8 +11,11 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-smithy-observability = { path = "../aws-smithy-observability" }
-opentelemetry = {version = "0.24.0", features = ["metrics"]}
-opentelemetry_sdk = {version = "0.24.0", features = ["metrics"]}
+opentelemetry = {version = "0.26.0", features = ["metrics"]}
+opentelemetry_sdk = {version = "0.26.0", features = ["metrics", "testing"]}
+
+[dev-dependencies]
+tokio = { version = "1.23.1" }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -9,8 +9,9 @@ use std::fmt;
 
 use aws_smithy_runtime_api::box_error::BoxError;
 
+#[non_exhaustive]
 #[derive(Debug)]
-pub(crate) struct ObservabilityError {
+pub struct ObservabilityError {
     kind: ErrorKind,
     source: BoxError,
 }
@@ -18,15 +19,19 @@ pub(crate) struct ObservabilityError {
 //TODO(smithyObservability): refine the error kinds
 #[non_exhaustive]
 #[derive(Debug)]
-pub(crate) enum ErrorKind {
+pub enum ErrorKind {
     /// An error setting the `GlobalTelemetryProvider``
     SettingGlobalProvider,
+    /// Error flushing metrics pipeline
+    MetricsFlush,
+    /// Error gracefully shutting down Metrics Provider
+    MetricsShutdown,
     /// A custom error that does not fall under any other error kind
     Other,
 }
 
 impl ObservabilityError {
-    pub(crate) fn new<E>(kind: ErrorKind, err: E) -> Self
+    pub fn new<E>(kind: ErrorKind, err: E) -> Self
     where
         E: Into<BoxError>,
     {
@@ -37,7 +42,7 @@ impl ObservabilityError {
     }
 
     /// Returns the corresponding [`ErrorKind`] for this error.
-    pub(crate) fn kind(&self) -> &ErrorKind {
+    pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
 }
@@ -49,6 +54,8 @@ impl fmt::Display for ObservabilityError {
             ErrorKind::SettingGlobalProvider => {
                 write!(f, "failed to set global telemetry provider")
             }
+            ErrorKind::MetricsFlush => write!(f, "failed to flush metrics pipeline"),
+            ErrorKind::MetricsShutdown => write!(f, "failed to shutdown metrics provider"),
         }
     }
 }
