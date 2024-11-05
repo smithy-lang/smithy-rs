@@ -14,9 +14,9 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, PartialEq)]
 pub enum AttributeValue {
     /// Holds an [i64]
-    Long(i64),
+    I64(i64),
     /// Holds an [f64]
-    Double(f64),
+    F64(f64),
     /// Holds a [String]
     String(String),
     /// Holds a [bool]

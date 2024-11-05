@@ -57,7 +57,7 @@ pub trait Meter {
     ) -> Box<dyn AsyncMeasurement<Value = i64>>;
 
     /// Create a new [MonotonicCounter].
-    fn create_counter(
+    fn create_monotonic_counter(
         &self,
         name: String,
         units: Option<String>,
