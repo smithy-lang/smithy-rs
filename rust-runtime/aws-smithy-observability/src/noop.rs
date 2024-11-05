@@ -8,7 +8,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    attributes::{Attributes, Context, Double, Long, UnsignedLong},
+    attributes::{Attributes, Context},
     meter::{AsyncMeasurement, Histogram, Meter, MeterProvider, MonotonicCounter, UpDownCounter},
 };
 
@@ -24,11 +24,11 @@ impl Meter for NoopMeter {
     fn create_gauge(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync>,
+        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = f64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = Double>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<Double>))
+    ) -> Box<dyn AsyncMeasurement<Value = f64>> {
+        Box::new(NoopAsyncMeasurement(PhantomData::<f64>))
     }
 
     fn create_up_down_counter(
@@ -43,11 +43,11 @@ impl Meter for NoopMeter {
     fn create_async_up_down_counter(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Long>) + Send + Sync>,
+        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = i64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = Long>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<Long>))
+    ) -> Box<dyn AsyncMeasurement<Value = i64>> {
+        Box::new(NoopAsyncMeasurement(PhantomData::<i64>))
     }
 
     fn create_counter(
@@ -62,11 +62,11 @@ impl Meter for NoopMeter {
     fn create_async_monotonic_counter(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = UnsignedLong>) + Send + Sync>,
+        _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = u64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = UnsignedLong>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<UnsignedLong>))
+    ) -> Box<dyn AsyncMeasurement<Value = u64>> {
+        Box::new(NoopAsyncMeasurement(PhantomData::<u64>))
     }
 
     fn create_histogram(
@@ -90,25 +90,19 @@ impl<T> AsyncMeasurement for NoopAsyncMeasurement<T> {
 
 struct NoopUpDownCounter;
 impl UpDownCounter for NoopUpDownCounter {
-    fn add(&self, _value: Long, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
+    fn add(&self, _value: i64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
 }
 
 struct NoopMonotonicCounter;
 impl MonotonicCounter for NoopMonotonicCounter {
-    fn add(
-        &self,
-        _value: UnsignedLong,
-        _attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
-    ) {
-    }
+    fn add(&self, _value: u64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
 }
 
 struct NoopHistogram;
 impl Histogram for NoopHistogram {
     fn record(
         &self,
-        _value: Double,
+        _value: f64,
         _attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
