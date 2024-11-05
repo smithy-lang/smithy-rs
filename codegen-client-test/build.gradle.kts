@@ -131,7 +131,7 @@ project.registerCopyCheckedInCargoLockfileTask(checkedInSmithyRuntimeLockfile, l
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].dependsOn("generateCargoWorkspace").finalizedBy("copyCheckedInCargoLockfile")
+tasks["assemble"].finalizedBy("generateCargoWorkspace", "copyCheckedInCargoLockfile")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
