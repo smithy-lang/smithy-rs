@@ -44,7 +44,6 @@ def main(skip_generation=False):
         elif get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') != 0:
             eprint(f'skipping {path} because it does not exist in base')
         else:
-            get_cmd_output('cargo generate-lockfile', quiet=True)
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
             pkgid = parse_package_id(out)
             (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
