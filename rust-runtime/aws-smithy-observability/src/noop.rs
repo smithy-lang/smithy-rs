@@ -5,7 +5,7 @@
 
 //! An noop implementation of the Meter traits
 
-use std::any::Any;
+use std::marker::PhantomData;
 
 use crate::{
     attributes::{Attributes, Context, Double, Long, UnsignedLong},
@@ -14,8 +14,8 @@ use crate::{
 
 pub(crate) struct NoopMeterProvider;
 impl MeterProvider for NoopMeterProvider {
-    fn get_meter(&self, _scope: String, _attributes: Option<&Attributes>) -> &dyn Meter {
-        &NoopMeter
+    fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
+        Box::new(NoopMeter)
     }
 }
 
@@ -28,7 +28,7 @@ impl Meter for NoopMeter {
         _units: Option<String>,
         _description: Option<String>,
     ) -> Box<dyn AsyncMeasurement<Value = Double>> {
-        Box::new(NoopAsyncMeasurement)
+        Box::new(NoopAsyncMeasurement(PhantomData::<Double>))
     }
 
     fn create_up_down_counter(
@@ -46,8 +46,8 @@ impl Meter for NoopMeter {
         _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Long>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement> {
-        Box::new(NoopAsyncMeasurement)
+    ) -> Box<dyn AsyncMeasurement<Value = Long>> {
+        Box::new(NoopAsyncMeasurement(PhantomData::<Long>))
     }
 
     fn create_counter(
@@ -65,8 +65,8 @@ impl Meter for NoopMeter {
         _callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = UnsignedLong>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement> {
-        Box::new(NoopAsyncMeasurement)
+    ) -> Box<dyn AsyncMeasurement<Value = UnsignedLong>> {
+        Box::new(NoopAsyncMeasurement(PhantomData::<UnsignedLong>))
     }
 
     fn create_histogram(
@@ -79,8 +79,8 @@ impl Meter for NoopMeter {
     }
 }
 
-struct NoopAsyncMeasurement;
-impl<T> AsyncMeasurement for NoopAsyncMeasurement {
+struct NoopAsyncMeasurement<T>(PhantomData<T>);
+impl<T> AsyncMeasurement for NoopAsyncMeasurement<T> {
     type Value = T;
 
     fn record(&self, _value: T, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}

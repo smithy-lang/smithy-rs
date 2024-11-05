@@ -7,11 +7,22 @@
 //! real time.
 
 use crate::attributes::{Attributes, Context, Double, Long, UnsignedLong};
+use crate::error::ObservabilityError;
 
 /// Provides named instances of [Meter].
 pub trait MeterProvider {
     /// Get or create a named [Meter].
-    fn get_meter(&self, scope: String, attributes: Option<&Attributes>) -> &dyn Meter;
+    fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Box<dyn Meter>;
+
+    /// Optional method to flush the metrics pipeline, default is noop
+    fn flush(&self) -> Result<(), ObservabilityError> {
+        Ok(())
+    }
+
+    /// Optional method to shutdown the metrics provider, default is noop
+    fn shutdown(&self) -> Result<(), ObservabilityError> {
+        Ok(())
+    }
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
