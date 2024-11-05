@@ -8,7 +8,7 @@
 use std::ops::Deref;
 
 use crate::attributes::kv_from_option_attr;
-use aws_smithy_observability::attributes::{Attributes, Context, Double, Long, UnsignedLong};
+use aws_smithy_observability::attributes::{Attributes, Context};
 use aws_smithy_observability::error::{ErrorKind, ObservabilityError};
 pub use aws_smithy_observability::meter::{
     AsyncMeasurement, Histogram, Meter, MeterProvider, MonotonicCounter, UpDownCounter,
@@ -32,7 +32,7 @@ impl Deref for UpDownCounterWrap {
 }
 
 impl UpDownCounter for UpDownCounterWrap {
-    fn add(&self, value: Long, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
+    fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
@@ -47,12 +47,7 @@ impl Deref for HistogramWrap {
 }
 
 impl Histogram for HistogramWrap {
-    fn record(
-        &self,
-        value: Double,
-        attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
-    ) {
+    fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.record(value, &kv_from_option_attr(attributes));
     }
 }
@@ -66,12 +61,7 @@ impl Deref for MonotonicCounterWrap {
     }
 }
 impl MonotonicCounter for MonotonicCounterWrap {
-    fn add(
-        &self,
-        value: UnsignedLong,
-        attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
-    ) {
+    fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
@@ -86,7 +76,7 @@ impl Deref for GaugeWrap {
 }
 
 impl AsyncMeasurement for GaugeWrap {
-    type Value = Double;
+    type Value = f64;
 
     fn record(
         &self,
@@ -110,7 +100,7 @@ impl Deref for AsyncUpDownCounterWrap {
 }
 
 impl AsyncMeasurement for AsyncUpDownCounterWrap {
-    type Value = Long;
+    type Value = i64;
 
     fn record(
         &self,
@@ -134,7 +124,7 @@ impl Deref for AsyncMonotonicCounterWrap {
 }
 
 impl AsyncMeasurement for AsyncMonotonicCounterWrap {
-    type Value = UnsignedLong;
+    type Value = u64;
 
     fn record(
         &self,
@@ -177,10 +167,10 @@ impl Meter for MeterWrap {
     fn create_gauge(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = Double>> {
+    ) -> Box<dyn AsyncMeasurement<Value = f64>> {
         let mut builder = self.f64_observable_gauge(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<f64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -219,10 +209,10 @@ impl Meter for MeterWrap {
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = Long>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = i64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = Long>> {
+    ) -> Box<dyn AsyncMeasurement<Value = i64>> {
         let mut builder = self.i64_observable_up_down_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<i64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -261,10 +251,10 @@ impl Meter for MeterWrap {
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = UnsignedLong>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = u64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = UnsignedLong>> {
+    ) -> Box<dyn AsyncMeasurement<Value = u64>> {
         let mut builder = self.u64_observable_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<u64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -301,25 +291,20 @@ impl Meter for MeterWrap {
     }
 }
 
+/// An OpenTelemetry based implementation of the AWS SDK's [MeterProvider] trait
 #[non_exhaustive]
-pub(crate) struct AwsSdkOtelMeterProvider {
+#[derive(Debug)]
+pub struct AwsSdkOtelMeterProvider {
     meter_provider: OtelSdkMeterProvider,
 }
 
 impl AwsSdkOtelMeterProvider {
-    fn new(otel_meter_provider: OtelSdkMeterProvider) -> Self {
+    /// Create a new [AwsSdkOtelMeterProvider] from an [OtelSdkMeterProvider].
+    pub fn new(otel_meter_provider: OtelSdkMeterProvider) -> Self {
         Self {
             meter_provider: otel_meter_provider,
         }
     }
-
-    // fn force_flush(&self) -> Result<(), opentelemetry::metrics::MetricsError> {
-    //     self.meter_provider.force_flush()
-    // }
-
-    // fn shutdown(&self) -> Result<(), opentelemetry::metrics::MetricsError> {
-    //     self.meter_provider.shutdown()
-    // }
 }
 
 impl MeterProvider for AwsSdkOtelMeterProvider {

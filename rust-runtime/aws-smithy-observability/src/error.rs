@@ -9,6 +9,7 @@ use std::fmt;
 
 use aws_smithy_runtime_api::box_error::BoxError;
 
+/// An error in the SDKs Observability providers
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct ObservabilityError {
@@ -16,7 +17,7 @@ pub struct ObservabilityError {
     source: BoxError,
 }
 
-//TODO(smithyObservability): refine the error kinds
+/// The types of errors associated with [ObservabilityError]
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum ErrorKind {
@@ -31,6 +32,7 @@ pub enum ErrorKind {
 }
 
 impl ObservabilityError {
+    /// Create a new [`ObservabilityError`] from an [ErrorKind] and a [BoxError]
     pub fn new<E>(kind: ErrorKind, err: E) -> Self
     where
         E: Into<BoxError>,

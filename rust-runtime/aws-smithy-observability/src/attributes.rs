@@ -9,52 +9,18 @@
 
 use std::collections::HashMap;
 
-/// Helper type aliase to stay aligned with the type names in the spec.
-pub type Long = i64;
-/// Helper type aliase to stay aligned with the type names in the spec.
-pub type UnsignedLong = u64;
-/// Helper type aliase to stay aligned with the type names in the spec.
-pub type Double = f64;
-
-/// Marker trait for allowed Attribute value types.
-pub trait AttributeValueType {
-    /// Get the [AttributeValue] variant for the given type.
-    fn get_attribute_variant(self) -> AttributeValue;
-}
-
-impl AttributeValueType for Long {
-    fn get_attribute_variant(self) -> AttributeValue {
-        AttributeValue::LONG(self)
-    }
-}
-impl AttributeValueType for Double {
-    fn get_attribute_variant(self) -> AttributeValue {
-        AttributeValue::DOUBLE(self)
-    }
-}
-impl AttributeValueType for String {
-    fn get_attribute_variant(self) -> AttributeValue {
-        AttributeValue::STRING(self)
-    }
-}
-impl AttributeValueType for bool {
-    fn get_attribute_variant(self) -> AttributeValue {
-        AttributeValue::BOOLEAN(self)
-    }
-}
-
 /// The valid types of values accepted by [Attributes].
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AttributeValue {
     /// Holds an [i64]
-    LONG(Long),
+    Long(i64),
     /// Holds an [f64]
-    DOUBLE(Double),
+    Double(f64),
     /// Holds a [String]
-    STRING(String),
+    String(String),
     /// Holds a [bool]
-    BOOLEAN(bool),
+    Bool(bool),
 }
 
 /// Structured telemetry metadata.
