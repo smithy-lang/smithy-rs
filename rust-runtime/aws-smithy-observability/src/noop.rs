@@ -50,7 +50,7 @@ impl Meter for NoopMeter {
         Box::new(NoopAsyncMeasurement(PhantomData::<i64>))
     }
 
-    fn create_counter(
+    fn create_monotonic_counter(
         &self,
         _name: String,
         _units: Option<String>,

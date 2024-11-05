@@ -50,8 +50,8 @@ impl<'a> From<AttributesWrap> for Vec<KeyValue> {
                 KeyValue::new(
                     k.clone(),
                     match v {
-                        AttributeValue::Long(val) => Value::I64(val.clone()),
-                        AttributeValue::Double(val) => Value::F64(val.clone()),
+                        AttributeValue::I64(val) => Value::I64(val.clone()),
+                        AttributeValue::F64(val) => Value::F64(val.clone()),
                         AttributeValue::String(val) => Value::String(val.clone().into()),
                         AttributeValue::Bool(val) => Value::Bool(val.clone()),
                         _ => Value::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into()),
@@ -71,8 +71,8 @@ impl<'a> From<&[KeyValue]> for AttributesWrap {
                 kv.key.clone().into(),
                 match &kv.value {
                     Value::Bool(val) => AttributeValue::Bool(val.clone()),
-                    Value::I64(val) => AttributeValue::Long(val.clone()),
-                    Value::F64(val) => AttributeValue::Double(val.clone()),
+                    Value::I64(val) => AttributeValue::I64(val.clone()),
+                    Value::F64(val) => AttributeValue::F64(val.clone()),
                     Value::String(val) => AttributeValue::String(val.clone().into()),
                     Value::Array(_) => {
                         AttributeValue::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into())
@@ -96,13 +96,13 @@ mod tests {
     #[test]
     fn attr_to_kv() {
         let mut attrs = Attributes::new();
-        attrs.set("LONG".into(), AttributeValue::Long(64));
-        attrs.set("DOUBLE".into(), AttributeValue::Double(64.0));
+        attrs.set("I64".into(), AttributeValue::I64(64));
+        attrs.set("F64".into(), AttributeValue::F64(64.0));
         attrs.set(
-            "STRING".into(),
+            "String".into(),
             AttributeValue::String("I AM A STRING".into()),
         );
-        attrs.set("BOOLEAN".into(), AttributeValue::Bool(true));
+        attrs.set("Bool".into(), AttributeValue::Bool(true));
 
         let kv = kv_from_option_attr(Some(&attrs));
 
@@ -111,25 +111,23 @@ mod tests {
             .map(|kv| (kv.key.to_string(), kv.value))
             .collect();
 
-        assert_eq!(kv_map.get("LONG").unwrap(), &Value::I64(64));
-        assert_eq!(kv_map.get("DOUBLE").unwrap(), &Value::F64(64.0));
+        assert_eq!(kv_map.get("I64").unwrap(), &Value::I64(64));
+        assert_eq!(kv_map.get("F64").unwrap(), &Value::F64(64.0));
         assert_eq!(
-            kv_map.get("STRING").unwrap(),
+            kv_map.get("String").unwrap(),
             &Value::String("I AM A STRING".into())
         );
-        assert_eq!(kv_map.get("BOOLEAN").unwrap(), &Value::Bool(true));
+        assert_eq!(kv_map.get("Bool").unwrap(), &Value::Bool(true));
     }
 
     #[test]
     fn kv_to_attr() {
-        let mut kvs: Vec<KeyValue> = Vec::new();
-        kvs.push(KeyValue::new("Bool", Value::Bool(true)));
-        kvs.push(KeyValue::new(
-            "String",
-            Value::String("I AM A STRING".into()),
-        ));
-        kvs.push(KeyValue::new("I64", Value::I64(64)));
-        kvs.push(KeyValue::new("F64", Value::F64(64.0)));
+        let kvs: Vec<KeyValue> = vec![
+            KeyValue::new("Bool", Value::Bool(true)),
+            KeyValue::new("String", Value::String("I AM A STRING".into())),
+            KeyValue::new("I64", Value::I64(64)),
+            KeyValue::new("F64", Value::F64(64.0)),
+        ];
 
         let attrs = option_attr_from_kv(&kvs).unwrap();
         assert_eq!(
@@ -140,10 +138,7 @@ mod tests {
             attrs.get("String".into()).unwrap(),
             &AttributeValue::String("I AM A STRING".into())
         );
-        assert_eq!(attrs.get("I64".into()).unwrap(), &AttributeValue::Long(64));
-        assert_eq!(
-            attrs.get("F64".into()).unwrap(),
-            &AttributeValue::Double(64.0)
-        );
+        assert_eq!(attrs.get("I64".into()).unwrap(), &AttributeValue::I64(64));
+        assert_eq!(attrs.get("F64".into()).unwrap(), &AttributeValue::F64(64.0));
     }
 }

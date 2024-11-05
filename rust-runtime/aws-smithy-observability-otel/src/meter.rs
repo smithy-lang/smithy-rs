@@ -23,14 +23,6 @@ use opentelemetry::metrics::{
 use opentelemetry_sdk::metrics::SdkMeterProvider as OtelSdkMeterProvider;
 
 struct UpDownCounterWrap(OtelUpDownCounter<i64>);
-impl Deref for UpDownCounterWrap {
-    type Target = OtelUpDownCounter<i64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl UpDownCounter for UpDownCounterWrap {
     fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.add(value, &kv_from_option_attr(attributes));
@@ -38,14 +30,6 @@ impl UpDownCounter for UpDownCounterWrap {
 }
 
 struct HistogramWrap(OtelHistogram<f64>);
-impl Deref for HistogramWrap {
-    type Target = OtelHistogram<f64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl Histogram for HistogramWrap {
     fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.record(value, &kv_from_option_attr(attributes));
@@ -53,13 +37,6 @@ impl Histogram for HistogramWrap {
 }
 
 struct MonotonicCounterWrap(OtelCounter<u64>);
-impl Deref for MonotonicCounterWrap {
-    type Target = OtelCounter<u64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 impl MonotonicCounter for MonotonicCounterWrap {
     fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.add(value, &kv_from_option_attr(attributes));
@@ -67,14 +44,6 @@ impl MonotonicCounter for MonotonicCounterWrap {
 }
 
 struct GaugeWrap(OtelObservableGauge<f64>);
-impl Deref for GaugeWrap {
-    type Target = OtelObservableGauge<f64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl AsyncMeasurement for GaugeWrap {
     type Value = f64;
 
@@ -87,18 +56,12 @@ impl AsyncMeasurement for GaugeWrap {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
     fn stop(&self) {}
 }
 
 struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
-impl Deref for AsyncUpDownCounterWrap {
-    type Target = OtelObservableUpDownCounter<i64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl AsyncMeasurement for AsyncUpDownCounterWrap {
     type Value = i64;
 
@@ -111,18 +74,12 @@ impl AsyncMeasurement for AsyncUpDownCounterWrap {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
     fn stop(&self) {}
 }
 
 struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
-impl Deref for AsyncMonotonicCounterWrap {
-    type Target = OtelObservableCounter<u64>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
 impl AsyncMeasurement for AsyncMonotonicCounterWrap {
     type Value = u64;
 
@@ -135,6 +92,8 @@ impl AsyncMeasurement for AsyncMonotonicCounterWrap {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
     fn stop(&self) {}
 }
 
@@ -151,6 +110,8 @@ impl<T> AsyncMeasurement for AsyncInstrumentWrap<'_, T> {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
     fn stop(&self) {}
 }
 
@@ -230,7 +191,7 @@ impl Meter for MeterWrap {
         Box::new(AsyncUpDownCounterWrap(builder.init()))
     }
 
-    fn create_counter(
+    fn create_monotonic_counter(
         &self,
         name: String,
         units: Option<String>,
@@ -330,9 +291,11 @@ impl MeterProvider for AwsSdkOtelMeterProvider {
 #[cfg(test)]
 mod tests {
 
+    use aws_smithy_observability::attributes::{AttributeValue, Attributes};
+    use aws_smithy_observability::meter::AsyncMeasurement;
     use aws_smithy_observability::provider::TelemetryProvider;
     use opentelemetry_sdk::metrics::{
-        data::{Histogram, Sum},
+        data::{Gauge, Histogram, Sum},
         PeriodicReader, SdkMeterProvider,
     };
     use opentelemetry_sdk::runtime::Tokio;
@@ -342,7 +305,7 @@ mod tests {
 
     // Without these tokio settings this test just stalls forever on flushing the metrics pipeline
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn meter_provider_construction() {
+    async fn sync_instruments() {
         // Create the OTel metrics objects
         let exporter = InMemoryMetricsExporter::default();
         let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
@@ -358,9 +321,13 @@ mod tests {
         let dyn_sdk_mp = sdk_tp.meter_provider();
         let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
 
-        //Create some instruments and record some data
-        let counter = dyn_sdk_meter.create_counter("TestCounter".to_string(), None, None);
-        counter.add(4, None, None);
+        //Create all 3 sync instruments and record some data for each
+        let mono_counter =
+            dyn_sdk_meter.create_monotonic_counter("TestMonoCounter".to_string(), None, None);
+        mono_counter.add(4, None, None);
+        let ud_counter =
+            dyn_sdk_meter.create_up_down_counter("TestUpDownCounter".to_string(), None, None);
+        ud_counter.add(-6, None, None);
         let histogram = dyn_sdk_meter.create_histogram("TestHistogram".to_string(), None, None);
         histogram.record(1.234, None, None);
 
@@ -369,16 +336,25 @@ mod tests {
 
         // Extract the metrics from the exporter and assert that they are what we expect
         let finished_metrics = exporter.get_finished_metrics().unwrap();
-        let extracted_counter_data = &finished_metrics[0].scope_metrics[0].metrics[0]
+        let extracted_mono_counter_data = &finished_metrics[0].scope_metrics[0].metrics[0]
             .data
             .as_any()
             .downcast_ref::<Sum<u64>>()
             .unwrap()
             .data_points[0]
             .value;
-        assert_eq!(extracted_counter_data, &4);
+        assert_eq!(extracted_mono_counter_data, &4);
 
-        let extracted_histogram_data = &finished_metrics[0].scope_metrics[0].metrics[1]
+        let extracted_ud_counter_data = &finished_metrics[0].scope_metrics[0].metrics[1]
+            .data
+            .as_any()
+            .downcast_ref::<Sum<i64>>()
+            .unwrap()
+            .data_points[0]
+            .value;
+        assert_eq!(extracted_ud_counter_data, &-6);
+
+        let extracted_histogram_data = &finished_metrics[0].scope_metrics[0].metrics[2]
             .data
             .as_any()
             .downcast_ref::<Histogram<f64>>()
@@ -386,5 +362,135 @@ mod tests {
             .data_points[0]
             .sum;
         assert_eq!(extracted_histogram_data, &1.234);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn async_instruments() {
+        // Create the OTel metrics objects
+        let exporter = InMemoryMetricsExporter::default();
+        let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
+        let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
+
+        // Create the SDK metrics types from the OTel objects
+        let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+        let sdk_tp = TelemetryProvider::builder()
+            .meter_provider(Box::new(sdk_mp))
+            .build();
+
+        // Get the dyn versions of the SDK metrics objects
+        let dyn_sdk_mp = sdk_tp.meter_provider();
+        let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
+
+        //Create all async instruments and record some data
+        let gauge = dyn_sdk_meter.create_gauge(
+            "TestGauge".to_string(),
+            // Callback function records another value with different attributes so it is deduped
+            Box::new(|measurement: &dyn AsyncMeasurement<Value = f64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestGaugeAttr".into(),
+                    AttributeValue::String("TestGaugeAttr".into()),
+                );
+                measurement.record(6.789, Some(&attrs), None);
+            }),
+            None,
+            None,
+        );
+        gauge.record(1.234, None, None);
+
+        let async_ud_counter = dyn_sdk_meter.create_async_up_down_counter(
+            "TestAsyncUpDownCounter".to_string(),
+            Box::new(|measurement: &dyn AsyncMeasurement<Value = i64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestAsyncUpDownCounterAttr".into(),
+                    AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
+                );
+                measurement.record(12, Some(&attrs), None);
+            }),
+            None,
+            None,
+        );
+        async_ud_counter.record(-6, None, None);
+
+        let async_mono_counter = dyn_sdk_meter.create_async_monotonic_counter(
+            "TestAsyncMonoCounter".to_string(),
+            Box::new(|measurement: &dyn AsyncMeasurement<Value = u64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestAsyncMonoCounterAttr".into(),
+                    AttributeValue::String("TestAsyncMonoCounterAttr".into()),
+                );
+                measurement.record(123, Some(&attrs), None);
+            }),
+            None,
+            None,
+        );
+        async_mono_counter.record(4, None, None);
+
+        // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
+        dyn_sdk_mp.flush().unwrap();
+        dyn_sdk_mp.shutdown().unwrap();
+
+        // Extract the metrics from the exporter
+        let finished_metrics = exporter.get_finished_metrics().unwrap();
+
+        // Assert that the reported metrics are what we expect
+        let extracted_gauge_data = &finished_metrics[0].scope_metrics[0].metrics[0]
+            .data
+            .as_any()
+            .downcast_ref::<Gauge<f64>>()
+            .unwrap()
+            .data_points[0]
+            .value;
+        assert_eq!(extracted_gauge_data, &1.234);
+
+        let extracted_async_ud_counter_data = &finished_metrics[0].scope_metrics[0].metrics[1]
+            .data
+            .as_any()
+            .downcast_ref::<Sum<i64>>()
+            .unwrap()
+            .data_points[0]
+            .value;
+        assert_eq!(extracted_async_ud_counter_data, &-6);
+
+        let extracted_async_mono_data = &finished_metrics[0].scope_metrics[0].metrics[2]
+            .data
+            .as_any()
+            .downcast_ref::<Sum<u64>>()
+            .unwrap()
+            .data_points[0]
+            .value;
+        assert_eq!(extracted_async_mono_data, &4);
+
+        // Assert that the async callbacks ran
+        let finished_metrics = exporter.get_finished_metrics().unwrap();
+        println!("{finished_metrics:#?}");
+        let extracted_gauge_data = &finished_metrics[0].scope_metrics[0].metrics[0]
+            .data
+            .as_any()
+            .downcast_ref::<Gauge<f64>>()
+            .unwrap()
+            .data_points[1]
+            .value;
+        assert_eq!(extracted_gauge_data, &6.789);
+
+        let extracted_async_ud_counter_data = &finished_metrics[0].scope_metrics[0].metrics[1]
+            .data
+            .as_any()
+            .downcast_ref::<Sum<i64>>()
+            .unwrap()
+            .data_points[1]
+            .value;
+        assert_eq!(extracted_async_ud_counter_data, &12);
+
+        let extracted_async_mono_data = &finished_metrics[0].scope_metrics[0].metrics[2]
+            .data
+            .as_any()
+            .downcast_ref::<Sum<u64>>()
+            .unwrap()
+            .data_points[1]
+            .value;
+        assert_eq!(extracted_async_mono_data, &123);
     }
 }
