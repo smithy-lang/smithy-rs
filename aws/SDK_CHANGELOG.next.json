@@ -18,7 +18,7 @@
         "aws-sdk-rust#1202"
       ],
       "since-commit": "1e803494dc1c9f1d8290cf9317ed39b026a603a2",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Client SDKs built with the `awsQueryCompatible` trait now include the `x-amzn-query-mode` header. This header signals the service that the clients are operating in compatible mode.\n",
@@ -32,7 +32,7 @@
         "smithy-rs#3883"
       ],
       "since-commit": "c606065c0e2e97d3cecb6a675ffc226dc488d674",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix default credential provider chain not respecting endpoint URL overrides from environment\n",
@@ -46,7 +46,7 @@
         "aws-sdk-rust#1193"
       ],
       "since-commit": "c606065c0e2e97d3cecb6a675ffc226dc488d674",
-      "age": 2
+      "age": 3
     }
   ],
   "aws-sdk-model": []
