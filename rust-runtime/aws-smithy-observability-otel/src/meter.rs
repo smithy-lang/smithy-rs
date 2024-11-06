@@ -305,7 +305,7 @@ mod tests {
 
     // Without these tokio settings this test just stalls forever on flushing the metrics pipeline
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn sync_instruments() {
+    async fn sync_instruments_work() {
         // Create the OTel metrics objects
         let exporter = InMemoryMetricsExporter::default();
         let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn async_instruments() {
+    async fn async_instrument_work() {
         // Create the OTel metrics objects
         let exporter = InMemoryMetricsExporter::default();
         let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
@@ -465,7 +465,6 @@ mod tests {
 
         // Assert that the async callbacks ran
         let finished_metrics = exporter.get_finished_metrics().unwrap();
-        println!("{finished_metrics:#?}");
         let extracted_gauge_data = &finished_metrics[0].scope_metrics[0].metrics[0]
             .data
             .as_any()
