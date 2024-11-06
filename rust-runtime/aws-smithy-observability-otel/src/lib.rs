@@ -13,7 +13,9 @@
     rust_2018_idioms
 )]
 
-//! Smithy Observability
+//! Smithy Observability OpenTelemetry
+//TODO(smithyobservability): once we have finalized everything and integrated metrics with our runtime
+// libraries update this with detailed usage docs and examples
 
 pub mod attributes;
 pub mod meter;
