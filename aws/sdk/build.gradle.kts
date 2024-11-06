@@ -501,7 +501,7 @@ fun Project.registerDowngradeFor(
         executable = "sh" // noop to avoid execCommand == null
         doLast {
             val crateNameToLastKnownWorkingVersions =
-                mapOf("minicbor" to "0.24.2")
+                mapOf("minicbor" to "0.24.2", "idna" to "0.5.0")
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile
