@@ -54,6 +54,12 @@ impl Attributes {
     }
 }
 
+impl Default for Attributes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Delineates a logical scope that has some beginning and end
 /// (e.g. a function or block of code).
 pub trait Scope {

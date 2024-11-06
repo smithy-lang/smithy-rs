@@ -52,8 +52,12 @@ pub fn get_global_telemetry_provider() -> Arc<TelemetryProvider> {
 mod tests {
     use super::*;
     use crate::provider::TelemetryProvider;
+    use serial_test::serial;
 
+    // Note: the tests in this module are run serially to prevent them from stepping on each other and poisoning the
+    // RwLock holding the GlobalTelemetryProvider
     #[test]
+    #[serial]
     fn can_set_global_telemetry_provider() {
         let my_provider = TelemetryProvider::default();
 
@@ -65,6 +69,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn can_get_global_telemetry_provider() {
         let curr_provider = get_global_telemetry_provider();
 

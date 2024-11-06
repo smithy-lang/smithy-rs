@@ -24,8 +24,8 @@ impl TelemetryProvider {
     }
 
     /// Get the set [MeterProvider]
-    pub fn meter_provider(&self) -> &Box<(dyn MeterProvider + Send + Sync)> {
-        &self.meter_provider
+    pub fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
+        self.meter_provider.as_ref()
     }
 }
 
