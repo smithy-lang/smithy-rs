@@ -28,12 +28,10 @@ pub trait MeterProvider {
 /// The entry point to creating instruments. A grouping of related metrics.
 pub trait Meter {
     /// Create a new Gauge.
+    #[allow(clippy::type_complexity)]
     fn create_gauge(
         &self,
         name: String,
-        // TODO(smithyObservability): compare this definition to the Boxed version below
-        // callback: Box<dyn Fn(Box<dyn AsyncMeasurement<Value = Double>>)>,
-        // callback: &(dyn Fn(&dyn AsyncMeasurement<Value = Double>) + Send + Sync),
         callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
@@ -48,6 +46,7 @@ pub trait Meter {
     ) -> Box<dyn UpDownCounter>;
 
     /// Create a new AsyncUpDownCounter.
+    #[allow(clippy::type_complexity)]
     fn create_async_up_down_counter(
         &self,
         name: String,
@@ -65,6 +64,7 @@ pub trait Meter {
     ) -> Box<dyn MonotonicCounter>;
 
     /// Create a new AsyncMonotonicCounter.
+    #[allow(clippy::type_complexity)]
     fn create_async_monotonic_counter(
         &self,
         name: String,

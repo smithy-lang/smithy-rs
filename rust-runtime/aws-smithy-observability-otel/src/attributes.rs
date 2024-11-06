@@ -34,14 +34,14 @@ pub(crate) fn kv_from_option_attr(input: Option<&Attributes>) -> Vec<KeyValue> {
 
 #[allow(dead_code)]
 pub(crate) fn option_attr_from_kv(input: &[KeyValue]) -> Option<Attributes> {
-    if input.len() == 0 {
+    if input.is_empty() {
         return None;
     }
 
     Some(AttributesWrap::from(input).0)
 }
 
-impl<'a> From<AttributesWrap> for Vec<KeyValue> {
+impl From<AttributesWrap> for Vec<KeyValue> {
     fn from(value: AttributesWrap) -> Self {
         value
             .attributes()
@@ -50,10 +50,10 @@ impl<'a> From<AttributesWrap> for Vec<KeyValue> {
                 KeyValue::new(
                     k.clone(),
                     match v {
-                        AttributeValue::I64(val) => Value::I64(val.clone()),
-                        AttributeValue::F64(val) => Value::F64(val.clone()),
+                        AttributeValue::I64(val) => Value::I64(*val),
+                        AttributeValue::F64(val) => Value::F64(*val),
                         AttributeValue::String(val) => Value::String(val.clone().into()),
-                        AttributeValue::Bool(val) => Value::Bool(val.clone()),
+                        AttributeValue::Bool(val) => Value::Bool(*val),
                         _ => Value::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into()),
                     },
                 )
@@ -62,7 +62,7 @@ impl<'a> From<AttributesWrap> for Vec<KeyValue> {
     }
 }
 
-impl<'a> From<&[KeyValue]> for AttributesWrap {
+impl From<&[KeyValue]> for AttributesWrap {
     fn from(value: &[KeyValue]) -> Self {
         let mut attrs = Attributes::new();
 
@@ -70,9 +70,9 @@ impl<'a> From<&[KeyValue]> for AttributesWrap {
             attrs.set(
                 kv.key.clone().into(),
                 match &kv.value {
-                    Value::Bool(val) => AttributeValue::Bool(val.clone()),
-                    Value::I64(val) => AttributeValue::I64(val.clone()),
-                    Value::F64(val) => AttributeValue::F64(val.clone()),
+                    Value::Bool(val) => AttributeValue::Bool(*val),
+                    Value::I64(val) => AttributeValue::I64(*val),
+                    Value::F64(val) => AttributeValue::F64(*val),
                     Value::String(val) => AttributeValue::String(val.clone().into()),
                     Value::Array(_) => {
                         AttributeValue::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into())
