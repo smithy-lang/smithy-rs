@@ -5,6 +5,7 @@
 
 #![allow(dead_code)]
 
+use aws_smithy_http::header::set_request_header_if_absent;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use http::header::{HeaderName, CONTENT_LENGTH, CONTENT_TYPE};
 
@@ -51,14 +52,7 @@ impl HeaderSerializationSettings {
         value: &str,
     ) -> http::request::Builder {
         if self.include_header(&header_name) {
-            // TODO(hyper1) - revert back to use aws_smithy_http::header::set_request_header_if_absent once codegen is on http_1x types
-            if !request
-                .headers_ref()
-                .map(|map| map.contains_key(&header_name))
-                .unwrap_or(false)
-            {
-                request = request.header(header_name, value)
-            }
+            request = set_request_header_if_absent(request, header_name, value);
         }
         request
     }

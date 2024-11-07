@@ -93,3 +93,6 @@ harness = false
 [target."cfg(aws_sdk_unstable)".dependencies.serde]
 version = "1"
 features = ["derive"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)'] }
