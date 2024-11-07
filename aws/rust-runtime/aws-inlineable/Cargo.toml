@@ -12,7 +12,7 @@ publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
-http_1x = ["dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
+http_1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -21,17 +21,16 @@ aws-sigv4 = { path = "../aws-sigv4" }
 aws-types = { path = "../aws-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["compat"] }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
 fastrand = "2.0.0"
 hex = "0.4.3"
-# FIXME(hyper1) - due to the way codegen generates crate dependencies right now we have to match the codegen names used for theses
-http = { package = "http", version = "0.2.9" }
+http = "0.2.9"
 http-body = "0.4.5"
-http-1x = { package = "http", version = "1" }
+http-1x = { package = "http", version = "1", optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true }
 hmac = "0.12"
 lru = "0.12.5"

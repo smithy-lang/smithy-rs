@@ -24,8 +24,6 @@ impl SdkBody {
         SdkBody::from_body_0_4_internal(Http1toHttp04::new(body.map_err(Into::into)))
     }
 
-    // FIXME(hyper1): this method name is confusing at best since it doesn't only return data
-    // frames
     pub(crate) fn poll_data_frame(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,

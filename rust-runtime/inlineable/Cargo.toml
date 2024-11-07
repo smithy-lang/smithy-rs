@@ -28,9 +28,7 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
 fastrand = "2.0.0"
 futures-util = "0.3.29"
-# FIXME(hyper1) - due to the way codegen generates crate dependencies right now we have to match the codegen names used for theses
-http-1x = { package = "http", version = "1" }
-http = { package = "http", version = "0.2.9" }
+http = "0.2.1"
 http-body = "0.4"
 md-5 = "0.10.0"
 once_cell = "1.16.0"

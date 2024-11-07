@@ -20,7 +20,7 @@
 pub mod auth;
 
 /// AWS-specific content-encoding tools
-#[cfg(any(feature = "http-02x", feature = "http-1x"))]
+#[cfg(feature = "http-02x")]
 pub mod content_encoding;
 
 /// Supporting code for recursion detection in the AWS SDK.
