@@ -500,8 +500,9 @@ fun Project.registerDowngradeFor(
         }
         executable = "sh" // noop to avoid execCommand == null
         doLast {
+            //TODO(MSRV): remove idna and url pinned versions when ugrading MSRV to (or past) 1.81
             val crateNameToLastKnownWorkingVersions =
-                mapOf("minicbor" to "0.24.2")
+                mapOf("minicbor" to "0.24.2", "idna" to "0.5.0", "url" to "2.5.2")
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile
