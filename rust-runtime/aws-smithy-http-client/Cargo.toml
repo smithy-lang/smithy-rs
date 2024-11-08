@@ -137,3 +137,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crypto_unstable)'] }
