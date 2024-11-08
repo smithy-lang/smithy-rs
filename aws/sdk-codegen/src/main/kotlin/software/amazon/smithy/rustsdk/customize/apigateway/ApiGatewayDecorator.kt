@@ -42,6 +42,7 @@ private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegen
                                     additionalDependency =
                                         arrayOf(
                                             CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
+                                            CargoDependency.Http1x,
                                         ),
                                 ),
                             ).resolve("AcceptHeaderInterceptor"),

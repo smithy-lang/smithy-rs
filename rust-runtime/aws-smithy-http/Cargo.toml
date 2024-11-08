@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http"
-version = "0.60.11"
+version = "0.62.0"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
   "Russell Cohen <rcoh@amazon.com>",
@@ -20,7 +20,9 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["clie
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 bytes = "1"
 bytes-utils = "0.1"
+# TODO(hyper1) - Complete the breaking changes by updating to http 1.x ecosystem fully in this crate. Also remove hyper 0.14 from dev
 http-02x = { package = "http", version = "0.2.3" }
+http-1x = { package = "http", version = "1" }
 http-body-04x = { package = "http-body", version = "0.4.4" }
 once_cell = "1.10"
 percent-encoding = "2.1.0"

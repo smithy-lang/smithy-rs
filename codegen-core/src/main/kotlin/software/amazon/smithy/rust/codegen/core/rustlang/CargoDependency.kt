@@ -347,7 +347,7 @@ data class CargoDependency(
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
 
         // Hyper 1.x types
-        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http", optional = true)
+        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")
         val HttpBody1x: CargoDependency =
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body", optional = true)
 
@@ -363,9 +363,7 @@ data class CargoDependency(
 
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
 
-        fun smithyHttpClient(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.smithyRuntimeCrate("smithy-http-client")
-                .withFeature("crypto-ring")
+        fun smithyHttpClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-client")
 
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
 

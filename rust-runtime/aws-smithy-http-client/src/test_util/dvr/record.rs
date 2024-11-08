@@ -30,7 +30,7 @@ use tokio::task::JoinHandle;
 /// ```rust,ignore
 /// use aws_smithy_async::rt::sleep::default_async_sleep;
 /// use aws_smithy_runtime::client::http::hyper_014::default_connector;
-/// use aws_smithy_runtime::client::http::test_util::dvr::RecordingClient;
+/// use aws_smithy_http_client::test_util::dvr::RecordingClient;
 /// use aws_smithy_runtime_api::client::http::HttpConnectorSettingsBuilder;
 /// use aws_sdk_s3::{Client, Config};
 ///

@@ -9,6 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# TODO(hyper1) - deprecate legacy hyper features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
@@ -38,6 +39,7 @@ bytes = "1"
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.0.0"
 http-02x = { package = "http", version = "0.2.8" }
+http-1x = { package = "http", version = "1" }
 http-body-04x = { package = "http-body", version = "0.4.4" }
 http-body-1x = { package = "http-body", version = "1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
@@ -64,7 +66,6 @@ tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
 # FIXME - migrate to hyper-1
 hyper_0_14 = { package = "hyper", version = "0.14.27", features = ["client", "server", "tcp", "http1", "http2"] }
-http1 = { package = "http", version = "1" }
 
 [package.metadata.docs.rs]
 all-features = true

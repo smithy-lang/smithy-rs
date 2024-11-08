@@ -10,7 +10,7 @@ use aws_sdk_s3::config::{
     SharedAsyncSleep, Sleep, StalledStreamProtectionConfig,
 };
 use aws_sdk_s3::primitives::SdkBody;
-use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+use aws_smithy_http_client::test_util::infallible_client_fn;
 
 use aws_sdk_s3::error::DisplayErrorContext;
 use aws_smithy_async::rt::sleep::AsyncSleep;
@@ -68,7 +68,7 @@ async fn test_clients_from_service_config() {
 async fn test_missing_behavior_version() {
     use aws_sdk_s3::config::Region;
     let http_client =
-        infallible_client_fn(|_req| http::Response::builder().body(SdkBody::empty()).unwrap());
+        infallible_client_fn(|_req| http_1x::Response::builder().body(SdkBody::empty()).unwrap());
 
     let config = Config::builder()
         .region(Region::new("us-east-1"))

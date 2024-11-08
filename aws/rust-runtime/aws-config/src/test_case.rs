@@ -7,9 +7,7 @@ use crate::default_provider::use_dual_stack::use_dual_stack_provider;
 use crate::default_provider::use_fips::use_fips_provider;
 use crate::provider_config::ProviderConfig;
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
-use aws_smithy_runtime::client::http::test_util::dvr::{
-    NetworkTraffic, RecordingClient, ReplayingClient,
-};
+use aws_smithy_http_client::test_util::dvr::{NetworkTraffic, RecordingClient, ReplayingClient};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::shared::IntoShared;

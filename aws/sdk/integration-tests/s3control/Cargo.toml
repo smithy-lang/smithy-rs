@@ -18,11 +18,12 @@ test-util = []
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1.0.0"
-http = "0.2.0"
+http-1x = { package = "http", version = "1" }
 serde_json = "1.0.0"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

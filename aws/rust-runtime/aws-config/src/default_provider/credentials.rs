@@ -352,8 +352,8 @@ mod test {
         use crate::provider_config::ProviderConfig;
         use aws_credential_types::provider::error::CredentialsError;
         use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_http_client::test_util::NeverTcpConnector;
         use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
-        use aws_smithy_runtime::client::http::test_util::NeverTcpConnector;
 
         tokio::time::pause();
         let conf = ProviderConfig::no_configuration()

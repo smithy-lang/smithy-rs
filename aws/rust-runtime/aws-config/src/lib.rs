@@ -943,7 +943,7 @@ mod loader {
         use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
-        use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
+        use aws_smithy_http_client::test_util::{infallible_client_fn, NeverClient};
         use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
         use aws_types::app_name::AppName;
         use aws_types::origin::Origin;
