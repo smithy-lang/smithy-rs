@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 internal class HttpChecksumTest {
     companion object {
@@ -69,6 +70,24 @@ internal class HttpChecksumTest {
 
                 @httpHeader("x-amz-response-validation-mode")
                 validationMode: ValidationMode
+
+                @httpHeader("x-amz-checksum-crc32")
+                ChecksumCRC32: String
+
+                @httpHeader("x-amz-checksum-crc32c")
+                ChecksumCRC32C: String
+
+                @httpHeader("x-amz-checksum-crc64nvme")
+                ChecksumCRC64Nvme: String
+
+                @httpHeader("x-amz-checksum-sha1")
+                ChecksumSHA1: String
+
+                @httpHeader("x-amz-checksum-sha256")
+                ChecksumSHA256: String
+
+                @httpHeader("x-amz-checksum-foo")
+                ChecksumFoo: String
 
                 @httpPayload
                 @required
@@ -140,6 +159,8 @@ internal class HttpChecksumTest {
                 checksumResponseFailTests.map { createResponseChecksumValidationFailureTest(it, context) }.join("\n")
             val checksumStreamingRequestTestWritables =
                 streamingRequestTests.map { createStreamingRequestChecksumCalculationTest(it, context) }.join("\n")
+            val userProvidedChecksumTestWritables =
+                userProvidedChecksumTests.map { createUserProvidedChecksumsTest(it, context) }.join("\n")
             val miscTests = createMiscellaneousTests(context)
 
             // Shared imports for all test types
@@ -190,6 +211,10 @@ internal class HttpChecksumTest {
 
             rustCrate.integrationTest("streaming_request_checksums") {
                 testBase.plus(checksumStreamingRequestTestWritables)()
+            }
+
+            rustCrate.integrationTest("user_provided_checksums") {
+                testBase.plus(userProvidedChecksumTestWritables)()
             }
 
             rustCrate.integrationTest("misc_tests") {
@@ -357,7 +382,7 @@ internal class HttpChecksumTest {
                 """
                 //${testDef.docs}
                 ##[::tokio::test]
-                async fn ${algoLower}_response_checksums_work() {
+                async fn ${algoLower}_response_checksums_fails_correctly() {
                     let (http_client, _rx) = #{capture_request}(Some(
                         http::Response::builder()
                             .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
@@ -441,6 +466,67 @@ internal class HttpChecksumTest {
                         }
                         _ => panic!("Unknown error type in checksum validation"),
                     };
+                }
+                """,
+                *preludeScope,
+                "tokio" to CargoDependency.Tokio.toType(),
+                "capture_request" to RuntimeType.captureRequest(rc),
+            )
+        }
+    }
+
+    /**
+     * Generate tests for the case where a user provides a checksum
+     */
+    private fun createUserProvidedChecksumsTest(
+        testDef: UserProvidedChecksumTest,
+        context: ClientCodegenContext,
+    ): Writable {
+        val rc = context.runtimeConfig
+        val moduleName = context.moduleUseName()
+        val algoLower = testDef.checksumAlgorithm.lowercase()
+        // We treat the c after crc32c and the nvme after crc64nvme as separate words
+        // so this quick map helps us find the field to set
+        val algoFieldNames =
+            mapOf(
+                "crc32" to "checksum_crc32",
+                "crc32c" to "checksum_crc32_c",
+                "crc64nvme" to "checksum_crc64_nvme",
+                "foo" to "checksum_foo",
+                "sha1" to "checksum_sha1",
+                "sha256" to "checksum_sha256",
+            )
+
+        return writable {
+            rustTemplate(
+                """
+                //${testDef.docs}
+                ##[#{tokio}::test]
+                async fn user_provided_${algoLower}_request_checksum_works() {
+                    let (http_client, rx) = #{capture_request}(None);
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let _ = client.http_checksum_operation()
+                    .body(Blob::new(b"${testDef.requestPayload}"))
+                    .${algoFieldNames.get(algoLower)}(${testDef.checksumValue.dq()})
+                    .send()
+                    .await;
+                    let request = rx.expect_request();
+                    let ${algoLower}_header = request.headers()
+                        .get("x-amz-checksum-$algoLower")
+                        .expect("x-amz-checksum-$algoLower header should exist");
+
+                    assert_eq!(${algoLower}_header, "${testDef.expectedHeaderValue}");
+
+                    let algo_header = request.headers()
+                        .get("x-amz-request-algorithm");
+
+                    assert!(algo_header.is_none());
                 }
                 """,
                 *preludeScope,
@@ -779,5 +865,73 @@ val checksumResponseFailTests =
             "Sha256",
             "bm90LWEtY2hlY2tzdW0=",
             "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+        ),
+    )
+
+data class UserProvidedChecksumTest(
+    val docs: String,
+    val requestPayload: String,
+    val checksumAlgorithm: String,
+    val checksumValue: String,
+    val expectedHeaderName: String,
+    val expectedHeaderValue: String,
+    val forbidHeaderName: String,
+)
+
+val userProvidedChecksumTests =
+    listOf(
+        UserProvidedChecksumTest(
+            "CRC32 checksum provided by user.",
+            "Hello world",
+            "Crc32",
+            "i9aeUg==",
+            "x-amz-checksum-crc32",
+            "i9aeUg==",
+            "x-amz-request-algorithm",
+        ),
+        UserProvidedChecksumTest(
+            "CRC32C checksum provided by user.",
+            "Hello world",
+            "Crc32C",
+            "crUfeA==",
+            "x-amz-checksum-crc32c",
+            "crUfeA==",
+            "x-amz-request-algorithm",
+        ),
+        UserProvidedChecksumTest(
+            "CRC64NVME checksum provided by user.",
+            "Hello world",
+            "Crc64Nvme",
+            "OOJZ0D8xKts=",
+            "x-amz-checksum-crc64nvme",
+            "OOJZ0D8xKts=",
+            "x-amz-request-algorithm",
+        ),
+        UserProvidedChecksumTest(
+            "SHA1 checksum provided by user.",
+            "Hello world",
+            "Sha1",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+            "x-amz-checksum-sha1",
+            "e1AsOh9IyGCa4hLN+2Od7jlnP14=",
+            "x-amz-request-algorithm",
+        ),
+        UserProvidedChecksumTest(
+            "SHA256 checksum provided by user.",
+            "Hello world",
+            "Sha256",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+            "x-amz-checksum-sha256",
+            "ZOyIygCyaOW6GjVnihtTFtIS9PNmskdyMlNKiuyjfzw=",
+            "x-amz-request-algorithm",
+        ),
+        UserProvidedChecksumTest(
+            "Forwards compatibility, unmodeled checksum provided by user.",
+            "Hello world",
+            "Foo",
+            "This-is-not-a-real-checksum",
+            "x-amz-checksum-foo",
+            "This-is-not-a-real-checksum",
+            "x-amz-request-algorithm",
         ),
     )
