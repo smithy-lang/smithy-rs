@@ -1,1 +1,3 @@
-allowed_external_types = []
+allowed_external_types = [
+    "aws_smithy_runtime_api::box_error::BoxError",
+]
