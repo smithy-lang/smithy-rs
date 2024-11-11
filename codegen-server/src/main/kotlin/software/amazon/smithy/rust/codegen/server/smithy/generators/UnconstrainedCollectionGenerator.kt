@@ -117,73 +117,16 @@ class UnconstrainedCollectionGenerator(
                         } else {
                             ""
                         }
-
-                    /**
-                     * This example demonstrates a list shape that is directly constrained, while its member shape is
-                     * indirectly constrained:
-                     * ```smithy
-                     * @length(min: 1, max: 100)
-                     * list ItemList {
-                     *     member: Item
-                     * }
-                     * list Item {
-                     *     member: ItemName
-                     * }
-                     * @length(min: 1, max: 100)
-                     * string ItemName
-                     * ```
-                     *
-                     * For this model, two `pub(crate)` types are generated for the `Item` shape:
-                     * - `ItemUnconstrained`: represents the non-validated version
-                     * - `ItemConstrained`: represents the validated version
-                     *
-                     * Similarly, for `ItemList`:
-                     * - `ItemListUnconstrained`: a `pub(crate)` type representing the non-validated version
-                     * - `ItemList`: the publicly exposed validated version
-                     *
-                     * A `TryFrom` implementation must be generated to convert from `ItemListUnconstrained` to `ItemList`.
-                     * Since the final type exposed to the user is `struct ItemList(Vec<Vec<ItemName>>)`, the conversion
-                     * process involves two steps:
-                     * 1. Converting each element of the vector from `ItemUnconstrained` to `ItemConstrained` to validate
-                     *    constraints
-                     * 2. Converting the resulting `Vec<ItemConstrained>` to `Vec<Vec<ItemName>>`
-                     */
-                    val constrainedValueTypeIsNotFinalType =
-                        resolvesToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
-
-                    val finalType =
-                        if (constrainedValueTypeIsNotFinalType) {
-                            symbolProvider.toSymbol(shape.member)
-                        } else {
-                            constrainedMemberSymbol
-                        }
-
                     val constrainValueWritable =
                         writable {
                             conditionalBlock("inner.map(|inner| ", ").transpose()", constrainedMemberSymbol.isOptional()) {
-                                if (constrainedValueTypeIsNotFinalType) {
-                                    rustTemplate(
-                                        """
-                                        #{ConstrainedMemberSymbol}::try_from(inner)
-                                            .map(|inner_constrained| inner_constrained.into())
-                                            .map_err(|inner_violation| (idx, inner_violation))
-                                        """,
-                                        "ConstrainedMemberSymbol" to constrainedMemberSymbol,
-                                    )
-                                } else {
-                                    rustTemplate(
-                                        """
-                                        inner.try_into()
-                                            .map_err(|inner_violation| (idx, inner_violation))
-                                        """,
-                                    )
-                                }
+                                rust("inner.try_into().map_err(|inner_violation| (idx, inner_violation))")
                             }
                         }
 
                     rustTemplate(
                         """
-                        let res: Result<#{Vec}<#{FinalType}>, (usize, #{InnerConstraintViolationSymbol}) > = value
+                        let res: Result<#{Vec}<#{ConstrainedMemberSymbol}>, (usize, #{InnerConstraintViolationSymbol}) > = value
                             .0
                             .into_iter()
                             .enumerate()
@@ -196,10 +139,47 @@ class UnconstrainedCollectionGenerator(
                             .map_err(|(idx, inner_violation)| Self::Error::Member(idx, inner_violation))?;
                         """,
                         "Vec" to RuntimeType.Vec,
-                        "FinalType" to finalType,
+                        "ConstrainedMemberSymbol" to constrainedMemberSymbol,
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                         "ConstrainValueWritable" to constrainValueWritable,
                     )
+
+                    val constrainedValueTypeIsNotFinalType =
+                        resolvesToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
+                    if (constrainedValueTypeIsNotFinalType) {
+                        // Refer to the comments under `UnconstrainedMapGenerator` for a more in-depth explanation
+                        // of this process. Consider the following Smithy model where a constrained list contains
+                        // an indirectly constrained shape as a member:
+                        //
+                        // ```smithy
+                        // @length(min: 1, max: 100)
+                        // list ItemList {
+                        //     member: Item
+                        // }
+                        //
+                        // list Item {
+                        //     member: ItemName
+                        // }
+                        //
+                        // @length(min: 1, max: 100)
+                        // string ItemName
+                        // ```
+                        //
+                        // The final type exposed to the user is `ItemList<Vec<Vec<ItemName>>>`. However, the
+                        // intermediate representation generated is `Vec<ItemConstrained>`. This needs to be
+                        // transformed into `Vec<Vec<ItemName>>` to satisfy the `TryFrom` implementation and
+                        // successfully construct an `ItemList` instance.
+                        //
+                        // This transformation is necessary due to the nested nature of the constraints and
+                        // the difference between the internal constrained representation and the external
+                        // user-facing type.
+                        rustTemplate(
+                            """
+                            let inner: Vec<#{FinalType}> = inner.into_iter().map(|value| value.into()).collect();
+                            """,
+                            "FinalType" to symbolProvider.toSymbol(shape.member),
+                        )
+                    }
                 } else {
                     rust("let inner = value.0;")
                 }
