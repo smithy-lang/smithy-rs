@@ -46,6 +46,8 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use std::{fmt, vec};
 
+use crate::client::timeout;
+
 /// Choice of underlying cryptography library
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[non_exhaustive]
@@ -313,23 +315,23 @@ impl<Any> HyperConnectorBuilder<Any> {
             .unwrap_or((None, None));
 
         let connector = match connect_timeout {
-            Some(duration) => timeout_middleware::ConnectTimeout::new(
+            Some(duration) => timeout::ConnectTimeout::new(
                 tcp_connector,
                 sleep_impl
                     .clone()
                     .expect("a sleep impl must be provided in order to have a connect timeout"),
                 duration,
             ),
-            None => timeout_middleware::ConnectTimeout::no_timeout(tcp_connector),
+            None => timeout::ConnectTimeout::no_timeout(tcp_connector),
         };
         let base = client_builder.build(connector);
         let read_timeout = match read_timeout {
-            Some(duration) => timeout_middleware::HttpReadTimeout::new(
+            Some(duration) => timeout::HttpReadTimeout::new(
                 base,
                 sleep_impl.expect("a sleep impl must be provided in order to have a read timeout"),
                 duration,
             ),
-            None => timeout_middleware::HttpReadTimeout::no_timeout(base),
+            None => timeout::HttpReadTimeout::no_timeout(base),
         };
         HyperConnector {
             adapter: Box::new(Adapter {
@@ -398,8 +400,8 @@ impl<Any> HyperConnectorBuilder<Any> {
 ///
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`HyperConnector::builder`].
 struct Adapter<C> {
-    client: timeout_middleware::HttpReadTimeout<
-        hyper_util::client::legacy::Client<timeout_middleware::ConnectTimeout<C>, SdkBody>,
+    client: timeout::HttpReadTimeout<
+        hyper_util::client::legacy::Client<timeout::ConnectTimeout<C>, SdkBody>,
     >,
 }
 
@@ -442,7 +444,7 @@ where
     C: Clone + Send + Sync + 'static,
     C: tower::Service<Uri>,
     C::Response: Connection + Read + Write + Unpin + 'static,
-    timeout_middleware::ConnectTimeout<C>: Connect,
+    timeout::ConnectTimeout<C>: Connect,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
@@ -500,7 +502,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 
 /// Convert a [`hyper::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: &hyper::Error) -> fn(BoxError) -> ConnectorError {
-    if err.is_timeout() || find_source::<timeout_middleware::HttpTimeoutError>(err).is_some() {
+    if err.is_timeout() || find_source::<timeout::HttpTimeoutError>(err).is_some() {
         return ConnectorError::timeout;
     }
     if err.is_user() {
@@ -727,380 +729,6 @@ where
     })
 }
 
-mod timeout_middleware {
-    use std::error::Error;
-    use std::fmt::Formatter;
-    use std::future::Future;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-    use std::time::Duration;
-
-    use http_1x::Uri;
-    use pin_project_lite::pin_project;
-
-    use aws_smithy_async::future::timeout::{TimedOutError, Timeout};
-    use aws_smithy_async::rt::sleep::Sleep;
-    use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
-    use aws_smithy_runtime_api::box_error::BoxError;
-
-    #[derive(Debug)]
-    pub(crate) struct HttpTimeoutError {
-        kind: &'static str,
-        duration: Duration,
-    }
-
-    impl std::fmt::Display for HttpTimeoutError {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "{} timeout occurred after {:?}",
-                self.kind, self.duration
-            )
-        }
-    }
-
-    impl Error for HttpTimeoutError {
-        // We implement the `source` function as returning a `TimedOutError` because when `downcast_error`
-        // or `find_source` is called with an `HttpTimeoutError` (or another error wrapping an `HttpTimeoutError`)
-        // this method will be checked to determine if it's a timeout-related error.
-        fn source(&self) -> Option<&(dyn Error + 'static)> {
-            Some(&TimedOutError)
-        }
-    }
-
-    /// Timeout wrapper that will timeout on the initial TCP connection
-    ///
-    /// # Stability
-    /// This interface is unstable.
-    #[derive(Clone, Debug)]
-    pub(super) struct ConnectTimeout<I> {
-        inner: I,
-        timeout: Option<(SharedAsyncSleep, Duration)>,
-    }
-
-    impl<I> ConnectTimeout<I> {
-        /// Create a new `ConnectTimeout` around `inner`.
-        ///
-        /// Typically, `I` will implement [`hyper_util::client::legacy::connect::Connect`].
-        pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
-            Self {
-                inner,
-                timeout: Some((sleep, timeout)),
-            }
-        }
-
-        pub(crate) fn no_timeout(inner: I) -> Self {
-            Self {
-                inner,
-                timeout: None,
-            }
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    pub(crate) struct HttpReadTimeout<I> {
-        inner: I,
-        timeout: Option<(SharedAsyncSleep, Duration)>,
-    }
-
-    impl<I> HttpReadTimeout<I> {
-        /// Create a new `HttpReadTimeout` around `inner`.
-        ///
-        /// Typically, `I` will implement [`tower::Service<http::Request<SdkBody>>`].
-        pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
-            Self {
-                inner,
-                timeout: Some((sleep, timeout)),
-            }
-        }
-
-        pub(crate) fn no_timeout(inner: I) -> Self {
-            Self {
-                inner,
-                timeout: None,
-            }
-        }
-    }
-
-    pin_project! {
-        /// Timeout future for Tower services
-        ///
-        /// Timeout future to handle timing out, mapping errors, and the possibility of not timing out
-        /// without incurring an additional allocation for each timeout layer.
-        #[project = MaybeTimeoutFutureProj]
-        pub enum MaybeTimeoutFuture<F> {
-            Timeout {
-                #[pin]
-                timeout: Timeout<F, Sleep>,
-                error_type: &'static str,
-                duration: Duration,
-            },
-            NoTimeout {
-                #[pin]
-                future: F
-            }
-        }
-    }
-
-    impl<F, T, E> Future for MaybeTimeoutFuture<F>
-    where
-        F: Future<Output = Result<T, E>>,
-        E: Into<BoxError>,
-    {
-        type Output = Result<T, BoxError>;
-
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-            let (timeout_future, kind, &mut duration) = match self.project() {
-                MaybeTimeoutFutureProj::NoTimeout { future } => {
-                    return future.poll(cx).map_err(|err| err.into());
-                }
-                MaybeTimeoutFutureProj::Timeout {
-                    timeout,
-                    error_type,
-                    duration,
-                } => (timeout, error_type, duration),
-            };
-            match timeout_future.poll(cx) {
-                Poll::Ready(Ok(response)) => Poll::Ready(response.map_err(|err| err.into())),
-                Poll::Ready(Err(_timeout)) => {
-                    Poll::Ready(Err(HttpTimeoutError { kind, duration }.into()))
-                }
-                Poll::Pending => Poll::Pending,
-            }
-        }
-    }
-
-    impl<I> tower::Service<Uri> for ConnectTimeout<I>
-    where
-        I: tower::Service<Uri>,
-        I::Error: Into<BoxError>,
-    {
-        type Response = I::Response;
-        type Error = BoxError;
-        type Future = MaybeTimeoutFuture<I::Future>;
-
-        fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            self.inner.poll_ready(cx).map_err(|err| err.into())
-        }
-
-        fn call(&mut self, req: Uri) -> Self::Future {
-            match &self.timeout {
-                Some((sleep, duration)) => {
-                    let sleep = sleep.sleep(*duration);
-                    MaybeTimeoutFuture::Timeout {
-                        timeout: Timeout::new(self.inner.call(req), sleep),
-                        error_type: "HTTP connect",
-                        duration: *duration,
-                    }
-                }
-                None => MaybeTimeoutFuture::NoTimeout {
-                    future: self.inner.call(req),
-                },
-            }
-        }
-    }
-
-    impl<I, B> tower::Service<http_1x::Request<B>> for HttpReadTimeout<I>
-    where
-        I: tower::Service<http_1x::Request<B>>,
-        I::Error: Send + Sync + Error + 'static,
-    {
-        type Response = I::Response;
-        type Error = BoxError;
-        type Future = MaybeTimeoutFuture<I::Future>;
-
-        fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            self.inner.poll_ready(cx).map_err(|err| err.into())
-        }
-
-        fn call(&mut self, req: http_1x::Request<B>) -> Self::Future {
-            match &self.timeout {
-                Some((sleep, duration)) => {
-                    let sleep = sleep.sleep(*duration);
-                    MaybeTimeoutFuture::Timeout {
-                        timeout: Timeout::new(self.inner.call(req), sleep),
-                        error_type: "HTTP read",
-                        duration: *duration,
-                    }
-                }
-                None => MaybeTimeoutFuture::NoTimeout {
-                    future: self.inner.call(req),
-                },
-            }
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) mod test {
-        use std::time::Duration;
-
-        use hyper::rt::ReadBufCursor;
-        use hyper_util::client::legacy::connect::Connected;
-        use hyper_util::rt::TokioIo;
-        use tokio::net::TcpStream;
-
-        use aws_smithy_async::assert_elapsed;
-        use aws_smithy_async::future::never::Never;
-        use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-        use aws_smithy_types::error::display::DisplayErrorContext;
-
-        use super::super::*;
-
-        #[allow(unused)]
-        fn connect_timeout_is_correct<T: Send + Sync + Clone + 'static>() {
-            is_send_sync::<super::ConnectTimeout<T>>();
-        }
-
-        #[allow(unused)]
-        fn is_send_sync<T: Send + Sync>() {}
-
-        /// A service that will never return whatever it is you want
-        ///
-        /// Returned futures will return Pending forever
-        #[non_exhaustive]
-        #[derive(Clone, Default, Debug)]
-        pub(crate) struct NeverConnects;
-        impl tower::Service<Uri> for NeverConnects {
-            type Response = TokioIo<TcpStream>;
-            type Error = ConnectorError;
-            type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
-
-            fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-                Poll::Ready(Ok(()))
-            }
-
-            fn call(&mut self, _uri: Uri) -> Self::Future {
-                Box::pin(async move {
-                    Never::new().await;
-                    unreachable!()
-                })
-            }
-        }
-
-        /// A service that will connect but never send any data
-        #[derive(Clone, Debug, Default)]
-        struct NeverReplies;
-        impl tower::Service<Uri> for NeverReplies {
-            type Response = EmptyStream;
-            type Error = BoxError;
-            type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
-
-            fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-                Poll::Ready(Ok(()))
-            }
-
-            fn call(&mut self, _req: Uri) -> Self::Future {
-                std::future::ready(Ok(EmptyStream))
-            }
-        }
-
-        /// A stream that will never return or accept any data
-        #[non_exhaustive]
-        #[derive(Debug, Default)]
-        struct EmptyStream;
-        impl Read for EmptyStream {
-            fn poll_read(
-                self: Pin<&mut Self>,
-                _cx: &mut Context<'_>,
-                _buf: ReadBufCursor<'_>,
-            ) -> Poll<Result<(), std::io::Error>> {
-                Poll::Pending
-            }
-        }
-        impl Write for EmptyStream {
-            fn poll_write(
-                self: Pin<&mut Self>,
-                _cx: &mut Context<'_>,
-                _buf: &[u8],
-            ) -> Poll<Result<usize, std::io::Error>> {
-                Poll::Pending
-            }
-
-            fn poll_flush(
-                self: Pin<&mut Self>,
-                _cx: &mut Context<'_>,
-            ) -> Poll<Result<(), std::io::Error>> {
-                Poll::Pending
-            }
-
-            fn poll_shutdown(
-                self: Pin<&mut Self>,
-                _cx: &mut Context<'_>,
-            ) -> Poll<Result<(), std::io::Error>> {
-                Poll::Pending
-            }
-        }
-        impl Connection for EmptyStream {
-            fn connected(&self) -> Connected {
-                Connected::new()
-            }
-        }
-
-        #[tokio::test]
-        async fn http_connect_timeout_works() {
-            let tcp_connector = NeverConnects::default();
-            let connector_settings = HttpConnectorSettings::builder()
-                .connect_timeout(Duration::from_secs(1))
-                .build();
-            let hyper = HyperConnector::builder()
-                .connector_settings(connector_settings)
-                .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-                .build(tcp_connector)
-                .adapter;
-            let now = tokio::time::Instant::now();
-            tokio::time::pause();
-            let resp = hyper
-                .call(HttpRequest::get("https://static-uri.com").unwrap())
-                .await
-                .unwrap_err();
-            assert!(
-                resp.is_timeout(),
-                "expected resp.is_timeout() to be true but it was false, resp == {:?}",
-                resp
-            );
-            let message = DisplayErrorContext(&resp).to_string();
-            let expected =
-                "timeout: client error (Connect): HTTP connect timeout occurred after 1s";
-            assert!(
-                message.contains(expected),
-                "expected '{message}' to contain '{expected}'"
-            );
-            assert_elapsed!(now, Duration::from_secs(1));
-        }
-
-        #[tokio::test]
-        async fn http_read_timeout_works() {
-            let tcp_connector = NeverReplies;
-            let connector_settings = HttpConnectorSettings::builder()
-                .connect_timeout(Duration::from_secs(1))
-                .read_timeout(Duration::from_secs(2))
-                .build();
-            let hyper = HyperConnector::builder()
-                .connector_settings(connector_settings)
-                .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-                .build(tcp_connector)
-                .adapter;
-            let now = tokio::time::Instant::now();
-            tokio::time::pause();
-            let err = hyper
-                .call(HttpRequest::get("https://fake-uri.com").unwrap())
-                .await
-                .unwrap_err();
-            assert!(
-                err.is_timeout(),
-                "expected err.is_timeout() to be true but it was false, err == {err:?}",
-            );
-            let message = format!("{}", DisplayErrorContext(&err));
-            let expected = "timeout: HTTP read timeout occurred after 2s";
-            assert!(
-                message.contains(expected),
-                "expected '{message}' to contain '{expected}'"
-            );
-            assert_elapsed!(now, Duration::from_secs(2));
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::io::{Error, ErrorKind};
@@ -1109,14 +737,15 @@ mod test {
     use std::sync::Arc;
     use std::task::{Context, Poll};
 
+    use aws_smithy_async::assert_elapsed;
+    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::time::SystemTimeSource;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http_1x::Uri;
     use hyper::rt::ReadBufCursor;
     use hyper_util::client::legacy::connect::Connected;
 
-    use aws_smithy_async::time::SystemTimeSource;
-    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-
-    use crate::hyper_1::timeout_middleware::test::NeverConnects;
+    use crate::client::timeout::test::NeverConnects;
 
     use super::*;
 
@@ -1250,5 +879,67 @@ mod test {
         fn call(&mut self, _req: Uri) -> Self::Future {
             std::future::ready(Ok(self.inner.clone()))
         }
+    }
+
+    #[tokio::test]
+    async fn http_connect_timeout_works() {
+        let tcp_connector = NeverConnects::default();
+        let connector_settings = HttpConnectorSettings::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .build();
+        let hyper = HyperConnector::builder()
+            .connector_settings(connector_settings)
+            .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+            .build(tcp_connector)
+            .adapter;
+        let now = tokio::time::Instant::now();
+        tokio::time::pause();
+        let resp = hyper
+            .call(HttpRequest::get("https://static-uri.com").unwrap())
+            .await
+            .unwrap_err();
+        assert!(
+            resp.is_timeout(),
+            "expected resp.is_timeout() to be true but it was false, resp == {:?}",
+            resp
+        );
+        let message = DisplayErrorContext(&resp).to_string();
+        let expected = "timeout: client error (Connect): HTTP connect timeout occurred after 1s";
+        assert!(
+            message.contains(expected),
+            "expected '{message}' to contain '{expected}'"
+        );
+        assert_elapsed!(now, Duration::from_secs(1));
+    }
+
+    #[tokio::test]
+    async fn http_read_timeout_works() {
+        let tcp_connector = crate::client::timeout::test::NeverReplies;
+        let connector_settings = HttpConnectorSettings::builder()
+            .connect_timeout(Duration::from_secs(1))
+            .read_timeout(Duration::from_secs(2))
+            .build();
+        let hyper = HyperConnector::builder()
+            .connector_settings(connector_settings)
+            .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+            .build(tcp_connector)
+            .adapter;
+        let now = tokio::time::Instant::now();
+        tokio::time::pause();
+        let err = hyper
+            .call(HttpRequest::get("https://fake-uri.com").unwrap())
+            .await
+            .unwrap_err();
+        assert!(
+            err.is_timeout(),
+            "expected err.is_timeout() to be true but it was false, err == {err:?}",
+        );
+        let message = format!("{}", DisplayErrorContext(&err));
+        let expected = "timeout: HTTP read timeout occurred after 2s";
+        assert!(
+            message.contains(expected),
+            "expected '{message}' to contain '{expected}'"
+        );
+        assert_elapsed!(now, Duration::from_secs(2));
     }
 }

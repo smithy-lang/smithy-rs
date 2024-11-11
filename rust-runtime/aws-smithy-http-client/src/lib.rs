@@ -41,3 +41,5 @@ pub mod hyper_1;
 
 #[cfg(feature = "test-util")]
 pub mod test_util;
+
+pub(crate) mod client;
