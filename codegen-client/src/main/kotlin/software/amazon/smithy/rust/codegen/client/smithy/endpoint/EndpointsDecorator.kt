@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Smith
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -147,6 +148,13 @@ class EndpointsDecorator : ClientCodegenDecorator {
                 generator.testGenerator()(this)
             }
         }
+        rustCrate.mergeFeature(
+            Feature(
+                "gated-tests",
+                default = false,
+                emptyList(),
+            ),
+        )
     }
 }
 

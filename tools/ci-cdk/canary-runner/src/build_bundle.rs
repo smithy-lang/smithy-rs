@@ -143,6 +143,11 @@ wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
 wasmtime-wasi-http = "17.0.1"
+
+# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
+# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
+arbitrary = "=1.3.2"
+
 "#;
 
 lazy_static! {
@@ -599,6 +604,11 @@ wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
 wasmtime-wasi-http = "17.0.1"
+
+# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
+# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
+arbitrary = "=1.3.2"
+
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
@@ -657,6 +667,11 @@ wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
 wasmtime-wasi = "17.0.1"
 wasmtime-wasi-http = "17.0.1"
+
+# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
+# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
+arbitrary = "=1.3.2"
+
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "0.20.0" }
 aws-sdk-ec2 = { version = "0.19.0" }
