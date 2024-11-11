@@ -10,7 +10,7 @@
 ))]
 
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_http_client::hyper_1::{CryptoMode, HyperClientBuilder};
+use aws_smithy_http_client::{Builder, CryptoMode};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -24,16 +24,14 @@ use tower::Service;
 #[cfg(feature = "crypto-ring")]
 #[tokio::test]
 async fn ring_client() {
-    let client = HyperClientBuilder::new()
-        .crypto_mode(CryptoMode::Ring)
-        .build_https();
+    let client = Builder::new().crypto_mode(CryptoMode::Ring).build_https();
     smoke_test_client(&client).await.unwrap();
 }
 
 #[cfg(feature = "crypto-aws-lc-fips")]
 #[tokio::test]
 async fn aws_lc_fips_client() {
-    let client = HyperClientBuilder::new()
+    let client = Builder::new()
         .crypto_mode(CryptoMode::AwsLcFips)
         .build_https();
     smoke_test_client(&client).await.unwrap();
@@ -42,9 +40,7 @@ async fn aws_lc_fips_client() {
 #[cfg(feature = "crypto-aws-lc")]
 #[tokio::test]
 async fn aws_lc_client() {
-    let client = HyperClientBuilder::new()
-        .crypto_mode(CryptoMode::AwsLc)
-        .build_https();
+    let client = Builder::new().crypto_mode(CryptoMode::AwsLc).build_https();
     smoke_test_client(&client).await.unwrap();
 }
 
@@ -73,7 +69,7 @@ async fn custom_dns_client() {
         inner: GaiResolver::new(),
         count: Default::default(),
     };
-    let client = HyperClientBuilder::new()
+    let client = Builder::new()
         .crypto_mode(CryptoMode::Ring)
         .build_with_resolver(resolver.clone());
     smoke_test_client(&client).await.unwrap();

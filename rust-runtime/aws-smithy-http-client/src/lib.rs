@@ -26,20 +26,20 @@
 #[cfg(feature = "hyper-014")]
 pub(crate) mod hyper_legacy;
 
-/// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
+/// Legacy HTTP and TLS connectors that use hyper 0.14.x and rustls.
 #[cfg(feature = "hyper-014")]
 #[deprecated = "hyper 0.14.x support is deprecated, please migrate to 1.x client"]
 pub mod hyper_014 {
     pub use crate::hyper_legacy::*;
 }
 
-// TODO(https://github.com/smithy-lang/smithy-rs/issues/1925) - do we even want to name this/tie this to hyper?
+// FIXME - remove hyper-1 from the name
 
-/// Default HTTP and TLS connectors that use hyper 0.14.x and rustls.
+/// Default HTTP and TLS connectors
 #[cfg(feature = "hyper-1")]
-pub mod hyper_1;
+pub(crate) mod client;
+#[cfg(feature = "hyper-1")]
+pub use client::{Builder, Connector, ConnectorBuilder, CryptoMode};
 
 #[cfg(feature = "test-util")]
 pub mod test_util;
-
-pub(crate) mod client;
