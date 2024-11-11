@@ -24,6 +24,9 @@ runtime-versioner patch-runtime \
   --sdk-path "$(pwd)/aws-sdk-rust" \
   --smithy-rs-path "$(pwd)/smithy-rs"
 
+echo -e "${C_YELLOW}# Copying the SDK lockfile to aws-sdk-rust...${C_RESET}"
+cp "$(pwd)/smithy-rs/aws/sdk/Cargo.lock" "$(pwd)/aws-sdk-rust/"
+
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
 for sdk in aws-sdk-rust/sdk/*; do
   if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
