@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_client::{Builder, CryptoMode};
+use aws_smithy_http_client::{
+    tls::{self, rustls_provider::CryptoMode},
+    Builder,
+};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
 use std::net::{IpAddr, Ipv4Addr};
 
@@ -18,6 +21,6 @@ impl ResolveDns for StaticResolver {
 
 fn main() {
     let _client = Builder::new()
-        .crypto_mode(CryptoMode::Ring)
+        .tls_provider(tls::Provider::Rustls(CryptoMode::Ring))
         .build_with_resolver(StaticResolver);
 }

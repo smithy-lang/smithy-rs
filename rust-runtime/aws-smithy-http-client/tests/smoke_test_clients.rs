@@ -4,13 +4,13 @@
  */
 
 #![cfg(any(
-    feature = "crypto-ring",
-    feature = "crypto-aws-lc",
-    feature = "crypto-aws-lc-fips"
+    feature = "rustls-ring",
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips"
 ))]
 
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_http_client::{Builder, CryptoMode};
+use aws_smithy_http_client::{tls, Builder};
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -21,30 +21,40 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tower::Service;
 
-#[cfg(feature = "crypto-ring")]
+#[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn ring_client() {
-    let client = Builder::new().crypto_mode(CryptoMode::Ring).build_https();
-    smoke_test_client(&client).await.unwrap();
-}
-
-#[cfg(feature = "crypto-aws-lc-fips")]
-#[tokio::test]
-async fn aws_lc_fips_client() {
     let client = Builder::new()
-        .crypto_mode(CryptoMode::AwsLcFips)
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::Ring,
+        ))
         .build_https();
     smoke_test_client(&client).await.unwrap();
 }
 
-#[cfg(feature = "crypto-aws-lc")]
+#[cfg(feature = "rustls-aws-lc-fips")]
 #[tokio::test]
-async fn aws_lc_client() {
-    let client = Builder::new().crypto_mode(CryptoMode::AwsLc).build_https();
+async fn aws_lc_fips_client() {
+    let client = Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLcFips,
+        ))
+        .build_https();
     smoke_test_client(&client).await.unwrap();
 }
 
-#[cfg(feature = "crypto-ring")]
+#[cfg(feature = "rustls-aws-lc")]
+#[tokio::test]
+async fn aws_lc_client() {
+    let client = Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
+
+#[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn custom_dns_client() {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -70,13 +80,15 @@ async fn custom_dns_client() {
         count: Default::default(),
     };
     let client = Builder::new()
-        .crypto_mode(CryptoMode::Ring)
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::Ring,
+        ))
         .build_with_resolver(resolver.clone());
     smoke_test_client(&client).await.unwrap();
     assert_eq!(resolver.count.load(Ordering::Relaxed), 1);
 }
 
-#[cfg(feature = "crypto-ring")]
+#[cfg(feature = "rustls-ring")]
 async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>> {
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()

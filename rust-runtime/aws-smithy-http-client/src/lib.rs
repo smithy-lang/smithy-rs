@@ -39,7 +39,7 @@ pub mod hyper_014 {
 #[cfg(feature = "hyper-1")]
 pub(crate) mod client;
 #[cfg(feature = "hyper-1")]
-pub use client::{Builder, Connector, ConnectorBuilder, CryptoMode};
+pub use client::{tls, Builder, Connector, ConnectorBuilder};
 
 #[cfg(feature = "test-util")]
 pub mod test_util;

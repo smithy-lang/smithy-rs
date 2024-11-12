@@ -5,6 +5,8 @@
 
 mod dns;
 mod timeout;
+/// TLS connector(s)
+pub mod tls;
 
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
@@ -36,154 +38,12 @@ use hyper_util::client::legacy::connect::{
     capture_connection, CaptureConnection, Connect, HttpInfo,
 };
 use hyper_util::rt::TokioExecutor;
-use rustls::crypto::CryptoProvider;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::sync::RwLock;
 use std::time::Duration;
-
-/// Choice of underlying cryptography library
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-#[non_exhaustive]
-pub enum CryptoMode {
-    /// Crypto based on [ring](https://github.com/briansmith/ring)
-    #[cfg(feature = "crypto-ring")]
-    Ring,
-    /// Crypto based on [aws-lc](https://github.com/aws/aws-lc-rs)
-    #[cfg(feature = "crypto-aws-lc")]
-    AwsLc,
-    /// FIPS compliant variant of [aws-lc](https://github.com/aws/aws-lc-rs)
-    #[cfg(feature = "crypto-aws-lc-fips")]
-    AwsLcFips,
-}
-
-impl CryptoMode {
-    fn provider(self) -> CryptoProvider {
-        match self {
-            #[cfg(feature = "crypto-aws-lc")]
-            CryptoMode::AwsLc => rustls::crypto::aws_lc_rs::default_provider(),
-
-            #[cfg(feature = "crypto-ring")]
-            CryptoMode::Ring => rustls::crypto::ring::default_provider(),
-
-            #[cfg(feature = "crypto-aws-lc-fips")]
-            CryptoMode::AwsLcFips => {
-                let provider = rustls::crypto::default_fips_provider();
-                assert!(
-                    provider.fips(),
-                    "FIPS was requested but the provider did not support FIPS"
-                );
-                provider
-            }
-        }
-    }
-}
-
-#[allow(unused_imports)]
-mod cached_connectors {
-    use client::connect::HttpConnector;
-    use hyper_util::client::legacy as client;
-    use hyper_util::client::legacy::connect::dns::GaiResolver;
-
-    use crate::client::build_connector::make_tls;
-    use crate::client::{CryptoMode, Inner};
-
-    #[cfg(feature = "crypto-ring")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_RING: once_cell::sync::Lazy<
-        hyper_rustls::HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| make_tls(GaiResolver::new(), CryptoMode::Ring.provider()));
-
-    #[cfg(feature = "crypto-aws-lc")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_AWS_LC: once_cell::sync::Lazy<
-        hyper_rustls::HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| make_tls(GaiResolver::new(), CryptoMode::AwsLc.provider()));
-
-    #[cfg(feature = "crypto-aws-lc-fips")]
-    pub(crate) static HTTPS_NATIVE_ROOTS_AWS_LC_FIPS: once_cell::sync::Lazy<
-        hyper_rustls::HttpsConnector<HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| {
-        make_tls(GaiResolver::new(), CryptoMode::AwsLcFips.provider())
-    });
-
-    pub(super) fn cached_https(mode: Inner) -> hyper_rustls::HttpsConnector<HttpConnector> {
-        match mode {
-            #[cfg(feature = "crypto-ring")]
-            Inner::Standard(CryptoMode::Ring) => HTTPS_NATIVE_ROOTS_RING.clone(),
-            #[cfg(feature = "crypto-aws-lc")]
-            Inner::Standard(CryptoMode::AwsLc) => HTTPS_NATIVE_ROOTS_AWS_LC.clone(),
-            #[cfg(feature = "crypto-aws-lc-fips")]
-            Inner::Standard(CryptoMode::AwsLcFips) => HTTPS_NATIVE_ROOTS_AWS_LC_FIPS.clone(),
-            #[allow(unreachable_patterns)]
-            Inner::Standard(_) => unreachable!("unexpected mode"),
-            Inner::Custom(provider) => make_tls(GaiResolver::new(), provider),
-        }
-    }
-}
-
-mod build_connector {
-    use crate::client::{dns::HyperUtilResolver, Inner};
-    use aws_smithy_runtime_api::client::dns::ResolveDns;
-    use client::connect::HttpConnector;
-    use hyper_util::client::legacy as client;
-    use rustls::crypto::CryptoProvider;
-    use std::sync::Arc;
-
-    fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
-        let suites = &[
-            rustls::CipherSuite::TLS13_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS13_AES_128_GCM_SHA256,
-            // TLS1.2 suites
-            rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-            rustls::CipherSuite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-        ];
-        let supported_suites = suites
-            .iter()
-            .flat_map(|suite| {
-                base.cipher_suites
-                    .iter()
-                    .find(|s| &s.suite() == suite)
-                    .cloned()
-            })
-            .collect::<Vec<_>>();
-        CryptoProvider {
-            cipher_suites: supported_suites,
-            ..base
-        }
-    }
-
-    pub(crate) fn make_tls<R>(
-        resolver: R,
-        crypto_provider: CryptoProvider,
-    ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
-        use hyper_rustls::ConfigBuilderExt;
-        let mut base_connector = HttpConnector::new_with_resolver(resolver);
-        base_connector.enforce_http(false);
-        hyper_rustls::HttpsConnectorBuilder::new()
-               .with_tls_config(
-                rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_provider)))
-                    .with_safe_default_protocol_versions()
-                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                    .with_native_roots().expect("error with TLS configuration.")
-                    .with_no_client_auth()
-            )
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .wrap_connector(base_connector)
-    }
-
-    pub(super) fn https_with_resolver<R: ResolveDns>(
-        crypto_provider: Inner,
-        resolver: R,
-    ) -> hyper_rustls::HttpsConnector<HttpConnector<HyperUtilResolver<R>>> {
-        make_tls(HyperUtilResolver { resolver }, crypto_provider.provider())
-    }
-}
 
 /// [`HttpConnector`] used to make HTTP requests.
 ///
@@ -211,47 +71,46 @@ impl HttpConnector for Connector {
 
 /// Builder for [`Connector`].
 #[derive(Default, Debug)]
-pub struct ConnectorBuilder<Crypto = CryptoUnset> {
+pub struct ConnectorBuilder<Tls = TlsUnset> {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
     client_builder: Option<hyper_util::client::legacy::Builder>,
     #[allow(unused)]
-    crypto: Crypto,
+    tls: Tls,
 }
 
-/// Initial builder state, [`CryptoMode`] choice required
+/// Initial builder state, [`TlsProvider`] choice required
 #[derive(Default)]
 #[non_exhaustive]
-pub struct CryptoUnset {}
+pub struct TlsUnset {}
 
 /// Crypto implementation selected
-pub struct CryptoProviderSelected {
-    crypto_provider: Inner,
+pub struct TlsProviderSelected {
+    tls_provider: tls::Provider,
 }
 
-#[derive(Clone)]
-enum Inner {
-    Standard(CryptoMode),
-    #[allow(dead_code)]
-    Custom(CryptoProvider),
-}
-
-impl Inner {
-    fn provider(&self) -> CryptoProvider {
-        match self {
-            Inner::Standard(mode) => mode.provider(),
-            Inner::Custom(provider) => provider.clone(),
-        }
-    }
-}
-
-#[cfg(any(feature = "crypto-aws-lc", feature = "crypto-ring"))]
-impl ConnectorBuilder<CryptoProviderSelected> {
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring"
+))]
+impl ConnectorBuilder<TlsProviderSelected> {
     /// Build a [`Connector`] that will use the given DNS resolver implementation.
     pub fn build_from_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
-        let connector =
-            build_connector::https_with_resolver(self.crypto.crypto_provider.clone(), resolver);
-        self.build(connector)
+        match &self.tls.tls_provider {
+            #[cfg(any(
+                feature = "rustls-aws-lc",
+                feature = "rustls-aws-lc-fips",
+                feature = "rustls-ring"
+            ))]
+            tls::Provider::Rustls(crypto_mode) => {
+                let connector = tls::rustls_provider::build_connector::https_with_resolver(
+                    crypto_mode.clone(),
+                    resolver,
+                );
+                self.build(connector)
+            }
+        }
     }
 }
 
@@ -608,21 +467,28 @@ where
 /// This can be useful when you want to share a Hyper connector between multiple
 /// generated Smithy clients.
 #[derive(Clone, Default, Debug)]
-pub struct Builder<Crypto = CryptoUnset> {
+pub struct Builder<Tls = TlsUnset> {
     client_builder: Option<hyper_util::client::legacy::Builder>,
-    crypto_provider: Crypto,
+    tls_provider: Tls,
 }
 
-impl Builder<CryptoProviderSelected> {
+impl Builder<TlsProviderSelected> {
     /// Create a hyper client using RusTLS for TLS
     ///
     /// The trusted certificates will be loaded later when this becomes the selected
     /// HTTP client for a Smithy client.
     pub fn build_https(self) -> SharedHttpClient {
-        let crypto = self.crypto_provider.crypto_provider;
-        build_with_fn(self.client_builder, move || {
-            cached_connectors::cached_https(crypto.clone())
-        })
+        let provider = self.tls_provider.tls_provider;
+        match provider {
+            #[cfg(any(
+                feature = "rustls-aws-lc",
+                feature = "rustls-aws-lc-fips",
+                feature = "rustls-ring"
+            ))]
+            tls::Provider::Rustls(crypto_mode) => build_with_fn(self.client_builder, move || {
+                tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone())
+            }),
+        }
     }
 
     /// Create a hyper client using a custom DNS resolver
@@ -630,43 +496,37 @@ impl Builder<CryptoProviderSelected> {
         self,
         resolver: impl ResolveDns + Clone + 'static,
     ) -> SharedHttpClient {
-        build_with_fn(self.client_builder, move || {
-            build_connector::https_with_resolver(
-                self.crypto_provider.crypto_provider.clone(),
-                resolver.clone(),
-            )
-        })
+        let provider = self.tls_provider.tls_provider;
+        match provider {
+            #[cfg(any(
+                feature = "rustls-aws-lc",
+                feature = "rustls-aws-lc-fips",
+                feature = "rustls-ring"
+            ))]
+            tls::Provider::Rustls(crypto_mode) => build_with_fn(self.client_builder, move || {
+                tls::rustls_provider::build_connector::https_with_resolver(
+                    crypto_mode.clone(),
+                    resolver.clone(),
+                )
+            }),
+        }
     }
 }
 
-impl Builder<CryptoUnset> {
+impl Builder<TlsUnset> {
     /// Creates a new builder.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the cryptography implementation to use
-    pub fn crypto_mode(self, provider: CryptoMode) -> Builder<CryptoProviderSelected> {
-        Builder {
-            client_builder: self.client_builder,
-            crypto_provider: CryptoProviderSelected {
-                crypto_provider: Inner::Standard(provider),
-            },
-        }
-    }
+    // TODO(hyper1) - build for unsecure HTTP?
 
-    /// This interface will be broken in the future
-    ///
-    /// This exposes `CryptoProvider` from `rustls` directly and this API has no stability guarantee.
-    #[cfg(crypto_unstable)]
-    pub fn crypto_provider_unstable(
-        self,
-        provider: CryptoProvider,
-    ) -> Builder<CryptoProviderSelected> {
+    /// Set the TLS implementation to use
+    pub fn tls_provider(self, provider: tls::Provider) -> Builder<TlsProviderSelected> {
         Builder {
             client_builder: self.client_builder,
-            crypto_provider: CryptoProviderSelected {
-                crypto_provider: Inner::Custom(provider),
+            tls_provider: TlsProviderSelected {
+                tls_provider: provider,
             },
         }
     }
