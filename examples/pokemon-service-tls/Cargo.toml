@@ -29,8 +29,8 @@ assert_cmd = "2.0"
 serial_test = "3.1.1"
 
 # These dependencies are only required for testing the `pokemon-service-tls` program.
-hyper-rustls = { version = "0.27", features = ["http2"] }
-hyper-tls = { version = "0.6" }
+hyper-rustls = { version = "0.24", features = ["http2"] }
+hyper-tls = { version = "0.5" }
 
 # Local paths
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
