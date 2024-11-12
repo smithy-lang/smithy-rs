@@ -217,6 +217,10 @@ where
                     cfg.interceptor_state()
                         .store_append(SmithySdkFeature::FlexibleChecksumsReqCrc32c);
                 }
+                ChecksumAlgorithm::Crc64Nvme => {
+                    cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::FlexibleChecksumsReqCrc64);
+                }
                 #[allow(deprecated)]
                 ChecksumAlgorithm::Md5 => {
                     tracing::warn!(more_info = "Unsupported ChecksumAlgorithm MD5 set");

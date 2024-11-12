@@ -382,7 +382,7 @@ internal class HttpChecksumTest {
                 """
                 //${testDef.docs}
                 ##[::tokio::test]
-                async fn ${algoLower}_response_checksums_fails_correctly() {
+                async fn ${algoLower}_response_checksums_works() {
                     let (http_client, _rx) = #{capture_request}(Some(
                         http::Response::builder()
                             .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
@@ -428,7 +428,7 @@ internal class HttpChecksumTest {
                 """
                 //${testDef.docs}
                 ##[::tokio::test]
-                async fn ${algoLower}_response_checksums_work() {
+                async fn ${algoLower}_response_checksums_fail_correctly() {
                     let (http_client, _rx) = #{capture_request}(Some(
                         http::Response::builder()
                             .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
@@ -709,16 +709,14 @@ val checksumRequestTests =
             "crUfeA==",
             "V",
         ),
-        /* We do not yet support Crc64Nvme checksums
-         RequestChecksumCalculationTest(
-         "CRC64NVME checksum calculation works.",
-         "Hello world",
-         "Crc64Nvme",
-         "CRC64NVME",
-         "uc8X9yrZrD4=",
-         "W",
-         ),
-         */
+        RequestChecksumCalculationTest(
+            "CRC64NVME checksum calculation works.",
+            "Hello world",
+            "Crc64Nvme",
+            "CRC64NVME",
+            "OOJZ0D8xKts=",
+            "W",
+        ),
         RequestChecksumCalculationTest(
             "SHA1 checksum calculation works.",
             "Hello world",
@@ -758,12 +756,12 @@ val streamingRequestTests =
             "Crc32C",
             "crUfeA==",
         ),
-//    StreamingRequestChecksumCalculationTest(
-//        "CRC64NVME streaming checksum calculation works.",
-//        "Hello world",
-//        "Crc64Nvme",
-//        "uc8X9yrZrD4=",
-//    ),
+        StreamingRequestChecksumCalculationTest(
+            "CRC64NVME streaming checksum calculation works.",
+            "Hello world",
+            "Crc64Nvme",
+            "OOJZ0D8xKts=",
+        ),
         StreamingRequestChecksumCalculationTest(
             "SHA1 streaming checksum calculation works.",
             "Hello world",
@@ -799,13 +797,12 @@ val checksumResponseSuccTests =
             "Crc32C",
             "crUfeA==",
         ),
-        /*
         ResponseChecksumValidationSuccessTest(
             "Successful payload validation with Crc64Nvme checksum.",
             "Hello world",
             "Crc64Nvme",
-            "uc8X9yrZrD4=",
-        ),*/
+            "OOJZ0D8xKts=",
+        ),
         ResponseChecksumValidationSuccessTest(
             "Successful payload validation with Sha1 checksum.",
             "Hello world",
@@ -844,14 +841,13 @@ val checksumResponseFailTests =
             "bm90LWEtY2hlY2tzdW0=",
             "crUfeA==",
         ),
-        /*
         ResponseChecksumValidationFailureTest(
             "Failed payload validation with CRC64NVME checksum.",
             "Hello world",
             "Crc64Nvme",
             "bm90LWEtY2hlY2tzdW0=",
-            "uc8X9yrZrD4=",
-        ),*/
+            "OOJZ0D8xKts=",
+        ),
         ResponseChecksumValidationFailureTest(
             "Failed payload validation with SHA1 checksum.",
             "Hello world",
