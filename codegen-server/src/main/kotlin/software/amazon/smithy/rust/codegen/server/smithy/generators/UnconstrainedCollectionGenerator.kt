@@ -143,6 +143,43 @@ class UnconstrainedCollectionGenerator(
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                         "ConstrainValueWritable" to constrainValueWritable,
                     )
+
+                    val constrainedValueTypeIsNotFinalType =
+                        resolvesToNonPublicConstrainedValueType && shape.isDirectlyConstrained(symbolProvider)
+                    if (constrainedValueTypeIsNotFinalType) {
+                        // Refer to the comments under `UnconstrainedMapGenerator` for a more in-depth explanation
+                        // of this process. Consider the following Smithy model where a constrained list contains
+                        // an indirectly constrained shape as a member:
+                        //
+                        // ```smithy
+                        // @length(min: 1, max: 100)
+                        // list ItemList {
+                        //     member: Item
+                        // }
+                        //
+                        // list Item {
+                        //     member: ItemName
+                        // }
+                        //
+                        // @length(min: 1, max: 100)
+                        // string ItemName
+                        // ```
+                        //
+                        // The final type exposed to the user is `ItemList<Vec<Vec<ItemName>>>`. However, the
+                        // intermediate representation generated is `Vec<ItemConstrained>`. This needs to be
+                        // transformed into `Vec<Vec<ItemName>>` to satisfy the `TryFrom` implementation and
+                        // successfully construct an `ItemList` instance.
+                        //
+                        // This transformation is necessary due to the nested nature of the constraints and
+                        // the difference between the internal constrained representation and the external
+                        // user-facing type.
+                        rustTemplate(
+                            """
+                            let inner: Vec<#{FinalType}> = inner.into_iter().map(|value| value.into()).collect();
+                            """,
+                            "FinalType" to symbolProvider.toSymbol(shape.member),
+                        )
+                    }
                 } else {
                     rust("let inner = value.0;")
                 }
