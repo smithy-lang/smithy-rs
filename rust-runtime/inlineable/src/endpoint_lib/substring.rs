@@ -61,6 +61,8 @@ mod test {
             None
         );
     }
+
+    #[test]
     fn substring_backwards() {
         assert_eq!(
             substring("hello", 0, 2, true, &mut DiagnosticCollector::new()),

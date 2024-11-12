@@ -21,6 +21,8 @@ fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "o
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
 
+val checkedInSmithyRuntimeLockfile = rootProject.projectDir.resolve("rust-runtime/Cargo.lock")
+
 dependencies {
     implementation(project(":codegen-client"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
@@ -124,11 +126,12 @@ val allCodegenTests = listOf(
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+project.registerCopyCheckedInCargoLockfileTask(checkedInSmithyRuntimeLockfile, layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].finalizedBy("generateCargoWorkspace", "copyCheckedInCargoLockfile")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)

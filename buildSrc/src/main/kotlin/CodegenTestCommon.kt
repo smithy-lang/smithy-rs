@@ -4,6 +4,7 @@
  */
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.Exec
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
@@ -292,6 +293,17 @@ fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
                     """.trimIndent(),
                 )
         }
+    }
+}
+
+fun Project.registerCopyCheckedInCargoLockfileTask(
+    lockfile: File,
+    destinationDir: File,
+) {
+    this.tasks.register<Copy>("copyCheckedInCargoLockfile") {
+        description = "copy checked-in `Cargo.lock` to the destination directory"
+        from(lockfile)
+        into(destinationDir)
     }
 }
 
