@@ -26,7 +26,9 @@ import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -224,6 +226,31 @@ class ConstraintsTest {
         primitiveBoolean.isDirectlyConstrained(symbolProvider) shouldBe false
     }
 
+    private fun generateAndCompileServer(
+        model: Model,
+        pubConstraints: Boolean = true,
+        dir: File? = null,
+        test: (ServerCodegenContext, RustCrate) -> Unit = { _, _ -> },
+    ) {
+        if (dir?.exists() == true) {
+            dir.deleteRecursively()
+        }
+
+        // Simply compiling the crate is sufficient as a test.
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                service = "test#SampleService",
+                additionalSettings =
+                    ServerAdditionalSettings.builder()
+                        .publicConstrainedTypes(pubConstraints)
+                        .toObjectNode(),
+                overrideTestDir = dir,
+            ),
+            test = test,
+        )
+    }
+
     @Test
     fun `unnamed and named enums should validate and have an associated ConstraintViolation error type`() {
         val model =
@@ -257,12 +284,7 @@ class ConstraintsTest {
             string DayOfWeek
             """.asSmithyModel(smithyVersion = "2")
 
-        serverIntegrationTest(
-            model,
-            IntegrationTestParams(
-                service = "test#SampleService",
-            ),
-        ) { _, crate ->
+        generateAndCompileServer(model) { _, crate ->
             crate.unitTest("value_should_be_validated") {
                 rustTemplate(
                     """
@@ -277,5 +299,112 @@ class ConstraintsTest {
                 )
             }
         }
+    }
+
+    private fun createModel(
+        inputMemberShape: String,
+        additionalShapes: () -> String,
+    ) = """
+        namespace test
+        use aws.protocols#restJson1
+        use smithy.framework#ValidationException
+
+        @restJson1
+        service SampleService {
+            operations: [SampleOp]
+        }
+
+        @http(uri: "/sample", method: "POST")
+        operation SampleOp {
+            input := {
+                items : $inputMemberShape
+            }
+            errors: [ValidationException]
+        }
+        @length(min: 0 max: 65535)
+        string ItemName
+        string ItemDescription
+        ${additionalShapes()}
+        """.asSmithyModel(smithyVersion = "2")
+
+    @Test
+    fun `constrained map with an indirectly constrained nested list should compile`() {
+        val model =
+            createModel("ItemMap") {
+                """
+                @length(min: 1 max: 100)
+                map ItemMap {
+                    key: ItemName,
+                    value: ItemListA
+                }
+                list ItemListA { 
+                    member: ItemListB
+                }
+                list ItemListB {
+                    member: ItemDescription
+                }
+                """
+            }
+        generateAndCompileServer(model)
+    }
+
+    // TODO(#3895): Move tests that use `generateAndCompileServer` into `constraints.smithy` once issue is resolved.
+    @Test
+    fun `constrained list with an indirectly constrained map should compile`() {
+        val model =
+            createModel("ItemList") {
+                """
+                @length(min: 1 max: 100)
+                list ItemList {
+                    member: Item
+                }
+                map Item {
+                    key: ItemName
+                    value: ItemDescription
+                }
+                """
+            }
+        generateAndCompileServer(model)
+    }
+
+    @Test
+    fun `constrained list with an indirectly constrained nested list should compile`() {
+        val model =
+            createModel("ItemList") {
+                """
+                @length(min: 1 max: 100)
+                list ItemList {
+                    member: ItemA
+                }
+                list ItemA {
+                    member: ItemB
+                }
+                list ItemB {
+                    member: ItemName
+                }
+                """
+            }
+        generateAndCompileServer(model)
+    }
+
+    @Test
+    fun `constrained list with an indirectly constrained list that has an indirectly constrained map should compile`() {
+        val model =
+            createModel("ItemList") {
+                """
+                @length(min: 1 max: 100)
+                list ItemList {
+                    member: NestedItemList
+                }
+                list NestedItemList {
+                    member: Item
+                }
+                map Item {
+                    key: ItemName
+                    value: ItemDescription
+                }
+                """
+            }
+        generateAndCompileServer(model)
     }
 }
