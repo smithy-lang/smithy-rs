@@ -88,7 +88,6 @@ async fn custom_dns_client() {
     assert_eq!(resolver.count.load(Ordering::Relaxed), 1);
 }
 
-#[cfg(feature = "rustls-ring")]
 async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>> {
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()

@@ -177,7 +177,6 @@ mod hyper_014_support {
 
 #[cfg(test)]
 mod test {
-    use super::NeverTcpConnector;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
@@ -188,6 +187,7 @@ mod test {
     #[cfg(feature = "hyper-014")]
     #[tokio::test]
     async fn never_tcp_connector_plugs_into_hyper_014() {
+        use super::NeverTcpConnector;
         use crate::hyper_014::HyperClientBuilder;
 
         // it should compile
@@ -214,6 +214,7 @@ mod test {
     #[cfg(feature = "hyper-1")]
     #[tokio::test]
     async fn never_tcp_connector_plugs_into_hyper_1() {
+        use super::NeverTcpConnector;
         let client = crate::client::build_with_fn(None, NeverTcpConnector::new);
         let components = RuntimeComponentsBuilder::for_tests()
             .with_sleep_impl(Some(TokioSleep::new()))

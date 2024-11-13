@@ -149,7 +149,7 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(awsConfig(codegenContext.runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
-            addDependency(smithyHttpClient(codegenContext.runtimeConfig).toDevDependency().withFeature("crypto-ring"))
+            addDependency(smithyHttpClient(codegenContext.runtimeConfig).toDevDependency().withFeature("rustls-ring"))
             addDependency(AsyncStd)
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())

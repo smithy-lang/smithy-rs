@@ -407,7 +407,7 @@ impl tower::Service<Name> for InnerDnsResolver {
     }
 }
 
-#[cfg(any(feature = "legacy-test-util", feature = "hyper-014"))]
+#[cfg(all(feature = "legacy-test-util", feature = "hyper-014"))]
 impl hyper_0_14::service::Service<hyper_0_14::client::connect::dns::Name> for LoggingDnsResolver {
     type Response = Once<SocketAddr>;
     type Error = Infallible;

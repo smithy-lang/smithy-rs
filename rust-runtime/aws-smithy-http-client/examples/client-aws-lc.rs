@@ -10,12 +10,12 @@ use aws_smithy_http_client::{
 
 #[tokio::main]
 async fn main() {
-    // feature = crypto-aws-lc
+    // feature = rustls-aws-lc
     let _client = Builder::new()
         .tls_provider(tls::Provider::Rustls(CryptoMode::AwsLc))
         .build_https();
 
-    // feature = crypto-aws-lc-fips
+    // feature = rustls-aws-lc-fips
     // A FIPS client can also be created. Note that this has a more complex build environment required.
     let _client = Builder::new()
         .tls_provider(tls::Provider::Rustls(CryptoMode::AwsLcFips))

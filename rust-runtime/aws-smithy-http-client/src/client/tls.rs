@@ -17,7 +17,6 @@ pub enum Provider {
     // TLS provider based on [S2N](https://github.com/aws/s2n-tls)
     // S2n,
     // TODO(hyper1) s2n support
-
     // TODO(hyper1): consider native-tls support?
 }
 
