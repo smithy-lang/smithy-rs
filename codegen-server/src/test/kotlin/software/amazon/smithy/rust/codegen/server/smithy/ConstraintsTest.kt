@@ -25,9 +25,12 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
@@ -223,11 +226,11 @@ class ConstraintsTest {
         primitiveBoolean.isDirectlyConstrained(symbolProvider) shouldBe false
     }
 
-    // TODO(#3895): Move tests that use `generateAndCompileServer` into `constraints.smithy` once issue is resolved
     private fun generateAndCompileServer(
         model: Model,
         pubConstraints: Boolean = true,
         dir: File? = null,
+        test: (ServerCodegenContext, RustCrate) -> Unit = { _, _ -> },
     ) {
         if (dir?.exists() == true) {
             dir.deleteRecursively()
@@ -244,7 +247,57 @@ class ConstraintsTest {
                         .toObjectNode(),
                 overrideTestDir = dir,
             ),
-        ) { _, _ ->
+            test = test,
+        )
+    }
+
+    @Test
+    fun `unnamed and named enums should validate and have an associated ConstraintViolation error type`() {
+        val model =
+            """
+            namespace test
+            use aws.protocols#restJson1
+            use smithy.framework#ValidationException
+
+            @restJson1
+            service SampleService {
+                operations: [SampleOp]
+            }
+
+            @http(uri: "/dailySummary", method: "POST")
+            operation SampleOp {
+                input := {
+                    unnamedDay: UnnamedDayOfWeek
+                    namedDay: DayOfWeek
+                }
+                errors: [ValidationException]
+            }
+            @enum([
+                { value: "MONDAY" },
+                { value: "TUESDAY" }
+            ])
+            string UnnamedDayOfWeek
+            @enum([
+                { value: "MONDAY", name: "MONDAY" },
+                { value: "TUESDAY", name: "TUESDAY" }
+            ])
+            string DayOfWeek
+            """.asSmithyModel(smithyVersion = "2")
+
+        generateAndCompileServer(model) { _, crate ->
+            crate.unitTest("value_should_be_validated") {
+                rustTemplate(
+                    """
+                    let x: Result<crate::model::DayOfWeek, crate::model::day_of_week::ConstraintViolation> =
+                        "Friday".try_into();
+                    assert!(x.is_err());
+                    
+                    let x: Result<crate::model::UnnamedDayOfWeek, crate::model::unnamed_day_of_week::ConstraintViolation> =
+                        "Friday".try_into();
+                    assert!(x.is_err());
+                """,
+                )
+            }
         }
     }
 
@@ -295,6 +348,7 @@ class ConstraintsTest {
         generateAndCompileServer(model)
     }
 
+    // TODO(#3895): Move tests that use `generateAndCompileServer` into `constraints.smithy` once issue is resolved.
     @Test
     fun `constrained list with an indirectly constrained map should compile`() {
         val model =
