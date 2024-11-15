@@ -102,6 +102,7 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     sleep_impl: Option<SharedAsyncSleep>,
     client_builder: Option<hyper_util::client::legacy::Builder>,
     enable_tcp_nodelay: bool,
+    interface: Option<String>,
     // flag to indicate that cached TLS connector is ok (i.e. there are no non-default HttpConnector settings changed)
     enable_cached_tls: bool,
     #[allow(unused)]
@@ -178,6 +179,7 @@ impl ConnectorBuilder<TlsUnset> {
             sleep_impl: self.sleep_impl,
             client_builder: self.client_builder,
             enable_tcp_nodelay: self.enable_tcp_nodelay,
+            interface: self.interface,
             enable_cached_tls: self.enable_cached_tls,
             tls: TlsProviderSelected {
                 tls_provider: provider,
@@ -246,6 +248,10 @@ impl<Any> ConnectorBuilder<Any> {
     fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
         let mut conn = HyperHttpConnector::new_with_resolver(resolver);
         conn.set_nodelay(self.enable_tcp_nodelay);
+        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+        if let Some(interface) = self.interface {
+            conn.set_interface(self.interface);
+        }
         conn
     }
 
@@ -291,6 +297,22 @@ impl<Any> ConnectorBuilder<Any> {
     /// Configure `SO_NODELAY` for all sockets to the supplied value `nodelay`
     pub fn set_enable_tcp_nodelay(&mut self, nodelay: bool) -> &mut Self {
         self.enable_tcp_nodelay = nodelay;
+        self
+    }
+
+    /// Sets the value for the `SO_BINDTODEVICE` option on this socket.
+    ///
+    /// If a socket is bound to an interface, only packets received from that particular
+    /// interface are processed by the socket. Note that this only works for some socket
+    /// types (e.g. `AF_INET` sockets).
+    ///
+    /// On Linux it can be used to specify a [VRF], but the binary needs to either have
+    /// `CAP_NET_RAW` capability set or be run as root.
+    ///
+    /// This function is only availble on Android, Fuchsia, and Linux.
+    /// [VRF]: https://www.kernel.org/doc/Documentation/networking/vrf.txt
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+    pub fn set_interface<S: Into<String>>(&mut self, interface: S) -> Self {
         self
     }
 
