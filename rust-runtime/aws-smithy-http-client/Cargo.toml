@@ -135,4 +135,4 @@ rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crypto_unstable)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_smithy_http_unstable)'] }

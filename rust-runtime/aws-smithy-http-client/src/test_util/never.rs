@@ -215,7 +215,7 @@ mod test {
     #[tokio::test]
     async fn never_tcp_connector_plugs_into_hyper_1() {
         use super::NeverTcpConnector;
-        let client = crate::client::build_with_fn(None, NeverTcpConnector::new);
+        let client = crate::client::build_with_tcp_conn_fn(None, NeverTcpConnector::new);
         let components = RuntimeComponentsBuilder::for_tests()
             .with_sleep_impl(Some(TokioSleep::new()))
             .with_time_source(Some(SystemTimeSource::new()))

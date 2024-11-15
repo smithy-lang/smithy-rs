@@ -8,6 +8,7 @@ mod timeout;
 /// TLS connector(s)
 pub mod tls;
 
+use crate::client::dns::HyperUtilResolver;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -34,14 +35,16 @@ use h2::Reason;
 use http_1x::{Extensions, Uri};
 use hyper::rt::{Read, Write};
 use hyper_util::client::legacy as client;
+use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
 use hyper_util::client::legacy::connect::{
-    capture_connection, CaptureConnection, Connect, HttpInfo,
+    capture_connection, CaptureConnection, Connect, HttpConnector as HyperHttpConnector, HttpInfo,
 };
 use hyper_util::rt::TokioExecutor;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::net::SocketAddr;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -57,9 +60,12 @@ pub struct Connector {
 }
 
 impl Connector {
-    /// Builder for a Hyper connector.
+    /// Builder for an HTTP connector.
     pub fn builder() -> ConnectorBuilder {
-        Default::default()
+        ConnectorBuilder {
+            enable_tcp_nodelay: true,
+            ..Default::default()
+        }
     }
 }
 
@@ -75,6 +81,9 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
     client_builder: Option<hyper_util::client::legacy::Builder>,
+    enable_tcp_nodelay: bool,
+    // flag to indicate that cached TLS connector is ok (i.e. there are no non-default HttpConnector settings changed)
+    enable_cached_tls: bool,
     #[allow(unused)]
     tls: Tls,
 }
@@ -84,39 +93,82 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
 #[non_exhaustive]
 pub struct TlsUnset {}
 
-/// Crypto implementation selected
+/// TLS implementation selected
 pub struct TlsProviderSelected {
     tls_provider: tls::Provider,
 }
 
-#[cfg(any(
-    feature = "rustls-aws-lc",
-    feature = "rustls-aws-lc-fips",
-    feature = "rustls-ring"
-))]
 impl ConnectorBuilder<TlsProviderSelected> {
+    /// Build a [`Connector`] that will use the default DNS resolver implementation.
+    pub fn build(self) -> Connector {
+        let http_connector = self.base_connector();
+        self.build_https(http_connector)
+    }
+
     /// Build a [`Connector`] that will use the given DNS resolver implementation.
-    pub fn build_from_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
+    pub fn build_with_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
+        let http_connector = self.base_connector_with_resolver(HyperUtilResolver { resolver });
+        self.build_https(http_connector)
+    }
+
+    fn build_https<R>(self, http_connector: HyperHttpConnector<R>) -> Connector
+    where
+        R: Clone + Send + Sync + 'static,
+        R: tower::Service<Name>,
+        R::Response: Iterator<Item = SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
         match &self.tls.tls_provider {
+            // TODO(hyper1) - fix cfg_rustls! to allow matching on patterns so we can re-use it and not duplicate these cfg matches everywhere
             #[cfg(any(
                 feature = "rustls-aws-lc",
                 feature = "rustls-aws-lc-fips",
                 feature = "rustls-ring"
             ))]
             tls::Provider::Rustls(crypto_mode) => {
-                let connector = tls::rustls_provider::build_connector::https_with_resolver(
-                    crypto_mode.clone(),
-                    resolver,
-                );
-                self.build(connector)
+                if self.enable_cached_tls {
+                    let https_connector =
+                        tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone());
+                    self.wrap_connector(https_connector)
+                } else {
+                    let https_connector = tls::rustls_provider::build_connector::wrap_connector(
+                        http_connector,
+                        crypto_mode.clone(),
+                    );
+                    self.wrap_connector(https_connector)
+                }
             }
+        }
+    }
+
+    /// Enable cached TLS connector to be used. Used internally to indicate that no default connector
+    /// settings have been changed and that we can re-use and wrap an existing cached TLS connector
+    fn enable_cached_tls_connectors(mut self) -> Self {
+        self.enable_cached_tls = true;
+        self
+    }
+}
+
+impl ConnectorBuilder<TlsUnset> {
+    /// Set the TLS implementation to use for this connector
+    pub fn tls_provider(self, provider: tls::Provider) -> ConnectorBuilder<TlsProviderSelected> {
+        ConnectorBuilder {
+            connector_settings: self.connector_settings,
+            sleep_impl: self.sleep_impl,
+            client_builder: self.client_builder,
+            enable_tcp_nodelay: self.enable_tcp_nodelay,
+            enable_cached_tls: self.enable_cached_tls,
+            tls: TlsProviderSelected {
+                tls_provider: provider,
+            },
         }
     }
 }
 
 impl<Any> ConnectorBuilder<Any> {
     /// Create a [`Connector`] from this builder and a given connector.
-    pub(crate) fn build<C>(self, tcp_connector: C) -> Connector
+    pub(crate) fn wrap_connector<C>(self, tcp_connector: C) -> Connector
     where
         C: Send + Sync + 'static,
         C: Clone,
@@ -163,6 +215,20 @@ impl<Any> ConnectorBuilder<Any> {
         }
     }
 
+    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+    /// (which is a base TCP connector with no TLS or any wrapping)
+    fn base_connector(&self) -> HyperHttpConnector {
+        self.base_connector_with_resolver(GaiResolver::new())
+    }
+
+    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+    /// using the given resolver `R`
+    fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
+        let mut conn = HyperHttpConnector::new_with_resolver(resolver);
+        conn.set_nodelay(self.enable_tcp_nodelay);
+        conn
+    }
+
     /// Set the async sleep implementation used for timeouts
     ///
     /// Calling this is only necessary for testing or to use something other than
@@ -193,6 +259,18 @@ impl<Any> ConnectorBuilder<Any> {
         connector_settings: Option<HttpConnectorSettings>,
     ) -> &mut Self {
         self.connector_settings = connector_settings;
+        self
+    }
+
+    /// Configure `SO_NODELAY` for all sockets to the supplied value `nodelay`
+    pub fn enable_tcp_nodelay(mut self, nodelay: bool) -> Self {
+        self.enable_tcp_nodelay = nodelay;
+        self
+    }
+
+    /// Configure `SO_NODELAY` for all sockets to the supplied value `nodelay`
+    pub fn set_enable_tcp_nodelay(&mut self, nodelay: bool) -> &mut Self {
+        self.enable_tcp_nodelay = nodelay;
         self
     }
 
@@ -383,7 +461,7 @@ impl From<&HttpConnectorSettings> for CacheKey {
 struct HyperClient<F> {
     connector_cache: RwLock<HashMap<CacheKey, SharedHttpConnector>>,
     client_builder: hyper_util::client::legacy::Builder,
-    tcp_connector_fn: F,
+    connector_fn: F,
 }
 
 impl<F> fmt::Debug for HyperClient<F> {
@@ -395,14 +473,16 @@ impl<F> fmt::Debug for HyperClient<F> {
     }
 }
 
-impl<C, F> HttpClient for HyperClient<F>
+impl<F> HttpClient for HyperClient<F>
 where
-    F: Fn() -> C + Send + Sync,
-    C: Clone + Send + Sync + 'static,
-    C: tower::Service<Uri>,
-    C::Response: Connection + Read + Write + Send + Sync + Unpin + 'static,
-    C::Future: Unpin + Send + 'static,
-    C::Error: Into<BoxError>,
+    F: Fn(
+            hyper_util::client::legacy::Builder,
+            Option<&HttpConnectorSettings>,
+            Option<&RuntimeComponents>,
+        ) -> Connector
+        + Send
+        + Sync
+        + 'static,
 {
     fn http_connector(
         &self,
@@ -415,20 +495,19 @@ where
             let mut cache = self.connector_cache.write().unwrap();
             // Short-circuit if another thread already wrote a connector to the cache for this key
             if !cache.contains_key(&key) {
-                let mut builder = Connector::builder()
-                    .hyper_builder(self.client_builder.clone())
-                    .connector_settings(settings.clone());
-                builder.set_sleep_impl(components.sleep_impl());
-
                 let start = components.time_source().map(|ts| ts.now());
-                let tcp_connector = (self.tcp_connector_fn)();
+                let connector = (self.connector_fn)(
+                    self.client_builder.clone(),
+                    Some(settings),
+                    Some(components),
+                );
                 let end = components.time_source().map(|ts| ts.now());
                 if let (Some(start), Some(end)) = (start, end) {
                     if let Ok(elapsed) = end.duration_since(start) {
-                        tracing::debug!("new TCP connector created in {:?}", elapsed);
+                        tracing::debug!("new connector created in {:?}", elapsed);
                     }
                 }
-                let connector = SharedHttpConnector::new(builder.build(tcp_connector));
+                let connector = SharedHttpConnector::new(connector);
                 cache.insert(key.clone(), connector);
             }
             connector = cache.get(&key).cloned();
@@ -447,7 +526,7 @@ where
         // here rather than at construction so that it won't run if this is not
         // the selected HTTP client for the base config (for example, if this was
         // the default HTTP client, and it was overridden by a later plugin).
-        let _ = (self.tcp_connector_fn)();
+        let _ = (self.connector_fn)(self.client_builder.clone(), None, None);
         Ok(())
     }
 
@@ -478,17 +557,17 @@ impl Builder<TlsProviderSelected> {
     /// The trusted certificates will be loaded later when this becomes the selected
     /// HTTP client for a Smithy client.
     pub fn build_https(self) -> SharedHttpClient {
-        let provider = self.tls_provider.tls_provider;
-        match provider {
-            #[cfg(any(
-                feature = "rustls-aws-lc",
-                feature = "rustls-aws-lc-fips",
-                feature = "rustls-ring"
-            ))]
-            tls::Provider::Rustls(crypto_mode) => build_with_fn(self.client_builder, move || {
-                tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone())
-            }),
-        }
+        build_with_conn_fn(
+            self.client_builder,
+            move |client_builder, settings, runtime_components| {
+                let builder = new_conn_builder(client_builder, settings, runtime_components)
+                    .tls_provider(self.tls_provider.tls_provider.clone())
+                    // the base HTTP connector settings have not changed, and we are not using a custom resolver
+                    // mark the connector as safe to use cached TLS connectors
+                    .enable_cached_tls_connectors();
+                builder.build()
+            },
+        )
     }
 
     /// Create a hyper client using a custom DNS resolver
@@ -496,20 +575,14 @@ impl Builder<TlsProviderSelected> {
         self,
         resolver: impl ResolveDns + Clone + 'static,
     ) -> SharedHttpClient {
-        let provider = self.tls_provider.tls_provider;
-        match provider {
-            #[cfg(any(
-                feature = "rustls-aws-lc",
-                feature = "rustls-aws-lc-fips",
-                feature = "rustls-ring"
-            ))]
-            tls::Provider::Rustls(crypto_mode) => build_with_fn(self.client_builder, move || {
-                tls::rustls_provider::build_connector::https_with_resolver(
-                    crypto_mode.clone(),
-                    resolver.clone(),
-                )
-            }),
-        }
+        build_with_conn_fn(
+            self.client_builder,
+            move |client_builder, settings, runtime_components| {
+                let builder = new_conn_builder(client_builder, settings, runtime_components)
+                    .tls_provider(self.tls_provider.tls_provider.clone());
+                builder.build_with_resolver(resolver.clone())
+            },
+        )
     }
 }
 
@@ -532,7 +605,29 @@ impl Builder<TlsUnset> {
     }
 }
 
-pub(crate) fn build_with_fn<C, F>(
+pub(crate) fn build_with_conn_fn<F>(
+    client_builder: Option<hyper_util::client::legacy::Builder>,
+    connector_fn: F,
+) -> SharedHttpClient
+where
+    F: Fn(
+            hyper_util::client::legacy::Builder,
+            Option<&HttpConnectorSettings>,
+            Option<&RuntimeComponents>,
+        ) -> Connector
+        + Send
+        + Sync
+        + 'static,
+{
+    SharedHttpClient::new(HyperClient {
+        connector_cache: RwLock::new(HashMap::new()),
+        client_builder: client_builder
+            .unwrap_or_else(|| hyper_util::client::legacy::Builder::new(TokioExecutor::new())),
+        connector_fn,
+    })
+}
+
+pub(crate) fn build_with_tcp_conn_fn<C, F>(
     client_builder: Option<hyper_util::client::legacy::Builder>,
     tcp_connector_fn: F,
 ) -> SharedHttpClient
@@ -545,12 +640,26 @@ where
     C::Error: Into<BoxError>,
     C: Connect,
 {
-    SharedHttpClient::new(HyperClient {
-        connector_cache: RwLock::new(HashMap::new()),
-        client_builder: client_builder
-            .unwrap_or_else(|| hyper_util::client::legacy::Builder::new(TokioExecutor::new())),
-        tcp_connector_fn,
-    })
+    build_with_conn_fn(
+        client_builder,
+        move |client_builder, settings, runtime_components| {
+            let builder = new_conn_builder(client_builder, settings, runtime_components);
+            builder.wrap_connector(tcp_connector_fn())
+        },
+    )
+}
+
+fn new_conn_builder(
+    client_builder: hyper_util::client::legacy::Builder,
+    settings: Option<&HttpConnectorSettings>,
+    runtime_components: Option<&RuntimeComponents>,
+) -> ConnectorBuilder {
+    let mut builder = Connector::builder().hyper_builder(client_builder);
+    builder.set_connector_settings(settings.cloned());
+    if let Some(components) = runtime_components {
+        builder.set_sleep_impl(components.sleep_impl());
+    }
+    builder
 }
 
 #[cfg(test)]
@@ -577,7 +686,7 @@ mod test {
     async fn connector_selection() {
         // Create a client that increments a count every time it creates a new Connector
         let creation_count = Arc::new(AtomicU32::new(0));
-        let http_client = build_with_fn(None, {
+        let http_client = build_with_tcp_conn_fn(None, {
             let count = creation_count.clone();
             move || {
                 count.fetch_add(1, Ordering::Relaxed);
@@ -634,7 +743,7 @@ mod test {
         let connector = TestConnection {
             inner: HangupStream,
         };
-        let adapter = Connector::builder().build(connector).adapter;
+        let adapter = Connector::builder().wrap_connector(connector).adapter;
         let err = adapter
             .call(HttpRequest::get("https://socket-hangup.com").unwrap())
             .await
@@ -714,7 +823,7 @@ mod test {
         let hyper = Connector::builder()
             .connector_settings(connector_settings)
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-            .build(tcp_connector)
+            .wrap_connector(tcp_connector)
             .adapter;
         let now = tokio::time::Instant::now();
         tokio::time::pause();
@@ -746,7 +855,7 @@ mod test {
         let hyper = Connector::builder()
             .connector_settings(connector_settings)
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-            .build(tcp_connector)
+            .wrap_connector(tcp_connector)
             .adapter;
         let now = tokio::time::Instant::now();
         tokio::time::pause();
