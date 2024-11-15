@@ -16,7 +16,7 @@ hyper-014 = [
     "dep:hyper-0-14",
 ]
 
-# FIXME - rename feature and add default feature(s) for default client/tls
+# FIXME(hyper1) - rename feature
 hyper-1 = [
     "aws-smithy-runtime-api/http-1x",
     "aws-smithy-types/http-body-1-x",
@@ -25,6 +25,11 @@ hyper-1 = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+]
+
+default-tls = [
+    "hyper-1",
+    "rustls-aws-lc"
 ]
 
 wire-mock = [
@@ -128,11 +133,16 @@ doc-scrape-examples = true
 stable = true
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
+features = [
+    "hyper-1 ",
+    "wire-mock",
+    "test-util",
+    "rustls-ring",
+    "rustls-aws-lc",
+]
+
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_smithy_http_unstable)'] }

@@ -11,6 +11,7 @@
 //!
 //! # Crate Features
 //!
+//! - `default-tls`: Enable default TLS provider (used by `default_client()` to provide a default configured HTTPS client)
 //! - `hyper-014`: (Deprecated) HTTP client implementation based on hyper-0.14.x.
 //! - `test-util`: Enables utilities for unit tests. DO NOT ENABLE IN PRODUCTION.
 
@@ -33,13 +34,11 @@ pub mod hyper_014 {
     pub use crate::hyper_legacy::*;
 }
 
-// FIXME - remove hyper-1 from the name
-
 /// Default HTTP and TLS connectors
 #[cfg(feature = "hyper-1")]
 pub(crate) mod client;
 #[cfg(feature = "hyper-1")]
-pub use client::{tls, Builder, Connector, ConnectorBuilder};
+pub use client::{default_client, tls, Builder, Connector, ConnectorBuilder};
 
 #[cfg(feature = "test-util")]
 pub mod test_util;
