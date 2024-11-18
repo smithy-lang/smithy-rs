@@ -8,14 +8,13 @@ mod timeout;
 /// TLS connector(s)
 pub mod tls;
 
-use crate::client::dns::HyperUtilResolver;
+use crate::cfg::cfg_tls;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
-use aws_smithy_runtime_api::client::dns::ResolveDns;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
@@ -35,16 +34,14 @@ use h2::Reason;
 use http_1x::{Extensions, Uri};
 use hyper::rt::{Read, Write};
 use hyper_util::client::legacy as client;
-use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
 use hyper_util::client::legacy::connect::{
-    capture_connection, CaptureConnection, Connect, HttpConnector as HyperHttpConnector, HttpInfo,
+    capture_connection, CaptureConnection, Connect, HttpInfo,
 };
 use hyper_util::rt::TokioExecutor;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::net::SocketAddr;
 use std::sync::RwLock;
 use std::time::Duration;
 
@@ -116,60 +113,8 @@ pub struct TlsUnset {}
 
 /// TLS implementation selected
 pub struct TlsProviderSelected {
+    #[allow(unused)]
     tls_provider: tls::Provider,
-}
-
-impl ConnectorBuilder<TlsProviderSelected> {
-    /// Build a [`Connector`] that will use the default DNS resolver implementation.
-    pub fn build(self) -> Connector {
-        let http_connector = self.base_connector();
-        self.build_https(http_connector)
-    }
-
-    /// Build a [`Connector`] that will use the given DNS resolver implementation.
-    pub fn build_with_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
-        let http_connector = self.base_connector_with_resolver(HyperUtilResolver { resolver });
-        self.build_https(http_connector)
-    }
-
-    fn build_https<R>(self, http_connector: HyperHttpConnector<R>) -> Connector
-    where
-        R: Clone + Send + Sync + 'static,
-        R: tower::Service<Name>,
-        R::Response: Iterator<Item = SocketAddr>,
-        R::Future: Send,
-        R::Error: Into<Box<dyn Error + Send + Sync>>,
-    {
-        match &self.tls.tls_provider {
-            // TODO(hyper1) - fix cfg_rustls! to allow matching on patterns so we can re-use it and not duplicate these cfg matches everywhere
-            #[cfg(any(
-                feature = "rustls-aws-lc",
-                feature = "rustls-aws-lc-fips",
-                feature = "rustls-ring"
-            ))]
-            tls::Provider::Rustls(crypto_mode) => {
-                if self.enable_cached_tls {
-                    let https_connector =
-                        tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone());
-                    self.wrap_connector(https_connector)
-                } else {
-                    let https_connector = tls::rustls_provider::build_connector::wrap_connector(
-                        http_connector,
-                        crypto_mode.clone(),
-                    );
-                    self.wrap_connector(https_connector)
-                }
-            }
-            _ => unreachable!("unknown TLS provider"),
-        }
-    }
-
-    /// Enable cached TLS connector to be used. Used internally to indicate that no default connector
-    /// settings have been changed and that we can re-use and wrap an existing cached TLS connector
-    fn enable_cached_tls_connectors(mut self) -> Self {
-        self.enable_cached_tls = true;
-        self
-    }
 }
 
 impl ConnectorBuilder<TlsUnset> {
@@ -236,24 +181,6 @@ impl<Any> ConnectorBuilder<Any> {
                 client: read_timeout,
             }),
         }
-    }
-
-    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
-    /// (which is a base TCP connector with no TLS or any wrapping)
-    fn base_connector(&self) -> HyperHttpConnector {
-        self.base_connector_with_resolver(GaiResolver::new())
-    }
-
-    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
-    /// using the given resolver `R`
-    fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
-        let mut conn = HyperHttpConnector::new_with_resolver(resolver);
-        conn.set_nodelay(self.enable_tcp_nodelay);
-        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-        if let Some(interface) = &self.interface {
-            conn.set_interface(interface);
-        }
-        conn
     }
 
     /// Set the async sleep implementation used for timeouts
@@ -592,41 +519,122 @@ where
 #[derive(Clone, Default, Debug)]
 pub struct Builder<Tls = TlsUnset> {
     client_builder: Option<hyper_util::client::legacy::Builder>,
+    #[allow(unused)]
     tls_provider: Tls,
 }
 
-impl Builder<TlsProviderSelected> {
-    /// Create a hyper client using RusTLS for TLS
-    ///
-    /// The trusted certificates will be loaded later when this becomes the selected
-    /// HTTP client for a Smithy client.
-    pub fn build_https(self) -> SharedHttpClient {
-        build_with_conn_fn(
-            self.client_builder,
-            move |client_builder, settings, runtime_components| {
-                let builder = new_conn_builder(client_builder, settings, runtime_components)
-                    .tls_provider(self.tls_provider.tls_provider.clone())
-                    // the base HTTP connector settings have not changed, and we are not using a custom resolver
-                    // mark the connector as safe to use cached TLS connectors
-                    .enable_cached_tls_connectors();
-                builder.build()
-            },
-        )
+cfg_tls! {
+    use crate::client::dns::HyperUtilResolver;
+    use aws_smithy_runtime_api::client::dns::ResolveDns;
+    use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
+    use hyper_util::client::legacy::connect::HttpConnector as HyperHttpConnector;
+    use std::net::SocketAddr;
+
+    impl<Any> ConnectorBuilder<Any> {
+        /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+        /// (which is a base TCP connector with no TLS or any wrapping)
+        fn base_connector(&self) -> HyperHttpConnector {
+            self.base_connector_with_resolver(GaiResolver::new())
+        }
+
+        /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+        /// using the given resolver `R`
+        fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
+            let mut conn = HyperHttpConnector::new_with_resolver(resolver);
+            conn.set_nodelay(self.enable_tcp_nodelay);
+            #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+            if let Some(interface) = &self.interface {
+                conn.set_interface(interface);
+            }
+            conn
+        }
     }
 
-    /// Create a hyper client using a custom DNS resolver
-    pub fn build_with_resolver(
-        self,
-        resolver: impl ResolveDns + Clone + 'static,
-    ) -> SharedHttpClient {
-        build_with_conn_fn(
-            self.client_builder,
-            move |client_builder, settings, runtime_components| {
-                let builder = new_conn_builder(client_builder, settings, runtime_components)
-                    .tls_provider(self.tls_provider.tls_provider.clone());
-                builder.build_with_resolver(resolver.clone())
-            },
-        )
+    impl ConnectorBuilder<TlsProviderSelected> {
+        /// Build a [`Connector`] that will use the default DNS resolver implementation.
+        pub fn build(self) -> Connector {
+            let http_connector = self.base_connector();
+            self.build_https(http_connector)
+        }
+
+        /// Build a [`Connector`] that will use the given DNS resolver implementation.
+        pub fn build_with_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
+            let http_connector = self.base_connector_with_resolver(HyperUtilResolver { resolver });
+            self.build_https(http_connector)
+        }
+
+        fn build_https<R>(self, http_connector: HyperHttpConnector<R>) -> Connector
+        where
+            R: Clone + Send + Sync + 'static,
+            R: tower::Service<Name>,
+            R::Response: Iterator<Item = SocketAddr>,
+            R::Future: Send,
+            R::Error: Into<Box<dyn Error + Send + Sync>>,
+        {
+            match &self.tls.tls_provider {
+                // TODO(hyper1) - fix cfg_rustls! to allow matching on patterns so we can re-use it and not duplicate these cfg matches everywhere
+                #[cfg(any(
+                    feature = "rustls-aws-lc",
+                    feature = "rustls-aws-lc-fips",
+                    feature = "rustls-ring"
+                ))]
+                tls::Provider::Rustls(crypto_mode) => {
+                    if self.enable_cached_tls {
+                        let https_connector =
+                            tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone());
+                        self.wrap_connector(https_connector)
+                    } else {
+                        let https_connector = tls::rustls_provider::build_connector::wrap_connector(
+                            http_connector,
+                            crypto_mode.clone(),
+                        );
+                        self.wrap_connector(https_connector)
+                    }
+                }
+            }
+        }
+
+        /// Enable cached TLS connector to be used. Used internally to indicate that no default connector
+        /// settings have been changed and that we can re-use and wrap an existing cached TLS connector
+        fn enable_cached_tls_connectors(mut self) -> Self {
+            self.enable_cached_tls = true;
+            self
+        }
+    }
+
+    impl Builder<TlsProviderSelected> {
+        /// Create a hyper client using RusTLS for TLS
+        ///
+        /// The trusted certificates will be loaded later when this becomes the selected
+        /// HTTP client for a Smithy client.
+        pub fn build_https(self) -> SharedHttpClient {
+            build_with_conn_fn(
+                self.client_builder,
+                move |client_builder, settings, runtime_components| {
+                    let builder = new_conn_builder(client_builder, settings, runtime_components)
+                        .tls_provider(self.tls_provider.tls_provider.clone())
+                        // the base HTTP connector settings have not changed, and we are not using a custom resolver
+                        // mark the connector as safe to use cached TLS connectors
+                        .enable_cached_tls_connectors();
+                    builder.build()
+                },
+            )
+        }
+
+        /// Create a hyper client using a custom DNS resolver
+        pub fn build_with_resolver(
+            self,
+            resolver: impl ResolveDns + Clone + 'static,
+        ) -> SharedHttpClient {
+            build_with_conn_fn(
+                self.client_builder,
+                move |client_builder, settings, runtime_components| {
+                    let builder = new_conn_builder(client_builder, settings, runtime_components)
+                        .tls_provider(self.tls_provider.tls_provider.clone());
+                    builder.build_with_resolver(resolver.clone())
+                },
+            )
+        }
     }
 }
 
