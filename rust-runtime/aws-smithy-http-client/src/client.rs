@@ -106,7 +106,7 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     tls: Tls,
 }
 
-/// Initial builder state, [`TlsProvider`] choice required
+/// Initial builder state, `TlsProvider` choice required
 #[derive(Default)]
 #[non_exhaustive]
 pub struct TlsUnset {}

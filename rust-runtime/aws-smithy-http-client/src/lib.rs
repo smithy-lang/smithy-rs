@@ -21,6 +21,7 @@
     unreachable_pub,
     rust_2018_idioms
 )]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 // ideally hyper_014 would just be exposed as is but due to
 // https://github.com/rust-lang/rust/issues/47238 we get clippy warnings we can't suppress
