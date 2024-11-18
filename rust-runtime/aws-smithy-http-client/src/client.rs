@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod dns;
 mod timeout;
 /// TLS connector(s)
 pub mod tls;
@@ -34,8 +33,9 @@ use h2::Reason;
 use http_1x::{Extensions, Uri};
 use hyper::rt::{Read, Write};
 use hyper_util::client::legacy as client;
+use hyper_util::client::legacy::connect::dns::GaiResolver;
 use hyper_util::client::legacy::connect::{
-    capture_connection, CaptureConnection, Connect, HttpInfo,
+    capture_connection, CaptureConnection, Connect, HttpConnector as HyperHttpConnector, HttpInfo,
 };
 use hyper_util::rt::TokioExecutor;
 use std::borrow::Cow;
@@ -132,6 +132,13 @@ impl ConnectorBuilder<TlsUnset> {
             },
         }
     }
+
+    /// Build an HTTP connector sans TLS
+    #[doc(hidden)]
+    pub fn build_http(self) -> Connector {
+        let base = self.base_connector();
+        self.wrap_connector(base)
+    }
 }
 
 impl<Any> ConnectorBuilder<Any> {
@@ -181,6 +188,24 @@ impl<Any> ConnectorBuilder<Any> {
                 client: read_timeout,
             }),
         }
+    }
+
+    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+    /// (which is a base TCP connector with no TLS or any wrapping)
+    fn base_connector(&self) -> HyperHttpConnector {
+        self.base_connector_with_resolver(GaiResolver::new())
+    }
+
+    /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
+    /// using the given resolver `R`
+    fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
+        let mut conn = HyperHttpConnector::new_with_resolver(resolver);
+        conn.set_nodelay(self.enable_tcp_nodelay);
+        #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+        if let Some(interface) = &self.interface {
+            conn.set_interface(interface);
+        }
+        conn
     }
 
     /// Set the async sleep implementation used for timeouts
@@ -237,7 +262,7 @@ impl<Any> ConnectorBuilder<Any> {
     /// On Linux it can be used to specify a [VRF], but the binary needs to either have
     /// `CAP_NET_RAW` capability set or be run as root.
     ///
-    /// This function is only availble on Android, Fuchsia, and Linux.
+    /// This function is only available on Android, Fuchsia, and Linux.
     ///
     /// [VRF]: https://www.kernel.org/doc/Documentation/networking/vrf.txt
     #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
@@ -525,31 +550,8 @@ pub struct Builder<Tls = TlsUnset> {
 }
 
 cfg_tls! {
-    use crate::client::dns::HyperUtilResolver;
+    mod dns;
     use aws_smithy_runtime_api::client::dns::ResolveDns;
-    use hyper_util::client::legacy::connect::dns::{GaiResolver, Name};
-    use hyper_util::client::legacy::connect::HttpConnector as HyperHttpConnector;
-    use std::net::SocketAddr;
-
-    impl<Any> ConnectorBuilder<Any> {
-        /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
-        /// (which is a base TCP connector with no TLS or any wrapping)
-        fn base_connector(&self) -> HyperHttpConnector {
-            self.base_connector_with_resolver(GaiResolver::new())
-        }
-
-        /// Get the base TCP connector by mapping our config to the underlying `HttpConnector` from hyper
-        /// using the given resolver `R`
-        fn base_connector_with_resolver<R>(&self, resolver: R) -> HyperHttpConnector<R> {
-            let mut conn = HyperHttpConnector::new_with_resolver(resolver);
-            conn.set_nodelay(self.enable_tcp_nodelay);
-            #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-            if let Some(interface) = &self.interface {
-                conn.set_interface(interface);
-            }
-            conn
-        }
-    }
 
     impl ConnectorBuilder<TlsProviderSelected> {
         /// Build a [`Connector`] that will use the default DNS resolver implementation.
@@ -560,6 +562,7 @@ cfg_tls! {
 
         /// Build a [`Connector`] that will use the given DNS resolver implementation.
         pub fn build_with_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
+            use crate::client::dns::HyperUtilResolver;
             let http_connector = self.base_connector_with_resolver(HyperUtilResolver { resolver });
             self.build_https(http_connector)
         }
@@ -567,8 +570,8 @@ cfg_tls! {
         fn build_https<R>(self, http_connector: HyperHttpConnector<R>) -> Connector
         where
             R: Clone + Send + Sync + 'static,
-            R: tower::Service<Name>,
-            R::Response: Iterator<Item = SocketAddr>,
+            R: tower::Service<hyper_util::client::legacy::connect::dns::Name>,
+            R::Response: Iterator<Item = std::net::SocketAddr>,
             R::Future: Send,
             R::Error: Into<Box<dyn Error + Send + Sync>>,
         {
@@ -645,7 +648,17 @@ impl Builder<TlsUnset> {
         Self::default()
     }
 
-    // TODO(hyper1) - build for unsecure HTTP?
+    /// Build a new HTTP client without TLS enabled
+    #[doc(hidden)]
+    pub fn build_http(self) -> SharedHttpClient {
+        build_with_conn_fn(
+            self.client_builder,
+            move |client_builder, settings, runtime_components| {
+                let builder = new_conn_builder(client_builder, settings, runtime_components);
+                builder.build_http()
+            },
+        )
+    }
 
     /// Set the TLS implementation to use
     pub fn tls_provider(self, provider: tls::Provider) -> Builder<TlsProviderSelected> {
@@ -680,6 +693,7 @@ where
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn build_with_tcp_conn_fn<C, F>(
     client_builder: Option<hyper_util::client::legacy::Builder>,
     tcp_connector_fn: F,
