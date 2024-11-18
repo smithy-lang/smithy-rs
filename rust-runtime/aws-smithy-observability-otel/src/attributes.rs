@@ -44,16 +44,16 @@ pub(crate) fn option_attr_from_kv(input: &[KeyValue]) -> Option<Attributes> {
 impl From<AttributesWrap> for Vec<KeyValue> {
     fn from(value: AttributesWrap) -> Self {
         value
-            .attributes()
-            .iter()
+            .0
+            .into_attributes()
             .map(|(k, v)| {
                 KeyValue::new(
-                    k.clone(),
+                    k,
                     match v {
-                        AttributeValue::I64(val) => Value::I64(*val),
-                        AttributeValue::F64(val) => Value::F64(*val),
-                        AttributeValue::String(val) => Value::String(val.clone().into()),
-                        AttributeValue::Bool(val) => Value::Bool(*val),
+                        AttributeValue::I64(val) => Value::I64(val),
+                        AttributeValue::F64(val) => Value::F64(val),
+                        AttributeValue::String(val) => Value::String(val.into()),
+                        AttributeValue::Bool(val) => Value::Bool(val),
                         _ => Value::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into()),
                     },
                 )
@@ -68,7 +68,7 @@ impl From<&[KeyValue]> for AttributesWrap {
 
         value.iter().for_each(|kv| {
             attrs.set(
-                kv.key.clone().into(),
+                kv.key.clone(),
                 match &kv.value {
                     Value::Bool(val) => AttributeValue::Bool(*val),
                     Value::I64(val) => AttributeValue::I64(*val),
@@ -96,13 +96,10 @@ mod tests {
     #[test]
     fn attr_to_kv() {
         let mut attrs = Attributes::new();
-        attrs.set("I64".into(), AttributeValue::I64(64));
-        attrs.set("F64".into(), AttributeValue::F64(64.0));
-        attrs.set(
-            "String".into(),
-            AttributeValue::String("I AM A STRING".into()),
-        );
-        attrs.set("Bool".into(), AttributeValue::Bool(true));
+        attrs.set("I64", AttributeValue::I64(64));
+        attrs.set("F64", AttributeValue::F64(64.0));
+        attrs.set("String", AttributeValue::String("I AM A STRING".into()));
+        attrs.set("Bool", AttributeValue::Bool(true));
 
         let kv = kv_from_option_attr(Some(&attrs));
 
@@ -130,15 +127,12 @@ mod tests {
         ];
 
         let attrs = option_attr_from_kv(&kvs).unwrap();
+        assert_eq!(attrs.get("Bool").unwrap(), &AttributeValue::Bool(true));
         assert_eq!(
-            attrs.get("Bool".into()).unwrap(),
-            &AttributeValue::Bool(true)
-        );
-        assert_eq!(
-            attrs.get("String".into()).unwrap(),
+            attrs.get("String").unwrap(),
             &AttributeValue::String("I AM A STRING".into())
         );
-        assert_eq!(attrs.get("I64".into()).unwrap(), &AttributeValue::I64(64));
-        assert_eq!(attrs.get("F64".into()).unwrap(), &AttributeValue::F64(64.0));
+        assert_eq!(attrs.get("I64").unwrap(), &AttributeValue::I64(64));
+        assert_eq!(attrs.get("F64").unwrap(), &AttributeValue::F64(64.0));
     }
 }

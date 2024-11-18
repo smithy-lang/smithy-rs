@@ -17,6 +17,10 @@ impl MeterProvider for NoopMeterProvider {
     fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
         Box::new(NoopMeter)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub(crate) struct NoopMeter;

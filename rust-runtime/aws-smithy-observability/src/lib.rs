@@ -14,12 +14,15 @@
 )]
 
 //! Smithy Observability
-//TODO(smithyobservability): once we have finalized everything and integrated metrics with our runtime
+// TODO(smithyobservability): once we have finalized everything and integrated metrics with our runtime
 // libraries update this with detailed usage docs and examples
 
 pub mod attributes;
+pub use attributes::{AttributeValue, Attributes};
 pub mod error;
+pub use error::{ErrorKind, ObservabilityError};
 pub mod global;
 pub mod meter;
 mod noop;
 pub mod provider;
+pub use provider::{TelemetryProvider, TelemetryProviderBuilder};

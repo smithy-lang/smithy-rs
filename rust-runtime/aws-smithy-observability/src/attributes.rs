@@ -39,18 +39,23 @@ impl Attributes {
     }
 
     /// Set an attribute.
-    pub fn set(&mut self, key: String, value: AttributeValue) {
-        self.attrs.insert(key, value);
+    pub fn set(&mut self, key: impl Into<String>, value: impl Into<AttributeValue>) {
+        self.attrs.insert(key.into(), value.into());
     }
 
     /// Get an attribute.
-    pub fn get(&self, key: String) -> Option<&AttributeValue> {
-        self.attrs.get(&key)
+    pub fn get(&self, key: impl Into<String>) -> Option<&AttributeValue> {
+        self.attrs.get(&key.into())
     }
 
     /// Get all of the attribute key value pairs.
     pub fn attributes(&self) -> &HashMap<String, AttributeValue> {
         &self.attrs
+    }
+
+    /// Get an owned [Iterator] of ([String], [AttributeValue]).
+    pub fn into_attributes(self) -> impl Iterator<Item = (String, AttributeValue)> {
+        self.attrs.into_iter()
     }
 }
 

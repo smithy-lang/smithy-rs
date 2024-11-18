@@ -23,12 +23,23 @@ impl TelemetryProvider {
         }
     }
 
+    /// Returns a noop [TelemetryProvider]
+    pub fn noop() -> TelemetryProvider {
+        Self {
+            meter_provider: Box::new(NoopMeterProvider),
+        }
+    }
+
     /// Get the set [MeterProvider]
     pub fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
         self.meter_provider.as_ref()
     }
 }
 
+// If we choose to expand our Telemetry provider and make Logging and Tracing
+// configurable at some point in the future we can do that by adding default
+// logger_provider and tracer_providers based on `tracing` to maintain backwards
+// compatibilty with what we have today.
 impl Default for TelemetryProvider {
     fn default() -> Self {
         Self {
@@ -37,10 +48,6 @@ impl Default for TelemetryProvider {
     }
 }
 
-// If we choose to expand our Telemetry provider and make Logging and Tracing
-// configurable at some point in the future we can do that by adding default
-// logger_provider and tracer_providers based on `tracing` to maintain backwards
-// compatibilty with what we have today.
 /// A builder for [TelemetryProvider].
 #[non_exhaustive]
 pub struct TelemetryProviderBuilder {
@@ -49,8 +56,11 @@ pub struct TelemetryProviderBuilder {
 
 impl TelemetryProviderBuilder {
     /// Set the [MeterProvider].
-    pub fn meter_provider(mut self, meter_provider: Box<dyn MeterProvider + Send + Sync>) -> Self {
-        self.meter_provider = meter_provider;
+    pub fn meter_provider(
+        mut self,
+        meter_provider: impl MeterProvider + Send + Sync + 'static,
+    ) -> Self {
+        self.meter_provider = Box::new(meter_provider);
         self
     }
 

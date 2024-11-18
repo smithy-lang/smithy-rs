@@ -266,6 +266,22 @@ impl AwsSdkOtelMeterProvider {
             meter_provider: otel_meter_provider,
         }
     }
+
+    /// Flush the metric pipeline.
+    pub fn flush(&self) -> Result<(), ObservabilityError> {
+        match self.meter_provider.force_flush() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsFlush, err)),
+        }
+    }
+
+    /// Gracefully shutdown the metric pipeline.
+    pub fn shutdown(&self) -> Result<(), ObservabilityError> {
+        match self.meter_provider.force_flush() {
+            Ok(_) => Ok(()),
+            Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsShutdown, err)),
+        }
+    }
 }
 
 impl MeterProvider for AwsSdkOtelMeterProvider {
@@ -273,18 +289,8 @@ impl MeterProvider for AwsSdkOtelMeterProvider {
         Box::new(MeterWrap(self.meter_provider.meter(scope)))
     }
 
-    fn flush(&self) -> Result<(), ObservabilityError> {
-        match self.meter_provider.force_flush() {
-            Ok(_) => Ok(()),
-            Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsFlush, err)),
-        }
-    }
-
-    fn shutdown(&self) -> Result<(), ObservabilityError> {
-        match self.meter_provider.force_flush() {
-            Ok(_) => Ok(()),
-            Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsShutdown, err)),
-        }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -313,9 +319,7 @@ mod tests {
 
         // Create the SDK metrics types from the OTel objects
         let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-        let sdk_tp = TelemetryProvider::builder()
-            .meter_provider(Box::new(sdk_mp))
-            .build();
+        let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
         let dyn_sdk_mp = sdk_tp.meter_provider();
@@ -332,7 +336,12 @@ mod tests {
         histogram.record(1.234, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp.shutdown().unwrap();
+        dyn_sdk_mp
+            .as_any()
+            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .unwrap()
+            .shutdown()
+            .unwrap();
 
         // Extract the metrics from the exporter and assert that they are what we expect
         let finished_metrics = exporter.get_finished_metrics().unwrap();
@@ -373,9 +382,7 @@ mod tests {
 
         // Create the SDK metrics types from the OTel objects
         let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-        let sdk_tp = TelemetryProvider::builder()
-            .meter_provider(Box::new(sdk_mp))
-            .build();
+        let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
         let dyn_sdk_mp = sdk_tp.meter_provider();
@@ -388,7 +395,7 @@ mod tests {
             Box::new(|measurement: &dyn AsyncMeasurement<Value = f64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
-                    "TestGaugeAttr".into(),
+                    "TestGaugeAttr",
                     AttributeValue::String("TestGaugeAttr".into()),
                 );
                 measurement.record(6.789, Some(&attrs), None);
@@ -403,7 +410,7 @@ mod tests {
             Box::new(|measurement: &dyn AsyncMeasurement<Value = i64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
-                    "TestAsyncUpDownCounterAttr".into(),
+                    "TestAsyncUpDownCounterAttr",
                     AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
                 );
                 measurement.record(12, Some(&attrs), None);
@@ -418,7 +425,7 @@ mod tests {
             Box::new(|measurement: &dyn AsyncMeasurement<Value = u64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
-                    "TestAsyncMonoCounterAttr".into(),
+                    "TestAsyncMonoCounterAttr",
                     AttributeValue::String("TestAsyncMonoCounterAttr".into()),
                 );
                 measurement.record(123, Some(&attrs), None);
@@ -429,8 +436,12 @@ mod tests {
         async_mono_counter.record(4, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp.flush().unwrap();
-        dyn_sdk_mp.shutdown().unwrap();
+        dyn_sdk_mp
+            .as_any()
+            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .unwrap()
+            .shutdown()
+            .unwrap();
 
         // Extract the metrics from the exporter
         let finished_metrics = exporter.get_finished_metrics().unwrap();

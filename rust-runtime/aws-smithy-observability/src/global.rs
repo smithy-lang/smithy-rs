@@ -17,28 +17,26 @@ use crate::provider::{GlobalTelemetryProvider, TelemetryProvider};
 static GLOBAL_TELEMETRY_PROVIDER: Lazy<RwLock<GlobalTelemetryProvider>> =
     Lazy::new(|| RwLock::new(GlobalTelemetryProvider::new(TelemetryProvider::default())));
 
-/// Set the current global [TelemetryProvider]. If [None] is supplied then a noop provider is set.
-/// The previous [TelemetryProvider] is returned in an [Arc] so appropriate cleanup can be done if necessary.
-pub fn set_global_telemetry_provider(
-    new_provider: Option<TelemetryProvider>,
-) -> Arc<TelemetryProvider> {
+/// Set the current global [TelemetryProvider].
+///
+/// This is meant to be run once at the beginning of an application. It will panic if two threads
+/// attempt to call it at the same time.
+pub fn set_telemetry_provider(new_provider: TelemetryProvider) {
     // TODO(smithyObservability): would probably be nicer to return a Result here, but the Guard held by the error from
     // .try_write is not Send so I struggled to build an ObservabilityError from it
     let mut old_provider = GLOBAL_TELEMETRY_PROVIDER
         .try_write()
         .expect("GLOBAL_TELEMETRY_PROVIDER RwLock Poisoned");
 
-    let new_global_provider = if let Some(tp) = new_provider {
-        GlobalTelemetryProvider::new(tp)
-    } else {
-        GlobalTelemetryProvider::new(TelemetryProvider::default())
-    };
+    let new_global_provider = GlobalTelemetryProvider::new(new_provider);
 
-    mem::replace(&mut *old_provider, new_global_provider).telemetry_provider
+    let _ = mem::replace(&mut *old_provider, new_global_provider);
 }
 
 /// Get an [Arc] reference to the current global [TelemetryProvider].
-pub fn get_global_telemetry_provider() -> Arc<TelemetryProvider> {
+///
+/// This can panic if called when another thread is calling [set_telemetry_provider].
+pub fn get_telemetry_provider() -> Arc<TelemetryProvider> {
     // TODO(smithyObservability): would probably be nicer to return a Result here, but the Guard held by the error from
     // .try_read is not Send so I struggled to build an ObservabilityError from it
     GLOBAL_TELEMETRY_PROVIDER
@@ -62,16 +60,13 @@ mod tests {
         let my_provider = TelemetryProvider::default();
 
         // Set the new counter and get a reference to the old one
-        let old_provider = set_global_telemetry_provider(Some(my_provider));
-
-        // Call shutdown on the old meter provider
-        let _old_meter = old_provider.meter_provider().shutdown().unwrap();
+        set_telemetry_provider(my_provider);
     }
 
     #[test]
     #[serial]
     fn can_get_global_telemetry_provider() {
-        let curr_provider = get_global_telemetry_provider();
+        let curr_provider = get_telemetry_provider();
 
         // Use the global provider to create an instrument and record a value with it
         let curr_mp = curr_provider.meter_provider();
