@@ -160,6 +160,7 @@ impl ConnectorBuilder<TlsProviderSelected> {
                     self.wrap_connector(https_connector)
                 }
             }
+            _ => unreachable!("unknown TLS provider"),
         }
     }
 
@@ -249,8 +250,8 @@ impl<Any> ConnectorBuilder<Any> {
         let mut conn = HyperHttpConnector::new_with_resolver(resolver);
         conn.set_nodelay(self.enable_tcp_nodelay);
         #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-        if let Some(interface) = self.interface {
-            conn.set_interface(self.interface);
+        if let Some(interface) = &self.interface {
+            conn.set_interface(interface);
         }
         conn
     }
@@ -312,7 +313,8 @@ impl<Any> ConnectorBuilder<Any> {
     /// This function is only availble on Android, Fuchsia, and Linux.
     /// [VRF]: https://www.kernel.org/doc/Documentation/networking/vrf.txt
     #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
-    pub fn set_interface<S: Into<String>>(&mut self, interface: S) -> Self {
+    pub fn set_interface<S: Into<String>>(&mut self, interface: S) -> &mut Self {
+        self.interface = Some(interface.into());
         self
     }
 
