@@ -238,6 +238,7 @@ impl<Any> ConnectorBuilder<Any> {
     /// `CAP_NET_RAW` capability set or be run as root.
     ///
     /// This function is only availble on Android, Fuchsia, and Linux.
+    ///
     /// [VRF]: https://www.kernel.org/doc/Documentation/networking/vrf.txt
     #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
     pub fn set_interface<S: Into<String>>(&mut self, interface: S) -> &mut Self {
