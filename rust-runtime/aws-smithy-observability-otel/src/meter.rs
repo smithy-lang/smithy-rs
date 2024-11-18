@@ -5,6 +5,7 @@
 
 //! OpenTelemetry based implementations of the Smithy Observability Meter traits.
 
+use std::fmt::Debug;
 use std::ops::Deref;
 
 use crate::attributes::kv_from_option_attr;
@@ -22,6 +23,7 @@ use opentelemetry::metrics::{
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider as OtelSdkMeterProvider;
 
+#[derive(Debug)]
 struct UpDownCounterWrap(OtelUpDownCounter<i64>);
 impl UpDownCounter for UpDownCounterWrap {
     fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
@@ -29,6 +31,7 @@ impl UpDownCounter for UpDownCounterWrap {
     }
 }
 
+#[derive(Debug)]
 struct HistogramWrap(OtelHistogram<f64>);
 impl Histogram for HistogramWrap {
     fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
@@ -36,6 +39,7 @@ impl Histogram for HistogramWrap {
     }
 }
 
+#[derive(Debug)]
 struct MonotonicCounterWrap(OtelCounter<u64>);
 impl MonotonicCounter for MonotonicCounterWrap {
     fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
@@ -43,6 +47,7 @@ impl MonotonicCounter for MonotonicCounterWrap {
     }
 }
 
+#[derive(Debug)]
 struct GaugeWrap(OtelObservableGauge<f64>);
 impl AsyncMeasurement for GaugeWrap {
     type Value = f64;
@@ -61,6 +66,7 @@ impl AsyncMeasurement for GaugeWrap {
     fn stop(&self) {}
 }
 
+#[derive(Debug)]
 struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
 impl AsyncMeasurement for AsyncUpDownCounterWrap {
     type Value = i64;
@@ -79,6 +85,7 @@ impl AsyncMeasurement for AsyncUpDownCounterWrap {
     fn stop(&self) {}
 }
 
+#[derive(Debug)]
 struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
 impl AsyncMeasurement for AsyncMonotonicCounterWrap {
     type Value = u64;
@@ -115,6 +122,15 @@ impl<T> AsyncMeasurement for AsyncInstrumentWrap<'_, T> {
     fn stop(&self) {}
 }
 
+// The OtelAsyncInstrument trait does not have Debug as a supertrait, so we impl a minimal version
+// for our wrapper struct
+impl<T> Debug for AsyncInstrumentWrap<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("AsyncInstrumentWrap").finish()
+    }
+}
+
+#[derive(Debug)]
 struct MeterWrap(OtelMeter);
 impl Deref for MeterWrap {
     type Target = OtelMeter;

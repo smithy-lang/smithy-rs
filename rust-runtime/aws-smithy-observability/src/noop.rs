@@ -5,6 +5,7 @@
 
 //! An noop implementation of the Meter traits
 
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use crate::{
@@ -12,6 +13,7 @@ use crate::{
     meter::{AsyncMeasurement, Histogram, Meter, MeterProvider, MonotonicCounter, UpDownCounter},
 };
 
+#[derive(Debug)]
 pub(crate) struct NoopMeterProvider;
 impl MeterProvider for NoopMeterProvider {
     fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
@@ -23,6 +25,7 @@ impl MeterProvider for NoopMeterProvider {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct NoopMeter;
 impl Meter for NoopMeter {
     fn create_gauge(
@@ -83,8 +86,9 @@ impl Meter for NoopMeter {
     }
 }
 
-struct NoopAsyncMeasurement<T>(PhantomData<T>);
-impl<T> AsyncMeasurement for NoopAsyncMeasurement<T> {
+#[derive(Debug)]
+struct NoopAsyncMeasurement<T: Send + Sync + Debug>(PhantomData<T>);
+impl<T: Send + Sync + Debug> AsyncMeasurement for NoopAsyncMeasurement<T> {
     type Value = T;
 
     fn record(&self, _value: T, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
@@ -92,16 +96,19 @@ impl<T> AsyncMeasurement for NoopAsyncMeasurement<T> {
     fn stop(&self) {}
 }
 
+#[derive(Debug)]
 struct NoopUpDownCounter;
 impl UpDownCounter for NoopUpDownCounter {
     fn add(&self, _value: i64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
 }
 
+#[derive(Debug)]
 struct NoopMonotonicCounter;
 impl MonotonicCounter for NoopMonotonicCounter {
     fn add(&self, _value: u64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
 }
 
+#[derive(Debug)]
 struct NoopHistogram;
 impl Histogram for NoopHistogram {
     fn record(

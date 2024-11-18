@@ -1,4 +1,5 @@
 allowed_external_types = [
+    "aws_smithy_observability::error::ObservabilityError",
     "aws_smithy_observability::meter::AsyncMeasurement",
     "aws_smithy_observability::meter::Histogram",
     "aws_smithy_observability::meter::Meter",

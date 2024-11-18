@@ -7,9 +7,10 @@
 //! real time.
 
 use crate::attributes::{Attributes, Context};
+use std::fmt::Debug;
 
 /// Provides named instances of [Meter].
-pub trait MeterProvider {
+pub trait MeterProvider: Send + Sync + Debug {
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Box<dyn Meter>;
 
@@ -18,7 +19,7 @@ pub trait MeterProvider {
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
-pub trait Meter {
+pub trait Meter: Send + Sync + Debug {
     /// Create a new Gauge.
     #[allow(clippy::type_complexity)]
     fn create_gauge(
@@ -75,25 +76,25 @@ pub trait Meter {
 }
 
 /// Collects a set of events with an event count and sum for all events.
-pub trait Histogram {
+pub trait Histogram: Send + Sync + Debug {
     /// Record a value.
     fn record(&self, value: f64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
 }
 
 /// A counter that monotonically increases.
-pub trait MonotonicCounter {
+pub trait MonotonicCounter: Send + Sync + Debug {
     /// Increment a counter by a fixed amount.
     fn add(&self, value: u64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
 }
 
 /// A counter that can increase or decrease.
-pub trait UpDownCounter {
+pub trait UpDownCounter: Send + Sync + Debug {
     /// Increment or decrement a counter by a fixed amount.
     fn add(&self, value: i64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
 }
 
 /// A measurement that can be taken asynchronously.
-pub trait AsyncMeasurement {
+pub trait AsyncMeasurement: Send + Sync + Debug {
     /// The type recorded by the measurement.
     type Value;
 
