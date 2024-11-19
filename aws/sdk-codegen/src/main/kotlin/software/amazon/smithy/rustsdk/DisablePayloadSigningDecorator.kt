@@ -23,6 +23,11 @@ class DisablePayloadSigningDecorator : ClientCodegenDecorator {
                 rustTemplate(
                     """
                     /// Disable payload signing for this request.
+                    ///
+                    /// **WARNING:** This is an advanced feature that removes
+                    /// the cost of signing a request payload by removing a data
+                    /// integrity check. Not all services/operations support
+                    /// this feature.
                     pub fn disable_payload_signing(self) -> Self {
                         self.runtime_plugin(#{PayloadSigningOverrideRuntimePlugin}::unsigned())
                     }
