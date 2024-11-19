@@ -10,7 +10,7 @@ use crate::attributes::{Attributes, Context};
 use std::fmt::Debug;
 
 /// Provides named instances of [Meter].
-pub trait MeterProvider: Send + Sync + Debug {
+pub trait ProvideMeter: Send + Sync + Debug {
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Box<dyn Meter>;
 
@@ -25,10 +25,10 @@ pub trait Meter: Send + Sync + Debug {
     fn create_gauge(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = f64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = f64>>;
+    ) -> Box<dyn AsyncMeasure<Value = f64>>;
 
     /// Create a new [UpDownCounter].
     fn create_up_down_counter(
@@ -43,10 +43,10 @@ pub trait Meter: Send + Sync + Debug {
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = i64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = i64>>;
+    ) -> Box<dyn AsyncMeasure<Value = i64>>;
 
     /// Create a new [MonotonicCounter].
     fn create_monotonic_counter(
@@ -61,10 +61,10 @@ pub trait Meter: Send + Sync + Debug {
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = u64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = u64>>;
+    ) -> Box<dyn AsyncMeasure<Value = u64>>;
 
     /// Create a new [Histogram].
     fn create_histogram(
@@ -94,7 +94,7 @@ pub trait UpDownCounter: Send + Sync + Debug {
 }
 
 /// A measurement that can be taken asynchronously.
-pub trait AsyncMeasurement: Send + Sync + Debug {
+pub trait AsyncMeasure: Send + Sync + Debug {
     /// The type recorded by the measurement.
     type Value;
 

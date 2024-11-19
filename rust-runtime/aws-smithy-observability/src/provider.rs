@@ -7,12 +7,12 @@
 
 use std::sync::Arc;
 
-use crate::{meter::MeterProvider, noop::NoopMeterProvider};
+use crate::{meter::ProvideMeter, noop::NoopMeterProvider};
 
 /// A struct to hold the various types of telemetry providers.
 #[non_exhaustive]
 pub struct TelemetryProvider {
-    meter_provider: Box<dyn MeterProvider + Send + Sync>,
+    meter_provider: Box<dyn ProvideMeter + Send + Sync>,
 }
 
 impl TelemetryProvider {
@@ -30,8 +30,8 @@ impl TelemetryProvider {
         }
     }
 
-    /// Get the set [MeterProvider]
-    pub fn meter_provider(&self) -> &(dyn MeterProvider + Send + Sync) {
+    /// Get the set [ProvideMeter]
+    pub fn meter_provider(&self) -> &(dyn ProvideMeter + Send + Sync) {
         self.meter_provider.as_ref()
     }
 }
@@ -51,15 +51,12 @@ impl Default for TelemetryProvider {
 /// A builder for [TelemetryProvider].
 #[non_exhaustive]
 pub struct TelemetryProviderBuilder {
-    meter_provider: Box<dyn MeterProvider + Send + Sync>,
+    meter_provider: Box<dyn ProvideMeter + Send + Sync>,
 }
 
 impl TelemetryProviderBuilder {
-    /// Set the [MeterProvider].
-    pub fn meter_provider(
-        mut self,
-        meter_provider: impl MeterProvider + Send + Sync + 'static,
-    ) -> Self {
+    /// Set the [ProvideMeter].
+    pub fn meter_provider(mut self, meter_provider: impl ProvideMeter + 'static) -> Self {
         self.meter_provider = Box::new(meter_provider);
         self
     }

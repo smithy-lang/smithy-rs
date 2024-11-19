@@ -12,7 +12,7 @@ use crate::attributes::kv_from_option_attr;
 use aws_smithy_observability::attributes::{Attributes, Context};
 use aws_smithy_observability::error::{ErrorKind, ObservabilityError};
 pub use aws_smithy_observability::meter::{
-    AsyncMeasurement, Histogram, Meter, MeterProvider, MonotonicCounter, UpDownCounter,
+    AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
 };
 pub use aws_smithy_observability::provider::TelemetryProvider;
 use opentelemetry::metrics::{
@@ -49,7 +49,7 @@ impl MonotonicCounter for MonotonicCounterWrap {
 
 #[derive(Debug)]
 struct GaugeWrap(OtelObservableGauge<f64>);
-impl AsyncMeasurement for GaugeWrap {
+impl AsyncMeasure for GaugeWrap {
     type Value = f64;
 
     fn record(
@@ -68,7 +68,7 @@ impl AsyncMeasurement for GaugeWrap {
 
 #[derive(Debug)]
 struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
-impl AsyncMeasurement for AsyncUpDownCounterWrap {
+impl AsyncMeasure for AsyncUpDownCounterWrap {
     type Value = i64;
 
     fn record(
@@ -87,7 +87,7 @@ impl AsyncMeasurement for AsyncUpDownCounterWrap {
 
 #[derive(Debug)]
 struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
-impl AsyncMeasurement for AsyncMonotonicCounterWrap {
+impl AsyncMeasure for AsyncMonotonicCounterWrap {
     type Value = u64;
 
     fn record(
@@ -105,7 +105,7 @@ impl AsyncMeasurement for AsyncMonotonicCounterWrap {
 }
 
 struct AsyncInstrumentWrap<'a, T>(&'a (dyn OtelAsyncInstrument<T> + Send + Sync));
-impl<T> AsyncMeasurement for AsyncInstrumentWrap<'_, T> {
+impl<T> AsyncMeasure for AsyncInstrumentWrap<'_, T> {
     type Value = T;
 
     fn record(
@@ -144,10 +144,10 @@ impl Meter for MeterWrap {
     fn create_gauge(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = f64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = f64>> {
+    ) -> Box<dyn AsyncMeasure<Value = f64>> {
         let mut builder = self.f64_observable_gauge(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<f64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -186,10 +186,10 @@ impl Meter for MeterWrap {
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = i64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = i64>> {
+    ) -> Box<dyn AsyncMeasure<Value = i64>> {
         let mut builder = self.i64_observable_up_down_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<i64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -228,10 +228,10 @@ impl Meter for MeterWrap {
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasurement<Value = u64>) + Send + Sync>,
+        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasurement<Value = u64>> {
+    ) -> Box<dyn AsyncMeasure<Value = u64>> {
         let mut builder = self.u64_observable_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<u64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -268,7 +268,7 @@ impl Meter for MeterWrap {
     }
 }
 
-/// An OpenTelemetry based implementation of the AWS SDK's [MeterProvider] trait
+/// An OpenTelemetry based implementation of the AWS SDK's [ProvideMeter] trait
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct AwsSdkOtelMeterProvider {
@@ -300,7 +300,7 @@ impl AwsSdkOtelMeterProvider {
     }
 }
 
-impl MeterProvider for AwsSdkOtelMeterProvider {
+impl ProvideMeter for AwsSdkOtelMeterProvider {
     fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
         Box::new(MeterWrap(self.meter_provider.meter(scope)))
     }
@@ -314,7 +314,7 @@ impl MeterProvider for AwsSdkOtelMeterProvider {
 mod tests {
 
     use aws_smithy_observability::attributes::{AttributeValue, Attributes};
-    use aws_smithy_observability::meter::AsyncMeasurement;
+    use aws_smithy_observability::meter::AsyncMeasure;
     use aws_smithy_observability::provider::TelemetryProvider;
     use opentelemetry_sdk::metrics::{
         data::{Gauge, Histogram, Sum},
@@ -408,7 +408,7 @@ mod tests {
         let gauge = dyn_sdk_meter.create_gauge(
             "TestGauge".to_string(),
             // Callback function records another value with different attributes so it is deduped
-            Box::new(|measurement: &dyn AsyncMeasurement<Value = f64>| {
+            Box::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestGaugeAttr",
@@ -423,7 +423,7 @@ mod tests {
 
         let async_ud_counter = dyn_sdk_meter.create_async_up_down_counter(
             "TestAsyncUpDownCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasurement<Value = i64>| {
+            Box::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncUpDownCounterAttr",
@@ -438,7 +438,7 @@ mod tests {
 
         let async_mono_counter = dyn_sdk_meter.create_async_monotonic_counter(
             "TestAsyncMonoCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasurement<Value = u64>| {
+            Box::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncMonoCounterAttr",
