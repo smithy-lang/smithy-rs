@@ -267,6 +267,8 @@ fn apply_signing_instructions(
     Ok(())
 }
 
+/// When present in the config bag, this type will signal that the default
+/// payload signing should be overridden.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub enum PayloadSigningOverride {
@@ -286,18 +288,14 @@ pub enum PayloadSigningOverride {
 }
 
 impl PayloadSigningOverride {
+    /// Create a payload signing override that will prevent the payload from
+    /// being signed.
     pub fn unsigned_payload() -> Self {
         Self::UnsignedPayload
     }
 
-    pub fn precomputed_checksum(checksum: impl Into<String>) -> Self {
-        Self::Precomputed(checksum.into())
-    }
-
-    pub fn streaming_unsigned_payload_trailer() -> Self {
-        Self::StreamingUnsignedPayloadTrailer
-    }
-
+    /// Convert this type into the type used by the signer to determine how a
+    /// request body should be signed.
     pub fn to_signable_body(self) -> SignableBody<'static> {
         match self {
             Self::UnsignedPayload => SignableBody::UnsignedPayload,
@@ -311,6 +309,7 @@ impl Storable for PayloadSigningOverride {
     type Storer = StoreReplace<Self>;
 }
 
+// A runtime plugin that, when set, will override how the signer signs request payloads.
 #[derive(Debug)]
 pub struct PayloadSigningOverrideRuntimePlugin {
     inner: FrozenLayer,
