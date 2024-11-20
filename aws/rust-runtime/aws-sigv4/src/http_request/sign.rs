@@ -106,7 +106,9 @@ impl<'a> Debug for SignableBody<'a> {
                 if should_log_signable_body {
                     f.debug_tuple("Bytes").field(arg0).finish()
                 } else {
-                    f.debug_tuple("Bytes").finish()
+                    f.debug_tuple("Bytes")
+                        .field(&"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true")
+                        .finish()
                 }
             }
             Self::UnsignedPayload => write!(f, "UnsignedPayload"),
@@ -114,7 +116,9 @@ impl<'a> Debug for SignableBody<'a> {
                 if should_log_signable_body {
                     f.debug_tuple("Precomputed").field(arg0).finish()
                 } else {
-                    f.debug_tuple("Precomputed").finish()
+                    f.debug_tuple("Precomputed")
+                        .field(&"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true")
+                        .finish()
                 }
             }
             Self::StreamingUnsignedPayloadTrailer => {
@@ -1156,13 +1160,19 @@ mod tests {
     #[test]
     fn test_debug_signable_body() {
         let sut = SignableBody::Bytes(b"hello signable body");
-        assert_eq!("Bytes", format!("{sut:?}"));
+        assert_eq!(
+            "Bytes(\"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true\")",
+            format!("{sut:?}")
+        );
 
         let sut = SignableBody::UnsignedPayload;
         assert_eq!("UnsignedPayload", format!("{sut:?}"));
 
         let sut = SignableBody::Precomputed("precomputed".to_owned());
-        assert_eq!("Precomputed", format!("{sut:?}"));
+        assert_eq!(
+            "Precomputed(\"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true\")",
+            format!("{sut:?}")
+        );
 
         let sut = SignableBody::StreamingUnsignedPayloadTrailer;
         assert_eq!("StreamingUnsignedPayloadTrailer", format!("{sut:?}"));
