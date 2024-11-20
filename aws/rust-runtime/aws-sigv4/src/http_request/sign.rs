@@ -95,7 +95,7 @@ pub enum SignableBody<'a> {
     StreamingUnsignedPayloadTrailer,
 }
 
-/// Formats the value using the given formatter. To print the body data, set `LOG_SIGNABLE_BODY=true`.
+/// Formats the value using the given formatter. To print the body data, set the environment variable `LOG_SIGNABLE_BODY=true`.
 impl<'a> Debug for SignableBody<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let should_log_signable_body = std::env::var(LOG_SIGNABLE_BODY)
@@ -106,21 +106,12 @@ impl<'a> Debug for SignableBody<'a> {
                 if should_log_signable_body {
                     f.debug_tuple("Bytes").field(arg0).finish()
                 } else {
-                    f.debug_tuple("Bytes")
-                        .field(&"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true")
-                        .finish()
+                    let redacted = format!("** REDACTED **. To print {body_size} bytes of raw data, set environment variable `LOG_SIGNABLE_BODY=true`", body_size = arg0.len());
+                    f.debug_tuple("Bytes").field(&redacted).finish()
                 }
             }
             Self::UnsignedPayload => write!(f, "UnsignedPayload"),
-            Self::Precomputed(arg0) => {
-                if should_log_signable_body {
-                    f.debug_tuple("Precomputed").field(arg0).finish()
-                } else {
-                    f.debug_tuple("Precomputed")
-                        .field(&"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true")
-                        .finish()
-                }
-            }
+            Self::Precomputed(arg0) => f.debug_tuple("Precomputed").field(arg0).finish(),
             Self::StreamingUnsignedPayloadTrailer => {
                 write!(f, "StreamingUnsignedPayloadTrailer")
             }
@@ -1161,7 +1152,7 @@ mod tests {
     fn test_debug_signable_body() {
         let sut = SignableBody::Bytes(b"hello signable body");
         assert_eq!(
-            "Bytes(\"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true\")",
+            "Bytes(\"** REDACTED **. To print 19 bytes of raw data, set environment variable `LOG_SIGNABLE_BODY=true`\")",
             format!("{sut:?}")
         );
 
@@ -1169,10 +1160,7 @@ mod tests {
         assert_eq!("UnsignedPayload", format!("{sut:?}"));
 
         let sut = SignableBody::Precomputed("precomputed".to_owned());
-        assert_eq!(
-            "Precomputed(\"** REDACTED **. To print, set LOG_SIGNABLE_BODY=true\")",
-            format!("{sut:?}")
-        );
+        assert_eq!("Precomputed(\"precomputed\")", format!("{sut:?}"));
 
         let sut = SignableBody::StreamingUnsignedPayloadTrailer;
         assert_eq!("StreamingUnsignedPayloadTrailer", format!("{sut:?}"));
