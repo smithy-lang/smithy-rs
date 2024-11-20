@@ -20,4 +20,4 @@ done
 # TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) We don't have a way to codegen the deps needed by the aws-config crate
 # (cd aws/rust-runtime/aws-config && cargo test --all-features) # aws-config is not part of the workspace so we have to test it separately
 echo "Testing isolated features of aws-smithy-http-client"
-(cd rust-runtime && cargo test -p aws-smithy-http-client --features crypto-ring) # only ring works on windows
+(cd rust-runtime && cargo test -p aws-smithy-http-client --features rustls-ring) # only ring works on windows

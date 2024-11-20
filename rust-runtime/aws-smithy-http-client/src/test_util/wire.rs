@@ -333,7 +333,7 @@ impl WireMockServer {
     /// **Note**: This must be used in tandem with [`Self::dns_resolver`]
     pub fn http_client(&self) -> SharedHttpClient {
         let resolver = self.dns_resolver();
-        crate::hyper_1::build_with_fn(None, move || {
+        crate::client::build_with_tcp_conn_fn(None, move || {
             hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
                 resolver.clone().0,
             )
@@ -407,7 +407,7 @@ impl tower::Service<Name> for InnerDnsResolver {
     }
 }
 
-#[cfg(any(feature = "legacy-test-util", feature = "hyper-014"))]
+#[cfg(all(feature = "legacy-test-util", feature = "hyper-014"))]
 impl hyper_0_14::service::Service<hyper_0_14::client::connect::dns::Name> for LoggingDnsResolver {
     type Response = Once<SocketAddr>;
     type Error = Infallible;

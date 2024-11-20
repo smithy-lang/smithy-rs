@@ -168,7 +168,10 @@ impl Lint for DocsRs {
     }
 
     fn files_to_check(&self) -> Result<Vec<PathBuf>> {
-        Ok(all_cargo_tomls()?.collect())
+        Ok(all_cargo_tomls()?
+            // aws-lc-fips cannot build on docs.rs, grant an exception for this crate which does not follow the same cargo.toml w.r.t docs.rs
+            .filter(|path| !path.to_string_lossy().contains("aws-smithy-http-client"))
+            .collect())
     }
 }
 

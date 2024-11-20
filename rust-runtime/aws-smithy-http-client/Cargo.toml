@@ -16,6 +16,7 @@ hyper-014 = [
     "dep:hyper-0-14",
 ]
 
+# FIXME(hyper1) - rename feature
 hyper-1 = [
     "aws-smithy-runtime-api/http-1x",
     "aws-smithy-types/http-body-1-x",
@@ -24,10 +25,11 @@ hyper-1 = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+]
 
-    # FIXME - should not be needed in base http implementation, only for https and only for specific tls impl
-    "dep:rustls",
-    "dep:hyper-rustls",
+default-tls = [
+    "hyper-1",
+    "rustls-aws-lc"
 ]
 
 wire-mock = [
@@ -58,15 +60,15 @@ test-util = [
 legacy-test-util = [
     "test-util",
     "dep:http-02x",
-    "aws-smithy-runtime-api/http-02x"
+    "aws-smithy-runtime-api/http-02x",
+    "aws-smithy-types/http-body-0-4-x",
 ]
 
-legacy-tls-rustls = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
+legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
 
-# FIXME - s2n-tls option, distinguish between rustls and s2n
-crypto-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
-crypto-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "hyper-1"]
-crypto-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1"]
+rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
+rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "hyper-1"]
+rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
@@ -74,7 +76,6 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["clie
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 h2 = { version = "0.4", default-features = false }
-# FIXME - do we need tokio enabled by default?
 tokio = { version = "1.40", features = [] }
 once_cell = "1.20.1"
 pin-project-lite = "0.2.14"
@@ -82,7 +83,7 @@ tracing = "0.1"
 
 # hyper 1.x stack
 hyper = { version = "1", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1.7", optional = true }
+hyper-util = { version = "0.1.7", features = ["http1", "http2"], optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
@@ -115,28 +116,33 @@ tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-ut
 
 [[example]]
 name = "client-ring"
-required-features = ["crypto-ring"]
+required-features = ["rustls-ring"]
 doc-scrape-examples = true
 
 [[example]]
 name = "client-aws-lc"
-required-features = ["crypto-aws-lc", "crypto-aws-lc-fips"]
+required-features = ["rustls-aws-lc", "rustls-aws-lc-fips"]
 doc-scrape-examples = true
 
 [[example]]
 name = "custom-dns"
-required-features = ["crypto-ring"]
+required-features = ["rustls-ring"]
 doc-scrape-examples = true
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
 
 [package.metadata.docs.rs]
-all-features = true
+all-features = false
+features = [
+    "hyper-1 ",
+    "wire-mock",
+    "test-util",
+    "rustls-ring",
+    "rustls-aws-lc",
+]
+
 targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crypto_unstable)'] }
