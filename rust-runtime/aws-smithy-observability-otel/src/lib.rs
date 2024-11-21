@@ -46,7 +46,7 @@ mod tests {
 
         // Set the global TelemetryProvider and then get it back out
         let _ = set_telemetry_provider(sdk_tp);
-        let global_tp = get_telemetry_provider();
+        let global_tp = get_telemetry_provider().unwrap();
 
         // Create an instrument and record a value
         let global_meter = global_tp

@@ -33,17 +33,16 @@ pub fn set_telemetry_provider(new_provider: TelemetryProvider) {
     let _ = mem::replace(&mut *old_provider, new_global_provider);
 }
 
-/// Get an [Arc] reference to the current global [TelemetryProvider].
-///
-/// This can panic if called when another thread is calling [set_telemetry_provider].
-pub fn get_telemetry_provider() -> Arc<TelemetryProvider> {
-    // TODO(smithyObservability): would probably be nicer to return a Result here, but the Guard held by the error from
+/// Get an [Arc] reference to the current global [TelemetryProvider]. [None] is returned if the [RwLock] containing
+/// the global [TelemetryProvider] is poisoned or is currently locked by a writer.
+pub fn get_telemetry_provider() -> Option<Arc<TelemetryProvider>> {
+    // TODO(smithyObservability): would probably make more sense to return a Result rather than an Option here, but the Guard held by the error from
     // .try_read is not Send so I struggled to build an ObservabilityError from it
-    GLOBAL_TELEMETRY_PROVIDER
-        .try_read()
-        .expect("GLOBAL_TELEMETRY_PROVIDER RwLock Poisoned")
-        .telemetry_provider()
-        .clone()
+    if let Ok(tp) = GLOBAL_TELEMETRY_PROVIDER.try_read() {
+        Some(tp.telemetry_provider().clone())
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -66,7 +65,7 @@ mod tests {
     #[test]
     #[serial]
     fn can_get_global_telemetry_provider() {
-        let curr_provider = get_telemetry_provider();
+        let curr_provider = get_telemetry_provider().unwrap();
 
         // Use the global provider to create an instrument and record a value with it
         let curr_mp = curr_provider.meter_provider();

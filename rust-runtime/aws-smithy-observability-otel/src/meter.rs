@@ -7,6 +7,7 @@
 
 use std::fmt::Debug;
 use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::attributes::kv_from_option_attr;
 use aws_smithy_observability::attributes::{Attributes, Context};
@@ -147,7 +148,7 @@ impl Meter for MeterWrap {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = f64>> {
+    ) -> Arc<dyn AsyncMeasure<Value = f64>> {
         let mut builder = self.f64_observable_gauge(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<f64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -162,7 +163,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(GaugeWrap(builder.init()))
+        Arc::new(GaugeWrap(builder.init()))
     }
 
     fn create_up_down_counter(
@@ -170,7 +171,7 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn UpDownCounter> {
+    ) -> Arc<dyn UpDownCounter> {
         let mut builder = self.i64_up_down_counter(name);
         if let Some(desc) = description {
             builder = builder.with_description(desc);
@@ -180,7 +181,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(UpDownCounterWrap(builder.init()))
+        Arc::new(UpDownCounterWrap(builder.init()))
     }
 
     fn create_async_up_down_counter(
@@ -189,7 +190,7 @@ impl Meter for MeterWrap {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = i64>> {
+    ) -> Arc<dyn AsyncMeasure<Value = i64>> {
         let mut builder = self.i64_observable_up_down_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<i64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -204,7 +205,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(AsyncUpDownCounterWrap(builder.init()))
+        Arc::new(AsyncUpDownCounterWrap(builder.init()))
     }
 
     fn create_monotonic_counter(
@@ -212,7 +213,7 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn MonotonicCounter> {
+    ) -> Arc<dyn MonotonicCounter> {
         let mut builder = self.u64_counter(name);
         if let Some(desc) = description {
             builder = builder.with_description(desc);
@@ -222,7 +223,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(MonotonicCounterWrap(builder.init()))
+        Arc::new(MonotonicCounterWrap(builder.init()))
     }
 
     fn create_async_monotonic_counter(
@@ -231,7 +232,7 @@ impl Meter for MeterWrap {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = u64>> {
+    ) -> Arc<dyn AsyncMeasure<Value = u64>> {
         let mut builder = self.u64_observable_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<u64>| {
                 callback(&AsyncInstrumentWrap(input));
@@ -246,7 +247,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(AsyncMonotonicCounterWrap(builder.init()))
+        Arc::new(AsyncMonotonicCounterWrap(builder.init()))
     }
 
     fn create_histogram(
@@ -254,7 +255,7 @@ impl Meter for MeterWrap {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn Histogram> {
+    ) -> Arc<dyn Histogram> {
         let mut builder = self.f64_histogram(name);
         if let Some(desc) = description {
             builder = builder.with_description(desc);
@@ -264,7 +265,7 @@ impl Meter for MeterWrap {
             builder = builder.with_unit(u);
         }
 
-        Box::new(HistogramWrap(builder.init()))
+        Arc::new(HistogramWrap(builder.init()))
     }
 }
 
@@ -301,8 +302,8 @@ impl AwsSdkOtelMeterProvider {
 }
 
 impl ProvideMeter for AwsSdkOtelMeterProvider {
-    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
-        Box::new(MeterWrap(self.meter_provider.meter(scope)))
+    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
+        Arc::new(MeterWrap(self.meter_provider.meter(scope)))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

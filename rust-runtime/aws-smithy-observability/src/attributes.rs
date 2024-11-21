@@ -25,7 +25,7 @@ pub enum AttributeValue {
 
 /// Structured telemetry metadata.
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Attributes {
     attrs: HashMap<String, AttributeValue>,
 }
@@ -33,9 +33,7 @@ pub struct Attributes {
 impl Attributes {
     /// Create a new empty instance of [Attributes].
     pub fn new() -> Self {
-        Self {
-            attrs: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Set an attribute.
@@ -56,12 +54,6 @@ impl Attributes {
     /// Get an owned [Iterator] of ([String], [AttributeValue]).
     pub fn into_attributes(self) -> impl Iterator<Item = (String, AttributeValue)> {
         self.attrs.into_iter()
-    }
-}
-
-impl Default for Attributes {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

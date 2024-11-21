@@ -7,12 +7,12 @@
 //! real time.
 
 use crate::attributes::{Attributes, Context};
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 /// Provides named instances of [Meter].
 pub trait ProvideMeter: Send + Sync + Debug {
     /// Get or create a named [Meter].
-    fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Box<dyn Meter>;
+    fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<dyn Meter>;
 
     /// Foo
     fn as_any(&self) -> &dyn std::any::Any;
@@ -28,7 +28,7 @@ pub trait Meter: Send + Sync + Debug {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = f64>>;
+    ) -> Arc<dyn AsyncMeasure<Value = f64>>;
 
     /// Create a new [UpDownCounter].
     fn create_up_down_counter(
@@ -36,7 +36,7 @@ pub trait Meter: Send + Sync + Debug {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn UpDownCounter>;
+    ) -> Arc<dyn UpDownCounter>;
 
     /// Create a new AsyncUpDownCounter.
     #[allow(clippy::type_complexity)]
@@ -46,7 +46,7 @@ pub trait Meter: Send + Sync + Debug {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = i64>>;
+    ) -> Arc<dyn AsyncMeasure<Value = i64>>;
 
     /// Create a new [MonotonicCounter].
     fn create_monotonic_counter(
@@ -54,7 +54,7 @@ pub trait Meter: Send + Sync + Debug {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn MonotonicCounter>;
+    ) -> Arc<dyn MonotonicCounter>;
 
     /// Create a new AsyncMonotonicCounter.
     #[allow(clippy::type_complexity)]
@@ -64,7 +64,7 @@ pub trait Meter: Send + Sync + Debug {
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = u64>>;
+    ) -> Arc<dyn AsyncMeasure<Value = u64>>;
 
     /// Create a new [Histogram].
     fn create_histogram(
@@ -72,7 +72,7 @@ pub trait Meter: Send + Sync + Debug {
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Box<dyn Histogram>;
+    ) -> Arc<dyn Histogram>;
 }
 
 /// Collects a set of events with an event count and sum for all events.
@@ -106,6 +106,6 @@ pub trait AsyncMeasure: Send + Sync + Debug {
         context: Option<&dyn Context>,
     );
 
-    /// Stop recording , unregister callback.
+    /// Stop recording, unregister callback.
     fn stop(&self);
 }

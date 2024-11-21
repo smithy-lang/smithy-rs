@@ -5,8 +5,8 @@
 
 //! An noop implementation of the Meter traits
 
-use std::fmt::Debug;
 use std::marker::PhantomData;
+use std::{fmt::Debug, sync::Arc};
 
 use crate::{
     attributes::{Attributes, Context},
@@ -16,8 +16,8 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct NoopMeterProvider;
 impl ProvideMeter for NoopMeterProvider {
-    fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Box<dyn Meter> {
-        Box::new(NoopMeter)
+    fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
+        Arc::new(NoopMeter)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -34,8 +34,8 @@ impl Meter for NoopMeter {
         _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = f64>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<f64>))
+    ) -> Arc<dyn AsyncMeasure<Value = f64>> {
+        Arc::new(NoopAsyncMeasurement(PhantomData::<f64>))
     }
 
     fn create_up_down_counter(
@@ -43,8 +43,8 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn UpDownCounter> {
-        Box::new(NoopUpDownCounter)
+    ) -> Arc<dyn UpDownCounter> {
+        Arc::new(NoopUpDownCounter)
     }
 
     fn create_async_up_down_counter(
@@ -53,8 +53,8 @@ impl Meter for NoopMeter {
         _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = i64>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<i64>))
+    ) -> Arc<dyn AsyncMeasure<Value = i64>> {
+        Arc::new(NoopAsyncMeasurement(PhantomData::<i64>))
     }
 
     fn create_monotonic_counter(
@@ -62,8 +62,8 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn MonotonicCounter> {
-        Box::new(NoopMonotonicCounter)
+    ) -> Arc<dyn MonotonicCounter> {
+        Arc::new(NoopMonotonicCounter)
     }
 
     fn create_async_monotonic_counter(
@@ -72,8 +72,8 @@ impl Meter for NoopMeter {
         _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn AsyncMeasure<Value = u64>> {
-        Box::new(NoopAsyncMeasurement(PhantomData::<u64>))
+    ) -> Arc<dyn AsyncMeasure<Value = u64>> {
+        Arc::new(NoopAsyncMeasurement(PhantomData::<u64>))
     }
 
     fn create_histogram(
@@ -81,8 +81,8 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Box<dyn Histogram> {
-        Box::new(NoopHistogram)
+    ) -> Arc<dyn Histogram> {
+        Arc::new(NoopHistogram)
     }
 }
 
