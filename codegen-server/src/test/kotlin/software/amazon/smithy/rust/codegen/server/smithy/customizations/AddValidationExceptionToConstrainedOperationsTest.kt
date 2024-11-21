@@ -76,9 +76,10 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
             testModelWithValidationExceptionImported,
             IntegrationTestParams(
                 additionalSettings =
-                    ServerAdditionalSettings.builder()
+                    ServerAdditionalSettings()
+                        .generateCodegenComments(true)
                         .addValidationExceptionToConstrainedOperations()
-                        .toObjectNode(),
+                        .build(),
             ),
         )
     }
