@@ -242,9 +242,9 @@ class ConstraintsTest {
             IntegrationTestParams(
                 service = "test#SampleService",
                 additionalSettings =
-                    ServerAdditionalSettings.builder()
+                    ServerAdditionalSettings()
                         .publicConstrainedTypes(pubConstraints)
-                        .toObjectNode(),
+                        .build(),
                 overrideTestDir = dir,
             ),
             test = test,
