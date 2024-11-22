@@ -131,6 +131,7 @@ pub async fn main() {
         acceptor,
         hyper::server::conn::AddrIncoming::bind(&addr).expect("could not bind"),
     )
+    .connections()
     .filter(|conn| {
         if let Err(err) = conn {
             eprintln!("connection error: {:?}", err);

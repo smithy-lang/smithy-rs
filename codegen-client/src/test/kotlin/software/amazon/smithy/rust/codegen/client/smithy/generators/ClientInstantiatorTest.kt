@@ -69,6 +69,8 @@ internal class ClientInstantiatorTest {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
         val sut = ClientInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
+        // The client SDK should accept unknown variants as valid.
+        val notValidVariant = Node.parse("not-a-valid-variant".dq())
 
         val project = TestWorkspace.testProject(symbolProvider)
         project.moduleFor(shape) {
@@ -77,7 +79,11 @@ internal class ClientInstantiatorTest {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
                 }
-                rust("""assert_eq!(result, UnnamedEnum("t2.nano".to_owned()));""")
+                rust("""assert_eq!(result, UnnamedEnum("$data".to_owned()));""")
+                withBlock("let result = ", ";") {
+                    sut.render(this, shape, notValidVariant)
+                }
+                rust("""assert_eq!(result, UnnamedEnum("$notValidVariant".to_owned()));""")
             }
         }
         project.compileAndTest()
