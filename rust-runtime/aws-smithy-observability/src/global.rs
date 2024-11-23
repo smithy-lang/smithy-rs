@@ -11,7 +11,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::provider::{GlobalTelemetryProvider, TelemetryProvider};
+use crate::{
+    error::{ErrorKind, GlobalTelemetryProviderError},
+    provider::{GlobalTelemetryProvider, TelemetryProvider},
+    ObservabilityError,
+};
 
 // Statically store the global provider
 static GLOBAL_TELEMETRY_PROVIDER: Lazy<RwLock<GlobalTelemetryProvider>> =
@@ -19,29 +23,33 @@ static GLOBAL_TELEMETRY_PROVIDER: Lazy<RwLock<GlobalTelemetryProvider>> =
 
 /// Set the current global [TelemetryProvider].
 ///
-/// This is meant to be run once at the beginning of an application. It will panic if two threads
-/// attempt to call it at the same time.
-pub fn set_telemetry_provider(new_provider: TelemetryProvider) {
-    // TODO(smithyObservability): would probably be nicer to return a Result here, but the Guard held by the error from
-    // .try_write is not Send so I struggled to build an ObservabilityError from it
-    let mut old_provider = GLOBAL_TELEMETRY_PROVIDER
-        .try_write()
-        .expect("GLOBAL_TELEMETRY_PROVIDER RwLock Poisoned");
+/// This is meant to be run once at the beginning of an application. Will return an [Err] if the
+/// [RwLock] holding the global [TelemetryProvider] is locked or poisoned.
+pub fn set_telemetry_provider(new_provider: TelemetryProvider) -> Result<(), ObservabilityError> {
+    if let Ok(mut old_provider) = GLOBAL_TELEMETRY_PROVIDER.try_write() {
+        let new_global_provider = GlobalTelemetryProvider::new(new_provider);
 
-    let new_global_provider = GlobalTelemetryProvider::new(new_provider);
+        let _ = mem::replace(&mut *old_provider, new_global_provider);
 
-    let _ = mem::replace(&mut *old_provider, new_global_provider);
+        Ok(())
+    } else {
+        Err(ObservabilityError::new(
+            ErrorKind::GettingGlobalProvider,
+            GlobalTelemetryProviderError,
+        ))
+    }
 }
 
-/// Get an [Arc] reference to the current global [TelemetryProvider]. [None] is returned if the [RwLock] containing
-/// the global [TelemetryProvider] is poisoned or is currently locked by a writer.
-pub fn get_telemetry_provider() -> Option<Arc<TelemetryProvider>> {
-    // TODO(smithyObservability): would probably make more sense to return a Result rather than an Option here, but the Guard held by the error from
-    // .try_read is not Send so I struggled to build an ObservabilityError from it
+/// Get an [Arc] reference to the current global [TelemetryProvider]. Will return an [Err] if the
+/// [RwLock] holding the global [TelemetryProvider] is locked or poisoned.
+pub fn get_telemetry_provider() -> Result<Arc<TelemetryProvider>, ObservabilityError> {
     if let Ok(tp) = GLOBAL_TELEMETRY_PROVIDER.try_read() {
-        Some(tp.telemetry_provider().clone())
+        Ok(tp.telemetry_provider().clone())
     } else {
-        None
+        Err(ObservabilityError::new(
+            ErrorKind::GettingGlobalProvider,
+            GlobalTelemetryProviderError,
+        ))
     }
 }
 
@@ -59,7 +67,7 @@ mod tests {
         let my_provider = TelemetryProvider::default();
 
         // Set the new counter and get a reference to the old one
-        set_telemetry_provider(my_provider);
+        set_telemetry_provider(my_provider).unwrap();
     }
 
     #[test]
