@@ -9,7 +9,7 @@ use aws_smithy_types::config_bag::{Storable, StoreAppend};
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AwsSdkFeature {
-    /// Indicates that an operation called using the S3 Transfer Manager
+    /// Indicates that an operation was called by the S3 Transfer Manager
     S3Transfer,
 }
 
