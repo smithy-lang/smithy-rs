@@ -53,3 +53,6 @@ pub mod sdk_feature;
 
 /// Smithy support-code for code generated waiters.
 pub mod waiters;
+
+/// Collection of instruments for measuring operation related metrics
+mod metrics;

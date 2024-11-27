@@ -5,6 +5,7 @@
 
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
+use crate::client::metrics::{record_attempt_duration, record_call_duration, OperationInfo};
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
@@ -147,16 +148,21 @@ pub async fn invoke_with_stop_point(
 
         let runtime_components = apply_configuration(&mut ctx, cfg, runtime_plugins)
             .map_err(SdkError::construction_failure)?;
+
         trace!(runtime_components = ?runtime_components);
 
         let operation_timeout_config =
             MaybeTimeoutConfig::new(&runtime_components, cfg, TimeoutKind::Operation);
         trace!(operation_timeout_config = ?operation_timeout_config);
-        async {
+
+        let start_time = runtime_components.time_source().map(|ts| ts.now());
+        let info = OperationInfo {service_name: service_name.into(), operation_name: operation_name.into()};
+
+        let res = async {
             // If running the pre-execution interceptors failed, then we skip running the op and run the
             // final interceptors instead.
             if !ctx.is_failed() {
-                try_op(&mut ctx, cfg, &runtime_components, stop_point).await;
+                try_op(&mut ctx, cfg, &runtime_components, stop_point, info).await;
             }
             finally_op(&mut ctx, cfg, &runtime_components).await;
             if ctx.is_failed() {
@@ -166,7 +172,15 @@ pub async fn invoke_with_stop_point(
             }
         }
         .maybe_timeout(operation_timeout_config)
-        .await
+        .await;
+
+        // Record full duration of the call
+        if cfg!(feature = "metrics") {
+            let info = OperationInfo {service_name: service_name.into(), operation_name: operation_name.into()};
+            record_call_duration(start_time, info);
+        }
+
+        res
     }
     // Include a random, internal-only, seven-digit ID for the operation invocation so that it can be correlated in the logs.
     .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name, sdk_invocation_id = fastrand::u32(1_000_000..10_000_000)))
@@ -214,6 +228,7 @@ async fn try_op(
     cfg: &mut ConfigBag,
     runtime_components: &RuntimeComponents,
     stop_point: StopPoint,
+    info: OperationInfo,
 ) {
     // Before serialization
     run_interceptors!(halt_on_err: {
@@ -305,7 +320,7 @@ async fn try_op(
         trace!(attempt_timeout_config = ?attempt_timeout_config);
         let maybe_timeout = async {
             debug!("beginning attempt #{i}");
-            try_attempt(ctx, cfg, runtime_components, stop_point).await;
+            try_attempt(ctx, cfg, runtime_components, stop_point, i, info.clone()).await;
             finally_attempt(ctx, cfg, runtime_components).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
@@ -322,6 +337,7 @@ async fn try_op(
             .retry_strategy()
             .should_attempt_retry(ctx, runtime_components, cfg)
             .map_err(OrchestratorError::other));
+
         match should_attempt {
             // Yes, let's retry the request
             ShouldAttempt::Yes => continue,
@@ -347,7 +363,10 @@ async fn try_attempt(
     cfg: &mut ConfigBag,
     runtime_components: &RuntimeComponents,
     stop_point: StopPoint,
+    attempt: u32,
+    info: OperationInfo,
 ) {
+    let start_time = runtime_components.time_source().map(|ts| ts.now());
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
     halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
@@ -436,6 +455,11 @@ async fn try_attempt(
 
     ctx.enter_after_deserialization_phase();
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
+
+    // Record the duration of the attempt
+    if cfg!(feature = "metrics") {
+        record_attempt_duration(start_time, attempt, info);
+    }
 }
 
 #[instrument(skip_all, level = "debug")]
