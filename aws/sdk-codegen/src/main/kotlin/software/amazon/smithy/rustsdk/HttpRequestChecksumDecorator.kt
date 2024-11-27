@@ -187,7 +187,7 @@ class HttpRequestChecksumCustomization(
                                         }
                                     });
                                     for algo_header in headers_to_check {
-                                        if let Some(_) = request.headers().get(algo_header) {
+                                        if request.headers().get(algo_header).is_some() {
                                             user_set_checksum_value = true;
                                         }
                                     }

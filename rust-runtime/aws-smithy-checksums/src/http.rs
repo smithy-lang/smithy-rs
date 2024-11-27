@@ -117,8 +117,7 @@ mod tests {
     use bytes::Bytes;
 
     use crate::{
-        http::CRC_64_NVME_HEADER_NAME, ChecksumAlgorithm, CRC_32_C_NAME, CRC_32_NAME,
-        CRC_64_NVME_NAME, SHA_1_NAME, SHA_256_NAME,
+        ChecksumAlgorithm, CRC_32_C_NAME, CRC_32_NAME, CRC_64_NVME_NAME, SHA_1_NAME, SHA_256_NAME,
     };
 
     use super::HttpChecksum;
