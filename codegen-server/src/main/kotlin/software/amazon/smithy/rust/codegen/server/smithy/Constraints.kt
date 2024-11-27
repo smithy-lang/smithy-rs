@@ -29,7 +29,6 @@ import software.amazon.smithy.model.traits.UniqueItemsTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -151,12 +150,7 @@ fun Shape.hasPublicConstrainedWrapperTupleType(
 fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model: Model): Boolean =
     hasPublicConstrainedWrapperTupleType(model, true)
 
-/**
- * Helper function to determine whether a shape will map to a _public_ constrained wrapper tuple type.
- *
- * This function is used in core code generators, so it takes in a [CodegenContext] that is downcast
- * to [ServerCodegenContext] when generating servers.
- */
+/** Helper function to determine whether a shape will map to a _public_ constrained wrapper tuple type. */
 fun workingWithPublicConstrainedWrapperTupleType(
     shape: Shape,
     model: Model,

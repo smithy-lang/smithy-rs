@@ -10,19 +10,16 @@ plugins {
     `maven-publish`
 }
 
-description = "Plugin to generate `serde` implementations. NOTE: This is separate from generalized serialization."
-extra["displayName"] = "Smithy :: Rust :: Codegen Serde"
-extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
+description = "Smithy shapes vended by smithy-rs"
+extra["displayName"] = "Smithy :: Rust :: Shapes"
 
-group = "software.amazon.smithy.rust.codegen.serde"
+group = "software.amazon.smithy.rust.smithy.shapes"
 version = "0.1.0"
 
 val smithyVersion: String by project
 
 dependencies {
-    implementation(project(":codegen-core"))
-    implementation(project(":codegen-client"))
-    implementation(project(":codegen-server"))
+    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
 }
 
 java {
@@ -61,7 +58,6 @@ if (isTestingEnabled.toBoolean()) {
     val kotestVersion: String by project
 
     dependencies {
-        runtimeOnly(project(":rust-runtime"))
         testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
         testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
         testImplementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
