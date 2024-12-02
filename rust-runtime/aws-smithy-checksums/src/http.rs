@@ -9,9 +9,12 @@ use aws_smithy_types::base64;
 use http::header::{HeaderMap, HeaderValue};
 
 use crate::{
-    Checksum, Crc32, Crc32c, Crc64Nvme, Md5, Sha1, Sha256, CRC_32_C_NAME, CRC_32_NAME,
-    CRC_64_NVME_NAME, SHA_1_NAME, SHA_256_NAME,
+    Checksum, Crc32, Crc32c, Md5, Sha1, Sha256, CRC_32_C_NAME, CRC_32_NAME, CRC_64_NVME_NAME,
+    SHA_1_NAME, SHA_256_NAME,
 };
+
+#[cfg(not(target_arch = "x86"))]
+use crate::Crc64Nvme;
 
 pub const CRC_32_HEADER_NAME: &str = "x-amz-checksum-crc32";
 pub const CRC_32_C_HEADER_NAME: &str = "x-amz-checksum-crc32c";
@@ -87,6 +90,7 @@ impl HttpChecksum for Crc32c {
     }
 }
 
+#[cfg(not(target_arch = "x86"))]
 impl HttpChecksum for Crc64Nvme {
     fn header_name(&self) -> &'static str {
         CRC_64_NVME_HEADER_NAME
@@ -171,6 +175,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_arch = "x86"))]
     fn test_trailer_length_of_crc64nvme_checksum_body() {
         let checksum = CRC_64_NVME_NAME
             .parse::<ChecksumAlgorithm>()
@@ -182,6 +187,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_arch = "x86"))]
     fn test_trailer_value_of_crc64nvme_checksum_body() {
         let checksum = CRC_64_NVME_NAME
             .parse::<ChecksumAlgorithm>()

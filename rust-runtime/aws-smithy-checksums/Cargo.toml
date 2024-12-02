@@ -18,7 +18,6 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 crc32c = "0.6.8"
 crc32fast = "1.3"
-crc64fast-nvme = "1.0.0"
 hex = "0.4.3"
 http = "0.2.8"
 http-body = "0.4.4"
@@ -27,6 +26,10 @@ pin-project-lite = "0.2.9"
 sha1 = "0.10"
 sha2 = "0.10"
 tracing = "0.1"
+
+# The crc64fast-nvme crate uses some 64 bit intrinsics that are not available on 32 bit x86
+[target.'cfg(not(target_arch = "x86"))'.dependencies]
+crc64fast-nvme = "1.0.0"
 
 [dev-dependencies]
 bytes-utils = "0.1.2"
