@@ -72,8 +72,10 @@ async fn disable_payload_signing_works() {
     assert_eq!("UNSIGNED-PAYLOAD", x_amz_content_sha256);
 }
 
-// This test ensures that the interceptor's payload signing setting
-// takes priority over the runtime plugin for disabling signing.
+// This test ensures that the request checksum interceptor payload signing
+// override takes priority over the runtime plugin's override. If it didn't,
+// then disabling payload signing would cause requests to incorrectly omit
+// trailers.
 #[tokio::test]
 async fn disable_payload_signing_works_with_checksums() {
     let (http_client, request) = capture_request(None);
