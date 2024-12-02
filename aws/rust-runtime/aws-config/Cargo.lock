@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.4.3"
+version = "1.4.4"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -253,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.7.3"
+version = "1.7.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
