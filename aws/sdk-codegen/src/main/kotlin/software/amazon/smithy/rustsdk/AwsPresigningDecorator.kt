@@ -20,8 +20,7 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.InternalTraitsModule
@@ -40,8 +39,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 
 private val presigningTypes: Array<Pair<String, Any>> =
@@ -139,42 +141,26 @@ class AwsPresigningDecorator internal constructor(
         TopDownIndex.of(ctx.model).getContainedOperations(ctx.serviceShape)
             .any { presignableOperations.containsKey(it.id) }
 
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations +
-            object : OperationCustomization() {
-                override fun section(section: OperationSection): Writable {
-                    return writable {
-                        when (section) {
-                            is OperationSection.CustomizableOperationImpl -> {
-                                if (PRESIGNABLE_OPERATIONS.containsKey(operation.id)) {
-                                    rustTemplate(
-                                        """
-                                        /// Sends the request and returns the response.
-                                        ##[allow(unused_mut)]
-                                        pub async fn presigned(mut self, presigning_config: #{PresigningConfig}) -> #{Result}<#{PresignedRequest}, crate::error::SdkError<E>> where
-                                            E: std::error::Error + #{Send} + #{Sync} + 'static,
-                                            B: #{CustomizablePresigned}<E>
-                                        {
-                                            self.execute(move |sender, conf|sender.presign(conf, presigning_config)).await
-                                        }
-                                        """,
-                                        *preludeScope,
-                                        *presigningTypes,
-                                        "CustomizablePresigned" to customizablePresigned,
-                                    )
-                                }
-                            }
-
-                            else -> {}
-                        }
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        anyPresignedShapes(codegenContext).thenSingletonListOf {
+            adhocCustomization<CustomizableOperationSection.CustomizableOperationImpl> {
+                rustTemplate(
+                    """
+                    /// Sends the request and returns the response.
+                    ##[allow(unused_mut)]
+                    pub async fn presigned(mut self, presigning_config: #{PresigningConfig}) -> #{Result}<#{PresignedRequest}, crate::error::SdkError<E>> where
+                        E: std::error::Error + #{Send} + #{Sync} + 'static,
+                        B: #{CustomizablePresigned}<E>
+                    {
+                        self.execute(move |sender, conf|sender.presign(conf, presigning_config)).await
                     }
-                }
+                    """,
+                    *preludeScope,
+                    *presigningTypes,
+                    "CustomizablePresigned" to customizablePresigned,
+                )
             }
-    }
+        }
 
     override fun extras(
         codegenContext: ClientCodegenContext,
