@@ -316,6 +316,8 @@ pub struct PayloadSigningOverrideRuntimePlugin {
 }
 
 impl PayloadSigningOverrideRuntimePlugin {
+    /// Create a new runtime plugin that will force the signer to skip signing
+    /// the request payload when signing an HTTP request.
     pub fn unsigned() -> Self {
         let mut layer = Layer::new("PayloadSigningOverrideRuntimePlugin");
         layer.store_put(PayloadSigningOverride::UnsignedPayload);
