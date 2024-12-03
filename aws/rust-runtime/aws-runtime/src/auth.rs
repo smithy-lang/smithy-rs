@@ -309,7 +309,7 @@ impl Storable for PayloadSigningOverride {
     type Storer = StoreReplace<Self>;
 }
 
-// A runtime plugin that, when set, will override how the signer signs request payloads.
+/// A runtime plugin that, when set, will override how the signer signs request payloads.
 #[derive(Debug)]
 pub struct PayloadSigningOverrideRuntimePlugin {
     inner: FrozenLayer,
