@@ -194,7 +194,7 @@ async fn test_connect_timeout() {
             Err(err) => {
                 let message = format!("{}", DisplayErrorContext(&err));
                 let expected =
-                    "timeout: error trying to connect: HTTP connect timeout occurred after 300ms";
+                    "timeout: client error (Connect): HTTP connect timeout occurred after 300ms";
                 assert!(
                     message.contains(expected),
                     "expected '{message}' to contain '{expected}'"

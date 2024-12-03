@@ -47,7 +47,7 @@ use std::time::Duration;
 
 /// Creates an HTTPS client using the default TLS provider
 pub fn default_client() -> Option<SharedHttpClient> {
-    #[cfg(feature = "default-tls")]
+    #[cfg(feature = "rustls-aws-lc")]
     {
         tracing::trace!("creating a new default hyper 1.x client using rustls<aws-lc>");
         Some(
@@ -58,7 +58,7 @@ pub fn default_client() -> Option<SharedHttpClient> {
                 .build_https(),
         )
     }
-    #[cfg(not(feature = "default-tls"))]
+    #[cfg(not(feature = "rustls-aws-lc"))]
     {
         tracing::trace!("no default connector available");
         None

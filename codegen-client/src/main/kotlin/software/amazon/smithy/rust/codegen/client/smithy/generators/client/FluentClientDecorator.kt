@@ -51,7 +51,12 @@ class FluentClientDecorator : ClientCodegenDecorator {
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
 
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
+        // For backwards compat reasons we have to leave this feature as `rustls` which really historically was
+        // used to enable the `default_http_client` plugin to work (as rustls feature meant enabling both connector-hyper-0-14 + rustls)
+        //
+        // When we moved to hyper-1.x as default we re-purposed this feature flag to still (1) enable a default HTTP
+        // client and (2) still mean rustls (albeit now with aws-lc instead of ring)
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/default-http-connector")))
     }
 
     override fun libRsCustomizations(
