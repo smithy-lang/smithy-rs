@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Code related to creating signed URLs for logging in to Xanadu.
+//! Code related to creating signed URLs for logging in to DSQL.
 
 use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
 use aws_sigv4::http_request;
@@ -45,7 +45,7 @@ pub struct AuthTokenGenerator {
     config: Config,
 }
 
-/// An auth token usable as a password for a Xanadu database.
+/// An auth token usable as a password for a DSQL database.
 ///
 /// This struct can be converted into a `&str` by calling `as_str`
 /// or converted into a `String` by calling `to_string()`.
@@ -69,7 +69,7 @@ impl fmt::Display for AuthToken {
 }
 
 impl AuthTokenGenerator {
-    /// Given a `Config`, create a new Xanadu database login URL signer.
+    /// Given a `Config`, create a new DSQL database login URL signer.
     pub fn new(config: Config) -> Self {
         Self { config }
     }
@@ -141,7 +141,7 @@ impl AuthTokenGenerator {
     }
 }
 
-/// Configuration for a Xanadu auth URL signer.
+/// Configuration for a DSQL auth URL signer.
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The AWS credentials to sign requests with.
