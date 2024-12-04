@@ -14,7 +14,7 @@ use crate::meta::credentials::CredentialsProviderChain;
 use crate::meta::region::ProvideRegion;
 use crate::provider_config::ProviderConfig;
 
-#[cfg(feature = "rustls")]
+#[cfg(any(feature = "default-http-connector", feature = "rustls"))]
 /// Default Credentials Provider chain
 ///
 /// The region from the default region provider will be used
@@ -170,7 +170,7 @@ impl Builder {
     /// Creates a `DefaultCredentialsChain`
     ///
     /// ## Panics
-    /// This function will panic if no connector has been set or the `rustls`
+    /// This function will panic if no connector has been set or the `default-http-connector`
     /// feature has been disabled.
     pub async fn build(self) -> DefaultCredentialsChain {
         let region = match self.region_override {
@@ -347,7 +347,6 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(feature = "client-hyper")]
     async fn no_providers_configured_err() {
         use crate::provider_config::ProviderConfig;
         use aws_credential_types::provider::error::CredentialsError;

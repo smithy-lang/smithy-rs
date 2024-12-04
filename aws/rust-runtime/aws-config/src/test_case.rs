@@ -319,7 +319,6 @@ where
     E: Error,
 {
     #[allow(unused)]
-    #[cfg(all(feature = "client-hyper", feature = "rustls"))]
     /// Record a test case from live (remote) HTTPS traffic
     ///
     /// The `default_connector()` from the crate will be used
