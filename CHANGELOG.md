@@ -1,4 +1,19 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 3rd, 2024
+==================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3880](https://github.com/smithy-lang/smithy-rs/issues/3880)) Unnamed enums now validate assigned values and will raise a `ConstraintViolation` if an unknown variant is set.
+
+    The following is an example of an unnamed enum:
+    ```smithy
+    @enum([
+        { value: "MONDAY" },
+        { value: "TUESDAY" }
+    ])
+    string UnnamedDayOfWeek
+    ```
+
+
 November 5th, 2024
 ==================
 
