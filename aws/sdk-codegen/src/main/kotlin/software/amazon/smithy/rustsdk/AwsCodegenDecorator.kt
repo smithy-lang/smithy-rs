@@ -76,7 +76,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         RetryClassifierDecorator().applyExceptFor("com.amazonaws.s3#AmazonS3"),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
-        DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#AxdbFrontend"),
+        DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#DSQL"),
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),
         GlacierDecorator().onlyApplyTo("com.amazonaws.glacier#Glacier"),
         LambdaDecorator().onlyApplyTo("com.amazonaws.lambda#AWSGirApiService"),
