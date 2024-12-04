@@ -407,6 +407,15 @@ pub(crate) mod rfc3339 {
             )
             .into());
         }
+        // Only support 'T' as a separator in RFC-3339 dates.
+        if let Some(ch) = s.chars().nth(10) {
+            if ch != 'T' {
+                return Err(DateTimeParseErrorKind::Invalid(
+                    "Smithy only allows `T` as a separator in RFC-3339 date times".into(),
+                )
+                .into());
+            }
+        }
         let date_time = OffsetDateTime::parse(s, &Rfc3339).map_err(|err| {
             DateTimeParseErrorKind::Invalid(format!("invalid RFC-3339 date-time: {}", err).into())
         })?;
