@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.customize.allCustomizationsAreEmpty
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 
@@ -26,8 +26,13 @@ class CustomizableOperationImplGenerator(
             return
         }
 
-        writer.rust("impl<E, B> CustomizableOperation<#T, E, B> {", codegenContext.symbolProvider.toSymbol(operation))
-        writer.writeCustomizations(customizations, section)
-        writer.rust("}")
+        operation.output
+            .map { codegenContext.model.expectShape(it) }
+            .map { codegenContext.symbolProvider.toSymbol(it) }
+            .ifPresent {
+                writer.rustBlock("impl<E, B> CustomizableOperation<#T, E, B>", it) {
+                    writer.writeCustomizations(customizations, section)
+                }
+            }
     }
 }

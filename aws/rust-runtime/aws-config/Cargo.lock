@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.60.7"
+version = "0.61.1"
 dependencies = [
  "aws-smithy-types",
 ]
