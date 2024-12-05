@@ -125,6 +125,11 @@ sealed class OperationSection(name: String) : Section(name) {
             writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
         }
     }
+
+    data class CustomizableOperationImpl(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("CustomizableOperationImpl")
 }
 
 abstract class OperationCustomization : NamedCustomization<OperationSection>()
