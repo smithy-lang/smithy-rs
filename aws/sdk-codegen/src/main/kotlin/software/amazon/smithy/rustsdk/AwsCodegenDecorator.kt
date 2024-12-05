@@ -66,6 +66,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
+            DisablePayloadSigningDecorator(),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),
