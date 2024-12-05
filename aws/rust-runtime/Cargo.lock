@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.7.4"
+version = "1.7.5"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
