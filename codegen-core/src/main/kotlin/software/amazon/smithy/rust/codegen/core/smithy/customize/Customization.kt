@@ -80,3 +80,13 @@ fun <T : Section> RustWriter.writeCustomizationsOrElse(
         orElse(this)
     }
 }
+
+fun <T : Section> allCustomizationsAreEmpty(
+    customizations: List<NamedCustomization<T>>,
+    section: T,
+): Boolean {
+    val test = RustWriter.root()
+    test.writeCustomizations(customizations, section)
+    // If they're not dirty, then they're empty.
+    return !test.dirty()
+}

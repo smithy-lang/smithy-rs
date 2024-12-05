@@ -15,6 +15,7 @@ import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
 import software.amazon.smithy.rustsdk.customize.applyExceptFor
+import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.lambda.LambdaDecorator
@@ -65,6 +66,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             TokenProvidersDecorator(),
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
+            DisablePayloadSigningDecorator(),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),
@@ -75,6 +77,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         RetryClassifierDecorator().applyExceptFor("com.amazonaws.s3#AmazonS3"),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
+        DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#DSQL"),
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),
         GlacierDecorator().onlyApplyTo("com.amazonaws.glacier#Glacier"),
         LambdaDecorator().onlyApplyTo("com.amazonaws.lambda#AWSGirApiService"),
