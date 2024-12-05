@@ -352,11 +352,10 @@ mod test {
         use aws_credential_types::provider::error::CredentialsError;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_http_client::test_util::NeverTcpConnector;
-        use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 
         tokio::time::pause();
         let conf = ProviderConfig::no_configuration()
-            .with_http_client(HyperClientBuilder::new().build(NeverTcpConnector::new()))
+            .with_http_client(NeverTcpConnector::new().into_client())
             .with_time_source(StaticTimeSource::new(UNIX_EPOCH))
             .with_sleep_impl(TokioSleep::new());
         let provider = DefaultCredentialsChain::builder()

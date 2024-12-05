@@ -437,7 +437,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
 mod tests {
     use super::*;
     use crate::client::http::test_util::{capture_request, ReplayEvent, StaticReplayClient};

@@ -65,6 +65,34 @@ pub fn default_client() -> Option<SharedHttpClient> {
     }
 }
 
+/// Given `HttpConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
+pub fn default_connector(
+    settings: &HttpConnectorSettings,
+    sleep: Option<SharedAsyncSleep>,
+) -> Option<SharedHttpConnector> {
+    #[cfg(feature = "rustls-aws-lc")]
+    {
+        tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new default connector");
+        let mut conn_builder = Connector::builder().connector_settings(settings.clone());
+
+        if let Some(sleep) = sleep {
+            conn_builder = conn_builder.sleep_impl(sleep);
+        }
+
+        let conn = conn_builder
+            .tls_provider(tls::Provider::Rustls(
+                tls::rustls_provider::CryptoMode::AwsLc,
+            ))
+            .build();
+        Some(SharedHttpConnector::new(conn))
+    }
+    #[cfg(not(feature = "rustls-aws-lc"))]
+    {
+        tracing::trace!(settings = ?settings, sleep = ?sleep, "no default connector available");
+        None
+    }
+}
+
 /// [`HttpConnector`] used to make HTTP requests.
 ///
 /// This connector also implements socket connect and read timeouts.

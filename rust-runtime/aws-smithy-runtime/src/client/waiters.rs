@@ -196,7 +196,7 @@ impl<AcceptorFn, OperationFn> WaiterOrchestratorBuilder<AcceptorFn, OperationFn>
         self
     }
 
-    #[cfg(all(test, feature = "test-util"))]
+    #[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
     fn random(mut self, random_fn: impl Fn(u64, u64) -> u64 + Send + Sync + 'static) -> Self {
         self.random_fn = RandomImpl::Override(Box::new(random_fn));
         self

@@ -462,7 +462,7 @@ async fn finally_op(
     });
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
 mod tests {
     use crate::client::auth::no_auth::{NoAuthRuntimePlugin, NO_AUTH_SCHEME_ID};
     use crate::client::http::test_util::NeverClient;

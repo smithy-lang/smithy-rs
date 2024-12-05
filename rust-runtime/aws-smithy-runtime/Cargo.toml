@@ -9,7 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# TODO(hyper1) - deprecate legacy hyper features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
+# TODO(hyper1) - deprecate legacy hyper and http testing features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
@@ -20,15 +20,24 @@ default-http-connector = ["dep:aws-smithy-http-client", "aws-smithy-http-client?
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
+# NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
+# and updated to work with the 1.x HTTP/hyper ecosystem. Feature remains in place for backwards compat but internal
+# usage should rely on `test-util-latest` to avoid pulling in all of pre 1.x hyper ecosystem.
+# Same thing for `wire-mock`, prefer using the `aws-smithy-http-client/wire-mock` feature directly instead.
 test-util = [
-    "aws-smithy-runtime-api/test-util",
-    "dep:tracing-subscriber",
+    "test-util-latest",
+    # legacy http test utils
     "connector-hyper-0-14-x",
-    "aws-smithy-http-client/test-util",
     "aws-smithy-http-client/legacy-test-util",
 ]
 
 wire-mock = ["test-util", "aws-smithy-http-client/wire-mock"]
+
+test-util-latest = [
+    "aws-smithy-runtime-api/test-util",
+    "dep:tracing-subscriber",
+    "aws-smithy-http-client/test-util",
+]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
