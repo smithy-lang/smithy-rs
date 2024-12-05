@@ -59,7 +59,6 @@ aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-featur
 
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
-# FIXME(hyper1) - rework test-util to a v2 to not include legacy hyper and remove conn-hyper-014 feature
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util-latest"] }
 aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
