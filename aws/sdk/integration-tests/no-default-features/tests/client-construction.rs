@@ -14,7 +14,7 @@ use aws_smithy_http_client::test_util::infallible_client_fn;
 
 use aws_sdk_s3::error::DisplayErrorContext;
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use std::time::Duration;
 
