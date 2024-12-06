@@ -63,7 +63,7 @@ proc-macro2 = {version = "1.0.92", optional = true }
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util-latest"] }
-aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["hyper-1", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 futures-util = { version = "0.3.29", default-features = false }
 tracing-test = "0.2.4"
