@@ -281,7 +281,7 @@ pub fn attach_waiter_tracing_span<O, E>(
     future.instrument(span)
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
 mod tests {
     use super::*;
     use crate::test_util::capture_test_logs::show_test_logs;
