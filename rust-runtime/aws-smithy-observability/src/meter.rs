@@ -14,7 +14,7 @@ pub trait ProvideMeter: Send + Sync + Debug {
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<dyn Meter>;
 
-    /// Foo
+    /// Cast to [std::any::Any]
     fn as_any(&self) -> &dyn std::any::Any;
 }
 

@@ -34,7 +34,7 @@ pub fn set_telemetry_provider(new_provider: TelemetryProvider) -> Result<(), Obs
         Ok(())
     } else {
         Err(ObservabilityError::new(
-            ErrorKind::GettingGlobalProvider,
+            ErrorKind::SettingGlobalProvider,
             GlobalTelemetryProviderError,
         ))
     }
