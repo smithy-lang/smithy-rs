@@ -16,7 +16,7 @@ tokio = { version = "1", default-features = false, features = ["time"] }
 tower = "0.4"
 
 # Local paths
-aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x", "tls-rustls"] }
 aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 pokemon-service-client = { path = "../pokemon-service-client/", features = [
     "behavior-version-latest",
