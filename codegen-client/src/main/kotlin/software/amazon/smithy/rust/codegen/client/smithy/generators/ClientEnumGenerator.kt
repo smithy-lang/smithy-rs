@@ -100,7 +100,7 @@ data class InfallibleEnumType(
                 """
                 impl ::std::str::FromStr for ${context.enumName} {
                     type Err = ::std::convert::Infallible;
-    
+
                     fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
                         #{Ok}(${context.enumName}::from(s))
                     }
@@ -162,7 +162,12 @@ data class InfallibleEnumType(
 
     override fun additionalDocs(context: EnumGeneratorContext): Writable =
         writable {
-            renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UNKNOWN_VARIANT, UNKNOWN_VARIANT_VALUE)
+            renderForwardCompatibilityNote(
+                context.enumName,
+                context.sortedMembers,
+                UNKNOWN_VARIANT,
+                UNKNOWN_VARIANT_VALUE,
+            )
         }
 
     override fun additionalEnumMembers(context: EnumGeneratorContext): Writable =
@@ -269,6 +274,7 @@ data class InfallibleEnumType(
             - It might inadvertently shadow other intended match arms.
             """.trimIndent(),
         )
+        docs("")
     }
 }
 
