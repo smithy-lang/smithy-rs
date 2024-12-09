@@ -45,7 +45,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.5.10"
+version = "1.5.11"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -106,6 +106,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
+ "regex-lite",
  "tracing",
  "uuid",
 ]
@@ -194,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "futures-util",
  "pin-project-lite",

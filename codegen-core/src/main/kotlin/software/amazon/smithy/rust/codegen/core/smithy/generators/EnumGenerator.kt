@@ -156,7 +156,7 @@ private fun RustWriter.docWithNote(
         doc?.also { docs(escape(it)) }
         note?.also {
             // Add a blank line between the docs and the note to visually differentiate
-            doc?.also { write("///") }
+            write("///")
             docs("_Note: ${it}_")
         }
     }
