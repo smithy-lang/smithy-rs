@@ -57,7 +57,6 @@ zeroize = { version = "1", optional = true }
 # implementation detail of SSO OIDC `CreateToken` for SSO token providers
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }
 
-# FIXME - workaround minimal-versions check issue with proc-macro < 1.0.60
 proc-macro2 = {version = "1.0.92", optional = true }
 
 [dev-dependencies]
@@ -86,3 +85,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 #  Crate("aws-config", STABLE_VERSION_PROP_NAME),
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# FIXME - workaround minimal-versions check issue with proc-macro < 1.0.60
+[package.metadata.cargo-udeps.ignore]
+normal = ["proc-macro2"]
