@@ -17,8 +17,9 @@
 //! Checksum calculation and verification callbacks.
 
 use crate::error::UnknownChecksumAlgorithmError;
+
 use bytes::Bytes;
-use std::str::FromStr;
+use std::{fmt::Debug, str::FromStr};
 
 pub mod body;
 pub mod error;
@@ -27,18 +28,22 @@ pub mod http;
 // Valid checksum algorithm names
 pub const CRC_32_NAME: &str = "crc32";
 pub const CRC_32_C_NAME: &str = "crc32c";
+pub const CRC_64_NVME_NAME: &str = "crc64nvme";
 pub const SHA_1_NAME: &str = "sha1";
 pub const SHA_256_NAME: &str = "sha256";
 pub const MD5_NAME: &str = "md5";
 
 /// We only support checksum calculation and validation for these checksum algorithms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChecksumAlgorithm {
     Crc32,
     Crc32c,
+    #[deprecated]
     Md5,
     Sha1,
     Sha256,
+    Crc64Nvme,
 }
 
 impl FromStr for ChecksumAlgorithm {
@@ -47,9 +52,9 @@ impl FromStr for ChecksumAlgorithm {
     /// Create a new `ChecksumAlgorithm` from an algorithm name. Valid algorithm names are:
     /// - "crc32"
     /// - "crc32c"
+    /// - "crc64nvme"
     /// - "sha1"
     /// - "sha256"
-    /// - "md5"
     ///
     /// Passing an invalid name will return an error.
     fn from_str(checksum_algorithm: &str) -> Result<Self, Self::Err> {
@@ -62,7 +67,10 @@ impl FromStr for ChecksumAlgorithm {
         } else if checksum_algorithm.eq_ignore_ascii_case(SHA_256_NAME) {
             Ok(Self::Sha256)
         } else if checksum_algorithm.eq_ignore_ascii_case(MD5_NAME) {
-            Ok(Self::Md5)
+            // MD5 is now an alias for the default Crc32 since it is deprecated
+            Ok(Self::Crc32)
+        } else if checksum_algorithm.eq_ignore_ascii_case(CRC_64_NVME_NAME) {
+            Ok(Self::Crc64Nvme)
         } else {
             Err(UnknownChecksumAlgorithmError::new(checksum_algorithm))
         }
@@ -75,9 +83,16 @@ impl ChecksumAlgorithm {
         match self {
             Self::Crc32 => Box::<Crc32>::default(),
             Self::Crc32c => Box::<Crc32c>::default(),
-            Self::Md5 => Box::<Md5>::default(),
+            #[cfg(not(target_arch = "x86"))]
+            Self::Crc64Nvme => Box::<Crc64Nvme>::default(),
+            #[allow(deprecated)]
+            Self::Md5 => Box::<Crc32>::default(),
             Self::Sha1 => Box::<Sha1>::default(),
             Self::Sha256 => Box::<Sha256>::default(),
+            // This fall through is here for the x86 situation so we catch crc64nvme and
+            // return the default algo. It is unreachable on other arches.
+            #[allow(unreachable_patterns)]
+            check => panic!("Unsupported checksum type: {check:?}"),
         }
     }
 
@@ -86,6 +101,8 @@ impl ChecksumAlgorithm {
         match self {
             Self::Crc32 => CRC_32_NAME,
             Self::Crc32c => CRC_32_C_NAME,
+            Self::Crc64Nvme => CRC_64_NVME_NAME,
+            #[allow(deprecated)]
             Self::Md5 => MD5_NAME,
             Self::Sha1 => SHA_1_NAME,
             Self::Sha256 => SHA_256_NAME,
@@ -172,6 +189,49 @@ impl Crc32c {
 }
 
 impl Checksum for Crc32c {
+    fn update(&mut self, bytes: &[u8]) {
+        Self::update(self, bytes)
+    }
+    fn finalize(self: Box<Self>) -> Bytes {
+        Self::finalize(*self)
+    }
+    fn size(&self) -> u64 {
+        Self::size()
+    }
+}
+
+#[derive(Default)]
+#[cfg(not(target_arch = "x86"))]
+struct Crc64Nvme {
+    hasher: crc64fast_nvme::Digest,
+}
+
+// crc64fast_nvme::Digest doesn't impl Debug so we can't derive the impl
+#[cfg(not(target_arch = "x86"))]
+impl Debug for Crc64Nvme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Crc64Nvme").finish()
+    }
+}
+
+#[cfg(not(target_arch = "x86"))]
+impl Crc64Nvme {
+    fn update(&mut self, bytes: &[u8]) {
+        self.hasher.write(bytes);
+    }
+
+    fn finalize(self) -> Bytes {
+        Bytes::copy_from_slice(self.hasher.sum64().to_be_bytes().as_slice())
+    }
+
+    // Size of the checksum in bytes
+    fn size() -> u64 {
+        8
+    }
+}
+
+#[cfg(not(target_arch = "x86"))]
+impl Checksum for Crc64Nvme {
     fn update(&mut self, bytes: &[u8]) {
         Self::update(self, bytes)
     }
@@ -301,6 +361,7 @@ mod tests {
 
     use crate::http::HttpChecksum;
     use crate::ChecksumAlgorithm;
+
     use aws_smithy_types::base64;
     use http::HeaderValue;
     use pretty_assertions::assert_eq;
@@ -345,6 +406,21 @@ mod tests {
         let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
 
         let expected_checksum = "0x3379B4CA";
+
+        assert_eq!(decoded_checksum, expected_checksum);
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "x86"))]
+    fn test_crc64nvme_checksum() {
+        use crate::{http::CRC_64_NVME_HEADER_NAME, Crc64Nvme};
+        let mut checksum = Crc64Nvme::default();
+        checksum.update(TEST_DATA.as_bytes());
+        let checksum_result = Box::new(checksum).headers();
+        let encoded_checksum = checksum_result.get(CRC_64_NVME_HEADER_NAME).unwrap();
+        let decoded_checksum = base64_encoded_checksum_to_hex_string(encoded_checksum);
+
+        let expected_checksum = "0xAECAF3AF9C98A855";
 
         assert_eq!(decoded_checksum, expected_checksum);
     }
