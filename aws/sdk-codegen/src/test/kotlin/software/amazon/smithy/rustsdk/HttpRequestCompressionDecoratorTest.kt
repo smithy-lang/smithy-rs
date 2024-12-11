@@ -135,7 +135,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_isnt_applied_unless_modeled() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -151,7 +151,7 @@ class HttpRequestCompressionDecoratorTest {
                             .await;
                         let request = rx.expect_request();
                         // Check that the content-encoding header is not set.
-                        assert_eq!(None, request.headers().get(#{http}::header::CONTENT_ENCODING));
+                        assert_eq!(None, request.headers().get(#{http_1x}::header::CONTENT_ENCODING));
 
                         let compressed_body = ByteStream::from(request.into_body())
                             .collect()
@@ -164,7 +164,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_can_be_disabled() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -182,7 +182,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is not set to "gzip"
                         assert_ne!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -196,7 +196,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_min_size_body_over_minimum() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -215,7 +215,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -229,7 +229,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_min_size_body_under_minimum() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -248,7 +248,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is not set to "gzip"
                         assert_ne!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -262,7 +262,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_implicitly_enabled() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -280,7 +280,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -294,7 +294,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_min_size_default() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -312,7 +312,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is not set to "gzip"
                         assert_ne!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -326,7 +326,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_request_compression_streaming_body() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -356,7 +356,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-encoding header is set to "gzip"
                         assert_eq!(
                             Some("gzip"),
-                            request.headers().get(#{http}::header::CONTENT_ENCODING)
+                            request.headers().get(#{http_1x}::header::CONTENT_ENCODING)
                         );
 
                         let compressed_body = ByteStream::from(request.into_body())
@@ -376,7 +376,7 @@ class HttpRequestCompressionDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn test_compressed_content_length() {
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -395,7 +395,7 @@ class HttpRequestCompressionDecoratorTest {
                         // Check that the content-length header is set correctly.
                         if let Some(content_length) = request
                             .headers()
-                            .get(#{http}::header::CONTENT_LENGTH)
+                            .get(#{http_1x}::header::CONTENT_LENGTH)
                             .and_then(|len| len.parse::<usize>().ok())
                         {
                             assert_ne!(
@@ -405,7 +405,7 @@ class HttpRequestCompressionDecoratorTest {
                             assert_eq!(COMPRESSED_OUTPUT.len(), content_length);
                         }
 
-                        let (http_client, rx) = ::aws_smithy_runtime::client::http::test_util::capture_request(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
                             .region(Region::from_static("doesntmatter"))
                             .with_test_defaults()
@@ -435,7 +435,7 @@ class HttpRequestCompressionDecoratorTest {
                         assert!(
                             request
                                 .headers()
-                                .get(#{http}::header::CONTENT_LENGTH)
+                                .get(#{http_1x}::header::CONTENT_LENGTH)
                                 .is_none(),
                             "expected that no content length header is set because the request is streaming."
                         );
@@ -445,7 +445,7 @@ class HttpRequestCompressionDecoratorTest {
                     "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
                     "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
                     "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
-                    "http" to CargoDependency.Http.toType(),
+                    "http_1x" to CargoDependency.Http1x.toType(),
                     "tokio" to CargoDependency.Tokio.toType(),
                     "capture_request" to RuntimeType.captureRequest(rc),
                     "pretty_assertions" to CargoDependency.PrettyAssertions.toType(),

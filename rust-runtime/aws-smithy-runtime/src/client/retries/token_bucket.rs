@@ -69,7 +69,7 @@ impl TokenBucket {
         }
     }
 
-    #[cfg(all(test, feature = "test-util"))]
+    #[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }

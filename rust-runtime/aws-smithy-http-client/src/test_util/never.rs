@@ -101,6 +101,7 @@ impl hyper_0_14::service::Service<http_02x::Uri> for NeverTcpConnector {
 mod hyper1_support {
     use super::NeverTcpConnector;
     use aws_smithy_async::future::never::Never;
+    use aws_smithy_runtime_api::client::http::SharedHttpClient;
     use aws_smithy_runtime_api::client::result::ConnectorError;
     use http_1x::Uri;
     use hyper_util::rt::TokioIo;
@@ -123,6 +124,14 @@ mod hyper1_support {
                 Never::new().await;
                 unreachable!()
             })
+        }
+    }
+
+    impl NeverTcpConnector {
+        /// Convert this connector into a usable HTTP client for testing
+        #[doc(hidden)]
+        pub fn into_client(self) -> SharedHttpClient {
+            crate::client::build_with_tcp_conn_fn(None, NeverTcpConnector::new)
         }
     }
 }
@@ -215,7 +224,7 @@ mod test {
     #[tokio::test]
     async fn never_tcp_connector_plugs_into_hyper_1() {
         use super::NeverTcpConnector;
-        let client = crate::client::build_with_tcp_conn_fn(None, NeverTcpConnector::new);
+        let client = NeverTcpConnector::new().into_client();
         let components = RuntimeComponentsBuilder::for_tests()
             .with_sleep_impl(Some(TokioSleep::new()))
             .with_time_source(Some(SystemTimeSource::new()))

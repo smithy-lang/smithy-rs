@@ -57,6 +57,10 @@ pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
     #[cfg(feature = "connector-hyper-0-14-x")]
     let _default = crate::client::http::hyper_014::default_client();
 
+    // takes precedence over legacy connector if enabled
+    #[cfg(feature = "default-http-connector")]
+    let _default = aws_smithy_http_client::default_client();
+
     _default.map(|default| {
         default_plugin("default_http_client_plugin", |components| {
             components.with_http_client(Some(default))

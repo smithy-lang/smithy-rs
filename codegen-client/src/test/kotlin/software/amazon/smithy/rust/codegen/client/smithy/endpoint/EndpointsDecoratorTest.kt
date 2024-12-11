@@ -307,8 +307,8 @@ class EndpointsDecoratorTest {
                         }
                         """,
                         "NeverClient" to
-                            CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
-                                .toType().resolve("client::http::test_util::NeverClient"),
+                            CargoDependency.smithyHttpClientTestUtil(clientCodegenContext.runtimeConfig)
+                                .toType().resolve("test_util::NeverClient"),
                         "TokioSleep" to
                             CargoDependency.smithyAsync(clientCodegenContext.runtimeConfig)
                                 .withFeature("rt-tokio").toType().resolve("rt::sleep::TokioSleep"),
