@@ -30,6 +30,8 @@ use http_body::Body;
 use std::str::FromStr;
 use std::{fmt, mem};
 
+use crate::presigning::PresigningMarker;
+
 /// Errors related to constructing checksum-validated HTTP requests
 #[derive(Debug)]
 pub(crate) enum Error {
@@ -202,6 +204,13 @@ where
 
         // Calculate the checksum if necessary
         if calculate_checksum {
+            let is_presigned_req = cfg.load::<PresigningMarker>().is_some();
+
+            // If this is a presigned request and the user has not set a checksum we short circuit
+            if is_presigned_req && checksum_algorithm.is_none() {
+                return Ok(());
+            }
+
             // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
             // If we have made it this far without a checksum being set we set the default as Crc32
             let checksum_algorithm = incorporate_custom_default(checksum_algorithm, cfg)

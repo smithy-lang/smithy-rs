@@ -180,6 +180,7 @@ internal class HttpChecksumTest {
                         use #{HttpRequest};
                         use #{UaAssert};
                         use #{UaExtract};
+                        //#{PresigningMarker};
                         """,
                         *preludeScope,
                         "Blob" to RuntimeType.smithyTypes(rc).resolve("Blob"),
@@ -193,6 +194,7 @@ internal class HttpChecksumTest {
                         "UaExtract" to
                             AwsRuntimeType.awsRuntime(rc)
                                 .resolve("user_agent::test_util::extract_ua_values"),
+                        "PresigningMarker" to AwsRuntimeType.presigning().resolve("PresigningMarker"),
                     )
                 }
 
