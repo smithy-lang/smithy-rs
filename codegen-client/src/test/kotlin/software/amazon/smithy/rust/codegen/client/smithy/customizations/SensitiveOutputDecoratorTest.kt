@@ -23,6 +23,7 @@ class SensitiveOutputDecoratorTest {
                     .resolve("test_util::capture_test_logs::capture_test_logs"),
             "capture_request" to RuntimeType.captureRequest(runtimeConfig),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "http_1x" to CargoDependency.Http1x.toType(),
         )
 
     private val model =
@@ -59,7 +60,7 @@ class SensitiveOutputDecoratorTest {
                     async fn redacting_sensitive_response_body() {
                         let (_logs, logs_rx) = #{capture_test_logs}();
                         let (http_client, _r) = #{capture_request}(Some(
-                            http::Response::builder()
+                            #{http_1x}::Response::builder()
                                 .status(200)
                                 .body(#{SdkBody}::from(""))
                                 .unwrap(),

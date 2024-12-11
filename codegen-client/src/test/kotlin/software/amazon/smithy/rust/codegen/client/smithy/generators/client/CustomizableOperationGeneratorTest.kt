@@ -53,8 +53,8 @@ class CustomizableOperationGeneratorTest {
                     }
                     """,
                     "NeverClient" to
-                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                            .resolve("client::http::test_util::NeverClient"),
+                        CargoDependency.smithyHttpClientTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("test_util::NeverClient"),
                 )
             }
         }
