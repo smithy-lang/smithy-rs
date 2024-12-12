@@ -5,7 +5,7 @@
 
 #![cfg(all(
     feature = "client",
-    any(feature = "test-util-latest", feature = "test-util")
+    any(feature = "test-util", feature = "legacy-test-util")
 ))]
 
 use aws_smithy_async::rt::sleep::TokioSleep;

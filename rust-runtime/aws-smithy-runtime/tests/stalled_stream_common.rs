@@ -5,7 +5,7 @@
 
 #![cfg(all(
     feature = "client",
-    any(feature = "test-util-latest", feature = "test-util")
+    any(feature = "test-util", feature = "legacy-test-util")
 ))]
 // Extra imports are used by stalled_stream_download and stalled_stream_upload as conveniences
 #![allow(unused_imports)]

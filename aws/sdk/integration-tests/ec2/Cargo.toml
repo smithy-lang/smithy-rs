@@ -10,7 +10,7 @@ publish = false
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util-latest"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 # TODO(hyper1) - remove legacy-test-util feature by providing an http 1.x answer to take_requests() function
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util", "legacy-test-util"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client", "http-1x"] }

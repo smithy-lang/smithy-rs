@@ -186,7 +186,7 @@ fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
-val DEV_ONLY_FEATURES = setOf("test-util", "test-util-latest")
+val DEV_ONLY_FEATURES = setOf("test-util", "legacy-test-util")
 
 /**
  * A dependency on an internal or external Cargo crate
@@ -380,7 +380,7 @@ data class CargoDependency(
                 .withFeature("client")
 
         fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
-            smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util-latest")
+            smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")
 
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
 

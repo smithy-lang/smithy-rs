@@ -437,7 +437,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     }
 }
 
-#[cfg(all(test, any(feature = "test-util-latest", feature = "test-util")))]
+#[cfg(all(test, any(feature = "test-util", feature = "legacy-test-util")))]
 mod tests {
     use super::*;
     use crate::client::retries::classifiers::HttpStatusCodeClassifier;
