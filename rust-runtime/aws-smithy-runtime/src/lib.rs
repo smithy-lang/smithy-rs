@@ -32,7 +32,7 @@ pub mod expiring_cache;
 pub mod static_partition_map;
 
 /// General testing utilities.
-#[cfg(feature = "test-util")]
+#[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
 pub mod test_util;
 
 // legacy test-util, re-export of macros

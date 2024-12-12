@@ -27,11 +27,6 @@ hyper-1 = [
     "dep:tower",
 ]
 
-default-tls = [
-    "hyper-1",
-    "rustls-aws-lc"
-]
-
 wire-mock = [
     "test-util",
     "hyper-1",

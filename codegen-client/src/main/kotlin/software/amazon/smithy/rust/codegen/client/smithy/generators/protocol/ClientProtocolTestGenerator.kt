@@ -199,8 +199,8 @@ class ClientProtocolTestGenerator(
 
             """,
             "capture_request" to
-                CargoDependency.smithyRuntimeTestUtil(rc).toType()
-                    .resolve("client::http::test_util::capture_request"),
+                CargoDependency.smithyHttpClientTestUtil(rc).toType()
+                    .resolve("test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
         )

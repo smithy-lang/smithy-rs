@@ -135,8 +135,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         "AsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::AsyncSleep"),
                         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                         "NeverClient" to
-                            CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
-                                .resolve("client::http::test_util::NeverClient"),
+                            CargoDependency.smithyHttpClientTestUtil(runtimeConfig).toType()
+                                .resolve("test_util::NeverClient"),
                         "Timeout" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::timeout::Timeout"),
                         "TokioSleep" to
                             CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio")

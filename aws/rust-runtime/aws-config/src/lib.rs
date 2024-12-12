@@ -391,31 +391,6 @@ mod loader {
         ///
         /// If you wish to use a separate HTTP client for credentials providers when creating clients,
         /// then override the HTTP client set with this function on the client-specific `Config`s.
-        ///
-        /// ## Examples
-        ///
-        /// ```no_run
-        /// # use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-        /// #[cfg(feature = "client-hyper")]
-        /// # async fn create_config() {
-        /// use std::time::Duration;
-        /// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
-        ///
-        /// let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     // NOTE: setting `https_only()` will not allow this connector to work with IMDS.
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .enable_http2()
-        ///     .build();
-        ///
-        /// let hyper_client = HyperClientBuilder::new().build(tls_connector);
-        /// let sdk_config = aws_config::from_env()
-        ///     .http_client(hyper_client)
-        ///     .load()
-        ///     .await;
-        /// # }
-        /// ```
         pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
             self
@@ -1128,7 +1103,7 @@ mod loader {
             assert_eq!(Some(&app_name), conf.app_name());
         }
 
-        #[cfg(feature = "rustls")]
+        #[cfg(feature = "default-http-connector")]
         #[tokio::test]
         async fn disable_default_credentials() {
             let config = defaults(BehaviorVersion::latest())
@@ -1138,7 +1113,7 @@ mod loader {
             assert!(config.credentials_provider().is_none());
         }
 
-        #[cfg(feature = "rustls")]
+        #[cfg(feature = "default-http-connector")]
         #[tokio::test]
         async fn identity_cache_defaulted() {
             let config = defaults(BehaviorVersion::latest()).load().await;
@@ -1146,7 +1121,7 @@ mod loader {
             assert!(config.identity_cache().is_some());
         }
 
-        #[cfg(feature = "rustls")]
+        #[cfg(feature = "default-http-connector")]
         #[allow(deprecated)]
         #[tokio::test]
         async fn identity_cache_old_behavior_version() {

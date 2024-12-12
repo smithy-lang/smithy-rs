@@ -9,24 +9,39 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# TODO(hyper1) - deprecate legacy hyper features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
+# TODO(hyper1) - deprecate legacy hyper and http testing features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
+# NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
+default-http-connector = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
+# NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
+# and updated to work with the 1.x HTTP/hyper ecosystem. Prefer using the `test-util` and `wire-mock` features from
+# `aws-smithy-http-client` directly instead for HTTP test utils.
 test-util = [
     "aws-smithy-runtime-api/test-util",
     "dep:tracing-subscriber",
-    "connector-hyper-0-14-x",
     "aws-smithy-http-client/test-util",
+    # TODO(hyper1): Feature remains in place for backwards compat but in a future release we will break this flag and disable legacy HTTP test utils
+    "legacy-test-util",
+]
+
+legacy-test-util = [
+    # non HTTP test utils
+    "aws-smithy-runtime-api/test-util",
+    "dep:tracing-subscriber",
+    "aws-smithy-http-client/test-util",
+    # legacy http test utils
+    "connector-hyper-0-14-x",
     "aws-smithy-http-client/legacy-test-util",
 ]
 
-wire-mock = ["test-util", "aws-smithy-http-client/wire-mock"]
+wire-mock = ["legacy-test-util", "aws-smithy-http-client/wire-mock"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }

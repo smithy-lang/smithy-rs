@@ -100,7 +100,7 @@ class IntegrationTestDependencies(
                         addDependency(SerdeJson)
                         addDependency(smithyAsync)
                         addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
-                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
                         addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
                         addDependency(smithyTypes)
                         addDependency(Tokio)

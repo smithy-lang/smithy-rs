@@ -186,7 +186,7 @@ fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
-val DEV_ONLY_FEATURES = setOf("test-util")
+val DEV_ONLY_FEATURES = setOf("test-util", "legacy-test-util")
 
 /**
  * A dependency on an internal or external Cargo crate
@@ -364,6 +364,9 @@ data class CargoDependency(
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
 
         fun smithyHttpClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-client")
+
+        fun smithyHttpClientTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyHttpClient(runtimeConfig).toDevDependency().withFeature("test-util")
 
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
 

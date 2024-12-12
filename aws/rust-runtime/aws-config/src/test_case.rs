@@ -318,8 +318,8 @@ where
     O: for<'a> Deserialize<'a> + Secrets + PartialEq + Debug,
     E: Error,
 {
+    #[cfg(feature = "default-http-connector")]
     #[allow(unused)]
-    #[cfg(all(feature = "client-hyper", feature = "rustls"))]
     /// Record a test case from live (remote) HTTPS traffic
     ///
     /// The `default_connector()` from the crate will be used
@@ -327,11 +327,12 @@ where
         // swap out the connector generated from `http-traffic.json` for a real connector:
 
         use std::error::Error;
-        let live_connector = aws_smithy_runtime::client::http::hyper_014::default_connector(
+        let live_connector = aws_smithy_http_client::default_connector(
             &Default::default(),
             self.provider_config.sleep_impl(),
         )
         .expect("feature gate on this function makes this always return Some");
+
         let live_client = RecordingClient::new(live_connector);
         let config = self
             .provider_config
