@@ -34,6 +34,8 @@ dependencies {
 
     // It's handy to re-use protocol test suite models from Smithy in our Kotlin tests.
     testImplementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
+
+    testImplementation(project(":smithy-shapes"))
 }
 
 java {
