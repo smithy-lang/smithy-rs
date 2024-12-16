@@ -55,12 +55,12 @@ def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_
     # Move generated code into codegen-diff/ directory
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
     get_cmd_output(f"mkdir {OUTPUT_PATH}")
-    # if target_aws_sdk in targets:
-    #     # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
-    #     if preserve_aws_sdk_build:
-    #         get_cmd_output(f"cp -r aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-    #     else:
-    get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+    if target_aws_sdk in targets:
+        # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
+        if preserve_aws_sdk_build:
+            get_cmd_output(f"cp -r aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+        else:
+            get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
     for target in [target_codegen_client, target_codegen_server]:
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
