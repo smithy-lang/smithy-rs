@@ -132,7 +132,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60e8f6b615cb5fc60a98132268508ad104310f0cfb25a1c22eee76efdf9154da"
 dependencies = [
- "aws-smithy-async 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.1",
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-types 1.2.9",
  "zeroize",
@@ -188,7 +188,7 @@ checksum = "b5ac934720fbb46206292d2c75b57e67acfc56fe7dfd34fb9a02334af08409ea"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
- "aws-smithy-async 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.1",
  "aws-smithy-eventstream 0.60.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-http 0.60.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-runtime 1.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -215,7 +215,7 @@ dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
- "aws-smithy-async 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.1",
  "aws-smithy-checksums 0.60.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-eventstream 0.60.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-http 0.60.11 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -272,23 +272,23 @@ dependencies = [
 [[package]]
 name = "aws-smithy-async"
 version = "1.2.1"
-dependencies = [
- "futures-util",
- "pin-project-lite",
- "pin-utils",
- "tokio",
- "tokio-test",
-]
-
-[[package]]
-name = "aws-smithy-async"
-version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62220bc6e97f946ddd51b5f1361f78996e704677afc518a4ff66b7a72ea1378c"
 dependencies = [
  "futures-util",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "aws-smithy-async"
+version = "1.2.2"
+dependencies = [
+ "futures-util",
+ "pin-project-lite",
+ "pin-utils",
+ "tokio",
+ "tokio-test",
 ]
 
 [[package]]
@@ -396,8 +396,8 @@ dependencies = [
 name = "aws-smithy-experimental"
 version = "0.1.5"
 dependencies = [
- "aws-smithy-async 1.2.1",
- "aws-smithy-runtime 1.7.4",
+ "aws-smithy-async 1.2.2",
+ "aws-smithy-runtime 1.7.5",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.10",
  "h2 0.4.7",
@@ -818,7 +818,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5221b91b3e441e6675310829fd8984801b772cb1546ef6c0e54dec9f1ac13fef"
 dependencies = [
  "aws-credential-types",
- "aws-smithy-async 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.1",
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-types 1.2.9",
  "rustc_version",
@@ -1989,7 +1989,7 @@ dependencies = [
  "aws-smithy-compression",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.4",
+ "aws-smithy-runtime 1.7.5",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.10",
  "aws-smithy-xml 0.60.9",

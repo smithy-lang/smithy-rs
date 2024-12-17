@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.5.10"
+version = "1.5.11"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -19,6 +19,7 @@ default = ["client-hyper", "rustls", "rt-tokio", "credentials-process", "sso"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
+test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing
 allow-compilation = []
