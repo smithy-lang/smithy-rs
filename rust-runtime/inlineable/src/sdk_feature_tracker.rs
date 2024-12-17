@@ -172,3 +172,80 @@ pub(crate) mod waiter {
         }
     }
 }
+
+#[allow(dead_code)]
+pub(crate) mod retry_mode {
+    use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
+    use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+    use aws_smithy_runtime_api::client::runtime_components::{
+        RuntimeComponents, RuntimeComponentsBuilder,
+    };
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+    use aws_smithy_types::config_bag::ConfigBag;
+    use aws_smithy_types::retry::{RetryConfig, RetryMode};
+    use std::borrow::Cow;
+
+    #[derive(Debug)]
+    struct RetryModeFeatureTrackerInterceptor;
+
+    impl RetryModeFeatureTrackerInterceptor {
+        pub(crate) fn new() -> Self {
+            Self
+        }
+    }
+
+    impl Intercept for RetryModeFeatureTrackerInterceptor {
+        fn name(&self) -> &'static str {
+            "RetryModeFeatureTrackerInterceptor"
+        }
+
+        fn modify_before_serialization(
+            &self,
+            _context: &mut BeforeSerializationInterceptorContextMut<'_>,
+            _runtime_components: &RuntimeComponents,
+            cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            cfg.load::<RetryConfig>()
+                .map(|retry_config| match retry_config.mode() {
+                    RetryMode::Standard => SmithySdkFeature::RetryModeStandard,
+                    RetryMode::Adaptive => SmithySdkFeature::RetryModeAdaptive,
+                    _ => unreachable!("retry mode must be standard or adaptive"),
+                })
+                .map(|feature| {
+                    cfg.interceptor_state()
+                        .store_append::<SmithySdkFeature>(feature)
+                });
+
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    pub(crate) struct RetryModeFeatureTrackerRuntimePlugin {
+        runtime_components: RuntimeComponentsBuilder,
+    }
+
+    impl RetryModeFeatureTrackerRuntimePlugin {
+        pub(crate) fn new() -> Self {
+            Self {
+                runtime_components: RuntimeComponentsBuilder::new(
+                    "RetryModeFeatureTrackerRuntimePlugin",
+                )
+                .with_interceptor(SharedInterceptor::new(
+                    RetryModeFeatureTrackerInterceptor::new(),
+                )),
+            }
+        }
+    }
+
+    impl RuntimePlugin for RetryModeFeatureTrackerRuntimePlugin {
+        fn runtime_components(
+            &self,
+            _: &RuntimeComponentsBuilder,
+        ) -> Cow<'_, RuntimeComponentsBuilder> {
+            Cow::Borrowed(&self.runtime_components)
+        }
+    }
+}

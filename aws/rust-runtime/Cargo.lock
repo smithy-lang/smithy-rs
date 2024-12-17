@@ -332,7 +332,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.9"
+version = "1.2.10"
 dependencies = [
  "base64-simd",
  "bytes",

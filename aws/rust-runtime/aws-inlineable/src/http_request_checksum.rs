@@ -12,6 +12,7 @@ use aws_runtime::content_encoding::header_value::AWS_CHUNKED;
 use aws_runtime::content_encoding::{AwsChunkedBody, AwsChunkedBodyOptions};
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
+use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut, Input,
@@ -130,6 +131,22 @@ where
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let checksum_algorithm = (self.algorithm_provider)(context.input())?;
+        if let Some(checksum_algorithm) = checksum_algorithm {
+            let feature = match checksum_algorithm {
+                ChecksumAlgorithm::Crc32 => Some(SmithySdkFeature::FlexibleChecksumsReqCrc32),
+                ChecksumAlgorithm::Crc32c => Some(SmithySdkFeature::FlexibleChecksumsReqCrc32c),
+                // TODO(flexible checksums v2) add CRC64 to this list
+                ChecksumAlgorithm::Sha1 => Some(SmithySdkFeature::FlexibleChecksumsReqSha1),
+                ChecksumAlgorithm::Sha256 => Some(SmithySdkFeature::FlexibleChecksumsReqSha256),
+                _ => {
+                    tracing::warn!("can't insert business metric for unknown checksum algorithm.");
+                    None
+                }
+            };
+            if let Some(feature) = feature {
+                cfg.interceptor_state().store_append(feature);
+            }
+        }
 
         let mut layer = Layer::new("RequestChecksumInterceptor");
         layer.store_put(RequestChecksumInterceptorState { checksum_algorithm });
