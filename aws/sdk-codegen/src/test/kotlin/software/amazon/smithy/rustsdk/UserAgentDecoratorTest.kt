@@ -213,6 +213,123 @@ class UserAgentDecoratorTest {
     }
 
     @Test
+    fun `it emits business metrics for retry modes`() {
+        val model =
+            """
+            namespace test
+
+            use aws.auth#sigv4
+            use aws.api#service
+            use aws.protocols#restJson1
+            use smithy.rules#endpointRuleSet
+
+            @auth([sigv4])
+            @sigv4(name: "dontcare")
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{ "type": "endpoint", "conditions": [], "endpoint": { "url": "https://example.com" } }],
+                "parameters": {}
+            })
+            @service(sdkId: "dontcare")
+            @restJson1
+            service TestService { version: "2023-01-01", operations: [SomeOperation] }
+
+            @http(uri: "/SomeOperation", method: "GET")
+            @optionalAuth
+            operation SomeOperation {
+                input: SomeInput,
+                output: SomeOutput
+            }
+
+            @input
+            structure SomeInput {}
+
+            @output
+            structure SomeOutput {}
+            """.asSmithyModel()
+
+        awsSdkIntegrationTest(model) { ctx, rustCrate ->
+            rustCrate.integrationTest("retry_mode_feature_tracker") {
+                val rc = ctx.runtimeConfig
+                val moduleName = ctx.moduleUseName()
+
+                rust(
+                    """
+                    use $moduleName::config::{Region, retry::RetryConfig};
+                    use $moduleName::{Client, Config};
+                    """,
+                )
+
+                tokioTest("should_emit_metric_in_user_agent_standard_mode") {
+                    rustTemplate(
+                        """
+                        let (http_client, rcvr) = #{capture_request}(#{None});
+                        let config = Config::builder()
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .retry_config(RetryConfig::standard())
+                            .with_test_defaults()
+                            .build();
+                        let client = Client::from_conf(config);
+                        let _ = client.some_operation().send().await;
+                        let expected_req = rcvr.expect_request();
+                        let user_agent = expected_req
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .unwrap();
+                        #{assert_ua_contains_metric_values}(user_agent, &["E"]);
+                        """,
+                        *preludeScope,
+                        "assert_ua_contains_metric_values" to
+                            AwsRuntimeType.awsRuntimeTestUtil(rc)
+                                .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                        "disable_interceptor" to
+                            RuntimeType.smithyRuntimeApiClient(rc)
+                                .resolve("client::interceptors::disable_interceptor"),
+                        "UserAgentInterceptor" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::UserAgentInterceptor"),
+                    )
+                }
+
+                tokioTest("should_emit_metric_in_user_agent_adaptive_mode") {
+                    rustTemplate(
+                        """
+                        let (http_client, rcvr) = #{capture_request}(#{None});
+                        let config = Config::builder()
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .retry_config(RetryConfig::adaptive())
+                            .with_test_defaults()
+                            .build();
+                        let client = Client::from_conf(config);
+                        let _ = client.some_operation().send().await;
+                        let expected_req = rcvr.expect_request();
+                        let user_agent = expected_req
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .unwrap();
+                        #{assert_ua_contains_metric_values}(user_agent, &["F"]);
+                        """,
+                        *preludeScope,
+                        "assert_ua_contains_metric_values" to
+                            AwsRuntimeType.awsRuntimeTestUtil(rc)
+                                .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                        "disable_interceptor" to
+                            RuntimeType.smithyRuntimeApiClient(rc)
+                                .resolve("client::interceptors::disable_interceptor"),
+                        "UserAgentInterceptor" to
+                            AwsRuntimeType.awsRuntime(rc)
+                                .resolve("user_agent::UserAgentInterceptor"),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `it emits business metric for checksum usage`() {
         val model =
             """
