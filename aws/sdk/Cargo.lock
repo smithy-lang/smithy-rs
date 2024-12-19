@@ -320,16 +320,16 @@ name = "aws-config"
 version = "1.5.11"
 dependencies = [
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
  "aws-sdk-sso",
  "aws-sdk-ssooidc",
  "aws-sdk-sts",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "fastrand 2.0.2",
@@ -354,9 +354,9 @@ name = "aws-credential-types"
 version = "1.2.1"
 dependencies = [
  "async-trait",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "tokio",
  "zeroize",
 ]
@@ -381,7 +381,7 @@ version = "0.60.3"
 name = "aws-http"
 version = "0.60.6"
 dependencies = [
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
 ]
 
 [[package]]
@@ -458,18 +458,18 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.1"
+version = "1.5.2"
 dependencies = [
  "arbitrary",
  "aws-credential-types 1.2.1",
  "aws-sigv4 1.2.6",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-http 0.60.11",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "bytes-utils",
@@ -504,14 +504,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "http 0.2.12",
@@ -527,14 +527,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "fastrand 2.0.2",
@@ -554,13 +554,13 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "http 0.2.12",
@@ -577,14 +577,14 @@ dependencies = [
  "approx",
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "criterion",
@@ -605,15 +605,15 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-query",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "fastrand 2.0.2",
@@ -633,13 +633,13 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "fastrand 2.0.2",
@@ -656,15 +656,15 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
  "aws-sigv4 1.2.6",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-util",
@@ -687,15 +687,15 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-query",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "futures-util",
@@ -714,14 +714,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-util",
@@ -740,15 +740,15 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-util",
@@ -767,15 +767,15 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
  "aws-sigv4 1.2.6",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-util",
@@ -796,14 +796,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-util",
@@ -822,13 +822,13 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "http 0.2.12",
@@ -847,18 +847,18 @@ dependencies = [
  "async-std",
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
  "aws-sigv4 1.2.6",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-checksums 0.60.13",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-experimental",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "bytes",
@@ -930,14 +930,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "fastrand 2.0.2",
@@ -959,13 +959,13 @@ name = "aws-sdk-sso"
 version = "0.0.0-local"
 dependencies = [
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "http 0.2.12",
@@ -980,13 +980,13 @@ name = "aws-sdk-ssooidc"
 version = "0.0.0-local"
 dependencies = [
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "http 0.2.12",
@@ -1001,15 +1001,15 @@ name = "aws-sdk-sts"
 version = "0.0.0-local"
 dependencies = [
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-query",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.3",
  "futures-util",
@@ -1028,14 +1028,14 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "fastrand 2.0.2",
@@ -1055,13 +1055,13 @@ version = "0.0.0-local"
 dependencies = [
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
- "aws-smithy-async 1.2.2",
+ "aws-runtime 1.5.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "fastrand 2.0.2",
@@ -1079,16 +1079,16 @@ dependencies = [
  "async-stream",
  "aws-config",
  "aws-credential-types 1.2.1",
- "aws-runtime 1.5.1",
+ "aws-runtime 1.5.2",
  "aws-sigv4 1.2.6",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-http 0.60.11",
  "aws-smithy-json 0.61.1",
  "aws-smithy-protocol-test 0.63.0",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "aws-types 1.3.3",
  "bytes",
  "futures-core",
@@ -1116,7 +1116,7 @@ dependencies = [
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-http 0.60.11",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "criterion",
  "crypto-bigint 0.5.5",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.2"
+version = "1.2.3"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -1199,7 +1199,7 @@ dependencies = [
 name = "aws-smithy-cbor"
 version = "0.60.8"
 dependencies = [
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "criterion",
  "minicbor",
 ]
@@ -1209,7 +1209,7 @@ name = "aws-smithy-checksums"
 version = "0.60.13"
 dependencies = [
  "aws-smithy-http 0.60.11",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "bytes-utils",
  "crc32c",
@@ -1257,7 +1257,7 @@ name = "aws-smithy-compression"
 version = "0.0.2"
 dependencies = [
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "bytes-utils",
  "flate2",
@@ -1278,7 +1278,7 @@ name = "aws-smithy-eventstream"
 version = "0.60.5"
 dependencies = [
  "arbitrary",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "bytes-utils",
  "crc32fast",
@@ -1300,10 +1300,10 @@ dependencies = [
 name = "aws-smithy-experimental"
 version = "0.1.5"
 dependencies = [
- "aws-smithy-async 1.2.2",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "h2 0.4.7",
  "http 1.2.0",
  "hyper 1.5.1",
@@ -1324,7 +1324,7 @@ dependencies = [
  "async-stream",
  "aws-smithy-eventstream 0.60.5",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "bytes-utils",
  "futures-core",
@@ -1374,7 +1374,7 @@ version = "0.60.3"
 name = "aws-smithy-json"
 version = "0.61.1"
 dependencies = [
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "proptest",
  "serde_json",
 ]
@@ -1394,7 +1394,7 @@ version = "0.2.1"
 dependencies = [
  "aws-sdk-s3 1.65.0",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "tokio",
 ]
 
@@ -1438,7 +1438,7 @@ dependencies = [
 name = "aws-smithy-query"
 version = "0.60.7"
 dependencies = [
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "urlencoding",
 ]
 
@@ -1476,14 +1476,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.7.5"
+version = "1.7.6"
 dependencies = [
  "approx",
- "aws-smithy-async 1.2.2",
+ "aws-smithy-async 1.2.3",
  "aws-smithy-http 0.60.11",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "fastrand 2.0.2",
  "futures-util",
@@ -1513,8 +1513,8 @@ dependencies = [
 name = "aws-smithy-runtime-api"
 version = "1.7.3"
 dependencies = [
- "aws-smithy-async 1.2.2",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "http 0.2.12",
  "http 1.2.0",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
@@ -1606,8 +1606,8 @@ dependencies = [
 name = "aws-smithy-types-convert"
 version = "0.60.8"
 dependencies = [
- "aws-smithy-async 1.2.2",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-types 1.2.11",
  "chrono",
  "futures-core",
  "time",
@@ -1619,7 +1619,7 @@ version = "0.1.3"
 dependencies = [
  "aws-smithy-http 0.60.11",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "http 1.2.0",
  "tracing",
@@ -1650,10 +1650,10 @@ name = "aws-types"
 version = "1.3.3"
 dependencies = [
  "aws-credential-types 1.2.1",
- "aws-smithy-async 1.2.2",
- "aws-smithy-runtime 1.7.5",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.10",
+ "aws-smithy-types 1.2.11",
  "http 0.2.12",
  "hyper-rustls 0.24.2",
  "rustc_version",
