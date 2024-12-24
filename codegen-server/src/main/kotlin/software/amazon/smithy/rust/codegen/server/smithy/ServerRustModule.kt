@@ -41,8 +41,8 @@ object ServerRustModule {
     val Input = RustModule.public("input")
     val Output = RustModule.public("output")
     val Types = RustModule.public("types")
-    val Server = RustModule.public("server")
     val Service = RustModule.private("service")
+    val Server = RustModule.public("server", inline = true)
 
     val UnconstrainedModule =
         software.amazon.smithy.rust.codegen.core.smithy.UnconstrainedModule

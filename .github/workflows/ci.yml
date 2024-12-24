@@ -9,6 +9,11 @@ name: Test
 on:
   workflow_call:
     inputs:
+      run_canary:
+        description: Whether to run the canary or not.
+        required: false
+        default: true
+        type: boolean
       run_sdk_examples:
         description: Whether to run the SDK example checks or not.
         required: false
@@ -27,9 +32,13 @@ on:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
         required: false
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: false
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: false
 
 env:
-  rust_version: 1.74.1
+  rust_version: 1.81.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -39,6 +48,7 @@ jobs:
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
+    timeout-minutes: 25
     runs-on: smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -55,6 +65,9 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
+        # `generate-smithy-rs-release` requires access to previous tags to determine if a numerical suffix is needed
+        # to make the release tag unique
+        fetch-depth: 0
     # The models from aws-sdk-rust are needed to generate the full SDK for CI
     - uses: actions/checkout@v4
       with:
@@ -75,6 +88,7 @@ jobs:
   test-codegen:
     name: Test Codegen
     runs-on: ${{ matrix.test.runner }}
+    timeout-minutes: 30
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -131,6 +145,7 @@ jobs:
   check-semver-hazards:
     name: Check for semver hazards
     runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
       with:
@@ -153,6 +168,7 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
+    timeout-minutes: 20
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -184,11 +200,10 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
-
-
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
+    timeout-minutes: 30
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0
@@ -223,6 +238,7 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -294,11 +310,11 @@ jobs:
             "OPENSSL_INCLUDE_DIR",
         ]
         [target.powerpc-unknown-linux-gnu]
-        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
         [target.powerpc-unknown-linux-gnu.env]
         passthrough = ["OPENSSL_DIR"]
         [target.powerpc64-unknown-linux-gnu]
-        pre-build = ["curl -L -s -o /tmp/openssl.sh https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
         [target.powerpc64-unknown-linux-gnu.env]
         passthrough = ["OPENSSL_DIR"]
         EOF
@@ -315,12 +331,57 @@ jobs:
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
+  # Run the canary against generated SDKs
+  #
+  # In addition to Matrix Success, this job will also be required to pass for merge.
+  # CI execution from forked repositories will skip this job, and when it does
+  # this skipped job will report its status as "Success".
+  # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
+  canary:
+    name: Canary
+    if: ${{ inputs.run_canary }}
+    needs: generate
+    runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+
+  # This is always a failing job since forked repositories do not have necessary repository secrets
+  # to run the PR bot workflow or the canary workflow
+  ask-maintainer-to-run-pr-bot-and-canary:
+    name: Ask maintainer to run the PR bot and canary workflows
+    if: ${{ !inputs.run_canary }}
+    runs-on: ubuntu-latest
+    steps:
+    - run: |
+        echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
+        exit 1
+
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
     name: Check SDK Examples
     if: ${{ inputs.run_sdk_examples }}
     needs: generate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
     - uses: actions/checkout@v4
       with:

@@ -756,6 +756,7 @@ class ServerServiceGenerator(
             rustTemplate(
                 """
                 /// An enumeration of all [operations](https://smithy.io/2.0/spec/service-types.html##operation) in $serviceName.
+                ##[allow(clippy::enum_variant_names)]
                 ##[derive(Debug, PartialEq, Eq, Clone, Copy)]
                 pub enum Operation {
                     $operations

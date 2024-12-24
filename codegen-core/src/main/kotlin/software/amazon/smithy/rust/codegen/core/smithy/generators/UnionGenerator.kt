@@ -161,7 +161,7 @@ open class UnionGenerator(
                         }
                     }
                     if (renderUnknownVariant) {
-                        rust("${unionSymbol.name}::$UnknownVariantName => f.debug_tuple(${UnknownVariantName.dq()}).finish(),")
+                        rust("${unionSymbol.name}::$UNKNOWN_VARIANT_NAME => f.debug_tuple(${UNKNOWN_VARIANT_NAME.dq()}).finish(),")
                     }
                 }
             }
@@ -169,12 +169,12 @@ open class UnionGenerator(
     }
 
     companion object {
-        const val UnknownVariantName = "Unknown"
+        const val UNKNOWN_VARIANT_NAME = "Unknown"
     }
 }
 
 fun unknownVariantError(union: String) =
-    "Cannot serialize `$union::${UnionGenerator.UnknownVariantName}` for the request. " +
+    "Cannot serialize `$union::${UnionGenerator.UNKNOWN_VARIANT_NAME}` for the request. " +
         "The `Unknown` variant is intended for responses only. " +
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
@@ -200,7 +200,8 @@ private fun RustWriter.renderAsVariant(
 ) {
     if (member.isTargetUnit()) {
         rust(
-            "/// Tries to convert the enum instance into [`$variantName`], extracting the inner `()`.",
+            "/// Tries to convert the enum instance into [`$variantName`](#T::$variantName), extracting the inner `()`.",
+            unionSymbol,
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
         rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<(), &Self>", *preludeScope) {

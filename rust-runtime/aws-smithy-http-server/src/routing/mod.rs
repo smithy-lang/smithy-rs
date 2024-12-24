@@ -5,7 +5,7 @@
 
 //! HTTP routing that adheres to the [Smithy specification].
 //!
-//! [Smithy specification]: https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html
+//! [Smithy specification]: https://smithy.io/2.0/spec/http-bindings.html
 
 mod into_make_service;
 mod into_make_service_with_connect_info;
@@ -37,7 +37,6 @@ use futures_util::{
 use http::Response;
 use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
-use tracing::debug;
 
 use crate::{
     body::{boxed, BoxBody},
@@ -191,12 +190,13 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        tracing::debug!("inside routing service call");
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.
             Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(error) => {
-                debug!(%error, "failed to route");
+                tracing::debug!(%error, "failed to route");
                 RoutingFuture::from_response(error.into_response())
             }
         }

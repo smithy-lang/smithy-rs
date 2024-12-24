@@ -8,8 +8,8 @@ use crate::{Args, BoxError, BENCH_KEY};
 use async_trait::async_trait;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
+use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
-use aws_smithy_types::byte_stream::ByteStream;
 use s3::types::CompletedMultipartUpload;
 use s3::types::CompletedPart;
 use std::io::SeekFrom;
@@ -29,7 +29,7 @@ impl PutBenchmark for PutObjectMultipart {
     type Setup = Vec<Client>;
 
     async fn prepare(&self, conf: &SdkConfig) -> Self::Setup {
-        let clients = (0..32).map(|_| Client::new(&conf)).collect::<Vec<_>>();
+        let clients = (0..32).map(|_| Client::new(conf)).collect::<Vec<_>>();
         for client in &clients {
             let _ = client.list_buckets().send().await;
         }
@@ -112,6 +112,7 @@ pub async fn put_object_multipart(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn upload_part_retry_on_timeout(
     permit: OwnedSemaphorePermit,
     client: s3::Client,

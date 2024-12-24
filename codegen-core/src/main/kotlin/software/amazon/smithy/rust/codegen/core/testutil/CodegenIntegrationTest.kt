@@ -30,12 +30,116 @@ data class IntegrationTestParams(
 )
 
 /**
+ * A helper class to allow setting `codegen` object keys to be passed to the `additionalSettings`
+ * field of `IntegrationTestParams`.
+ *
+ * Usage:
+ *
+ * ```kotlin
+ * serverIntegrationTest(
+ *     model,
+ *     IntegrationTestParams(
+ *         additionalSettings =
+ *             ServerAdditionalSettings.builder()
+ *                 .generateCodegenComments()
+ *                 .publicConstrainedTypes()
+ *                 .toObjectNode()
+ * )),
+ * ```
+ */
+sealed class AdditionalSettings {
+    abstract fun toObjectNode(): ObjectNode
+
+    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) : AdditionalSettings() {
+        override fun toObjectNode(): ObjectNode {
+            val merged =
+                settings.map { it.toObjectNode() }
+                    .reduce { acc, next -> acc.merge(next) }
+
+            return ObjectNode.builder()
+                .withMember("codegen", merged)
+                .build()
+        }
+
+        abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
+            protected val settings = mutableListOf<AdditionalSettings>()
+
+            fun generateCodegenComments(debugMode: Boolean = true): Builder<T> {
+                settings.add(GenerateCodegenComments(debugMode))
+                return this
+            }
+
+            abstract fun build(): T
+
+            override fun toObjectNode(): ObjectNode = build().toObjectNode()
+        }
+
+        // Core settings that are common to both Servers and Clients should be defined here.
+        data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("debugMode", debugMode)
+                    .build()
+        }
+    }
+}
+
+class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
+    AdditionalSettings.CoreAdditionalSettings(settings) {
+        class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>() {
+            override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
+        }
+
+        // Additional settings that are specific to client generation should be defined here.
+
+        companion object {
+            fun builder() = Builder()
+        }
+    }
+
+class ServerAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
+    AdditionalSettings.CoreAdditionalSettings(settings) {
+        class Builder : CoreAdditionalSettings.Builder<ServerAdditionalSettings>() {
+            fun publicConstrainedTypes(enabled: Boolean = true): Builder {
+                settings.add(PublicConstrainedTypes(enabled))
+                return this
+            }
+
+            fun addValidationExceptionToConstrainedOperations(enabled: Boolean = true): Builder {
+                settings.add(AddValidationExceptionToConstrainedOperations(enabled))
+                return this
+            }
+
+            override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
+        }
+
+        private data class PublicConstrainedTypes(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("publicConstrainedTypes", enabled)
+                    .build()
+        }
+
+        private data class AddValidationExceptionToConstrainedOperations(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("addValidationExceptionToConstrainedOperations", enabled)
+                    .build()
+        }
+
+        companion object {
+            fun builder() = Builder()
+        }
+    }
+
+/**
  * Run cargo test on a true, end-to-end, codegen product of a given model.
  */
 fun codegenIntegrationTest(
     model: Model,
     params: IntegrationTestParams,
     invokePlugin: (PluginContext) -> Unit,
+    environment: Map<String, String> = mapOf(),
 ): Path {
     val (ctx, testDir) =
         generatePluginContext(
@@ -53,7 +157,7 @@ fun codegenIntegrationTest(
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
     val logger = Logger.getLogger("CodegenIntegrationTest")
-    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir)
+    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir, environment = environment)
     logger.fine(out.toString())
     return testDir
 }

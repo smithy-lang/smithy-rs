@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
@@ -19,6 +20,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.meta
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -121,7 +124,8 @@ internal class BuilderGeneratorTest {
                         .username("admin")
                         .password("pswd")
                         .secret_key("12345");
-                         assert_eq!(format!("{:?}", builder), "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\" }");
+                         assert_eq!(format!("{:?}", builder),
+                         "Builder { username: Some(\"admin\"), password: \"*** Sensitive Data Redacted ***\", secret_key: \"*** Sensitive Data Redacted ***\", secret_value_map: \"*** Sensitive Data Redacted ***\", secret_key_map: \"*** Sensitive Data Redacted ***\", secret_list: \"*** Sensitive Data Redacted ***\" }");
                     """,
                 )
             }
@@ -237,6 +241,62 @@ internal class BuilderGeneratorTest {
                     "Struct" to provider.toSymbol(shape),
                 )
             }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `builder doesn't inherit attributes from struct`() {
+        /**
+         * This test checks if the generated Builder doesn't inherit the macro attributes added to the main struct.
+         *
+         * The strategy is to:
+         * 1) mark the `Inner` struct with `#[deprecated]`
+         * 2) deny use of deprecated in the test
+         * 3) allow use of deprecated by the Builder
+         * 4) Ensure that the builder can be instantiated
+         */
+        class SymbolProviderWithExtraAnnotation(val base: RustSymbolProvider) : RustSymbolProvider by base {
+            override fun toSymbol(shape: Shape): Symbol {
+                val baseSymbol = base.toSymbol(shape)
+                val name = baseSymbol.name
+                if (name == "Inner") {
+                    var metadata = baseSymbol.expectRustMetadata()
+                    val attribute = Attribute.Deprecated
+                    metadata = metadata.copy(additionalAttributes = metadata.additionalAttributes + listOf(attribute))
+                    return baseSymbol.toBuilder().meta(metadata).build()
+                } else {
+                    return baseSymbol
+                }
+            }
+        }
+
+        val provider = SymbolProviderWithExtraAnnotation(testSymbolProvider(model))
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(inner) {
+            rust("##![allow(deprecated)]")
+            generator(model, provider, this, inner).render()
+            implBlock(provider.toSymbol(inner)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, inner)
+            }
+            unitTest(
+                "test", additionalAttributes = listOf(Attribute.DenyDeprecated),
+                block = {
+                    rust(
+                        // Notice that the builder is instantiated directly, and not through the Inner::builder() method.
+                        // This is because Inner is marked with `deprecated`, so any usage of `Inner` inside the test will
+                        // fail the compilation.
+                        //
+                        // This piece of code would fail though if the Builder inherits the attributes from Inner.
+                        """
+                        let _ = test_inner::Builder::default();
+                        """,
+                    )
+                },
+            )
+        }
+        project.withModule(provider.moduleForBuilder(inner)) {
+            BuilderGenerator(model, provider, inner, emptyList()).render(this)
         }
         project.compileAndTest()
     }

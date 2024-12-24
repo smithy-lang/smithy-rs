@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use smithy_rs_tool_common::changelog::Changelog;
+use smithy_rs_tool_common::changelog::{Changelog, ChangelogLoader};
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use std::path::{Path, PathBuf};
 use std::{env, fs, mem};
@@ -14,10 +14,6 @@ use std::{env, fs, mem};
 // SDK changelog entries, but small enough that the SDK changelog file
 // doesn't get too long.
 const MAX_ENTRY_AGE: usize = 5;
-const INTERMEDIATE_SOURCE_HEADER: &str =
-    "# This is an intermediate file that will be replaced after automation is complete.\n\
-     # It will be used to generate a changelog entry for smithy-rs.\n\
-     # Do not commit the contents of this file!\n";
 
 const DEST_HEADER: &str =
     "# This file will be used by automation when cutting a release of the SDK\n\
@@ -42,14 +38,20 @@ pub struct SplitArgs {
 }
 
 pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
-    let combined_changelog = Changelog::load_from_file(&args.source).map_err(|errs| {
+    let loader = ChangelogLoader::default();
+    let combined_changelog = if args.source.is_dir() {
+        loader.load_from_dir(&args.source)
+    } else {
+        loader.load_from_file(&args.source)
+    }
+    .map_err(|errs| {
         anyhow::Error::msg(format!(
             "cannot split changelogs with changelog errors: {:#?}",
             errs
         ))
     })?;
     let current_sdk_changelog = if args.destination.exists() {
-        Changelog::load_from_file(&args.destination).map_err(|errs| {
+        loader.load_from_file(&args.destination).map_err(|errs| {
             anyhow::Error::msg(format!(
                 "failed to load existing SDK changelog entries: {:#?}",
                 errs
@@ -59,14 +61,10 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
         Changelog::new()
     };
 
-    let (smithy_rs_entries, new_sdk_entries) = (
-        smithy_rs_entries(combined_changelog.clone()),
-        sdk_entries(args, combined_changelog).context("failed to filter SDK entries")?,
-    );
+    let new_sdk_entries =
+        sdk_entries(args, combined_changelog).context("failed to filter SDK entries")?;
     let sdk_changelog = merge_sdk_entries(current_sdk_changelog, new_sdk_entries);
 
-    write_entries(&args.source, INTERMEDIATE_SOURCE_HEADER, &smithy_rs_entries)
-        .context("failed to write source")?;
     write_entries(&args.destination, DEST_HEADER, &sdk_changelog)
         .context("failed to write destination")?;
     Ok(())
@@ -94,12 +92,6 @@ fn sdk_entries(args: &SplitArgs, mut changelog: Changelog) -> Result<Changelog> 
         entry.since_commit = Some(last_commit.to_string());
     }
     Ok(changelog)
-}
-
-fn smithy_rs_entries(mut changelog: Changelog) -> Changelog {
-    changelog.aws_sdk_rust.clear();
-    changelog.sdk_models.clear();
-    changelog
 }
 
 fn merge_sdk_entries(old_changelog: Changelog, new_changelog: Changelog) -> Changelog {

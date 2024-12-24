@@ -102,7 +102,7 @@ apply SayHello @httpResponseTests([{
                                              listValue: [],
                                              mapValue: {},
                                              doubleListValue: []
-                                             document: null
+                                             document: {}
                                              nested: { a: "" }
                                          },
                                          code: 200,

@@ -15,16 +15,18 @@ plugins {
 }
 
 val smithyVersion: String by project
-val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
 
+val checkedInSmithyRuntimeLockfile = rootProject.projectDir.resolve("rust-runtime/Cargo.lock")
+
 dependencies {
     implementation(project(":codegen-client"))
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
@@ -73,6 +75,12 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
     ClientTest("aws.protocoltests.query#AwsQuery", "aws_query", addMessageToErrors = false),
     ClientTest("aws.protocoltests.ec2#AwsEc2", "ec2_query", addMessageToErrors = false),
+    ClientTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
+    ClientTest(
+        "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+        "rpcv2Cbor_extras",
+        dependsOn = listOf("rpcv2Cbor-extras.smithy")
+    ),
     ClientTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace",
@@ -118,14 +126,15 @@ val allCodegenTests = listOf(
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
+project.registerCopyCheckedInCargoLockfileTask(checkedInSmithyRuntimeLockfile, layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks["assemble"].finalizedBy("generateCargoWorkspace", "copyCheckedInCargoLockfile")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

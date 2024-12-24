@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamTestModels
+import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTestCases.generateRustPayloadInitializer
 import software.amazon.smithy.rust.codegen.core.testutil.EventStreamUnmarshallTestCases.writeUnmarshallTestCases
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -46,7 +47,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                         "exception",
                         "UnmodeledError",
                         "${testCase.responseContentType}",
-                        br#"${testCase.validUnmodeledError}"#
+                        ${testCase.generateRustPayloadInitializer(testCase.validUnmodeledError)}
                     );
                     let result = $generator::new().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);

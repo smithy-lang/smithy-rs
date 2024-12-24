@@ -1,4 +1,272 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 16th, 2024
+===================
+
+December 3rd, 2024
+==================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3880](https://github.com/smithy-lang/smithy-rs/issues/3880)) Unnamed enums now validate assigned values and will raise a `ConstraintViolation` if an unknown variant is set.
+
+    The following is an example of an unnamed enum:
+    ```smithy
+    @enum([
+        { value: "MONDAY" },
+        { value: "TUESDAY" }
+    ])
+    string UnnamedDayOfWeek
+    ```
+
+
+November 5th, 2024
+==================
+
+October 30th, 2024
+==================
+
+October 24th, 2024
+==================
+
+October 9th, 2024
+=================
+**New this release:**
+- :bug: (client, [smithy-rs#3871](https://github.com/smithy-lang/smithy-rs/issues/3871), [aws-sdk-rust#1202](https://github.com/awslabs/aws-sdk-rust/issues/1202)) Fix minimum throughput detection for downloads to avoid incorrectly raising an error while the user is consuming data at a slow but steady pace.
+
+
+October 5th, 2024
+=================
+**New this release:**
+- :bug: (client, [smithy-rs#3852](https://github.com/smithy-lang/smithy-rs/issues/3852)) Fix AWS SDK generation examples in README in the `aws/sdk` directory.
+
+
+October 4th, 2024
+=================
+
+October 3rd, 2024
+=================
+**Breaking Changes:**
+- :warning: (server) The generated crates no longer have the `aws-lambda` feature flag enabled by default. This prevents the [aws-lambda](https://docs.rs/crate/aws-smithy-http-server/0.63.3/features#aws-lambda) feature from being automatically enabled in [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) when the SDK is not intended for AWS Lambda.
+
+**New this release:**
+- :tada: (server) All relevant types from [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) are now re-exported within the generated crates. This removes the need to explicitly depend on [aws-smithy-http-server](https://docs.rs/aws-smithy-http-server/0.63.3/aws_smithy_http_server/) in service handler code and prevents compilation errors caused by version mismatches.
+
+- :tada: (all, [smithy-rs#3573](https://github.com/smithy-lang/smithy-rs/issues/3573)) Support for the [rpcv2Cbor](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html) protocol has been added, allowing services to serialize RPC payloads as CBOR (Concise Binary Object Representation), improving performance and efficiency in data transmission.
+
+
+September 26th, 2024
+====================
+**New this release:**
+- :bug: (client, [smithy-rs#3820](https://github.com/smithy-lang/smithy-rs/issues/3820)) Fixed a bug with the content length of compressed payloads that caused such requests to hang.
+
+
+September 17th, 2024
+====================
+
+September 9th, 2024
+===================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3813](https://github.com/smithy-lang/smithy-rs/issues/3813)) Operations with event stream member shapes must include `ValidationException` in the errors list. This is necessary because the member shape is a required field, and the builder for the operation input or output returns a `std::result::Result` with the error set to `crate::model::ValidationExceptionField`.
+
+**New this release:**
+- :tada: (server, [smithy-rs#3803](https://github.com/smithy-lang/smithy-rs/issues/3803)) Setting the `addValidationExceptionToConstrainedOperations` codegen flag adds `aws.smithy.framework#ValidationException` to operations with constrained inputs that do not already have this exception added.
+
+    Sample `smithy-build-template.json`:
+
+    ```
+    {
+        "...",
+        "plugins": {
+            "rust-server-codegen": {
+                "service": "ServiceToGenerateSDKFor",
+                    "module": "amzn-sample-server-sdk",
+                    "codegen": {
+                        "addValidationExceptionToConstrainedOperations": true,
+                    }
+            }
+        }
+    }
+    ```
+- :bug: (all, [smithy-rs#3805](https://github.com/smithy-lang/smithy-rs/issues/3805)) Fix bug in `DateTime::from_secs_f64` where certain floating point values could lead to a panic.
+
+
+August 28th, 2024
+=================
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#3800](https://github.com/smithy-lang/smithy-rs/issues/3800)) Upgrade MSRV to Rust 1.78.0.
+
+**New this release:**
+- :bug: (client, [smithy-rs#3798](https://github.com/smithy-lang/smithy-rs/issues/3798)) Fix the execution order of [modify_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.modify_before_serialization) and [read_before_serialization](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/interceptors/trait.Intercept.html#method.read_before_serialization) in the orchestrator. The `modify_before_serialization` method now executes before the `read_before_serialization` method. This adjustment may result in changes in behavior depending on how you customize interceptors.
+- (client, [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925)) Backport connection poisoning to hyper 1.x support
+- :bug: (client, [aws-sdk-rust#821](https://github.com/awslabs/aws-sdk-rust/issues/821), [smithy-rs#3797](https://github.com/smithy-lang/smithy-rs/issues/3797)) Fix the [Length::UpTo](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/enum.Length.html) usage in [FsBuilder](https://docs.rs/aws-smithy-types/1.2.2/aws_smithy_types/byte_stream/struct.FsBuilder.html), ensuring that the specified length does not exceed the remaining file length.
+- :bug: (client, [aws-sdk-rust#820](https://github.com/awslabs/aws-sdk-rust/issues/820)) Re-export `ByteStream`'s `Length` and `FsBuilder`. By making these types available directly within a client crate, customers can use `ByteStream::read_from` without needing to import them separately from the `aws-smithy-types` crate.
+
+
+August 16th, 2024
+=================
+
+August 14th, 2024
+=================
+
+August 8th, 2024
+================
+**New this release:**
+- :bug: (client, [smithy-rs#3767](https://github.com/smithy-lang/smithy-rs/issues/3767)) Fix client error correction to properly parse structure members that target a `Union` containing that structure recursively.
+- :bug: (client, [smithy-rs#3765](https://github.com/smithy-lang/smithy-rs/issues/3765), [smithy-rs#3757](https://github.com/smithy-lang/smithy-rs/issues/3757)) Fix incorrect redaction of `@sensitive` types in maps and lists.
+- (client, [smithy-rs#3779](https://github.com/smithy-lang/smithy-rs/issues/3779)) Improve error messaging when HTTP headers aren't valid UTF-8
+
+
+July 16th, 2024
+===============
+**New this release:**
+- (client, [smithy-rs#3742](https://github.com/smithy-lang/smithy-rs/issues/3742)) Support `stringArray` type in endpoints params
+- (client, [smithy-rs#3755](https://github.com/smithy-lang/smithy-rs/issues/3755)) Add support for `operationContextParams` Endpoints trait
+- (client, [smithy-rs#3591](https://github.com/smithy-lang/smithy-rs/issues/3591)) `aws_smithy_runtime_api::client::orchestrator::HttpRequest` and `aws_smithy_runtime_api::client::orchestrator::HttpResponse` are now re-exported in generated clients so that using these types does not require directly depending on `aws-smithy-runtime-api`.
+
+
+July 9th, 2024
+==============
+**Breaking Changes:**
+- :warning: (server, [smithy-rs#3746](https://github.com/smithy-lang/smithy-rs/issues/3746)) `FromParts<Protocol>::Rejection` must implement `std::fmt::Display`.
+
+    Handlers can accept user-defined types if they implement 
+    [FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) with a `Rejection` 
+    type that implements `std::fmt::Display` (preferably `std::error::Error`) to enable error logging when parameter construction from request parts fails.
+
+    See the [changelog discussion for futher details](https://github.com/smithy-lang/smithy-rs/discussions/3749).
+
+**New this release:**
+- (client, [smithy-rs#3742](https://github.com/smithy-lang/smithy-rs/issues/3742)) Support `stringArray` type in endpoints params
+- :bug: (client, [smithy-rs#3744](https://github.com/smithy-lang/smithy-rs/issues/3744)) Fix bug where stalled stream protection would panic with an underflow if the first event was logged too soon.
+
+
+July 3rd, 2024
+==============
+**New this release:**
+- :bug: (server, [smithy-rs#3643](https://github.com/smithy-lang/smithy-rs/issues/3643)) A feature, `aws-lambda`, has been added to generated SDKs to re-export types required for Lambda deployment.
+- :bug: (server, [smithy-rs#3471](https://github.com/smithy-lang/smithy-rs/issues/3471), [smithy-rs#3724](https://github.com/smithy-lang/smithy-rs/issues/3724), @djedward) Content-Type header validation now ignores parameter portion of media types.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @djedward ([smithy-rs#3471](https://github.com/smithy-lang/smithy-rs/issues/3471), [smithy-rs#3724](https://github.com/smithy-lang/smithy-rs/issues/3724))
+
+
+June 19th, 2024
+===============
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#3690](https://github.com/smithy-lang/smithy-rs/issues/3690)) Fix request `Content-Type` header checking
+
+    Two bugs related to how servers were checking the `Content-Type` header in incoming requests have been fixed:
+
+    1. `Content-Type` header checking was incorrectly succeeding when no `Content-Type` header was present but one was expected.
+    2. When a shape was @httpPayload`-bound, `Content-Type` header checking occurred even when no payload was being sent. In this case it is not necessary to check the header, since there is no content.
+
+    This is a breaking change in that servers are now stricter at enforcing the expected `Content-Type` header is being sent by the client in general, and laxer when the shape is bound with `@httpPayload`.
+
+
+June 17th, 2024
+===============
+
+June 12th, 2024
+===============
+
+June 10th, 2024
+===============
+**New this release:**
+- (all, [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925), [smithy-rs#3673](https://github.com/smithy-lang/smithy-rs/issues/3673)) Add support for v1 `http_body::Body` to `aws_smithy_types::byte_stream::bytestream_util::PathBody`.
+- (all, [smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637), @khuey) Add conversions from smithy StatusCode to http StatusCode.
+- :bug: (client, [smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675), @dastrom) Enable aws-smithy-runtime to compile in rustc 1.72.1
+
+**Contributors**
+Thank you for your contributions! ❤
+- @dastrom ([smithy-rs#3675](https://github.com/smithy-lang/smithy-rs/issues/3675))
+- @khuey ([smithy-rs#3637](https://github.com/smithy-lang/smithy-rs/issues/3637))
+
+
+June 3rd, 2024
+==============
+**New this release:**
+- (client, [smithy-rs#3664](https://github.com/smithy-lang/smithy-rs/issues/3664)) Reduce verbosity of various debug logs
+
+
+May 28th, 2024
+==============
+
+May 22nd, 2024
+==============
+**New this release:**
+- :bug: (client, [smithy-rs#3656](https://github.com/smithy-lang/smithy-rs/issues/3656), [smithy-rs#3657](https://github.com/smithy-lang/smithy-rs/issues/3657)) Fix the Content-Length enforcement so it is only applied to GET requests.
+
+
+May 21st, 2024
+==============
+**Breaking Changes:**
+- :warning::tada: (all, [smithy-rs#3653](https://github.com/smithy-lang/smithy-rs/issues/3653)) Update MSRV to `1.76.0`
+
+**New this release:**
+- :tada: (client, [smithy-rs#2891](https://github.com/smithy-lang/smithy-rs/issues/2891)) Compression is now supported for operations modeled with the `@requestCompression` trait.
+
+    [**For more details, see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3646).
+- :bug: (client, [aws-sdk-rust#1133](https://github.com/awslabs/aws-sdk-rust/issues/1133)) Fix panics that occurred when `Duration` for exponential backoff could not be created from too big a float.
+- :bug: (all, [smithy-rs#3491](https://github.com/smithy-lang/smithy-rs/issues/3491), [aws-sdk-rust#1079](https://github.com/awslabs/aws-sdk-rust/issues/1079)) Clients now enforce that the Content-Length sent by the server matches the length of the returned response body. In most cases, Hyper will enforce this behavior, however, in extremely rare circumstances where the Tokio runtime is dropped in between subsequent requests, this scenario can occur.
+- :bug: (all, [aws-sdk-rust#1141](https://github.com/awslabs/aws-sdk-rust/issues/1141), [aws-sdk-rust#1146](https://github.com/awslabs/aws-sdk-rust/issues/1146), [aws-sdk-rust#1148](https://github.com/awslabs/aws-sdk-rust/issues/1148)) Fixes stalled upload stream protection to not apply to empty request bodies and to stop checking for violations once the request body has been read.
+
+
+May 8th, 2024
+=============
+**Breaking Changes:**
+- :warning::tada: (all, [smithy-rs#3527](https://github.com/smithy-lang/smithy-rs/issues/3527)) Stalled stream protection on uploads is now enabled by default behind `BehaviorVersion::v2024_03_28()`. If you're using `BehaviorVersion::latest()`, you will get this change automatically by running `cargo update`.
+
+**New this release:**
+- (all, [smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161), @mnissenb) Implement Debug for DateTime
+
+**Contributors**
+Thank you for your contributions! ❤
+- @mnissenb ([smithy-rs#3161](https://github.com/smithy-lang/smithy-rs/issues/3161))
+
+
+April 30th, 2024
+================
+**New this release:**
+- :tada: (client, [smithy-rs#119](https://github.com/smithy-lang/smithy-rs/issues/119), [smithy-rs#3595](https://github.com/smithy-lang/smithy-rs/issues/3595), [smithy-rs#3593](https://github.com/smithy-lang/smithy-rs/issues/3593), [smithy-rs#3585](https://github.com/smithy-lang/smithy-rs/issues/3585), [smithy-rs#3571](https://github.com/smithy-lang/smithy-rs/issues/3571), [smithy-rs#3569](https://github.com/smithy-lang/smithy-rs/issues/3569)) Added support for waiters. Services that model waiters now have a `Waiters` trait that adds
+    some methods prefixed with `wait_until` to the existing clients.
+
+    For example, if there was a waiter modeled for "thing" that takes a "thing ID", using
+    that waiter would look as follows:
+
+    ```rust
+    use my_generated_client::client::Waiters;
+
+    let result = client.wait_until_thing()
+        .thing_id("someId")
+        .wait(Duration::from_secs(120))
+        .await;
+    ```
+- :bug: (all, [smithy-rs#3603](https://github.com/smithy-lang/smithy-rs/issues/3603)) Fix event stream `:content-type` message headers for struct messages. Note: this was the `:content-type` header on individual event message frames that was incorrect, not the HTTP `content-type` header for the initial request.
+
+
+April 19th, 2024
+================
+**New this release:**
+- :tada: (server, [smithy-rs#3430](https://github.com/smithy-lang/smithy-rs/issues/3430)) Implement `std::error::Error` for `ConstraintViolation`
+- (all, [smithy-rs#3553](https://github.com/smithy-lang/smithy-rs/issues/3553)) Upgraded MSRV to Rust 1.75
+
+
+April 11th, 2024
+================
+**New this release:**
+- :tada: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection now supports request upload streams. It is currently off by default, but will be enabled by default in a future release. To enable it now, you can do the following:
+
+    ```rust
+    let config = my_service::Config::builder()
+        .stalled_stream_protection(StalledStreamProtectionConfig::enabled().build())
+        // ...
+        .build();
+    ```
+- :bug: (all, [smithy-rs#3427](https://github.com/smithy-lang/smithy-rs/issues/3427)) `SharedIdentityResolver` now respects an existing cache partition when the `ResolveIdentity` implementation
+    provides one already.
+- :bug: (all, [smithy-rs#3485](https://github.com/smithy-lang/smithy-rs/issues/3485)) Stalled stream protection on downloads will now only trigger if the upstream source is too slow. Previously, stalled stream protection could be erroneously triggered if the user was slowly consuming the stream slower than the minimum speed limit.
+- :bug: (all, [smithy-rs#2546](https://github.com/smithy-lang/smithy-rs/issues/2546)) Unions with unit target member shape are now fully supported
+
+
 April 2nd, 2024
 ===============
 **Breaking Changes:**

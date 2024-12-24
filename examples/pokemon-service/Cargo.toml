@@ -15,15 +15,14 @@ tower = "0.4"
 tracing = "0.1"
 
 # Local paths
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server", features = ["request-id"] }
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
 async-stream = "0.3"
 rand = "0.8.5"
-serial_test = "1.0.0"
+serial_test = "3.1.1"
 
 # We use hyper client in tests
 hyper = { version = "0.14.26", features = ["server", "client"] }
@@ -33,4 +32,6 @@ hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
-pokemon-service-client = { path = "../pokemon-service-client/" }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }

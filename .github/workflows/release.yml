@@ -1,8 +1,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow performs a release of smithy-rs. It is manually
-# kicked off via GitHub Actions workflow dispatch.
+# This is the shared release workflow run by both `prod-release.yml` and `dry-run-release.yml'.
+# A calling workflow will indicate whether it wants to run this with a prod run or a dry run.
 
 # Allow only one release to run at a time
 concurrency:
@@ -10,25 +10,33 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.74.1
+  rust_version: 1.81.0
 
 name: Release smithy-rs
-run-name: ${{ inputs.dry_run && 'Dry run' || 'Prod run' }} - ${{ github.workflow }} (${{ inputs.commit_sha }})
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       commit_sha:
-        description: |
-          Commit SHA: The SHA of the git commit that you want to release.
-          You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
+        description: The SHA of the git commit that you want to release.
         required: true
         type: string
       dry_run:
-        description: |
-          Dry run: When selected, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io
+        description: When true, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io.
         required: true
         type: boolean
-        default: true
+      skip_ci:
+        description: Skip CI when executing a release
+        required: true
+        type: boolean
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
+      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN:
+        required: true
+      CANARY_GITHUB_ACTIONS_ROLE_ARN:
+        required: true
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: true
 
 jobs:
   check-actor-for-prod-run:
@@ -80,14 +88,19 @@ jobs:
         retention-days: 1
 
   release-ci:
-    name: Prerelease checks
-    if: inputs.dry_run == false
+    name: Pre-release checks
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always() && inputs.skip_ci == false
     needs:
     - acquire-base-image
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: false
       git_ref: ${{ inputs.commit_sha }}
+    secrets:
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
 
   check-semver-hazards:
     name: Check for semver hazards
@@ -168,12 +181,18 @@ jobs:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
         token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        fetch-depth: 0
     - name: Generate release artifacts
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-smithy-rs-release
     - name: Download all artifacts
       uses: ./smithy-rs/.github/actions/download-all-artifacts
+    # This step is not idempotent, as it pushes release artifacts to the `smithy-rs-release-1.x.y` branch. However,
+    # if this step succeeds but a subsequent step fails, retrying the release workflow is "safe" in that it does not
+    # create any inconsistent states; this step would simply fail because the release branch would be ahead of `main`
+    # due to previously pushed artifacts.
+    # To successfully retry a release, revert the commits in the release branch that pushed the artifacts.
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
@@ -189,7 +208,7 @@ jobs:
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the changelog should have already
           # been processed.
-          git fetch --unshallow
+          git fetch
           if [[ "${DRY_RUN}" == "true" ]]; then
             # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
             # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
@@ -201,18 +220,7 @@ jobs:
           fi
         fi
         echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
-    - name: Tag release
-      uses: actions/github-script@v7
-      with:
-        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-        script: |
-          const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
-          await createReleaseScript({
-            github,
-            isDryRun: ${{ inputs.dry_run }},
-            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
-            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
-          });
+    # This step is idempotent; the `publisher` will not publish a crate if the version is already published on crates.io.
     - name: Publish to crates.io
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
@@ -234,37 +242,29 @@ jobs:
         else
           publisher publish -y --location .
         fi
+    # This step is not idempotent and MUST be performed last, as it will generate a new release in the `smithy-rs`
+    # repository with the release tag that is always unique and has an increasing numerical suffix.
+    - name: Tag release
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        script: |
+          const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
+          await createReleaseScript({
+            github,
+            isDryRun: ${{ inputs.dry_run }},
+            releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
+            releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
+          });
 
-  trim-changelog-next-on-main:
-    name: Remove released entries from CHANGELOG.next.toml on the main branch
-    if: inputs.dry_run == false && needs.get-or-create-release-branch.outputs.new_release_series == true
+  # If this step fails for any reason, there's no need to retry the release workflow, as this step is auxiliary
+  # and the release itself was successful. Instead, manually trigger `backport-pull-request.yml`.
+  open-backport-pull-request:
+    name: Open backport pull request to merge the release branch back to main
     needs:
-    - get-or-create-release-branch
     - release
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout smithy-rs
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ inputs.commit_sha }}
-        path: smithy-rs
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
-    - name: Empty CHANGELOG.next.toml
-      uses: ./smithy-rs/.github/actions/docker-build
-      with:
-        action: generate-new-changelog-next-toml
-    - name: Download all artifacts
-      uses: ./smithy-rs/.github/actions/download-all-artifacts
-    - name: Push smithy-rs changes
-      working-directory: generate-new-changelog-next-toml/smithy-rs
-      shell: bash
-      run: |
-        set -eux
-
-        # This will fail if other commits have been pushed to `main` after `commit_sha`
-        # In particular, this will ALWAYS fail if you are creating a new release series from
-        # a commit that is not the current tip of `main`.
-        # We can build more refined automation to handle this case in the future - until then, it'll require
-        # a manual PR to edit the current CHANGELOG.next.toml file and remove the released entries.
-        git -c 'user.name=AWS SDK Rust Bot' -c 'user.email=aws-sdk-rust-primary@amazon.com' commit CHANGELOG.next.toml --message "Remove released entries from \`CHANGELOG.next.toml\`"
-        git push origin main
+    # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
+    if: inputs.dry_run == false && always() && needs.release.result == 'success'
+    uses: ./.github/workflows/backport-pull-request.yml
+    secrets:
+      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}

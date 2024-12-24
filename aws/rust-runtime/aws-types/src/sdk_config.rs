@@ -11,9 +11,8 @@
 
 use crate::app_name::AppName;
 use crate::docs_for;
+use crate::origin::Origin;
 use crate::region::Region;
-use std::sync::Arc;
-
 use crate::service_config::LoadServiceConfig;
 use aws_credential_types::provider::token::SharedTokenProvider;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
@@ -28,6 +27,8 @@ pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStream
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Unified docstrings to keep crates in sync. Not intended for public use
 pub mod unified_docs {
@@ -47,8 +48,25 @@ If no dual-stack endpoint is available the request MAY return an error.
 **Note**: Some services do not offer dual-stack as a configurable parameter (e.g. Code Catalyst). For
 these services, this setting has no effect"
         };
+        (time_source) => {
+"The time source use to use for this client.
 
-        (time_source) => { "The time source use to use for this client. This only needs to be required for creating deterministic tests or platforms where `SystemTime::now()` is not supported." };
+This only needs to be required for creating deterministic tests or platforms where `SystemTime::now()` is not supported."};
+        (disable_request_compression) => {
+"When `true`, disable request compression. Defaults to `false`.
+
+**Only some services support request compression.** For services
+that don't support request compression, this setting does nothing.
+" };
+        (request_min_compression_size_bytes) => {
+"The minimum size of request that should be compressed. Defaults to `10240` bytes.
+
+When a request body's size is lower than this, request compression will be skipped.
+This is useful for request bodies because, for small request bodies, compression may actually increase their size.
+
+**Only some services support request compression.** For services
+that don't support request compression, this setting does nothing.
+" };
     }
 }
 
@@ -71,6 +89,9 @@ pub struct SdkConfig {
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
     service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
+    disable_request_compression: Option<bool>,
+    request_min_compression_size_bytes: Option<u32>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -96,6 +117,9 @@ pub struct Builder {
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
     service_config: Option<Arc<dyn LoadServiceConfig>>,
+    config_origins: HashMap<&'static str, Origin>,
+    disable_request_compression: Option<bool>,
+    request_min_compression_size_bytes: Option<u32>,
 }
 
 impl Builder {
@@ -598,6 +622,39 @@ impl Builder {
         self
     }
 
+    #[doc = docs_for!(disable_request_compression)]
+    pub fn disable_request_compression(mut self, disable_request_compression: bool) -> Self {
+        self.set_disable_request_compression(Some(disable_request_compression));
+        self
+    }
+
+    #[doc = docs_for!(disable_request_compression)]
+    pub fn set_disable_request_compression(
+        &mut self,
+        disable_request_compression: Option<bool>,
+    ) -> &mut Self {
+        self.disable_request_compression = disable_request_compression;
+        self
+    }
+
+    #[doc = docs_for!(request_min_compression_size_bytes)]
+    pub fn request_min_compression_size_bytes(
+        mut self,
+        request_min_compression_size_bytes: u32,
+    ) -> Self {
+        self.set_request_min_compression_size_bytes(Some(request_min_compression_size_bytes));
+        self
+    }
+
+    #[doc = docs_for!(request_min_compression_size_bytes)]
+    pub fn set_request_min_compression_size_bytes(
+        &mut self,
+        request_min_compression_size_bytes: Option<u32>,
+    ) -> &mut Self {
+        self.request_min_compression_size_bytes = request_min_compression_size_bytes;
+        self
+    }
+
     /// Sets the [`BehaviorVersion`] for the [`SdkConfig`]
     pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
         self.set_behavior_version(Some(behavior_version));
@@ -633,6 +690,14 @@ impl Builder {
         self
     }
 
+    /// Set the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn insert_origin(&mut self, setting: &'static str, origin: Origin) {
+        self.config_origins.insert(setting, origin);
+    }
+
     /// Build a [`SdkConfig`] from this builder.
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -652,6 +717,9 @@ impl Builder {
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
             service_config: self.service_config,
+            config_origins: self.config_origins,
+            disable_request_compression: self.disable_request_compression,
+            request_min_compression_size_bytes: self.request_min_compression_size_bytes,
         }
     }
 }
@@ -793,14 +861,24 @@ impl SdkConfig {
         self.use_dual_stack
     }
 
+    /// When true, request compression is disabled.
+    pub fn disable_request_compression(&self) -> Option<bool> {
+        self.disable_request_compression
+    }
+
+    /// Configured minimum request compression size.
+    pub fn request_min_compression_size_bytes(&self) -> Option<u32> {
+        self.request_min_compression_size_bytes
+    }
+
     /// Configured stalled stream protection
     pub fn stalled_stream_protection(&self) -> Option<StalledStreamProtectionConfig> {
         self.stalled_stream_protection_config.clone()
     }
 
-    /// Behavior major version configured for this client
+    /// Behavior version configured for this client
     pub fn behavior_version(&self) -> Option<BehaviorVersion> {
-        self.behavior_version.clone()
+        self.behavior_version
     }
 
     /// Return an immutable reference to the service config provider configured for this client.
@@ -822,6 +900,17 @@ impl SdkConfig {
         self.clone().into_builder()
     }
 
+    /// Get the origin of a setting.
+    ///
+    /// This is used internally to understand how to merge config structs while
+    /// respecting precedence of origins.
+    pub fn get_origin(&self, setting: &'static str) -> Origin {
+        self.config_origins
+            .get(setting)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// Convert this [`SdkConfig`] back to a builder to enable modification
     pub fn into_builder(self) -> Builder {
         Builder {
@@ -841,6 +930,9 @@ impl SdkConfig {
             behavior_version: self.behavior_version,
             stalled_stream_protection_config: self.stalled_stream_protection_config,
             service_config: self.service_config,
+            config_origins: self.config_origins,
+            disable_request_compression: self.disable_request_compression,
+            request_min_compression_size_bytes: self.request_min_compression_size_bytes,
         }
     }
 }

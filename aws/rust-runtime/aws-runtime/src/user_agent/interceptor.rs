@@ -3,18 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::user_agent::{ApiMetadata, AwsUserAgent};
+use std::borrow::Cow;
+use std::fmt;
+
+use http_02x::header::{HeaderName, HeaderValue, InvalidHeaderValue, USER_AGENT};
+
+use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::http::HttpClient;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    BeforeTransmitInterceptorContextMut, BeforeTransmitInterceptorContextRef,
+};
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
-use http::header::{InvalidHeaderValue, USER_AGENT};
-use http::{HeaderName, HeaderValue};
-use std::borrow::Cow;
-use std::fmt;
+
+use crate::sdk_feature::AwsSdkFeature;
+use crate::user_agent::metrics::ProvideBusinessMetric;
+use crate::user_agent::{AdditionalMetadata, ApiMetadata, AwsUserAgent, InvalidMetadataValue};
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
@@ -23,12 +31,14 @@ const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent")
 enum UserAgentInterceptorError {
     MissingApiMetadata,
     InvalidHeaderValue(InvalidHeaderValue),
+    InvalidMetadataValue(InvalidMetadataValue),
 }
 
 impl std::error::Error for UserAgentInterceptorError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::InvalidHeaderValue(source) => Some(source),
+            Self::InvalidMetadataValue(source) => Some(source),
             Self::MissingApiMetadata => None,
         }
     }
@@ -38,6 +48,7 @@ impl fmt::Display for UserAgentInterceptorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::InvalidHeaderValue(_) => "AwsUserAgent generated an invalid HTTP header value. This is a bug. Please file an issue.",
+            Self::InvalidMetadataValue(_) => "AwsUserAgent generated an invalid metadata value. This is a bug. Please file an issue.",
             Self::MissingApiMetadata => "The UserAgentInterceptor requires ApiMetadata to be set before the request is made. This is a bug. Please file an issue.",
         })
     }
@@ -46,6 +57,12 @@ impl fmt::Display for UserAgentInterceptorError {
 impl From<InvalidHeaderValue> for UserAgentInterceptorError {
     fn from(err: InvalidHeaderValue) -> Self {
         UserAgentInterceptorError::InvalidHeaderValue(err)
+    }
+}
+
+impl From<InvalidMetadataValue> for UserAgentInterceptorError {
+    fn from(err: InvalidMetadataValue) -> Self {
+        UserAgentInterceptorError::InvalidMetadataValue(err)
     }
 }
 
@@ -76,31 +93,66 @@ impl Intercept for UserAgentInterceptor {
         "UserAgentInterceptor"
     }
 
-    fn modify_before_signing(
+    fn read_after_serialization(
         &self,
-        context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _context: &BeforeTransmitInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Allow for overriding the user agent by an earlier interceptor (so, for example,
         // tests can use `AwsUserAgent::for_tests()`) by attempting to grab one out of the
         // config bag before creating one.
-        let ua: Cow<'_, AwsUserAgent> = cfg
-            .load::<AwsUserAgent>()
-            .map(Cow::Borrowed)
-            .map(Result::<_, UserAgentInterceptorError>::Ok)
-            .unwrap_or_else(|| {
-                let api_metadata = cfg
-                    .load::<ApiMetadata>()
-                    .ok_or(UserAgentInterceptorError::MissingApiMetadata)?;
-                let mut ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata.clone());
+        if cfg.load::<AwsUserAgent>().is_some() {
+            return Ok(());
+        }
 
-                let maybe_app_name = cfg.load::<AppName>();
-                if let Some(app_name) = maybe_app_name {
-                    ua.set_app_name(app_name.clone());
-                }
-                Ok(Cow::Owned(ua))
-            })?;
+        let api_metadata = cfg
+            .load::<ApiMetadata>()
+            .ok_or(UserAgentInterceptorError::MissingApiMetadata)?;
+        let mut ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata.clone());
+
+        let maybe_app_name = cfg.load::<AppName>();
+        if let Some(app_name) = maybe_app_name {
+            ua.set_app_name(app_name.clone());
+        }
+
+        cfg.interceptor_state().store_put(ua);
+
+        Ok(())
+    }
+
+    fn modify_before_signing(
+        &self,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let mut ua = cfg
+            .load::<AwsUserAgent>()
+            .expect("`AwsUserAgent should have been created in `read_before_execution`")
+            .clone();
+
+        let smithy_sdk_features = cfg.load::<SmithySdkFeature>();
+        for smithy_sdk_feature in smithy_sdk_features {
+            smithy_sdk_feature
+                .provide_business_metric()
+                .map(|m| ua.add_business_metric(m));
+        }
+
+        let aws_sdk_features = cfg.load::<AwsSdkFeature>();
+        for aws_sdk_feature in aws_sdk_features {
+            aws_sdk_feature
+                .provide_business_metric()
+                .map(|m| ua.add_business_metric(m));
+        }
+
+        let maybe_connector_metadata = runtime_components
+            .http_client()
+            .and_then(|c| c.connector_metadata());
+        if let Some(connector_metadata) = maybe_connector_metadata {
+            let am = AdditionalMetadata::new(Cow::Owned(connector_metadata.to_string()))?;
+            ua.add_additional_metadata(am);
+        }
 
         let headers = context.request_mut().headers_mut();
         let (user_agent, x_amz_user_agent) = header_values(&ua)?;
@@ -175,6 +227,10 @@ mod tests {
         let mut config = ConfigBag::of_layers(vec![layer]);
 
         let interceptor = UserAgentInterceptor::new();
+        let ctx = Into::into(&context);
+        interceptor
+            .read_after_serialization(&ctx, &rc, &mut config)
+            .unwrap();
         let mut ctx = Into::into(&mut context);
         interceptor
             .modify_before_signing(&mut ctx, &rc, &mut config)
@@ -207,6 +263,10 @@ mod tests {
         let mut config = ConfigBag::of_layers(vec![layer]);
 
         let interceptor = UserAgentInterceptor::new();
+        let ctx = Into::into(&context);
+        interceptor
+            .read_after_serialization(&ctx, &rc, &mut config)
+            .unwrap();
         let mut ctx = Into::into(&mut context);
         interceptor
             .modify_before_signing(&mut ctx, &rc, &mut config)
@@ -229,17 +289,17 @@ mod tests {
     #[test]
     fn test_api_metadata_missing() {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut context = context();
+        let context = context();
         let mut config = ConfigBag::base();
 
         let interceptor = UserAgentInterceptor::new();
-        let mut ctx = Into::into(&mut context);
+        let ctx = Into::into(&context);
 
         let error = format!(
             "{}",
             DisplayErrorContext(
                 &*interceptor
-                    .modify_before_signing(&mut ctx, &rc, &mut config)
+                    .read_after_serialization(&ctx, &rc, &mut config)
                     .expect_err("it should error")
             )
         );

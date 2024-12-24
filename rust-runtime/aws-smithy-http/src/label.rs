@@ -4,7 +4,7 @@
  */
 
 //! Formatting values as Smithy
-//! [httpLabel](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html#httplabel-trait)
+//! [httpLabel](https://smithy.io/2.0/spec/http-bindings.html#httplabel-trait)
 
 use crate::urlencode::BASE_SET;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
@@ -41,7 +41,7 @@ pub fn fmt_timestamp(t: &DateTime, format: Format) -> Result<String, DateTimeFor
 #[cfg(test)]
 mod test {
     use crate::label::{fmt_string, EncodingStrategy};
-    use http::Uri;
+    use http_02x::Uri;
     use proptest::proptest;
 
     #[test]

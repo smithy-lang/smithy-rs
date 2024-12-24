@@ -178,7 +178,7 @@ object NamingObstacleCourseTestModels {
     /**
      * This targets two bug classes:
      * - operation inputs used as nested outputs
-     * - operation outputs used as nested outputs
+     * - operation outputs used as nested inputs
      */
     fun reusedInputOutputShapesModel(protocol: Trait) =
         """

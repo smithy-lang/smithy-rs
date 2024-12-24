@@ -81,6 +81,51 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """.trimIndent()
     }
 
+    @Test
+    fun `should detect when event streams are used, even without constraints, as the event member is required`() {
+        val model =
+            """
+            $baseModel
+            structure TestInputOutput {
+                eventStream: EventStream
+            }
+            @streaming
+            union EventStream {
+                message: Message,
+                error: Error
+            }
+            structure Message {
+                lengthString: String
+            }
+            structure Error {
+                message: String
+            }
+            """.asSmithyModel()
+        val service = model.lookup<ServiceShape>("test#TestService")
+        val validationResult =
+            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                model,
+                service,
+                SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+            )
+
+        validationResult.messages shouldHaveSize 1
+
+        // Asserts the exact message, to ensure the formatting is appropriate.
+        validationResult.messages[0].message shouldBe
+            """
+            Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
+            ```smithy
+            use smithy.framework#ValidationException
+
+            operation TestOperation {
+                ...
+                errors: [..., ValidationException] // <-- Add this.
+            }
+            ```
+            """.trimIndent()
+    }
+
     private val constraintTraitOnStreamingBlobShapeModel =
         """
         $baseModel

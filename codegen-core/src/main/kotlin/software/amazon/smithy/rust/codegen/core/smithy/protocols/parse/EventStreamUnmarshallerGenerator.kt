@@ -41,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 fun RustModule.Companion.eventStreamSerdeModule(): RustModule.LeafModule = private("event_stream_serde")
@@ -162,7 +163,7 @@ class EventStreamUnmarshallerGenerator(
                 when (codegenTarget.renderUnknownVariant()) {
                     true ->
                         rustTemplate(
-                            "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UnknownVariantName}))",
+                            "Ok(#{UnmarshalledMessage}::Event(#{Output}::${UnionGenerator.UNKNOWN_VARIANT_NAME}))",
                             "Output" to unionSymbol,
                             *codegenScope,
                         )
@@ -189,12 +190,20 @@ class EventStreamUnmarshallerGenerator(
             // Don't attempt to parse the payload for an empty struct. The payload can be empty, or if the model was
             // updated since the code was generated, it can have content that would not be understood.
             empty -> {
-                rustTemplate(
-                    "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(#{UnionStruct}::builder().build())))",
-                    "Output" to unionSymbol,
-                    "UnionStruct" to symbolProvider.toSymbol(unionStruct),
-                    *codegenScope,
-                )
+                if (unionMember.isTargetUnit()) {
+                    rustTemplate(
+                        "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName))",
+                        "Output" to unionSymbol,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(#{UnionStruct}::builder().build())))",
+                        "Output" to unionSymbol,
+                        "UnionStruct" to symbolProvider.toSymbol(unionStruct),
+                        *codegenScope,
+                    )
+                }
             }
 
             payloadOnly -> {

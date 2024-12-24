@@ -5,8 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy
 
+import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
@@ -53,7 +55,7 @@ abstract class CodegenContext(
      * Several code generators are reused by both the client and server plugins, but only deviate in small and contained
      * parts (e.g. changing a return type or adding an attribute).
      * Instead of splitting the generator in two or setting up an inheritance relationship, sometimes it's best
-     * to just lookup this flag.
+     * to just look up this flag.
      */
     open val target: CodegenTarget,
 ) {

@@ -14,46 +14,39 @@ import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
+import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
-import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
-import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
-import java.io.File
-import java.nio.file.Path
+import kotlin.streams.toList
 
 class ConstraintsMemberShapeTest {
-    private val outputModelOnly =
+    private val sampleModel =
         """
         namespace constrainedMemberShape
 
+        use smithy.framework#ValidationException
         use aws.protocols#restJson1
         use aws.api#data
 
         @restJson1
         service ConstrainedService {
-            operations: [OperationUsingGet]
+            operations: [SampleOperation]
         }
 
-        @http(uri: "/anOperation", method: "GET")
-        operation OperationUsingGet {
-            output : OperationUsingGetOutput
+        @http(uri: "/anOperation", method: "POST")
+        operation SampleOperation {
+            output: SampleInputOutput
+            input: SampleInputOutput
+            errors: [ValidationException, ErrorWithMemberConstraint]
         }
-        structure OperationUsingGetOutput {
+        structure SampleInputOutput {
             plainLong : Long
             plainInteger : Integer
             plainShort : Short
@@ -159,6 +152,12 @@ class ConstraintsMemberShapeTest {
         string PatternString
         @range(min: 0, max:1000)
         integer RangedInteger
+
+        @error("server")
+        structure ErrorWithMemberConstraint {
+            @range(min: 100, max: 999)
+            statusCode: Integer
+        }
         """.asSmithyModel()
 
     private fun loadModel(model: Model): Model =
@@ -166,16 +165,16 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `non constrained fields should not be changed`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
 
         fun checkFieldTargetRemainsSame(fieldName: String) {
             checkMemberShapeIsSame(
                 transformedModel,
-                outputModelOnly,
-                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
-                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
+                sampleModel,
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
+                "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
-                "OperationUsingGetOutput$fieldName has changed whereas it is not constrained and should have remained same"
+                "SampleInputOutput$fieldName has changed whereas it is not constrained and should have remained same"
             }
         }
 
@@ -200,7 +199,7 @@ class ConstraintsMemberShapeTest {
 
         checkMemberShapeIsSame(
             transformedModel,
-            outputModelOnly,
+            sampleModel,
             "constrainedMemberShape#StructWithConstrainedMember\$long",
             "constrainedMemberShape#StructWithConstrainedMember\$long",
         )
@@ -208,10 +207,10 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `constrained members should have a different target now`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkMemberShapeChanged(
             transformedModel,
-            outputModelOnly,
+            sampleModel,
             "constrainedMemberShape#PatternStringListOverride\$member",
             "constrainedMemberShape#PatternStringListOverride\$member",
         )
@@ -219,9 +218,9 @@ class ConstraintsMemberShapeTest {
         fun checkSyntheticFieldTargetChanged(fieldName: String) {
             checkMemberShapeChanged(
                 transformedModel,
-                outputModelOnly,
-                "constrainedMemberShape.synthetic#OperationUsingGetOutput\$$fieldName",
-                "constrainedMemberShape#OperationUsingGetOutput\$$fieldName",
+                sampleModel,
+                "constrainedMemberShape.synthetic#SampleOperationOutput\$$fieldName",
+                "constrainedMemberShape#SampleInputOutput\$$fieldName",
             ) {
                 "constrained member $fieldName should have been changed into a new type."
             }
@@ -230,7 +229,7 @@ class ConstraintsMemberShapeTest {
         fun checkFieldTargetChanged(memberNameWithContainer: String) {
             checkMemberShapeChanged(
                 transformedModel,
-                outputModelOnly,
+                sampleModel,
                 "constrainedMemberShape#$memberNameWithContainer",
                 "constrainedMemberShape#$memberNameWithContainer",
             ) {
@@ -262,90 +261,41 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `extra trait on a constrained member should remain on it`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkShapeHasTrait(
             transformedModel,
-            outputModelOnly,
-            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$constrainedPatternString",
-            "constrainedMemberShape#OperationUsingGetOutput\$constrainedPatternString",
+            sampleModel,
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$constrainedPatternString",
+            "constrainedMemberShape#SampleInputOutput\$constrainedPatternString",
             DataTrait("content", SourceLocation.NONE),
         )
     }
 
     @Test
     fun `required remains on constrained member shape`() {
-        val transformedModel = loadModel(outputModelOnly)
+        val transformedModel = loadModel(sampleModel)
         checkShapeHasTrait(
             transformedModel,
-            outputModelOnly,
-            "constrainedMemberShape.synthetic#OperationUsingGetOutput\$requiredConstrainedString",
-            "constrainedMemberShape#OperationUsingGetOutput\$requiredConstrainedString",
+            sampleModel,
+            "constrainedMemberShape.synthetic#SampleOperationOutput\$requiredConstrainedString",
+            "constrainedMemberShape#SampleInputOutput\$requiredConstrainedString",
             RequiredTrait(),
         )
     }
 
-    private fun runServerCodeGen(
-        model: Model,
-        dirToUse: File? = null,
-        writable: Writable,
-    ): Path {
-        val runtimeConfig =
-            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../rust-runtime").absolutePath))
-
-        val (context, dir) =
-            generatePluginContext(
-                model,
-                runtimeConfig = runtimeConfig,
-                overrideTestDir = dirToUse,
-            )
-        val codegenDecorator =
-            CombinedServerCodegenDecorator.fromClasspath(
-                context,
-                ServerRequiredCustomizations(),
-                SmithyValidationExceptionDecorator(),
-                CustomValidationExceptionWithReasonDecorator(),
-            )
-
-        ServerCodegenVisitor(context, codegenDecorator)
-            .execute()
-
-        val codegenContext = serverTestCodegenContext(model)
-        val settings = ServerRustSettings.from(context.model, context.settings)
-        val rustCrate =
-            RustCrate(
-                context.fileManifest,
-                codegenContext.symbolProvider,
-                settings.codegenConfig,
-                codegenContext.expectModuleDocProvider(),
-            )
-
-        // We cannot write to the lib anymore as the RustWriter overwrites it, so writing code directly to check.rs
-        // and then adding a `mod check;` to the lib.rs
-        rustCrate.withModule(RustModule.public("check")) {
-            writable(this)
-            File("$dir/src/check.rs").writeText(toString())
-        }
-
-        val lib = File("$dir/src/lib.rs")
-        val libContents = lib.readText() + "\nmod check;"
-        lib.writeText(libContents)
-
-        return dir
-    }
-
     @Test
     fun `generate code and check member constrained shapes are in the right modules`() {
-        val dir =
-            runServerCodeGen(outputModelOnly) {
-                fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
-                    unitTest(
-                        "builder_module_has_${typeName.toSnakeCase()}",
-                        """
-                        #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
-                        """,
-                    )
-                }
+        serverIntegrationTest(sampleModel, IntegrationTestParams(service = "constrainedMemberShape#ConstrainedService")) { codegenContext, rustCrate ->
+            fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
+                unitTest(
+                    "builder_module_has_${typeName.toSnakeCase()}",
+                    """
+                    #[allow(unused_imports)] use crate::output::sample_operation_output::$typeName;
+                    """,
+                )
+            }
 
+            rustCrate.testModule {
                 // All directly constrained members of the output structure should be in the builder module
                 setOf(
                     "ConstrainedLong",
@@ -394,9 +344,7 @@ class ConstraintsMemberShapeTest {
                     ).generateUseStatements("crate::model::pattern_string_list_override"),
                 )
             }
-
-        val env = mapOf("RUSTFLAGS" to "-A dead_code")
-        "cargo test".runCommand(dir, env)
+        }
     }
 
     /**

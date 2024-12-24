@@ -47,10 +47,14 @@ interface ValidationExceptionConversionGenerator {
         model: Model,
     ): Writable
 
-    fun builderConstraintViolationImplBlock(constraintViolations: Collection<ConstraintViolation>): Writable
+    fun builderConstraintViolationFn(constraintViolations: Collection<ConstraintViolation>): Writable
 
     fun collectionShapeConstraintViolationImplBlock(
         collectionConstraintsInfo: Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
+    ): Writable
+
+    fun unionShapeConstraintViolationImplBlock(
+        unionConstraintTraitInfo: Collection<UnionConstraintTraitInfo>,
     ): Writable
 }

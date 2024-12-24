@@ -12,7 +12,15 @@ use std::error::Error;
 use std::fmt;
 
 mod interceptor;
+mod metrics;
+#[cfg(feature = "test-util")]
+pub mod test_util;
+
+const USER_AGENT_VERSION: &str = "2.1";
+
+use crate::user_agent::metrics::BusinessMetrics;
 pub use interceptor::UserAgentInterceptor;
+pub use metrics::BusinessMetric;
 
 /// AWS User Agent
 ///
@@ -22,15 +30,16 @@ pub use interceptor::UserAgentInterceptor;
 #[derive(Clone, Debug)]
 pub struct AwsUserAgent {
     sdk_metadata: SdkMetadata,
+    ua_metadata: UaMetadata,
     api_metadata: ApiMetadata,
     os_metadata: OsMetadata,
     language_metadata: LanguageMetadata,
     exec_env_metadata: Option<ExecEnvMetadata>,
-    feature_metadata: Vec<FeatureMetadata>,
-    config_metadata: Vec<ConfigMetadata>,
+    business_metrics: BusinessMetrics,
     framework_metadata: Vec<FrameworkMetadata>,
     app_name: Option<AppName>,
     build_env_additional_metadata: Option<AdditionalMetadata>,
+    additional_metadata: Vec<AdditionalMetadata>,
 }
 
 impl AwsUserAgent {
@@ -44,6 +53,9 @@ impl AwsUserAgent {
         let sdk_metadata = SdkMetadata {
             name: "rust",
             version: build_metadata.core_pkg_version,
+        };
+        let ua_metadata = UaMetadata {
+            version: USER_AGENT_VERSION,
         };
         let os_metadata = OsMetadata {
             os_family: &build_metadata.os_family,
@@ -60,6 +72,7 @@ impl AwsUserAgent {
 
         AwsUserAgent {
             sdk_metadata,
+            ua_metadata,
             api_metadata,
             os_metadata,
             language_metadata: LanguageMetadata {
@@ -68,11 +81,11 @@ impl AwsUserAgent {
                 extras: Default::default(),
             },
             exec_env_metadata,
-            feature_metadata: Default::default(),
-            config_metadata: Default::default(),
             framework_metadata: Default::default(),
+            business_metrics: Default::default(),
             app_name: Default::default(),
             build_env_additional_metadata,
+            additional_metadata: Default::default(),
         }
     }
 
@@ -85,6 +98,7 @@ impl AwsUserAgent {
                 name: "rust",
                 version: "0.123.test",
             },
+            ua_metadata: UaMetadata { version: "0.1" },
             api_metadata: ApiMetadata {
                 service_id: "test-service".into(),
                 version: "0.123",
@@ -99,39 +113,73 @@ impl AwsUserAgent {
                 extras: Default::default(),
             },
             exec_env_metadata: None,
-            feature_metadata: Vec::new(),
-            config_metadata: Vec::new(),
+            business_metrics: Default::default(),
             framework_metadata: Vec::new(),
             app_name: None,
             build_env_additional_metadata: None,
+            additional_metadata: Vec::new(),
         }
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `with_business_metric` instead."
+    )]
+    #[allow(unused_mut)]
+    #[allow(deprecated)]
     #[doc(hidden)]
     /// Adds feature metadata to the user agent.
-    pub fn with_feature_metadata(mut self, metadata: FeatureMetadata) -> Self {
-        self.feature_metadata.push(metadata);
+    pub fn with_feature_metadata(mut self, _metadata: FeatureMetadata) -> Self {
         self
     }
 
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `add_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
     #[doc(hidden)]
     /// Adds feature metadata to the user agent.
-    pub fn add_feature_metadata(&mut self, metadata: FeatureMetadata) -> &mut Self {
-        self.feature_metadata.push(metadata);
+    pub fn add_feature_metadata(&mut self, _metadata: FeatureMetadata) -> &mut Self {
+        self
+    }
+
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `with_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
+    #[doc(hidden)]
+    /// Adds config metadata to the user agent.
+    pub fn with_config_metadata(mut self, _metadata: ConfigMetadata) -> Self {
+        self
+    }
+
+    #[deprecated(
+        since = "1.4.0",
+        note = "This is a no-op; use `add_business_metric` instead."
+    )]
+    #[allow(deprecated)]
+    #[allow(unused_mut)]
+    #[doc(hidden)]
+    /// Adds config metadata to the user agent.
+    pub fn add_config_metadata(&mut self, _metadata: ConfigMetadata) -> &mut Self {
         self
     }
 
     #[doc(hidden)]
-    /// Adds config metadata to the user agent.
-    pub fn with_config_metadata(mut self, metadata: ConfigMetadata) -> Self {
-        self.config_metadata.push(metadata);
+    /// Adds business metric to the user agent.
+    pub fn with_business_metric(mut self, metric: BusinessMetric) -> Self {
+        self.business_metrics.push(metric);
         self
     }
 
     #[doc(hidden)]
-    /// Adds config metadata to the user agent.
-    pub fn add_config_metadata(&mut self, metadata: ConfigMetadata) -> &mut Self {
-        self.config_metadata.push(metadata);
+    /// Adds business metric to the user agent.
+    pub fn add_business_metric(&mut self, metric: BusinessMetric) -> &mut Self {
+        self.business_metrics.push(metric);
         self
     }
 
@@ -146,6 +194,18 @@ impl AwsUserAgent {
     /// Adds framework metadata to the user agent.
     pub fn add_framework_metadata(&mut self, metadata: FrameworkMetadata) -> &mut Self {
         self.framework_metadata.push(metadata);
+        self
+    }
+
+    /// Adds additional metadata to the user agent.
+    pub fn with_additional_metadata(mut self, metadata: AdditionalMetadata) -> Self {
+        self.additional_metadata.push(metadata);
+        self
+    }
+
+    /// Adds additional metadata to the user agent.
+    pub fn add_additional_metadata(&mut self, metadata: AdditionalMetadata) -> &mut Self {
+        self.additional_metadata.push(metadata);
         self
     }
 
@@ -168,33 +228,35 @@ impl AwsUserAgent {
         /*
         ABNF for the user agent (see the bottom of the file for complete ABNF):
         ua-string = sdk-metadata RWS
+                    ua-metadata RWS
                     [api-metadata RWS]
                     os-metadata RWS
                     language-metadata RWS
                     [env-metadata RWS]
-                    *(feat-metadata RWS)
-                    *(config-metadata RWS)
-                    *(framework-metadata RWS)
+                        ; ordering is not strictly required in the following section
+                    [business-metrics]
                     [appId]
+                    *(framework-metadata RWS)
         */
         let mut ua_value = String::new();
         use std::fmt::Write;
         // unwrap calls should never fail because string formatting will always succeed.
         write!(ua_value, "{} ", &self.sdk_metadata).unwrap();
+        write!(ua_value, "{} ", &self.ua_metadata).unwrap();
         write!(ua_value, "{} ", &self.api_metadata).unwrap();
         write!(ua_value, "{} ", &self.os_metadata).unwrap();
         write!(ua_value, "{} ", &self.language_metadata).unwrap();
         if let Some(ref env_meta) = self.exec_env_metadata {
             write!(ua_value, "{} ", env_meta).unwrap();
         }
-        for feature in &self.feature_metadata {
-            write!(ua_value, "{} ", feature).unwrap();
-        }
-        for config in &self.config_metadata {
-            write!(ua_value, "{} ", config).unwrap();
+        if !self.business_metrics.is_empty() {
+            write!(ua_value, "{} ", &self.business_metrics).unwrap()
         }
         for framework in &self.framework_metadata {
             write!(ua_value, "{} ", framework).unwrap();
+        }
+        for additional_metadata in &self.additional_metadata {
+            write!(ua_value, "{} ", additional_metadata).unwrap();
         }
         if let Some(app_name) = &self.app_name {
             write!(ua_value, "app/{}", app_name).unwrap();
@@ -234,6 +296,17 @@ struct SdkMetadata {
 impl fmt::Display for SdkMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "aws-sdk-{}/{}", self.name, self.version)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct UaMetadata {
+    version: &'static str,
+}
+
+impl fmt::Display for UaMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "ua/{}", self.version)
     }
 }
 
@@ -351,6 +424,7 @@ impl fmt::Display for AdditionalMetadataList {
     }
 }
 
+#[deprecated(since = "1.4.0", note = "Replaced by `BusinessMetric`.")]
 #[doc(hidden)]
 /// Metadata about a feature that is being used in the SDK.
 #[derive(Clone, Debug)]
@@ -361,6 +435,7 @@ pub struct FeatureMetadata {
     additional: AdditionalMetadataList,
 }
 
+#[allow(deprecated)]
 impl FeatureMetadata {
     /// Creates `FeatureMetadata`.
     ///
@@ -387,6 +462,7 @@ impl FeatureMetadata {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for FeatureMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // feat-metadata = "ft/" name ["/" version] *(RWS additional-metadata)
@@ -398,6 +474,7 @@ impl fmt::Display for FeatureMetadata {
     }
 }
 
+#[deprecated(since = "1.4.0", note = "Replaced by `BusinessMetric`.")]
 #[doc(hidden)]
 /// Metadata about a config value that is being used in the SDK.
 #[derive(Clone, Debug)]
@@ -407,6 +484,7 @@ pub struct ConfigMetadata {
     value: Option<Cow<'static, str>>,
 }
 
+#[allow(deprecated)]
 impl ConfigMetadata {
     /// Creates `ConfigMetadata`.
     ///
@@ -426,6 +504,7 @@ impl ConfigMetadata {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Display for ConfigMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // config-metadata = "cfg/" config ["/" value]
@@ -542,6 +621,7 @@ mod test {
     fn make_deterministic(ua: &mut AwsUserAgent) {
         // hard code some variable things for a deterministic test
         ua.sdk_metadata.version = "0.1";
+        ua.ua_metadata.version = "0.1";
         ua.language_metadata.version = "1.50.0";
         ua.os_metadata.os_family = &OsFamily::Macos;
         ua.os_metadata.version = Some("1.15".to_string());
@@ -557,7 +637,7 @@ mod test {
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0"
         );
         assert_eq!(
             ua.ua_header(),
@@ -578,55 +658,7 @@ mod test {
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 exec-env/lambda"
-        );
-        assert_eq!(
-            ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
-        );
-    }
-
-    #[test]
-    fn generate_a_valid_ua_with_features() {
-        let api_metadata = ApiMetadata {
-            service_id: "dynamodb".into(),
-            version: "123",
-        };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_feature_metadata(
-                FeatureMetadata::new("test-feature", Some(Cow::Borrowed("1.0"))).unwrap(),
-            )
-            .with_feature_metadata(
-                FeatureMetadata::new("other-feature", None)
-                    .unwrap()
-                    .with_additional(AdditionalMetadata::new("asdf").unwrap()),
-            );
-        make_deterministic(&mut ua);
-        assert_eq!(
-            ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 ft/test-feature/1.0 ft/other-feature md/asdf"
-        );
-        assert_eq!(
-            ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
-        );
-    }
-
-    #[test]
-    fn generate_a_valid_ua_with_config() {
-        let api_metadata = ApiMetadata {
-            service_id: "dynamodb".into(),
-            version: "123",
-        };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_config_metadata(
-                ConfigMetadata::new("some-config", Some(Cow::Borrowed("5"))).unwrap(),
-            )
-            .with_config_metadata(ConfigMetadata::new("other-config", None).unwrap());
-        make_deterministic(&mut ua);
-        assert_eq!(
-            ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 cfg/some-config/5 cfg/other-config"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 exec-env/lambda"
         );
         assert_eq!(
             ua.ua_header(),
@@ -650,7 +682,7 @@ mod test {
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
         );
         assert_eq!(
             ua.ua_header(),
@@ -669,7 +701,7 @@ mod test {
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 app/my_app"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 app/my_app"
         );
         assert_eq!(
             ua.ua_header(),
@@ -683,12 +715,43 @@ mod test {
         ua.build_env_additional_metadata = Some(AdditionalMetadata::new("asdf").unwrap());
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 md/asdf"
+            "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 md/asdf"
         );
         assert_eq!(
             ua.ua_header(),
             "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
         );
+    }
+
+    #[test]
+    fn generate_a_valid_ua_with_business_metrics() {
+        // single metric ID
+        {
+            let ua = AwsUserAgent::for_tests().with_business_metric(BusinessMetric::ResourceModel);
+            assert_eq!(
+                ua.aws_ua_header(),
+                "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/A"
+            );
+            assert_eq!(
+                ua.ua_header(),
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+            );
+        }
+        // multiple metric IDs
+        {
+            let ua = AwsUserAgent::for_tests()
+                .with_business_metric(BusinessMetric::RetryModeAdaptive)
+                .with_business_metric(BusinessMetric::S3Transfer)
+                .with_business_metric(BusinessMetric::S3ExpressBucket);
+            assert_eq!(
+                ua.aws_ua_header(),
+                "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/F,G,J"
+            );
+            assert_eq!(
+                ua.ua_header(),
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+            );
+        }
     }
 }
 
@@ -710,21 +773,25 @@ api-metadata                  = "api/" service-id "/" version
 os-metadata                   = "os/" os-family ["/" version]
 language-metadata             = "lang/" language "/" version *(RWS additional-metadata)
 env-metadata                  = "exec-env/" name
-feat-metadata                 = "ft/" name ["/" version] *(RWS additional-metadata)
-config-metadata               = "cfg/" config ["/" value]
 framework-metadata            = "lib/" name ["/" version] *(RWS additional-metadata)
 app-id                        = "app/" name
 build-env-additional-metadata = "md/" value
+ua-metadata                   = "ua/2.1"
+business-metrics              = "m/" metric_id *(comma metric_id)
+metric_id                     = 1*m_char
+m_char                        = DIGIT / ALPHA / "+" / "-"
+comma                         = ","
 ua-string                     = sdk-metadata RWS
+                                ua-metadata RWS
                                 [api-metadata RWS]
                                 os-metadata RWS
                                 language-metadata RWS
                                 [env-metadata RWS]
-                                *(feat-metadata RWS)
-                                *(config-metadata RWS)
-                                *(framework-metadata RWS)
+                                       ; ordering is not strictly required in the following section
+                                [business-metrics]
                                 [app-id]
                                 [build-env-additional-metadata]
+                                *(framework-metadata RWS)
 
 # New metadata field might be added in the future and they must follow this format
 prefix               = token

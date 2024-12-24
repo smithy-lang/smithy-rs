@@ -101,10 +101,10 @@ where
     ///
     /// The key may be borrowed form of map's key type, but [`Hash`] and [`Eq`] on the borrowed
     /// form _must_ match those for the key type.
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
+    pub fn get<Q>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash + Eq + ?Sized,
     {
         match &self.inner {
             TinyMapInner::Vec(vec) => vec

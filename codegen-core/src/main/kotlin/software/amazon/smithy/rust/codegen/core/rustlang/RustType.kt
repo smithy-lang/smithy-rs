@@ -257,7 +257,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 if (this.lifetime == "&") {
                     "&${this.member.render(fullyQualified)}"
                 } else {
-                    "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
+                    "&${this.lifetime?.let { "'$it " } ?: ""}${this.member.render(fullyQualified)}"
                 }
             }
             is RustType.Application -> {
@@ -373,6 +373,17 @@ fun RustType.isEq(): Boolean =
         is RustType.Unit -> true
         is RustType.Container -> this.member.isEq()
         else -> false
+    }
+
+/** Recursively replaces lifetimes with the new lifetime */
+fun RustType.replaceLifetimes(newLifetime: String?): RustType =
+    when (this) {
+        is RustType.Option -> copy(member = member.replaceLifetimes(newLifetime))
+        is RustType.Vec -> copy(member = member.replaceLifetimes(newLifetime))
+        is RustType.HashSet -> copy(member = member.replaceLifetimes(newLifetime))
+        is RustType.HashMap -> copy(key = key.replaceLifetimes(newLifetime), member = member.replaceLifetimes(newLifetime))
+        is RustType.Reference -> copy(lifetime = newLifetime)
+        else -> this
     }
 
 enum class Visibility {
@@ -531,6 +542,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
+        val AllowClippyNeedlessLifetimes = Attribute(allow("clippy::needless_lifetimes"))
         val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
@@ -548,16 +560,22 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
         val CfgTest = Attribute(cfg("test"))
+        val DenyDeprecated = Attribute(deny("deprecated"))
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
         val NoImplicitPrelude = Attribute("no_implicit_prelude")
 
-        fun shouldPanic(expectedMessage: String) =
-            Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+        fun shouldPanic(expectedMessage: String? = null): Attribute =
+            if (expectedMessage != null) {
+                Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
+            } else {
+                Attribute("should_panic")
+            }
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val TracedTest = Attribute(RuntimeType.TracingTest.resolve("traced_test").writable)
         val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**

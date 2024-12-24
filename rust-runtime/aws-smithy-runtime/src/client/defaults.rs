@@ -171,7 +171,17 @@ pub fn default_identity_cache_plugin() -> Option<SharedRuntimePlugin> {
 ///
 /// By default, when throughput falls below 1/Bs for more than 5 seconds, the
 /// stream is cancelled.
+#[deprecated(
+    since = "1.2.0",
+    note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
+)]
 pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntimePlugin> {
+    #[allow(deprecated)]
+    default_stalled_stream_protection_config_plugin_v2(BehaviorVersion::v2023_11_09())
+}
+fn default_stalled_stream_protection_config_plugin_v2(
+    behavior_version: BehaviorVersion,
+) -> Option<SharedRuntimePlugin> {
     Some(
         default_plugin(
             "default_stalled_stream_protection_config_plugin",
@@ -182,18 +192,18 @@ pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntime
             },
         )
         .with_config(layer("default_stalled_stream_protection_config", |layer| {
-            layer.store_put(
-                StalledStreamProtectionConfig::enabled()
-                    .grace_period(Duration::from_secs(5))
-                    .build(),
-            );
+            let mut config =
+                StalledStreamProtectionConfig::enabled().grace_period(Duration::from_secs(5));
+            // Before v2024_03_28, upload streams did not have stalled stream protection by default
+            if !behavior_version.is_at_least(BehaviorVersion::v2024_03_28()) {
+                config = config.upload_enabled(false);
+            }
+            layer.store_put(config.build());
         }))
         .into_shared(),
     )
 }
 
-// TODO(https://github.com/smithy-lang/smithy-rs/issues/3523)
-#[allow(dead_code)]
 fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
@@ -259,6 +269,10 @@ impl DefaultPluginParams {
 pub fn default_plugins(
     params: DefaultPluginParams,
 ) -> impl IntoIterator<Item = SharedRuntimePlugin> {
+    let behavior_version = params
+        .behavior_version
+        .unwrap_or_else(BehaviorVersion::latest);
+
     [
         default_http_client_plugin(),
         default_identity_cache_plugin(),
@@ -270,11 +284,54 @@ pub fn default_plugins(
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
         default_timeout_config_plugin(),
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3523): Reenable this
-        /* enforce_content_length_runtime_plugin(), */
-        default_stalled_stream_protection_config_plugin(),
+        enforce_content_length_runtime_plugin(),
+        default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
     .into_iter()
     .flatten()
     .collect::<Vec<SharedRuntimePlugin>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+
+    fn test_plugin_params(version: BehaviorVersion) -> DefaultPluginParams {
+        DefaultPluginParams::new()
+            .with_behavior_version(version)
+            .with_retry_partition_name("dontcare")
+    }
+    fn config_for(plugins: impl IntoIterator<Item = SharedRuntimePlugin>) -> ConfigBag {
+        let mut config = ConfigBag::base();
+        let plugins = RuntimePlugins::new().with_client_plugins(plugins);
+        plugins.apply_client_configuration(&mut config).unwrap();
+        config
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn v2024_03_28_stalled_stream_protection_difference() {
+        let latest = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::latest(),
+        )));
+        let v2023 = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::v2023_11_09(),
+        )));
+
+        assert!(
+            latest
+                .load::<StalledStreamProtectionConfig>()
+                .unwrap()
+                .upload_enabled(),
+            "stalled stream protection on uploads MUST be enabled after v2024_03_28"
+        );
+        assert!(
+            !v2023
+                .load::<StalledStreamProtectionConfig>()
+                .unwrap()
+                .upload_enabled(),
+            "stalled stream protection on uploads MUST NOT be enabled before v2024_03_28"
+        );
+    }
 }

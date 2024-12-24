@@ -51,8 +51,8 @@ object EndpointsLib {
         endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
             .resolve("PartitionResolver")
 
-    val substring = endpointsLib("substring").toType().resolve("substring")
-    val isValidHostLabel = endpointsLib("host").toType().resolve("is_valid_host_label")
+    val substring = endpointsLib("substring", CargoDependency.Proptest).toType().resolve("substring")
+    val isValidHostLabel = endpointsLib("host", CargoDependency.Proptest).toType().resolve("is_valid_host_label")
     val parseUrl = endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().resolve("parse_url")
     val uriEncode = endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().resolve("uri_encode")
 
@@ -109,6 +109,7 @@ fun Parameter.symbol(): Symbol {
         when (this.type) {
             ParameterType.STRING -> RustType.String
             ParameterType.BOOLEAN -> RustType.Bool
+            ParameterType.STRING_ARRAY -> RustType.Vec(RustType.String)
             else -> TODO("unexpected type: ${this.type}")
         }
     // Parameter return types are always optional

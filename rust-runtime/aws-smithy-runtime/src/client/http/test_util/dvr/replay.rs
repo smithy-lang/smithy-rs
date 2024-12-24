@@ -4,7 +4,9 @@
  */
 
 use super::{Action, ConnectionId, Direction, Event, NetworkTraffic};
+use crate::client::http::test_util::replay::DEFAULT_RELAXED_HEADERS;
 use aws_smithy_protocol_test::MediaType;
+use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -15,8 +17,6 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use bytes::{Bytes, BytesMut};
-use http::Request;
-use http_body_0_4::Body;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt;
@@ -55,9 +55,9 @@ impl<T> Waitable<T> {
 #[derive(Clone)]
 pub struct ReplayingClient {
     live_events: Arc<Mutex<HashMap<ConnectionId, VecDeque<Event>>>>,
-    verifiable_events: Arc<HashMap<ConnectionId, Request<Bytes>>>,
+    verifiable_events: Arc<HashMap<ConnectionId, http_02x::Request<Bytes>>>,
     num_events: Arc<AtomicUsize>,
-    recorded_requests: Arc<Mutex<HashMap<ConnectionId, Waitable<http::Request<Bytes>>>>>,
+    recorded_requests: Arc<Mutex<HashMap<ConnectionId, Waitable<http_02x::Request<Bytes>>>>>,
 }
 
 // Ideally, this would just derive Debug, but that makes the tests in aws-config think they found AWS secrets
@@ -67,6 +67,11 @@ impl fmt::Debug for ReplayingClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("test_util::dvr::ReplayingClient")
     }
+}
+
+enum HeadersToCheck<'a> {
+    Include(&'a [&'a str]),
+    Exclude(Option<&'a [&'a str]>),
 }
 
 impl ReplayingClient {
@@ -79,25 +84,60 @@ impl ReplayingClient {
         self.validate_body_and_headers(None, media_type).await
     }
 
+    /// Convenience method to validate that the bodies match, using a given [`MediaType`] for
+    /// comparison, and that the headers are also match excluding the default relaxed headers
+    ///
+    /// The current default relaxed headers:
+    /// - x-amz-user-agent
+    /// - authorization
+    pub async fn relaxed_validate(self, media_type: &str) -> Result<(), Box<dyn Error>> {
+        self.validate_body_and_headers_except(DEFAULT_RELAXED_HEADERS, media_type)
+            .await
+    }
+
     /// Validate actual requests against expected requests
     pub async fn validate(
         self,
         checked_headers: &[&str],
         body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
-        self.validate_base(Some(checked_headers), body_comparer)
+        self.validate_base(HeadersToCheck::Include(checked_headers), body_comparer)
             .await
     }
 
     /// Validate that the bodies match, using a given [`MediaType`] for comparison
     ///
-    /// The specified headers are also validated
+    /// The specified headers are also validated. If `checked_headers` is a `None`, it means
+    /// checking all headers.
     pub async fn validate_body_and_headers(
         self,
         checked_headers: Option<&[&str]>,
         media_type: &str,
     ) -> Result<(), Box<dyn Error>> {
-        self.validate_base(checked_headers, |b1, b2| {
+        let headers_to_check = match checked_headers {
+            Some(headers) => HeadersToCheck::Include(headers),
+            None => HeadersToCheck::Exclude(None),
+        };
+        self.validate_base(headers_to_check, |b1, b2| {
+            aws_smithy_protocol_test::validate_body(
+                b1,
+                std::str::from_utf8(b2).unwrap(),
+                MediaType::from(media_type),
+            )
+            .map_err(|e| Box::new(e) as _)
+        })
+        .await
+    }
+
+    /// Validate that the bodies match, using a given [`MediaType`] for comparison
+    ///
+    /// The headers are also validated unless listed in `excluded_headers`
+    pub async fn validate_body_and_headers_except(
+        self,
+        excluded_headers: &[&str],
+        media_type: &str,
+    ) -> Result<(), Box<dyn Error>> {
+        self.validate_base(HeadersToCheck::Exclude(Some(excluded_headers)), |b1, b2| {
             aws_smithy_protocol_test::validate_body(
                 b1,
                 std::str::from_utf8(b2).unwrap(),
@@ -110,7 +150,7 @@ impl ReplayingClient {
 
     async fn validate_base(
         self,
-        checked_headers: Option<&[&str]>,
+        checked_headers: HeadersToCheck<'_>,
         body_comparer: impl Fn(&[u8], &[u8]) -> Result<(), Box<dyn Error>>,
     ) -> Result<(), Box<dyn Error>> {
         let mut actual_requests =
@@ -128,14 +168,17 @@ impl ReplayingClient {
                 .await;
             body_comparer(expected.body().as_ref(), actual.body().as_ref())?;
             let actual: HttpRequest = actual.map(SdkBody::from).try_into()?;
-            aws_smithy_protocol_test::assert_uris_match(&expected.uri().to_string(), actual.uri());
+            aws_smithy_protocol_test::assert_uris_match(expected.uri().to_string(), actual.uri());
             let expected_headers = expected
                 .headers()
                 .keys()
                 .map(|k| k.as_str())
                 .filter(|k| match checked_headers {
-                    Some(list) => list.contains(k),
-                    None => true,
+                    HeadersToCheck::Include(headers) => headers.contains(k),
+                    HeadersToCheck::Exclude(excluded) => match excluded {
+                        Some(headers) => !headers.contains(k),
+                        None => true,
+                    },
                 })
                 .flat_map(|key| {
                     let _ = expected.headers().get(key)?;
@@ -164,7 +207,7 @@ impl ReplayingClient {
     }
 
     /// Return all the recorded requests for further analysis
-    pub async fn take_requests(self) -> Vec<http::Request<Bytes>> {
+    pub async fn take_requests(self) -> Vec<http_02x::Request<Bytes>> {
         let mut recorded_requests =
             std::mem::take(self.recorded_requests.lock().unwrap().deref_mut());
         let mut out = Vec::with_capacity(recorded_requests.len());
@@ -210,7 +253,7 @@ impl ReplayingClient {
                 let initial_request = events.iter().next().expect("must have one event");
                 let request = match &initial_request.action {
                     Action::Request { request } => {
-                        http::Request::from(request).map(|_| Bytes::from(body))
+                        http_02x::Request::from(request).map(|_| Bytes::from(body))
                     }
                     _ => panic!("invalid first event"),
                 };
@@ -272,6 +315,8 @@ async fn replay_body(events: VecDeque<Event>, mut sender: hyper_0_14::body::Send
 
 impl HttpConnector for ReplayingClient {
     fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
+        use http_body_04x::Body;
+
         let event_id = self.next_id();
         tracing::debug!("received event {}: {request:?}", event_id.0);
         let mut events = match self.live_events.lock().unwrap().remove(&event_id) {
@@ -321,7 +366,7 @@ impl HttpConnector for ReplayingClient {
                     Action::Response {
                         response: Ok(response),
                     } => {
-                        let mut builder = http::Response::builder().status(response.status);
+                        let mut builder = http_02x::Response::builder().status(response.status);
                         for (name, values) in response.headers {
                             for value in values {
                                 builder = builder.header(&name, &value);
@@ -368,5 +413,9 @@ impl HttpClient for ReplayingClient {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+
+    fn connector_metadata(&self) -> Option<ConnectorMetadata> {
+        Some(ConnectorMetadata::new("replaying-client", None))
     }
 }

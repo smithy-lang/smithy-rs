@@ -62,7 +62,8 @@ enum BoxBody {
         feature = "http-body-1-x",
         feature = "rt-tokio"
     ))]
-    HttpBody04(http_body_0_4::combinators::BoxBody<Bytes, Error>),
+    // will be dead code with `--no-default-features --features rt-tokio`
+    HttpBody04(#[allow(dead_code)] http_body_0_4::combinators::BoxBody<Bytes, Error>),
 }
 
 pin_project! {
@@ -233,6 +234,11 @@ impl SdkBody {
         })
     }
 
+    /// Return `true` if this SdkBody is streaming, `false` if it is in-memory.
+    pub fn is_streaming(&self) -> bool {
+        matches!(self.inner, Inner::Dyn { .. })
+    }
+
     /// Return the length, in bytes, of this SdkBody. If this returns `None`, then the body does not
     /// have a known length.
     pub fn content_length(&self) -> Option<u64> {
@@ -376,10 +382,12 @@ mod test {
     async fn http_body_consumes_data() {
         let mut body = SdkBody::from("hello!");
         let mut body = Pin::new(&mut body);
+        assert!(!body.is_end_stream());
         let data = body.next().await;
         assert!(data.is_some());
         let data = body.next().await;
         assert!(data.is_none());
+        assert!(body.is_end_stream());
     }
 
     #[tokio::test]

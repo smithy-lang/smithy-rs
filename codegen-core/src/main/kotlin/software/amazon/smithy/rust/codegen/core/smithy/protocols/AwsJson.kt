@@ -83,6 +83,9 @@ class AwsJsonHttpBindingResolver(
         "application/x-amz-json-${awsJsonVersion.value}"
 
     override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
+
+    override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
+        ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/json")
 }
 
 /**
@@ -171,10 +174,10 @@ open class AwsJson(
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

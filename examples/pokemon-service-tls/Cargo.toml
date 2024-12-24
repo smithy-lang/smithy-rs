@@ -13,19 +13,20 @@ tokio = "1.26.0"
 tracing = "0.1"
 
 # These dependencies are only required for the `pokemon-service-tls` program.
-tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
-tokio-rustls = "0.24.0"
-rustls-pemfile = "1.0.2"
+
+# Latest version supporting hyper 0.x
+tls-listener = { version = "0.8", features = ["rustls", "hyper-h2"] }
+tokio-rustls = "0.24"
+rustls-pemfile = "1"
 futures-util = { version = "0.3.29", default-features = false }
 
 # Local paths
-aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/" }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-serial_test = "1.0.0"
+serial_test = "3.1.1"
 
 # These dependencies are only required for testing the `pokemon-service-tls` program.
 hyper-rustls = { version = "0.24", features = ["http2"] }
@@ -35,4 +36,6 @@ hyper-tls = { version = "0.5" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
-pokemon-service-client = { path = "../pokemon-service-client/" }
+pokemon-service-client = { path = "../pokemon-service-client/", features = [
+    "behavior-version-latest",
+] }

@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 /**
  * This [HttpBindingResolver] implementation mostly delegates to the [HttpTraitHttpBindingResolver] class, since the
  * RestJson1 protocol can be almost entirely described by Smithy's HTTP binding traits
- * (https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html).
+ * (https://smithy.io/2.0/spec/http-bindings.html).
  * The only protocol-specific behavior that is truly custom is the response `Content-Type` header, which defaults to
  * `application/json` if not overridden.
  */
@@ -56,6 +56,12 @@ class RestJsonHttpBindingResolver(
                 }
             }
         }
+
+        // The spec does not mention whether we should set the `Content-Type` header when there is no modeled output.
+        // The protocol tests indicate it's optional:
+        // <https://github.com/smithy-lang/smithy/blob/ad8aac3c9ce18ce2170443c0296ef38be46a7320/smithy-aws-protocol-tests/model/restJson1/empty-input-output.smithy#L52-L54>
+        //
+        // In our implementation, we opt to always set it to `application/json`.
         return super.responseContentType(operationShape) ?: "application/json"
     }
 }
@@ -74,7 +80,15 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         )
 
     override val httpBindingResolver: HttpBindingResolver =
-        RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/json", "application/json", "application/vnd.amazon.eventstream"))
+        RestJsonHttpBindingResolver(
+            codegenContext.model,
+            ProtocolContentTypes(
+                requestDocument = "application/json",
+                responseDocument = "application/json",
+                eventStreamContentType = "application/vnd.amazon.eventstream",
+                eventStreamMessageContentType = "application/json",
+            ),
+        )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
@@ -116,10 +130,10 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+            // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    // Note: HeaderMap::new() doesn't allocate
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

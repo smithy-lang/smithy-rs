@@ -225,14 +225,32 @@ impl PresignedRequest {
     }
 
     /// Given a body, produce an `http::Request` from this `PresignedRequest`
+    #[deprecated = "Prefer the `make_http_1x_request()` instead by enabling the `http-1x` feature."]
+    #[allow(deprecated)]
     pub fn make_http_02x_request<B>(&self, body: B) -> http::Request<B> {
         self.clone().into_http_02x_request(body)
     }
 
     /// Converts this `PresignedRequest` directly into an `http` request.
+    #[deprecated = "Prefer the `into_http_1x_request` instead by enabling the `http-1x` feature."]
     pub fn into_http_02x_request<B>(self, body: B) -> http::Request<B> {
         self.http_request
             .try_into_http02x()
+            .expect("constructor validated convertibility")
+            .map(|_req| body)
+    }
+
+    #[cfg(feature = "http-1x")]
+    /// Given a body, produce an `http_1x::Request` from this `PresignedRequest`
+    pub fn make_http_1x_request<B>(&self, body: B) -> http_1x::Request<B> {
+        self.clone().into_http_1x_request(body)
+    }
+
+    #[cfg(feature = "http-1x")]
+    /// Converts this `PresignedRequest` directly into an `http_1x` request.
+    pub fn into_http_1x_request<B>(self, body: B) -> http_1x::Request<B> {
+        self.http_request
+            .try_into_http1x()
             .expect("constructor validated convertibility")
             .map(|_req| body)
     }

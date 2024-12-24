@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk.endpoints
 
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -132,6 +133,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
             tokioTest(safeName("operation_input_test_$operationName")) {
                 rustTemplate(
                     """
+                    /* documentation: ${test.documentation.orElse("No docs :(")} */
                     /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
                     /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
                     let (http_client, rcvr) = #{capture_request}(None);
@@ -211,10 +213,17 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                         Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
                     }
                 }
+                // If the test contains Endpoint built-ins and does not contain an AWS::Region then we set one
+                if (!operationInput.builtInParams.isEmpty && !operationInput.builtInParams.containsMember("AWS::Region")) {
+                    rust("let builder = builder.region(::aws_types::region::Region::new(\"us-east-1\"));")
+                }
                 rust("builder.build()")
             }
         }
 }
 
 fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =
-    this.serviceShape.allOperations.first { it.name == testOperationInput.operationName }
+    TopDownIndex.of(this.model)
+        .getContainedOperations(this.serviceShape)
+        .map { it.toShapeId() }
+        .first { it.name == testOperationInput.operationName }

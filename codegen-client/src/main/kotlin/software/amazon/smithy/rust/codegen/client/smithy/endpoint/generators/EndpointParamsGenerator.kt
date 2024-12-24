@@ -120,6 +120,8 @@ internal class EndpointParamsGenerator(
         fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()
 
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
+
+        fun getterName(parameterName: String) = "get_${memberName(parameterName)}"
     }
 
     fun paramsStruct(): RuntimeType =
@@ -230,7 +232,9 @@ internal class EndpointParamsGenerator(
 
     private fun generateEndpointParamsBuilder(rustWriter: RustWriter) {
         rustWriter.docs("Builder for [`Params`]")
-        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(rustWriter)
+        Attribute(derive(RuntimeType.Debug, RuntimeType.Default, RuntimeType.PartialEq, RuntimeType.Clone)).render(
+            rustWriter,
+        )
         rustWriter.rustBlock("pub struct ParamsBuilder") {
             parameters.toList().forEach { parameter ->
                 val name = parameter.memberName()
@@ -253,7 +257,8 @@ internal class EndpointParamsGenerator(
                         rustBlockTemplate("#{Params}", "Params" to paramsStruct()) {
                             parameters.toList().forEach { parameter ->
                                 rust("${parameter.memberName()}: self.${parameter.memberName()}")
-                                parameter.default.orNull()?.also { default -> rust(".or_else(||Some(${value(default)}))") }
+                                parameter.default.orNull()
+                                    ?.also { default -> rust(".or_else(||Some(${value(default)}))") }
                                 if (parameter.isRequired) {
                                     rustTemplate(
                                         ".ok_or_else(||#{Error}::missing(${parameter.memberName().dq()}))?",

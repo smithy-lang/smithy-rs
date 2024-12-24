@@ -239,6 +239,13 @@ impl<I, O, E> InterceptorContext<I, O, E> {
         self.output_or_error.as_mut()
     }
 
+    /// Grants ownership of the deserialized output/error.
+    ///
+    /// Note: This method is intended for internal use only.
+    pub fn take_output_or_error(&mut self) -> Option<Result<O, OrchestratorError<E>>> {
+        self.output_or_error.take()
+    }
+
     /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
     ///
     /// Note: This method is intended for internal use only.
@@ -409,16 +416,23 @@ where
     /// Convert this context into the final operation result that is returned in client's the public API.
     ///
     /// Note: This method is intended for internal use only.
-    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        output_or_error
-            .expect("output_or_error must always be set before finalize is called.")
-            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
+    pub fn finalize(mut self) -> Result<O, SdkError<E, HttpResponse>> {
+        let output_or_error = self
+            .output_or_error
+            .take()
+            .expect("output_or_error must always be set before finalize is called.");
+        self.finalize_result(output_or_error)
+    }
+
+    /// Convert the given output/error into a final operation result that is returned in the client's public API.
+    ///
+    /// Note: This method is intended for internal use only.
+    pub fn finalize_result(
+        &mut self,
+        result: Result<O, OrchestratorError<E>>,
+    ) -> Result<O, SdkError<E, HttpResponse>> {
+        let response = self.response.take();
+        result.map_err(|error| OrchestratorError::into_sdk_error(error, &self.phase, response))
     }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
@@ -471,8 +485,8 @@ impl fmt::Display for RewindResult {
 mod tests {
     use super::*;
     use aws_smithy_types::body::SdkBody;
-    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
-    use http::{HeaderValue, Uri};
+    use http_02x::header::{AUTHORIZATION, CONTENT_LENGTH};
+    use http_02x::{HeaderValue, Uri};
 
     #[test]
     fn test_success_transitions() {
@@ -494,7 +508,7 @@ mod tests {
         context.enter_transmit_phase();
         let _ = context.take_request();
         context.set_response(
-            http::Response::builder()
+            http_02x::Response::builder()
                 .body(SdkBody::empty())
                 .unwrap()
                 .try_into()
@@ -533,7 +547,7 @@ mod tests {
         context.enter_serialization_phase();
         let _ = context.take_input();
         context.set_request(
-            http::Request::builder()
+            http_02x::Request::builder()
                 .header("test", "the-original-un-mutated-request")
                 .body(SdkBody::empty())
                 .unwrap()
@@ -557,7 +571,7 @@ mod tests {
             request.headers().get("test").unwrap()
         );
         context.set_response(
-            http::Response::builder()
+            http_02x::Response::builder()
                 .body(SdkBody::empty())
                 .unwrap()
                 .try_into()
@@ -579,7 +593,7 @@ mod tests {
         context.enter_transmit_phase();
         let _ = context.take_request();
         context.set_response(
-            http::Response::builder()
+            http_02x::Response::builder()
                 .body(SdkBody::empty())
                 .unwrap()
                 .try_into()
@@ -598,7 +612,7 @@ mod tests {
 
     #[test]
     fn try_clone_clones_all_data() {
-        let request: HttpRequest = http::Request::builder()
+        let request: HttpRequest = http_02x::Request::builder()
             .uri(Uri::from_static("https://www.amazon.com"))
             .method("POST")
             .header(CONTENT_LENGTH, 456)

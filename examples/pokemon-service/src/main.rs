@@ -8,7 +8,8 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server::{
+use clap::Parser;
+use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
     layer::alb_health_check::AlbHealthCheckLayer,
@@ -16,7 +17,6 @@ use aws_smithy_http_server::{
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
-use clap::Parser;
 
 use hyper::StatusCode;
 use plugin::PrintExt;
@@ -54,6 +54,7 @@ pub async fn main() {
             includes: [GetPokemonSpecies, GetStorage]
         }
     }
+
     // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`.
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 

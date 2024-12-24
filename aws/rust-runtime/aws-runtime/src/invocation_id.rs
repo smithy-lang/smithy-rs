@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 use fastrand::Rng;
-use http::{HeaderName, HeaderValue};
+use http_02x::{HeaderName, HeaderValue};
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
@@ -152,8 +152,6 @@ impl Storable for InvocationId {
 
 #[cfg(feature = "test-util")]
 mod test_util {
-    use std::sync::{Arc, Mutex};
-
     use super::*;
 
     impl InvocationId {

@@ -10,32 +10,43 @@ use smithy_rs_tool_common::changelog::{Changelog, HandAuthoredEntry};
 use smithy_rs_tool_common::git::{CommitHash, Git, GitCLI};
 use smithy_rs_tool_common::shell::handle_failure;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
-use time::OffsetDateTime;
+use time::{Duration, OffsetDateTime};
 
-const SOURCE_TOML: &str = r#"
-    [[aws-sdk-rust]]
-    message = "Some change"
-    references = ["aws-sdk-rust#123", "smithy-rs#456"]
-    meta = { "breaking" = false, "tada" = false, "bug" = true }
-    since-commit = "REPLACE_SINCE_COMMIT_1"
-    author = "test-dev"
+const SOURCE_MARKDOWN1: &str = r#"---
+applies_to: ["aws-sdk-rust"]
+authors: ["test-dev"]
+references: ["aws-sdk-rust#123", "smithy-rs#456"]
+breaking: false
+new_feature: false
+bug_fix: true
+---
+Some change
+"#;
 
-    [[aws-sdk-rust]]
-    message = "Some other change"
-    references = ["aws-sdk-rust#234", "smithy-rs#567"]
-    meta = { "breaking" = false, "tada" = false, "bug" = true }
-    since-commit = "REPLACE_SINCE_COMMIT_2"
-    author = "test-dev"
+const SOURCE_MARKDOWN2: &str = r#"---
+applies_to: ["aws-sdk-rust"]
+authors: ["test-dev"]
+references: ["aws-sdk-rust#234", "smithy-rs#567"]
+breaking: false
+new_feature: false
+bug_fix: true
+---
+Some other change
+"#;
 
-    [[smithy-rs]]
-    message = "Another change"
-    references = ["smithy-rs#1234"]
-    meta = { "breaking" = false, "tada" = false, "bug" = false }
-    author = "another-dev"
-    "#;
+const SOURCE_MARKDOWN3: &str = r#"---
+applies_to: ["client", "server"]
+authors: ["another-dev"]
+references: ["smithy-rs#1234"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Another change
+"#;
 
 const SDK_MODEL_SOURCE_TOML: &str = r#"
     [[aws-sdk-model]]
@@ -125,18 +136,51 @@ fn create_fake_repo_root(
         .unwrap();
         release_commits.push(git.get_head_revision().unwrap());
     }
+
+    handle_failure(
+        "git-tag",
+        &Command::new("git")
+            .arg("tag")
+            .arg("release-1970-01-01")
+            .current_dir(path)
+            .output()
+            .unwrap(),
+    )
+    .unwrap();
+
     (release_commits.remove(0), release_commits.remove(0))
+}
+
+fn create_changelog_entry_markdown_files(
+    markdown_files: &[&str],
+    changelog_dir: &Path,
+) -> Vec<PathBuf> {
+    let mut source_paths = Vec::with_capacity(markdown_files.len());
+    markdown_files.iter().enumerate().for_each(|(i, md)| {
+        let source_path = changelog_dir.join(format!("source{i}.md"));
+        fs::write(&source_path, md.trim()).unwrap();
+        source_paths.push(source_path);
+    });
+    source_paths
 }
 
 #[test]
 fn split_aws_sdk() {
     let tmp_dir = TempDir::new().unwrap();
-    let source_path = tmp_dir.path().join("source.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
     let dest_path = tmp_dir.path().join("dest.toml");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
-
-    fs::write(&source_path, SOURCE_TOML).unwrap();
+    create_changelog_entry_markdown_files(
+        // Exclude `SOURCE_MARKDOWN2` to make string comparison verification at the end of this
+        // function deterministic across platforms. If `SOURCE_MARKDOWN2` were included, `dest_path`
+        // might list `SOURCE_MARKDOWN1` and `SOURCE_MARKDOWN2` in an non-deterministic order due to
+        // the use of `std::fs::read_dir` in `ChangelogLoader::load_from_dir`, making the test
+        // brittle.
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN3],
+        &dot_changelog_path,
+    );
 
     let mut original_dest_changelog = Changelog::new();
     original_dest_changelog
@@ -162,43 +206,15 @@ fn split_aws_sdk() {
     .unwrap();
 
     subcommand_split(&SplitArgs {
-        source: source_path.clone(),
+        source: dot_changelog_path,
         destination: dest_path.clone(),
         since_commit: Some("test-commit-hash".into()),
         smithy_rs_location: Some(tmp_dir.path().into()),
     })
     .unwrap();
 
-    let source = fs::read_to_string(&source_path).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(
-        r#"# This is an intermediate file that will be replaced after automation is complete.
-# It will be used to generate a changelog entry for smithy-rs.
-# Do not commit the contents of this file!
-
-{
-  "smithy-rs": [
-    {
-      "message": "Another change",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false,
-        "target": "all"
-      },
-      "author": "another-dev",
-      "references": [
-        "smithy-rs#1234"
-      ],
-      "since-commit": null
-    }
-  ],
-  "aws-sdk-rust": [],
-  "aws-sdk-model": []
-}"#,
-        source
-    );
     pretty_assertions::assert_str_eq!(
         r#"# This file will be used by automation when cutting a release of the SDK
 # to include code generator change log entries into the release notes.
@@ -233,21 +249,6 @@ fn split_aws_sdk() {
       ],
       "since-commit": "test-commit-hash",
       "age": 1
-    },
-    {
-      "message": "Some other change",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "test-dev",
-      "references": [
-        "aws-sdk-rust#234",
-        "smithy-rs#567"
-      ],
-      "since-commit": "test-commit-hash",
-      "age": 1
     }
   ],
   "aws-sdk-model": []
@@ -259,13 +260,17 @@ fn split_aws_sdk() {
 #[test]
 fn render_smithy_rs() {
     let tmp_dir = TempDir::new().unwrap();
-    let source_path = tmp_dir.path().join("source.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
     let dest_path = tmp_dir.path().join("dest.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
 
-    fs::write(&source_path, SOURCE_TOML).unwrap();
+    create_changelog_entry_markdown_files(
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN2, SOURCE_MARKDOWN3],
+        &dot_changelog_path,
+    );
     fs::write(
         &dest_path,
         format!(
@@ -279,22 +284,23 @@ fn render_smithy_rs() {
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
         independent_versioning: true,
-        source: vec![source_path.clone()],
-        source_to_truncate: source_path.clone(),
+        source: vec![dot_changelog_path.clone()],
         changelog_output: dest_path.clone(),
+        source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
-    let source = fs::read_to_string(&source_path).unwrap();
+    let dot_example = fs::read_to_string(dot_changelog_path.join(".example")).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
@@ -316,7 +322,7 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
+  "tagName": "release-1970-01-01.2",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n",
   "prerelease": false
@@ -328,23 +334,42 @@ Old entry contents
 #[test]
 fn render_aws_sdk() {
     let tmp_dir = TempDir::new().unwrap();
-    let source1_path = tmp_dir.path().join("source1.toml");
-    let source2_path = tmp_dir.path().join("source2.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
+    let model_source_path = tmp_dir.path().join("model_source.toml");
     let dest_path = tmp_dir.path().join("dest.md");
     let release_manifest_path = tmp_dir.path().join("aws-sdk-rust-release-manifest.json");
     let previous_versions_manifest_path = tmp_dir.path().join("versions.toml");
 
-    let (release_1_commit, release_2_commit) =
-        create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
+    let (last_release_commit, _) = create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
+    let source_paths = create_changelog_entry_markdown_files(
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN3],
+        &dot_changelog_path,
+    );
 
+    // Replicate the state by running the `split` subcommand where `SOURCE_MARKDOWN1` is saved in
+    // `dest_path` as an old release SDK changelog entry. That's done by `last_release_commit` will
+    // be the value of `since-commit` for SOURCE_MARKDOWN1
+    subcommand_split(&SplitArgs {
+        source: dot_changelog_path.clone(),
+        destination: dest_path.clone(),
+        since_commit: Some(last_release_commit.as_ref().to_owned()),
+        smithy_rs_location: Some(tmp_dir.path().into()),
+    })
+    .unwrap();
+    // After split, make sure to remove `SOURCE_MARKDOWN1` from the changelog directory otherwise
+    // it'd be rendered when the subcommand `render` runs below.
+    fs::remove_file(&source_paths[0]).unwrap();
+
+    // Now that `SOURCE_MARKDOWN1` has been saved in `dest_path` as an old SDK entry, create a new
+    // SDK changelog entry in the changelog directory.
     fs::write(
-        &source1_path,
-        SOURCE_TOML
-            .replace("REPLACE_SINCE_COMMIT_1", release_1_commit.as_ref())
-            .replace("REPLACE_SINCE_COMMIT_2", release_2_commit.as_ref()),
+        &dot_changelog_path.join(format!("123456.md")),
+        SOURCE_MARKDOWN2.trim(),
     )
     .unwrap();
-    fs::write(&source2_path, SDK_MODEL_SOURCE_TOML).unwrap();
+
+    fs::write(&model_source_path, SDK_MODEL_SOURCE_TOML).unwrap();
     fs::write(
         &dest_path,
         format!(
@@ -357,9 +382,9 @@ fn render_aws_sdk() {
     fs::write(
         &previous_versions_manifest_path,
         format!(
-            "smithy_rs_revision = '{release_1_commit}'
-             aws_doc_sdk_examples_revision = 'not-relevant'
-             [crates]",
+            "smithy_rs_revision = '{last_release_commit}'
+                 aws_doc_sdk_examples_revision = 'not-relevant'
+                 [crates]",
         ),
     )
     .unwrap();
@@ -367,30 +392,31 @@ fn render_aws_sdk() {
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::AwsSdk,
         independent_versioning: true,
-        source: vec![source1_path.clone(), source2_path.clone()],
-        source_to_truncate: source1_path.clone(),
+        source: vec![dot_changelog_path.clone(), model_source_path.clone()],
         changelog_output: dest_path.clone(),
+        source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
-        date_override: Some(OffsetDateTime::UNIX_EPOCH),
+        date_override: Some(OffsetDateTime::UNIX_EPOCH + Duration::days(1)),
         current_release_versions_manifest: None,
         previous_release_versions_manifest: Some(previous_versions_manifest_path),
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
-    let source1 = fs::read_to_string(&source1_path).unwrap();
-    let source2 = fs::read_to_string(&source2_path).unwrap();
+    let dot_example = fs::read_to_string(dot_changelog_path.join(".example")).unwrap();
+    let model_source = fs::read_to_string(&model_source_path).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source1);
-    pretty_assertions::assert_str_eq!(SDK_MODEL_SOURCE_TOML, source2);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
+    pretty_assertions::assert_str_eq!(SDK_MODEL_SOURCE_TOML, model_source);
 
     // It should only have one of the SDK changelog entries since
     // the other should be filtered out by the `since_commit` attribute
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
-January 1st, 1970
+January 2nd, 1970
 =================
 **New this release:**
 - :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change
@@ -412,8 +438,8 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
-  "name": "January 1st, 1970",
+  "tagName": "release-1970-01-02",
+  "name": "January 2nd, 1970",
   "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567))\n\n",
   "prerelease": false
 }"#,
@@ -421,62 +447,32 @@ Old entry contents
     );
 }
 
-/// entries with target set to each of the possible ones, and one entry with no target
-/// set, which should result in the default
 #[test]
-fn render_smithy_entries() {
-    const NEXT_CHANGELOG: &str = r#"
-# Example changelog entries
-# [[aws-sdk-rust]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-#
-# [[smithy-rs]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-[[aws-sdk-rust]]
-message = "Some change"
-references = ["aws-sdk-rust#123", "smithy-rs#456"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-since-commit = "REPLACE_SINCE_COMMIT_1"
-author = "test-dev"
-
-[[smithy-rs]]
-message = "First change - server"
-references = ["smithy-rs#1"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "server" }
-author = "server-dev"
-
-[[smithy-rs]]
-message = "Second change - should be all"
-references = ["smithy-rs#2"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
-author = "another-dev"
-
-[[smithy-rs]]
-message = "Third change - empty"
-references = ["smithy-rs#3"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[smithy-rs]]
-message = "Fourth change - client"
-references = ["smithy-rs#4"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "rcoh"
+fn render_server_smithy_entry() {
+    const SERVER_ONLY_MARKDOWN: &str = r#"---
+applies_to: ["server"]
+authors: ["server-dev"]
+references: ["smithy-rs#1"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Change from server
 "#;
     let tmp_dir = TempDir::new().unwrap();
-    let source_path = tmp_dir.path().join("source.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
     let dest_path = tmp_dir.path().join("dest.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
 
-    fs::write(&source_path, NEXT_CHANGELOG).unwrap();
+    create_changelog_entry_markdown_files(
+        // Not include other `smithy-rs` targeted entries other than `SERVER_ONLY_MARKDOWN` to make
+        // string comparison verification deterministic
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN2, SERVER_ONLY_MARKDOWN],
+        &dot_changelog_path,
+    );
     fs::write(
         &dest_path,
         format!(
@@ -490,37 +486,32 @@ author = "rcoh"
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
         independent_versioning: true,
-        source: vec![source_path.clone()],
-        source_to_truncate: source_path.clone(),
+        source: vec![dot_changelog_path.clone()],
         changelog_output: dest_path.clone(),
+        source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
-    let source = fs::read_to_string(&source_path).unwrap();
+    let dot_example = fs::read_to_string(dot_changelog_path.join(".example")).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
 
     // source file should be empty
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, &dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
 =================
-**Breaking Changes:**
-- :warning: (all, [smithy-rs#3](https://github.com/smithy-lang/smithy-rs/issues/3)) Third change - empty
-
 **New this release:**
-- (server, [smithy-rs#1](https://github.com/smithy-lang/smithy-rs/issues/1), @server-dev) First change - server
-- (all, [smithy-rs#2](https://github.com/smithy-lang/smithy-rs/issues/2), @another-dev) Second change - should be all
-- (client, [smithy-rs#4](https://github.com/smithy-lang/smithy-rs/issues/4)) Fourth change - client
+- (server, [smithy-rs#1](https://github.com/smithy-lang/smithy-rs/issues/1), @server-dev) Change from server
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-dev ([smithy-rs#2](https://github.com/smithy-lang/smithy-rs/issues/2))
 - @server-dev ([smithy-rs#1](https://github.com/smithy-lang/smithy-rs/issues/1))
 
 
@@ -533,61 +524,32 @@ Old entry contents
     );
 }
 
-/// aws_sdk_rust should not be allowed to have target entries
 #[test]
-fn aws_sdk_cannot_have_target() {
-    const NEXT_CHANGELOG: &str = r#"
-# Example changelog entries
-# [[aws-sdk-rust]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-#
-# [[smithy-rs]]
-# message = "Fix typos in module documentation for generated crates"
-# references = ["smithy-rs#920"]
-# meta = { "breaking" = false, "tada" = false, "bug" = false }
-# author = "rcoh"
-[[aws-sdk-rust]]
-message = "Some change"
-references = ["aws-sdk-rust#123", "smithy-rs#456"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-since-commit = "REPLACE_SINCE_COMMIT_1"
-author = "test-dev"
-
-[[smithy-rs]]
-message = "First change - server"
-references = ["smithy-rs#1"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "server" }
-author = "server-dev"
-
-[[smithy-rs]]
-message = "Second change - should be all"
-references = ["smithy-rs#2"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "all" }
-author = "another-dev"
-
-[[smithy-rs]]
-message = "Third change - empty"
-references = ["smithy-rs#3"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[smithy-rs]]
-message = "Fourth change - client"
-references = ["smithy-rs#4"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "rcoh"
+fn render_client_smithy_entry() {
+    const CLIENT_ONLY_MARKDOWN: &str = r#"---
+applies_to: ["client"]
+authors: ["client-dev"]
+references: ["smithy-rs#4"]
+breaking: false
+new_feature: false
+bug_fix: false
+---
+Change from client
 "#;
     let tmp_dir = TempDir::new().unwrap();
-    let source_path = tmp_dir.path().join("source.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
     let dest_path = tmp_dir.path().join("dest.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
 
     create_fake_repo_root(tmp_dir.path(), "0.42.0", "0.12.0");
 
-    fs::write(&source_path, NEXT_CHANGELOG).unwrap();
+    create_changelog_entry_markdown_files(
+        // Not include other `smithy-rs` targeted entries other than `CLIENT_ONLY_MARKDOWN` to make
+        // string comparison verification deterministic
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN2, CLIENT_ONLY_MARKDOWN],
+        &dot_changelog_path,
+    );
     fs::write(
         &dest_path,
         format!(
@@ -598,40 +560,62 @@ author = "rcoh"
     .unwrap();
     fs::write(release_manifest_path, "overwrite-me").unwrap();
 
-    let result = subcommand_render(&RenderArgs {
+    subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
         independent_versioning: true,
-        source: vec![source_path.clone()],
-        source_to_truncate: source_path,
-        changelog_output: dest_path,
+        source: vec![dot_changelog_path.clone()],
+        changelog_output: dest_path.clone(),
+        source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         current_release_versions_manifest: None,
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
-    });
+        aws_sdk_rust_location: None,
+    })
+    .unwrap();
 
-    if let Err(e) = result {
-        let index = e
-            .to_string()
-            .find("aws-sdk-rust changelog entry cannot have an affected target");
-        assert!(index.is_some());
-    } else {
-        panic!("This should have been error that aws-sdk-rust has a target entry");
-    }
+    let dot_example = fs::read_to_string(dot_changelog_path.join(".example")).unwrap();
+    let dest = fs::read_to_string(&dest_path).unwrap();
+
+    // source file should be empty
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, &dot_example);
+    pretty_assertions::assert_str_eq!(
+        r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 1st, 1970
+=================
+**New this release:**
+- (client, [smithy-rs#4](https://github.com/smithy-lang/smithy-rs/issues/4), @client-dev) Change from client
+
+**Contributors**
+Thank you for your contributions! ❤
+- @client-dev ([smithy-rs#4](https://github.com/smithy-lang/smithy-rs/issues/4))
+
+
+v0.41.0 (Some date in the past)
+=========
+
+Old entry contents
+"#,
+        dest
+    );
 }
 
 #[test]
 fn render_crate_versions() {
     let tmp_dir = TempDir::new().unwrap();
-    let source_path = tmp_dir.path().join("source.toml");
+    let dot_changelog = TempDir::new_in(tmp_dir.path()).unwrap();
+    let dot_changelog_path = dot_changelog.path().to_owned();
     let dest_path = tmp_dir.path().join("dest.md");
     let release_manifest_path = tmp_dir.path().join("smithy-rs-release-manifest.json");
     let current_versions_manifest_path = tmp_dir.path().join("versions.toml");
 
     create_fake_repo_root(tmp_dir.path(), "0.54.1", "0.24.0");
 
-    fs::write(&source_path, SOURCE_TOML).unwrap();
+    create_changelog_entry_markdown_files(
+        &[SOURCE_MARKDOWN1, SOURCE_MARKDOWN2, SOURCE_MARKDOWN3],
+        &dot_changelog_path,
+    );
     fs::write(
         &dest_path,
         format!(
@@ -646,23 +630,23 @@ fn render_crate_versions() {
     subcommand_render(&RenderArgs {
         change_set: ChangeSet::SmithyRs,
         independent_versioning: true,
-        source: vec![source_path.clone()],
-        source_to_truncate: source_path.clone(),
+        source: vec![dot_changelog_path.clone()],
         changelog_output: dest_path.clone(),
+        source_to_truncate: Some(dot_changelog_path.clone()),
         release_manifest_output: Some(tmp_dir.path().into()),
         date_override: Some(OffsetDateTime::UNIX_EPOCH),
         current_release_versions_manifest: Some(current_versions_manifest_path),
         previous_release_versions_manifest: None,
         smithy_rs_location: Some(tmp_dir.path().into()),
+        aws_sdk_rust_location: None,
     })
     .unwrap();
 
-    let source = fs::read_to_string(&source_path).unwrap();
+    let dot_example = fs::read_to_string(dot_changelog_path.join(".example")).unwrap();
     let dest = fs::read_to_string(&dest_path).unwrap();
     let release_manifest = fs::read_to_string(&release_manifest_path).unwrap();
 
-    // source file should be empty
-    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY.trim(), source);
+    pretty_assertions::assert_str_eq!(EXAMPLE_ENTRY, dot_example);
     pretty_assertions::assert_str_eq!(
         r#"<!-- Do not manually edit this file. Use the `changelogger` tool. -->
 January 1st, 1970
@@ -695,7 +679,7 @@ Old entry contents
     );
     pretty_assertions::assert_str_eq!(
         r#"{
-  "tagName": "release-1970-01-01",
+  "tagName": "release-1970-01-01.2",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
   "prerelease": false

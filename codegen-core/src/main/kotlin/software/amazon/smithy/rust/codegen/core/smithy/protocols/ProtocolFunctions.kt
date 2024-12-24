@@ -39,7 +39,7 @@ class ProtocolFunctions(
     private val codegenContext: CodegenContext,
 ) {
     companion object {
-        private val serDeModule = RustModule.pubCrate("protocol_serde")
+        val serDeModule = RustModule.pubCrate("protocol_serde")
 
         fun crossOperationFn(
             fnName: String,
@@ -136,7 +136,7 @@ class ProtocolFunctions(
 }
 
 /** Creates a module name for a ser/de function. */
-internal fun RustSymbolProvider.shapeModuleName(
+fun RustSymbolProvider.shapeModuleName(
     serviceShape: ServiceShape?,
     shape: Shape,
 ): String =

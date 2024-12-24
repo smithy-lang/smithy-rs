@@ -14,8 +14,11 @@ import software.amazon.smithy.model.traits.InputTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.rename
 import java.util.Optional
 import kotlin.streams.toList
@@ -23,14 +26,16 @@ import kotlin.streams.toList
 /**
  * Generate synthetic Input and Output structures for operations.
  *
- * Operation input/output shapes can be retroactively added. In order to support this while maintaining backwards compatibility,
- * we need to generate input/output shapes for all operations in a backwards compatible way.
- *
  * This works by **adding** new shapes to the model for operation inputs & outputs. These new shapes have `SyntheticInputTrait`
  * and `SyntheticOutputTrait` attached to them as needed. This enables downstream code generators to determine if a shape is
  * "real" vs. a shape created as a synthetic input/output.
  *
  * The trait also tracks the original shape id for certain serialization tasks that require it to exist.
+ *
+ * Note that adding/removing operation input/output [is a breaking change]; the only reason why we synthetically add them
+ * is to produce a consistent API.
+ *
+ * [is a breaking change]: <https://github.com/smithy-lang/smithy/issues/2253#issuecomment-2069943344>
  */
 object OperationNormalizer {
     // Functions to construct synthetic shape IDs—Don't rely on these in external code.
@@ -42,6 +47,30 @@ object OperationNormalizer {
 
     private fun OperationShape.syntheticOutputId() =
         ShapeId.fromParts(this.id.namespace + ".synthetic", "${this.id.name}Output")
+
+    /**
+     * Returns `true` if the user had originally modeled an operation input shape on the given [operation];
+     * `false` if the transform added a synthetic one.
+     */
+    fun hadUserModeledOperationInput(
+        operation: OperationShape,
+        model: Model,
+    ): Boolean {
+        val syntheticInputTrait = operation.inputShape(model).expectTrait<SyntheticInputTrait>()
+        return syntheticInputTrait.originalId != null
+    }
+
+    /**
+     * Returns `true` if the user had originally modeled an operation output shape on the given [operation];
+     * `false` if the transform added a synthetic one.
+     */
+    fun hadUserModeledOperationOutput(
+        operation: OperationShape,
+        model: Model,
+    ): Boolean {
+        val syntheticOutputTrait = operation.outputShape(model).expectTrait<SyntheticOutputTrait>()
+        return syntheticOutputTrait.originalId != null
+    }
 
     /**
      * Add synthetic input & output shapes to every Operation in model. The generated shapes will be marked with

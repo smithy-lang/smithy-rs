@@ -27,22 +27,20 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
+import software.amazon.smithy.rust.codegen.client.smithy.traits.IncompatibleWithStalledStreamProtectionTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rustsdk.SdkConfigSection
+import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
 import java.util.logging.Logger
@@ -62,6 +60,10 @@ class S3Decorator : ClientCodegenDecorator {
             ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
             // API returns ListAllMyDirectoryBucketsResult instead of ListDirectoryBucketsOutput
             ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
+        )
+    private val operationsIncompatibleWithStalledStreamProtection =
+        setOf(
+            ShapeId.from("com.amazonaws.s3#CopyObject"),
         )
 
     override fun protocols(
@@ -85,6 +87,9 @@ class S3Decorator : ClientCodegenDecorator {
             shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+            }.letIf(operationsIncompatibleWithStalledStreamProtection.contains(shape.id)) {
+                logger.info("Adding IncompatibleWithStalledStreamProtection trait to $it")
+                (it as OperationShape).toBuilder().addTrait(IncompatibleWithStalledStreamProtectionTrait()).build()
             }
         }
             // the model has the bucket in the path
@@ -136,6 +141,9 @@ class S3Decorator : ClientCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations +
             object : OperationCustomization() {
+                private val runtimeConfig = codegenContext.runtimeConfig
+                private val symbolProvider = codegenContext.symbolProvider
+
                 override fun section(section: OperationSection): Writable {
                     return writable {
                         when (section) {
@@ -147,42 +155,37 @@ class S3Decorator : ClientCodegenDecorator {
                                             ${section.forceError} = true;
                                         }
                                         """,
-                                        "errors" to RuntimeType.unwrappedXmlErrors(codegenContext.runtimeConfig),
+                                        "errors" to RuntimeType.unwrappedXmlErrors(runtimeConfig),
                                     )
                                 }
                             }
+
+                            is OperationSection.RetryClassifiers -> {
+                                section.registerRetryClassifier(this) {
+                                    rustTemplate(
+                                        """
+                                        #{AwsErrorCodeClassifier}::<#{OperationError}>::builder().transient_errors({
+                                            let mut transient_errors: Vec<&'static str> = #{TRANSIENT_ERRORS}.into();
+                                            transient_errors.push("InternalError");
+                                            #{Cow}::Owned(transient_errors)
+                                            }).build()""",
+                                        "AwsErrorCodeClassifier" to
+                                            AwsRuntimeType.awsRuntime(runtimeConfig)
+                                                .resolve("retries::classifiers::AwsErrorCodeClassifier"),
+                                        "Cow" to RuntimeType.Cow,
+                                        "OperationError" to symbolProvider.symbolForOperationError(operation),
+                                        "TRANSIENT_ERRORS" to
+                                            AwsRuntimeType.awsRuntime(runtimeConfig)
+                                                .resolve("retries::classifiers::TRANSIENT_ERRORS"),
+                                    )
+                                }
+                            }
+
                             else -> {}
                         }
                     }
                 }
             }
-    }
-
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
-        return listOf(
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust(
-                    """
-                    ${section.serviceConfigBuilder}.set_disable_multi_region_access_points(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS", "s3_disable_multi_region_access_points"));
-                                str_config.and_then(|it| it.parse::<bool>().ok())
-                            }),
-                    );
-                    ${section.serviceConfigBuilder}.set_use_arn_region(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                let str_config = conf.load_config(service_config_key("AWS_S3_USE_ARN_REGION", "s3_use_arn_region"));
-                                str_config.and_then(|it| it.parse::<bool>().ok())
-                            }),
-                    );
-                    """,
-                )
-            },
-        )
     }
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {

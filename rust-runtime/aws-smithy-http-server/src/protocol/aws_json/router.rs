@@ -39,15 +39,15 @@ pub enum Error {
 // This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
 // `HashMap`. This is chosen to be 15 as a result of the discussion around
 // https://github.com/smithy-lang/smithy-rs/pull/1429#issuecomment-1147516546
-const ROUTE_CUTOFF: usize = 15;
+pub(crate) const ROUTE_CUTOFF: usize = 15;
 
-/// A [`Router`] supporting [`AWS JSON 1.0`] and [`AWS JSON 1.1`] protocols.
+/// A [`Router`] supporting [AWS JSON 1.0] and [AWS JSON 1.1] protocols.
 ///
-/// [AWS JSON 1.0]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_0-protocol.html
-/// [AWS JSON 1.1]: https://awslabs.github.io/smithy/2.0/aws/protocols/aws-json-1_1-protocol.html
+/// [AWS JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
+/// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<String, S, ROUTE_CUTOFF>,
+    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
@@ -106,9 +106,9 @@ where
     }
 }
 
-impl<S> FromIterator<(String, S)> for AwsJsonRouter<S> {
+impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (String, S)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
             routes: iter.into_iter().collect(),
         }
@@ -126,11 +126,7 @@ mod tests {
     #[tokio::test]
     async fn simple_routing() {
         let routes = vec![("Service.Operation")];
-        let router: AwsJsonRouter<_> = routes
-            .clone()
-            .into_iter()
-            .map(|operation| (operation.to_string(), ()))
-            .collect();
+        let router: AwsJsonRouter<_> = routes.clone().into_iter().map(|operation| (operation, ())).collect();
 
         let mut headers = HeaderMap::new();
         headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));

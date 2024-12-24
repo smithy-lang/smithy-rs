@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rulesengine.traits.ClientContextParamDefinition
@@ -51,6 +52,7 @@ class ClientContextConfigCustomization(ctx: ClientCodegenContext) : ConfigCustom
                 when (shapeType) {
                     ShapeType.STRING -> StringShape.builder().id("smithy.api#String").build()
                     ShapeType.BOOLEAN -> BooleanShape.builder().id("smithy.api#Boolean").build()
+                    ShapeType.LIST -> ListShape.builder().id("smithy.api#List").build()
                     else -> TODO("unsupported type")
                 },
             )

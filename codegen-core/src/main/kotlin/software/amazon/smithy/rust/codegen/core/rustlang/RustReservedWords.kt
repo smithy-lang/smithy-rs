@@ -97,6 +97,7 @@ enum class EscapeFor {
 }
 
 object RustReservedWords : ReservedWords {
+    // This is the same list defined in `CodegenTestCommon` from the `buildSrc` Gradle subproject.
     private val RustKeywords =
         setOf(
             "as",

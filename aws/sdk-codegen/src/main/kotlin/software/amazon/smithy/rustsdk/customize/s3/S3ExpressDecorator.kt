@@ -155,7 +155,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             rustTemplate(
                                 """
                                 #{DefaultS3ExpressIdentityProvider}::builder()
-                                    .behavior_version(${section.serviceConfigName}.behavior_version.clone().expect(${behaviorVersionError.dq()}))
+                                    .behavior_version(${section.serviceConfigName}.behavior_version.expect(${behaviorVersionError.dq()}))
                                     .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
                                     .build()
                                 """,
@@ -314,10 +314,6 @@ private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
 
 private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
     arrayOf(
-        // Used by lru, and this forces it to be a later version that avoids
-        // https://github.com/tkaitchuck/aHash/issues/200
-        // when built with `cargo update -Z minimal-versions`
-        CargoDependency.AHash,
         AwsCargoDependency.awsCredentialTypes(runtimeConfig),
         AwsCargoDependency.awsRuntime(runtimeConfig),
         AwsCargoDependency.awsSigv4(runtimeConfig),

@@ -24,8 +24,10 @@ service QueryCompatService {
     params: {
         message: "hello!"
     },
-    headers: { "x-amz-target": "QueryCompatService.Operation"}
-
+    headers: {
+        "x-amz-target": "QueryCompatService.Operation",
+        "x-amzn-query-mode": "true",
+    }
    }
 ])
 operation Operation {

@@ -12,7 +12,8 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use smithy_rs_tool_common::{
-    command::sync::CommandExt, index::CratesIndex, release_tag::ReleaseTag,
+    command::sync::CommandExt, index::CratesIndex, package::PackageCategory,
+    release_tag::ReleaseTag,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,7 +32,9 @@ pub fn audit(args: Audit) -> Result<()> {
     let previous_release_tag =
         previous_release_tag(&repo, &release_tags, args.previous_release_tag.as_deref())?;
     if release_tags.first() != Some(&previous_release_tag) {
-        tracing::warn!("there are newer releases since '{previous_release_tag}'");
+        tracing::warn!("there are newer releases since '{previous_release_tag}'. \
+            Consider specifying a more recent release tag using the `--previous-release-tag` command-line argument or \
+            the `SMITHY_RS_RUNTIME_VERSIONER_AUDIT_PREVIOUS_RELEASE_TAG` environment variable if audit fails.");
     }
 
     let next_crates = discover_runtime_crates(&repo.root).context("next")?;
@@ -57,9 +60,22 @@ pub fn audit(args: Audit) -> Result<()> {
 
 fn audit_crate(repo: &Repo, release_tag: &ReleaseTag, rt_crate: RuntimeCrate) -> Result<()> {
     if rt_crate.changed_since_release(repo, release_tag)? {
+        // There is an edge case with the aws/rust-runtime crates due to the decoupled smithy-rs/SDK releases.
+        // After a smithy-rs release and before a SDK release, there is a period of time where the smithy-rs
+        // runtime crates are published to crates.io, but the SDK runtime crates are not.
+        //
+        // The way this manifests is that the crate's previous release version is now the same as the version
+        // number at HEAD, and the crate is not published.
+        let is_sdk_runtime_edge_case = PackageCategory::from_package_name(&rt_crate.name).is_sdk()
+            && rt_crate.previous_release_version.as_ref() == Some(&rt_crate.next_release_version)
+            && !rt_crate.next_version_is_published();
+        if is_sdk_runtime_edge_case {
+            tracing::info!("For '{}', detected that a new version of smithy-rs has been released, but that the SDK release hasn't caught up yet.", rt_crate.name);
+        }
+
         // If this version has never been published before, then we're good.
         // (This tool doesn't check semver compatibility.)
-        if !rt_crate.next_version_is_published() {
+        if !rt_crate.next_version_is_published() && !is_sdk_runtime_edge_case {
             if let Some(previous_version) = rt_crate.previous_release_version {
                 tracing::info!(
                     "'{}' changed and was version bumped from {previous_version} to {}",
@@ -123,12 +139,13 @@ impl RuntimeCrate {
             .output()
             .with_context(|| format!("failed to git diff {}", self.name))?;
         let output = String::from_utf8(status.stdout)?;
+        // When run during a release, this file is replaced with it's actual contents.
+        // This breaks this git-based comparison and incorrectly requires a version bump.
+        // Temporary fix to allow the build to succeed.
+        let lines_to_ignore = &["aws-config/clippy.toml", "aws-config/Cargo.lock"];
         let changed_files = output
             .lines()
-            // When run during a release, this file is replaced with it's actual contents.
-            // This breaks this git-based comparison and incorrectly requires a version bump.
-            // Temporary fix to allow the build to succeed.
-            .filter(|line| !line.contains("aws-config/clippy.toml"))
+            .filter(|line| !lines_to_ignore.iter().any(|ignore| line.contains(ignore)))
             .collect::<Vec<_>>();
         Ok(!changed_files.is_empty())
     }

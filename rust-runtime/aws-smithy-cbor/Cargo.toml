@@ -1,0 +1,41 @@
+[package]
+name = "aws-smithy-cbor"
+version = "0.60.8"
+authors = [
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+    "David Pérez <d@vidp.dev>",
+]
+description = "CBOR utilities for smithy-rs."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+
+[dependencies.minicbor]
+version = "0.24.2"
+features = [
+    # To write to a `Vec<u8>`: https://docs.rs/minicbor/latest/minicbor/encode/write/trait.Write.html#impl-Write-for-Vec%3Cu8%3E
+    "alloc",
+    # To support reading `f16` to accomodate fewer bytes transmitted that fit the value.
+    "half",
+]
+
+[dependencies]
+aws-smithy-types = { path = "../aws-smithy-types" }
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "string"
+harness = false
+
+[[bench]]
+name = "blob"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

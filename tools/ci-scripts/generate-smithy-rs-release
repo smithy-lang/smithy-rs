@@ -8,19 +8,20 @@ set -eux
 
 SMITHY_RS_DIR="$(pwd)/smithy-rs"
 ARTIFACTS_DIR="$(pwd)/artifacts/smithy-rs-release"
+CHANGELOG_DIR="${SMITHY_RS_DIR}/.changelog"
 mkdir -p "${ARTIFACTS_DIR}"
 
 pushd "${SMITHY_RS_DIR}"
-# Split AWS SDK changelog entries into a separate file
+# Duplicate AWS SDK changelog entries into a separate file
 changelogger split \
-    --source CHANGELOG.next.toml \
+    --source "${CHANGELOG_DIR}" \
     --destination aws/SDK_CHANGELOG.next.json
-# Render the remaining smithy-rs changelog entries
+# Render the smithy-rs changelog entries
 changelogger render \
     --independent-versioning \
     --change-set smithy-rs \
-    --source CHANGELOG.next.toml \
-    --source-to-truncate CHANGELOG.next.toml \
+    --source "${CHANGELOG_DIR}" \
+    --source-to-truncate "${CHANGELOG_DIR}" \
     --changelog-output CHANGELOG.md \
     --release-manifest-output "${ARTIFACTS_DIR}"
 # Commit changelog changes if there are any
@@ -30,6 +31,19 @@ git diff --staged --quiet || \
         -c "user.email=aws-sdk-rust-primary@amazon.com" \
         commit \
         -am "Update changelog"
+
+echo "Synchronizing the SDK lockfile with runtime lockfiles and with crate dependencies specified in CargoDependency.kt..."
+./gradlew aws:sdk:syncAwsSdkLockfile
+# Verify that crate dependencies in runtime lockfiles are covered by the updated SDK lockfile
+sdk-lockfiles audit
+# Commit the updated SDK lockfile
+git add aws/sdk/Cargo.lock
+git diff --staged --quiet || \
+  git -c 'user.name=AWS SDK Rust Bot' \
+      -c 'user.email=aws-sdk-rust-primary@amazon.com' \
+      commit aws/sdk/Cargo.lock \
+      -m "Synchronize the SDK lockfile"
+
 # Generate the crates to publish
 ./gradlew rust-runtime:assemble
 popd

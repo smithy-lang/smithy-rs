@@ -1,0 +1,122 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This is a shared workflow used by both `update-lockfiles.yml` and `manual-update-lockfiles.yml`.
+
+name: Pull Request for Updating Lockfiles
+on:
+  workflow_call:
+    inputs:
+      base_branch:
+        description: The name of the branch on which to run `cargo update` for lockfiles
+        required: true
+        type: string
+      force_update_on_broken_dependencies:
+        description: When true, it forces `cargo update` to update broken dependencies to the latest semver-compatible versions, without downgrading them to the last known working versions
+        required: true
+        type: boolean
+    secrets:
+      DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: true
+      SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN:
+        required: true
+      RELEASE_AUTOMATION_BOT_PAT:
+        required: true
+
+env:
+  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
+
+jobs:
+  save-docker-login-token:
+    name: Save a docker login token
+    timeout-minutes: 10
+    outputs:
+      docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
+    permissions:
+      id-token: write
+      contents: read
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+    - name: Attempt to load a docker login password
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Save the docker login password to the output
+      id: set-token
+      run: |
+        ENCRYPTED_PAYLOAD=$(
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+        )
+        echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
+
+  acquire-base-image:
+    name: Acquire Base Image
+    needs: save-docker-login-token
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+    - name: Acquire base image
+      id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Upload image
+      run: |
+        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+        docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
+
+  create-pull-request-for-updating-lockfiles:
+    name: Create a Pull Request for updating lockfiles
+    needs:
+    - acquire-base-image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+    - name: Create branch name for updating lockfiles
+      id: branch-name-for-updating-lockfiles
+      shell: bash
+      run: |
+        branch_name="update-all-lockfiles-$(date +%s)"
+        echo "branch_name=${branch_name}" > $GITHUB_OUTPUT
+    - name: Cargo update all lockfiles
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: cargo-update-lockfiles
+        action-arguments: ${{ inputs.base_branch }} ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} ${{ inputs.force_update_on_broken_dependencies }}
+    - name: Create pull request
+      working-directory: smithy-rs
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+      run: |
+        echo -e 'If CI fails, commit the necessary fixes to this PR until all checks pass.\n\nIf changes are required to [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/92916b5484cdfef9ff58540ebf5e845eeeccf860/aws/sdk/build.gradle.kts#L504), revert the first commit in the PR, run `./gradlew aws:sdk:cargoUpdateAllLockfiles`, and commit the updated lockfiles.' | \
+        gh pr create \
+          --title 'Run `cargo update` on the runtime lockfiles and the SDK lockfile' \
+          --base ${{ inputs.base_branch }} \
+          --head ${{ steps.branch-name-for-updating-lockfiles.outputs.branch_name }} \
+          --label "needs-sdk-review" \
+          --body-file -

@@ -6,7 +6,8 @@
 use crate::lint::LintError;
 use crate::{repo_root, Check, Lint};
 use anyhow::Result;
-use smithy_rs_tool_common::changelog::{Changelog, ValidationSet};
+use smithy_rs_tool_common::changelog::{ChangelogLoader, ValidationSet};
+use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 pub(crate) struct ChangelogNext;
@@ -22,7 +23,32 @@ impl Lint for ChangelogNext {
 }
 
 impl Check for ChangelogNext {
-    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+    fn check(&self, path: impl AsRef<Path> + Debug) -> Result<Vec<LintError>> {
+        if path.as_ref().exists() {
+            Ok(vec![LintError::new(
+                "the legacy `CHANGELOG.next.toml` should no longer exist",
+            )])
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) struct DotChangelog;
+
+impl Lint for DotChangelog {
+    fn name(&self) -> &str {
+        ".changelog"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(vec![repo_root().join(".changelog")])
+    }
+}
+
+impl Check for DotChangelog {
+    fn check(&self, path: impl AsRef<Path> + Debug) -> Result<Vec<LintError>> {
         match check_changelog_next(path) {
             Ok(_) => Ok(vec![]),
             Err(errs) => Ok(errs),
@@ -30,9 +56,12 @@ impl Check for ChangelogNext {
     }
 }
 
-/// Validate that `CHANGELOG.next.toml` follows best practices
-fn check_changelog_next(path: impl AsRef<Path>) -> std::result::Result<(), Vec<LintError>> {
-    let parsed = Changelog::load_from_file(path).map_err(|e| vec![LintError::via_display(e)])?;
+/// Validate that changelog entries in the `.changelog` directory follows best practices
+#[allow(dead_code)]
+fn check_changelog_next(path: impl AsRef<Path> + Debug) -> std::result::Result<(), Vec<LintError>> {
+    let parsed = ChangelogLoader::default()
+        .load_from_dir(path)
+        .map_err(|e| vec![LintError::via_display(e)])?;
     parsed
         .validate(ValidationSet::Development)
         .map_err(|errs| {

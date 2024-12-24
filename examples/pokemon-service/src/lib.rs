@@ -5,11 +5,11 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use aws_smithy_http_server::request::{connect_info::ConnectInfo, request_id::ServerRequestId};
 use pokemon_service_server_sdk::{
     error::{GetStorageError, StorageAccessNotAuthorized},
     input::{DoNothingInput, GetStorageInput},
     output::{DoNothingOutput, GetStorageOutput},
+    server::request::{connect_info::ConnectInfo, request_id::ServerRequestId},
 };
 
 // Defaults shared between `main.rs` and `/tests`.

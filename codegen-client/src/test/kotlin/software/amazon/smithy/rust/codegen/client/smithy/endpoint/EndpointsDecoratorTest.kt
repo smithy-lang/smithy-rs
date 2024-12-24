@@ -32,6 +32,7 @@ class EndpointsDecoratorTest {
 
         use smithy.rules#clientContextParams
         use smithy.rules#staticContextParams
+        use smithy.rules#operationContextParams
         use smithy.rules#contextParam
         use aws.protocols#awsJson1_1
 
@@ -58,12 +59,16 @@ class EndpointsDecoratorTest {
                 }
             }],
             "parameters": {
-                "Bucket": { "required": false, "type": "String" },
-                "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
-                "BuiltInWithDefault": { "required": true, "type": "String", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
-                "BoolBuiltInWithDefault": { "required": true, "type": "Boolean", "builtIn": "AWS::FooBar", "default": true },
-                "AStringParam": { "required": false, "type": "String" },
-                "ABoolParam": { "required": false, "type": "Boolean" }
+                "Bucket": { "required": false, "type": "string" },
+                "Region": { "required": false, "type": "string", "builtIn": "AWS::Region" },
+                "BuiltInWithDefault": { "required": true, "type": "string", "builtIn": "AWS::DefaultBuiltIn", "default": "some-default" },
+                "BoolBuiltInWithDefault": { "required": true, "type": "boolean", "builtIn": "AWS::FooBar", "default": true },
+                "AStringParam": { "required": false, "type": "string" },
+                "ABoolParam": { "required": false, "type": "boolean" },
+                "AStringArrayParam": { "required": false, "type": "stringArray" },
+                "JmesPathParamString": {"required": false, type: "string"},
+                "JmesPathParamBoolean": {"required": false, type: "boolean"},
+                "JmesPathParamStringArray": {"required": false, type: "stringArray"},
             }
         })
         @clientContextParams(
@@ -107,7 +112,21 @@ class EndpointsDecoratorTest {
             operations: [TestOperation]
         }
 
-        @staticContextParams(Region: { value: "us-east-2" })
+        @staticContextParams(
+            Region: { value: "us-east-2" },
+            AStringArrayParam: {value: ["a", "b", "c"]}
+        )
+        @operationContextParams(
+            JmesPathParamString: {
+                path: "nested.field",
+            }
+            JmesPathParamBoolean: {
+                path: "nested.boolField",
+            }
+            JmesPathParamStringArray: {
+                path: "keys(nested.mapField)",
+            }
+        )
         operation TestOperation {
             input: TestOperationInput
         }
@@ -121,7 +140,14 @@ class EndpointsDecoratorTest {
         }
 
         structure NestedStructure {
-            field: String
+            field: String,
+            boolField: Boolean,
+            mapField: IntegerMap,
+        }
+
+        map IntegerMap {
+            key: String,
+            value: Integer
         }
         """.asSmithyModel(disableValidation = true)
 
@@ -153,7 +179,7 @@ class EndpointsDecoratorTest {
                             use std::time::Duration;
                             use $moduleName::{
                                 config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
-                                config::Intercept, config::SharedAsyncSleep, Client, Config,
+                                config::Intercept, config::SharedAsyncSleep, types::NestedStructure, Client, Config,
                             };
 
                             ##[derive(Clone, Debug, Default)]
@@ -174,19 +200,63 @@ class EndpointsDecoratorTest {
                                     let params = cfg
                                         .load::<EndpointResolverParams>()
                                         .expect("params set in config");
-                                    let params: &Params = params.get().expect("correct type");
+                                    let preset_params: &Params = params.get().expect("correct type");
+                                    let manual_params: &Params = &Params::builder()
+                                        .bucket("bucket-name".to_string())
+                                        .built_in_with_default("some-default")
+                                        .bool_built_in_with_default(true)
+                                        .a_bool_param(false)
+                                        .a_string_param("hello".to_string())
+                                        .region("us-east-2".to_string())
+                                        .a_string_array_param(
+                                            vec!["a", "b", "c"]
+                                                .iter()
+                                                .map(ToString::to_string)
+                                                .collect::<Vec<_>>(),
+                                        )
+                                        .jmes_path_param_string_array(vec!["key2".to_string(), "key1".to_string()])
+                                        .jmes_path_param_string("nested-field")
+                                        .build()
+                                        .unwrap();
+
+                                    // The params struct for this test contains a vec sourced from the JMESPath keys function which
+                                    // does not guarantee the order. Due to this we cannot compare the preset_params with the
+                                    // manual_params directly, instead we must assert equlaity field by field.
+                                    assert_eq!(preset_params.bucket(), manual_params.bucket());
+                                    assert_eq!(preset_params.region(), manual_params.region());
                                     assert_eq!(
-                                        params,
-                                        &Params::builder()
-                                            .bucket("bucket-name".to_string())
-                                            .built_in_with_default("some-default")
-                                            .bool_built_in_with_default(true)
-                                            .a_bool_param(false)
-                                            .a_string_param("hello".to_string())
-                                            .region("us-east-2".to_string())
-                                            .build()
-                                            .unwrap()
+                                        preset_params.a_string_param(),
+                                        manual_params.a_string_param()
                                     );
+                                    assert_eq!(
+                                        preset_params.built_in_with_default(),
+                                        manual_params.built_in_with_default()
+                                    );
+                                    assert_eq!(
+                                        preset_params.bool_built_in_with_default(),
+                                        manual_params.bool_built_in_with_default()
+                                    );
+                                    assert_eq!(preset_params.a_bool_param(), manual_params.a_bool_param());
+                                    assert_eq!(
+                                        preset_params.a_string_array_param(),
+                                        manual_params.a_string_array_param()
+                                    );
+                                    assert_eq!(
+                                        preset_params.jmes_path_param_string(),
+                                        manual_params.jmes_path_param_string()
+                                    );
+                                    assert_eq!(
+                                        preset_params.jmes_path_param_boolean(),
+                                        manual_params.jmes_path_param_boolean()
+                                    );
+                                    assert!(preset_params
+                                        .jmes_path_param_string_array()
+                                        .unwrap()
+                                        .contains(&"key1".to_string()));
+                                    assert!(preset_params
+                                        .jmes_path_param_string_array()
+                                        .unwrap()
+                                        .contains(&"key2".to_string()));
 
                                     let endpoint = cfg.load::<Endpoint>().expect("endpoint set in config");
                                     assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
@@ -198,6 +268,7 @@ class EndpointsDecoratorTest {
 
                             let interceptor = TestInterceptor::default();
                             let config = Config::builder()
+                                .behavior_version_latest()
                                 .http_client(NeverClient::new())
                                 .interceptor(interceptor.clone())
                                 .timeout_config(
@@ -211,7 +282,20 @@ class EndpointsDecoratorTest {
                                 .build();
                             let client = Client::from_conf(config);
 
-                            let _ = dbg!(client.test_operation().bucket("bucket-name").send().await);
+                            let _ = dbg!(
+                                client
+                                .test_operation()
+                                .bucket("bucket-name")
+                                .nested(
+                                    NestedStructure::builder()
+                                        .field("nested-field")
+                                        .map_field("key1", 1)
+                                        .map_field("key2", 2)
+                                        .build()
+                                )
+                                .send()
+                                .await
+                            );
                             assert!(
                                 interceptor.called.load(Ordering::Relaxed),
                                 "the interceptor should have been called"

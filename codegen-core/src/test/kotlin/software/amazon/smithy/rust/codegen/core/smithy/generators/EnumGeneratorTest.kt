@@ -269,7 +269,7 @@ class EnumGeneratorTest {
                     "it_generates_unnamed_enums",
                     """
                     // Values should be sorted
-                    assert_eq!(FooEnum::${EnumGenerator.Values}(), ["0", "1", "Bar", "Baz", "Foo"]);
+                    assert_eq!(FooEnum::${EnumGenerator.VALUES}(), ["0", "1", "Bar", "Baz", "Foo"]);
                     """.trimIndent(),
                 )
             }
@@ -490,6 +490,16 @@ class EnumGeneratorTest {
                     }
 
                 override fun implFromStr(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
+
+                override fun implFromForStrForUnnamedEnum(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
+
+                override fun implFromStrForUnnamedEnum(context: EnumGeneratorContext): Writable =
                     writable {
                         // intentional no-op
                     }

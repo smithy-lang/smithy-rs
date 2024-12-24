@@ -4,10 +4,6 @@
 # More documentation for the licenses section can be found here:
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
-default = "deny"
-unlicensed = "deny"
-copyleft = "deny"
-allow-osi-fsf-free = "neither"
 allow = [
     # See https://spdx.org/licenses/ for list of possible licenses
     # [possible values: any SPDX 3.11 short identifier (+ optional exception)].
@@ -18,12 +14,17 @@ allow = [
     "MIT",
     "MPL-2.0",
     "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "Zlib",
 ]
 confidence-threshold = 1.0
 exceptions = [
     { allow = ["OpenSSL"], name = "ring", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-sys", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-fips-sys", version = "*" },
+    { allow = ["BlueOak-1.0.0"], name = "minicbor", version = "<=0.24.2" },
+    # Safe to bump as long as license does not change -------------^
+    # See D105255799.
 ]
 
 [[licenses.clarify]]

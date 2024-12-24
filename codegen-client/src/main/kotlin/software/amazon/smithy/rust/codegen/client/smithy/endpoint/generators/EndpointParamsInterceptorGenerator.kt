@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.jmespath.JmespathExpression
+import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
@@ -19,16 +21,23 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.configParamNewtype
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.loadFromConfigBag
+import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.RustJmespathShapeTraversalGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.TraversalBinding
+import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.TraversedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -102,10 +111,16 @@ class EndpointParamsInterceptorGenerator(
                     #{Ok}(())
                 }
             }
+
+            // The get_* functions below are generated from JMESPath expressions in the
+            // operationContextParams trait. They target the operation's input shape.
+
+            #{jmespath_getters}
             """,
             *codegenScope,
             "endpoint_prefix" to endpointPrefix(operationShape),
             "param_setters" to paramSetters(operationShape, endpointTypesGenerator.params),
+            "jmespath_getters" to jmesPathGetters(operationShape),
         )
     }
 
@@ -139,6 +154,33 @@ class EndpointParamsInterceptorGenerator(
             rust(".$setterName(#W)", value)
         }
 
+        idx.getOperationContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
+            val setterName = EndpointParamsGenerator.setterName(name)
+            val getterName = EndpointParamsGenerator.getterName(name)
+            val pathValue = param.path
+            val pathExpression = JmespathExpression.parse(pathValue)
+            val pathTraversal =
+                RustJmespathShapeTraversalGenerator(codegenContext).generate(
+                    pathExpression,
+                    listOf(
+                        TraversalBinding.Global(
+                            "input",
+                            TraversedShape.from(model, operationShape.inputShape(model)),
+                        ),
+                    ),
+                )
+
+            when (pathTraversal.outputType) {
+                is RustType.Vec -> {
+                    rust(".$setterName($getterName(_input))")
+                }
+
+                else -> {
+                    rust(".$setterName($getterName(_input).cloned())")
+                }
+            }
+        }
+
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
@@ -150,12 +192,51 @@ class EndpointParamsInterceptorGenerator(
         }
     }
 
+    private fun jmesPathGetters(operationShape: OperationShape) =
+        writable {
+            val idx = ContextIndex.of(codegenContext.model)
+            val inputShape = operationShape.inputShape(codegenContext.model)
+            val input = symbolProvider.toSymbol(inputShape)
+
+            idx.getOperationContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
+                val getterName = EndpointParamsGenerator.getterName(name)
+                val pathValue = param.path
+                val pathExpression = JmespathExpression.parse(pathValue)
+                val pathTraversal =
+                    RustJmespathShapeTraversalGenerator(codegenContext).generate(
+                        pathExpression,
+                        listOf(
+                            TraversalBinding.Global(
+                                "input",
+                                TraversedShape.from(model, operationShape.inputShape(model)),
+                            ),
+                        ),
+                    )
+
+                rust("// Generated from JMESPath Expression: $pathValue")
+                rustBlockTemplate(
+                    "fn $getterName(input: #{Input}) -> Option<#{Ret}>",
+                    "Input" to input.rustType().asRef(),
+                    "Ret" to pathTraversal.outputType,
+                ) {
+                    pathTraversal.output(this)
+                    rust("Some(${pathTraversal.identifier})")
+                }
+            }
+        }
+
     private fun Node.toWritable(): Writable {
         val node = this
         return writable {
             when (node) {
                 is StringNode -> rust("Some(${node.value.dq()}.to_string())")
                 is BooleanNode -> rust("Some(${node.value})")
+                is ArrayNode -> {
+                    // Cast the elements to a StringNode so this will fail if non-string values are provided
+                    val elms = node.elements.map { "${(it as StringNode).value.dq()}.to_string()" }.joinToString(",")
+                    rust("Some(vec![$elms])")
+                }
+
                 else -> PANIC("unsupported default value: $node")
             }
         }

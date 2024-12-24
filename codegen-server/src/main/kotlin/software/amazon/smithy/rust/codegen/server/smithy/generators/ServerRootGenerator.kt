@@ -69,7 +69,14 @@ open class ServerRootGenerator(
             //! ## Using $serviceName
             //!
             //! The primary entrypoint is [`$serviceName`]: it satisfies the [`Service<http::Request, Response = http::Response>`](#{Tower}::Service)
-            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`] or used in Lambda via [`LambdaHandler`](#{SmithyHttpServer}::routing::LambdaHandler).
+            //! trait and therefore can be handed to a [`hyper` server](https://github.com/hyperium/hyper) via [`$serviceName::into_make_service`]
+            //! or used in AWS Lambda
+            ##![cfg_attr(
+                feature = "aws-lambda",
+                doc = " via [`LambdaHandler`](crate::server::routing::LambdaHandler).")]
+            ##![cfg_attr(
+                not(feature = "aws-lambda"),
+                doc = " by enabling the `aws-lambda` feature flag and utilizing the `LambdaHandler`.")]
             //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
@@ -93,10 +100,8 @@ open class ServerRootGenerator(
             //!
             //! ###### Running on Lambda
             //!
-            //! This requires the `aws-lambda` feature flag to be passed to the [`#{SmithyHttpServer}`] crate.
-            //!
             //! ```rust,ignore
-            //! use #{SmithyHttpServer}::routing::LambdaHandler;
+            //! use $crateName::server::routing::LambdaHandler;
             //! use $crateName::$serviceName;
             //!
             //! ## async fn dummy() {
@@ -120,10 +125,10 @@ open class ServerRootGenerator(
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
             //! ```rust,no_run
-            //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
-            //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
+            //! ## use $crateName::server::plugin::IdentityPlugin as LoggingPlugin;
+            //! ## use $crateName::server::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
-            //! use #{SmithyHttpServer}::plugin::HttpPlugins;
+            //! use $crateName::server::plugin::HttpPlugins;
             //! use $crateName::{$serviceName, ${serviceName}Config, $builderName};
             //!
             //! let http_plugins = HttpPlugins::new()
@@ -133,14 +138,14 @@ open class ServerRootGenerator(
             //! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);
             //! ```
             //!
-            //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.
+            //! Check out [`crate::server::plugin`] to learn more about plugins.
             //!
             //! #### Handlers
             //!
             //! [`$builderName`] provides a setter method for each operation in your Smithy model. The setter methods expect an async function as input, matching the signature for the corresponding operation in your Smithy model.
             //! We call these async functions **handlers**. This is where your application business logic lives.
             //!
-            //! Every handler must take an `Input`, and optional [`extractor arguments`](#{SmithyHttpServer}::request), while returning:
+            //! Every handler must take an `Input`, and optional [`extractor arguments`](crate::server::request), while returning:
             //!
             //! * A `Result<Output, Error>` if your operation has modeled errors, or
             //! * An `Output` otherwise.
@@ -162,7 +167,7 @@ open class ServerRootGenerator(
             //! ## struct Error;
             //! ## struct State;
             //! ## use std::net::SocketAddr;
-            //! use #{SmithyHttpServer}::request::{extension::Extension, connect_info::ConnectInfo};
+            //! use $crateName::server::request::{extension::Extension, connect_info::ConnectInfo};
             //!
             //! async fn handler_with_no_extensions(input: Input) -> Output {
             //!     todo!()
@@ -181,7 +186,7 @@ open class ServerRootGenerator(
             //! }
             //! ```
             //!
-            //! See the [`operation module`](#{SmithyHttpServer}::operation) for information on precisely what constitutes a handler.
+            //! See the [`operation module`](crate::operation) for information on precisely what constitutes a handler.
             //!
             //! #### Build
             //!
@@ -233,7 +238,6 @@ open class ServerRootGenerator(
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
-            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
             "Hyper" to ServerCargoDependency.HyperDev.toType(),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),

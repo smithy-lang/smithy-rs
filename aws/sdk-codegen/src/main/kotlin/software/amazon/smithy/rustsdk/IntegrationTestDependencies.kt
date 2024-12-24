@@ -57,7 +57,7 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
                 "correctly in the smithy-build.json."
         }
 
-        val moduleName = codegenContext.moduleName.substring("aws-sdk-".length)
+        val moduleName = codegenContext.moduleName.removePrefix("aws-sdk-")
         val testPackagePath = integrationTestPath.resolve(moduleName)
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))

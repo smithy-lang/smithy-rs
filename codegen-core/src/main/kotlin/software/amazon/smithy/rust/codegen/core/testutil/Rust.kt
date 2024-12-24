@@ -15,6 +15,7 @@ import software.amazon.smithy.model.loader.ModelAssembler
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.generated.BuildEnvironment
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -43,6 +44,7 @@ import java.io.File
 import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
@@ -66,6 +68,29 @@ private fun tempDir(directory: File? = null): File {
 }
 
 /**
+ * This function returns the minimum supported Rust version, as specified in the `gradle.properties` file
+ * located at the root of the project.
+ */
+fun msrv(): String = BuildEnvironment.MSRV
+
+/**
+ * Generates the `rust-toolchain.toml` file in the specified directory.
+ *
+ * The compiler version is set in `gradle.properties` under the `rust.msrv` property.
+ * The Gradle task `generateRustMsrvFile` generates the Kotlin class
+ * `software.amazon.smithy.rust.codegen.core.generated.RustMsrv.kt` and writes the value of `rust.msrv` into it.
+ */
+private fun File.generateRustToolchainToml() {
+    resolve("rust-toolchain.toml").writeText(
+        // Help rust select the right version when we run cargo test.
+        """
+        [toolchain]
+        channel = "${msrv()}"
+        """.trimIndent(),
+    )
+}
+
+/**
  * Creates a Cargo workspace shared among all tests
  *
  * This workspace significantly improves test performance by sharing dependencies between different tests.
@@ -86,6 +111,10 @@ object TestWorkspace {
     }
     private val subprojects = mutableListOf<String>()
 
+    private val cargoLock: File by lazy {
+        File(BuildEnvironment.PROJECT_DIR).resolve("aws/sdk/Cargo.lock")
+    }
+
     init {
         baseDir.mkdirs()
     }
@@ -97,11 +126,13 @@ object TestWorkspace {
                 mapOf(
                     "workspace" to
                         mapOf(
+                            "resolver" to "2",
                             "members" to subprojects,
                         ),
                 ),
             )
         cargoToml.writeText(workspaceToml)
+        cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
     }
 
     fun subproject(): File {
@@ -114,12 +145,7 @@ object TestWorkspace {
                 version = "0.0.1"
                 """.trimIndent(),
             )
-            newProject.resolve("rust-toolchain.toml").writeText(
-                // help rust select the right version when we run cargo test
-                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
-                //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.74.1\"\n",
-            )
+            newProject.generateRustToolchainToml()
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
             newProject.resolve("src/lib.rs").writeText("")
@@ -174,7 +200,11 @@ fun generatePluginContext(
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
 ): Pair<PluginContext, Path> {
-    val testDir = overrideTestDir ?: TestWorkspace.subproject()
+    val testDir =
+        overrideTestDir?.apply {
+            mkdirs()
+            generateRustToolchainToml()
+        } ?: TestWorkspace.subproject()
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
@@ -258,9 +288,11 @@ fun RustWriter.assertNoNewDependencies(
         val writtenOut = this.toString()
         val badLines = writtenOut.lines().filter { line -> badDeps.any { line.contains(it) } }
         throw CodegenException(
-            "found invalid dependencies. ${invalidDeps.map {
-                it.first
-            }}\nHint: the following lines may be the problem.\n${
+            "found invalid dependencies. ${
+                invalidDeps.map {
+                    it.first
+                }
+            }\nHint: the following lines may be the problem.\n${
                 badLines.joinToString(
                     separator = "\n",
                     prefix = "   ",
@@ -466,6 +498,7 @@ private fun String.intoCrate(
                 moduleDescription = null,
                 moduleLicense = null,
                 moduleRepository = null,
+                minimumSupportedRustVersion = null,
                 writer = this,
                 dependencies = deps,
             ).render()
@@ -536,11 +569,14 @@ fun RustCrate.integrationTest(
     writable: Writable,
 ) = this.withFile("tests/$name.rs", writable)
 
-fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
+fun TestWriterDelegator.unitTest(
+    additionalAttributes: List<Attribute> = emptyList(),
+    test: Writable,
+): TestWriterDelegator {
     lib {
         val name = safeName("test")
         withInlineModule(RustModule.inlineTests(name), TestModuleDocProvider) {
-            unitTest(name) {
+            unitTest(name, additionalAttributes = additionalAttributes) {
                 test(this)
             }
         }

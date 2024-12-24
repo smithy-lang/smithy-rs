@@ -13,11 +13,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChec
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdentityCacheConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.RequestCompressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryModeFeatureTrackerRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -52,7 +54,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations +
             MetadataCustomization(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
-            RetryClassifierOperationCustomization(codegenContext, operation)
+            RetryClassifierOperationCustomization(codegenContext, operation) +
+            RequestCompressionGenerator(codegenContext, operation)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -132,5 +135,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
     ): List<ServiceRuntimePluginCustomization> =
         baseCustomizations +
             ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
-            RetryClassifierServiceRuntimePluginCustomization(codegenContext)
+            RetryClassifierServiceRuntimePluginCustomization(codegenContext) +
+            RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext)
 }

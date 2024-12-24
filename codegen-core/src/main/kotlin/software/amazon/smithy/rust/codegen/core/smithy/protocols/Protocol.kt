@@ -27,11 +27,28 @@ interface Protocol {
     /** The timestamp format that should be used if no override is specified in the model */
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
-    /** Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol. */
+    /**
+     * Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
     fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
 
     /**
+     * Returns additional HTTP headers that should be included in HTTP responses for the given operation for this protocol.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
+    fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
+    /**
      * Returns additional HTTP headers that should be included in HTTP responses for the given error shape.
+     * These headers are added to responses _in addition_ to those returned by `additionalResponseHeaders`; if a header
+     * added by this function has the same header name as one added by `additionalResponseHeaders`, the one added by
+     * `additionalResponseHeaders` takes precedence.
+     *
      * These MUST all be lowercase, or the application will panic, as per
      * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
      */
@@ -61,6 +78,13 @@ interface Protocol {
      * there are no response headers or statuses available to further inform the error parsing.
      */
     fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType
+
+    /**
+     * Determines whether the `Content-Length` header should be set in an HTTP request.
+     */
+    fun needsRequestContentLength(operationShape: OperationShape): Boolean =
+        httpBindingResolver.requestBindings(operationShape)
+            .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
 }
 
 typealias ProtocolMap<T, C> = Map<ShapeId, ProtocolGeneratorFactory<T, C>>

@@ -59,6 +59,12 @@ abstract class EnumType {
     /** Returns a writable that implements `FromStr` for the enum */
     abstract fun implFromStr(context: EnumGeneratorContext): Writable
 
+    /** Returns a writable that implements `From<&str>` and/or `TryFrom<&str>` for the unnamed enum */
+    abstract fun implFromForStrForUnnamedEnum(context: EnumGeneratorContext): Writable
+
+    /** Returns a writable that implements `FromStr` for the unnamed enum */
+    abstract fun implFromStrForUnnamedEnum(context: EnumGeneratorContext): Writable
+
     /** Optionally adds additional documentation to the `enum` docs */
     open fun additionalDocs(context: EnumGeneratorContext): Writable = writable {}
 
@@ -150,7 +156,7 @@ private fun RustWriter.docWithNote(
         doc?.also { docs(escape(it)) }
         note?.also {
             // Add a blank line between the docs and the note to visually differentiate
-            doc?.also { write("///") }
+            write("///")
             docs("_Note: ${it}_")
         }
     }
@@ -164,7 +170,7 @@ open class EnumGenerator(
 ) {
     companion object {
         /** Name of the function on the enum impl to get a vec of value names */
-        const val Values = "values"
+        const val VALUES = "values"
     }
 
     private val enumTrait: EnumTrait = shape.expectTrait()
@@ -237,32 +243,10 @@ open class EnumGenerator(
                     rust("&self.0")
                 },
         )
-
-        // Add an infallible FromStr implementation for uniformity
-        rustTemplate(
-            """
-            impl ::std::str::FromStr for ${context.enumName} {
-                type Err = ::std::convert::Infallible;
-
-                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
-                    #{Ok}(${context.enumName}::from(s))
-                }
-            }
-            """,
-            *preludeScope,
-        )
-
-        rustTemplate(
-            """
-            impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
-                fn from(s: T) -> Self {
-                    ${context.enumName}(s.as_ref().to_owned())
-                }
-            }
-
-            """,
-            *preludeScope,
-        )
+        // impl From<str> for Blah { ... }
+        enumType.implFromForStrForUnnamedEnum(context)(this)
+        // impl FromStr for Blah { ... }
+        enumType.implFromStrForUnnamedEnum(context)(this)
     }
 
     private fun RustWriter.renderEnum() {
@@ -295,7 +279,7 @@ open class EnumGenerator(
                     #{asStrImpl:W}
                 }
                 /// Returns all the `&str` representations of the enum members.
-                pub const fn $Values() -> &'static [&'static str] {
+                pub const fn $VALUES() -> &'static [&'static str] {
                     &[#{Values:W}]
                 }
             }

@@ -109,21 +109,32 @@ fun Model.sdkConfigSetter(
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
+    val builtinType = builtIn.type!!
     val map =
-        when (builtIn.type!!) {
+        when (builtinType) {
             ParameterType.STRING -> writable { rust("|s|s.to_string()") }
             ParameterType.BOOLEAN -> null
+            // No builtins currently map to stringArray
+            else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
         }
-    return SdkConfigCustomization.copyField(fieldName, map)
+
+    return if (fieldName == "endpoint_url") {
+        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
+    } else {
+        SdkConfigCustomization.copyField(fieldName, map)
+    }
 }
 
 /**
  * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide
- * [clientParam.Builder] which allows control over the config parameter that will be generated.
+ * [clientParam.Builder] which allows control over the config parameter that will be generated. You can also opt
+ * to exclude including the extra sections that set the builtIn value on the SdkConfig. This is useful for builtIns
+ * that are only minimally supported, like accountId and accountIdEndpointMode.
  */
 fun decoratorForBuiltIn(
     builtIn: Parameter,
     clientParamBuilder: ConfigParam.Builder? = null,
+    includeSdkConfigSetter: Boolean = true,
 ): ClientCodegenDecorator {
     val nameOverride = clientParamBuilder?.name
     val name = nameOverride ?: builtIn.name.rustName()
@@ -135,9 +146,17 @@ fun decoratorForBuiltIn(
             codegenContext.getBuiltIn(builtIn) != null
 
         override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
-            return listOfNotNull(
-                codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, builtIn, clientParamBuilder?.name),
-            )
+            if (includeSdkConfigSetter) {
+                return listOfNotNull(
+                    codegenContext.model.sdkConfigSetter(
+                        codegenContext.serviceShape.id,
+                        builtIn,
+                        clientParamBuilder?.name,
+                    ),
+                )
+            } else {
+                return listOf()
+            }
         }
 
         override fun configCustomizations(
@@ -228,4 +247,6 @@ val PromotedBuiltInsDecorators =
                 .type(RuntimeType.String.toSymbol())
                 .setterDocs(endpointUrlDocs),
         ),
+        decoratorForBuiltIn(AwsBuiltIns.ACCOUNT_ID_ENDPOINT_MODE, null, false),
+        decoratorForBuiltIn(AwsBuiltIns.ACCOUNT_ID, null, false),
     ).toTypedArray()

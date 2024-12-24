@@ -117,6 +117,7 @@ pin_project! {
 impl<P, Input, B, S> Future for UpgradeFuture<P, Input, B, S>
 where
     Input: FromRequest<P, B>,
+    <Input as FromRequest<P, B>>::Rejection: std::fmt::Display,
     S: Service<Input>,
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
@@ -137,7 +138,13 @@ where
                             .take()
                             .expect("futures cannot be polled after completion")
                             .oneshot(ok),
-                        Err(err) => return Poll::Ready(Ok(err.into_response())),
+                        Err(err) => {
+                            // The error may arise either from a `FromRequest` failure for any user-defined
+                            // handler's additional input parameters, or from a de-serialization failure
+                            // of an input parameter specific to the operation.
+                            tracing::trace!(error = %err, "parameter for the handler cannot be constructed");
+                            return Poll::Ready(Ok(err.into_response()));
+                        }
                     }
                 }
                 InnerProj::Inner { call } => {
@@ -158,6 +165,7 @@ where
 impl<P, Input, B, S> Service<http::Request<B>> for Upgrade<P, Input, S>
 where
     Input: FromRequest<P, B>,
+    <Input as FromRequest<P, B>>::Rejection: std::fmt::Display,
     S: Service<Input> + Clone,
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
@@ -167,6 +175,8 @@ where
     type Future = UpgradeFuture<P, Input, B, S>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        // The check that the inner service is ready is done by `Oneshot` in `UpgradeFuture`'s
+        // implementation.
         Poll::Ready(Ok(()))
     }
 

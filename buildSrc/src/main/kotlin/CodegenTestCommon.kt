@@ -4,6 +4,7 @@
  */
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.Exec
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
@@ -26,8 +27,83 @@ fun generateImports(imports: List<String>): String =
     if (imports.isEmpty()) {
         ""
     } else {
-        "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
+        "\"imports\": [${imports.joinToString(", ") { "\"$it\"" }}],"
     }
+
+val RustKeywords =
+    setOf(
+        "as",
+        "break",
+        "const",
+        "continue",
+        "crate",
+        "else",
+        "enum",
+        "extern",
+        "false",
+        "fn",
+        "for",
+        "if",
+        "impl",
+        "in",
+        "let",
+        "loop",
+        "match",
+        "mod",
+        "move",
+        "mut",
+        "pub",
+        "ref",
+        "return",
+        "self",
+        "Self",
+        "static",
+        "struct",
+        "super",
+        "trait",
+        "true",
+        "type",
+        "unsafe",
+        "use",
+        "where",
+        "while",
+        "async",
+        "await",
+        "dyn",
+        "abstract",
+        "become",
+        "box",
+        "do",
+        "final",
+        "macro",
+        "override",
+        "priv",
+        "typeof",
+        "unsized",
+        "virtual",
+        "yield",
+        "try",
+    )
+
+fun toRustCrateName(input: String): String {
+    if (input.isBlank()) {
+        throw IllegalArgumentException("Rust crate name cannot be empty")
+    }
+    val lowerCased = input.lowercase()
+    // Replace any sequence of characters that are not lowercase letters, numbers, dashes, or underscores with a single underscore.
+    val sanitized = lowerCased.replace(Regex("[^a-z0-9_-]+"), "_")
+    // Trim leading or trailing underscores.
+    val trimmed = sanitized.trim('_')
+    // Check if the resulting string is empty, purely numeric, or a reserved name
+    val finalName =
+        when {
+            trimmed.isEmpty() -> throw IllegalArgumentException("Rust crate name after sanitizing cannot be empty.")
+            trimmed.matches(Regex("\\d+")) -> "n$trimmed" // Prepend 'n' if the name is purely numeric.
+            trimmed in RustKeywords -> "${trimmed}_" // Append an underscore if the name is reserved.
+            else -> trimmed
+        }
+    return finalName
+}
 
 private fun generateSmithyBuild(
     projectDir: String,
@@ -48,7 +124,7 @@ private fun generateSmithyBuild(
                             ${it.extraCodegenConfig ?: ""}
                         },
                         "service": "${it.service}",
-                        "module": "${it.module}",
+                        "module": "${toRustCrateName(it.module)}",
                         "moduleVersion": "0.0.1",
                         "moduleDescription": "test",
                         "moduleAuthors": ["protocoltest@example.com"]
@@ -83,6 +159,7 @@ private fun generateCargoWorkspace(
 ) = (
     """
     [workspace]
+    resolver = "2"
     members = [
         ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
     ]
@@ -174,7 +251,7 @@ fun Project.registerGenerateSmithyBuildTask(
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
-            project.extra[previousBuildHashesKey] =
+            project.extra[PREVIOUS_BUILD_HASHES_KEY] =
                 project.buildDir.walk()
                     .filter { it.isFile }
                     .map {
@@ -204,20 +281,33 @@ fun Project.registerGenerateCargoWorkspaceTask(
 fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1068): Once doc normalization
+        // is completed, warnings can be prohibited in rustdoc by setting `rustdocflags` to `-D warnings`.
         doFirst {
             outputDir.resolve(".cargo").mkdirs()
             outputDir.resolve(".cargo/config.toml")
                 .writeText(
                     """
                     [build]
-                    rustflags = ["--deny", "warnings"]
+                    rustflags = ["--deny", "warnings", "--cfg", "aws_sdk_unstable"]
                     """.trimIndent(),
                 )
         }
     }
 }
 
-const val previousBuildHashesKey = "previousBuildHashes"
+fun Project.registerCopyCheckedInCargoLockfileTask(
+    lockfile: File,
+    destinationDir: File,
+) {
+    this.tasks.register<Copy>("copyCheckedInCargoLockfile") {
+        description = "copy checked-in `Cargo.lock` to the destination directory"
+        from(lockfile)
+        into(destinationDir)
+    }
+}
+
+const val PREVIOUS_BUILD_HASHES_KEY = "previousBuildHashes"
 
 fun Project.registerModifyMtimeTask() {
     // Cargo uses `mtime` (among other factors) to determine whether a compilation unit needs a rebuild. While developing,
@@ -232,11 +322,12 @@ fun Project.registerModifyMtimeTask() {
         dependsOn("generateSmithyBuild")
 
         doFirst {
-            if (!project.extra.has(previousBuildHashesKey)) {
+            if (!project.extra.has(PREVIOUS_BUILD_HASHES_KEY)) {
                 println("No hashes from a previous build exist because `generateSmithyBuild` is up to date, skipping `mtime` fixups")
             } else {
                 @Suppress("UNCHECKED_CAST")
-                val previousBuildHashes: Map<String, Long> = project.extra[previousBuildHashesKey] as Map<String, Long>
+                val previousBuildHashes: Map<String, Long> =
+                    project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
 
                 project.buildDir.walk()
                     .filter { it.isFile }
@@ -254,10 +345,7 @@ fun Project.registerModifyMtimeTask() {
     }
 }
 
-fun Project.registerCargoCommandsTasks(
-    outputDir: File,
-    defaultRustDocFlags: String,
-) {
+fun Project.registerCargoCommandsTasks(outputDir: File) {
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -268,29 +356,29 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTDOCFLAGS", defaultRustDocFlags)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+        val args =
+            mutableListOf(
+                "--no-deps",
+                "--document-private-items",
+            )
+        commandLine("cargo", "doc", *args.toTypedArray())
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
     }
 }

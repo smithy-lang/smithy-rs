@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -45,10 +46,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
+import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This builder generator is only used by the client.
@@ -89,7 +92,7 @@ fun MemberShape.enforceRequired(
     }
     val shape = this
     val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
-    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
+    val field = field.letIf(!isOptional) { it.map { t -> rust("Some(#T)", t) } }
     val error =
         OperationBuildError(codegenContext.runtimeConfig).missingField(
             codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
@@ -98,10 +101,7 @@ fun MemberShape.enforceRequired(
         when (codegenContext.model.expectShape(this.target)) {
             is StringShape ->
                 writable {
-                    rustTemplate(
-                        "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
-                        "field" to field,
-                    )
+                    rust("#T.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())", field)
                 }
 
             else -> field
@@ -189,6 +189,12 @@ class BuilderGenerator(
         metadata.derives.filter {
             it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
         } + RuntimeType.Default
+
+    // Filter out attributes
+    private val builderAttributes =
+        metadata.additionalAttributes.filter {
+            it == Attribute.NonExhaustive
+        }
     private val builderName = symbolProvider.symbolForBuilder(shape).name
 
     fun render(writer: RustWriter) {
@@ -213,7 +219,11 @@ class BuilderGenerator(
             implBlockWriter.docs("This method will fail if any of the following fields are not set:")
             trulyRequiredMembers.forEach {
                 val memberName = symbolProvider.toMemberName(it)
-                implBlockWriter.docs("- [`$memberName`](#T::$memberName)", symbolProvider.symbolForBuilder(shape))
+                implBlockWriter.docsTemplate(
+                    // We have to remove the `r##` prefix in the path b/c Rustdoc doesn't support it.
+                    "- [`$memberName`](#{struct}::${memberName.removePrefix("r##")})",
+                    "struct" to symbolProvider.symbolForBuilder(shape),
+                )
             }
         }
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
@@ -306,8 +316,8 @@ class BuilderGenerator(
 
     private fun renderBuilder(writer: RustWriter) {
         writer.docs("A builder for #D.", structureSymbol)
-        metadata.additionalAttributes.render(writer)
         Attribute(derive(builderDerives)).render(writer)
+        this.builderAttributes.render(writer)
         writer.rustBlock("pub struct $builderName") {
             for (member in members) {
                 val memberName = symbolProvider.toMemberName(member)
@@ -347,7 +357,16 @@ class BuilderGenerator(
                 rust("""let mut formatter = f.debug_struct(${builderName.dq()});""")
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = member.redactIfNecessary(model, "self.$memberName")
+                    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own
+                    val fieldValue =
+                        if (shape.shouldRedact(model)) {
+                            REDACTION
+                        } else {
+                            member.redactIfNecessary(
+                                model,
+                                "self.$memberName",
+                            )
+                        }
 
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",

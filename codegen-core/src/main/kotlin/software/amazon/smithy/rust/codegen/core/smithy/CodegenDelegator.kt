@@ -46,7 +46,11 @@ interface ModuleDocProvider {
             }
             try {
                 when {
-                    module.documentationOverride != null -> writer.docs(module.documentationOverride)
+                    module.documentationOverride != null -> {
+                        if (module.documentationOverride.isNotEmpty()) {
+                            writer.docs(module.documentationOverride)
+                        }
+                    }
                     else -> provider?.docsWriter(module)?.also { writeTo -> writeTo(writer) }
                 }
             } catch (e: NotImplementedError) {

@@ -7,10 +7,13 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
@@ -65,14 +68,17 @@ object ClientRustModule {
         /** crate::config::endpoint */
         val endpoint = RustModule.public("endpoint", parent = self)
 
+        /** crate::config::http */
+        val http = RustModule.public("http", parent = self)
+
+        /** crate::config::interceptors */
+        val interceptors = RustModule.public("interceptors", parent = self)
+
         /** crate::config::retry */
         val retry = RustModule.public("retry", parent = self)
 
         /** crate::config::timeout */
         val timeout = RustModule.public("timeout", parent = self)
-
-        /** crate::config::interceptors */
-        val interceptors = RustModule.public("interceptors", parent = self)
     }
 
     val Error = RustModule.public("error")
@@ -102,6 +108,8 @@ object ClientRustModule {
         /** crate::types::error */
         val Error = RustModule.public("error", parent = self)
     }
+
+    val waiters = RustModule.public("waiters")
 }
 
 class ClientModuleDocProvider(
@@ -117,6 +125,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
             ClientRustModule.Config.retry -> strDoc("Retry configuration.")
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
+            ClientRustModule.Config.http -> strDoc("HTTP request and response types.")
             ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Intercept`](crate::config::Intercept).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
@@ -127,6 +136,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Primitives.EventStream -> strDoc("Event stream related primitives such as `Message` or `Header`.")
             ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
             ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
+            ClientRustModule.waiters -> strDoc("Supporting types for waiters.\n\nNote: to use waiters, import the [`Waiters`](crate::client::Waiters) trait, which adds methods prefixed with `wait_until` to the client.")
             else -> TODO("Document this module: $module")
         }
     }
@@ -140,6 +150,7 @@ class ClientModuleDocProvider(
 
             writeClientConstructionDocs(this)
             FluentClientDocs.clientUsageDocs(codegenContext)(this)
+            FluentClientDocs.waiterDocs(codegenContext)(this)
         }
 
     private fun customizeModuleDoc(): Writable =
@@ -191,8 +202,9 @@ object ClientModuleProvider : ModuleProvider {
     override fun moduleForShape(
         context: ModuleProviderContext,
         shape: Shape,
-    ): RustModule.LeafModule =
-        when (shape) {
+    ): RustModule.LeafModule {
+        fun shouldNotBeRendered(): Nothing = PANIC("Shape ${shape.id} should not be rendered in any module")
+        return when (shape) {
             is OperationShape -> perOperationModule(context, shape)
             is StructureShape ->
                 when {
@@ -202,8 +214,18 @@ object ClientModuleProvider : ModuleProvider {
                     else -> ClientRustModule.types
                 }
 
-            else -> ClientRustModule.types
+            is UnionShape, is EnumShape -> ClientRustModule.types
+            is StringShape -> {
+                if (shape.hasTrait<EnumTrait>()) {
+                    ClientRustModule.types
+                } else {
+                    shouldNotBeRendered()
+                }
+            }
+
+            else -> shouldNotBeRendered()
         }
+    }
 
     override fun moduleForOperationError(
         context: ModuleProviderContext,

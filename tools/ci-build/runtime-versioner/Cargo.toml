@@ -1,6 +1,6 @@
 [package]
 name = "runtime-versioner"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Tool that manages runtime crate versions."
 edition = "2021"
@@ -16,7 +16,7 @@ opt-level = 0
 [dependencies]
 anyhow = "1.0.75"
 camino = "1.1.6"
-clap = { version = "4.4.11", features = ["derive"] }
+clap = { version = "4.4.11", features = ["derive", "env"] }
 crates-index = "2.3.0"
 indicatif = "0.17.7"
 reqwest = { version = "0.11.22", features = ["blocking"] }
