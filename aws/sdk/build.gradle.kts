@@ -501,7 +501,12 @@ fun Project.registerDowngradeFor(
         executable = "sh" // noop to avoid execCommand == null
         doLast {
             val crateNameToLastKnownWorkingVersions =
-                mapOf("minicbor" to "0.24.2")
+                mapOf(
+                    "minicbor" to "0.24.2",
+                    "idna" to "0.5.0", // TODO(MSRV): remove when ugrading MSRV to (or past) 1.81
+                    "url" to "2.5.2", // TODO(MSRV): remove when ugrading MSRV to (or past) 1.81
+                    "libfuzzer-sys" to "0.4.7" // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
+                    )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile

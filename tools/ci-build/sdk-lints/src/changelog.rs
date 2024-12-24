@@ -34,6 +34,7 @@ impl Check for ChangelogNext {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) struct DotChangelog;
 
 impl Lint for DotChangelog {
@@ -56,6 +57,7 @@ impl Check for DotChangelog {
 }
 
 /// Validate that changelog entries in the `.changelog` directory follows best practices
+#[allow(dead_code)]
 fn check_changelog_next(path: impl AsRef<Path> + Debug) -> std::result::Result<(), Vec<LintError>> {
     let parsed = ChangelogLoader::default()
         .load_from_dir(path)

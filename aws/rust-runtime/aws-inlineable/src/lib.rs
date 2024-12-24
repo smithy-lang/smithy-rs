@@ -66,4 +66,5 @@ pub mod s3_expires_interceptor;
 #[derive(Debug)]
 pub struct Client;
 
+pub mod dsql_auth_token;
 pub mod rds_auth_token;

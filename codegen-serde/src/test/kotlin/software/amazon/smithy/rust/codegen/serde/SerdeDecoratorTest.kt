@@ -6,10 +6,15 @@
 package software.amazon.smithy.rust.codegen.serde
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.cfg
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.feature
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -186,22 +191,22 @@ class SerdeDecoratorTest {
             namespace com.example
             use smithy.rust#serde
             use aws.protocols#awsJson1_0
-            
+
             @awsJson1_0
             @serde
             service MyResourceService {
                 resources: [MyResource]
             }
-            
+
             resource MyResource {
                 read: ReadMyResource
             }
-            
+
             @readonly
             operation ReadMyResource {
                 input := { }
             }
-        """.asSmithyModel(smithyVersion = "2")
+            """.asSmithyModel(smithyVersion = "2")
 
         val params =
             IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyResourceService")
@@ -228,6 +233,74 @@ class SerdeDecoratorTest {
                     )
                 }
             }
+        }
+    }
+
+    @Test
+    fun `feature should not be added if trait is not used`() {
+        val model =
+            """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+
+            @awsJson1_0
+            service MyService {
+                operations: [MyOperation]
+            }
+
+            operation MyOperation { }
+            """.asSmithyModel(smithyVersion = "2")
+
+        val params =
+            IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyService")
+        serverIntegrationTest(model, params = params) { _, crate ->
+            crate.integrationTest("test_serde") {
+                unitTest("fails_if_serde_feature_exists", additionalAttributes = listOf(Attribute(cfg(feature("serde"))))) {
+                    rust("assert!(false);")
+                }
+            }
+        }
+    }
+
+    val onlyConstrained =
+        """
+        namespace com.example
+        use smithy.rust#serde
+        use aws.protocols#awsJson1_0
+        use smithy.framework#ValidationException
+        @awsJson1_0
+        service HelloService {
+            operations: [SayHello],
+            version: "1"
+        }
+        @serde
+        operation SayHello {
+            input: TestInput
+            errors: [ValidationException]
+        }
+        structure TestInput {
+            @length(max: 10)
+            shortBlob: Blob
+        }
+        """.asSmithyModel(smithyVersion = "2")
+
+    // There is a "race condition" where if the first blob shape serialized is constrained, it triggered unexpected
+    // behavior where the constrained shape was used instead. This test verifies the fix.
+    // Fixes https://github.com/smithy-lang/smithy-rs/issues/3890
+    @Test
+    fun compilesOnlyConstrainedModel() {
+        val constrainedShapesSettings =
+            Node.objectNodeBuilder().withMember(
+                "codegen",
+                Node.objectNodeBuilder()
+                    .withMember("publicConstrainedTypes", true)
+                    .withMember("includeFluentClient", false)
+                    .build(),
+            ).build()
+        serverIntegrationTest(
+            onlyConstrained,
+            params.copy(additionalSettings = constrainedShapesSettings),
+        ) { clientCodegenContext, rustCrate ->
         }
     }
 

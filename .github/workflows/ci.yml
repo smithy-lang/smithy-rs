@@ -38,7 +38,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.78.0
+  rust_version: 1.81.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -203,7 +203,7 @@ jobs:
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       # Disable incremental compilation to reduce disk space use
       CARGO_INCREMENTAL: 0

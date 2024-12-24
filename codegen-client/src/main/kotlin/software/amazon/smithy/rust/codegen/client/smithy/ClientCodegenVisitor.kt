@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationImplGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
@@ -311,10 +312,10 @@ class ClientCodegenVisitor(
      * Generate operations
      */
     override fun operationShape(operationShape: OperationShape) {
-        rustCrate.useShapeWriter(operationShape) operationWriter@{
+        rustCrate.useShapeWriter(operationShape) {
             // Render the operation shape
             operationGenerator.renderOperation(
-                this@operationWriter,
+                this,
                 operationShape,
                 codegenDecorator,
             )
@@ -327,16 +328,24 @@ class ClientCodegenVisitor(
                     protocolGeneratorFactory.support(),
                     operationShape,
                 ),
-            ).render(this@operationWriter)
+            ).render(this)
+        }
 
-            rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
-                OperationErrorGenerator(
-                    model,
-                    symbolProvider,
-                    operationShape,
-                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
-                ).render(this)
-            }
+        rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
+            OperationErrorGenerator(
+                model,
+                symbolProvider,
+                operationShape,
+                codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+            ).render(this)
+        }
+
+        rustCrate.withModule(ClientRustModule.Client.customize) {
+            CustomizableOperationImplGenerator(
+                codegenContext,
+                operationShape,
+                codegenDecorator.operationCustomizations(codegenContext, operationShape, emptyList()),
+            ).render(this)
         }
     }
 }
