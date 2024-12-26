@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.printGeneratedFiles
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 
 class FuzzHarnessBuildPluginTest() {
@@ -40,9 +41,9 @@ class FuzzHarnessBuildPluginTest() {
                         .withMember(
                             "targetCrates",
                             ArrayNode.arrayNode(
-                                ObjectNode.objectNode().withMember("relativePath", actualServerCodegenPath(modelName, "2"))
+                                ObjectNode.objectNode().withMember("relativePath", actualServerCodegenPath(modelName, ""))
                                     .withMember("name", "a"),
-                                ObjectNode.objectNode().withMember("relativePath", actualServerCodegenPath(modelName, "3"))
+                                ObjectNode.objectNode().withMember("relativePath", actualServerCodegenPath(modelName, ""))
                                     .withMember("name", "b"),
                             ),
                         )
@@ -56,7 +57,7 @@ class FuzzHarnessBuildPluginTest() {
                 ).build()
         FuzzHarnessBuildPlugin().execute(context)
         context.fileManifest.printGeneratedFiles()
-        print("cd ${context.fileManifest.baseDir.resolve("driver")} && cargo check")
-        // "cargo check".runCommand(context.fileManifest.baseDir.resolve("a"))
+        "cargo check".runCommand(context.fileManifest.baseDir.resolve("a"))
+        "cargo check".runCommand(context.fileManifest.baseDir.resolve("b"))
     }
 }

@@ -17,11 +17,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.BasicRustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
@@ -52,7 +52,7 @@ fun rustSettings(
 data class FuzzTargetContext(
     val target: FuzzTarget,
     val fuzzSettings: FuzzSettings,
-    val rustCrate: BasicRustCrate,
+    val rustCrate: RustCrate,
     val model: Model,
     val symbolProvider: RustSymbolProvider,
     private val manifest: FileManifest,

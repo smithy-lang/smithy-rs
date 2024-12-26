@@ -23,7 +23,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
@@ -36,7 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
-import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -134,7 +133,6 @@ fun corpus(
     val protocolTests = operations.flatMap { it.getTrait<HttpRequestTestsTrait>()?.testCases ?: listOf() }
     val out = ArrayNode.builder()
     protocolTests.forEach { testCase ->
-        println(testCase.bodyMediaType)
         val body: List<NumberNode> =
             when (testCase.bodyMediaType.orNull()) {
                 "application/cbor" -> {
@@ -231,7 +229,7 @@ fun createFuzzTarget(
                 NullableIndex.CheckMode.SERVER,
                 ServerModuleProvider,
             ),
-        ).let { PublicCrateSymbolProvider("rust_server_codegen", it) }
+        ).let { PublicImportSymbolProvider(it, "rust_server_codegen") }
     val crate =
         RustCrate(
             newManifest,
@@ -252,31 +250,6 @@ fun createFuzzTarget(
 class DocProvider : ModuleDocProvider {
     override fun docsWriter(module: RustModule.LeafModule): Writable? {
         return null
-    }
-}
-
-class NoOpVisitor : RustSymbolProvider {
-    override val model: Model
-        get() = TODO("Not yet implemented")
-    override val moduleProviderContext: ModuleProviderContext
-        get() = TODO("Not yet implemented")
-    override val config: RustSymbolProviderConfig
-        get() = TODO("Not yet implemented")
-
-    override fun symbolForOperationError(operation: OperationShape): Symbol {
-        TODO("Not yet implemented")
-    }
-
-    override fun symbolForEventStreamError(eventStream: UnionShape): Symbol {
-        TODO("Not yet implemented")
-    }
-
-    override fun symbolForBuilder(shape: Shape): Symbol {
-        TODO("Not yet implemented")
-    }
-
-    override fun toSymbol(shape: Shape?): Symbol {
-        TODO("Not yet implemented")
     }
 }
 

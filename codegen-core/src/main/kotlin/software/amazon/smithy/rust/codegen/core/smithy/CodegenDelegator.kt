@@ -214,7 +214,7 @@ open class RustCrate(
                 }
             }
         }
-        // return this
+        return this
     }
 
     /**

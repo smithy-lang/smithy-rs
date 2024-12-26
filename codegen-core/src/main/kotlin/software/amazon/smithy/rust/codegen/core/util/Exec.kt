@@ -16,11 +16,10 @@ fun String.runCommand(
     workdir: Path? = null,
     environment: Map<String, String> = mapOf(),
     timeout: Long = 3600,
-    redirect:  ProcessBuilder.Redirect = ProcessBuilder.Redirect.PIPE
+    redirect: ProcessBuilder.Redirect = ProcessBuilder.Redirect.PIPE,
 ): String {
     val logger = Logger.getLogger("RunCommand")
     logger.fine("Invoking comment $this in `$workdir` with env $environment")
-    println("Invoking comment $this in `$workdir` with env $environment")
     val start = System.currentTimeMillis()
     val parts = this.split("\\s".toRegex())
     val builder =
