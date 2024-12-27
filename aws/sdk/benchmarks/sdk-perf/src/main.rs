@@ -30,17 +30,20 @@ fn main() {
         results: Vec::new(),
     };
 
+    // Note: in the below microseconds should be case insensitive, but due to a
+    // bug in the perf test evaluation it is currently not. Can get rid of the
+    // capitalization when that is fixed.
     let deserialize_config = TestConfig {
         name: "deserialize.ddb".into(),
         description: "Deserializing a DDB response.".into(),
-        unit: "microseconds".into(),
+        unit: "Microseconds".into(),
         runs: 10,
     };
 
     let serialize_config = TestConfig {
         name: "serialize.ddb".into(),
         description: "Serializing a DDB request.".into(),
-        unit: "microseconds".into(),
+        unit: "Microseconds".into(),
         runs: 10,
     };
 
