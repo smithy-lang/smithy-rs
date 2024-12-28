@@ -61,7 +61,7 @@ impl Error for EnvConfigParseError {}
 ///
 /// - Sub-properties looks like regular properties (`k=v`) that are nested within an existing property.
 /// - Sub-properties must be validated for compatibility with other SDKs, but they are not actually
-/// parsed into structured data.
+///   parsed into structured data.
 fn validate_subproperty(value: &str, location: Location) -> Result<(), EnvConfigParseError> {
     if value.trim_matches(WHITESPACE).is_empty() {
         Ok(())
@@ -204,7 +204,7 @@ impl<'a> Parser<'a> {
         let line = prepare_line(line, false);
         let profile_name = line
             .strip_prefix('[')
-            .ok_or_else(|| self.make_error("Profile definition must start with ]"))?
+            .ok_or_else(|| self.make_error("Profile definition must start with '['"))?
             .strip_suffix(']')
             .ok_or_else(|| self.make_error("Profile definition must end with ']'"))?;
         if !self.data.contains_key(profile_name) {

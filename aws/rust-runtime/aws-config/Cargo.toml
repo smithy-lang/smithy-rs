@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.5.10"
+version = "1.5.12"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -19,6 +19,7 @@ default = ["client-hyper", "rustls", "rt-tokio", "credentials-process", "sso"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
+test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing
 allow-compilation = []
@@ -39,7 +40,7 @@ http = "0.2.4"
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
-url = "2.3.1"
+url = "2.5.4"
 
 # implementation detail of IMDS credentials provider
 fastrand = "2.0.0"

@@ -1,4 +1,13 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 26th, 2024
+===================
+**New this release:**
+- :bug: (server, [smithy-rs#3890](https://github.com/smithy-lang/smithy-rs/issues/3890)) Fix bug in `serde` decorator that generated non-compiling code on some models
+
+
+December 16th, 2024
+===================
+
 December 3rd, 2024
 ==================
 **Breaking Changes:**
