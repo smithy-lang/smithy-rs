@@ -15,7 +15,7 @@
       "author": "Velfi",
       "references": [],
       "since-commit": "039177d0ee6dd288ad57de2230a1110bbe7ff7d5",
-      "age": 3
+      "age": 4
     },
     {
       "message": "It is now possible to disable payload signing through an operation customization.\n\n```rust\nasync fn put_example_object(client: &aws_sdk_s3::Client) {\n    let res = client\n        .put_object()\n        .bucket(\"test-bucket\")\n        .key(\"test-key\")\n        .body(ByteStream::from_static(b\"Hello, world!\"))\n        .customize()\n        // Setting this will disable payload signing.\n        .disable_payload_signing()\n        .send()\n        .await;\n}\n```\n\nDisabling payload signing will result in a small speedup at the cost of removing a data integrity check.\nHowever, this is an advanced feature and **may not be supported by all services/operations**.\n",
@@ -29,7 +29,7 @@
         "smithy-rs#3583"
       ],
       "since-commit": "89881abd3df80e9b6fd59790d7c02e2b9a6dd45c",
-      "age": 2
+      "age": 3
     }
   ],
   "aws-sdk-model": []
