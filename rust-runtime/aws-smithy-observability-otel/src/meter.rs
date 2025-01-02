@@ -10,10 +10,14 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::attributes::kv_from_option_attr;
-use aws_smithy_observability::attributes::{Attributes, Context};
+use aws_smithy_observability::attributes::{Attributes, Context, ContextGeneric};
 use aws_smithy_observability::error::{ErrorKind, ObservabilityError};
 pub use aws_smithy_observability::meter::{
     AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
+};
+use aws_smithy_observability::meter::{
+    AsyncMeasureGeneric, HistogramGeneric, MeterGeneric, MonotonicCounterGeneric,
+    UpDownCounterGeneric,
 };
 pub use aws_smithy_observability::provider::TelemetryProvider;
 use opentelemetry::metrics::{
@@ -24,11 +28,20 @@ use opentelemetry::metrics::{
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider as OtelSdkMeterProvider;
 
+struct ContextWrap;
+impl ContextGeneric for ContextWrap {}
+
 #[derive(Debug)]
 struct UpDownCounterWrap(OtelUpDownCounter<i64>);
 impl UpDownCounter for UpDownCounterWrap {
     fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
         self.0.add(value, &kv_from_option_attr(attributes));
+    }
+}
+
+impl UpDownCounterGeneric<ContextWrap> for UpDownCounterWrap {
+    fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
+        self.0.add(value, &kv_from_option_attr(attributes))
     }
 }
 
@@ -40,10 +53,22 @@ impl Histogram for HistogramWrap {
     }
 }
 
+impl HistogramGeneric<ContextWrap> for HistogramWrap {
+    fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
+        self.0.record(value, &kv_from_option_attr(attributes));
+    }
+}
+
 #[derive(Debug)]
 struct MonotonicCounterWrap(OtelCounter<u64>);
 impl MonotonicCounter for MonotonicCounterWrap {
     fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
+        self.0.add(value, &kv_from_option_attr(attributes));
+    }
+}
+
+impl MonotonicCounterGeneric<ContextWrap> for MonotonicCounterWrap {
+    fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
@@ -59,6 +84,18 @@ impl AsyncMeasure for GaugeWrap {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
+        self.0.observe(value, &kv_from_option_attr(attributes));
+    }
+
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
+impl AsyncMeasureGeneric<'_, ContextWrap, f64> for GaugeWrap {
+    // type Value = f64;
+
+    fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
@@ -86,6 +123,18 @@ impl AsyncMeasure for AsyncUpDownCounterWrap {
     fn stop(&self) {}
 }
 
+impl AsyncMeasureGeneric<'_, ContextWrap, i64> for AsyncUpDownCounterWrap {
+    // type Value = i64;
+
+    fn record(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
+        self.0.observe(value, &kv_from_option_attr(attributes));
+    }
+
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
 #[derive(Debug)]
 struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
 impl AsyncMeasure for AsyncMonotonicCounterWrap {
@@ -105,6 +154,18 @@ impl AsyncMeasure for AsyncMonotonicCounterWrap {
     fn stop(&self) {}
 }
 
+impl AsyncMeasureGeneric<'_, ContextWrap, u64> for AsyncMonotonicCounterWrap {
+    // type Value = u64;
+
+    fn record(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
+        self.0.observe(value, &kv_from_option_attr(attributes));
+    }
+
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
 struct AsyncInstrumentWrap<'a, T>(&'a (dyn OtelAsyncInstrument<T> + Send + Sync));
 impl<T> AsyncMeasure for AsyncInstrumentWrap<'_, T> {
     type Value = T;
@@ -115,6 +176,18 @@ impl<T> AsyncMeasure for AsyncInstrumentWrap<'_, T> {
         attributes: Option<&Attributes>,
         _context: Option<&dyn Context>,
     ) {
+        self.0.observe(value, &kv_from_option_attr(attributes));
+    }
+
+    // OTel rust does not currently support unregistering callbacks
+    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
+    fn stop(&self) {}
+}
+
+impl<T> AsyncMeasureGeneric<'_, ContextWrap, T> for AsyncInstrumentWrap<'_, T> {
+    // type Value = T;
+
+    fn record(&self, value: T, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
@@ -266,6 +339,91 @@ impl Meter for MeterWrap {
         }
 
         Arc::new(HistogramWrap(builder.init()))
+    }
+}
+
+impl
+    MeterGeneric<
+        '_,
+        ContextWrap,
+        GaugeWrap,
+        UpDownCounterWrap,
+        AsyncUpDownCounterWrap,
+        MonotonicCounterWrap,
+        AsyncMonotonicCounterWrap,
+        HistogramWrap,
+        AsyncInstrumentWrap<'static, f64>,
+    > for MeterWrap
+{
+    fn create_gauge(
+        &self,
+        name: String,
+        callback: impl Fn(&AsyncInstrumentWrap<'static, f64>) + Send + Sync + 'static,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<GaugeWrap> {
+        let mut builder = self.f64_observable_gauge(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<f64>| {
+                callback(&AsyncInstrumentWrap(input));
+            },
+        );
+
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(GaugeWrap(builder.init()))
+    }
+
+    fn create_up_down_counter(
+        &self,
+        name: String,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<UpDownCounterWrap> {
+        todo!()
+    }
+
+    fn create_async_up_down_counter(
+        &self,
+        name: String,
+        callback: impl Fn(&AsyncUpDownCounterWrap) + Send + Sync,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<AsyncUpDownCounterWrap> {
+        todo!()
+    }
+
+    fn create_monotonic_counter(
+        &self,
+        name: String,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<MonotonicCounterWrap> {
+        todo!()
+    }
+
+    fn create_async_monotonic_counter(
+        &self,
+        name: String,
+        callback: impl Fn(&AsyncMonotonicCounterWrap) + Send + Sync,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<AsyncMonotonicCounterWrap> {
+        todo!()
+    }
+
+    fn create_histogram(
+        &self,
+        name: String,
+        units: Option<String>,
+        description: Option<String>,
+    ) -> Arc<HistogramWrap> {
+        todo!()
     }
 }
 
