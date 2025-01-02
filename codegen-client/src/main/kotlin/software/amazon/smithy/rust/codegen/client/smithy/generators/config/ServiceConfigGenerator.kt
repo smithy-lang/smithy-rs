@@ -399,6 +399,7 @@ class ServiceConfigGenerator(
         }
 
     fun render(writer: RustWriter) {
+        val configDocs = "Constructs a config builder. Note that a config created from this builder will not have the same safe defaults as one created by the [aws-config](https://crates.io/crates/aws-config) crate."
         writer.docs("Configuration for a $moduleUseName service client.\n")
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
@@ -426,7 +427,7 @@ class ServiceConfigGenerator(
         writer.rustBlock("impl Config") {
             writer.rustTemplate(
                 """
-                /// Constructs a config builder.
+                /// $configDocs
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
@@ -483,7 +484,7 @@ class ServiceConfigGenerator(
         }
 
         writer.rustBlock("impl Builder") {
-            writer.docs("Constructs a config builder.")
+            writer.docs(configDocs)
             writer.rust("pub fn new() -> Self { Self::default() }")
 
             builderFromConfigBag()(this)
