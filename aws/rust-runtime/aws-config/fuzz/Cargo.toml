@@ -10,7 +10,8 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+# Version pinned due to https://github.com/rust-fuzz/libfuzzer/issues/126
+libfuzzer-sys = "=0.4.7"
 aws-config = { path = ".." }
 
 [dependencies.aws-types]
