@@ -102,7 +102,7 @@ class EnumMemberModel(
             parentShape: Shape,
             definition: EnumDefinition,
         ): MaybeRenamed? {
-            val name = definition.name.orNull()?.toPascalCase() ?: return null
+            val name = definition.name.orNull()?.toPascalCase()?.replace(Regex("^(_*\\d)"), "_$1") ?: return null
             // Create a fake member shape for symbol look up until we refactor to use EnumShape
             val fakeMemberShape =
                 MemberShape.builder().id(parentShape.id.withMember(name)).target("smithy.api#String").build()
