@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 3rd, 2025
+=================
+
 December 30th, 2024
 ===================
 
