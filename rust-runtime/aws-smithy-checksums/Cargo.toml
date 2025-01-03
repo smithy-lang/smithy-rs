@@ -26,10 +26,7 @@ pin-project-lite = "0.2.9"
 sha1 = "0.10"
 sha2 = "0.10"
 tracing = "0.1"
-
-# The crc64fast-nvme crate uses some 64 bit intrinsics that are not available on 32 bit x86
-[target.'cfg(not(target_arch = "x86"))'.dependencies]
-crc64fast-nvme = "1.0.0"
+crc64fast-nvme = "1.1.1"
 
 [dev-dependencies]
 bytes-utils = "0.1.2"

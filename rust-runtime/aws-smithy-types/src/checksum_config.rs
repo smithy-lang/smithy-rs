@@ -23,13 +23,13 @@ const WHEN_REQUIRED: &str = "when_required";
 
 /// Determines when a checksum will be calculated for request payloads. Values are:
 /// * [RequestChecksumCalculation::WhenSupported] - (default) When set, a checksum will be
-/// calculated for all request payloads of operations modeled with the
-/// `httpChecksum` trait where `requestChecksumRequired` is `true` and/or a
-/// `requestAlgorithmMember` is modeled.
+///   calculated for all request payloads of operations modeled with the
+///   `httpChecksum` trait where `requestChecksumRequired` is `true` and/or a
+///   `requestAlgorithmMember` is modeled.
 /// * [RequestChecksumCalculation::WhenRequired] - When set, a checksum will only be calculated for
-/// request payloads of operations modeled with the  `httpChecksum` trait where
-/// `requestChecksumRequired` is `true` or where a requestAlgorithmMember
-/// is modeled and supplied.
+///   request payloads of operations modeled with the  `httpChecksum` trait where
+///   `requestChecksumRequired` is `true` or where a requestAlgorithmMember
+///   is modeled and supplied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RequestChecksumCalculation {
@@ -61,12 +61,12 @@ impl FromStr for RequestChecksumCalculation {
 
 /// Determines when checksum validation will be performed on response payloads. Values are:
 /// * [ResponseChecksumValidation::WhenSupported] - (default) When set, checksum validation is performed on all
-/// response payloads of operations modeled with the `httpChecksum` trait where
-/// `responseAlgorithms` is modeled, except when no modeled checksum algorithms
-/// are supported.
+///   response payloads of operations modeled with the `httpChecksum` trait where
+///   `responseAlgorithms` is modeled, except when no modeled checksum algorithms
+///   are supported.
 /// * [ResponseChecksumValidation::WhenRequired] - When set, checksum validation is not performed on
-/// response payloads of operations unless the checksum algorithm is supported and
-/// the `requestValidationModeMember` member is set to `ENABLED`.
+///   response payloads of operations unless the checksum algorithm is supported and
+///   the `requestValidationModeMember` member is set to `ENABLED`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ResponseChecksumValidation {
