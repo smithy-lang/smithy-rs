@@ -12,6 +12,8 @@ pub enum SmithySdkFeature {
     Paginator,
     GzipRequestCompression,
     ProtocolRpcV2Cbor,
+    RetryModeStandard,
+    RetryModeAdaptive,
     FlexibleChecksumsReqCrc32,
     FlexibleChecksumsReqCrc32c,
     FlexibleChecksumsReqCrc64,
