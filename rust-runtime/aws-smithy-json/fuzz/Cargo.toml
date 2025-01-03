@@ -11,7 +11,8 @@ cargo-fuzz = true
 [dependencies]
 aws-smithy-json = { path = ".." }
 aws-smithy-types = { path = "../../aws-smithy-types" }
-libfuzzer-sys = "0.4"
+# Version pinned due to https://github.com/rust-fuzz/libfuzzer/issues/126
+libfuzzer-sys = "=0.4.7"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 # Prevent this from interfering with workspaces
