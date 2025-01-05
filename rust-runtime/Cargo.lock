@@ -251,7 +251,7 @@ checksum = "721cae7de5c34fbb2acd27e21e6d2cf7b886dce0c27388d46c4e6c47ea4318dd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.87",
+ "syn 2.0.91",
 ]
 
 [[package]]
@@ -729,10 +729,13 @@ dependencies = [
 name = "aws-smithy-observability-otel"
 version = "0.1.0"
 dependencies = [
+ "async-global-executor",
+ "async-task",
  "aws-smithy-observability",
  "opentelemetry",
  "opentelemetry_sdk",
  "tokio",
+ "value-bag",
 ]
 
 [[package]]
@@ -3695,7 +3698,7 @@ checksum = "82fe9db325bcef1fbcde82e078a5cc4efdf787e96b3b9cf45b50b529f2083d67"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.87",
+ "syn 2.0.91",
 ]
 
 [[package]]

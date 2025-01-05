@@ -92,7 +92,7 @@ impl AsyncMeasure for GaugeWrap {
     fn stop(&self) {}
 }
 
-impl AsyncMeasureGeneric<'_, ContextWrap, f64> for GaugeWrap {
+impl AsyncMeasureGeneric<ContextWrap, f64> for GaugeWrap {
     // type Value = f64;
 
     fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
@@ -123,7 +123,7 @@ impl AsyncMeasure for AsyncUpDownCounterWrap {
     fn stop(&self) {}
 }
 
-impl AsyncMeasureGeneric<'_, ContextWrap, i64> for AsyncUpDownCounterWrap {
+impl AsyncMeasureGeneric<ContextWrap, i64> for AsyncUpDownCounterWrap {
     // type Value = i64;
 
     fn record(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
@@ -154,7 +154,7 @@ impl AsyncMeasure for AsyncMonotonicCounterWrap {
     fn stop(&self) {}
 }
 
-impl AsyncMeasureGeneric<'_, ContextWrap, u64> for AsyncMonotonicCounterWrap {
+impl AsyncMeasureGeneric<ContextWrap, u64> for AsyncMonotonicCounterWrap {
     // type Value = u64;
 
     fn record(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
@@ -184,7 +184,7 @@ impl<T> AsyncMeasure for AsyncInstrumentWrap<'_, T> {
     fn stop(&self) {}
 }
 
-impl<T> AsyncMeasureGeneric<'_, ContextWrap, T> for AsyncInstrumentWrap<'_, T> {
+impl<T> AsyncMeasureGeneric<ContextWrap, T> for AsyncInstrumentWrap<'_, T> {
     // type Value = T;
 
     fn record(&self, value: T, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
@@ -344,7 +344,6 @@ impl Meter for MeterWrap {
 
 impl
     MeterGeneric<
-        '_,
         ContextWrap,
         GaugeWrap,
         UpDownCounterWrap,
@@ -352,13 +351,18 @@ impl
         MonotonicCounterWrap,
         AsyncMonotonicCounterWrap,
         HistogramWrap,
-        AsyncInstrumentWrap<'static, f64>,
+        fn(&AsyncInstrumentWrap<'_, f64>),
+        AsyncInstrumentWrap<'_, f64>,
+        fn(&AsyncInstrumentWrap<'_, i64>),
+        AsyncInstrumentWrap<'_, i64>,
+        fn(&AsyncInstrumentWrap<'_, u64>),
+        AsyncInstrumentWrap<'_, u64>,
     > for MeterWrap
 {
     fn create_gauge(
         &self,
         name: String,
-        callback: impl Fn(&AsyncInstrumentWrap<'static, f64>) + Send + Sync + 'static,
+        callback: fn(&AsyncInstrumentWrap<'_, f64>),
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<GaugeWrap> {
@@ -385,17 +389,40 @@ impl
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<UpDownCounterWrap> {
-        todo!()
+        let mut builder = self.i64_up_down_counter(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(UpDownCounterWrap(builder.init()))
     }
 
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: impl Fn(&AsyncUpDownCounterWrap) + Send + Sync,
+        callback: fn(&AsyncInstrumentWrap<'_, i64>),
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<AsyncUpDownCounterWrap> {
-        todo!()
+        let mut builder = self.i64_observable_up_down_counter(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<i64>| {
+                callback(&AsyncInstrumentWrap(input));
+            },
+        );
+
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(AsyncUpDownCounterWrap(builder.init()))
     }
 
     fn create_monotonic_counter(
@@ -404,17 +431,40 @@ impl
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<MonotonicCounterWrap> {
-        todo!()
+        let mut builder = self.u64_counter(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(MonotonicCounterWrap(builder.init()))
     }
 
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: impl Fn(&AsyncMonotonicCounterWrap) + Send + Sync,
+        callback: fn(&AsyncInstrumentWrap<'_, u64>),
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<AsyncMonotonicCounterWrap> {
-        todo!()
+        let mut builder = self.u64_observable_counter(name).with_callback(
+            move |input: &dyn OtelAsyncInstrument<u64>| {
+                callback(&AsyncInstrumentWrap(input));
+            },
+        );
+
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(AsyncMonotonicCounterWrap(builder.init()))
     }
 
     fn create_histogram(
@@ -423,7 +473,16 @@ impl
         units: Option<String>,
         description: Option<String>,
     ) -> Arc<HistogramWrap> {
-        todo!()
+        let mut builder = self.f64_histogram(name);
+        if let Some(desc) = description {
+            builder = builder.with_description(desc);
+        }
+
+        if let Some(u) = units {
+            builder = builder.with_unit(u);
+        }
+
+        Arc::new(HistogramWrap(builder.init()))
     }
 }
 
