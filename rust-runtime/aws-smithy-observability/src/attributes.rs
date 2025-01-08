@@ -73,7 +73,7 @@ pub trait Context {
     fn make_current(&self) -> &dyn Scope;
 }
 
-// Just a marker trait for now
+/// Just a marker trait for now
 pub trait ContextGeneric {}
 
 /// Keeps track of the current [Context].

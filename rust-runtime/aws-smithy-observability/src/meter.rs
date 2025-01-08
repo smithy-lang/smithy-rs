@@ -153,46 +153,49 @@ where
 }
 
 /// Worlds longest where clause
-pub trait MeterGeneric<
-    C,
-    Gauge,
-    UDC,
-    AsyncUDC,
-    MC,
-    AsyncMC,
-    H,
-    GaugeCallback,
-    GaugeCallbackInput,
-    AsyncUDCCallback,
-    AsyncUDCCallbackInput,
-    AsyncMCCallback,
-    AsyncMCCallbackInput,
->: Send + Sync + Debug where
-    Gauge: AsyncMeasureGeneric<C, f64>,
-    UDC: UpDownCounterGeneric<C>,
-    AsyncUDC: AsyncMeasureGeneric<C, i64>,
-    MC: MonotonicCounterGeneric<C>,
-    AsyncMC: AsyncMeasureGeneric<C, u64>,
-    H: HistogramGeneric<C>,
-    C: ContextGeneric,
-    // There has to be a better way to type these callback functions,
-    // but I haven't been able to figure it out, GATs maybe?
-    GaugeCallback: Fn(&GaugeCallbackInput) + Send + Sync,
-    GaugeCallbackInput: AsyncMeasureGeneric<C, f64>,
-    AsyncUDCCallback: Fn(&AsyncUDCCallbackInput) + Send + Sync,
-    AsyncUDCCallbackInput: AsyncMeasureGeneric<C, i64>,
-    AsyncMCCallback: Fn(&AsyncMCCallbackInput) + Send + Sync,
-    AsyncMCCallbackInput: AsyncMeasureGeneric<C, u64>,
-{
+pub trait MeterGeneric: Send + Sync + Debug {
+    /// A type implementing [crate::attributes::Context]
+    type Context: ContextGeneric;
+
+    /// A type implementing [AsyncMeasureGeneric] for [f64]
+    type Gauge: AsyncMeasureGeneric<Self::Context, f64>;
+    /// The type of the callback function passed when creating a [MeterGeneric::Gauge]
+    type GaugeCallback<'a>: Fn(&Self::GaugeCallbackInput<'a>) + Send + Sync;
+    /// The type of the input to [MeterGeneric::GaugeCallback]
+    type GaugeCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, f64>;
+
+    /// A type implementing [UpDownCounterGeneric]
+    type UpDownCounter: UpDownCounterGeneric<Self::Context>;
+
+    /// A type implementing [AsyncMeasureGeneric] for [i64]
+    type AsyncUDC: AsyncMeasureGeneric<Self::Context, i64>;
+    /// The type of the callback function passed when creating a [MeterGeneric::AsyncUDC]
+    type AsyncUDCCallback<'a>: Fn(&Self::AsyncUDCCallbackInput<'a>) + Send + Sync;
+    /// The type of the input to [MeterGeneric::AsyncUDCCallback]
+    type AsyncUDCCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, i64>;
+
+    /// A type implementing [MonotonicCounterGeneric]
+    type MonotonicCounter: MonotonicCounterGeneric<Self::Context>;
+
+    /// A type implementing [AsyncMeasureGeneric] for [u64]
+    type AsyncMC: AsyncMeasureGeneric<Self::Context, u64>;
+    /// The type of the callback function passed when creating a [MeterGeneric::AsyncMC]
+    type AsyncMCCallback<'a>: Fn(&Self::AsyncMCCallbackInput<'a>) + Send + Sync;
+    /// The type of the input to [MeterGeneric::AsyncMCCallback]
+    type AsyncMCCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, u64>;
+
+    /// A type implementing [HistogramGeneric]
+    type Histogram: HistogramGeneric<Self::Context>;
+
     /// Create a new Gauge.
     #[allow(clippy::type_complexity)]
     fn create_gauge(
         &self,
         name: String,
-        callback: GaugeCallback,
+        callback: Self::GaugeCallback<'_>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<Gauge>;
+    ) -> Arc<Self::Gauge>;
 
     /// Create a new [UpDownCounter].
     fn create_up_down_counter(
@@ -200,17 +203,17 @@ pub trait MeterGeneric<
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<UDC>;
+    ) -> Arc<Self::UpDownCounter>;
 
     /// Create a new AsyncUpDownCounter.
     #[allow(clippy::type_complexity)]
     fn create_async_up_down_counter(
         &self,
         name: String,
-        callback: AsyncUDCCallback,
+        callback: Self::AsyncUDCCallback<'_>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<AsyncUDC>;
+    ) -> Arc<Self::AsyncUDC>;
 
     /// Create a new [MonotonicCounter].
     fn create_monotonic_counter(
@@ -218,17 +221,17 @@ pub trait MeterGeneric<
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<MC>;
+    ) -> Arc<Self::MonotonicCounter>;
 
     /// Create a new AsyncMonotonicCounter.
     #[allow(clippy::type_complexity)]
     fn create_async_monotonic_counter(
         &self,
         name: String,
-        callback: AsyncMCCallback,
+        callback: Self::AsyncMCCallback<'_>,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<AsyncMC>;
+    ) -> Arc<Self::AsyncMC>;
 
     /// Create a new [Histogram].
     fn create_histogram(
@@ -236,21 +239,5 @@ pub trait MeterGeneric<
         name: String,
         units: Option<String>,
         description: Option<String>,
-    ) -> Arc<H>;
+    ) -> Arc<Self::Histogram>;
 }
-
-// pub trait ProvideMeterGeneric<M, C, Gauge, UDC, AsyncUDC, MC, AsyncMC, H>:
-//     Send + Sync + Debug
-// where
-//     M: MeterGeneric<C, Gauge, UDC, AsyncUDC, MC, AsyncMC, H>,
-//     Gauge: AsyncMeasureGeneric<C, Value = f64>,
-//     UDC: UpDownCounterGeneric<C>,
-//     AsyncUDC: AsyncMeasureGeneric<C, Value = i64>,
-//     MC: MonotonicCounterGeneric<C>,
-//     AsyncMC: AsyncMeasureGeneric<C, Value = u64>,
-//     H: Histogram,
-//     C: ContextGeneric,
-// {
-//     /// Get or create a named [Meter].
-//     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<M>;
-// }

@@ -342,23 +342,21 @@ impl Meter for MeterWrap {
     }
 }
 
-impl
-    MeterGeneric<
-        ContextWrap,
-        GaugeWrap,
-        UpDownCounterWrap,
-        AsyncUpDownCounterWrap,
-        MonotonicCounterWrap,
-        AsyncMonotonicCounterWrap,
-        HistogramWrap,
-        fn(&AsyncInstrumentWrap<'_, f64>),
-        AsyncInstrumentWrap<'_, f64>,
-        fn(&AsyncInstrumentWrap<'_, i64>),
-        AsyncInstrumentWrap<'_, i64>,
-        fn(&AsyncInstrumentWrap<'_, u64>),
-        AsyncInstrumentWrap<'_, u64>,
-    > for MeterWrap
-{
+impl MeterGeneric for MeterWrap {
+    type Context = ContextWrap;
+    type Gauge = GaugeWrap;
+    type UpDownCounter = UpDownCounterWrap;
+    type AsyncUDC = AsyncUpDownCounterWrap;
+    type MonotonicCounter = MonotonicCounterWrap;
+    type AsyncMC = AsyncMonotonicCounterWrap;
+    type Histogram = HistogramWrap;
+    type GaugeCallback<'a> = fn(&AsyncInstrumentWrap<'_, f64>);
+    type GaugeCallbackInput<'a> = AsyncInstrumentWrap<'a, f64>;
+    type AsyncUDCCallback<'a> = fn(&AsyncInstrumentWrap<'_, i64>);
+    type AsyncUDCCallbackInput<'a> = AsyncInstrumentWrap<'a, i64>;
+    type AsyncMCCallback<'a> = fn(&AsyncInstrumentWrap<'_, u64>);
+    type AsyncMCCallbackInput<'a> = AsyncInstrumentWrap<'a, u64>;
+
     fn create_gauge(
         &self,
         name: String,
