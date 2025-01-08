@@ -11,6 +11,7 @@
 
 use crate::client::http::body::content_length_enforcement::EnforceContentLengthRuntimePlugin;
 use crate::client::identity::IdentityCache;
+use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
@@ -95,6 +96,7 @@ pub fn default_retry_config_plugin(
                 .with_config_validator(SharedConfigValidator::base_client_config_fn(
                     validate_retry_config,
                 ))
+                .with_interceptor(TokenBucketProvider::new())
         })
         .with_config(layer("default_retry_config", |layer| {
             layer.store_put(RetryConfig::disabled());
