@@ -343,13 +343,25 @@ fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
 }
 
 /// Interceptor registered in default retry plugin that ensures a token bucket exists in config
-/// bag. Token bucket is partitioned by the retry partition
+/// bag for every operation. Token bucket provided is partitioned by the retry partition **in the
+/// config bag** at the time an operation is executed.
 #[derive(Debug)]
-pub(crate) struct TokenBucketProvider {}
+pub(crate) struct TokenBucketProvider {
+    default_partition: RetryPartition,
+    token_bucket: TokenBucket,
+}
 
 impl TokenBucketProvider {
-    pub(crate) fn new() -> Self {
-        Self {}
+    /// Create a new token bucket provider with the given default retry partition.
+    ///
+    /// NOTE: This partition should be the one used for every operation on a client
+    /// unless config is overridden.
+    pub(crate) fn new(default_partition: RetryPartition) -> Self {
+        let token_bucket = TOKEN_BUCKET.get_or_init_default(default_partition.clone());
+        Self {
+            default_partition,
+            token_bucket,
+        }
     }
 }
 
@@ -365,7 +377,17 @@ impl Intercept for TokenBucketProvider {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let retry_partition = cfg.load::<RetryPartition>().expect("set in default config");
-        let tb = TOKEN_BUCKET.get_or_init_default(retry_partition.clone());
+
+        // we store the original retry partition configured and associated token bucket
+        // for the client when created so that we can avoid locking on _every_ request
+        // from _every_ client
+        let tb = if *retry_partition != self.default_partition {
+            TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
+        } else {
+            // avoid contention on the global lock
+            self.token_bucket.clone()
+        };
+
         trace!("token bucket for {retry_partition:?} added to config bag");
         let mut layer = Layer::new("token_bucket_partition");
         layer.store_put(tb);
@@ -398,7 +420,6 @@ mod tests {
     use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
-    #[cfg(feature = "test-util")]
     use crate::client::retries::TokenBucket;
 
     #[test]

@@ -89,6 +89,7 @@ pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
 pub fn default_retry_config_plugin(
     default_partition_name: impl Into<Cow<'static, str>>,
 ) -> Option<SharedRuntimePlugin> {
+    let retry_partition = RetryPartition::new(default_partition_name);
     Some(
         default_plugin("default_retry_config_plugin", |components| {
             components
@@ -96,11 +97,11 @@ pub fn default_retry_config_plugin(
                 .with_config_validator(SharedConfigValidator::base_client_config_fn(
                     validate_retry_config,
                 ))
-                .with_interceptor(TokenBucketProvider::new())
+                .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
             layer.store_put(RetryConfig::disabled());
-            layer.store_put(RetryPartition::new(default_partition_name));
+            layer.store_put(retry_partition);
         }))
         .into_shared(),
     )
