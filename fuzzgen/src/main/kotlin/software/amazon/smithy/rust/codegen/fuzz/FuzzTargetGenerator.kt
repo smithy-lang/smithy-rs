@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.fuzz
 
 import software.amazon.smithy.build.FileManifest
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -19,10 +20,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
+import software.amazon.smithy.rust.codegen.core.smithy.PublicImportSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -30,13 +34,14 @@ import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerModuleProvider
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import java.nio.file.Path
 import kotlin.io.path.name
 
-fun rustSettings(
+private fun rustSettings(
     fuzzSettings: FuzzSettings,
-    target: FuzzTarget,
+    target: TargetCrate,
 ) = CoreRustSettings(
     fuzzSettings.service,
     moduleVersion = "0.1.0",
@@ -50,7 +55,7 @@ fun rustSettings(
 )
 
 data class FuzzTargetContext(
-    val target: FuzzTarget,
+    val target: TargetCrate,
     val fuzzSettings: FuzzSettings,
     val rustCrate: RustCrate,
     val model: Model,
@@ -59,7 +64,10 @@ data class FuzzTargetContext(
 ) {
     fun finalize(): FileManifest {
         val forceWorkspace =
-            mapOf("workspace" to listOf("_ignored" to "_ignored").toMap(), "lib" to mapOf("crate-type" to listOf("cdylib")))
+            mapOf(
+                "workspace" to listOf("_ignored" to "_ignored").toMap(),
+                "lib" to mapOf("crate-type" to listOf("cdylib")),
+            )
         val rustSettings = rustSettings(fuzzSettings, target)
         rustCrate.finalize(rustSettings, model, forceWorkspace, listOf(), requireDocs = false)
         return manifest
@@ -69,13 +77,13 @@ data class FuzzTargetContext(
 class FuzzTargetGenerator(private val context: FuzzTargetContext) {
     private val model = context.model
     private val serviceShape = context.model.expectShape(context.fuzzSettings.service, ServiceShape::class.java)
-    private val symbolProvider = context.symbolProvider
+    private val symbolProvider = PublicImportSymbolProvider(context.symbolProvider, targetCrate().name)
 
     private fun targetCrate(): RuntimeType {
         val path = Path.of(context.target.relativePath).toAbsolutePath()
         return CargoDependency(
-            path.name,
-            Local(path.parent?.toString() ?: ""),
+            name = path.name,
+            location = Local(path.parent?.toString() ?: ""),
             `package` = context.target.targetPackage(),
         ).toType()
     }
@@ -131,7 +139,8 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
     private fun allTxs(): Writable =
         writable {
             operationsToImplement().forEach { op ->
-                val operationName = op.contextName(serviceShape).toSnakeCase().let { RustReservedWords.escapeIfNeeded(it) }
+                val operationName =
+                    op.contextName(serviceShape).toSnakeCase().let { RustReservedWords.escapeIfNeeded(it) }
                 rust("let tx_$operationName = tx.clone();")
             }
         }
@@ -140,7 +149,8 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
         writable {
             val operations = operationsToImplement()
             operations.forEach { op ->
-                val operationName = op.contextName(serviceShape).toSnakeCase().let { RustReservedWords.escapeIfNeeded(it) }
+                val operationName =
+                    op.contextName(serviceShape).toSnakeCase().let { RustReservedWords.escapeIfNeeded(it) }
                 val output =
                     writable {
                         val outputSymbol = symbolProvider.toSymbol(op.outputShape(model))
@@ -165,4 +175,41 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
                 )
             }
         }
+}
+
+fun createFuzzTarget(
+    target: TargetCrate,
+    baseManifest: FileManifest,
+    fuzzSettings: FuzzSettings,
+    model: Model,
+): FuzzTargetContext {
+    val newManifest = FileManifest.create(baseManifest.resolvePath(Path.of(target.name)))
+    val codegenConfig = CoreCodegenConfig()
+    val symbolProvider =
+        SymbolVisitor(
+            rustSettings(fuzzSettings, target),
+            model,
+            model.expectShape(fuzzSettings.service, ServiceShape::class.java),
+            RustSymbolProviderConfig(
+                fuzzSettings.runtimeConfig,
+                renameExceptions = false,
+                NullableIndex.CheckMode.SERVER,
+                ServerModuleProvider,
+            ),
+        )
+    val crate =
+        RustCrate(
+            newManifest,
+            symbolProvider,
+            codegenConfig,
+            NoOpDocProvider(),
+        )
+    return FuzzTargetContext(
+        target = target,
+        fuzzSettings = fuzzSettings,
+        rustCrate = crate,
+        model = model,
+        manifest = newManifest,
+        symbolProvider = symbolProvider,
+    )
 }

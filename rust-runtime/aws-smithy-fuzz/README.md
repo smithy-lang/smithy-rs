@@ -9,6 +9,8 @@ AWS Smithy fuzz contains a set of utilities for writing fuzz tests against smith
 2. Install aws-smithy-fuzz:
     - Locally: `cargo afl install --path .`
     - From crates.io: cargo afl install aws-smithy-fuzz
+   > **IMPORTANT**: This package MUST be installed with `cargo afl install` (instead of `cargo install`). If you do not use `afl`,
+   > you will get linking errors.
 
 ## Usage
 This contains a library + a CLI tool to fuzz smithy servers. The library allows setting up a given Smithy server implementation as a `cdylib`. This allows two different versions two by dynamically linked at runtime and executed by the fuzzer.
@@ -22,6 +24,14 @@ Each of these components are meant to be usable independently:
 First, you'll need to generate the 1 (or more) versions of a smithy-rs server to test against. The best way to do this is by using the smithy CLI. **This process is fully automated with the `aws-smithy-fuzz setup-smithy`. The following docs are in place in case you want to alter the behavior.**
 
 There is nothing magic about what `setup-smithy` does, but it does save you some tedious setup.
+
+```bash
+aws-smithy-fuzz setup-smithy --revision fix-timestamp-from-f64 --service smithy.protocoltests.rpcv2Cbor#RpcV2Protocol --workdir fuzz-workspace-cbor2 --fuzz-runner-local-path smithy-rs --dependency software.amazon.smithy:smithy-protocol-tests:1.50.0 --rebuild-local-targets
+```
+<details>
+<summary>
+Details of functionality of `setup-smithy`. This can be helpful if you need to do something slightly different.
+</summary>
 
 ```bash
 # Create a workspace just to keep track of everything
@@ -117,8 +127,10 @@ The easiest way to use `fuzzgen` is with the Smithy CLI:
   }
 }
 ```
+</details>
 
 ### Initialization and Fuzzing
+After `setup-smithy` creates the target shims, use `aws-smithy initialize` to setup ceremony required for `AFL` to function:
 ```
 aws-smithy-fuzz initialize --lexicon <path to lexicon> --target-crate <path-to-target-b> --target-crate <path-to-target-a>
 ```
