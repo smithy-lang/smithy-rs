@@ -6,6 +6,7 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /* End of automatically managed default lints */
+#![cfg(not(windows))]
 use libloading::{os, Library, Symbol};
 use std::error::Error;
 use tokio::sync::mpsc::Sender;

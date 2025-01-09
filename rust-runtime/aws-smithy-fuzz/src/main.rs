@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(not(windows))]
+
 use aws_smithy_fuzz::{FuzzResult, FuzzTarget, HttpRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
