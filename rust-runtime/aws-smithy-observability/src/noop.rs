@@ -62,10 +62,10 @@ impl Meter for NoopMeter {
 
     type Histogram = NoopHistogram;
 
-    fn create_gauge<'a>(
+    fn create_gauge(
         &self,
         _name: String,
-        _callback: Self::GaugeCallback<'a>,
+        _callback: Self::GaugeCallback<'_>,
         _units: Option<String>,
         _description: Option<String>,
     ) -> Arc<NoopAsyncMeasurement<f64>> {
@@ -81,10 +81,10 @@ impl Meter for NoopMeter {
         Arc::new(NoopUpDownCounter)
     }
 
-    fn create_async_up_down_counter<'a>(
+    fn create_async_up_down_counter(
         &self,
         _name: String,
-        _callback: Self::AsyncUDCCallback<'a>,
+        _callback: Self::AsyncUDCCallback<'_>,
         _units: Option<String>,
         _description: Option<String>,
     ) -> Arc<NoopAsyncMeasurement<i64>> {
@@ -100,10 +100,10 @@ impl Meter for NoopMeter {
         Arc::new(NoopMonotonicCounter)
     }
 
-    fn create_async_monotonic_counter<'a>(
+    fn create_async_monotonic_counter(
         &self,
         _name: String,
-        _callback: Self::AsyncMCCallback<'a>,
+        _callback: Self::AsyncMCCallback<'_>,
         _units: Option<String>,
         _description: Option<String>,
     ) -> Arc<NoopAsyncMeasurement<u64>> {

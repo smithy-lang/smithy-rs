@@ -10,14 +10,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::attributes::kv_from_option_attr;
-use aws_smithy_observability::attributes::{Attributes, Context, ContextGeneric};
+use aws_smithy_observability::attributes::{Attributes, Context, Scope};
 use aws_smithy_observability::error::{ErrorKind, ObservabilityError};
 pub use aws_smithy_observability::meter::{
     AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
-};
-use aws_smithy_observability::meter::{
-    AsyncMeasureGeneric, HistogramGeneric, MeterGeneric, MonotonicCounterGeneric,
-    UpDownCounterGeneric,
 };
 pub use aws_smithy_observability::provider::TelemetryProvider;
 use opentelemetry::metrics::{
@@ -28,61 +24,76 @@ use opentelemetry::metrics::{
 };
 use opentelemetry_sdk::metrics::SdkMeterProvider as OtelSdkMeterProvider;
 
-struct ContextWrap;
-impl ContextGeneric for ContextWrap {}
+#[derive(Debug)]
+#[non_exhaustive]
+/// A struct holding a noop implementation of the [Scope] trait.
+pub struct ScopeWrap;
+
+impl Scope for ScopeWrap {
+    fn end(&self) {}
+}
 
 #[derive(Debug)]
-struct UpDownCounterWrap(OtelUpDownCounter<i64>);
+#[non_exhaustive]
+/// A struct holding a noop implementation of the [Context] trait.
+pub struct ContextWrap;
+impl Context for ContextWrap {
+    type Scope = ScopeWrap;
+
+    fn make_current(&self) -> &Self::Scope {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+/// A wrapper for the [OtelUpDownCounter<i64>] type.
+pub struct UpDownCounterWrap(OtelUpDownCounter<i64>);
 impl UpDownCounter for UpDownCounterWrap {
-    fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
+    type Context = ContextWrap;
+
+    fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
 
-impl UpDownCounterGeneric<ContextWrap> for UpDownCounterWrap {
-    fn add(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
-        self.0.add(value, &kv_from_option_attr(attributes))
-    }
-}
-
 #[derive(Debug)]
-struct HistogramWrap(OtelHistogram<f64>);
+#[non_exhaustive]
+/// A wrapper for the [OtelHistogram<f64>] type.
+pub struct HistogramWrap(OtelHistogram<f64>);
 impl Histogram for HistogramWrap {
-    fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
-        self.0.record(value, &kv_from_option_attr(attributes));
-    }
-}
+    type Context = ContextWrap;
 
-impl HistogramGeneric<ContextWrap> for HistogramWrap {
     fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.record(value, &kv_from_option_attr(attributes));
     }
 }
 
 #[derive(Debug)]
-struct MonotonicCounterWrap(OtelCounter<u64>);
+#[non_exhaustive]
+/// A wrapper for the [OtelCounter<u64>] type.
+pub struct MonotonicCounterWrap(OtelCounter<u64>);
 impl MonotonicCounter for MonotonicCounterWrap {
-    fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&dyn Context>) {
-        self.0.add(value, &kv_from_option_attr(attributes));
-    }
-}
+    type Context = ContextWrap;
 
-impl MonotonicCounterGeneric<ContextWrap> for MonotonicCounterWrap {
     fn add(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.add(value, &kv_from_option_attr(attributes));
     }
 }
 
 #[derive(Debug)]
-struct GaugeWrap(OtelObservableGauge<f64>);
+#[non_exhaustive]
+/// A wrapper for the [OtelObservableGauge<f64>] type.
+pub struct GaugeWrap(OtelObservableGauge<f64>);
 impl AsyncMeasure for GaugeWrap {
     type Value = f64;
+    type Context = ContextWrap;
 
     fn record(
         &self,
         value: Self::Value,
         attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
+        _context: Option<&ContextWrap>,
     ) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
@@ -92,41 +103,20 @@ impl AsyncMeasure for GaugeWrap {
     fn stop(&self) {}
 }
 
-impl AsyncMeasureGeneric<ContextWrap, f64> for GaugeWrap {
-    // type Value = f64;
-
-    fn record(&self, value: f64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
-        self.0.observe(value, &kv_from_option_attr(attributes));
-    }
-
-    // OTel rust does not currently support unregistering callbacks
-    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
-    fn stop(&self) {}
-}
-
 #[derive(Debug)]
-struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
+#[non_exhaustive]
+/// A wrapper for the [OtelObservableUpDownCounter<i64>] type.
+pub struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
 impl AsyncMeasure for AsyncUpDownCounterWrap {
     type Value = i64;
+    type Context = ContextWrap;
 
     fn record(
         &self,
         value: Self::Value,
         attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
+        _context: Option<&ContextWrap>,
     ) {
-        self.0.observe(value, &kv_from_option_attr(attributes));
-    }
-
-    // OTel rust does not currently support unregistering callbacks
-    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
-    fn stop(&self) {}
-}
-
-impl AsyncMeasureGeneric<ContextWrap, i64> for AsyncUpDownCounterWrap {
-    // type Value = i64;
-
-    fn record(&self, value: i64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
@@ -136,15 +126,18 @@ impl AsyncMeasureGeneric<ContextWrap, i64> for AsyncUpDownCounterWrap {
 }
 
 #[derive(Debug)]
-struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
+#[non_exhaustive]
+/// A wrapper for the [OtelObservableCounter<u64>] type.
+pub struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
 impl AsyncMeasure for AsyncMonotonicCounterWrap {
     type Value = u64;
+    type Context = ContextWrap;
 
     fn record(
         &self,
         value: Self::Value,
         attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
+        _context: Option<&ContextWrap>,
     ) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
@@ -154,40 +147,19 @@ impl AsyncMeasure for AsyncMonotonicCounterWrap {
     fn stop(&self) {}
 }
 
-impl AsyncMeasureGeneric<ContextWrap, u64> for AsyncMonotonicCounterWrap {
-    // type Value = u64;
-
-    fn record(&self, value: u64, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
-        self.0.observe(value, &kv_from_option_attr(attributes));
-    }
-
-    // OTel rust does not currently support unregistering callbacks
-    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
-    fn stop(&self) {}
-}
-
-struct AsyncInstrumentWrap<'a, T>(&'a (dyn OtelAsyncInstrument<T> + Send + Sync));
+#[non_exhaustive]
+/// A wrapper for the [OtelAsyncInstrument] type.
+pub struct AsyncInstrumentWrap<'a, T>(&'a (dyn OtelAsyncInstrument<T> + Send + Sync));
 impl<T> AsyncMeasure for AsyncInstrumentWrap<'_, T> {
     type Value = T;
+    type Context = ContextWrap;
 
     fn record(
         &self,
         value: Self::Value,
         attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
+        _context: Option<&ContextWrap>,
     ) {
-        self.0.observe(value, &kv_from_option_attr(attributes));
-    }
-
-    // OTel rust does not currently support unregistering callbacks
-    // https://github.com/open-telemetry/opentelemetry-rust/issues/2245
-    fn stop(&self) {}
-}
-
-impl<T> AsyncMeasureGeneric<ContextWrap, T> for AsyncInstrumentWrap<'_, T> {
-    // type Value = T;
-
-    fn record(&self, value: T, attributes: Option<&Attributes>, _context: Option<&ContextWrap>) {
         self.0.observe(value, &kv_from_option_attr(attributes));
     }
 
@@ -205,7 +177,9 @@ impl<T> Debug for AsyncInstrumentWrap<'_, T> {
 }
 
 #[derive(Debug)]
-struct MeterWrap(OtelMeter);
+#[non_exhaustive]
+/// A wrapper for the [OtelMeter] type.
+pub struct MeterWrap(OtelMeter);
 impl Deref for MeterWrap {
     type Target = OtelMeter;
 
@@ -215,134 +189,6 @@ impl Deref for MeterWrap {
 }
 
 impl Meter for MeterWrap {
-    fn create_gauge(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = f64>> {
-        let mut builder = self.f64_observable_gauge(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<f64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
-
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(GaugeWrap(builder.init()))
-    }
-
-    fn create_up_down_counter(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn UpDownCounter> {
-        let mut builder = self.i64_up_down_counter(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(UpDownCounterWrap(builder.init()))
-    }
-
-    fn create_async_up_down_counter(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = i64>> {
-        let mut builder = self.i64_observable_up_down_counter(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<i64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
-
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(AsyncUpDownCounterWrap(builder.init()))
-    }
-
-    fn create_monotonic_counter(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn MonotonicCounter> {
-        let mut builder = self.u64_counter(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(MonotonicCounterWrap(builder.init()))
-    }
-
-    fn create_async_monotonic_counter(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = u64>> {
-        let mut builder = self.u64_observable_counter(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<u64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
-
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(AsyncMonotonicCounterWrap(builder.init()))
-    }
-
-    fn create_histogram(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn Histogram> {
-        let mut builder = self.f64_histogram(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
-        }
-
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
-        }
-
-        Arc::new(HistogramWrap(builder.init()))
-    }
-}
-
-impl MeterGeneric for MeterWrap {
     type Context = ContextWrap;
     type Gauge = GaugeWrap;
     type UpDownCounter = UpDownCounterWrap;
@@ -517,7 +363,9 @@ impl AwsSdkOtelMeterProvider {
 }
 
 impl ProvideMeter for AwsSdkOtelMeterProvider {
-    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
+    type Meter = MeterWrap;
+
+    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<MeterWrap> {
         Arc::new(MeterWrap(self.meter_provider.meter(scope)))
     }
 
@@ -529,11 +377,14 @@ impl ProvideMeter for AwsSdkOtelMeterProvider {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use aws_smithy_observability::attributes::{AttributeValue, Attributes};
-    use aws_smithy_observability::meter::AsyncMeasure;
+    use aws_smithy_observability::meter::{
+        AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
+    };
     use aws_smithy_observability::provider::TelemetryProvider;
     use opentelemetry_sdk::metrics::{
-        data::{Gauge, Histogram, Sum},
+        data::{Gauge, Histogram as OtelHistogram, Sum},
         PeriodicReader, SdkMeterProvider,
     };
     use opentelemetry_sdk::runtime::Tokio;
@@ -551,7 +402,10 @@ mod tests {
 
         // Create the SDK metrics types from the OTel objects
         let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-        let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
+        let sdk_tp = TelemetryProvider::builder()
+            .meter_provider(sdk_mp)
+            .build()
+            .unwrap();
 
         // Get the dyn versions of the SDK metrics objects
         let dyn_sdk_mp = sdk_tp.meter_provider();
@@ -598,7 +452,7 @@ mod tests {
         let extracted_histogram_data = &finished_metrics[0].scope_metrics[0].metrics[2]
             .data
             .as_any()
-            .downcast_ref::<Histogram<f64>>()
+            .downcast_ref::<OtelHistogram<f64>>()
             .unwrap()
             .data_points[0]
             .sum;
@@ -614,7 +468,10 @@ mod tests {
 
         // Create the SDK metrics types from the OTel objects
         let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-        let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
+        let sdk_tp = TelemetryProvider::builder()
+            .meter_provider(sdk_mp)
+            .build()
+            .unwrap();
 
         // Get the dyn versions of the SDK metrics objects
         let dyn_sdk_mp = sdk_tp.meter_provider();
@@ -624,14 +481,14 @@ mod tests {
         let gauge = dyn_sdk_meter.create_gauge(
             "TestGauge".to_string(),
             // Callback function records another value with different attributes so it is deduped
-            Box::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
+            |measurement: &AsyncInstrumentWrap<'_, f64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestGaugeAttr",
                     AttributeValue::String("TestGaugeAttr".into()),
                 );
                 measurement.record(6.789, Some(&attrs), None);
-            }),
+            },
             None,
             None,
         );
@@ -639,14 +496,14 @@ mod tests {
 
         let async_ud_counter = dyn_sdk_meter.create_async_up_down_counter(
             "TestAsyncUpDownCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
+            |measurement: &AsyncInstrumentWrap<'_, i64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncUpDownCounterAttr",
                     AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
                 );
                 measurement.record(12, Some(&attrs), None);
-            }),
+            },
             None,
             None,
         );
@@ -654,14 +511,14 @@ mod tests {
 
         let async_mono_counter = dyn_sdk_meter.create_async_monotonic_counter(
             "TestAsyncMonoCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
+            |measurement: &AsyncInstrumentWrap<'_, u64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncMonoCounterAttr",
                     AttributeValue::String("TestAsyncMonoCounterAttr".into()),
                 );
                 measurement.record(123, Some(&attrs), None);
-            }),
+            },
             None,
             None,
         );

@@ -27,6 +27,7 @@ mod tests {
 
     use crate::meter::AwsSdkOtelMeterProvider;
     use aws_smithy_observability::global::{get_telemetry_provider, set_telemetry_provider};
+    use aws_smithy_observability::meter::{Meter, MonotonicCounter, ProvideMeter};
     use aws_smithy_observability::provider::TelemetryProvider;
     use opentelemetry_sdk::metrics::{data::Sum, PeriodicReader, SdkMeterProvider};
     use opentelemetry_sdk::runtime::Tokio;
@@ -42,11 +43,14 @@ mod tests {
 
         // Create the SDK metrics types from the OTel objects
         let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-        let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
+        let sdk_tp = TelemetryProvider::builder()
+            .meter_provider(sdk_mp)
+            .build()
+            .unwrap();
 
         // Set the global TelemetryProvider and then get it back out
         let _ = set_telemetry_provider(sdk_tp);
-        let global_tp = get_telemetry_provider().unwrap();
+        let global_tp = get_telemetry_provider::<AwsSdkOtelMeterProvider>().unwrap();
 
         // Create an instrument and record a value
         let global_meter = global_tp

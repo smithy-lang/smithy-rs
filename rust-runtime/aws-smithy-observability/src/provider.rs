@@ -17,9 +17,9 @@ pub struct TelemetryProvider<PM: ProvideMeter> {
 
 impl<PM: ProvideMeter> TelemetryProvider<PM> {
     /// Returns a builder struct for [TelemetryProvider]
-    pub fn builder() -> TelemetryProviderBuilder<NoopMeterProvider> {
+    pub fn builder() -> TelemetryProviderBuilder<PM> {
         TelemetryProviderBuilder {
-            meter_provider: NoopMeterProvider,
+            meter_provider: None,
         }
     }
 
@@ -49,23 +49,26 @@ impl Default for TelemetryProvider<NoopMeterProvider> {
 }
 
 /// A builder for [TelemetryProvider].
+// Implementation note: The meter_provider is wrapped in an Option to allow us to maintain
+// the generic nature of the struct when first constructing it from TelemetryProvider::builder.
+// Without the Option we would have to provide a properly typed instance of the meter_provider
+// when calling the builder function.
 #[non_exhaustive]
 pub struct TelemetryProviderBuilder<PM: ProvideMeter> {
-    meter_provider: PM,
+    meter_provider: Option<PM>,
 }
 
 impl<PM: ProvideMeter> TelemetryProviderBuilder<PM> {
     /// Set the [ProvideMeter].
     pub fn meter_provider(mut self, meter_provider: PM) -> Self {
-        self.meter_provider = meter_provider;
+        self.meter_provider = Some(meter_provider);
         self
     }
 
-    /// Build the [TelemetryProvider].
-    pub fn build(self) -> TelemetryProvider<PM> {
-        TelemetryProvider {
-            meter_provider: self.meter_provider,
-        }
+    /// Build the [TelemetryProvider]. Returns [None] if no `meter_provider` has been set.
+    pub fn build(self) -> Option<TelemetryProvider<PM>> {
+        self.meter_provider
+            .map(|mp| TelemetryProvider { meter_provider: mp })
     }
 }
 
