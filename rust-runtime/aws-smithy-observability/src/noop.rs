@@ -9,14 +9,21 @@ use std::marker::PhantomData;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::{
-    attributes::{Attributes, Context},
+    attributes::{Attributes, Context, Scope},
     meter::{AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter},
 };
 
 #[derive(Debug)]
-pub(crate) struct NoopMeterProvider;
+#[non_exhaustive]
+pub struct NoopMeterProvider;
 impl ProvideMeter for NoopMeterProvider {
-    fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
+    type Meter = NoopMeter;
+
+    fn get_meter(
+        &self,
+        _scope: &'static str,
+        _attributes: Option<&Attributes>,
+    ) -> Arc<Self::Meter> {
         Arc::new(NoopMeter)
     }
 
@@ -26,15 +33,42 @@ impl ProvideMeter for NoopMeterProvider {
 }
 
 #[derive(Debug)]
-pub(crate) struct NoopMeter;
+#[non_exhaustive]
+pub struct NoopMeter;
 impl Meter for NoopMeter {
-    fn create_gauge(
+    type Context = NoopContext;
+
+    type Gauge = NoopAsyncMeasurement<f64>;
+
+    type GaugeCallback<'a> = fn(&NoopAsyncMeasurement<f64>);
+
+    type GaugeCallbackInput<'a> = NoopAsyncMeasurement<f64>;
+
+    type UpDownCounter = NoopUpDownCounter;
+
+    type AsyncUDC = NoopAsyncMeasurement<i64>;
+
+    type AsyncUDCCallback<'a> = fn(&NoopAsyncMeasurement<i64>);
+
+    type AsyncUDCCallbackInput<'a> = NoopAsyncMeasurement<i64>;
+
+    type MonotonicCounter = NoopMonotonicCounter;
+
+    type AsyncMC = NoopAsyncMeasurement<u64>;
+
+    type AsyncMCCallback<'a> = fn(&NoopAsyncMeasurement<u64>);
+
+    type AsyncMCCallbackInput<'a> = NoopAsyncMeasurement<u64>;
+
+    type Histogram = NoopHistogram;
+
+    fn create_gauge<'a>(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
+        _callback: Self::GaugeCallback<'a>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = f64>> {
+    ) -> Arc<NoopAsyncMeasurement<f64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<f64>))
     }
 
@@ -43,17 +77,17 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn UpDownCounter> {
+    ) -> Arc<NoopUpDownCounter> {
         Arc::new(NoopUpDownCounter)
     }
 
-    fn create_async_up_down_counter(
+    fn create_async_up_down_counter<'a>(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
+        _callback: Self::AsyncUDCCallback<'a>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = i64>> {
+    ) -> Arc<NoopAsyncMeasurement<i64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<i64>))
     }
 
@@ -62,17 +96,17 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn MonotonicCounter> {
+    ) -> Arc<NoopMonotonicCounter> {
         Arc::new(NoopMonotonicCounter)
     }
 
-    fn create_async_monotonic_counter(
+    fn create_async_monotonic_counter<'a>(
         &self,
         _name: String,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
+        _callback: Self::AsyncMCCallback<'a>,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = u64>> {
+    ) -> Arc<NoopAsyncMeasurement<u64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<u64>))
     }
 
@@ -81,41 +115,69 @@ impl Meter for NoopMeter {
         _name: String,
         _units: Option<String>,
         _description: Option<String>,
-    ) -> Arc<dyn Histogram> {
+    ) -> Arc<NoopHistogram> {
         Arc::new(NoopHistogram)
     }
 }
 
 #[derive(Debug)]
-struct NoopAsyncMeasurement<T: Send + Sync + Debug>(PhantomData<T>);
+#[non_exhaustive]
+pub struct NoopAsyncMeasurement<T: Send + Sync + Debug>(PhantomData<T>);
 impl<T: Send + Sync + Debug> AsyncMeasure for NoopAsyncMeasurement<T> {
     type Value = T;
+    type Context = NoopContext;
 
-    fn record(&self, _value: T, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
+    fn record(&self, _value: T, _attributes: Option<&Attributes>, _context: Option<&NoopContext>) {}
 
     fn stop(&self) {}
 }
 
 #[derive(Debug)]
-struct NoopUpDownCounter;
+#[non_exhaustive]
+pub struct NoopUpDownCounter;
 impl UpDownCounter for NoopUpDownCounter {
-    fn add(&self, _value: i64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
+    type Context = NoopContext;
+
+    fn add(&self, _value: i64, _attributes: Option<&Attributes>, _context: Option<&NoopContext>) {}
 }
 
 #[derive(Debug)]
-struct NoopMonotonicCounter;
+#[non_exhaustive]
+pub struct NoopMonotonicCounter;
 impl MonotonicCounter for NoopMonotonicCounter {
-    fn add(&self, _value: u64, _attributes: Option<&Attributes>, _context: Option<&dyn Context>) {}
+    type Context = NoopContext;
+
+    fn add(&self, _value: u64, _attributes: Option<&Attributes>, _context: Option<&NoopContext>) {}
 }
 
 #[derive(Debug)]
-struct NoopHistogram;
+#[non_exhaustive]
+pub struct NoopHistogram;
 impl Histogram for NoopHistogram {
+    type Context = NoopContext;
+
     fn record(
         &self,
         _value: f64,
         _attributes: Option<&Attributes>,
-        _context: Option<&dyn Context>,
+        _context: Option<&NoopContext>,
     ) {
     }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct NoopContext;
+impl Context for NoopContext {
+    type Scope = NoopScope;
+    fn make_current(&self) -> &NoopScope {
+        &NoopScope
+    }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct NoopScope;
+impl Scope for NoopScope {
+    fn end(&self) {}
 }

@@ -75,12 +75,22 @@ impl std::error::Error for ObservabilityError {
 
 /// An simple error to represent issues with the global [crate::TelemetryProvider].
 #[derive(Debug)]
-pub struct GlobalTelemetryProviderError;
+#[non_exhaustive]
+pub struct GlobalTelemetryProviderError {
+    reason: &'static str,
+}
+
+impl GlobalTelemetryProviderError {
+    /// Create a new [GlobalTelemetryProviderError] with a reason for the error.
+    pub fn new(reason: &'static str) -> Self {
+        Self { reason }
+    }
+}
 
 impl std::error::Error for GlobalTelemetryProviderError {}
 
 impl fmt::Display for GlobalTelemetryProviderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GlobalTelemetryProviderError")
+        write!(f, "GlobalTelemetryProviderError: {}", self.reason)
     }
 }

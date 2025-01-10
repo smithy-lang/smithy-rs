@@ -6,96 +6,50 @@
 //! Metrics are used to gain insight into the operational performance and health of a system in
 //! real time.
 
-use crate::attributes::{Attributes, Context, ContextGeneric};
+use crate::attributes::{Attributes, Context};
 use std::{fmt::Debug, sync::Arc};
 
 /// Provides named instances of [Meter].
 pub trait ProvideMeter: Send + Sync + Debug {
+    /// A type implementing the [Meter] trait.
+    type Meter: Meter;
     /// Get or create a named [Meter].
-    fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<dyn Meter>;
+    fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<Self::Meter>;
 
     /// Cast to [std::any::Any]
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-/// The entry point to creating instruments. A grouping of related metrics.
-pub trait Meter: Send + Sync + Debug {
-    /// Create a new Gauge.
-    #[allow(clippy::type_complexity)]
-    fn create_gauge(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = f64>>;
-
-    /// Create a new [UpDownCounter].
-    fn create_up_down_counter(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn UpDownCounter>;
-
-    /// Create a new AsyncUpDownCounter.
-    #[allow(clippy::type_complexity)]
-    fn create_async_up_down_counter(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = i64>>;
-
-    /// Create a new [MonotonicCounter].
-    fn create_monotonic_counter(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn MonotonicCounter>;
-
-    /// Create a new AsyncMonotonicCounter.
-    #[allow(clippy::type_complexity)]
-    fn create_async_monotonic_counter(
-        &self,
-        name: String,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn AsyncMeasure<Value = u64>>;
-
-    /// Create a new [Histogram].
-    fn create_histogram(
-        &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
-    ) -> Arc<dyn Histogram>;
-}
-
 /// Collects a set of events with an event count and sum for all events.
 pub trait Histogram: Send + Sync + Debug {
+    /// A type implementing [crate::attributes::Context]
+    type Context: Context;
     /// Record a value.
-    fn record(&self, value: f64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
+    fn record(&self, value: f64, attributes: Option<&Attributes>, context: Option<&Self::Context>);
 }
 
 /// A counter that monotonically increases.
 pub trait MonotonicCounter: Send + Sync + Debug {
+    /// A type implementing [crate::attributes::Context]
+    type Context: Context;
     /// Increment a counter by a fixed amount.
-    fn add(&self, value: u64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
+    fn add(&self, value: u64, attributes: Option<&Attributes>, context: Option<&Self::Context>);
 }
 
 /// A counter that can increase or decrease.
 pub trait UpDownCounter: Send + Sync + Debug {
+    /// A type implementing [crate::attributes::Context]
+    type Context: Context;
     /// Increment or decrement a counter by a fixed amount.
-    fn add(&self, value: i64, attributes: Option<&Attributes>, context: Option<&dyn Context>);
+    fn add(&self, value: i64, attributes: Option<&Attributes>, context: Option<&Self::Context>);
 }
 
-/// A measurement that can be taken asynchronously.
+/// Foo
 pub trait AsyncMeasure: Send + Sync + Debug {
-    /// The type recorded by the measurement.
+    /// A type implementing [crate::attributes::Context]
+    type Context: Context;
+
+    /// The type of the value recorded by this instrument
     type Value;
 
     /// Record a value
@@ -103,89 +57,47 @@ pub trait AsyncMeasure: Send + Sync + Debug {
         &self,
         value: Self::Value,
         attributes: Option<&Attributes>,
-        context: Option<&dyn Context>,
+        context: Option<&Self::Context>,
     );
 
     /// Stop recording, unregister callback.
     fn stop(&self);
 }
 
-/// Foo Histogram
-pub trait HistogramGeneric<C>: Send + Sync + Debug
-where
-    C: ContextGeneric,
-{
-    /// Record a value.
-    fn record(&self, value: f64, attributes: Option<&Attributes>, context: Option<&C>);
-}
-
-/// A counter that monotonically increases.
-pub trait MonotonicCounterGeneric<C>: Send + Sync + Debug
-where
-    C: ContextGeneric,
-{
-    /// Increment a counter by a fixed amount.
-    fn add(&self, value: u64, attributes: Option<&Attributes>, context: Option<&C>);
-}
-
-/// A counter that can increase or decrease.
-pub trait UpDownCounterGeneric<C>: Send + Sync + Debug
-where
-    C: ContextGeneric,
-{
-    /// Increment or decrement a counter by a fixed amount.
-    fn add(&self, value: i64, attributes: Option<&Attributes>, context: Option<&C>);
-}
-
-/// Foo
-pub trait AsyncMeasureGeneric<C, T>: Send + Sync + Debug
-where
-    C: ContextGeneric,
-{
-    /// The type recorded by the measurement.
-    // type Value = T;
-
-    /// Record a value
-    fn record(&self, value: T, attributes: Option<&Attributes>, context: Option<&C>);
-
-    /// Stop recording, unregister callback.
-    fn stop(&self);
-}
-
-/// Worlds longest where clause
-pub trait MeterGeneric: Send + Sync + Debug {
+/// The entry point to creating instruments. A grouping of related metrics.
+pub trait Meter: Send + Sync + Debug {
     /// A type implementing [crate::attributes::Context]
-    type Context: ContextGeneric;
+    type Context: Context;
 
-    /// A type implementing [AsyncMeasureGeneric] for [f64]
-    type Gauge: AsyncMeasureGeneric<Self::Context, f64>;
-    /// The type of the callback function passed when creating a [MeterGeneric::Gauge]
+    /// A type implementing [AsyncMeasure] for [f64]
+    type Gauge: AsyncMeasure<Context = Self::Context, Value = f64>;
+    /// The type of the callback function passed when creating a [Meter::Gauge]
     type GaugeCallback<'a>: Fn(&Self::GaugeCallbackInput<'a>) + Send + Sync;
-    /// The type of the input to [MeterGeneric::GaugeCallback]
-    type GaugeCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, f64>;
+    /// The type of the input to [Meter::GaugeCallback]
+    type GaugeCallbackInput<'a>: AsyncMeasure<Context = Self::Context, Value = f64>;
 
-    /// A type implementing [UpDownCounterGeneric]
-    type UpDownCounter: UpDownCounterGeneric<Self::Context>;
+    /// A type implementing [UpDownCounter]
+    type UpDownCounter: UpDownCounter<Context = Self::Context>;
 
-    /// A type implementing [AsyncMeasureGeneric] for [i64]
-    type AsyncUDC: AsyncMeasureGeneric<Self::Context, i64>;
-    /// The type of the callback function passed when creating a [MeterGeneric::AsyncUDC]
+    /// A type implementing [AsyncMeasure] for [i64]
+    type AsyncUDC: AsyncMeasure<Context = Self::Context, Value = i64>;
+    /// The type of the callback function passed when creating a [Meter::AsyncUDC]
     type AsyncUDCCallback<'a>: Fn(&Self::AsyncUDCCallbackInput<'a>) + Send + Sync;
-    /// The type of the input to [MeterGeneric::AsyncUDCCallback]
-    type AsyncUDCCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, i64>;
+    /// The type of the input to [Meter::AsyncUDCCallback]
+    type AsyncUDCCallbackInput<'a>: AsyncMeasure<Context = Self::Context, Value = i64>;
 
-    /// A type implementing [MonotonicCounterGeneric]
-    type MonotonicCounter: MonotonicCounterGeneric<Self::Context>;
+    /// A type implementing [MonotonicCounter]
+    type MonotonicCounter: MonotonicCounter<Context = Self::Context>;
 
-    /// A type implementing [AsyncMeasureGeneric] for [u64]
-    type AsyncMC: AsyncMeasureGeneric<Self::Context, u64>;
-    /// The type of the callback function passed when creating a [MeterGeneric::AsyncMC]
+    /// A type implementing [AsyncMeasure] for [u64]
+    type AsyncMC: AsyncMeasure<Context = Self::Context, Value = u64>;
+    /// The type of the callback function passed when creating a [Meter::AsyncMC]
     type AsyncMCCallback<'a>: Fn(&Self::AsyncMCCallbackInput<'a>) + Send + Sync;
-    /// The type of the input to [MeterGeneric::AsyncMCCallback]
-    type AsyncMCCallbackInput<'a>: AsyncMeasureGeneric<Self::Context, u64>;
+    /// The type of the input to [Meter::AsyncMCCallback]
+    type AsyncMCCallbackInput<'a>: AsyncMeasure<Context = Self::Context, Value = u64>;
 
-    /// A type implementing [HistogramGeneric]
-    type Histogram: HistogramGeneric<Self::Context>;
+    /// A type implementing [Histogram]
+    type Histogram: Histogram<Context = Self::Context>;
 
     /// Create a new Gauge.
     #[allow(clippy::type_complexity)]

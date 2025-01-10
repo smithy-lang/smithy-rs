@@ -8,6 +8,7 @@
 //! to index and process telemetry data in ways that simple log messages lack.
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 
 /// The valid types of values accepted by [Attributes].
 #[non_exhaustive]
@@ -59,25 +60,26 @@ impl Attributes {
 
 /// Delineates a logical scope that has some beginning and end
 /// (e.g. a function or block of code).
-pub trait Scope {
+pub trait Scope: Send + Sync + Debug {
     /// invoke when the scope has ended.
     fn end(&self);
 }
 
 /// A cross cutting concern for carrying execution-scoped values across API
 /// boundaries (both in-process and distributed).
-pub trait Context {
+pub trait Context: Send + Sync + Debug {
+    /// A type implementing the [Scope] trait.
+    type Scope: Scope;
     /// Make this context the currently active context.
     /// The returned handle is used to return the previous
     /// context (if one existed) as active.
-    fn make_current(&self) -> &dyn Scope;
+    fn make_current(&self) -> &Self::Scope;
 }
 
-/// Just a marker trait for now
-pub trait ContextGeneric {}
-
 /// Keeps track of the current [Context].
-pub trait ContextManager {
+pub trait ContextManager: Send + Sync + Debug {
+    /// A type implementing the [Context] trait.
+    type Context: Context;
     ///Get the currently active context.
-    fn current(&self) -> &dyn Context;
+    fn current(&self) -> &Self::Context;
 }
