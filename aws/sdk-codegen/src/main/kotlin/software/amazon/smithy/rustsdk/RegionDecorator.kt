@@ -83,13 +83,6 @@ class RegionDecorator : ClientCodegenDecorator {
     private val envKey = "AWS_REGION".dq()
     private val profileKey = "region".dq()
 
-    // Services that have an endpoint ruleset that references the SDK::Region built in, or
-    // that use SigV4, both need a configurable region.
-    private fun usesRegion(codegenContext: ClientCodegenContext) =
-        codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null ||
-            ServiceIndex.of(codegenContext.model)
-                .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
-
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
@@ -223,3 +216,14 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
 }
 
 fun region(runtimeConfig: RuntimeConfig) = AwsRuntimeType.awsTypes(runtimeConfig).resolve("region")
+
+/**
+ * Test if region is used and configured for a model (and available on a service client).
+ *
+ * Services that have an endpoint ruleset that references the SDK::Region built in, or
+ * that use SigV4, both need a configurable region.
+ */
+fun usesRegion(codegenContext: ClientCodegenContext) =
+    codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null ||
+        ServiceIndex.of(codegenContext.model)
+            .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)

@@ -174,8 +174,8 @@ private class AwsFluentClientDocs(private val codegenContext: ClientCodegenConte
  */
 private class AwsFluentClientRetryPartition(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
     override fun section(section: FluentClientSection): Writable {
-        return when (section) {
-            is FluentClientSection.BeforeBaseClientPluginSetup ->
+        return when {
+            section is FluentClientSection.BeforeBaseClientPluginSetup && usesRegion(codegenContext) -> {
                 writable {
                     rustTemplate(
                         """
@@ -188,6 +188,7 @@ private class AwsFluentClientRetryPartition(private val codegenContext: ClientCo
                         "Cow" to RuntimeType.Cow,
                     )
                 }
+            }
             else -> emptySection
         }
     }
