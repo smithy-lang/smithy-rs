@@ -30,10 +30,11 @@ const WHEN_REQUIRED: &str = "when_required";
 ///   request payloads of operations modeled with the  `httpChecksum` trait where
 ///   `requestChecksumRequired` is `true` or where a requestAlgorithmMember
 ///   is modeled and supplied.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum RequestChecksumCalculation {
     /// Calculate request checksums when they are supported.
+    #[default]
     WhenSupported,
     /// Caulculate request checksums only when they are required.
     WhenRequired,
@@ -67,10 +68,11 @@ impl FromStr for RequestChecksumCalculation {
 /// * [ResponseChecksumValidation::WhenRequired] - When set, checksum validation is not performed on
 ///   response payloads of operations unless the checksum algorithm is supported and
 ///   the `requestValidationModeMember` member is set to `ENABLED`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum ResponseChecksumValidation {
     /// Validate response checksums when they are supported.
+    #[default]
     WhenSupported,
     /// Validate response checksums only when they are required.
     WhenRequired,
