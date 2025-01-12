@@ -15,9 +15,6 @@ pub trait ProvideMeter: Send + Sync + Debug {
     type Meter: Meter;
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Arc<Self::Meter>;
-
-    /// Cast to [std::any::Any]
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Collects a set of events with an event count and sum for all events.

@@ -24,6 +24,7 @@ opentelemetry_sdk = {version = "0.26.0", features = ["metrics", "testing"]}
 
 [dev-dependencies]
 tokio = { version = "1.23.1" }
+criterion = {version = "0.5.1", features = ["async_tokio"]}
 
 [package.metadata.docs.rs]
 all-features = true
@@ -31,3 +32,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[[bench]]
+name = "sync_instruments"
+harness = false

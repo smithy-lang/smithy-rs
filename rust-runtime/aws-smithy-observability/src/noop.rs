@@ -26,10 +26,6 @@ impl ProvideMeter for NoopMeterProvider {
     ) -> Arc<Self::Meter> {
         Arc::new(NoopMeter)
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[derive(Debug)]

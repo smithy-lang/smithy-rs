@@ -368,10 +368,6 @@ impl ProvideMeter for AwsSdkOtelMeterProvider {
     fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<MeterWrap> {
         Arc::new(MeterWrap(self.meter_provider.meter(scope)))
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(test)]
@@ -422,12 +418,7 @@ mod tests {
         histogram.record(1.234, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp
-            .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        dyn_sdk_mp.shutdown().unwrap();
 
         // Extract the metrics from the exporter and assert that they are what we expect
         let finished_metrics = exporter.get_finished_metrics().unwrap();
@@ -525,12 +516,7 @@ mod tests {
         async_mono_counter.record(4, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp
-            .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        dyn_sdk_mp.shutdown().unwrap();
 
         // Extract the metrics from the exporter
         let finished_metrics = exporter.get_finished_metrics().unwrap();

@@ -62,13 +62,7 @@ mod tests {
         mono_counter.add(4, None, None);
 
         // Flush metric pipeline and extract metrics from exporter
-        global_tp
-            .meter_provider()
-            .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        global_tp.meter_provider().shutdown().unwrap();
         let finished_metrics = exporter.get_finished_metrics().unwrap();
 
         let extracted_mono_counter_data = &finished_metrics[0].scope_metrics[0].metrics[0]
@@ -81,11 +75,7 @@ mod tests {
         assert_eq!(extracted_mono_counter_data, &4);
 
         // Get the OTel TP out and shut it down
-        let foo = global_tp
-            .meter_provider()
-            .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
-            .unwrap();
+        let foo = global_tp.meter_provider();
         foo.shutdown().unwrap();
     }
 }
