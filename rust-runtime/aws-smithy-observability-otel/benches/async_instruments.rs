@@ -20,20 +20,7 @@ use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
 use aws_smithy_observability_otel::meter::AwsSdkOtelMeterProvider;
 
-async fn record_async_instruments() {
-    // Create the OTel metrics objects
-    let exporter = InMemoryMetricsExporter::default();
-    let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
-    let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
-
-    // Create the SDK metrics types from the OTel objects
-    let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-    let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
-
-    // Get the dyn versions of the SDK metrics objects
-    let dyn_sdk_mp = sdk_tp.meter_provider();
-    let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
-
+async fn record_async_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
     //Create all async instruments and record some data
     let gauge = dyn_sdk_meter.create_gauge(
         "TestGauge".to_string(),
@@ -80,48 +67,28 @@ async fn record_async_instruments() {
         None,
     );
     async_mono_counter.record(4, None, None);
-
-    // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-    dyn_sdk_mp
-        .as_any()
-        .downcast_ref::<AwsSdkOtelMeterProvider>()
-        .unwrap()
-        .shutdown()
-        .unwrap();
-
-    // Extract the metrics from the exporter
-    let finished_metrics = exporter.get_finished_metrics().unwrap();
-
-    // Assert that the reported metrics are what we expect
-    let extracted_gauge_data = &finished_metrics[0].scope_metrics[0].metrics[0]
-        .data
-        .as_any()
-        .downcast_ref::<Gauge<f64>>()
-        .unwrap()
-        .data_points[0]
-        .value;
-
-    let extracted_async_ud_counter_data = &finished_metrics[0].scope_metrics[0].metrics[1]
-        .data
-        .as_any()
-        .downcast_ref::<Sum<i64>>()
-        .unwrap()
-        .data_points[0]
-        .value;
-
-    let extracted_async_mono_data = &finished_metrics[0].scope_metrics[0].metrics[2]
-        .data
-        .as_any()
-        .downcast_ref::<Sum<u64>>()
-        .unwrap()
-        .data_points[0]
-        .value;
 }
 
 fn async_instruments_benchmark(c: &mut Criterion) {
-    c.bench_function("sync_instruments", |b| {
-        b.to_async(tokio::runtime::Runtime::new().unwrap())
-            .iter(|| async { record_async_instruments() });
+    // Setup the Otel MeterProvider (which needs to be done inside an async runtime)
+    // The runtime is reused later for running the bench function
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let otel_mp = runtime.block_on(async {
+        let exporter = InMemoryMetricsExporter::default();
+        let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
+        SdkMeterProvider::builder().with_reader(reader).build()
+    });
+    // Create the SDK metrics types from the OTel objects
+    let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+    let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
+
+    // Get the dyn versions of the SDK metrics objects
+    let dyn_sdk_mp = sdk_tp.meter_provider();
+    let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
+
+    c.bench_function("async_instruments", |b| {
+        b.to_async(&runtime)
+            .iter(|| async { record_async_instruments(dyn_sdk_meter.clone()) });
     });
 }
 
