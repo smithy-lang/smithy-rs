@@ -20,23 +20,7 @@ use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
 use aws_smithy_observability_otel::meter::{AwsSdkOtelMeterProvider, MeterWrap};
 
-async fn record_sync_instruments() {
-    // Create the OTel metrics objects
-    let exporter = InMemoryMetricsExporter::default();
-    let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
-    let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
-
-    // Create the SDK metrics types from the OTel objects
-    let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
-    let sdk_tp = TelemetryProvider::builder()
-        .meter_provider(sdk_mp)
-        .build()
-        .unwrap();
-
-    // Get the dyn versions of the SDK metrics objects
-    let sdk_mp = sdk_tp.meter_provider();
-    let sdk_meter = sdk_mp.get_meter("TestMeter", None);
-
+async fn record_sync_instruments(sdk_meter: Arc<MeterWrap>) {
     //Create all 3 sync instruments and record some data for each
     let mono_counter =
         sdk_meter.create_monotonic_counter("TestMonoCounter".to_string(), None, None);
@@ -50,9 +34,29 @@ async fn record_sync_instruments() {
 }
 
 fn sync_instruments_benchmark(c: &mut Criterion) {
+    // Setup the Otel MeterProvider (which needs to be done inside an async runtime)
+    // The runtime is reused later for running the bench function
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let otel_mp = runtime.block_on(async {
+        let exporter = InMemoryMetricsExporter::default();
+        let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
+        SdkMeterProvider::builder().with_reader(reader).build()
+    });
+
+    // Create the SDK metrics types from the OTel objects
+    let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+    let sdk_tp = TelemetryProvider::builder()
+        .meter_provider(sdk_mp)
+        .build()
+        .unwrap();
+
+    // Get the dyn versions of the SDK metrics objects
+    let dyn_sdk_mp = sdk_tp.meter_provider();
+    let sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
+
     c.bench_function("sync_instruments", |b| {
-        b.to_async(tokio::runtime::Runtime::new().unwrap())
-            .iter(|| async { record_sync_instruments() });
+        b.to_async(&runtime)
+            .iter(|| async { record_sync_instruments(sdk_meter.clone()) });
     });
 }
 

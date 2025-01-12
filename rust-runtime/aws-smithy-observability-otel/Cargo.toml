@@ -36,3 +36,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [[bench]]
 name = "sync_instruments"
 harness = false
+
+[[bench]]
+name = "async_instruments"
+harness = false
