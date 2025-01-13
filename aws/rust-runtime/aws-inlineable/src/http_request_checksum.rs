@@ -212,9 +212,9 @@ where
             }
 
             // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
-            // If we have made it this far without a checksum being set we set the default as Crc32
-            let checksum_algorithm = incorporate_custom_default(checksum_algorithm, cfg)
-                .unwrap_or(ChecksumAlgorithm::Crc32);
+            // If we have made it this far without a checksum being set we set the default (currently Crc32)
+            let checksum_algorithm =
+                incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
 
             // Set the user-agent metric for the selected checksum algorithm
             match checksum_algorithm {

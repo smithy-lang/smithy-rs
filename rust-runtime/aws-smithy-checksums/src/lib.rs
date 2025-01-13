@@ -34,9 +34,10 @@ pub const SHA_256_NAME: &str = "sha256";
 pub const MD5_NAME: &str = "md5";
 
 /// We only support checksum calculation and validation for these checksum algorithms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[non_exhaustive]
 pub enum ChecksumAlgorithm {
+    #[default]
     Crc32,
     Crc32c,
     #[deprecated]
