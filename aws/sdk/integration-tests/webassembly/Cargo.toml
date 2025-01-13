@@ -35,7 +35,7 @@ aws-smithy-wasm = { path = "../../build/aws-sdk/sdk/aws-smithy-wasm" }
 http = "0.2.9"
 tokio = { version = "1.32.0", features = ["macros", "rt"] }
 
-[target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
+[target.'cfg(all(target_family = "wasm", target_env = "p1"))'.dependencies]
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 
 [lib]
