@@ -412,6 +412,8 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             opt.sdk_release_tag.as_ref(),
         )?);
 
+        tracing::debug!(wasm_bin_path = ?wasm_bin_path, bundle_path = ?bundle_path);
+
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
         //Write the canary bin to the zip

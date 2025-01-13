@@ -11,6 +11,7 @@ export AWS_ACCESS_KEY_ID=$2
 export AWS_SECRET_ACCESS_KEY=$3
 export AWS_SESSION_TOKEN=$4
 export AWS_REGION=us-west-2
+export RUST_LOG=debug
 
 SDK_PATH="$(pwd)/aws-sdk/sdk"
 
