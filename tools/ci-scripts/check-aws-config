@@ -48,13 +48,13 @@ cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls -
 # grouping these features because they don't interact
 cargo hack test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls
 
-echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasi targets${C_RESET}"
+echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasip1 targets${C_RESET}"
 cargo check --target wasm32-unknown-unknown --no-default-features
-cargo check --target wasm32-wasi --no-default-features
+cargo check --target wasm32-wasip1 --no-default-features
 
 # TODO(https://github.com/smithy-lang/smithy-rs/issues/2499): Uncomment the following once aws-config tests compile for WASM
-# echo "${C_YELLOW}## Testing the wasm32-unknown-unknown and wasm32-wasi targets${C_RESET}"
+# echo "${C_YELLOW}## Testing the wasm32-unknown-unknown and wasm32-wasip1 targets${C_RESET}"
 # wasm-pack test --node -- --no-default-features
-# cargo test --target wasm32-wasi --no-default-features
+# cargo test --target wasm32-wasip1 --no-default-features
 
 popd &>/dev/null

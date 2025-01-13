@@ -401,7 +401,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             repository_root
                 .join("tools")
                 .join("target")
-                .join("wasm32-wasi")
+                .join("wasm32-wasip1")
                 .join("release")
                 .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
