@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
@@ -58,6 +59,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 listOf(
                     AwsPresignedFluentBuilderMethod(codegenContext),
                     AwsFluentClientDocs(codegenContext),
+                    AwsFluentClientRetryPartition(codegenContext),
                 ).letIf(codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
                     it + S3ExpressFluentClientCustomization(codegenContext)
                 },
@@ -162,6 +164,31 @@ private class AwsFluentClientDocs(private val codegenContext: ClientCodegenConte
                     FluentClientDocs.waiterDocs(codegenContext)(this)
                 }
 
+            else -> emptySection
+        }
+    }
+}
+
+/**
+ * Replaces the default retry partition for all operations to include the AWS region if set
+ */
+private class AwsFluentClientRetryPartition(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
+    override fun section(section: FluentClientSection): Writable {
+        return when {
+            section is FluentClientSection.BeforeBaseClientPluginSetup && usesRegion(codegenContext) -> {
+                writable {
+                    rustTemplate(
+                        """
+                        let default_retry_partition = match config.region() {
+                            Some(region) => #{Cow}::from(format!("{default_retry_partition}-{}", region)),
+                            None => #{Cow}::from(default_retry_partition),
+                        };
+                        """,
+                        *preludeScope,
+                        "Cow" to RuntimeType.Cow,
+                    )
+                }
+            }
             else -> emptySection
         }
     }
