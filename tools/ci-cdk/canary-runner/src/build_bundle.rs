@@ -401,7 +401,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             repository_root
                 .join("tools")
                 .join("target")
-                .join("wasm32-wasi")
+                .join("wasm32-wasip1")
                 .join("release")
                 .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
@@ -411,6 +411,8 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             opt.rust_version.as_deref(),
             opt.sdk_release_tag.as_ref(),
         )?);
+
+        tracing::debug!(wasm_bin_path = ?wasm_bin_path, bundle_path = ?bundle_path);
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
