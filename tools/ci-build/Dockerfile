@@ -120,16 +120,16 @@ ARG maturin_version=1.5.1
 RUN cargo install maturin --locked --version ${maturin_version}
 
 FROM install_rust AS wasm_pack
-ARG wasm_pack_version=0.12.1
+ARG wasm_pack_version=0.13.1
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG cargo_wasmtime_version=19.0.1
+ARG cargo_wasmtime_version=28.0.0
 ARG rust_nightly_version
 RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_component
-ARG cargo_component_version=0.13.2
+ARG cargo_component_version=0.20.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
