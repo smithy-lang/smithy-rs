@@ -111,9 +111,7 @@ apply PutBucketLifecycleConfiguration @httpRequestTests([
         protocol: "aws.protocols#restXml",
         uri: "/",
         headers: {
-            // we can assert this, but when this test is promoted, it can't assert
-            // on the exact contents
-            "content-md5": "JP8DTuCSH6yDC8wNGg4+mA==",
+            "x-amz-checksum-crc32": "11+f3g==",
         },
         bodyMediaType: "application/xml",
         body: """
