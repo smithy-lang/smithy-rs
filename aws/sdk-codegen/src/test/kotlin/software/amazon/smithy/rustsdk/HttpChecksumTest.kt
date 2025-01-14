@@ -164,6 +164,9 @@ internal class HttpChecksumTest {
             val miscTests = createMiscellaneousTests(context)
 
             // Shared imports for all test types
+            // Note about the `//#{PresigningMarker}` below. The `RequestChecksumInterceptor` relies on the `PresigningMarker` type from
+            // the presigning inlineable. The decorator for that inlineable doesn't play nicely with the test model from the SEP, so we
+            // use this as a kind of blunt way to include the presigning inlineable without actually wiring it up with the model.
             val testBase =
                 writable {
                     rustTemplate(
