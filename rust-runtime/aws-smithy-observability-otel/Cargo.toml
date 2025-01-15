@@ -12,11 +12,6 @@ repository = "https://github.com/awslabs/smithy-rs"
 [dependencies]
 aws-smithy-observability = { path = "../aws-smithy-observability" }
 opentelemetry = {version = "0.26.0", features = ["metrics"]}
-# The below dependencies are transitive, but must be pinned until we can generate a new lockfile
-# lockfile generation currently blocked by aws-lc-sys build issue
-value-bag = "1.10.0"
-async-global-executor = "2.4.1"
-async-task = "=4.7.1"
 
 # This crate cannot be used on powerpc
 [target.'cfg(not(target_arch = "powerpc"))'.dependencies]
@@ -25,6 +20,7 @@ opentelemetry_sdk = {version = "0.26.0", features = ["metrics", "testing"]}
 [dev-dependencies]
 tokio = { version = "1.23.1" }
 criterion = {version = "0.5.1", features = ["async_tokio"]}
+stats_alloc = "0.1.10"
 
 [package.metadata.docs.rs]
 all-features = true

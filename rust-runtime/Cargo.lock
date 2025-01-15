@@ -729,14 +729,12 @@ dependencies = [
 name = "aws-smithy-observability-otel"
 version = "0.1.0"
 dependencies = [
- "async-global-executor",
- "async-task",
  "aws-smithy-observability",
  "criterion",
  "opentelemetry",
  "opentelemetry_sdk",
+ "stats_alloc",
  "tokio",
- "value-bag",
 ]
 
 [[package]]
@@ -3823,6 +3821,12 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stats_alloc"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c0e04424e733e69714ca1bbb9204c1a57f09f5493439520f9f68c132ad25eec"
 
 [[package]]
 name = "strsim"
