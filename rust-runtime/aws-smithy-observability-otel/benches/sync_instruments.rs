@@ -3,22 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::Arc;
-
-use aws_smithy_observability::attributes::{AttributeValue, Attributes};
 use aws_smithy_observability::meter::{
-    AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
+    Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
 };
 use aws_smithy_observability::provider::TelemetryProvider;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use opentelemetry_sdk::metrics::{
-    data::{Gauge, Histogram as OtelHistogram, Sum},
-    PeriodicReader, SdkMeterProvider,
-};
+use aws_smithy_observability_otel::meter::{AwsSdkOtelMeterProvider, MeterWrap};
+use criterion::{criterion_group, criterion_main, Criterion};
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
+use std::sync::Arc;
 
-use aws_smithy_observability_otel::meter::{AwsSdkOtelMeterProvider, MeterWrap};
+use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
+use std::alloc::System;
 
 async fn record_sync_instruments(sdk_meter: Arc<MeterWrap>) {
     //Create all 3 sync instruments and record some data for each
@@ -34,6 +31,10 @@ async fn record_sync_instruments(sdk_meter: Arc<MeterWrap>) {
 }
 
 fn sync_instruments_benchmark(c: &mut Criterion) {
+    #[global_allocator]
+    static GLOBAL: &StatsAlloc<System> = &INSTRUMENTED_SYSTEM;
+    let reg = Region::new(&GLOBAL);
+
     // Setup the Otel MeterProvider (which needs to be done inside an async runtime)
     // The runtime is reused later for running the bench function
     let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -58,6 +59,8 @@ fn sync_instruments_benchmark(c: &mut Criterion) {
         b.to_async(&runtime)
             .iter(|| async { record_sync_instruments(sdk_meter.clone()) });
     });
+    println!("FIINISHING");
+    println!("Stats at end: {:#?}", reg.change());
 }
 
 criterion_group!(benches, sync_instruments_benchmark);
