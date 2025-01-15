@@ -94,9 +94,10 @@ class RpcV2CborHttpBindingResolver(
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/cbor")
 }
 
-open class RpcV2Cbor(val codegenContext: CodegenContext,
-                     private val serializeCustomization: List<CborSerializerCustomization> = listOf(),
-                     private val parserCustomization: List<CborParserCustomization> = listOf()
+open class RpcV2Cbor(
+    val codegenContext: CodegenContext,
+    private val serializeCustomization: List<CborSerializerCustomization> = listOf(),
+    private val parserCustomization: List<CborParserCustomization> = listOf(),
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
@@ -139,7 +140,7 @@ open class RpcV2Cbor(val codegenContext: CodegenContext,
                     )
                 }
             },
-            customizations = parserCustomization
+            customizations = parserCustomization,
         )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =

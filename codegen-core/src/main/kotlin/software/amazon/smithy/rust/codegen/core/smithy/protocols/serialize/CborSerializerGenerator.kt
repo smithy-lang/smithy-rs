@@ -63,7 +63,7 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     data class BeforeSerializingStructureMembers(
         val structContext: CborSerializerGenerator.StructContext,
         val encoderBindingName: String,
-        val codegenContext: CodegenContext
+        val codegenContext: CodegenContext,
     ) : CborSerializerSection("BeforeSerializingStructureMembers")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
@@ -329,7 +329,7 @@ class CborSerializerGenerator(
                     CborSerializerSection.BeforeSerializingStructureMembers(
                         context,
                         "encoder",
-                        codegenContext
+                        codegenContext,
                     ),
                 )(this)
             }
@@ -344,7 +344,7 @@ class CborSerializerGenerator(
                         customization.section(
                             CborSerializerSection.AdditionalSerializingParameters(
                                 context,
-                                codegenContext
+                                codegenContext,
                             ),
                         )
                     }.join(",")
@@ -363,7 +363,7 @@ class CborSerializerGenerator(
                             CborSerializerSection.BeforeSerializingStructureMembers(
                                 context,
                                 "encoder",
-                                codegenContext
+                                codegenContext,
                             ),
                         )(this)
                     }
@@ -382,7 +382,7 @@ class CborSerializerGenerator(
                 customization.section(
                     CborSerializerSection.AdditionalSerializingArguments(
                         context,
-                        codegenContext
+                        codegenContext,
                     ),
                 )
             }.join(",")
@@ -469,15 +469,14 @@ class CborSerializerGenerator(
                                 CborSerializerSection.CustomizeUnionMemberKeyEncode(
                                     context,
                                     encoder,
-                                    codegenContext
+                                    codegenContext,
                                 ),
                             )
                         }
 
                     if (customizedWritable.isNotEmpty()) {
                         customizedWritable.join("")(this)
-                    }
-                    else {
+                    } else {
                         rust("$encoder;") // Encode the member key.
                     }
                 }
@@ -532,7 +531,7 @@ class CborSerializerGenerator(
                             customization.section(
                                 CborSerializerSection.CustomizeUnionEncoderMapLength(
                                     context,
-                                    codegenContext
+                                    codegenContext,
                                 ),
                             )
                         }
@@ -540,8 +539,7 @@ class CborSerializerGenerator(
                     // Otherwise fall back to default union variant serialization
                     if (customizedWritable.isNotEmpty()) {
                         customizedWritable.join("")(this)
-                    }
-                    else {
+                    } else {
                         // A union is serialized identically as a `structure` shape, but only a single member can be set to a
                         // non-null value.
                         rust("encoder.map(1);")

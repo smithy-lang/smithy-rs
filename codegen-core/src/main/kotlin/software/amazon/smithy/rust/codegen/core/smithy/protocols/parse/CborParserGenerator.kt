@@ -58,6 +58,7 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 /** Class describing a CBOR parser section that can be used in a customization. */
 sealed class CborParserSection(name: String) : Section(name) {
     data class BeforeBoxingDeserializedMember(val shape: MemberShape) : CborParserSection("BeforeBoxingDeserializedMember")
+
     /**
      * Represents a customization point in union deserialization that occurs before decoding the map structure.
      * This allows for custom handling of union variants before the standard map decoding logic is applied.
@@ -77,7 +78,8 @@ abstract class CborParserCustomization : NamedCustomization<CborParserSection>()
      * @param defaultContext The default discrimination context containing decoder symbol and discriminator method.
      * @return UnionVariantDiscriminatorContext that defines how to discriminate union variants.
      */
-    open fun getUnionVariantDiscriminator(defaultContext: CborParserGenerator.UnionVariantDiscriminatorContext) = defaultContext
+    open fun getUnionVariantDiscriminator(defaultContext: CborParserGenerator.UnionVariantDiscriminatorContext) =
+        defaultContext
 }
 
 class CborParserGenerator(
@@ -344,7 +346,7 @@ class CborParserGenerator(
                     """
                     Ok(match #{VariableDiscriminatingExpression} {
                     """,
-                    "VariableDiscriminatingExpression" to discriminatorContext.variantDiscriminatorExpression
+                    "VariableDiscriminatingExpression" to discriminatorContext.variantDiscriminatorExpression,
                 ).run {
                     for (member in shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
@@ -391,11 +393,15 @@ class CborParserGenerator(
             }
         }
 
-    private fun getUnionDiscriminatorContext(decoderType: String, callMethod: String) : UnionVariantDiscriminatorContext {
-        val defaultUnionPairContext = UnionVariantDiscriminatorContext(
-            smithyCbor.resolve(decoderType).toSymbol(),
-            writable { rustTemplate(callMethod)  },
-        )
+    private fun getUnionDiscriminatorContext(
+        decoderType: String,
+        callMethod: String,
+    ): UnionVariantDiscriminatorContext {
+        val defaultUnionPairContext =
+            UnionVariantDiscriminatorContext(
+                smithyCbor.resolve(decoderType).toSymbol(),
+                writable { rustTemplate(callMethod) },
+            )
         return customizations.fold(defaultUnionPairContext) { context, customization ->
             customization.getUnionVariantDiscriminator(context)
         }
