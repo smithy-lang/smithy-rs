@@ -232,9 +232,9 @@ checksum = "b16d1aa50accc11a4b4d5c50f7fb81cc0cf60328259c587d0e6b0f11385bde46"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
- "aws-smithy-async 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-eventstream 0.60.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-http 0.60.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-eventstream 0.60.5",
+ "aws-smithy-http 0.60.11",
  "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-types 1.2.11",
@@ -259,11 +259,11 @@ dependencies = [
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
- "aws-smithy-async 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-checksums 0.60.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-eventstream 0.60.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-http 0.60.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-json 0.61.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-checksums 0.60.13",
+ "aws-smithy-eventstream 0.60.5",
+ "aws-smithy-http 0.60.11",
+ "aws-smithy-json 0.61.1",
  "aws-smithy-runtime 1.7.6",
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-types 1.2.11",
@@ -441,7 +441,7 @@ dependencies = [
 name = "aws-smithy-experimental"
 version = "0.1.5"
 dependencies = [
- "aws-smithy-async 1.2.3",
+ "aws-smithy-async 1.2.4",
  "aws-smithy-runtime 1.7.7",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.12",
@@ -659,11 +659,11 @@ version = "1.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a05dd41a70fc74051758ee75b5c4db2c0ca070ed9229c3df50e9475cda1cb985"
 dependencies = [
- "aws-smithy-async 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-http 0.60.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-async 1.2.3",
+ "aws-smithy-http 0.60.11",
  "aws-smithy-protocol-test 0.63.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "aws-smithy-types 1.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "aws-smithy-types 1.2.11",
  "bytes",
  "fastrand",
  "h2 0.3.26",
@@ -690,11 +690,11 @@ name = "aws-smithy-runtime"
 version = "1.7.7"
 dependencies = [
  "approx",
- "aws-smithy-async 1.2.3",
- "aws-smithy-http 0.60.11",
+ "aws-smithy-async 1.2.4",
+ "aws-smithy-http 0.60.12",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-runtime-api 1.7.3",
- "aws-smithy-types 1.2.11",
+ "aws-smithy-types 1.2.12",
  "bytes",
  "fastrand",
  "futures-util",
@@ -1052,7 +1052,7 @@ version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3fce8dd7fcfcbf3a0a87d8f515194b49d6135acab73e18bd380d1d93bb1a15eb"
 dependencies = [
- "clap 4.5.23",
+ "clap 4.5.26",
  "heck",
  "indexmap 2.7.0",
  "log",
@@ -1060,7 +1060,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "syn 2.0.94",
+ "syn 2.0.96",
  "tempfile",
  "toml",
 ]
@@ -1426,9 +1426,9 @@ dependencies = [
 
 [[package]]
 name = "data-encoding"
-version = "2.6.0"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
+checksum = "0e60eed09d8c01d3cee5b7d30acb059b76614c918fa0f992e0dd6eeb10daad6f"
 
 [[package]]
 name = "der"
@@ -2230,8 +2230,8 @@ version = "0.1.0"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-compression",
- "aws-smithy-http 0.60.11",
- "aws-smithy-json 0.61.1",
+ "aws-smithy-http 0.60.12",
+ "aws-smithy-json 0.61.2",
  "aws-smithy-runtime 1.7.7",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.12",
@@ -2488,9 +2488,9 @@ checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
 name = "minicbor"
-version = "0.24.4"
+version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29be4f60e41fde478b36998b88821946aafac540e53591e76db53921a0cc225b"
+checksum = "5f8e213c36148d828083ae01948eed271d03f95f7e72571fa242d78184029af2"
 dependencies = [
  "half",
  "minicbor-derive",
