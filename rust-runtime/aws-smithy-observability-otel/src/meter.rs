@@ -196,11 +196,11 @@ impl Meter for MeterWrap {
     type MonotonicCounter = MonotonicCounterWrap;
     type AsyncMC = AsyncMonotonicCounterWrap;
     type Histogram = HistogramWrap;
-    type GaugeCallback<'a> = fn(&AsyncInstrumentWrap<'_, f64>);
+    type GaugeCallback<'a> = fn(&Self::GaugeCallbackInput<'_>);
     type GaugeCallbackInput<'a> = AsyncInstrumentWrap<'a, f64>;
-    type AsyncUDCCallback<'a> = fn(&AsyncInstrumentWrap<'_, i64>);
+    type AsyncUDCCallback<'a> = fn(&Self::AsyncUDCCallbackInput<'_>);
     type AsyncUDCCallbackInput<'a> = AsyncInstrumentWrap<'a, i64>;
-    type AsyncMCCallback<'a> = fn(&AsyncInstrumentWrap<'_, u64>);
+    type AsyncMCCallback<'a> = fn(&Self::AsyncMCCallbackInput<'_>);
     type AsyncMCCallbackInput<'a> = AsyncInstrumentWrap<'a, u64>;
 
     fn create_gauge(
