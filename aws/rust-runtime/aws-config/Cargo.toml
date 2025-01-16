@@ -23,6 +23,7 @@ client-hyper = ["aws-smithy-runtime/default-http-connector"]
 rustls = ["client-hyper"]
 default-http-connector = ["aws-smithy-runtime/default-http-connector"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
+test-util = ["aws-runtime/test-util"]
 
 # deprecated: this feature does nothing
 allow-compilation = []
@@ -43,7 +44,7 @@ http = "1"
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
-url = "2.3.1"
+url = "2.5.4"
 
 # implementation detail of IMDS credentials provider
 fastrand = "2.0.0"
@@ -57,7 +58,8 @@ zeroize = { version = "1", optional = true }
 # implementation detail of SSO OIDC `CreateToken` for SSO token providers
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }
 
-proc-macro2 = {version = "1.0.92", optional = true }
+# FIXME(hyper1): pins proc macro to fix build issue.
+proc-macro2 = { version = "1.0.92", optional = true }
 
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }

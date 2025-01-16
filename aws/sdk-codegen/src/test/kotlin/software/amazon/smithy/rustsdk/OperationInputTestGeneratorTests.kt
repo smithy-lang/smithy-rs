@@ -56,6 +56,50 @@ class OperationInputTestGeneratorTests {
     }
 
     @Test
+    fun `finds operation shape by name from nested operations`() {
+        val prefix = "\$version: \"2\""
+        val operationModel =
+            """
+            $prefix
+            namespace operations.bells
+
+            resource Bell {
+                operations: [Ding]
+            }
+
+            operation Ding {}
+            """.trimIndent()
+        val serviceModel =
+            """
+            $prefix
+            namespace service
+
+            use operations.bells#Bell
+
+            service MyService {
+                resources: [Bell]
+            }
+            """.trimIndent()
+
+        val model =
+            Model.assembler()
+                .discoverModels()
+                .addUnparsedModel("operation.smithy", operationModel)
+                .addUnparsedModel("main.smithy", serviceModel)
+                .assemble()
+                .unwrap()
+
+        val context = testClientCodegenContext(model)
+        val testOperationInput =
+            EndpointTestOperationInput.builder()
+                .operationName("Ding")
+                .build()
+
+        val operationId = context.operationId(testOperationInput)
+        assertEquals("operations.bells#Ding", operationId.toString())
+    }
+
+    @Test
     fun `fails for operation name not found`() {
         val model =
             """

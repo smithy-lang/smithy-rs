@@ -182,6 +182,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                     "ShouldAttempt" to
                         RuntimeType.smithyRuntimeApi(runtimeConfig)
                             .resolve("client::retries::ShouldAttempt"),
+                    "TokenBucket" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::TokenBucket"),
                 )
             rustCrate.testModule {
                 unitTest("test_operation_overrides_retry_config") {
@@ -199,6 +200,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
                         let mut layer = #{Layer}::new("test");
                         layer.store_put(#{RequestAttempts}::new(1));
+                        layer.store_put(#{TokenBucket}::default());
 
                         let mut cfg = #{ConfigBag}::of_layers(vec![layer]);
                         let client_config_layer = client_config.config;

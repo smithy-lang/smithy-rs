@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk.endpoints
 
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
@@ -222,4 +223,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
 }
 
 fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =
-    this.serviceShape.allOperations.first { it.name == testOperationInput.operationName }
+    TopDownIndex.of(this.model)
+        .getContainedOperations(this.serviceShape)
+        .map { it.toShapeId() }
+        .first { it.name == testOperationInput.operationName }

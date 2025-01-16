@@ -36,7 +36,7 @@ percent-encoding = "2.2.0"
 pin-project-lite = "0.2"
 regex-lite = "0.1.5"
 tracing = "0.1.37"
-url = "2.3.1"
+url = "2.5.4"
 
 [dev-dependencies]
 proptest = "1"

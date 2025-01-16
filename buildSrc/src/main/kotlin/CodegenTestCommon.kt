@@ -271,9 +271,10 @@ fun Project.registerGenerateCargoWorkspaceTask(
     val properties = PropertyRetriever(rootProject, this)
     project.tasks.register("generateCargoWorkspace") {
         description = "generate Cargo.toml workspace file"
+        val path = project.buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
+        outputs.file(path)
         doFirst {
-            project.buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
-                .writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
+            path.writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
         }
     }
 }

@@ -1,4 +1,26 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 14th, 2025
+==================
+**New this release:**
+- :bug::tada: (client, [smithy-rs#3845](https://github.com/smithy-lang/smithy-rs/issues/3845)) S3 client behavior is updated to always calculate a checksum by default for operations that support it (such as PutObject or UploadPart), or require it (such as DeleteObjects). The default checksum algorithm is CRC32. Checksum behavior can be configured using `when_supported` and `when_required` options - in shared config using request_checksum_calculation, or as env variable using AWS_REQUEST_CHECKSUM_CALCULATION.
+
+    The S3 client attempts to validate response checksums for all S3 API operations that support checksums. However, if the SDK has not implemented the specified checksum algorithm then this validation is skipped. Checksum validation behavior can be configured using `when_supported` and `when_required` options - in shared config using response_checksum_validation, or as env variable using AWS_RESPONSE_CHECKSUM_VALIDATION.
+- :bug::tada: (client, [smithy-rs#3967](https://github.com/smithy-lang/smithy-rs/issues/3967)) Updates client generation to conform with Smithy's updates to the [httpChecksum trait](https://smithy.io/2.0/aws/aws-core.html#aws-protocols-httpchecksum-trait).
+- :bug: (client, [aws-sdk-rust#1234](https://github.com/awslabs/aws-sdk-rust/issues/1234)) Fix token bucket not being set for standard and adaptive retry modes
+
+
+December 30th, 2024
+===================
+
+December 26th, 2024
+===================
+**New this release:**
+- :bug: (server, [smithy-rs#3890](https://github.com/smithy-lang/smithy-rs/issues/3890)) Fix bug in `serde` decorator that generated non-compiling code on some models
+
+
+December 16th, 2024
+===================
+
 December 3rd, 2024
 ==================
 **Breaking Changes:**

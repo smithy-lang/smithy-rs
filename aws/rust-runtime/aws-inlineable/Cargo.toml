@@ -38,7 +38,7 @@ ring = "0.17.5"
 sha2 = "0.10"
 tokio = "1.23.1"
 tracing = "0.1"
-url = "2.5.2"
+url = "2.5.4"
 
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }

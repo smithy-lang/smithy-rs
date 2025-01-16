@@ -6,49 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix minimum throughput detection for downloads to avoid incorrectly raising an error while the user is consuming data at a slow but steady pace.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3871",
-        "aws-sdk-rust#1202"
-      ],
-      "since-commit": "1e803494dc1c9f1d8290cf9317ed39b026a603a2",
-      "age": 5
-    },
-    {
-      "message": "Client SDKs built with the `awsQueryCompatible` trait now include the `x-amzn-query-mode` header. This header signals the service that the clients are operating in compatible mode.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3883"
-      ],
-      "since-commit": "c606065c0e2e97d3cecb6a675ffc226dc488d674",
-      "age": 4
-    },
-    {
-      "message": "Fix default credential provider chain not respecting endpoint URL overrides from environment\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [
-        "aws-sdk-rust#1193"
-      ],
-      "since-commit": "c606065c0e2e97d3cecb6a675ffc226dc488d674",
-      "age": 4
-    },
-    {
       "message": "Add auth token generator for Amazon Aurora DSQL.\n\n```rust\nuse aws_sdk_dsql::auth_token::{AuthTokenGenerator, Config};\n\n#[tokio::main]\nasync fn main() {\n   let cfg = aws_config::load_defaults(BehaviorVersion::latest()).await;\n   let generator = AuthTokenGenerator::new(\n       Config::builder()\n           .hostname(\"peccy.dsql.us-east-1.on.aws\")\n           .build()\n           .expect(\"cfg is valid\"),\n   );\n   let token = generator.auth_token(&cfg).await.unwrap();\n   println!(\"{token}\");\n}\n```\n\nThe resulting token can then be used as a password when connecting to the\ndatabase server.\n",
       "meta": {
         "bug": false,
@@ -58,6 +15,48 @@
       "author": "Velfi",
       "references": [],
       "since-commit": "039177d0ee6dd288ad57de2230a1110bbe7ff7d5",
+      "age": 5
+    },
+    {
+      "message": "It is now possible to disable payload signing through an operation customization.\n\n```rust\nasync fn put_example_object(client: &aws_sdk_s3::Client) {\n    let res = client\n        .put_object()\n        .bucket(\"test-bucket\")\n        .key(\"test-key\")\n        .body(ByteStream::from_static(b\"Hello, world!\"))\n        .customize()\n        // Setting this will disable payload signing.\n        .disable_payload_signing()\n        .send()\n        .await;\n}\n```\n\nDisabling payload signing will result in a small speedup at the cost of removing a data integrity check.\nHowever, this is an advanced feature and **may not be supported by all services/operations**.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "Velfi",
+      "references": [
+        "smithy-rs#3583"
+      ],
+      "since-commit": "89881abd3df80e9b6fd59790d7c02e2b9a6dd45c",
+      "age": 4
+    },
+    {
+      "message": "Fix token bucket not being set for standard and adaptive retry modes\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [
+        "aws-sdk-rust#1234"
+      ],
+      "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
+      "age": 1
+    },
+    {
+      "message": "S3 client behavior is updated to always calculate a checksum by default for operations that support it (such as PutObject or UploadPart), or require it (such as DeleteObjects). The default checksum algorithm is CRC32. Checksum behavior can be configured using `when_supported` and `when_required` options - in shared config using request_checksum_calculation, or as env variable using AWS_REQUEST_CHECKSUM_CALCULATION.\n\nThe S3 client attempts to validate response checksums for all S3 API operations that support checksums. However, if the SDK has not implemented the specified checksum algorithm then this validation is skipped. Checksum validation behavior can be configured using `when_supported` and `when_required` options - in shared config using response_checksum_validation, or as env variable using AWS_RESPONSE_CHECKSUM_VALIDATION.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#3845"
+      ],
+      "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
       "age": 1
     }
   ],

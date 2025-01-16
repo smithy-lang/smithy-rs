@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.78.0
+ARG rust_stable_version=1.81.0
 ARG rust_nightly_version=nightly-2024-06-30
 
 FROM ${base_image} AS bare_base_image
@@ -64,7 +64,9 @@ RUN set -eux; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
+    # NOTE: wasm32-wasi target is still valid in MSRV 1.81, when we update to 1.84 or above we _should_ be able to remove this target in favor of just wasip1
     rustup target add wasm32-wasi; \
+    rustup target add wasm32-wasip1; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
@@ -119,21 +121,21 @@ ARG maturin_version=1.5.1
 RUN cargo install maturin --locked --version ${maturin_version}
 
 FROM install_rust AS wasm_pack
-ARG wasm_pack_version=0.12.1
+ARG wasm_pack_version=0.13.1
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG cargo_wasmtime_version=19.0.1
+ARG cargo_wasmtime_version=28.0.0
 ARG rust_nightly_version
 RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_component
-ARG cargo_component_version=0.13.2
+ARG cargo_component_version=0.20.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.27.0
+ARG cargo_semver_checks_version=0.36.0
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
