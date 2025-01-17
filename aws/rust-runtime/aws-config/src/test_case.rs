@@ -318,7 +318,7 @@ where
     O: for<'a> Deserialize<'a> + Secrets + PartialEq + Debug,
     E: Error,
 {
-    #[cfg(feature = "default-http-connector")]
+    #[cfg(feature = "default-https-client")]
     #[allow(unused)]
     /// Record a test case from live (remote) HTTPS traffic
     ///

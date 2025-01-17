@@ -42,11 +42,11 @@ cargo hack check --feature-powerset --exclude-all-features --exclude-features al
 
 echo "${C_YELLOW}## Testing each feature in isolation${C_RESET}"
 # these features are missed by the following check because they are grouped
-cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls,default-http-connector --exclude-no-default-features
+cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls,default-https-client --exclude-no-default-features
 
 # This check will check other individual features and no-default-features
 # grouping these features because they don't interact
-cargo hack test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-http-connector
+cargo hack test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client
 
 echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasip1 targets${C_RESET}"
 cargo check --target wasm32-unknown-unknown --no-default-features

@@ -1135,7 +1135,7 @@ mod loader {
             assert_eq!(Some(&app_name), conf.app_name());
         }
 
-        #[cfg(feature = "default-http-connector")]
+        #[cfg(feature = "default-https-client")]
         #[tokio::test]
         async fn disable_default_credentials() {
             let config = defaults(BehaviorVersion::latest())
@@ -1145,7 +1145,7 @@ mod loader {
             assert!(config.credentials_provider().is_none());
         }
 
-        #[cfg(feature = "default-http-connector")]
+        #[cfg(feature = "default-https-client")]
         #[tokio::test]
         async fn identity_cache_defaulted() {
             let config = defaults(BehaviorVersion::latest()).load().await;
@@ -1153,7 +1153,7 @@ mod loader {
             assert!(config.identity_cache().is_some());
         }
 
-        #[cfg(feature = "default-http-connector")]
+        #[cfg(feature = "default-https-client")]
         #[allow(deprecated)]
         #[tokio::test]
         async fn identity_cache_old_behavior_version() {

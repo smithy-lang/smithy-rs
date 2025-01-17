@@ -44,7 +44,7 @@ pub mod test_util {
 /// This module is named after the hyper version number since we anticipate
 /// needing to provide equivalent functionality for hyper 1.x in the future.
 #[cfg(feature = "connector-hyper-0-14-x")]
-#[deprecated = "hyper 0.14.x connector is deprecated, please use the connector-hyper-1-x feature instead"]
+#[deprecated = "hyper 0.14.x connector is deprecated, please use the `aws-smithy-http-client` crate directly instead."]
 pub mod hyper_014 {
     #[allow(deprecated)]
     pub use aws_smithy_http_client::hyper_014::*;

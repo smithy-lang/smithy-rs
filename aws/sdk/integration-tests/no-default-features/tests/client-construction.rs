@@ -23,7 +23,7 @@ use std::time::Duration;
 // the connector being enabled transitively
 #[tokio::test]
 #[should_panic(
-    expected = "Enable the `default-http-connector` crate feature or configure an HTTP client to fix this."
+    expected = "Enable the `default-https-client` crate feature or configure an HTTP client to fix this."
 )]
 async fn test_clients_from_sdk_config() {
     aws_config::load_defaults(BehaviorVersion::latest()).await;
@@ -58,8 +58,8 @@ async fn test_clients_from_service_config() {
         .expect_err("it should fail to send a request because there is no HTTP client");
     let msg = format!("{}", DisplayErrorContext(err));
     assert!(
-        msg.contains("No HTTP client was available to send this request. Enable the `default-http-connector` crate feature or configure an HTTP client to fix this."),
-        "expected '{msg}' to contain 'No HTTP client was available to send this request. Enable the `default-http-connector` crate feature or set an HTTP client to fix this.'"
+        msg.contains("No HTTP client was available to send this request. Enable the `default-https-client` crate feature or configure an HTTP client to fix this."),
+        "expected '{msg}' to contain 'No HTTP client was available to send this request. Enable the `default-https-client` crate feature or set an HTTP client to fix this.'"
     );
 }
 

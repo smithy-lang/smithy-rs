@@ -379,7 +379,7 @@ async fn try_attempt(
         trace!(request = ?request, "transmitting request");
         let http_client = halt_on_err!([ctx] => runtime_components.http_client().ok_or_else(||
             OrchestratorError::other("No HTTP client was available to send this request. \
-                Enable the `default-http-connector` crate feature or configure an HTTP client to fix this.")
+                Enable the `default-https-client` crate feature or configure an HTTP client to fix this.")
         ));
         let timeout_config = cfg.load::<TimeoutConfig>().expect("timeout config must be set");
         let settings = {

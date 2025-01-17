@@ -11,7 +11,10 @@
 //!
 //! # Crate Features
 //!
-//! - `default-tls`: Enable default TLS provider (used by `default_client()` to provide a default configured HTTPS client)
+//! - `default-client`: Enable default HTTP client implementation (based on hyper 1.x).
+//! - `rustls-ring`: Enable TLS provider based on `rustls` using `ring` as the crypto provider
+//! - `rustls-aws-lc`: Enable TLS provider based on `rustls` using `aws-lc` as the crypto provider
+//! - `rustls-aws-lc-fips`: Same as `rustls-aws-lc` feature but using a FIPS compliant version of `aws-lc`
 //! - `hyper-014`: (Deprecated) HTTP client implementation based on hyper-0.14.x.
 //! - `test-util`: Enables utilities for unit tests. DO NOT ENABLE IN PRODUCTION.
 
@@ -36,9 +39,9 @@ pub mod hyper_014 {
 }
 
 /// Default HTTP and TLS connectors
-#[cfg(feature = "hyper-1")]
+#[cfg(feature = "default-client")]
 pub(crate) mod client;
-#[cfg(feature = "hyper-1")]
+#[cfg(feature = "default-client")]
 pub use client::{default_client, default_connector, tls, Builder, Connector, ConnectorBuilder};
 
 #[cfg(feature = "test-util")]

@@ -984,7 +984,7 @@ pub(crate) mod test {
     #[cfg_attr(windows, ignore)]
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]
-    #[cfg(feature = "default-http-connector")]
+    #[cfg(feature = "default-https-client")]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
         use aws_smithy_types::error::display::DisplayErrorContext;
