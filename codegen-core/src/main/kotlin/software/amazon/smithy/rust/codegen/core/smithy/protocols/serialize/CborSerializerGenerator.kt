@@ -321,15 +321,24 @@ class CborSerializerGenerator(
         return serverSerializer(errorShape, includedMembers, error = true)
     }
 
+    /**
+     * Retrieves customized parameters and arguments for struct serialization based on the provided context and section type.
+     *
+     * @param structContext The context containing information about the structure being serialized
+     * @param sectionType A function that takes a StructContext and CodegenContext and returns a CborSerializerSection.
+     *                   This determines which section of the serializer to customize (e.g., AdditionalSerializingArguments)
+     * @return A Writable containing the joined customized parameters/arguments as a comma-separated string with a leading comma,
+     *         or an empty Writable if no customizations are present
+     */
     private fun getCustomizedParamsAndArgsForStructSerializer(
         structContext: StructContext,
         sectionType: (StructContext, CodegenContext) -> CborSerializerSection,
     ) = customizations
         .map { it.section(sectionType(structContext, codegenContext)) }
-        .filter { it.isNotEmpty() }
-        .takeIf { it.isNotEmpty() }
-        ?.join(", ", prefix = ", ")
-        ?: writable {}
+        .filter { it.isNotEmpty() } // Remove any empty customizations.
+        .takeIf { it.isNotEmpty() } // Proceed only if there are remaining customizations.
+        ?.join(", ", prefix = ", ") // Join with commas and add leading comma.
+        ?: writable {} // Return empty writable if no customizations exist.
 
     private fun RustWriter.serializeStructure(
         context: StructContext,
@@ -355,7 +364,7 @@ class CborSerializerGenerator(
                 val paramsWritable =
                     getCustomizedParamsAndArgsForStructSerializer(
                         context,
-                        CborSerializerSection::AdditionalSerializingArguments,
+                        CborSerializerSection::AdditionalSerializingParameters,
                     )
                 rustBlockTemplate(
                     "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol} #{Params}) -> #{Result}<(), #{Error}>",
@@ -563,6 +572,31 @@ class CborSerializerGenerator(
     }
 
     /**
+     * Process and validate customizations for a CborSerializerSection.
+     *
+     * @param section The CborSerializerSection to validate
+     * @param customizationName A descriptive name for the customization type (used in error messages)
+     * @return A [Writable] containing the single valid customization, or an empty writable if none exist
+     * @throws IllegalArgumentException if multiple customizations are found
+     */
+    private fun validateAndGetUniqueCustomizationOrEmpty(
+        section: CborSerializerSection,
+        customizationName: String,
+    ): Writable =
+        customizations.map { customization ->
+            customization.section(section)
+        }
+            .filter { it.isNotEmpty() }
+            .also { filteredCustomizations ->
+                if (filteredCustomizations.size > 1) {
+                    throw IllegalArgumentException(
+                        "Found ${filteredCustomizations.size} $customizationName customizations, but only one is allowed.",
+                    )
+                }
+            }
+            .firstOrNull() ?: writable {}
+
+    /**
      * Process customizations for union variant encoding, ensuring only one customization exists.
      *
      * This function processes all customizations to find those that modify how a union variant's
@@ -576,23 +610,13 @@ class CborSerializerGenerator(
     private fun validateAndGetUniqueUnionVariantEncoderLengthCustomizedEncodingOrEmpty(
         context: Context<UnionShape>,
     ): Writable =
-        customizations.map { customization ->
-            customization.section(
-                CborSerializerSection.CustomizeUnionEncoderMapLength(
-                    context,
-                    codegenContext,
-                ),
-            )
-        }
-            .filter { it.isNotEmpty() }
-            .also { filteredCustomizations ->
-                if (filteredCustomizations.size > 1) {
-                    throw IllegalArgumentException(
-                        "Found ${filteredCustomizations.size} union encoder map length customizations, but only one is allowed.",
-                    )
-                }
-            }
-            .firstOrNull() ?: writable {}
+        validateAndGetUniqueCustomizationOrEmpty(
+            CborSerializerSection.CustomizeUnionEncoderMapLength(
+                context,
+                codegenContext,
+            ),
+            "union encoder map length",
+        )
 
     /**
      * Validates and retrieves a single customization for encoding a union variant's key.
@@ -609,22 +633,12 @@ class CborSerializerGenerator(
         context: MemberContext,
         encoder: String,
     ): Writable =
-        customizations.map { customization ->
-            customization.section(
-                CborSerializerSection.CustomizeUnionMemberKeyEncode(
-                    context,
-                    encoder,
-                    codegenContext,
-                ),
-            )
-        }
-            .filter { it.isNotEmpty() }
-            .also { filteredCustomizations ->
-                if (filteredCustomizations.size > 1) {
-                    throw IllegalArgumentException(
-                        "Found ${filteredCustomizations.size} union variant key customizations, but only one is allowed.",
-                    )
-                }
-            }
-            .firstOrNull() ?: writable {}
+        validateAndGetUniqueCustomizationOrEmpty(
+            CborSerializerSection.CustomizeUnionMemberKeyEncode(
+                context,
+                encoder,
+                codegenContext,
+            ),
+            "union variant key",
+        )
 }
