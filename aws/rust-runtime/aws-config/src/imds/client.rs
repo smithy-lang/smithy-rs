@@ -238,6 +238,7 @@ impl ImdsCommonRuntimePlugin {
         config: &ProviderConfig,
         endpoint_resolver: ImdsEndpointResolver,
         retry_config: RetryConfig,
+        retry_classifier: SharedRetryClassifier,
         timeout_config: TimeoutConfig,
     ) -> Self {
         let mut layer = Layer::new("ImdsCommonRuntimePlugin");
@@ -254,7 +255,7 @@ impl ImdsCommonRuntimePlugin {
                 .with_http_client(config.http_client())
                 .with_endpoint_resolver(Some(endpoint_resolver))
                 .with_interceptor(UserAgentInterceptor::new())
-                .with_retry_classifier(SharedRetryClassifier::new(ImdsResponseRetryClassifier))
+                .with_retry_classifier(retry_classifier)
                 .with_retry_strategy(Some(StandardRetryStrategy::new()))
                 .with_time_source(Some(config.time_source()))
                 .with_sleep_impl(config.sleep_impl()),
@@ -323,6 +324,7 @@ pub struct Builder {
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
     config: Option<ProviderConfig>,
+    retry_classifier: Option<SharedRetryClassifier>,
 }
 
 impl Builder {
@@ -398,6 +400,14 @@ impl Builder {
         self
     }
 
+    /// Override the retry classifier for IMDS
+    ///
+    /// This defaults to only retrying on server errors and 401s
+    pub fn retry_classifier(mut self, retry_classifier: SharedRetryClassifier) -> Self {
+        self.retry_classifier = Some(retry_classifier);
+        self
+    }
+
     /* TODO(https://github.com/awslabs/aws-sdk-rust/issues/339): Support customizing the port explicitly */
     /*
     pub fn port(mut self, port: u32) -> Self {
@@ -421,10 +431,14 @@ impl Builder {
         };
         let retry_config = RetryConfig::standard()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
+        let retry_classifier = self
+            .retry_classifier
+            .unwrap_or(SharedRetryClassifier::new(ImdsResponseRetryClassifier));
         let common_plugin = SharedRuntimePlugin::new(ImdsCommonRuntimePlugin::new(
             &config,
             endpoint_resolver,
             retry_config,
+            retry_classifier,
             timeout_config,
         ));
         let operation = Operation::builder()
@@ -593,7 +607,9 @@ pub(crate) mod test {
         HttpRequest, HttpResponse, OrchestratorError,
     };
     use aws_smithy_runtime_api::client::result::ConnectorError;
-    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_runtime_api::client::retries::classifiers::{
+        ClassifyRetry, RetryAction, SharedRetryClassifier,
+    };
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
@@ -948,6 +964,66 @@ pub(crate) mod test {
             RetryAction::NoActionIndicated,
             classifier.classify_retry(&ctx)
         );
+    }
+
+    /// User provided retry classifier works
+    #[tokio::test]
+    async fn user_provided_retry_classifier() {
+        #[derive(Clone, Debug)]
+        struct UserProvidedRetryClassifier;
+
+        impl ClassifyRetry for UserProvidedRetryClassifier {
+            fn name(&self) -> &'static str {
+                "UserProvidedRetryClassifier"
+            }
+
+            // Don't retry anything
+            fn classify_retry(&self, _ctx: &InterceptorContext) -> RetryAction {
+                RetryAction::RetryForbidden
+            }
+        }
+
+        let events = vec![
+            ReplayEvent::new(
+                token_request("http://169.254.169.254", 21600),
+                token_response(0, TOKEN_A),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
+                http::Response::builder()
+                    .status(401)
+                    .body(SdkBody::empty())
+                    .unwrap(),
+            ),
+            ReplayEvent::new(
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_B),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/metadata", TOKEN_B),
+                imds_response("ok"),
+            ),
+        ];
+        let http_client = StaticReplayClient::new(events);
+
+        tokio::time::pause();
+        let client = super::Client::builder()
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_sleep_impl(InstantSleep::unlogged())
+                    .with_http_client(http_client.clone()),
+            )
+            .retry_classifier(SharedRetryClassifier::new(UserProvidedRetryClassifier))
+            .build();
+
+        let res = client
+            .get("/latest/metadata")
+            .await
+            .expect_err("Client should error");
+
+        // Assert that the operation errored on the initial 401 and did not retry and get
+        // the 200 (since the user provided retry classifier never retries)
+        assert_full_error_contains!(res, "401");
     }
 
     // since tokens are sent as headers, the tokens need to be valid header values
