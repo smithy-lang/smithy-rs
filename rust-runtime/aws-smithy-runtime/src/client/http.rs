@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+#[cfg(feature = "default-https-client")]
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 
 /// Interceptor for connection poisoning.
@@ -59,21 +60,22 @@ pub mod body;
 /// Configuration options for the default HTTPS client
 #[derive(Debug, Clone)]
 pub(crate) struct DefaultClientOptions {
-    behavior_version: BehaviorVersion,
+    _behavior_version: BehaviorVersion,
 }
 
 impl Default for DefaultClientOptions {
     fn default() -> Self {
         DefaultClientOptions {
-            behavior_version: BehaviorVersion::latest(),
+            _behavior_version: BehaviorVersion::latest(),
         }
     }
 }
 
 impl DefaultClientOptions {
     /// Set the behavior version to use
+    #[allow(unused)]
     pub(crate) fn with_behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
-        self.behavior_version = behavior_version;
+        self._behavior_version = behavior_version;
         self
     }
 }
