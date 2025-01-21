@@ -402,7 +402,9 @@ impl Builder {
 
     /// Override the retry classifier for IMDS
     ///
-    /// This defaults to only retrying on server errors and 401s
+    /// This defaults to only retrying on server errors and 401s. The [ImdsResponseRetryClassifier] in this
+    /// module offers some configuration options and can be wrapped by[SharedRetryClassifier::new()] for use
+    /// here or you can create your own fully customized [SharedRetryClassifier].
     pub fn retry_classifier(mut self, retry_classifier: SharedRetryClassifier) -> Self {
         self.retry_classifier = Some(retry_classifier);
         self
@@ -431,9 +433,9 @@ impl Builder {
         };
         let retry_config = RetryConfig::standard()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
-        let retry_classifier = self
-            .retry_classifier
-            .unwrap_or(SharedRetryClassifier::new(ImdsResponseRetryClassifier));
+        let retry_classifier = self.retry_classifier.unwrap_or(SharedRetryClassifier::new(
+            ImdsResponseRetryClassifier::default(),
+        ));
         let common_plugin = SharedRuntimePlugin::new(ImdsCommonRuntimePlugin::new(
             &config,
             endpoint_resolver,
@@ -563,8 +565,20 @@ impl ResolveEndpoint for ImdsEndpointResolver {
 /// - 403 (IMDS disabled): **Not Retryable**
 /// - 404 (Not found): **Not Retryable**
 /// - >=500 (server error): **Retryable**
-#[derive(Clone, Debug)]
-struct ImdsResponseRetryClassifier;
+/// - Timeouts: Not retried by default, but this is configurable via [Self::with_retry_connect_timeouts()]
+#[derive(Clone, Debug, Default)]
+#[non_exhaustive]
+pub struct ImdsResponseRetryClassifier {
+    retry_connect_timeouts: bool,
+}
+
+impl ImdsResponseRetryClassifier {
+    /// Indicate whether the IMDS client should retry on connection timeouts
+    pub fn with_retry_connect_timeouts(mut self, retry_connect_timeouts: bool) -> Self {
+        self.retry_connect_timeouts = retry_connect_timeouts;
+        self
+    }
+}
 
 impl ClassifyRetry for ImdsResponseRetryClassifier {
     fn name(&self) -> &'static str {
@@ -581,7 +595,10 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
                 // This catch-all includes successful responses that fail to parse. These should not be retried.
                 _ => RetryAction::NoActionIndicated,
             }
+        } else if self.retry_connect_timeouts {
+            RetryAction::server_error()
         } else {
+            // This is the default behavior.
             // Don't retry timeouts for IMDS, or else it will take ~30 seconds for the default
             // credentials provider chain to fail to provide credentials.
             // Also don't retry non-responses.
@@ -592,6 +609,7 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
 
 #[cfg(test)]
 pub(crate) mod test {
+    use crate::imds::client::ImdsError;
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
@@ -619,6 +637,7 @@ pub(crate) mod test {
     use std::collections::HashMap;
     use std::error::Error;
     use std::io;
+    use std::time::SystemTime;
     use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
@@ -949,7 +968,7 @@ pub(crate) mod test {
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Ok(Output::doesnt_matter()));
         ctx.set_response(imds_response("").map(|_| SdkBody::empty()));
-        let classifier = ImdsResponseRetryClassifier;
+        let classifier = ImdsResponseRetryClassifier::default();
         assert_eq!(
             RetryAction::NoActionIndicated,
             classifier.classify_retry(&ctx)
@@ -1006,8 +1025,7 @@ pub(crate) mod test {
         ];
         let http_client = StaticReplayClient::new(events);
 
-        tokio::time::pause();
-        let client = super::Client::builder()
+        let imds_client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
                     .with_sleep_impl(InstantSleep::unlogged())
@@ -1016,7 +1034,7 @@ pub(crate) mod test {
             .retry_classifier(SharedRetryClassifier::new(UserProvidedRetryClassifier))
             .build();
 
-        let res = client
+        let res = imds_client
             .get("/latest/metadata")
             .await
             .expect_err("Client should error");
@@ -1064,10 +1082,6 @@ pub(crate) mod test {
     #[tokio::test]
     #[cfg(feature = "rustls")]
     async fn one_second_connect_timeout() {
-        use crate::imds::client::ImdsError;
-        use aws_smithy_types::error::display::DisplayErrorContext;
-        use std::time::SystemTime;
-
         let client = Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
@@ -1095,6 +1109,48 @@ pub(crate) mod test {
         assert!(
             time_elapsed < Duration::from_secs(2),
             "time_elapsed should be less than 2s but was {:?}",
+            time_elapsed
+        );
+    }
+
+    /// Retry classifier properly retries timeouts when configured to (meaning it takes ~30s to fail)
+    #[tokio::test]
+    async fn retry_connect_timeouts() {
+        let imds_client = super::Client::builder()
+            .retry_classifier(SharedRetryClassifier::new(
+                ImdsResponseRetryClassifier::default().with_retry_connect_timeouts(true),
+            ))
+            .endpoint("http://240.0.0.0")
+            .expect("valid uri")
+            .build();
+
+        let now = SystemTime::now();
+        let res = imds_client
+            .get("/latest/metadata")
+            .await
+            .expect_err("240.0.0.0 will never resolve");
+        let time_elapsed: Duration = now.elapsed().unwrap();
+
+        match res {
+            err @ ImdsError::FailedToLoadToken(_)
+                if format!("{}", DisplayErrorContext(&err)).contains("timeout") => {}
+            other => panic!(
+                "wrong error, expected construction failure with TimedOutError inside: {}",
+                DisplayErrorContext(&other)
+            ),
+        }
+
+        assert!(
+            time_elapsed > Duration::from_secs(1),
+            "time_elapsed should be greater than 1s but was {:?}",
+            time_elapsed
+        );
+
+        // This should actually be ~30 seconds, but there is some variance there
+        // so giving it a wide margin
+        assert!(
+            time_elapsed < Duration::from_secs(60),
+            "time_elapsed should be less than 60s but was {:?}",
             time_elapsed
         );
     }
