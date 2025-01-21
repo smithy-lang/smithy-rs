@@ -7,6 +7,7 @@
 set -euxo pipefail
 
 perl -p -i -e 's!\./runners!runners!' setup.py
+sed -i 's/^import imp$/import importlib as imp/' setup.py
 sed -i '/import platform/a import distro' runners/trytls/utils.py
 sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
 sed -i 's/break//' runners/trytls/bundles/https.py
