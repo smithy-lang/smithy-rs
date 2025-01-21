@@ -83,7 +83,9 @@ pub fn default_http_client_plugin_v2(
         // takes precedence over legacy connector if enabled
         #[cfg(feature = "default-https-client")]
         {
-            _default = aws_smithy_http_client::default_client();
+            let opts = crate::client::http::DefaultClientOptions::default()
+                .with_behavior_version(behavior_version);
+            _default = crate::client::http::default_https_client(opts);
         }
     } else {
         // fallback to legacy hyper client for given behavior version

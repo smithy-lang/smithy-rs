@@ -45,26 +45,6 @@ use std::fmt;
 use std::sync::RwLock;
 use std::time::Duration;
 
-/// Creates an HTTPS client using the default TLS provider
-pub fn default_client() -> Option<SharedHttpClient> {
-    #[cfg(feature = "rustls-aws-lc")]
-    {
-        tracing::trace!("creating a new default hyper 1.x client using rustls<aws-lc>");
-        Some(
-            Builder::new()
-                .tls_provider(tls::Provider::Rustls(
-                    tls::rustls_provider::CryptoMode::AwsLc,
-                ))
-                .build_https(),
-        )
-    }
-    #[cfg(not(feature = "rustls-aws-lc"))]
-    {
-        tracing::trace!("no default connector available");
-        None
-    }
-}
-
 /// Given `HttpConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
 pub fn default_connector(
     settings: &HttpConnectorSettings,

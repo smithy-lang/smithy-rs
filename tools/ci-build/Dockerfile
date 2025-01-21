@@ -95,8 +95,7 @@ RUN set -eux; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
-# FIXME(hyper1) - update to 0.16.2 to fix panic (requires rustc 1.81 though)
-ARG cargo_deny_version=0.16.1
+ARG cargo_deny_version=0.16.4
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
