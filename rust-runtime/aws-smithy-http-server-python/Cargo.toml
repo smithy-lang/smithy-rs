@@ -18,27 +18,27 @@ aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
-bytes = "1.2"
+bytes = "1.4.0"
 futures = "0.3"
-http = "0.2"
+http = "0.2.9"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
 tokio-rustls = "0.24.0"
-lambda_http = { version = "0.8.0" }
+lambda_http = { version = "0.8.3" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
-pin-project-lite = "0.2"
+pin-project-lite = "0.2.14"
 pyo3 = "0.18.2"
 pyo3-asyncio = { version = "0.18.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
-socket2 = { version = "0.5.2", features = ["all"] }
-thiserror = "1.0.32"
-tokio = { version = "1.20.1", features = ["full"] }
-tokio-stream = "0.1"
+socket2 = { version = "0.5.5", features = ["all"] }
+thiserror = "1.0.40"
+tokio = { version = "1.40.0", features = ["full"] }
+tokio-stream = "0.1.2"
 tower = { version = "0.4.13", features = ["util"] }
-tracing = "0.1.36"
-tracing-subscriber = { version = "0.3.15", features = ["json", "env-filter"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
 tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]
