@@ -20,13 +20,13 @@ http-1x = []
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-bytes = "1"
+bytes = "1.4.0"
 http-02x = { package = "http", version = "0.2.9" }
 http-1x = { package = "http", version = "1" }
-pin-project-lite = "0.2"
-tokio = { version = "1.25", features = ["sync"] }
-tracing = "0.1"
-zeroize = { version = "1", optional = true }
+pin-project-lite = "0.2.14"
+tokio = { version = "1.40.0", features = ["sync"] }
+tracing = "0.1.40"
+zeroize = { version = "1.7.0", optional = true }
 
 [dev-dependencies]
 proptest = "1"

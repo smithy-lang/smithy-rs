@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-compression"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
   "Zelda Hessler <zhessler@amazon.com>",
@@ -35,7 +35,7 @@ http-0-2 = { package = "http", version = "0.2.9", optional = true }
 http-1-0 = { package = "http", version = "1", optional = true }
 http-body-0-4 = { package = "http-body", version = "0.4.5", optional = true }
 http-body-1-0 = { package = "http-body", version = "1", optional = true }
-http-body-util = { version = "0.1.1", optional = true }
+http-body-util = { version = "0.1.2", optional = true }
 pin-project-lite = "0.2.14"
 tracing = "0.1.40"
 
