@@ -12,7 +12,7 @@
 //! respond with a given response, then capture request can also be useful since
 //! you can optionally give it a response to return.
 #![cfg_attr(
-    feature = "hyper-1",
+    feature = "default-client",
     doc = "- [`dvr`]: If you want to record real-world traffic and then replay it later, then DVR's"
 )]
 //! [`RecordingClient`](dvr::RecordingClient) and [`ReplayingClient`](dvr::ReplayingClient)
@@ -29,7 +29,7 @@
 //! - [`NeverClient`]: Useful for testing timeouts, where you want the client to never respond.
 //!
 #![cfg_attr(
-    any(feature = "hyper-014", feature = "hyper-1"),
+    any(feature = "hyper-014", feature = "default-client"),
     doc = "
 There is also the [`NeverTcpConnector`], which makes it easy to test connect/read timeouts.
 
@@ -59,9 +59,9 @@ pub mod legacy_infallible;
 mod never;
 pub use never::NeverClient;
 
-#[cfg(any(feature = "hyper-014", feature = "hyper-1"))]
+#[cfg(any(feature = "hyper-014", feature = "default-client"))]
 pub use never::NeverTcpConnector;
 
 mod body;
-#[cfg(all(feature = "hyper-1", feature = "wire-mock"))]
+#[cfg(all(feature = "default-client", feature = "wire-mock"))]
 pub mod wire;
