@@ -609,7 +609,6 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
 
 #[cfg(test)]
 pub(crate) mod test {
-    use crate::imds::client::ImdsError;
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
@@ -1082,6 +1081,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[cfg(feature = "rustls")]
     async fn one_second_connect_timeout() {
+        use crate::imds::client::ImdsError;
         let client = Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
