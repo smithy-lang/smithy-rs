@@ -42,13 +42,13 @@ class AddTypeFieldToServerErrorsCborCustomization : CborSerializerCustomization(
     override fun section(section: CborSerializerSection): Writable =
         when (section) {
             is CborSerializerSection.BeforeSerializingStructureMembers ->
-                if (section.structureShape.hasTrait<ErrorTrait>()) {
+                if (section.structContext.shape.hasTrait<ErrorTrait>()) {
                     writable {
                         rust(
                             """
                             ${section.encoderBindingName}
                                 .str("__type")
-                                .str("${escape(section.structureShape.id.toString())}");
+                                .str("${escape(section.structContext.shape.id.toString())}");
                             """,
                         )
                     }

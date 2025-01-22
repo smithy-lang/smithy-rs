@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -57,10 +58,29 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 /** Class describing a CBOR parser section that can be used in a customization. */
 sealed class CborParserSection(name: String) : Section(name) {
     data class BeforeBoxingDeserializedMember(val shape: MemberShape) : CborParserSection("BeforeBoxingDeserializedMember")
+
+    /**
+     * Represents a customization point in union deserialization that occurs before decoding the map structure.
+     * This allows for custom handling of union variants before the standard map decoding logic is applied.
+     * @property shape The union shape being deserialized.
+     */
+    data class UnionParserBeforeDecodingMap(val shape: UnionShape) : CborParserSection("UnionParserBeforeDecodingMap")
 }
 
-/** Customization for the CBOR parser. */
-typealias CborParserCustomization = NamedCustomization<CborParserSection>
+/**
+ * Customization class for CBOR parser generation that allows modification of union type deserialization behavior.
+ * Previously, union variant discrimination was hardcoded to use `decoder.str()`. This has been made more flexible
+ * to support different decoder implementations and discrimination methods.
+ */
+abstract class CborParserCustomization : NamedCustomization<CborParserSection>() {
+    /**
+     * Allows customization of how union variants are discriminated during deserialization.
+     * @param defaultContext The default discrimination context containing decoder symbol and discriminator method.
+     * @return UnionVariantDiscriminatorContext that defines how to discriminate union variants.
+     */
+    open fun getUnionVariantDiscriminator(defaultContext: CborParserGenerator.UnionVariantDiscriminatorContext) =
+        defaultContext
+}
 
 class CborParserGenerator(
     private val codegenContext: CodegenContext,
@@ -75,6 +95,16 @@ class CborParserGenerator(
     private val shouldWrapBuilderMemberSetterInputWithOption: (MemberShape) -> Boolean = { _ -> true },
     private val customizations: List<CborParserCustomization> = emptyList(),
 ) : StructuredDataParserGenerator {
+    /**
+     * Context class that encapsulates the information needed to discriminate union variants during deserialization.
+     * @property decoderSymbol The symbol representing the decoder type.
+     * @property variantDiscriminatorExpression The method call expression to determine the union variant.
+     */
+    data class UnionVariantDiscriminatorContext(
+        val decoderSymbol: Symbol,
+        val variantDiscriminatorExpression: Writable,
+    )
+
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -298,16 +328,26 @@ class CborParserGenerator(
     private fun unionPairParserFnWritable(shape: UnionShape) =
         writable {
             val returnSymbolToParse = returnSymbolToParse(shape)
+            // Get actual decoder type to use and the discriminating function to call to extract
+            // the variant of the union that has been encoded in the data.
+            val discriminatorContext = getUnionDiscriminatorContext("Decoder", "decoder.str()?.as_ref()")
+
             rustBlockTemplate(
                 """
                 fn pair(
-                    decoder: &mut #{Decoder}
+                    decoder: &mut #{DecoderSymbol}
                 ) -> #{Result}<#{UnionSymbol}, #{Error}>
                 """,
                 *codegenScope,
+                "DecoderSymbol" to discriminatorContext.decoderSymbol,
                 "UnionSymbol" to returnSymbolToParse.symbol,
             ) {
-                withBlock("Ok(match decoder.str()?.as_ref() {", "})") {
+                rustTemplate(
+                    """
+                    Ok(match #{VariableDiscriminatingExpression} {
+                    """,
+                    "VariableDiscriminatingExpression" to discriminatorContext.variantDiscriminatorExpression,
+                ).run {
                     for (member in shape.members()) {
                         val variantName = symbolProvider.toMemberName(member)
 
@@ -349,8 +389,23 @@ class CborParserGenerator(
                             )
                     }
                 }
+                rust("})")
             }
         }
+
+    private fun getUnionDiscriminatorContext(
+        decoderType: String,
+        callMethod: String,
+    ): UnionVariantDiscriminatorContext {
+        val defaultUnionPairContext =
+            UnionVariantDiscriminatorContext(
+                smithyCbor.resolve(decoderType).toSymbol(),
+                writable { rustTemplate(callMethod) },
+            )
+        return customizations.fold(defaultUnionPairContext) { context, customization ->
+            customization.getUnionVariantDiscriminator(context)
+        }
+    }
 
     enum class CollectionKind {
         Map,
@@ -677,12 +732,22 @@ class CborParserGenerator(
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
         val returnSymbolToParse = returnSymbolToParse(shape)
+        val beforeDecoderMapCustomization =
+            customizations.map { customization ->
+                customization.section(
+                    CborParserSection.UnionParserBeforeDecodingMap(
+                        shape,
+                    ),
+                )
+            }.join("")
+
         val parser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustTemplate(
                     """
                     pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{UnionSymbol}, #{Error}> {
                         #{UnionPairParserFnWritable}
+                        #{BeforeDecoderMapCustomization:W}
 
                         match decoder.map()? {
                             None => {
@@ -707,6 +772,7 @@ class CborParserGenerator(
                     """,
                     "UnionSymbol" to returnSymbolToParse.symbol,
                     "UnionPairParserFnWritable" to unionPairParserFnWritable(shape),
+                    "BeforeDecoderMapCustomization" to beforeDecoderMapCustomization,
                     *codegenScope,
                 )
             }
