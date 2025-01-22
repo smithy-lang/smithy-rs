@@ -130,7 +130,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.1"
+version = "1.2.2"
 dependencies = [
  "async-trait",
  "aws-smithy-async",
@@ -157,7 +157,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-inlineable"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.0"
+version = "0.63.1"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",

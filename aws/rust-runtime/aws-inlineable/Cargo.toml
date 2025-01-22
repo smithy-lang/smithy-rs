@@ -1,6 +1,6 @@
 [package]
 name = "aws-inlineable"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """
 The modules of this crate are intended to be inlined directly into the SDK as needed. The dependencies here
@@ -25,19 +25,19 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
-bytes = "1"
+bytes = "1.4.0"
 fastrand = "2.0.0"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
-http-1x = { package = "http", version = "1", optional = true }
+http-1x = { package = "http", version = "1.1.0", optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true }
 hmac = "0.12"
 lru = "0.12.5"
 ring = "0.17.5"
 sha2 = "0.10"
-tokio = "1.23.1"
-tracing = "0.1"
+tokio = "1.40.0"
+tracing = "0.1.40"
 url = "2.5.4"
 
 [dev-dependencies]
