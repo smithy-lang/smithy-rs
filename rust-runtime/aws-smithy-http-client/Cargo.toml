@@ -64,6 +64,8 @@ rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "default-client
 rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "default-client"]
 rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "default-client"]
 
+s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "default-client"]
+
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
@@ -82,6 +84,9 @@ http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
+# TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
+s2n-tls-hyper = { version = "0.0.2", optional = true }
+s2n-tls = { version = "0.3.10", optional = true }
 tower = { version = "0.5.1", optional = true }
 # end hyper 1.x stack deps
 
@@ -116,6 +121,11 @@ doc-scrape-examples = true
 [[example]]
 name = "client-aws-lc"
 required-features = ["rustls-aws-lc", "rustls-aws-lc-fips"]
+doc-scrape-examples = true
+
+[[example]]
+name = "client-s2n-tls"
+required-features = ["s2n-tls"]
 doc-scrape-examples = true
 
 [[example]]

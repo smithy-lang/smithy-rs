@@ -6,7 +6,8 @@
 #![cfg(any(
     feature = "rustls-ring",
     feature = "rustls-aws-lc",
-    feature = "rustls-aws-lc-fips"
+    feature = "rustls-aws-lc-fips",
+    feature = "s2n-tls",
 ))]
 
 use aws_smithy_async::time::SystemTimeSource;
@@ -54,7 +55,16 @@ async fn aws_lc_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
-#[cfg(feature = "rustls-ring")]
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn s2n_tls_client() {
+    let client = Builder::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
+
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 #[tokio::test]
 async fn custom_dns_client() {
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -75,17 +85,25 @@ async fn custom_dns_client() {
             })
         }
     }
-    let resolver = PassThroughResolver {
-        inner: GaiResolver::new(),
-        count: Default::default(),
-    };
-    let client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(
-            tls::rustls_provider::CryptoMode::Ring,
-        ))
-        .build_with_resolver(resolver.clone());
-    smoke_test_client(&client).await.unwrap();
-    assert_eq!(resolver.count.load(Ordering::Relaxed), 1);
+
+    let providers = [
+        #[cfg(feature = "rustls-ring")]
+        tls::Provider::Rustls(tls::rustls_provider::CryptoMode::Ring),
+        #[cfg(feature = "s2n-tls")]
+        tls::Provider::S2nTls,
+    ];
+
+    for provider in providers {
+        let resolver = PassThroughResolver {
+            inner: GaiResolver::new(),
+            count: Default::default(),
+        };
+        let client = Builder::new()
+            .tls_provider(provider)
+            .build_with_resolver(resolver.clone());
+        smoke_test_client(&client).await.unwrap();
+        assert_eq!(resolver.count.load(Ordering::Relaxed), 1);
+    }
 }
 
 async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>> {
