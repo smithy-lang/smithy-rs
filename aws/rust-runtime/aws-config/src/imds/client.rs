@@ -52,6 +52,8 @@ const DEFAULT_TOKEN_TTL: Duration = Duration::from_secs(21_600);
 const DEFAULT_ATTEMPTS: u32 = 4;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(1);
+const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_OPERATION_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn user_agent() -> AwsUserAgent {
     AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
@@ -323,6 +325,8 @@ pub struct Builder {
     token_ttl: Option<Duration>,
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
+    operation_timeout: Option<Duration>,
+    operation_attempt_timeout: Option<Duration>,
     config: Option<ProviderConfig>,
     retry_classifier: Option<SharedRetryClassifier>,
 }
@@ -400,6 +404,22 @@ impl Builder {
         self
     }
 
+    /// Override the operation timeout for IMDS
+    ///
+    /// This value defaults to 1 second
+    pub fn operation_timeout(mut self, timeout: Duration) -> Self {
+        self.operation_timeout = Some(timeout);
+        self
+    }
+
+    /// Override the operation attempt timeout for IMDS
+    ///
+    /// This value defaults to 1 second
+    pub fn operation_attempt_timeout(mut self, timeout: Duration) -> Self {
+        self.operation_attempt_timeout = Some(timeout);
+        self
+    }
+
     /// Override the retry classifier for IMDS
     ///
     /// This defaults to only retrying on server errors and 401s. The [ImdsResponseRetryClassifier] in this
@@ -423,6 +443,11 @@ impl Builder {
         let timeout_config = TimeoutConfig::builder()
             .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
             .read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT))
+            .operation_attempt_timeout(
+                self.operation_attempt_timeout
+                    .unwrap_or(DEFAULT_OPERATION_ATTEMPT_TIMEOUT),
+            )
+            .operation_timeout(self.operation_timeout.unwrap_or(DEFAULT_OPERATION_TIMEOUT))
             .build();
         let endpoint_source = self
             .endpoint
@@ -1122,6 +1147,7 @@ pub(crate) mod test {
                 ImdsResponseRetryClassifier::default().with_retry_connect_timeouts(true),
             ))
             .configure(&ProviderConfig::no_configuration().with_http_client(http_client.clone()))
+            .operation_timeout(Duration::from_secs(1))
             .endpoint("http://240.0.0.0")
             .expect("valid uri")
             .build();
@@ -1139,11 +1165,9 @@ pub(crate) mod test {
             time_elapsed
         );
 
-        // This should actually be ~30 seconds, but there is some variance there
-        // so giving it a wide margin
         assert!(
-            time_elapsed < Duration::from_secs(60),
-            "time_elapsed should be less than 60s but was {:?}",
+            time_elapsed < Duration::from_secs(2),
+            "time_elapsed should be less than 2s but was {:?}",
             time_elapsed
         );
     }
