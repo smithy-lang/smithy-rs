@@ -25,7 +25,7 @@ on:
           If unspecified, it will default to the git reference or SHA that triggered the execution of this workflow.
         required: false
         type: string
-        default: ""
+        default: ''
     secrets:
       # the docker login password for ECR. This is
       ENCRYPTED_DOCKER_PASSWORD:
@@ -57,31 +57,31 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         actions:
-          - action: generate-aws-sdk
-          - action: generate-aws-sdk-smoketest
-          - action: generate-smithy-rs-release
+        - action: generate-aws-sdk
+        - action: generate-aws-sdk-smoketest
+        - action: generate-smithy-rs-release
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-          # `generate-smithy-rs-release` requires access to previous tags to determine if a numerical suffix is needed
-          # to make the release tag unique
-          fetch-depth: 0
-      # The models from aws-sdk-rust are needed to generate the full SDK for CI
-      - uses: actions/checkout@v4
-        with:
-          repository: awslabs/aws-sdk-rust
-          path: aws-sdk-rust
-      # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
-      - uses: actions/checkout@v4
-        with:
-          repository: awsdocs/aws-doc-sdk-examples
-          path: aws-doc-sdk-examples
-      - name: Run ${{ matrix.actions.action }}
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: ${{ matrix.actions.action }}
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        # `generate-smithy-rs-release` requires access to previous tags to determine if a numerical suffix is needed
+        # to make the release tag unique
+        fetch-depth: 0
+    # The models from aws-sdk-rust are needed to generate the full SDK for CI
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+    # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
+    - uses: actions/checkout@v4
+      with:
+        repository: awsdocs/aws-doc-sdk-examples
+        path: aws-doc-sdk-examples
+    - name: Run ${{ matrix.actions.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.actions.action }}
 
   # Test the code generator and other parts (styles and lints) that don't require
   # code to have already been generated in order to run.
@@ -96,50 +96,50 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
-          - action: check-aws-sdk-adhoc-tests
-            runner: ubuntu-latest
-          - action: check-client-codegen-integration-tests
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-client-codegen-unit-tests
-            runner: ubuntu-latest
-          - action: check-core-codegen-unit-tests
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-rust-runtimes
-            runner: smithy_ubuntu-latest_8-core
-            fetch-depth: 0
-          - action: check-sdk-codegen-unit-tests
-            runner: ubuntu-latest
-          - action: check-server-codegen-integration-tests
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-server-codegen-integration-tests-python
-            runner: ubuntu-latest
-          - action: check-server-codegen-unit-tests
-            runner: ubuntu-latest
-          - action: check-server-codegen-unit-tests-python
-            runner: ubuntu-latest
-          - action: check-server-e2e-test
-            runner: ubuntu-latest
-          - action: check-server-python-e2e-test
-            runner: ubuntu-latest
-          - action: check-style-and-lints
-            runner: ubuntu-latest
-          - action: check-book
-            runner: ubuntu-latest
-          - action: check-tools
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-deterministic-codegen
-            runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-adhoc-tests
+          runner: ubuntu-latest
+        - action: check-client-codegen-integration-tests
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-client-codegen-unit-tests
+          runner: ubuntu-latest
+        - action: check-core-codegen-unit-tests
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-rust-runtimes
+          runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
+        - action: check-sdk-codegen-unit-tests
+          runner: ubuntu-latest
+        - action: check-server-codegen-integration-tests
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-server-codegen-integration-tests-python
+          runner: ubuntu-latest
+        - action: check-server-codegen-unit-tests
+          runner: ubuntu-latest
+        - action: check-server-codegen-unit-tests-python
+          runner: ubuntu-latest
+        - action: check-server-e2e-test
+          runner: ubuntu-latest
+        - action: check-server-python-e2e-test
+          runner: ubuntu-latest
+        - action: check-style-and-lints
+          runner: ubuntu-latest
+        - action: check-book
+          runner: ubuntu-latest
+        - action: check-tools
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-deterministic-codegen
+          runner: smithy_ubuntu-latest_8-core
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-          # Defaults to 1 if not set
-          fetch-depth: ${{ matrix.test.fetch-depth }}
-      - name: Run ${{ matrix.test.action }}
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: ${{ matrix.test.action }}
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        # Defaults to 1 if not set
+        fetch-depth: ${{ matrix.test.fetch-depth }}
+    - name: Run ${{ matrix.test.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.test.action }}
 
   # Separate from the main checks above because it uses aws-sdk-rust from GitHub
   check-semver-hazards:
@@ -147,20 +147,20 @@ jobs:
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-          fetch-depth: 0
-      - uses: actions/checkout@v4
-        with:
-          repository: awslabs/aws-sdk-rust
-          path: aws-sdk-rust
-          fetch-depth: 0
-      - name: Run check-semver-hazards
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: check-semver-hazards
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+        fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
 
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
@@ -176,29 +176,29 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
-          - action: check-aws-config
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-aws-sdk-canary
-            runner: ubuntu-latest
-          - action: check-aws-sdk-cargo-deny
-            runner: ubuntu-latest
-          - action: check-only-aws-sdk-services
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-aws-sdk-smoketest-docs-clippy-udeps
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-aws-sdk-smoketest-unit-tests
-            runner: smithy_ubuntu-latest_8-core
-          - action: check-aws-sdk-standalone-integration-tests
-            runner: ubuntu-latest
+        - action: check-aws-config
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-canary
+          runner: ubuntu-latest
+        - action: check-aws-sdk-cargo-deny
+          runner: ubuntu-latest
+        - action: check-only-aws-sdk-services
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-smoketest-unit-tests
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-standalone-integration-tests
+          runner: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-      - name: Run ${{ matrix.test.action }}
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: ${{ matrix.test.action }}
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Run ${{ matrix.test.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.test.action }}
 
   test-rust-windows:
     name: Rust Tests on Windows
@@ -210,26 +210,26 @@ jobs:
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git_ref }}
-        # Pinned to the commit hash of v2.7.3
-      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
-        with:
-          shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
-          workspaces: |
-            .
-            tools
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.rust_version }}
-          components: ${{ env.rust_toolchain_components }}
-        # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
-      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - run: vcpkg install openssl:x64-windows-static-md
-      - name: Run tests
-        shell: bash
-        run: tools/ci-scripts/test-windows.sh
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.git_ref }}
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      with:
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        workspaces: |
+          .
+          tools
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+      # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: vcpkg install openssl:x64-windows-static-md
+    - name: Run tests
+      shell: bash
+      run: tools/ci-scripts/test-windows.sh
 
   # We make sure that smithy-rs can be compiled on platforms that are not
   # natively supported by GitHub actions. We run as many tests as we can on
@@ -243,93 +243,93 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # We always exclude `aws-smithy-http-server-python` and
-          # `aws-smithy-http-server-typescript` since they are experimental.
-          - target: i686-unknown-linux-gnu
-            build_smithy_rs_features: --all-features
-            build_aws_exclude: ""
-            build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-            test_smithy_rs_features: --all-features
-            test_aws_exclude: ""
-            test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-          - target: powerpc-unknown-linux-gnu
-            build_smithy_rs_features: ""
-            build_aws_exclude: --exclude aws-inlineable
-            build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-            test_smithy_rs_features: ""
-            test_aws_exclude: --exclude aws-inlineable
-            test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
-          - target: powerpc64-unknown-linux-gnu
-            build_smithy_rs_features: ""
-            build_aws_exclude: --exclude aws-inlineable
-            build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-            test_smithy_rs_features: ""
-            test_aws_exclude: --exclude aws-inlineable
-            test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+        # We always exclude `aws-smithy-http-server-python` and
+        # `aws-smithy-http-server-typescript` since they are experimental.
+        - target: i686-unknown-linux-gnu
+          build_smithy_rs_features: --all-features
+          build_aws_exclude: ''
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          test_smithy_rs_features: --all-features
+          test_aws_exclude: ''
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+        - target: powerpc-unknown-linux-gnu
+          build_smithy_rs_features: ''
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          test_smithy_rs_features: ''
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+        - target: powerpc64-unknown-linux-gnu
+          build_smithy_rs_features: ''
+          build_aws_exclude: --exclude aws-inlineable
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          test_smithy_rs_features: ''
+          test_aws_exclude: --exclude aws-inlineable
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
     env:
       CROSS_CONFIG: Cross.toml
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git_ref }}
-        # Pinned to the commit hash of v2.7.3
-      - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
-        with:
-          shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
-          workspaces: |
-            .
-            tools
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.rust_version }}
-          components: ${{ env.rust_toolchain_components }}
-          targets: ${{ matrix.target }}
-      - name: Sets OpenSSL env vars on i686
-        run: |
-          echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
-          echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
-        if: matrix.target == 'i686-unknown-linux-gnu'
-      - name: Sets OpenSSL env vars on ppc and ppc64
-        run: |
-          echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
-        if: matrix.target != 'i686-unknown-linux-gnu'
-      - name: Configure cross
-        shell: bash
-        # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
-        # since cross dropped support for openssl, we use the build script from version 0.16.
-        run: |
-          cargo install cross --locked --version 0.2.4
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.git_ref }}
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      with:
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
+        workspaces: |
+          .
+          tools
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+        targets: ${{ matrix.target }}
+    - name: Sets OpenSSL env vars on i686
+      run: |
+        echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
+        echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
+      if: matrix.target == 'i686-unknown-linux-gnu'
+    - name: Sets OpenSSL env vars on ppc and ppc64
+      run: |
+        echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
+      if: matrix.target != 'i686-unknown-linux-gnu'
+    - name: Configure cross
+      shell: bash
+      # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
+      # since cross dropped support for openssl, we use the build script from version 0.16.
+      run: |
+        cargo install cross --locked --version 0.2.4
 
-          cat > Cross.toml << EOF
-          [target.i686-unknown-linux-gnu]
-          pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
-          [target.i686-unknown-linux-gnu.env]
-          passthrough = [
-              "OPENSSL_LIB_DIR",
-              "OPENSSL_INCLUDE_DIR",
-          ]
-          [target.powerpc-unknown-linux-gnu]
-          pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
-          [target.powerpc-unknown-linux-gnu.env]
-          passthrough = ["OPENSSL_DIR"]
-          [target.powerpc64-unknown-linux-gnu]
-          pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
-          [target.powerpc64-unknown-linux-gnu.env]
-          passthrough = ["OPENSSL_DIR"]
-          EOF
-      - name: Build Smithy-rs rust-runtime crates
-        shell: bash
-        run: cross build -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
-      - name: Build AWS rust-runtime crates
-        shell: bash
-        run: cross build -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
-      - name: Test Smithy-rs rust-runtime crates
-        shell: bash
-        run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
-      - name: Test AWS rust-runtime crates
-        shell: bash
-        run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+        cat > Cross.toml << EOF
+        [target.i686-unknown-linux-gnu]
+        pre-build = ["dpkg --add-architecture i386", "apt-get update && apt-get install --assume-yes pkg-config:i386 libssl-dev:i386"]
+        [target.i686-unknown-linux-gnu.env]
+        passthrough = [
+            "OPENSSL_LIB_DIR",
+            "OPENSSL_INCLUDE_DIR",
+        ]
+        [target.powerpc-unknown-linux-gnu]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc powerpc-linux-gnu-"]
+        [target.powerpc-unknown-linux-gnu.env]
+        passthrough = ["OPENSSL_DIR"]
+        [target.powerpc64-unknown-linux-gnu]
+        pre-build = ["curl -L -s https://github.com/cross-rs/cross/raw/c183ee37a9dc6b0e6b6a6ac9c918173137bad4ef/docker/openssl.sh | sed 's/curl https/curl -L https/' > /tmp/openssl.sh && bash /tmp/openssl.sh linux-ppc64 powerpc64-linux-gnu-"]
+        [target.powerpc64-unknown-linux-gnu.env]
+        passthrough = ["OPENSSL_DIR"]
+        EOF
+    - name: Build Smithy-rs rust-runtime crates
+      shell: bash
+      run: cross build -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
+    - name: Build AWS rust-runtime crates
+      shell: bash
+      run: cross build -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
+    - name: Test Smithy-rs rust-runtime crates
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
+    - name: Test AWS rust-runtime crates
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
   # Run the canary against generated SDKs
   #
@@ -347,22 +347,22 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-      - name: Configure credentials
-        id: creds
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: us-west-2
-          role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
-          output-credentials: true
-      - name: Run canary
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: run-canary
-          action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
 
   # This is always a failing job since forked repositories do not have necessary repository secrets
   # to run the PR bot workflow or the canary workflow
@@ -371,9 +371,9 @@ jobs:
     if: ${{ !inputs.run_canary }}
     runs-on: ubuntu-latest
     steps:
-      - run: |
-          echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
-          exit 1
+    - run: |
+        echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
+        exit 1
 
   # This job is split out from the rest since it is not required to pass for merge
   check-sdk-examples:
@@ -383,33 +383,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: smithy-rs
-          ref: ${{ inputs.git_ref }}
-      - name: Run ${{ matrix.actions.action }}
-        uses: ./smithy-rs/.github/actions/docker-build
-        with:
-          action: check-aws-sdk-examples
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Run ${{ matrix.actions.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-aws-sdk-examples
 
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
     # Should NOT depend on check-sdk-examples since that's an optional check
     needs:
-      - generate
-      - test-codegen
-      - check-semver-hazards
-      - test-sdk
-      - test-rust-windows
-      - test-exotic-platform-support
+    - generate
+    - test-codegen
+    - check-semver-hazards
+    - test-sdk
+    - test-rust-windows
+    - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
     name: Matrix Success
     steps:
-      - name: Verify jobs succeeded
-        # Pinned to commit hash of v1.2.2
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
-        with:
-          jobs: ${{ toJSON(needs) }}
+    - name: Verify jobs succeeded
+      # Pinned to commit hash of v1.2.2
+      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
+      with:
+        jobs: ${{ toJSON(needs) }}
