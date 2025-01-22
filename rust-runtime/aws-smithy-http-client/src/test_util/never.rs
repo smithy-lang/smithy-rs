@@ -62,11 +62,11 @@ impl HttpClient for NeverClient {
 
 /// A TCP connector that never connects.
 // In the future, this can be available for multiple hyper version feature flags, with the impls gated between individual features
-#[cfg(any(feature = "hyper-014", feature = "hyper-1"))]
+#[cfg(any(feature = "hyper-014", feature = "default-client"))]
 #[derive(Clone, Debug, Default)]
 pub struct NeverTcpConnector;
 
-#[cfg(any(feature = "hyper-014", feature = "hyper-1"))]
+#[cfg(any(feature = "hyper-014", feature = "default-client"))]
 impl NeverTcpConnector {
     /// Creates a new `NeverTcpConnector`.
     pub fn new() -> Self {
@@ -97,7 +97,7 @@ impl hyper_0_14::service::Service<http_02x::Uri> for NeverTcpConnector {
     }
 }
 
-#[cfg(feature = "hyper-1")]
+#[cfg(feature = "default-client")]
 mod hyper1_support {
     use super::NeverTcpConnector;
     use aws_smithy_async::future::never::Never;
@@ -220,7 +220,7 @@ mod test {
         assert!(dbg!(err).is_timeout());
     }
 
-    #[cfg(feature = "hyper-1")]
+    #[cfg(feature = "default-client")]
     #[tokio::test]
     async fn never_tcp_connector_plugs_into_hyper_1() {
         use super::NeverTcpConnector;

@@ -67,7 +67,13 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/default-http-connector")))
+
+        // TODO(hyper1): disable rustls as a default feature in future release
+        // NOTE: We enable both rustls and default-https-client as default features. This keeps the legacy hyper+rustls
+        // stack working as is and lets BehaviorVersion control which client you get. In a future release we will
+        // break this and disable the rustls feature by default (and break old BMV versions w.r.t http client default).
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
+        rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
     }
 
     override fun libRsCustomizations(

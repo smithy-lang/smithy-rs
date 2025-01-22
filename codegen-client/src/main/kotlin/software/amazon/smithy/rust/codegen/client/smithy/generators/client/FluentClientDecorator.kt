@@ -51,12 +51,12 @@ class FluentClientDecorator : ClientCodegenDecorator {
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
 
-        // For backwards compat reasons we have to leave this feature as `rustls` which really historically was
-        // used to enable the `default_http_client` plugin to work (as rustls feature meant enabling both connector-hyper-0-14 + rustls)
-        //
-        // When we moved to hyper-1.x as default we re-purposed this feature flag to still (1) enable a default HTTP
-        // client and (2) still mean rustls (albeit now with aws-lc instead of ring)
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/default-http-connector")))
+        // TODO(hyper1): disable rustls as a default feature in future release
+        // NOTE: We enable both rustls and default-https-client as default features. This keeps the legacy hyper+rustls
+        // stack working as is and lets BehaviorVersion control which client you get. In a future release we will
+        // break this and disable the rustls feature by default (and break old BMV versions w.r.t http client default).
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
+        rustCrate.mergeFeature(Feature("default-https-client", default = true, listOf("aws-smithy-runtime/default-https-client")))
     }
 
     override fun libRsCustomizations(

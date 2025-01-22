@@ -400,7 +400,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 
             assert!(
                 components.http_client().is_some(),
-                "a http_client is required. Enable the `default-http-connector` crate feature or configure an HTTP client to fix this."
+                "a http_client is required. Enable the `default-https-client` crate feature or configure an HTTP client to fix this."
             );
             assert!(
                 components.endpoint_resolver().is_some(),

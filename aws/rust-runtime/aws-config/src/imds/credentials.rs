@@ -418,7 +418,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(feature = "default-http-connector")]
+    #[cfg(feature = "default-https-client")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
@@ -436,7 +436,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(feature = "default-http-connector")]
+    #[cfg(feature = "default-https-client")]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
         let client = crate::imds::Client::builder()
@@ -458,7 +458,7 @@ mod test {
     // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
-    #[cfg(feature = "default-http-connector")]
+    #[cfg(feature = "default-https-client")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         use aws_smithy_async::rt::sleep::AsyncSleep;
         let client = crate::imds::Client::builder()

@@ -16,8 +16,7 @@ hyper-014 = [
     "dep:hyper-0-14",
 ]
 
-# FIXME(hyper1) - rename feature
-hyper-1 = [
+default-client = [
     "aws-smithy-runtime-api/http-1x",
     "aws-smithy-types/http-body-1-x",
     "dep:hyper",
@@ -29,7 +28,7 @@ hyper-1 = [
 
 wire-mock = [
     "test-util",
-    "hyper-1",
+    "default-client",
     "hyper-util?/server",
     "hyper-util?/server-auto",
     "hyper-util?/service",
@@ -61,9 +60,9 @@ legacy-test-util = [
 
 legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
 
-rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "hyper-1"]
-rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "hyper-1"]
-rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "hyper-1"]
+rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "default-client"]
+rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "default-client"]
+rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "default-client"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
@@ -130,7 +129,7 @@ stable = true
 [package.metadata.docs.rs]
 all-features = false
 features = [
-    "hyper-1 ",
+    "default-client ",
     "wire-mock",
     "test-util",
     "rustls-ring",

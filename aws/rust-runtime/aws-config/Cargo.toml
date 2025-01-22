@@ -14,14 +14,15 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [features]
 behavior-version-latest = []
 credentials-process = ["tokio/process"]
-default = ["default-http-connector", "rt-tokio", "credentials-process", "sso"]
+default = ["default-https-client", "rt-tokio", "credentials-process", "sso"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 # NOTE: `client-hyper` and `rustls` were proxies for enabling the default HTTP client plugin of `aws-smithy-runtime`
 # there is no direct usage otherwise on hyper or rustls in this crate. These are superceded by the more appropriately
-# named `default-http-connector` feature and `client-hyper` and `rustls` are now synonyms for the same
-client-hyper = ["aws-smithy-runtime/default-http-connector"]
+# named `default-https-client` feature and `client-hyper` and `rustls` are now synonyms for the same
+# TODO(hyper1) - deprecate legacy `client-hyper` and `rustls` features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
+client-hyper = ["aws-smithy-runtime/default-https-client"]
 rustls = ["client-hyper"]
-default-http-connector = ["aws-smithy-runtime/default-http-connector"]
+default-https-client = ["aws-smithy-runtime/default-https-client"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 test-util = ["aws-runtime/test-util"]
 
@@ -64,7 +65,7 @@ proc-macro2 = { version = "1.0.92", optional = true }
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
-aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["hyper-1", "test-util"] }
+aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 futures-util = { version = "0.3.29", default-features = false }
 tracing-test = "0.2.4"

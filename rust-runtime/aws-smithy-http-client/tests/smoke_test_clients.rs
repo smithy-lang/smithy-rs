@@ -54,13 +54,6 @@ async fn aws_lc_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
-#[cfg(feature = "default-tls")]
-#[tokio::test]
-async fn default_tls_client() {
-    let client = aws_smithy_http_client::default_client().expect("default TLS client created");
-    smoke_test_client(&client).await.unwrap();
-}
-
 #[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn custom_dns_client() {
