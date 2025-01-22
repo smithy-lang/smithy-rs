@@ -157,7 +157,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-inlineable"
-version = "0.1.1"
+version = "0.1.0"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",

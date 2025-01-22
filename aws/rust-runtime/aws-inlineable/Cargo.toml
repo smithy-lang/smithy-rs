@@ -1,6 +1,6 @@
 [package]
 name = "aws-inlineable"
-version = "0.1.1"
+version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = """
 The modules of this crate are intended to be inlined directly into the SDK as needed. The dependencies here
