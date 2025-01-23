@@ -448,5 +448,6 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedCborPa
                         rust("let v = v.into();")
                     }
                 }
+            else -> emptySection
         }
 }
