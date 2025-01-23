@@ -361,7 +361,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.5.14"
+version = "1.5.15"
 dependencies = [
  "aws-credential-types 1.2.1",
  "aws-runtime 1.5.4",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.60.8"
+version = "0.61.0"
 dependencies = [
  "aws-smithy-types 1.2.12",
  "criterion",

@@ -6,20 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "It is now possible to disable payload signing through an operation customization.\n\n```rust\nasync fn put_example_object(client: &aws_sdk_s3::Client) {\n    let res = client\n        .put_object()\n        .bucket(\"test-bucket\")\n        .key(\"test-key\")\n        .body(ByteStream::from_static(b\"Hello, world!\"))\n        .customize()\n        // Setting this will disable payload signing.\n        .disable_payload_signing()\n        .send()\n        .await;\n}\n```\n\nDisabling payload signing will result in a small speedup at the cost of removing a data integrity check.\nHowever, this is an advanced feature and **may not be supported by all services/operations**.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#3583"
-      ],
-      "since-commit": "89881abd3df80e9b6fd59790d7c02e2b9a6dd45c",
-      "age": 5
-    },
-    {
       "message": "Fix token bucket not being set for standard and adaptive retry modes\n",
       "meta": {
         "bug": true,
@@ -31,7 +17,7 @@
         "aws-sdk-rust#1234"
       ],
       "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
-      "age": 2
+      "age": 3
     },
     {
       "message": "S3 client behavior is updated to always calculate a checksum by default for operations that support it (such as PutObject or UploadPart), or require it (such as DeleteObjects). The default checksum algorithm is CRC32. Checksum behavior can be configured using `when_supported` and `when_required` options - in shared config using request_checksum_calculation, or as env variable using AWS_REQUEST_CHECKSUM_CALCULATION.\n\nThe S3 client attempts to validate response checksums for all S3 API operations that support checksums. However, if the SDK has not implemented the specified checksum algorithm then this validation is skipped. Checksum validation behavior can be configured using `when_supported` and `when_required` options - in shared config using response_checksum_validation, or as env variable using AWS_RESPONSE_CHECKSUM_VALIDATION.\n",
@@ -45,7 +31,7 @@
         "smithy-rs#3845"
       ],
       "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix bug with presigned requests introduced by new flexibile checksums functionality\n",
@@ -59,6 +45,34 @@
         "aws-sdk-rust#1240"
       ],
       "since-commit": "733eab7e1a3678971ffa6bf9fb99826e17e99481",
+      "age": 2
+    },
+    {
+      "message": "Allow IMDS clients to be configured with a user-provided `SharedRetryClassifier`.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [
+        "aws-sdk-rust#1233"
+      ],
+      "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
+      "age": 1
+    },
+    {
+      "message": "Fix `EcsCredentialsProvider` to include query params passed via `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "aws-sdk-rust#1248"
+      ],
+      "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
       "age": 1
     }
   ],
