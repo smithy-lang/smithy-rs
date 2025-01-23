@@ -1,5 +1,5 @@
 ---
-applies_to: ["client"]
+applies_to: ["aws-sdk-rust"]
 authors: ["landonxjames"]
 references: ["aws-sdk-rust#1233"]
 breaking: false
