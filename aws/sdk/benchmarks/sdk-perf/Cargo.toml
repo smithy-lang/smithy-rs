@@ -1,0 +1,18 @@
+[package]
+name = "sdk-perf"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# SDK deps
+# Note if you need more than dynamodb you will need to add the new services to the
+# assemble command in the tools/ci-scripts/generate-sdk-perf-bin script
+aws-sdk-dynamodb = {path = "../../build/aws-sdk/sdk/dynamodb"}
+aws-smithy-runtime-api = {path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["http-1x"]}
+aws-smithy-types = {path = "../../build/aws-sdk/sdk/aws-smithy-types"}
+# External deps
+bytes = "1.9.0"
+clap = { version = "4.5.23", features = ["derive"] }
+http = "1.2.0"
+serde = {version = "1.0.216", features = ["derive"]}
+serde_json = "1.0.133"

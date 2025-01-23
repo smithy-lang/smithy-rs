@@ -45,15 +45,30 @@ operator fun Writable.plus(other: Writable): Writable =
 
 /**
  * Helper allowing a `Iterable<Writable>` to be joined together using a `String` separator.
+ * @param separator The string to use as a separator between elements
+ * @param prefix An optional string to prepend to the entire joined sequence (defaults to null)
+ * @return A Writable containing the optionally prefixed, joined elements
  */
-fun Iterable<Writable>.join(separator: String) = join(writable(separator))
+fun Iterable<Writable>.join(
+    separator: String,
+    prefix: String? = null,
+) = join(writable(separator), prefix?.let { writable(it) })
 
 /**
  * Helper allowing a `Iterable<Writable>` to be joined together using a `Writable` separator.
+ * @param separator The Writable to use as a separator between elements
+ * @param prefix An optional Writable to prepend to the entire joined sequence (defaults to null)
+ * @return A Writable containing the optionally prefixed, joined elements
  */
-fun Iterable<Writable>.join(separator: Writable): Writable {
+fun Iterable<Writable>.join(
+    separator: Writable,
+    prefix: Writable? = null,
+): Writable {
     val iter = this.iterator()
     return writable {
+        if (iter.hasNext() && prefix != null) {
+            prefix()
+        }
         iter.forEach { value ->
             value()
             if (iter.hasNext()) {

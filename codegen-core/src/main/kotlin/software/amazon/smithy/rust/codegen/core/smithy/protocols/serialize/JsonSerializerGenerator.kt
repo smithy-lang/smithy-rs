@@ -76,6 +76,10 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
     /** Mutate the output object prior to finalization. */
     data class OutputStruct(val structureShape: StructureShape, val jsonObject: String) :
         JsonSerializerSection("OutputStruct")
+
+    /** Allow customizers to perform pre-serialization operations before handling union variants. */
+    data class BeforeSerializeUnion(val shape: UnionShape, val jsonObject: String) :
+        JsonSerializerSection("BeforeSerializeUnion")
 }
 
 /**
@@ -545,6 +549,10 @@ class JsonSerializerGenerator(
                     "Input" to unionSymbol,
                     *codegenScope,
                 ) {
+                    // Allow customizers to perform pre-serialization operations before handling union variants.
+                    customizations.forEach {
+                        it.section(JsonSerializerSection.BeforeSerializeUnion(context.shape, context.writerExpression))(this)
+                    }
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
                             val variantName =

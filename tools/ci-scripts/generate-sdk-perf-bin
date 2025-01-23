@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+
+# Generate the minimal subset of the sdk needed for the perf test
+cd smithy-rs
+./gradlew -Paws.services=+dynamodb,+sso,+ssooidc,+sts :aws:sdk:assemble
+
+# Build the perf test binary and move it to the artifacts dir
+cd aws/sdk/benchmarks/sdk-perf
+cargo build --release
+cd ../../../../
+cp target/release/sdk-perf ../artifacts/
+
+# Create the test.sh script that the perf test runner executes
+touch ../artifacts/test.sh
+echo "./sdk-perf --commit-id '$(git rev-parse HEAD)'" >> ../artifacts/test.sh
+chmod +x ../artifacts/test.sh

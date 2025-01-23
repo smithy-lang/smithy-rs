@@ -100,7 +100,13 @@ async fn test_presigning() {
         ][..],
         &query_params
     );
-    assert_eq!(presigned.headers().count(), 0);
+    assert_eq!(presigned.headers().count(), 1);
+    let headers = presigned.headers().collect::<HashMap<_, _>>();
+    assert_eq!(headers.get("x-amz-checksum-mode").unwrap(), &"ENABLED");
+
+    // Checksum headers should not be included by default in presigned requests
+    assert_eq!(headers.get("x-amz-sdk-checksum-algorithm"), None);
+    assert_eq!(headers.get("x-amz-checksum-crc32"), None);
 }
 
 #[tokio::test]
@@ -148,6 +154,11 @@ async fn test_presigning_with_payload_headers() {
         Some(&"application/x-test")
     );
     assert_eq!(headers.get(CONTENT_LENGTH.as_str()), Some(&"12345"));
+
+    // Checksum headers should not be included by default in presigned requests
+    assert_eq!(headers.get("x-amz-sdk-checksum-algorithm"), None);
+    assert_eq!(headers.get("x-amz-checksum-crc32"), None);
+
     assert_eq!(headers.len(), 2);
 }
 
@@ -193,5 +204,30 @@ async fn test_presigned_head_object() {
     pretty_assertions::assert_eq!(
         "https://bucket.s3.us-east-1.amazonaws.com/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=host&X-Amz-Signature=6b97012e70d5ee3528b5591e0e90c0f45e0fa303506f854eff50ff922751a193&X-Amz-Security-Token=notarealsessiontoken",
         presigned.uri().to_string(),
+    );
+}
+
+#[tokio::test]
+async fn test_presigned_user_provided_checksum() {
+    let presigned = presign(|client| {
+        client
+            .put_object()
+            .checksum_crc64_nvme("NotARealChecksum")
+            .bucket("test-bucket")
+            .key("test-key")
+    })
+    .await;
+
+    // The x-amz-checksum-crc64nvme header is added to the signed headers
+    pretty_assertions::assert_eq!(
+        "https://test-bucket.s3.us-east-1.amazonaws.com/test-key?x-id=PutObject&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=host%3Bx-amz-checksum-crc64nvme&X-Amz-Signature=40e6ea102769a53f440db587be0b6898893d9a0f8268d2f8d2315ca0abc42fee&X-Amz-Security-Token=notarealsessiontoken",
+        presigned.uri().to_string(),
+    );
+
+    // Checksum value header is persisted into the request
+    let headers = presigned.headers().collect::<HashMap<_, _>>();
+    assert_eq!(
+        headers.get("x-amz-checksum-crc64nvme"),
+        Some(&"NotARealChecksum")
     );
 }
