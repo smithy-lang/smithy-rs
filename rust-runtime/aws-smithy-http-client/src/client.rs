@@ -602,6 +602,16 @@ cfg_tls! {
                         );
                         self.wrap_connector(https_connector)
                     }
+                },
+                #[cfg(feature = "s2n-tls")]
+                tls::Provider::S2nTls  => {
+                    if self.enable_cached_tls {
+                        let https_connector = tls::s2n_tls_provider::cached_connectors::cached_https();
+                        self.wrap_connector(https_connector)
+                    } else {
+                        let https_connector = tls::s2n_tls_provider::build_connector::wrap_connector(http_connector);
+                        self.wrap_connector(https_connector)
+                    }
                 }
             }
         }
@@ -949,5 +959,43 @@ mod test {
             "expected '{message}' to contain '{expected}'"
         );
         assert_elapsed!(now, Duration::from_secs(2));
+    }
+
+    #[cfg(feature = "s2n-tls")]
+    #[tokio::test]
+    async fn s2n_tls_provider() {
+        // Create an HttpConnector with the s2n-tls provider.
+        let client = Builder::new()
+            .tls_provider(tls::Provider::S2nTls)
+            .build_https();
+        let connector_settings = HttpConnectorSettings::builder().build();
+
+        // HyperClient::http_connector invokes TimeSource::now to determine how long it takes to
+        // create new HttpConnectors. As such, a real time source must be provided.
+        let runtime_components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .build()
+            .unwrap();
+
+        let connector = client.http_connector(&connector_settings, &runtime_components);
+
+        // Ensure that s2n-tls is used as the underlying TLS provider when selected.
+        //
+        // s2n-tls-hyper will error when given an invalid scheme. Ensure that this error is produced
+        // from s2n-tls-hyper, and not another TLS provider.
+        let error = connector
+            .call(HttpRequest::get("notascheme://amazon.com").unwrap())
+            .await
+            .unwrap_err();
+        let error = error.into_source();
+        let s2n_error = error
+            .source()
+            .unwrap()
+            .downcast_ref::<s2n_tls_hyper::error::Error>()
+            .unwrap();
+        assert!(matches!(
+            s2n_error,
+            s2n_tls_hyper::error::Error::InvalidScheme
+        ));
     }
 }

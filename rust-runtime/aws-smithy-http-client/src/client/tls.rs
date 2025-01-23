@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use crate::cfg::cfg_rustls;
+use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 
 /// Choice of underlying cryptography library
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -15,9 +15,9 @@ pub enum Provider {
     ))]
     /// TLS provider based on [rustls](https://github.com/rustls/rustls)
     Rustls(rustls_provider::CryptoMode),
-    // TLS provider based on [S2N](https://github.com/aws/s2n-tls)
-    // S2n,
-    // TODO(hyper1) s2n support
+    /// TLS provider based on [s2n-tls](https://github.com/aws/s2n-tls)
+    #[cfg(feature = "s2n-tls")]
+    S2nTls,
     // TODO(hyper1): consider native-tls support?
 }
 
@@ -177,6 +177,58 @@ cfg_rustls! {
                     .enable_http1()
                     .enable_http2()
                     .wrap_connector(conn)
+            }
+        }
+    }
+}
+
+cfg_s2n_tls! {
+    /// s2n-tls based support and adapters
+    pub(crate) mod s2n_tls_provider {
+        pub(crate) mod cached_connectors {
+            use hyper_util::client::legacy as client;
+            use client::connect::HttpConnector;
+            use hyper_util::client::legacy::connect::dns::GaiResolver;
+            use super::build_connector::make_tls;
+
+            static CACHED_CONNECTOR: once_cell::sync::Lazy<
+                s2n_tls_hyper::connector::HttpsConnector<HttpConnector>,
+            > = once_cell::sync::Lazy::new(|| {
+                make_tls(GaiResolver::new())
+            });
+
+            pub(crate) fn cached_https() -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector> {
+                CACHED_CONNECTOR.clone()
+            }
+        }
+
+        pub(crate) mod build_connector {
+            use hyper_util::client::legacy as client;
+            use client::connect::HttpConnector;
+            use s2n_tls::security::Policy;
+
+            pub(super) fn make_tls<R>(
+                resolver: R,
+            ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
+                // use the base connector through our `Connector` type to ensure defaults are consistent
+                let base_connector = crate::client::Connector::builder()
+                    .base_connector_with_resolver(resolver);
+                wrap_connector(base_connector)
+            }
+
+            pub(crate) fn wrap_connector<R>(
+                mut http_connector: HttpConnector<R>,
+            ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
+                http_connector.enforce_http(false);
+                let config = {
+                    let mut builder = s2n_tls::config::Config::builder();
+                    let policy = Policy::from_version("20230317").unwrap();
+                    builder.set_security_policy(&policy).unwrap();
+                    builder.build().unwrap()
+                };
+                let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config);
+                builder.with_plaintext_http(true);
+                builder.build()
             }
         }
     }
