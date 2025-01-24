@@ -47,7 +47,7 @@ impl Context for ContextWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelUpDownCounter<i64>] type.
+/// A wrapper for the [`OtelUpDownCounter<i64>`] type.
 pub struct UpDownCounterWrap(OtelUpDownCounter<i64>);
 impl UpDownCounter for UpDownCounterWrap {
     type Context = ContextWrap;
@@ -59,7 +59,7 @@ impl UpDownCounter for UpDownCounterWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelHistogram<f64>] type.
+/// A wrapper for the [`OtelHistogram<f64>`] type.
 pub struct HistogramWrap(OtelHistogram<f64>);
 impl Histogram for HistogramWrap {
     type Context = ContextWrap;
@@ -71,7 +71,7 @@ impl Histogram for HistogramWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelCounter<u64>] type.
+/// A wrapper for the [`OtelCounter<u64>`] type.
 pub struct MonotonicCounterWrap(OtelCounter<u64>);
 impl MonotonicCounter for MonotonicCounterWrap {
     type Context = ContextWrap;
@@ -83,7 +83,7 @@ impl MonotonicCounter for MonotonicCounterWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelObservableGauge<f64>] type.
+/// A wrapper for the [`OtelObservableGauge<f64>`] type.
 pub struct GaugeWrap(OtelObservableGauge<f64>);
 impl AsyncMeasure for GaugeWrap {
     type Value = f64;
@@ -105,7 +105,7 @@ impl AsyncMeasure for GaugeWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelObservableUpDownCounter<i64>] type.
+/// A wrapper for the [`OtelObservableUpDownCounter<i64>`] type.
 pub struct AsyncUpDownCounterWrap(OtelObservableUpDownCounter<i64>);
 impl AsyncMeasure for AsyncUpDownCounterWrap {
     type Value = i64;
@@ -127,7 +127,7 @@ impl AsyncMeasure for AsyncUpDownCounterWrap {
 
 #[derive(Debug)]
 #[non_exhaustive]
-/// A wrapper for the [OtelObservableCounter<u64>] type.
+/// A wrapper for the [`OtelObservableCounter<u64>`] type.
 pub struct AsyncMonotonicCounterWrap(OtelObservableCounter<u64>);
 impl AsyncMeasure for AsyncMonotonicCounterWrap {
     type Value = u64;
