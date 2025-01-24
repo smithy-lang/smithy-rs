@@ -6,6 +6,13 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /* End of automatically managed default lints */
+
+//! Default HTTPS client implementation for smithy-rs generated code.
+//!
+//! This crate is not meant to be consumed directly and exists to facilitate
+//! platform specific defaults only. Use the `aws-smithy-http-client` crate directly
+//! instead.
+
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
