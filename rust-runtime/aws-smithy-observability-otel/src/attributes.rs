@@ -54,7 +54,9 @@ impl From<AttributesWrap> for Vec<KeyValue> {
                         AttributeValue::F64(val) => Value::F64(val),
                         AttributeValue::String(val) => Value::String(val.into()),
                         AttributeValue::Bool(val) => Value::Bool(val),
-                        _ => Value::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into()),
+                        unknown => Value::String(
+                            format!("UNSUPPORTED ATTRIBUTE VALUE TYPE: {unknown:?}").into(),
+                        ),
                     },
                 )
             })
@@ -74,9 +76,9 @@ impl From<&[KeyValue]> for AttributesWrap {
                     Value::I64(val) => AttributeValue::I64(*val),
                     Value::F64(val) => AttributeValue::F64(*val),
                     Value::String(val) => AttributeValue::String(val.clone().into()),
-                    Value::Array(_) => {
-                        AttributeValue::String("UNSUPPORTED ATTRIBUTE VALUE TYPE".into())
-                    }
+                    Value::Array(val) => AttributeValue::String(format!(
+                        "UNSUPPORTED ATTRIBUTE VALUE TYPE ARRAY: {val}"
+                    )),
                 },
             )
         });

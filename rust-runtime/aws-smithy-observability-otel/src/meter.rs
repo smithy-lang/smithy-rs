@@ -386,8 +386,6 @@ mod tests {
     use opentelemetry_sdk::runtime::Tokio;
     use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
-    use super::AwsSdkOtelMeterProvider;
-
     // Without these tokio settings this test just stalls forever on flushing the metrics pipeline
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn sync_instruments_work() {
