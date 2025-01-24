@@ -86,7 +86,7 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.2"
+version = "1.2.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.1"
+version = "0.63.0"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",

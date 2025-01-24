@@ -416,6 +416,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-default-tls"
+version = "0.1.0"
+dependencies = [
+ "aws-smithy-http-client",
+ "aws-smithy-runtime-api 1.7.4",
+ "tracing",
+]
+
+[[package]]
 name = "aws-smithy-eventstream"
 version = "0.60.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -710,6 +719,7 @@ version = "1.8.0"
 dependencies = [
  "approx",
  "aws-smithy-async 1.2.5",
+ "aws-smithy-default-tls",
  "aws-smithy-http 0.62.0",
  "aws-smithy-http-client",
  "aws-smithy-runtime-api 1.7.4",

@@ -16,7 +16,7 @@ http-auth = ["aws-smithy-runtime-api/http-auth"]
 # NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
-default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
+default-https-client = ["dep:aws-smithy-default-tls"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
@@ -49,6 +49,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }
+aws-smithy-default-tls = { path = "../aws-smithy-default-tls", optional = true }
 bytes = "1.4.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
