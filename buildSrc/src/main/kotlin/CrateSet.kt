@@ -63,6 +63,7 @@ object CrateSet {
             "aws-smithy-checksums",
             "aws-smithy-compression",
             "aws-smithy-client",
+            "aws-smithy-default-tls",
             "aws-smithy-eventstream",
             "aws-smithy-http",
             "aws-smithy-http-client",
