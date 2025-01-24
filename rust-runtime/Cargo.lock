@@ -773,12 +773,15 @@ dependencies = [
 name = "aws-smithy-observability-otel"
 version = "0.1.0"
 dependencies = [
+ "async-global-executor",
+ "async-task",
  "aws-smithy-observability",
  "criterion",
  "opentelemetry",
  "opentelemetry_sdk",
  "stats_alloc",
  "tokio",
+ "value-bag",
 ]
 
 [[package]]

@@ -13,6 +13,12 @@ repository = "https://github.com/awslabs/smithy-rs"
 aws-smithy-observability = { path = "../aws-smithy-observability" }
 opentelemetry = {version = "0.26.0", features = ["metrics"]}
 
+# The below dependencies are transitive, but must be pinned until the MSRV of
+# OTel catches up with ours
+value-bag = "1.10.0"
+async-global-executor = "2.4.1"
+async-task = "=4.7.1"
+
 # This crate cannot be used on powerpc
 [target.'cfg(not(target_arch = "powerpc"))'.dependencies]
 opentelemetry_sdk = {version = "0.26.0", features = ["metrics", "testing"]}
