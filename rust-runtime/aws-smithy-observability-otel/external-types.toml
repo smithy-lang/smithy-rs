@@ -1,4 +1,6 @@
 allowed_external_types = [
+    "aws_smithy_observability::attributes::Context",
+    "aws_smithy_observability::attributes::Scope",
     "aws_smithy_observability::error::ObservabilityError",
     "aws_smithy_observability::meter::AsyncMeasure",
     "aws_smithy_observability::meter::Histogram",
@@ -7,5 +9,6 @@ allowed_external_types = [
     "aws_smithy_observability::meter::ProvideMeter",
     "aws_smithy_observability::meter::UpDownCounter",
     "aws_smithy_observability::provider::TelemetryProvider",
+    "opentelemetry::metrics::meter::Meter",
     "opentelemetry_sdk::metrics::meter_provider::SdkMeterProvider",
 ]
