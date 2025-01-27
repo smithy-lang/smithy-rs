@@ -13,10 +13,10 @@ aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }
 tracing = "0.1.40"
 
 [target.'cfg(unix)'.dependencies]
-aws-smithy-http-client = { path = "../aws-smithy-http-client", features = ["s2n-tls"] }
+aws-smithy-http-client = { path = "../aws-smithy-http-client", version = "1", features = ["s2n-tls"] }
 
 [target.'cfg(windows)'.dependencies]
-aws-smithy-http-client = { path = "../aws-smithy-http-client", features = ["rustls-aws-lc"] }
+aws-smithy-http-client = { path = "../aws-smithy-http-client", version = "1", features = ["rustls-aws-lc"] }
 
 [package.metadata.docs.rs]
 all-features = true
