@@ -1030,8 +1030,7 @@ mod tests {
 
         #[test]
         fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
-            prop_assume!(HeaderValue::from_str(&v).is_ok());
-            assert!(normalize_header_value(&v).is_ok());
+            assert_eq!(normalize_header_value(&v).is_ok(), HeaderValue::from_str(&v).is_ok());
         }
 
         #[test]
