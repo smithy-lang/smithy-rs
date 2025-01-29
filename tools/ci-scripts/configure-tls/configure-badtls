@@ -6,7 +6,7 @@
 
 set -euxo pipefail
 
-sudo python3 -m pip install git+https://github.com/wbond/oscrypto.git@1547f535001ba568b239b8797465536759c742a3
+sudo python3 -m pip install git+https://github.com/wbond/oscrypto.git@d5f3437ed24257895ae1edd9e503cfb352e635a8
 python3 scripts/generate.py badtls.test
 sudo mkdir /etc/nginx/tls || true
 sudo mkdir /var/www || true
