@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -102,12 +101,12 @@ class JsonParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val customizations: List<JsonParserCustomization> = listOf(),
+    smithyJson: RuntimeType = RuntimeType.smithyJson(codegenContext.runtimeConfig),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
-    private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val builderInstantiator = codegenContext.builderInstantiator()
     private val codegenScope =

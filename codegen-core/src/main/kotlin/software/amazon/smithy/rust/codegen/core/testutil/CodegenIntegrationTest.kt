@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.testutil
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.node.ToNode
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
@@ -50,87 +51,78 @@ data class IntegrationTestParams(
 sealed class AdditionalSettings {
     abstract fun toObjectNode(): ObjectNode
 
-    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) : AdditionalSettings() {
-        override fun toObjectNode(): ObjectNode {
-            val merged =
-                settings.map { it.toObjectNode() }
-                    .reduce { acc, next -> acc.merge(next) }
-
-            return ObjectNode.builder()
-                .withMember("codegen", merged)
+    companion object {
+        private fun Map<String, Any>.toCodegenObjectNode(): ObjectNode =
+            ObjectNode.builder()
+                .withMember(
+                    "codegen",
+                    ObjectNode.builder().apply {
+                        forEach { (key, value) ->
+                            when (value) {
+                                is Boolean -> withMember(key, value)
+                                is Number -> withMember(key, value)
+                                is String -> withMember(key, value)
+                                is ToNode -> withMember(key, value)
+                                else -> throw IllegalArgumentException("Unsupported type for key $key: ${value::class}")
+                            }
+                        }
+                    }.build(),
+                )
                 .build()
-        }
+    }
+
+    abstract class CoreAdditionalSettings protected constructor(
+        private val settings: Map<String, Any>,
+    ) : AdditionalSettings() {
+        override fun toObjectNode(): ObjectNode = settings.toCodegenObjectNode()
 
         abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
-            protected val settings = mutableListOf<AdditionalSettings>()
+            protected val settings = mutableMapOf<String, Any>()
 
-            fun generateCodegenComments(debugMode: Boolean = true): Builder<T> {
-                settings.add(GenerateCodegenComments(debugMode))
-                return this
-            }
+            fun generateCodegenComments(debugMode: Boolean = true) =
+                apply {
+                    settings["debugMode"] = debugMode
+                }
 
-            abstract fun build(): T
-
-            override fun toObjectNode(): ObjectNode = build().toObjectNode()
-        }
-
-        // Core settings that are common to both Servers and Clients should be defined here.
-        data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("debugMode", debugMode)
-                    .build()
+            override fun toObjectNode(): ObjectNode = settings.toCodegenObjectNode()
         }
     }
 }
 
-class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
-    AdditionalSettings.CoreAdditionalSettings(settings) {
-        class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>() {
-            override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
-        }
-
-        // Additional settings that are specific to client generation should be defined here.
-
-        companion object {
-            fun builder() = Builder()
-        }
-    }
-
-class ServerAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
-    AdditionalSettings.CoreAdditionalSettings(settings) {
-        class Builder : CoreAdditionalSettings.Builder<ServerAdditionalSettings>() {
-            fun publicConstrainedTypes(enabled: Boolean = true): Builder {
-                settings.add(PublicConstrainedTypes(enabled))
-                return this
+class ServerAdditionalSettings private constructor(
+    settings: Map<String, Any>,
+) : AdditionalSettings.CoreAdditionalSettings(settings) {
+    class Builder : CoreAdditionalSettings.Builder<ServerAdditionalSettings>() {
+        fun publicConstrainedTypes(enabled: Boolean = true) =
+            apply {
+                settings["publicConstrainedTypes"] = enabled
             }
 
-            fun addValidationExceptionToConstrainedOperations(enabled: Boolean = true): Builder {
-                settings.add(AddValidationExceptionToConstrainedOperations(enabled))
-                return this
+        fun addValidationExceptionToConstrainedOperations(enabled: Boolean = true) =
+            apply {
+                settings["addValidationExceptionToConstrainedOperations"] = enabled
             }
 
-            override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
-        }
-
-        private data class PublicConstrainedTypes(val enabled: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("publicConstrainedTypes", enabled)
-                    .build()
-        }
-
-        private data class AddValidationExceptionToConstrainedOperations(val enabled: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("addValidationExceptionToConstrainedOperations", enabled)
-                    .build()
-        }
-
-        companion object {
-            fun builder() = Builder()
-        }
+        fun replaceInvalidUtf8(enabled: Boolean = true) =
+            apply {
+                settings["replaceInvalidUtf8"] = enabled
+            }
     }
+
+    companion object {
+        fun builder() = Builder()
+    }
+}
+
+class ClientAdditionalSettings private constructor(
+    settings: Map<String, Any>,
+) : AdditionalSettings.CoreAdditionalSettings(settings) {
+    class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>()
+
+    companion object {
+        fun builder() = Builder()
+    }
+}
 
 /**
  * Run cargo test on a true, end-to-end, codegen product of a given model.
