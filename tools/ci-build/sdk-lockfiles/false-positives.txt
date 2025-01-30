@@ -1,2 +1,3 @@
 aws-smithy-experimental -> pin-project
 aws-smithy-experimental -> pin-project-internal
+aws-inlineable -> wit-bindgen-rt
