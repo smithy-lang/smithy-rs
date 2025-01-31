@@ -293,9 +293,7 @@ pub(super) fn audit(args: AuditArgs) -> Result<()> {
             "checking whether `{}` is covered by the SDK lockfile...",
             path
         );
-        // We can assume that the need to handle `FALSE_POSITIVES` arises only with the Smithy runtime lockfile,
-        // due to server-related runtime crates. All dependencies listed in the AWS runtime lockfile and the `aws-config`
-        // lockfile should be included in the SDK lockfile.
+
         let crates_uncovered_by_sdk = audit_runtime_lockfile_covered_by_sdk_lockfile(
             runtime_lockfile,
             &sdk_dependency_set,
