@@ -145,7 +145,7 @@ checksum = "30ca9a001c1e8ba5149f91a74362376cc6bc5b919d92d988668657bd570bdcec"
 dependencies = [
  "async-task",
  "concurrent-queue",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-lite 2.6.0",
  "slab",
 ]
@@ -376,7 +376,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-types 1.3.4",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "hex",
  "http 0.2.12",
@@ -491,7 +491,7 @@ dependencies = [
  "bytes",
  "bytes-utils",
  "convert_case",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -527,7 +527,7 @@ dependencies = [
  "aws-smithy-types 1.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-types 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "http-body 0.4.6",
  "once_cell",
@@ -580,7 +580,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-types 1.3.4",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "once_cell",
@@ -631,7 +631,7 @@ dependencies = [
  "aws-types 1.3.4",
  "bytes",
  "criterion",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "once_cell",
@@ -659,7 +659,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.4",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "once_cell",
@@ -685,7 +685,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-types 1.3.4",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -906,7 +906,7 @@ dependencies = [
  "aws-types 1.3.4",
  "bytes",
  "bytes-utils",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "hdrhistogram",
  "hex",
@@ -953,7 +953,7 @@ dependencies = [
  "aws-smithy-xml 0.60.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-types 1.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "hex",
  "hmac",
  "http 0.2.12",
@@ -983,7 +983,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-smithy-xml 0.60.9",
  "aws-types 1.3.4",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "md-5",
@@ -1081,7 +1081,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-types 1.3.4",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "once_cell",
@@ -1107,7 +1107,7 @@ dependencies = [
  "aws-smithy-types 1.2.12",
  "aws-types 1.3.4",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -1498,7 +1498,7 @@ dependencies = [
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.12",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-util",
  "h2 0.3.26",
  "http 0.2.12",
@@ -1534,7 +1534,7 @@ dependencies = [
  "aws-smithy-runtime-api 1.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "aws-smithy-types 1.2.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "h2 0.3.26",
  "http 0.2.12",
  "http-body 0.4.6",
@@ -2434,9 +2434,9 @@ dependencies = [
 
 [[package]]
 name = "fastrand"
-version = "2.0.2"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "658bd65b1cf4c852a3cc96f18a8ce7b5640f6b703f905c7d74532294c2a63984"
+checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ff"
@@ -2527,7 +2527,7 @@ version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5edaec856126859abb19ed65f39e90fea3a9574b9707f13539acf4abf7eb532"
 dependencies = [
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-core",
  "futures-io",
  "parking",
@@ -2590,6 +2590,18 @@ dependencies = [
  "cfg-if",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+]
+
+[[package]]
+name = "getrandom"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43a49c392881ce6d5c3b8cb70f98717b7c07aabbdff06687b9030dbfbe2725f8"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "wasi 0.13.3+wasi-0.2.2",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -3491,7 +3503,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96c8c490f422ef9a4efd2cb5b42b76c8613d7e7dfc1caf667b8a3350a5acc066"
 dependencies = [
  "atomic-waker",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
  "futures-io",
 ]
 
@@ -3694,7 +3706,7 @@ version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
- "getrandom",
+ "getrandom 0.2.15",
 ]
 
 [[package]]
@@ -3804,7 +3816,7 @@ checksum = "c17fa4cb658e3583423e915b9f3acc01cceaee1860e33d59ebae66adc3a2dc0d"
 dependencies = [
  "cc",
  "cfg-if",
- "getrandom",
+ "getrandom 0.2.15",
  "libc",
  "spin",
  "untrusted",
@@ -4295,12 +4307,13 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.12.0"
+version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04cbcdd0c794ebb0d4cf35e88edd2f7d2c4c3e9a5a6dab322839b321c6a87a64"
+checksum = "38c246215d7d24f48ae091a2902398798e05d978b24315d6efbc00ede9a8bb91"
 dependencies = [
  "cfg-if",
- "fastrand 2.0.2",
+ "fastrand 2.3.0",
+ "getrandom 0.3.1",
  "once_cell",
  "rustix 0.38.44",
  "windows-sys 0.59.0",
@@ -4801,6 +4814,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af274f03e73b7d85551b3f9e97b8a04d5c9aec703cfc227a3fe0595a7561c67a"
 dependencies = [
  "wit-bindgen",
+]
+
+[[package]]
+name = "wasi"
+version = "0.13.3+wasi-0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26816d2e1a4a36a2940b96c5296ce403917633dff8f3440e9b236ed6f6bacad2"
+dependencies = [
+ "wit-bindgen-rt",
 ]
 
 [[package]]
