@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.5.14"
+version = "1.5.16"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -43,7 +43,7 @@ tracing = { version = "0.1" }
 url = "2.5.4"
 
 # implementation detail of IMDS credentials provider
-fastrand = "2.0.0"
+fastrand = "2.3.0"
 
 # implementation detail of SSO credential caching
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }

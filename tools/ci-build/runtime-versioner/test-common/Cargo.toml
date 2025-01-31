@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 camino = "1.1.6"
-tempfile = "3.8.1"
+tempfile = "3.16.0"
 test_bin = "0.4.0"
 whoami = "1.5.1"
