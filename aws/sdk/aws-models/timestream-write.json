@@ -503,7 +503,7 @@
                 "Tags": {
                     "target": "com.amazonaws.timestreamwrite#TagList",
                     "traits": {
-                        "smithy.api#documentation": "<p> A list of key-value pairs to label the table. </p>"
+                        "smithy.api#documentation": "<p> A list of key-value pairs to label the database. </p>"
                     }
                 }
             },
