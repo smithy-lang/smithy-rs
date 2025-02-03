@@ -19,6 +19,9 @@ on:
 jobs:
   verify-tls-config:
     name: Verify TLS configuration
+    # TODO: GH runners recently bumped the default Ubuntu version to 24.x, this comes with an upgraded OpenSSL
+    # version that causes the python oscrypto package to throw an error: https://github.com/wbond/oscrypto/issues/78
+    # Until that package is updated we are pinning the version here.
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
