@@ -27,17 +27,12 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get -y install gcc make python3-pip nginx git ruby pkg-config libssl-dev faketime
+        pip3 install certbuilder crlbuilder
     - name: Configure JDK
       uses: actions/setup-java@v4
       with:
         distribution: corretto
         java-version: 17
-        # Pinning to Python 3.11 see below for more details
-        # https://github.com/smithy-lang/smithy-rs/pull/3978
-      # - name: Configure Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: '3.11'
     - name: Stop nginx
       run: sudo systemctl stop nginx
     - name: Checkout smithy-rs

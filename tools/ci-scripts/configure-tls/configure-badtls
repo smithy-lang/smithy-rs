@@ -6,11 +6,6 @@
 
 set -euxo pipefail
 
-# sudo python3 -m pip install git+https://github.com/wbond/oscrypto.git@d5f3437ed24257895ae1edd9e503cfb352e635a8
-# Two lines below should show where pip installs packages and where python looks for them
-pip -V
-python3 -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])'
-sudo python3 -m pip install certbuilder crlbuilder
 python3 scripts/generate.py badtls.test
 sudo mkdir /etc/nginx/tls || true
 sudo mkdir /var/www || true
