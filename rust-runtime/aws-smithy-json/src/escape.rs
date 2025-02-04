@@ -233,7 +233,10 @@ fn read_unicode_escapes(bytes: &[u8], into: &mut Vec<u8>) -> Result<usize, Escap
             1 => into.push(chr as u8),
             _ => into.extend_from_slice(chr.encode_utf8(&mut [0; 4]).as_bytes()),
         },
-        None => into.extend_from_slice(&[0xEF, 0xBF, 0xBD]), // &[0xEF, 0xBF, 0xBD] is the byte representation of the '�' (\uFFFD) replacement character.
+        None => {
+            const REPLACEMENT_BYTES: &[u8] = "\u{FFFD}".as_bytes();
+            into.extend_from_slice(REPLACEMENT_BYTES)
+        }
     }
 
     Ok(bytes_read)

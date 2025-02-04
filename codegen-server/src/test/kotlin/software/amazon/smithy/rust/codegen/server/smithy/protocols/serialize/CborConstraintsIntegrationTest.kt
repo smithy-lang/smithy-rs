@@ -6,8 +6,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.protocols.serialize
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ModelProtocol
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
-import software.amazon.smithy.rust.codegen.server.smithy.ModelProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.loadSmithyConstraintsModelForProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 

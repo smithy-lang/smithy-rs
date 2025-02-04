@@ -9,10 +9,6 @@ import io.kotest.inspectors.forAll
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
-import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
-import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -22,27 +18,19 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
+import software.amazon.smithy.rust.codegen.core.testutil.ModelProtocol
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.replaceProtocolTraitOnServerShapeId
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 import java.io.File
-
-enum class ModelProtocol(val trait: AbstractTrait) {
-    AwsJson10(AwsJson1_0Trait.builder().build()),
-    AwsJson11(AwsJson1_1Trait.builder().build()),
-    RestJson(RestJson1Trait.builder().build()),
-    RestXml(RestXmlTrait.builder().build()),
-    Rpcv2Cbor(Rpcv2CborTrait.builder().build()),
-}
 
 /**
  * Returns the Smithy constraints model from the common repository, with the specified protocol
@@ -50,7 +38,7 @@ enum class ModelProtocol(val trait: AbstractTrait) {
  */
 fun loadSmithyConstraintsModelForProtocol(modelProtocol: ModelProtocol): Pair<Model, ShapeId> {
     val (model, serviceShapeId) = loadSmithyConstraintsModel()
-    return Pair(model.replaceProtocolTrait(serviceShapeId, modelProtocol), serviceShapeId)
+    return Pair(model.replaceProtocolTraitOnServerShapeId(serviceShapeId, modelProtocol), serviceShapeId)
 }
 
 /**
@@ -63,23 +51,6 @@ fun loadSmithyConstraintsModel(): Pair<Model, ShapeId> {
         File(filePath).readText().asSmithyModel()
     val serviceShapeId = model.shapes().filter { it.isServiceShape }.findFirst().orElseThrow().id
     return Pair(model, serviceShapeId)
-}
-
-/**
- * Removes all existing protocol traits annotated on the given service,
- * then sets the provided `protocol` as the sole protocol trait for the service.
- */
-fun Model.replaceProtocolTrait(
-    serviceShapeId: ShapeId,
-    modelProtocol: ModelProtocol,
-): Model {
-    val serviceBuilder =
-        this.expectShape(serviceShapeId, ServiceShape::class.java).toBuilder()
-    for (p in ModelProtocol.values()) {
-        serviceBuilder.removeTrait(p.trait.toShapeId())
-    }
-    val service = serviceBuilder.addTrait(modelProtocol.trait).build()
-    return ModelTransformer.create().replaceShapes(this, listOf(service))
 }
 
 fun List<ShapeId>.containsAnyShapeId(ids: Collection<ShapeId>): Boolean {

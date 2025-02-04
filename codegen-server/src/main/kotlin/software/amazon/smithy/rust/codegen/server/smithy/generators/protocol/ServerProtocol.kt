@@ -135,7 +135,6 @@ fun jsonParserGenerator(
     httpBindingResolver: HttpBindingResolver,
     jsonName: (MemberShape) -> String,
     additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
-    smithyJson: RuntimeType = RuntimeType.smithyJson(codegenContext.runtimeConfig),
 ): JsonParserGenerator =
     JsonParserGenerator(
         codegenContext,
@@ -153,7 +152,6 @@ fun jsonParserGenerator(
             } else {
                 RuntimeType.smithyJson(codegenContext.runtimeConfig)
             },
-        ,
     )
 
 class ServerAwsJsonProtocol(
@@ -254,15 +252,7 @@ class ServerRestJsonProtocol(
             serverCodegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            additionalParserCustomizations,
-            smithyJson =
-                if (serverCodegenContext.settings.codegenConfig.replaceInvalidUtf8) {
-                    CargoDependency.smithyJson(codegenContext.runtimeConfig)
-                        .copy(features = setOf("replace-invalid-utf8"))
-                        .toType()
-                } else {
-                    RuntimeType.smithyJson(codegenContext.runtimeConfig)
-                },
+            additionalParserCustomizations
         )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
