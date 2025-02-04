@@ -101,7 +101,7 @@ class JsonParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val customizations: List<JsonParserCustomization> = listOf(),
-    smithyJson: RuntimeType = RuntimeType.smithyJson(codegenContext.runtimeConfig),
+    smithyJsonWithFeatureFlag: RuntimeType = RuntimeType.smithyJson(codegenContext.runtimeConfig),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -111,20 +111,20 @@ class JsonParserGenerator(
     private val builderInstantiator = codegenContext.builderInstantiator()
     private val codegenScope =
         arrayOf(
-            "Error" to smithyJson.resolve("deserialize::error::DeserializeError"),
-            "expect_blob_or_null" to smithyJson.resolve("deserialize::token::expect_blob_or_null"),
-            "expect_bool_or_null" to smithyJson.resolve("deserialize::token::expect_bool_or_null"),
-            "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
-            "expect_number_or_null" to smithyJson.resolve("deserialize::token::expect_number_or_null"),
-            "expect_start_array" to smithyJson.resolve("deserialize::token::expect_start_array"),
-            "expect_start_object" to smithyJson.resolve("deserialize::token::expect_start_object"),
-            "expect_string_or_null" to smithyJson.resolve("deserialize::token::expect_string_or_null"),
-            "expect_timestamp_or_null" to smithyJson.resolve("deserialize::token::expect_timestamp_or_null"),
-            "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+            "Error" to smithyJsonWithFeatureFlag.resolve("deserialize::error::DeserializeError"),
+            "expect_blob_or_null" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_blob_or_null"),
+            "expect_bool_or_null" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_bool_or_null"),
+            "expect_document" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_document"),
+            "expect_number_or_null" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_number_or_null"),
+            "expect_start_array" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_start_array"),
+            "expect_start_object" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_start_object"),
+            "expect_string_or_null" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_string_or_null"),
+            "expect_timestamp_or_null" to smithyJsonWithFeatureFlag.resolve("deserialize::token::expect_timestamp_or_null"),
+            "json_token_iter" to smithyJsonWithFeatureFlag.resolve("deserialize::json_token_iter"),
             "Peekable" to RuntimeType.std.resolve("iter::Peekable"),
-            "skip_value" to smithyJson.resolve("deserialize::token::skip_value"),
-            "skip_to_end" to smithyJson.resolve("deserialize::token::skip_to_end"),
-            "Token" to smithyJson.resolve("deserialize::Token"),
+            "skip_value" to smithyJsonWithFeatureFlag.resolve("deserialize::token::skip_value"),
+            "skip_to_end" to smithyJsonWithFeatureFlag.resolve("deserialize::token::skip_to_end"),
+            "Token" to smithyJsonWithFeatureFlag.resolve("deserialize::Token"),
             "or_empty" to orEmptyJson(),
             *preludeScope,
         )

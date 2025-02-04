@@ -145,7 +145,15 @@ fun jsonParserGenerator(
         listOf(
             ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
         ) + additionalParserCustomizations,
-        smithyJson,
+        smithyJsonWithFeatureFlag =
+            if (codegenContext.settings.codegenConfig.replaceInvalidUtf8) {
+                CargoDependency.smithyJson(codegenContext.runtimeConfig)
+                    .copy(features = setOf("replace-invalid-utf8"))
+                    .toType()
+            } else {
+                RuntimeType.smithyJson(codegenContext.runtimeConfig)
+            },
+        ,
     )
 
 class ServerAwsJsonProtocol(
