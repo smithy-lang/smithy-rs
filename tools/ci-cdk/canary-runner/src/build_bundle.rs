@@ -612,7 +612,7 @@ wasmtime-wasi-http = "17.0.1"
 arbitrary = "=1.3.2"
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
-aws-sdk-s3 = { path = "some/sdk/path/s3" }
+aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
@@ -675,7 +675,7 @@ wasmtime-wasi-http = "17.0.1"
 arbitrary = "=1.3.2"
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
-aws-sdk-s3 = { version = "0.20.0" }
+aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }
 aws-sdk-ec2 = { version = "0.19.0" }
 aws-sdk-transcribestreaming = { version = "0.16.0" }
 aws-smithy-wasm = { version = "0.1.0" }
