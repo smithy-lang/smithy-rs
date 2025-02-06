@@ -153,7 +153,7 @@ arbitrary = "=1.3.2"
 lazy_static! {
     static ref REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
         RequiredDependency::new("aws-config").with_features(["behavior-version-latest"]),
-        RequiredDependency::new("aws-sdk-s3"),
+        RequiredDependency::new("aws-sdk-s3").with_features(["http-1x"]),
         RequiredDependency::new("aws-sdk-ec2"),
         RequiredDependency::new("aws-sdk-transcribestreaming"),
         RequiredDependency::new("aws-smithy-wasm"),
