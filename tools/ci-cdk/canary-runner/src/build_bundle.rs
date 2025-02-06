@@ -137,7 +137,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
@@ -600,7 +600,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
@@ -663,7 +663,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }

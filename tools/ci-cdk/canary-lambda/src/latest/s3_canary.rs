@@ -83,21 +83,19 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let presigned_put = client
         .put_object()
         .bucket(&s3_bucket_name)
-        .key(&presigned_test_key)
+        .key(presigned_test_key)
         .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
         .await
         .unwrap();
-    let http_put = presigned_request.make_http_1x_request("presigned_test");
+    let http_put = presigned_put.make_http_1x_request("presigned_test");
     let reqwest_put = reqwest::Request::try_from(http_put).unwrap();
     let put_resp = reqwest_client.execute(reqwest_put).await?;
-    if put_resp.is_err() {
-        return Err(CanaryError(format!("presigned put failed: {:?}", put_resp)).into());
-    }
+    assert_eq!(put_resp.status(), 200);
 
     let presigned_get = client
         .get_object()
         .bucket(&s3_bucket_name)
-        .key(&presigned_test_key)
+        .key(presigned_test_key)
         // Ensure a header is included that isn't in the query string
         .request_payer(RequestPayer::Requester)
         .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
@@ -107,6 +105,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let get_resp = reqwest_client
         .get(presigned_get.uri().to_string())
         .headers(headers)
+        .send()
         .await
         .context("s3::presigned")?
         .text()
