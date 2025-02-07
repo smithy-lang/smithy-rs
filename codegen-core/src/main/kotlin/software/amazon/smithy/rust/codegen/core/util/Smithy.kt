@@ -152,3 +152,21 @@ fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?
 
 /** Returns the SDK ID of the given service shape */
 fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)
+
+/**
+ * A set of RPC-bound Smithy protocols
+ */
+val RPC_BOUND_PROTOCOLS =
+    setOf(
+        "awsJson1_0",
+        "awsJson1_1",
+        "awsQuery",
+        "ec2Query",
+        "rpcv2Cbor",
+    )
+
+/**
+ * Represents whether the given ShapeId represents an RPC-bound Smithy protocol
+ */
+val ShapeId.isRpcBoundProtocol
+    get() = RPC_BOUND_PROTOCOLS.contains(name)

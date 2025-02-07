@@ -375,7 +375,7 @@ class EventStreamUnmarshallerGenerator(
                                         })?;
                                     builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::${member.target.name}(
+                                        #{OpError}::${member.target.name.toPascalCase()}(
                                             #{build}
                                         )
                                     ))

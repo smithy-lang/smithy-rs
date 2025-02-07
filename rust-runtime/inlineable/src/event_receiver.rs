@@ -5,7 +5,7 @@
 
 use aws_smithy_http::event_stream::Receiver;
 use aws_smithy_runtime_api::client::result::SdkError;
-use aws_smithy_types::event_stream::RawMessage;
+use aws_smithy_types::event_stream::{Message, RawMessage};
 
 #[derive(Debug)]
 /// Receives unmarshalled events at a time out of an Event Stream.
@@ -16,6 +16,14 @@ pub struct EventReceiver<T, E> {
 impl<T, E> EventReceiver<T, E> {
     pub(crate) fn new(inner: Receiver<T, E>) -> Self {
         Self { inner }
+    }
+
+    #[doc(hidden)]
+    // Wrapper around `try_recv_initial` on `aws_smithy_http::event_stream::Receiver`
+    //
+    // Note: This method is intended for internal use only.
+    pub async fn try_recv_initial(&mut self) -> Result<Option<Message>, SdkError<E, RawMessage>> {
+        self.inner.try_recv_initial().await
     }
 
     /// Asynchronously tries to receive an event from the stream. If the stream has ended, it

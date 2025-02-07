@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.Operat
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -49,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
@@ -142,8 +142,6 @@ class ClientCodegenVisitor(
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
-            // Drop unsupported event stream operations from the model
-            .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
 
@@ -236,6 +234,12 @@ class ClientCodegenVisitor(
 
                         implBlock(symbolProvider.toSymbol(shape)) {
                             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
+                            val hasNonEventStreamMemberInRpcBoundProtocol =
+                                shape.members().size > 1 && shape.members().any { it.isEventStream(model) } &&
+                                    codegenContext.protocol.isRpcBoundProtocol
+                            if (hasNonEventStreamMemberInRpcBoundProtocol) {
+                                BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
+                            }
                         }
                     }
                     val builder: Writable = {
