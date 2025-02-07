@@ -33,7 +33,8 @@ mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| {
 /// Runs canary exercising S3 APIs against a regular bucket
 pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
     let test_key = Uuid::new_v4().as_u128().to_string();
-    let presigned_test_key = test_key.clone().push_str("_presigned");
+    let mut presigned_test_key = test_key.clone();
+    presigned_test_key.push_str("_presigned");
 
     // Look for the test object and expect that it doesn't exist
     match client
@@ -83,7 +84,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let presigned_put = client
         .put_object()
         .bucket(&s3_bucket_name)
-        .key(presigned_test_key)
+        .key(&presigned_test_key)
         .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
         .await
         .unwrap();
@@ -95,7 +96,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     let presigned_get = client
         .get_object()
         .bucket(&s3_bucket_name)
-        .key(presigned_test_key)
+        .key(&presigned_test_key)
         // Ensure a header is included that isn't in the query string
         .request_payer(RequestPayer::Requester)
         .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
