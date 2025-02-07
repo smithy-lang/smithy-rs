@@ -7,6 +7,12 @@
 set -euxo pipefail
 
 perl -p -i -e 's!\./runners!runners!' setup.py
+
+sed -i 's/^import imp$/import importlib/' setup.py
+sed -i 's/^found = imp.find_module.*/sys.path.insert(0, os.path.join(os.path.dirname(__file__), "runners"))\
+found = importlib.util.find_spec("trytls")/' setup.py
+sed -i 's/^trytls = imp.load_module(\(.*\))$/trytls = importlib.util.module_from_spec(found)\nfound.loader.exec_module(trytls)/' setup.py
+
 sed -i '/import platform/a import distro' runners/trytls/utils.py
 sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
 sed -i 's/break//' runners/trytls/bundles/https.py
