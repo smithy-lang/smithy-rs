@@ -168,15 +168,18 @@ class HttpResponseChecksumCustomization(
 
                                         let is_presigned_req = cfg.load::<#{PresigningMarker}>().is_some();
 
-                                        // For presigned requests we do not enable the checksum mode header.
+                                        // For presigned requests we do not enable the checksum-mode header.
+                                        if is_presigned_req {
+                                            return #{Ok}(())
+                                        }
+
                                         // If validation setting is WhenSupported (or unknown) we enable response checksum
                                         // validation. If it is WhenRequired we do not enable (since there is no way to
                                         // indicate that a response checksum is required).
                                         ##[allow(clippy::wildcard_in_or_patterns)]
-                                        match (is_presigned_req, response_checksum_validation) {
-                                            (true, _) => {}
-                                            (false, #{ResponseChecksumValidation}::WhenRequired) => {}
-                                            (false, #{ResponseChecksumValidation}::WhenSupported) | _ => {
+                                        match response_checksum_validation {
+                                            #{ResponseChecksumValidation}::WhenRequired => {}
+                                            #{ResponseChecksumValidation}::WhenSupported | _ => {
                                                 input.$requestValidationModeName = Some(#{ValidationModeShape}::Enabled);
                                             }
                                         }
