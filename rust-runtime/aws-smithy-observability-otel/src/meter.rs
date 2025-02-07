@@ -10,12 +10,10 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use crate::attributes::kv_from_option_attr;
-use aws_smithy_observability::attributes::{Attributes, Context};
-use aws_smithy_observability::error::{ErrorKind, ObservabilityError};
 pub use aws_smithy_observability::meter::{
     AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
 };
-pub use aws_smithy_observability::provider::TelemetryProvider;
+use aws_smithy_observability::{Attributes, Context, ErrorKind, ObservabilityError};
 use opentelemetry::metrics::{
     AsyncInstrument as OtelAsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram,
     Meter as OtelMeter, MeterProvider as OtelMeterProvider,
@@ -314,9 +312,8 @@ impl ProvideMeter for AwsSdkOtelMeterProvider {
 #[cfg(test)]
 mod tests {
 
-    use aws_smithy_observability::attributes::{AttributeValue, Attributes};
     use aws_smithy_observability::meter::AsyncMeasure;
-    use aws_smithy_observability::provider::TelemetryProvider;
+    use aws_smithy_observability::{AttributeValue, Attributes, TelemetryProvider};
     use opentelemetry_sdk::metrics::{
         data::{Gauge, Histogram, Sum},
         PeriodicReader, SdkMeterProvider,

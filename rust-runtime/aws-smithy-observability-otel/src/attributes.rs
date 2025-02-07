@@ -8,7 +8,7 @@
 
 use std::ops::Deref;
 
-use aws_smithy_observability::attributes::{AttributeValue, Attributes};
+use aws_smithy_observability::{AttributeValue, Attributes};
 use opentelemetry::{KeyValue, Value};
 
 pub(crate) struct AttributesWrap(Attributes);
@@ -90,7 +90,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use aws_smithy_observability::attributes::{AttributeValue, Attributes};
+    use aws_smithy_observability::{AttributeValue, Attributes};
     use opentelemetry::Value;
 
     #[test]

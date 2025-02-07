@@ -4,7 +4,7 @@
  */
 
 use aws_smithy_observability::meter::Meter;
-use aws_smithy_observability::provider::TelemetryProvider;
+use aws_smithy_observability::TelemetryProvider;
 use aws_smithy_observability_otel::meter::AwsSdkOtelMeterProvider;
 use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};

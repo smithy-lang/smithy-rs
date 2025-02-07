@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_observability::attributes::{AttributeValue, Attributes};
 use aws_smithy_observability::meter::{AsyncMeasure, Meter};
-use aws_smithy_observability::provider::TelemetryProvider;
+use aws_smithy_observability::{AttributeValue, Attributes, TelemetryProvider};
 use aws_smithy_observability_otel::meter::AwsSdkOtelMeterProvider;
 use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};

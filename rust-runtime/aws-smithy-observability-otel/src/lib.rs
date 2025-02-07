@@ -26,8 +26,9 @@ pub mod meter;
 mod tests {
 
     use crate::meter::AwsSdkOtelMeterProvider;
-    use aws_smithy_observability::global::{get_telemetry_provider, set_telemetry_provider};
-    use aws_smithy_observability::provider::TelemetryProvider;
+    use aws_smithy_observability::{
+        get_telemetry_provider, set_telemetry_provider, TelemetryProvider,
+    };
     use opentelemetry_sdk::metrics::{data::Sum, PeriodicReader, SdkMeterProvider};
     use opentelemetry_sdk::runtime::Tokio;
     use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;

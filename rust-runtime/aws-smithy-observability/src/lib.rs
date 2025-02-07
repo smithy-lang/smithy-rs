@@ -17,12 +17,15 @@
 // TODO(smithyobservability): once we have finalized everything and integrated metrics with our runtime
 // libraries update this with detailed usage docs and examples
 
-pub mod attributes;
+mod attributes;
 pub use attributes::{AttributeValue, Attributes};
-pub mod error;
-pub use error::{ErrorKind, ObservabilityError};
-pub mod global;
+mod context;
+pub use context::{Context, ContextManager, Scope};
+mod error;
+pub use error::{ErrorKind, GlobalTelemetryProviderError, ObservabilityError};
+mod global;
+pub use global::{get_telemetry_provider, set_telemetry_provider};
 pub mod meter;
 mod noop;
-pub mod provider;
+mod provider;
 pub use provider::{TelemetryProvider, TelemetryProviderBuilder};

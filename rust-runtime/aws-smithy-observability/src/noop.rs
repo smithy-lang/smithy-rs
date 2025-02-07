@@ -9,7 +9,8 @@ use std::marker::PhantomData;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::{
-    attributes::{Attributes, Context},
+    attributes::Attributes,
+    context::Context,
     meter::{AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter},
 };
 

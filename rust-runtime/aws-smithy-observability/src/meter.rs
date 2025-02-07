@@ -6,7 +6,8 @@
 //! Metrics are used to gain insight into the operational performance and health of a system in
 //! real time.
 
-use crate::attributes::{Attributes, Context};
+use crate::attributes::Attributes;
+use crate::context::Context;
 use std::{fmt::Debug, sync::Arc};
 
 /// Provides named instances of [Meter].
