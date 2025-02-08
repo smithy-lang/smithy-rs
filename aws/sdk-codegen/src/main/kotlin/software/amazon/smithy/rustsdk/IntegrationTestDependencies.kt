@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
@@ -119,19 +120,23 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
-            "transcribestreaming" -> listOf(TranscribeTestDependencies())
+            "transcribestreaming" -> listOf(TranscribeTestDependencies(codegenContext.runtimeConfig))
             "s3" -> listOf(S3TestDependencies(codegenContext))
             "dynamodb" -> listOf(DynamoDbTestDependencies())
             else -> emptyList()
         }
 }
 
-class TranscribeTestDependencies : LibRsCustomization() {
+class TranscribeTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStream)
             addDependency(FuturesCore)
             addDependency(Hound)
+            addDependency(
+                CargoDependency.smithyEventStream(runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev),
+            )
         }
 }
 

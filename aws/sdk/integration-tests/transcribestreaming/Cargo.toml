@@ -12,7 +12,7 @@ publish = false
 async-stream = "0.3.0"
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming", features = ["behavior-version-latest"] }
-aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
+aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 bytes = "1.0.0"
