@@ -243,7 +243,7 @@ class ProtocolParserGenerator(
         if (outputShape.id == operationShape.output.get()) {
             structuredDataParser.operationParser(operationShape)?.also { parser ->
                 // Don't deserialize non-event stream members for an event stream operation with RPC bound protocols,
-                // as they need to be serialized from payload in the first frame of event stream.
+                // as they need to be deserialized from payload in the first frame of event stream.
                 if (!operationShape.isOutputEventStream(codegenContext.model) || !codegenContext.protocol.isRpcBoundProtocol) {
                     rust(
                         "output = #T(_response_body, output).map_err(#T::unhandled)?;",

@@ -217,7 +217,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 }
 
                 if (rpcEventStreamTestCase.nonEventStreamMember == NonEventStreamMemberInOutput.NONE) {
-                    tokioTest("without_initial_response") {
+                    tokioTest("event_stream_member_only") {
                         writeTestBody(
                             codegenContext,
                             initialResponseStreamGenerator = writable {},
