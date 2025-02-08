@@ -120,10 +120,21 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
+            "cloudwatchlogs" -> listOf(CloudWatchLogsTestDependencies(codegenContext.runtimeConfig))
             "transcribestreaming" -> listOf(TranscribeTestDependencies(codegenContext.runtimeConfig))
             "s3" -> listOf(S3TestDependencies(codegenContext))
             "dynamodb" -> listOf(DynamoDbTestDependencies())
             else -> emptyList()
+        }
+}
+
+class CloudWatchLogsTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(
+                CargoDependency.smithyEventStream(runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev),
+            )
         }
 }
 
