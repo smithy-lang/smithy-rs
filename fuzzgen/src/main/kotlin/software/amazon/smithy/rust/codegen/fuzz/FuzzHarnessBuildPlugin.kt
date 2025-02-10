@@ -117,7 +117,7 @@ class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
 }
 
 /**
- * Generate a corpus of words used within the model to see the dictionary
+ * Generate a corpus of words used within the model to seed the dictionary
  */
 fun corpus(
     model: Model,

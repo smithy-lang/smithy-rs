@@ -1,23 +1,23 @@
 # aws-smithy-fuzz
 
-AWS Smithy fuzz contains a set of utilities for writing fuzz tests against smithy-rs servers. This is part of our tooling to perform differential fuzzing against different versions of smithy-rs-server.
+AWS Smithy fuzz contains a set of utilities for writing fuzz tests against smithy-rs servers. This is part of our tooling to perform differential fuzzing against different versions of smithy-rs servers.
 
 ## Installation
 1. Install `cargo afl`: `cargo install cargo-afl`
 2. Install the AFL runtime: `cargo afl config --build`
 2. Install the smithy CLI:
-2. Install aws-smithy-fuzz:
+2. Install `aws-smithy-fuzz`:
     - Locally: `cargo afl install --path .`
     - From crates.io: cargo afl install aws-smithy-fuzz
    > **IMPORTANT**: This package MUST be installed with `cargo afl install` (instead of `cargo install`). If you do not use `afl`,
    > you will get linking errors.
 
 ## Usage
-This contains a library + a CLI tool to fuzz smithy servers. The library allows setting up a given Smithy server implementation as a `cdylib`. This allows two different versions two by dynamically linked at runtime and executed by the fuzzer.
+This contains a library + a CLI tool to fuzz smithy-rs servers. The library allows setting up a given smithy-rs server implementation as a `cdylib`. This allows two different versions two by dynamically linked at runtime and executed by the fuzzer.
 
 Each of these components are meant to be usable independently:
 1. The public APIs of `aws-smithy-fuzz` can be used to write your own fuzz targets without code generation.
-2. The `lexicon.json` can be used outside of this project to seed a fuzzer from a smithy model
+2. The `lexicon.json` can be used outside of this project to seed a fuzzer from a Smithy model.
 3. The fuzz driver can be used on other fuzz targets.
 
 ### Setup
