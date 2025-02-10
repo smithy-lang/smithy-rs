@@ -109,6 +109,7 @@ class RustWaiterMatcherGenerator(
             RustJmespathShapeTraversalGenerator(codegenContext).generate(
                 pathExpression,
                 listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape))),
+                TraversalContext(retainOption = false),
             )
 
         generatePathTraversalMatcher(
@@ -132,6 +133,7 @@ class RustWaiterMatcherGenerator(
                     TraversalBinding.Named("input", "_input", TraversedShape.from(model, inputShape)),
                     TraversalBinding.Named("output", "_output", TraversedShape.from(model, outputShape)),
                 ),
+                TraversalContext(retainOption = false),
             )
 
         generatePathTraversalMatcher(

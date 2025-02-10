@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.7.6"
+version = "1.7.8"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -29,7 +29,7 @@ aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"
 bytes = "1"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
-fastrand = "2.0.0"
+fastrand = "2.3.0"
 h2 = { version = "0.3", default-features = false, optional = true }
 http-02x = { package = "http", version = "0.2.8" }
 http-body-04x = { package = "http-body", version = "0.4.4" }
@@ -56,7 +56,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
 # Allow only patch-level bumps since major-level or minor-level bumps can cause seed-value-breaking changes
 # https://github.com/smol-rs/fastrand/issues/20
-fastrand = "~2.0.0"
+fastrand = "2.3.0"
 futures-util = "0.3.29"
 pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }

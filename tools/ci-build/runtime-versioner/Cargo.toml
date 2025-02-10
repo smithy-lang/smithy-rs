@@ -21,7 +21,7 @@ crates-index = "2.3.0"
 indicatif = "0.17.7"
 reqwest = { version = "0.11.22", features = ["blocking"] }
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
-tempfile = "3.9.0"
+tempfile = "3.16.0"
 toml = { version = "0.5.8", features = ["preserve_order"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

@@ -137,7 +137,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
@@ -153,7 +153,7 @@ arbitrary = "=1.3.2"
 lazy_static! {
     static ref REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
         RequiredDependency::new("aws-config").with_features(["behavior-version-latest"]),
-        RequiredDependency::new("aws-sdk-s3"),
+        RequiredDependency::new("aws-sdk-s3").with_features(["http-1x"]),
         RequiredDependency::new("aws-sdk-ec2"),
         RequiredDependency::new("aws-sdk-transcribestreaming"),
         RequiredDependency::new("aws-smithy-wasm"),
@@ -401,7 +401,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             repository_root
                 .join("tools")
                 .join("target")
-                .join("wasm32-wasi")
+                .join("wasm32-wasip1")
                 .join("release")
                 .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
@@ -411,6 +411,8 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             opt.rust_version.as_deref(),
             opt.sdk_release_tag.as_ref(),
         )?);
+
+        tracing::debug!(wasm_bin_path = ?wasm_bin_path, bundle_path = ?bundle_path);
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
@@ -598,7 +600,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
@@ -610,7 +612,7 @@ wasmtime-wasi-http = "17.0.1"
 arbitrary = "=1.3.2"
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
-aws-sdk-s3 = { path = "some/sdk/path/s3" }
+aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
@@ -661,7 +663,7 @@ tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
-reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 wasmtime = { version = "17.0.1", features = ["component-model"] }
@@ -673,7 +675,7 @@ wasmtime-wasi-http = "17.0.1"
 arbitrary = "=1.3.2"
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
-aws-sdk-s3 = { version = "0.20.0" }
+aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }
 aws-sdk-ec2 = { version = "0.19.0" }
 aws-sdk-transcribestreaming = { version = "0.16.0" }
 aws-smithy-wasm = { version = "0.1.0" }

@@ -76,7 +76,7 @@ internal class ExprGeneratorTest {
             rust("assert_eq!(true, #W);", gen.generate(Expression.of(true)))
             rust("assert_eq!(false, #W);", gen.generate(Expression.of(false)))
             rust("""assert_eq!("blah", #W);""", gen.generate(Expression.of("blah")))
-            rust("""assert_eq!("helloworld: rust", #W);""", gen.generate(Expression.of("{ref}: rust")))
+            rust("""assert_eq!("helloworld: rust", #W);""", gen.generate(Expression.of("{extra}: rust")))
             rustTemplate(
                 """
                 let mut expected = std::collections::HashMap::new();
@@ -94,6 +94,6 @@ internal class ExprGeneratorTest {
                         ),
                     ),
             )
-        }
+        }.compileAndTest(runClippy = true)
     }
 }

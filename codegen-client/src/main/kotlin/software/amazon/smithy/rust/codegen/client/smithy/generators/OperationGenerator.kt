@@ -93,7 +93,9 @@ open class OperationGenerator(
                     *preludeScope,
                     "Arc" to RuntimeType.Arc,
                     "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
-                    "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
+                    "Input" to
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::interceptors::context::Input"),
                     "Operation" to symbolProvider.toSymbol(operationShape),
                     "OperationError" to errorType,
                     "OperationOutput" to outputType,
@@ -169,7 +171,9 @@ open class OperationGenerator(
                 }
                 """,
                 *codegenScope,
-                "Error" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Error"),
+                "Error" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::interceptors::context::Error"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                 "OrchestratorError" to
                     RuntimeType.smithyRuntimeApiClient(runtimeConfig)

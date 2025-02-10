@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.loadFromConfigBag
 import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.RustJmespathShapeTraversalGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.TraversalBinding
+import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.TraversalContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.waiters.TraversedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -168,16 +169,18 @@ class EndpointParamsInterceptorGenerator(
                             TraversedShape.from(model, operationShape.inputShape(model)),
                         ),
                     ),
+                    TraversalContext(retainOption = false),
                 )
 
             when (pathTraversal.outputType) {
                 is RustType.Vec -> {
-                    rust(".$setterName($getterName(_input))")
+                    if (pathTraversal.outputType.member is RustType.Reference) {
+                        rust(".$setterName($getterName(_input).map(|v| v.into_iter().cloned().collect::<Vec<_>>()))")
+                    } else {
+                        rust(".$setterName($getterName(_input))")
+                    }
                 }
-
-                else -> {
-                    rust(".$setterName($getterName(_input).cloned())")
-                }
+                else -> rust(".$setterName($getterName(_input).cloned())")
             }
         }
 
@@ -211,6 +214,7 @@ class EndpointParamsInterceptorGenerator(
                                 TraversedShape.from(model, operationShape.inputShape(model)),
                             ),
                         ),
+                        TraversalContext(retainOption = false),
                     )
 
                 rust("// Generated from JMESPath Expression: $pathValue")

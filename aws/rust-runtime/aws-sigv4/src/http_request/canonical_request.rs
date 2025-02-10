@@ -31,6 +31,7 @@ pub(crate) mod header {
     pub(crate) const X_AMZ_DATE: &str = "x-amz-date";
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
     pub(crate) const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
+    pub(crate) const X_AMZ_CHECKSUM_MODE: &str = "x-amz-checksum-mode";
 }
 
 pub(crate) mod param {
@@ -293,8 +294,10 @@ impl<'a> CanonicalRequest<'a> {
             }
 
             if params.settings().signature_location == SignatureLocation::QueryParams {
-                // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
-                if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
+                // The X-Amz-User-Agent and x-amz-checksum-mode headers should not be signed if this is for a presigned URL
+                if name == HeaderName::from_static(header::X_AMZ_USER_AGENT)
+                    || name == HeaderName::from_static(header::X_AMZ_CHECKSUM_MODE)
+                {
                     continue;
                 }
             }
@@ -874,7 +877,7 @@ mod tests {
         assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
-    // It should exclude authorization, user-agent, x-amzn-trace-id headers from presigning
+    // It should exclude authorization, user-agent, x-amzn-trace-id, and transfer-encoding headers from presigning
     #[test]
     fn non_presigning_header_exclusion() {
         let request = http0::Request::builder()
@@ -885,6 +888,7 @@ mod tests {
             .header("user-agent", "test-user-agent")
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
+            .header("transfer-encoding", "chunked")
             .body("")
             .unwrap()
             .into();
@@ -906,7 +910,7 @@ mod tests {
         );
     }
 
-    // It should exclude authorization, user-agent, x-amz-user-agent, x-amzn-trace-id headers from presigning
+    // It should exclude authorization, user-agent, x-amz-user-agent, x-amzn-trace-id, and transfer-encoding headers from presigning
     #[test]
     fn presigning_header_exclusion() {
         let request = http0::Request::builder()
@@ -917,6 +921,7 @@ mod tests {
             .header("user-agent", "test-user-agent")
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
+            .header("transfer-encoding", "chunked")
             .body("")
             .unwrap()
             .into();
@@ -1027,8 +1032,7 @@ mod tests {
 
         #[test]
         fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
-            prop_assume!(HeaderValue::from_str(&v).is_ok());
-            assert!(normalize_header_value(&v).is_ok());
+            assert_eq!(normalize_header_value(&v).is_ok(), HeaderValue::from_str(&v).is_ok());
         }
 
         #[test]
