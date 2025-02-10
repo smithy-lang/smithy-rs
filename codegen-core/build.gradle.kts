@@ -186,6 +186,7 @@ val sourcesJar by tasks.creating(Jar::class) {
     group = "publishing"
     description = "Assembles Kotlin sources jar"
     archiveClassifier.set("sources")
+    dependsOn("generateBuildEnvironmentConstants")
     from(sourceSets.getByName("main").allSource)
 }
 
