@@ -446,8 +446,6 @@ fn fuzz(args: FuzzArgs) {
     let config: FuzzConfig = serde_json::from_str(&config).unwrap();
     if args.enter_fuzzing_loop {
         let libraries = force_load_libraries(&config.targets);
-        //let target = fs::File::create("log.txt").unwrap();
-        //let fuzzing_log = BufWriter::new(target);
         enter_fuzz_loop(libraries, None)
     } else {
         eprintln!(

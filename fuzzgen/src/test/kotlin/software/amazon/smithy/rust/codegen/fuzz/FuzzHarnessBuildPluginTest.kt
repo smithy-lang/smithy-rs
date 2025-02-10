@@ -29,7 +29,6 @@ class FuzzHarnessBuildPluginTest() {
             operations: [SayHello],
             version: "1"
         }
-        @optionalAuth
         operation SayHello { input: TestInput }
         structure TestInput {
            foo: String,
