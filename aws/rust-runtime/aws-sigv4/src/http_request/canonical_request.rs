@@ -16,6 +16,7 @@ use crate::sign::v4::sha256_hex_string;
 use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
 use http0::header::{AsHeaderName, HeaderName, HOST};
+use http0::uri::{Port, Scheme};
 use http0::{HeaderMap, HeaderValue, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -404,14 +405,8 @@ impl<'a> CanonicalRequest<'a> {
                 // sent in the Host header (and Hyper strips default ports if they are present)
                 // https://datatracker.ietf.org/doc/html/rfc2616#section-14.23
                 // https://github.com/awslabs/aws-sdk-rust/issues/1244
-                let header_value = if let (Some(scheme), Some(port)) = (scheme, port) {
-                    if [("http", "80"), ("https", "443")]
-                        .contains(&(scheme.as_str(), port.as_str()))
-                    {
-                        host
-                    } else {
-                        authority
-                    }
+                let header_value = if is_port_scheme_default(scheme, port) {
+                    host
                 } else {
                     authority
                 };
@@ -497,6 +492,15 @@ fn trim_all(text: &str) -> Cow<'_, str> {
 fn normalize_header_value(header_value: &str) -> Result<HeaderValue, CanonicalRequestError> {
     let trimmed_value = trim_all(header_value);
     HeaderValue::from_str(&trimmed_value).map_err(CanonicalRequestError::from)
+}
+
+#[inline]
+fn is_port_scheme_default(scheme: Option<&Scheme>, port: Option<Port<&str>>) -> bool {
+    if let (Some(scheme), Some(port)) = (scheme, port) {
+        return [("http", "80"), ("https", "443")].contains(&(scheme.as_str(), port.as_str()));
+    }
+
+    false
 }
 
 #[derive(Debug, PartialEq, Default)]
