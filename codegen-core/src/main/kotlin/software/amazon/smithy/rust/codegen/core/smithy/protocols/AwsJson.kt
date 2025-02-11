@@ -42,6 +42,7 @@ sealed class AwsJsonVersion {
 class AwsJsonHttpBindingResolver(
     private val model: Model,
     private val awsJsonVersion: AwsJsonVersion,
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): Remove todoHandlingInitialMessages once the server supports non-streaming members
     private val todoHandlingInitialMessages: Boolean,
 ) : HttpBindingResolver {
     private val httpTrait =
