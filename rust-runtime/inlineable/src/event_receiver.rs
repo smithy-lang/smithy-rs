@@ -21,6 +21,7 @@ impl<T, E> EventReceiver<T, E> {
     // Wrapper around `try_recv_initial` on `aws_smithy_http::event_stream::Receiver`
     //
     // Note: This method is intended for internal use only.
+    #[allow(dead_code)]
     pub(crate) async fn try_recv_initial(
         &mut self,
     ) -> Result<Option<Message>, SdkError<E, RawMessage>> {
