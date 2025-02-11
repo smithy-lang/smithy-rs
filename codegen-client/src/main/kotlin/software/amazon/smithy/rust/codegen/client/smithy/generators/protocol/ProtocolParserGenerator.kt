@@ -38,6 +38,8 @@ import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
+import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -240,11 +242,15 @@ class ProtocolParserGenerator(
         rust("let mut output = #T::default();", symbolProvider.symbolForBuilder(outputShape))
         if (outputShape.id == operationShape.output.get()) {
             structuredDataParser.operationParser(operationShape)?.also { parser ->
-                rust(
-                    "output = #T(_response_body, output).map_err(#T::unhandled)?;",
-                    parser,
-                    errorSymbol,
-                )
+                // Don't deserialize non-event stream members for an event stream operation with RPC bound protocols,
+                // as they need to be deserialized from payload in the first frame of event stream.
+                if (!operationShape.isOutputEventStream(codegenContext.model) || !codegenContext.protocol.isRpcBoundProtocol) {
+                    rust(
+                        "output = #T(_response_body, output).map_err(#T::unhandled)?;",
+                        parser,
+                        errorSymbol,
+                    )
+                }
             }
         } else {
             check(outputShape.hasTrait<ErrorTrait>()) { "should only be called on outputs or errors $outputShape" }

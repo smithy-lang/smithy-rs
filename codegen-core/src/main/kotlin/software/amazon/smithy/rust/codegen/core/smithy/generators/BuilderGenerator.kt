@@ -177,6 +177,30 @@ class BuilderGenerator(
                 }
             }
         }
+
+        fun renderIntoBuilderMethod(
+            implBlock: RustWriter,
+            symbolProvider: RustSymbolProvider,
+            shape: StructureShape,
+        ) {
+            val members: List<MemberShape> = shape.allMembers.values.toList()
+            symbolProvider.symbolForBuilder(shape).also { builderSymbol ->
+                Attribute.AllowUnused.render(implBlock)
+                implBlock.rustBlock("pub(crate) fn into_builder(self) -> #T", builderSymbol) {
+                    write("Self::builder()")
+                    for (member in members) {
+                        val memberName = member.memberName.toSnakeCase()
+                        val setter =
+                            if (symbolProvider.toSymbol(member).isOptional()) {
+                                member.setterName()
+                            } else {
+                                memberName
+                            }
+                        write(".$setter(self.$memberName)")
+                    }
+                }
+            }
+        }
     }
 
     private val runtimeConfig = symbolProvider.config.runtimeConfig

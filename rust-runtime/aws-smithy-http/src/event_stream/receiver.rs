@@ -223,10 +223,9 @@ impl<T, E> Receiver<T, E> {
                 {
                     return Ok(Some(message));
                 }
-            } else {
-                // Buffer the message so that it can be returned by the next call to `recv()`
-                self.buffered_message = Some(message);
             }
+            // Buffer the message so that it can be returned by the next call to `recv()`
+            self.buffered_message = Some(message);
         }
         Ok(None)
     }

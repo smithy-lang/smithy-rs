@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -24,6 +25,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.eventReceiver
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.forInlineDependency
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
@@ -31,6 +34,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
+import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -78,7 +83,8 @@ class FluentBuilderGenerator(
     private val inputShape = operation.inputShape(model)
     private val inputBuilderType = symbolProvider.symbolForBuilder(inputShape)
 
-    private val outputType = symbolProvider.toSymbol(operation.outputShape(model))
+    private val outputShape = operation.outputShape(model)
+    private val outputType = symbolProvider.toSymbol(outputShape)
     private val errorType = symbolProvider.symbolForOperationError(operation)
     private val operationType = symbolProvider.toSymbol(operation)
 
@@ -86,6 +92,7 @@ class FluentBuilderGenerator(
         arrayOf(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
             "CustomizableOperation" to
                 ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
@@ -96,11 +103,16 @@ class FluentBuilderGenerator(
             "Operation" to operationType,
             "OperationError" to errorType,
             "OperationOutput" to outputType,
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            "StatusCode" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("http::StatusCode"),
             "SendResult" to
                 ClientRustModule.Client.customize.toType()
                     .resolve("internal::SendResult"),
+            "event_receiver" to forInlineDependency(InlineDependency.eventReceiver(runtimeConfig)),
         )
 
     fun render(writer: RustWriter) {
@@ -139,7 +151,7 @@ class FluentBuilderGenerator(
                         &self.handle.conf,
                         self.config_override,
                     );
-                    #{Operation}::orchestrate(&runtime_plugins, input).await
+                    #{epilogue:W}
                 }
 
                 /// Consumes this builder, creating a customizable operation that can be modified before being sent.
@@ -150,8 +162,87 @@ class FluentBuilderGenerator(
                 }
                 """,
                 *scope,
+                "epilogue" to (
+                    handleEventStreamInitialResponse() ?: writable {
+                        rustTemplate("#{Operation}::orchestrate(&runtime_plugins, input).await", *scope)
+                    }
+                ),
             )
         }
+
+    private fun handleEventStreamInitialResponse(): Writable? {
+        if (!codegenContext.protocol.isRpcBoundProtocol) {
+            return null
+        }
+
+        val eventStreamMember =
+            outputShape.members().find { member ->
+                member.isEventStream(codegenContext.model)
+            }
+        if (eventStreamMember == null) {
+            return null
+        }
+
+        return writable {
+            val eventStreamMemberName = symbolProvider.toMemberName(eventStreamMember)
+            rustTemplate(
+                """
+                let mut output =
+                    #{Operation}::orchestrate(
+                        &runtime_plugins,
+                        input,
+                    )
+                    .await?;
+
+                // Converts any error encountered beyond this point into an `SdkError` response error
+                // with an `HttpResponse`. However, since we have already exited the `orchestrate`
+                // function, the original `HttpResponse` is no longer available and cannot be restored.
+                // This means that header information from the original response has been lost.
+                //
+                // Note that the response body would have been consumed by the deserializer
+                // regardless, even if the initial message was hypothetically processed during
+                // the orchestrator's deserialization phase but later resulted in an error.
+                fn response_error(
+                    err: impl #{Into}<#{BoxError}>
+                ) -> #{SdkError}<#{OperationError}, #{HttpResponse}> {
+                    #{SdkError}::response_error(err, #{HttpResponse}::new(
+                        #{StatusCode}::try_from(200).expect("valid successful code"),
+                        #{SdkBody}::empty()))
+                }
+
+                let message = output.$eventStreamMemberName.try_recv_initial().await.map_err(response_error)?;
+
+                match message {
+                    #{Some}(_message) => {
+                        #{maybeRecreateOutputWithNonEventStreamMembers:W}
+                        #{Ok}(output)
+                    }
+                    #{None} => #{Ok}(output),
+                }
+                """,
+                *scope,
+                "maybeRecreateOutputWithNonEventStreamMembers" to
+                    writable {
+                        val structuredDataParser = codegenContext.protocolImpl?.structuredDataParser()
+                        structuredDataParser?.operationParser(operation)?.also { parser ->
+                            rustTemplate(
+                                """
+                                let mut builder = output.into_builder();
+                                builder = #{parser}(
+                                    _message.payload(),
+                                    builder
+                                )
+                                .map_err(response_error)?;
+                                let output = builder.build().map_err(response_error)?;
+                                """,
+                                "parser" to parser,
+                                *scope,
+                            )
+                        }
+                    },
+            )
+        }
+    }
 
     private fun RustWriter.renderStruct() {
         // Filter out any derive that isn't Clone. Then add a Debug derive input name

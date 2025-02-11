@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
@@ -41,6 +42,8 @@ sealed class AwsJsonVersion {
 class AwsJsonHttpBindingResolver(
     private val model: Model,
     private val awsJsonVersion: AwsJsonVersion,
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): Remove todoHandlingInitialMessages once the server supports non-streaming members
+    private val todoHandlingInitialMessages: Boolean,
 ) : HttpBindingResolver {
     private val httpTrait =
         HttpTrait.builder()
@@ -51,8 +54,8 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
-        if (members.size > 1 && members.any { it.isStreaming(model) }) {
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): Remove the exception once the server supports non-streaming members
+        if (todoHandlingInitialMessages && members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
                     "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
@@ -143,7 +146,7 @@ open class AwsJson(
     val version: AwsJsonVersion get() = awsJsonVersion
 
     override val httpBindingResolver: HttpBindingResolver =
-        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion)
+        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion, codegenContext.target == CodegenTarget.SERVER)
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 
