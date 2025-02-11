@@ -156,7 +156,7 @@ fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?
 /**
  * A set of RPC-bound Smithy protocols
  */
-val RPC_BOUND_PROTOCOLS =
+private val RPC_BOUND_PROTOCOLS =
     setOf(
         "awsJson1_0",
         "awsJson1_1",
