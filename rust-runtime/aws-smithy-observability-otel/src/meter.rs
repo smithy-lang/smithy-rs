@@ -16,7 +16,7 @@ pub use aws_smithy_observability::meter::{
 use aws_smithy_observability::{Attributes, Context, ErrorKind, ObservabilityError};
 use opentelemetry::metrics::{
     AsyncInstrument as OtelAsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram,
-    Meter as OtelMeter, MeterProvider as OtelMeterProvider,
+    Meter as OtelMeter, MeterProvider as OtelMeterProviderTrait,
     ObservableCounter as OtelObservableCounter, ObservableGauge as OtelObservableGauge,
     ObservableUpDownCounter as OtelObservableUpDownCounter, UpDownCounter as OtelUpDownCounter,
 };
@@ -270,12 +270,12 @@ impl Meter for MeterWrap {
 /// An OpenTelemetry based implementation of the AWS SDK's [ProvideMeter] trait
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct AwsSdkOtelMeterProvider {
+pub struct OtelMeterProvider {
     meter_provider: OtelSdkMeterProvider,
 }
 
-impl AwsSdkOtelMeterProvider {
-    /// Create a new [AwsSdkOtelMeterProvider] from an [OtelSdkMeterProvider].
+impl OtelMeterProvider {
+    /// Create a new [OtelMeterProvider] from an [OtelSdkMeterProvider].
     pub fn new(otel_meter_provider: OtelSdkMeterProvider) -> Self {
         Self {
             meter_provider: otel_meter_provider,
@@ -299,7 +299,7 @@ impl AwsSdkOtelMeterProvider {
     }
 }
 
-impl ProvideMeter for AwsSdkOtelMeterProvider {
+impl ProvideMeter for OtelMeterProvider {
     fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
         Arc::new(MeterWrap(self.meter_provider.meter(scope)))
     }
@@ -321,7 +321,7 @@ mod tests {
     use opentelemetry_sdk::runtime::Tokio;
     use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
-    use super::AwsSdkOtelMeterProvider;
+    use super::OtelMeterProvider;
 
     // Without these tokio settings this test just stalls forever on flushing the metrics pipeline
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -332,7 +332,7 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+        let sdk_mp = OtelMeterProvider::new(otel_mp);
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
@@ -352,7 +352,7 @@ mod tests {
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
         dyn_sdk_mp
             .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .downcast_ref::<OtelMeterProvider>()
             .unwrap()
             .shutdown()
             .unwrap();
@@ -395,7 +395,7 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+        let sdk_mp = OtelMeterProvider::new(otel_mp);
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
@@ -452,7 +452,7 @@ mod tests {
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
         dyn_sdk_mp
             .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .downcast_ref::<OtelMeterProvider>()
             .unwrap()
             .shutdown()
             .unwrap();

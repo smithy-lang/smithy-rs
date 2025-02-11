@@ -25,7 +25,7 @@ pub mod meter;
 #[cfg(test)]
 mod tests {
 
-    use crate::meter::AwsSdkOtelMeterProvider;
+    use crate::meter::OtelMeterProvider;
     use aws_smithy_observability::{
         get_telemetry_provider, set_telemetry_provider, TelemetryProvider,
     };
@@ -42,7 +42,7 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+        let sdk_mp = OtelMeterProvider::new(otel_mp);
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Set the global TelemetryProvider and then get it back out
@@ -62,7 +62,7 @@ mod tests {
         global_tp
             .meter_provider()
             .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .downcast_ref::<OtelMeterProvider>()
             .unwrap()
             .shutdown()
             .unwrap();
@@ -81,7 +81,7 @@ mod tests {
         let foo = global_tp
             .meter_provider()
             .as_any()
-            .downcast_ref::<AwsSdkOtelMeterProvider>()
+            .downcast_ref::<OtelMeterProvider>()
             .unwrap();
         foo.shutdown().unwrap();
     }

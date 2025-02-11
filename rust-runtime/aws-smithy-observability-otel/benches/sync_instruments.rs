@@ -5,7 +5,7 @@
 
 use aws_smithy_observability::meter::Meter;
 use aws_smithy_observability::TelemetryProvider;
-use aws_smithy_observability_otel::meter::AwsSdkOtelMeterProvider;
+use aws_smithy_observability_otel::meter::OtelMeterProvider;
 use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::runtime::Tokio;
@@ -41,7 +41,7 @@ fn sync_instruments_benchmark(c: &mut Criterion) {
         SdkMeterProvider::builder().with_reader(reader).build()
     });
     // Create the SDK metrics types from the OTel objects
-    let sdk_mp = AwsSdkOtelMeterProvider::new(otel_mp);
+    let sdk_mp = OtelMeterProvider::new(otel_mp);
     let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
     // Get the dyn versions of the SDK metrics objects
