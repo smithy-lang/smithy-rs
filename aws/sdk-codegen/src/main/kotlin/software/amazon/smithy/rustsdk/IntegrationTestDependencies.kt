@@ -129,14 +129,14 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
-            "transcribestreaming" -> listOf(TranscribeTestDependencies(runtimeConfig))
+            "transcribestreaming" -> listOf(TranscribeTestDependencies())
             "s3" -> listOf(S3TestDependencies(runtimeConfig))
             "dynamodb" -> listOf(DynamoDbTestDependencies())
             else -> emptyList()
         }
 }
 
-class TranscribeTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
+class TranscribeTestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStream)
