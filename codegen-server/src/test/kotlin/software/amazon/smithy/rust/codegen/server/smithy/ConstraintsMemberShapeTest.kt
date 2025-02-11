@@ -87,6 +87,7 @@ class ConstraintsMemberShapeTest {
             @pattern("^[g-m]+${'$'}")
             constrainedPatternString : PatternString
 
+            constrainedList : ConstrainedList
             plainStringList : PlainStringList
             patternStringList : PatternStringList
             patternStringListOverride : PatternStringListOverride
@@ -117,6 +118,11 @@ class ConstraintsMemberShapeTest {
             lat : RangedInteger
             @range(min: 10, max:100)
             long : RangedInteger
+        }
+        @length(max: 3)
+        list ConstrainedList {
+            @length(max: 8000)
+            member: String
         }
         list PlainStringList {
             member: String
