@@ -166,6 +166,13 @@ class HttpResponseChecksumCustomization(
                                             .load::<#{ResponseChecksumValidation}>()
                                             .unwrap_or(&#{ResponseChecksumValidation}::WhenSupported);
 
+                                        let is_presigned_req = cfg.load::<#{PresigningMarker}>().is_some();
+
+                                        // For presigned requests we do not enable the checksum-mode header.
+                                        if is_presigned_req {
+                                            return #{Ok}(())
+                                        }
+
                                         // If validation setting is WhenSupported (or unknown) we enable response checksum
                                         // validation. If it is WhenRequired we do not enable (since there is no way to
                                         // indicate that a response checksum is required).
@@ -206,6 +213,7 @@ class HttpResponseChecksumCustomization(
                                 CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
                                     .resolve("checksum_config::ResponseChecksumValidation"),
                             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+                            "PresigningMarker" to AwsRuntimeType.presigning().resolve("PresigningMarker"),
                         )
                     }
                 }

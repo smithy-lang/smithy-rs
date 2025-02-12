@@ -25,10 +25,14 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
+import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -42,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator.Context
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -59,8 +64,9 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * to record the error type in the case of an error structure.
      */
     data class BeforeSerializingStructureMembers(
-        val structureShape: StructureShape,
+        val structContext: CborSerializerGenerator.StructContext,
         val encoderBindingName: String,
+        val codegenContext: CodegenContext,
     ) : CborSerializerSection("BeforeSerializingStructureMembers")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
@@ -70,6 +76,38 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
     data class BeforeSerializingNonNullMember(val shape: Shape, val context: CborSerializerGenerator.MemberContext) :
         CborSerializerSection("BeforeSerializingNonNullMember")
+
+    /**
+     * Allows specification of additional parameters in the function signature of the serializer.
+     * This customization point enables extending the serializer's interface with supplementary parameters
+     * needed for specialized serialization behaviors.
+     */
+    data class AdditionalSerializingParameters(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
+        CborSerializerSection("AdditionalSerializingParameters")
+
+    /**
+     * Provides a way to specify additional arguments that should be passed when invoking the serializer.
+     * This customization point allows for passing through context-specific information needed during
+     * the serialization process.
+     */
+    data class AdditionalSerializingArguments(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
+        CborSerializerSection("AdditionalSerializingArguments")
+
+    /**
+     * Customizes how a union variant's shape ID is encoded in the CBOR format.
+     * This section allows for specialized handling of union variant identification
+     * during serialization.
+     */
+    data class CustomizeUnionMemberKeyEncode(val context: CborSerializerGenerator.MemberContext, val encoderBindingName: String, val codegenContext: CodegenContext) :
+        CborSerializerSection("CustomizeUnionMemberKeyEncode")
+
+    /**
+     * Allows customization of the CBOR map length calculation for union types.
+     * This section provides control over how the size of the encoded union
+     * representation is determined, which may vary based on the serialization requirements.
+     */
+    data class CustomizeUnionEncoderMapLength(val context: Context<UnionShape>, val codegenContext: CodegenContext) :
+        CborSerializerSection("CustomizeUnionEncoderMapLength")
 }
 
 /**
@@ -78,7 +116,7 @@ sealed class CborSerializerSection(name: String) : Section(name) {
 typealias CborSerializerCustomization = NamedCustomization<CborSerializerSection>
 
 class CborSerializerGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     private val customizations: List<CborSerializerCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
@@ -136,9 +174,10 @@ class CborSerializerGenerator(
             fun unionMember(
                 variantReference: String,
                 member: MemberShape,
+                encodeKeyExpression: String = encodeKeyExpression(member.memberName),
             ): MemberContext =
                 MemberContext(
-                    encodeKeyExpression(member.memberName),
+                    encodeKeyExpression,
                     ValueExpression.Reference(variantReference),
                     member,
                 )
@@ -152,6 +191,7 @@ class CborSerializerGenerator(
         /** Name of the variable that holds the struct */
         val localName: String,
         val shape: StructureShape,
+        val memberContext: MemberContext? = null,
     )
 
     private val model = codegenContext.model
@@ -281,25 +321,55 @@ class CborSerializerGenerator(
         return serverSerializer(errorShape, includedMembers, error = true)
     }
 
+    /**
+     * Retrieves customized parameters and arguments for struct serialization based on the provided context and section type.
+     *
+     * @param structContext The context containing information about the structure being serialized
+     * @param sectionType A function that takes a StructContext and CodegenContext and returns a CborSerializerSection.
+     *                   This determines which section of the serializer to customize (e.g., AdditionalSerializingArguments)
+     * @return A Writable containing the joined customized parameters/arguments as a comma-separated string with a leading comma,
+     *         or an empty Writable if no customizations are present
+     */
+    private fun getCustomizedParamsAndArgsForStructSerializer(
+        structContext: StructContext,
+        sectionType: (StructContext, CodegenContext) -> CborSerializerSection,
+    ) = customizations
+        .map { it.section(sectionType(structContext, codegenContext)) }
+        .filter { it.isNotEmpty() } // Remove any empty customizations.
+        .takeIf { it.isNotEmpty() } // Proceed only if there are remaining customizations.
+        ?.join(", ", prefix = ", ") // Join with commas and add leading comma.
+        ?: writable {} // Return empty writable if no customizations exist.
+
     private fun RustWriter.serializeStructure(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
         if (context.shape.isUnit()) {
-            rust(
-                """
-                encoder.begin_map();
-                encoder.end();
-                """,
-            )
+            rust("encoder.begin_map();")
+            for (customization in customizations) {
+                customization.section(
+                    CborSerializerSection.BeforeSerializingStructureMembers(
+                        context,
+                        "encoder",
+                        codegenContext,
+                    ),
+                )(this)
+            }
+            rust("encoder.end();")
             return
         }
 
         val structureSerializer =
             protocolFunctions.serializeFn(context.shape) { fnName ->
+                val paramsWritable =
+                    getCustomizedParamsAndArgsForStructSerializer(
+                        context,
+                        CborSerializerSection::AdditionalSerializingParameters,
+                    )
                 rustBlockTemplate(
-                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> #{Result}<(), #{Error}>",
+                    "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol} #{Params}) -> #{Result}<(), #{Error}>",
                     "StructureSymbol" to symbolProvider.toSymbol(context.shape),
+                    "Params" to paramsWritable,
                     *codegenScope,
                 ) {
                     // TODO(https://github.com/smithy-lang/smithy-rs/issues/3745) If all members are non-`Option`-al,
@@ -308,8 +378,9 @@ class CborSerializerGenerator(
                     for (customization in customizations) {
                         customization.section(
                             CborSerializerSection.BeforeSerializingStructureMembers(
-                                context.shape,
+                                context,
                                 "encoder",
+                                codegenContext,
                             ),
                         )(this)
                     }
@@ -323,7 +394,17 @@ class CborSerializerGenerator(
                     rust("Ok(())")
                 }
             }
-        rust("#T(encoder, ${context.localName})?;", structureSerializer)
+
+        val argsWritable =
+            getCustomizedParamsAndArgsForStructSerializer(
+                context,
+                CborSerializerSection::AdditionalSerializingArguments,
+            )
+        rustTemplate(
+            "#{SerializingFunction}(encoder, ${context.localName} #{Args})?;",
+            "SerializingFunction" to structureSerializer,
+            "Args" to argsWritable,
+        )
     }
 
     private fun RustWriter.serializeMember(context: MemberContext) {
@@ -396,10 +477,17 @@ class CborSerializerGenerator(
             else -> {
                 // This condition is equivalent to `containerShape !is CollectionShape`.
                 if (containerShape is StructureShape || containerShape is UnionShape || containerShape is MapShape) {
-                    rust("$encoder;") // Encode the member key.
+                    val customizedMemberKeyWritable =
+                        validateAndGetUniqueUnionVariantKeyCustomizedEncodingOrEmpty(context, encoder)
+
+                    if (customizedMemberKeyWritable.isNotEmpty()) {
+                        customizedMemberKeyWritable(this)
+                    } else {
+                        rust("$encoder;") // Encode the member key.
+                    }
                 }
                 when (target) {
-                    is StructureShape -> serializeStructure(StructContext(value.asRef(), target))
+                    is StructureShape -> serializeStructure(StructContext(value.asRef(), target, context))
                     is CollectionShape -> serializeCollection(Context(value, target))
                     is MapShape -> serializeMap(Context(value, target))
                     is UnionShape -> serializeUnion(Context(value, target))
@@ -442,9 +530,21 @@ class CborSerializerGenerator(
                     "UnionSymbol" to unionSymbol,
                     *codegenScope,
                 ) {
-                    // A union is serialized identically as a `structure` shape, but only a single member can be set to a
-                    // non-null value.
-                    rust("encoder.map(1);")
+                    // Processes customizations for encoding union variants. This determines how the variant
+                    // type information is serialized in the generated code.
+                    val customUnionEncoderLength =
+                        validateAndGetUniqueUnionVariantEncoderLengthCustomizedEncodingOrEmpty(context)
+
+                    // Apply any custom variant encoding logic if customizations exist
+                    // Otherwise fall back to default union variant serialization
+                    if (customUnionEncoderLength.isNotEmpty()) {
+                        customUnionEncoderLength(this)
+                    } else {
+                        // A union is serialized identically as a `structure` shape, but only a single member can be set to a
+                        // non-null value.
+                        rust("encoder.map(1);")
+                    }
+
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
                             val variantName =
@@ -470,4 +570,75 @@ class CborSerializerGenerator(
             }
         rust("#T(encoder, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
+
+    /**
+     * Process and validate customizations for a CborSerializerSection.
+     *
+     * @param section The CborSerializerSection to validate
+     * @param customizationName A descriptive name for the customization type (used in error messages)
+     * @return A [Writable] containing the single valid customization, or an empty writable if none exist
+     * @throws IllegalArgumentException if multiple customizations are found
+     */
+    private fun validateAndGetUniqueCustomizationOrEmpty(
+        section: CborSerializerSection,
+        customizationName: String,
+    ): Writable =
+        customizations.map { customization ->
+            customization.section(section)
+        }
+            .filter { it.isNotEmpty() }
+            .also { filteredCustomizations ->
+                if (filteredCustomizations.size > 1) {
+                    throw IllegalArgumentException(
+                        "Found ${filteredCustomizations.size} $customizationName customizations, but only one is allowed.",
+                    )
+                }
+            }
+            .firstOrNull() ?: writable {}
+
+    /**
+     * Process customizations for union variant encoding, ensuring only one customization exists.
+     *
+     * This function processes all customizations to find those that modify how a union variant's
+     * map length is encoded. It enforces that at most one such customization exists to prevent
+     * conflicting encoding strategies.
+     *
+     * @throws IllegalArgumentException if multiple customizations are found.
+     * @return A [Writable] containing the custom encoding logic, or an empty writable if no
+     *         customizations exist, in which case the default encoding should be used.
+     */
+    private fun validateAndGetUniqueUnionVariantEncoderLengthCustomizedEncodingOrEmpty(
+        context: Context<UnionShape>,
+    ): Writable =
+        validateAndGetUniqueCustomizationOrEmpty(
+            CborSerializerSection.CustomizeUnionEncoderMapLength(
+                context,
+                codegenContext,
+            ),
+            "union encoder map length",
+        )
+
+    /**
+     * Validates and retrieves a single customization for encoding a union variant's key.
+     *
+     * This function processes all customizations to find those that modify how a union variant's
+     * key is encoded. It enforces that at most one such customization exists to prevent
+     * conflicting encoding strategies.
+     *
+     * @throws IllegalArgumentException if multiple customizations are found.
+     * @return A [Writable] containing the custom encoding logic, or an empty writable if no
+     *         customizations exist, in which case the default encoding should be used.
+     */
+    private fun validateAndGetUniqueUnionVariantKeyCustomizedEncodingOrEmpty(
+        context: MemberContext,
+        encoder: String,
+    ): Writable =
+        validateAndGetUniqueCustomizationOrEmpty(
+            CborSerializerSection.CustomizeUnionMemberKeyEncode(
+                context,
+                encoder,
+                codegenContext,
+            ),
+            "union variant key",
+        )
 }

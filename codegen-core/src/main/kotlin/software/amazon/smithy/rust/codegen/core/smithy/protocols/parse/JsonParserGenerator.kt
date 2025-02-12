@@ -70,6 +70,13 @@ sealed class JsonParserSection(name: String) : Section(name) {
 
     data class AfterDocumentDeserializedMember(val shape: MemberShape) :
         JsonParserSection("AfterDocumentDeserializedMember")
+
+    /**
+     * Represents a customization point at the beginning of union deserialization, before any token
+     * processing occurs.
+     */
+    data class BeforeUnionDeserialize(val shape: UnionShape) :
+        JsonParserSection("BeforeUnionDeserialize")
 }
 
 /**
@@ -548,6 +555,12 @@ class JsonParserGenerator(
                     *codegenScope,
                     "Shape" to returnSymbolToParse.symbol,
                 ) {
+                    // Apply any custom union deserialization logic before processing tokens.
+                    // This allows for customization of how union variants are handled,
+                    // particularly their discrimination mechanism.
+                    for (customization in customizations) {
+                        customization.section(JsonParserSection.BeforeUnionDeserialize(shape))(this)
+                    }
                     rust("let mut variant = None;")
                     val checkValueSet = !shape.members().all { it.isTargetUnit() } && !codegenTarget.renderUnknownVariant()
                     rustBlock("match tokens.next().transpose()?") {

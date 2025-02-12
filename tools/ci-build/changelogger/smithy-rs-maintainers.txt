@@ -3,7 +3,6 @@ aws-sdk-rust-ci
 david-perez
 jdisanti
 rcoh
-velfi
 ysaito1001
 drganjoo
 rschmitt
