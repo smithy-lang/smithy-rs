@@ -26,7 +26,7 @@ pub struct Meter {
 }
 
 impl Meter {
-    /// Create a new [Meter] from an [InstrumentProvider]
+    /// Create a new [Meter] from an [ProvideInstrument]
     pub fn new(instrument_provider: Arc<dyn ProvideInstrument + Send + Sync>) -> Self {
         Meter {
             instrument_provider,
