@@ -5,13 +5,14 @@
 
 //! OpenTelemetry based implementations of the Smithy Observability Meter traits.
 
-use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::{borrow::Cow, fmt::Debug};
 
 use crate::attributes::kv_from_option_attr;
 pub use aws_smithy_observability::meter::{
-    AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideMeter, UpDownCounter,
+    AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideInstrument, ProvideMeter,
+    UpDownCounter,
 };
 use aws_smithy_observability::{Attributes, Context, ErrorKind, ObservabilityError};
 use opentelemetry::metrics::{
@@ -139,13 +140,13 @@ impl Deref for MeterWrap {
     }
 }
 
-impl Meter for MeterWrap {
+impl ProvideInstrument for MeterWrap {
     fn create_gauge(
         &self,
-        name: String,
+        name: Cow<'static, str>,
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn AsyncMeasure<Value = f64>> {
         let mut builder = self.f64_observable_gauge(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<f64>| {
@@ -166,9 +167,9 @@ impl Meter for MeterWrap {
 
     fn create_up_down_counter(
         &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
+        name: Cow<'static, str>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn UpDownCounter> {
         let mut builder = self.i64_up_down_counter(name);
         if let Some(desc) = description {
@@ -184,10 +185,10 @@ impl Meter for MeterWrap {
 
     fn create_async_up_down_counter(
         &self,
-        name: String,
+        name: Cow<'static, str>,
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn AsyncMeasure<Value = i64>> {
         let mut builder = self.i64_observable_up_down_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<i64>| {
@@ -208,9 +209,9 @@ impl Meter for MeterWrap {
 
     fn create_monotonic_counter(
         &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
+        name: Cow<'static, str>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn MonotonicCounter> {
         let mut builder = self.u64_counter(name);
         if let Some(desc) = description {
@@ -226,10 +227,10 @@ impl Meter for MeterWrap {
 
     fn create_async_monotonic_counter(
         &self,
-        name: String,
+        name: Cow<'static, str>,
         callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-        units: Option<String>,
-        description: Option<String>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn AsyncMeasure<Value = u64>> {
         let mut builder = self.u64_observable_counter(name).with_callback(
             move |input: &dyn OtelAsyncInstrument<u64>| {
@@ -250,9 +251,9 @@ impl Meter for MeterWrap {
 
     fn create_histogram(
         &self,
-        name: String,
-        units: Option<String>,
-        description: Option<String>,
+        name: Cow<'static, str>,
+        units: Option<Cow<'static, str>>,
+        description: Option<Cow<'static, str>>,
     ) -> Arc<dyn Histogram> {
         let mut builder = self.f64_histogram(name);
         if let Some(desc) = description {
@@ -300,8 +301,8 @@ impl OtelMeterProvider {
 }
 
 impl ProvideMeter for OtelMeterProvider {
-    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Arc<dyn Meter> {
-        Arc::new(MeterWrap(self.meter_provider.meter(scope)))
+    fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Meter {
+        Meter::new(Arc::new(MeterWrap(self.meter_provider.meter(scope))))
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -341,12 +342,12 @@ mod tests {
 
         //Create all 3 sync instruments and record some data for each
         let mono_counter =
-            dyn_sdk_meter.create_monotonic_counter("TestMonoCounter".to_string(), None, None);
+            dyn_sdk_meter.create_monotonic_counter("TestMonoCounter", None::<&str>, None::<&str>);
         mono_counter.add(4, None, None);
         let ud_counter =
-            dyn_sdk_meter.create_up_down_counter("TestUpDownCounter".to_string(), None, None);
+            dyn_sdk_meter.create_up_down_counter("TestUpDownCounter", None::<&str>, None::<&str>);
         ud_counter.add(-6, None, None);
-        let histogram = dyn_sdk_meter.create_histogram("TestHistogram".to_string(), None, None);
+        let histogram = dyn_sdk_meter.create_histogram("TestHistogram", None::<&str>, None::<&str>);
         histogram.record(1.234, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
@@ -414,8 +415,8 @@ mod tests {
                 );
                 measurement.record(6.789, Some(&attrs), None);
             }),
-            None,
-            None,
+            None::<&str>,
+            None::<&str>,
         );
         gauge.record(1.234, None, None);
 
@@ -429,8 +430,8 @@ mod tests {
                 );
                 measurement.record(12, Some(&attrs), None);
             }),
-            None,
-            None,
+            None::<&str>,
+            None::<&str>,
         );
         async_ud_counter.record(-6, None, None);
 
@@ -444,8 +445,8 @@ mod tests {
                 );
                 measurement.record(123, Some(&attrs), None);
             }),
-            None,
-            None,
+            None::<&str>,
+            None::<&str>,
         );
         async_mono_counter.record(4, None, None);
 

@@ -27,7 +27,8 @@ mod tests {
 
     use crate::meter::OtelMeterProvider;
     use aws_smithy_observability::{
-        get_telemetry_provider, set_telemetry_provider, TelemetryProvider,
+        global::{get_telemetry_provider, set_telemetry_provider},
+        TelemetryProvider,
     };
     use opentelemetry_sdk::metrics::{data::Sum, PeriodicReader, SdkMeterProvider};
     use opentelemetry_sdk::runtime::Tokio;
@@ -55,7 +56,7 @@ mod tests {
             .get_meter("TestGlobalMeter", None);
 
         let mono_counter =
-            global_meter.create_monotonic_counter("TestMonoCounter".into(), None, None);
+            global_meter.create_monotonic_counter("TestMonoCounter", None::<&str>, None::<&str>);
         mono_counter.add(4, None, None);
 
         // Flush metric pipeline and extract metrics from exporter

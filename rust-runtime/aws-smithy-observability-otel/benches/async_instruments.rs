@@ -10,12 +10,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
-use std::sync::Arc;
 
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 
-async fn record_async_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
+async fn record_async_instruments(dyn_sdk_meter: Meter) {
     //Create all async instruments and record some data
     let gauge = dyn_sdk_meter.create_gauge(
         "TestGauge".to_string(),
@@ -28,8 +27,8 @@ async fn record_async_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
             );
             measurement.record(6.789, Some(&attrs), None);
         }),
-        None,
-        None,
+        None::<&str>,
+        None::<&str>,
     );
     gauge.record(1.234, None, None);
 
@@ -43,8 +42,8 @@ async fn record_async_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
             );
             measurement.record(12, Some(&attrs), None);
         }),
-        None,
-        None,
+        None::<&str>,
+        None::<&str>,
     );
     async_ud_counter.record(-6, None, None);
 
@@ -58,8 +57,8 @@ async fn record_async_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
             );
             measurement.record(123, Some(&attrs), None);
         }),
-        None,
-        None,
+        None::<&str>,
+        None::<&str>,
     );
     async_mono_counter.record(4, None, None);
 }

@@ -12,6 +12,8 @@ repository = "https://github.com/awslabs/smithy-rs"
 [dependencies]
 aws-smithy-observability = { path = "../aws-smithy-observability" }
 opentelemetry = {version = "0.26.0", features = ["metrics"]}
+# The following dependencies are transitive and pinned for build
+# compatability purposes
 value-bag = "1.10.0"
 async-global-executor = "2.4.1"
 async-task = "=4.7.1"

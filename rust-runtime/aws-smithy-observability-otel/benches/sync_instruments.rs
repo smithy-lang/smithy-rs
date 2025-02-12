@@ -10,20 +10,26 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::runtime::Tokio;
 use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
-use std::sync::Arc;
 
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
 
-async fn record_sync_instruments(dyn_sdk_meter: Arc<dyn Meter>) {
+async fn record_sync_instruments(dyn_sdk_meter: Meter) {
     //Create all 3 sync instruments and record some data for each
-    let mono_counter =
-        dyn_sdk_meter.create_monotonic_counter("TestMonoCounter".to_string(), None, None);
+    let mono_counter = dyn_sdk_meter.create_monotonic_counter(
+        "TestMonoCounter".to_string(),
+        None::<&str>,
+        None::<&str>,
+    );
     mono_counter.add(4, None, None);
-    let ud_counter =
-        dyn_sdk_meter.create_up_down_counter("TestUpDownCounter".to_string(), None, None);
+    let ud_counter = dyn_sdk_meter.create_up_down_counter(
+        "TestUpDownCounter".to_string(),
+        None::<&str>,
+        None::<&str>,
+    );
     ud_counter.add(-6, None, None);
-    let histogram = dyn_sdk_meter.create_histogram("TestHistogram".to_string(), None, None);
+    let histogram =
+        dyn_sdk_meter.create_histogram("TestHistogram".to_string(), None::<&str>, None::<&str>);
     histogram.record(1.234, None, None);
 }
 
