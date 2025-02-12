@@ -154,6 +154,8 @@ internal class EndpointResolverGenerator(
             "clippy::comparison_to_empty",
             // we generate `if let Some(_) = ... { ... }`
             "clippy::redundant_pattern_matching",
+            // we generate `if (s.as_ref() as &str) == ("arn:") { ... }`, and `s` can be either `String` or `&str`
+            "clippy::useless_asref",
         )
     private val context = Context(registry, runtimeConfig)
 

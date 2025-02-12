@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 import org.jetbrains.annotations.Contract
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import java.lang.RuntimeException
 
 /**
  * Root expression generator.
@@ -56,7 +58,18 @@ class ExpressionGenerator(
                         else -> rust("${ref.name.rustName()}.to_owned()")
                     }
                 } else {
-                    rust(ref.name.rustName())
+                    try {
+                        when (ref.type()) {
+                            // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
+                            // Typically, we don't know which type will be returned due to code generation.
+                            is StringType -> rust("${ref.name.rustName()}.as_ref() as &str")
+                            else -> rust(ref.name.rustName())
+                        }
+                    } catch (_: RuntimeException) {
+                        // Because Typechecking was never invoked upon calling `.type()` on Reference for an expression
+                        // like "{ref}: rust". See `generateLiterals2` in ExprGeneratorTest.
+                        rust(ref.name.rustName())
+                    }
                 }
             }
 

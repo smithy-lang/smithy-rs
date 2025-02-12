@@ -50,6 +50,8 @@ class RustJmespathShapeTraversalGeneratorTest {
         val entityMaps = symbolProvider.toSymbol(model.lookup<StructureShape>("test#EntityMaps"))
         val enum = symbolProvider.toSymbol(model.lookup<Shape>("test#Enum"))
         val struct = symbolProvider.toSymbol(model.lookup<Shape>("test#Struct"))
+        val subStruct = symbolProvider.toSymbol(model.lookup<Shape>("test#SubStruct"))
+        val traversalContext = TraversalContext(retainOption = false)
 
         val testInputDataFn: RuntimeType
         val testOutputDataFn: RuntimeType
@@ -107,15 +109,33 @@ class RustJmespathShapeTraversalGeneratorTest {
                                     .enums(#{Enum}::Two)
                                     .int_enums(2)
                                     .structs(#{Struct}::builder()
+                                        .required_integer(1)
                                         .primitives(primitives.clone())
-                                        .build())
+                                        .strings("lists_structs1_strings1")
+                                        .sub_structs(#{SubStruct}::builder().sub_struct_primitives(primitives.clone()).build())
+                                        .sub_structs(#{SubStruct}::builder().sub_struct_primitives(
+                                            #{EntityPrimitives}::builder()
+                                                .required_boolean(false)
+                                                .required_string("why")
+                                                .build()
+                                                .unwrap())
+                                            .build())
+                                        .build()
+                                        .unwrap())
+                                    .structs(#{Struct}::builder()
+                                        .required_integer(2)
+                                        .integer(1)
+                                        .string("foo")
+                                        .build()
+                                        .unwrap())
                                     .build())
                                 .maps(#{EntityMaps}::builder()
                                     .strings("foo", "foo_oo")
                                     .strings("bar", "bar_ar")
                                     .booleans("foo", true)
                                     .booleans("bar", false)
-                                    .structs("foo", #{Struct}::builder().integer(5).build())
+                                    .structs("foo", #{Struct}::builder().required_integer(2).integer(5).strings("maps_foo_struct_strings1").build().unwrap())
+                                    .structs("bar", #{Struct}::builder().required_integer(3).primitives(primitives).integer(7).build().unwrap())
                                     .build())
                                 .build()
                         }
@@ -126,6 +146,7 @@ class RustJmespathShapeTraversalGeneratorTest {
                         "EntityMaps" to entityMaps,
                         "Enum" to enum,
                         "Struct" to struct,
+                        "SubStruct" to subStruct,
                     )
                 }
         }
@@ -150,7 +171,7 @@ class RustJmespathShapeTraversalGeneratorTest {
 
                     else -> listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape)))
                 }
-            val generated = generator.generate(parsed, bindings)
+            val generated = generator.generate(parsed, bindings, traversalContext)
             rustCrate.unitTest(testName) {
                 rust("// jmespath: $expression")
                 rust("// jmespath parsed: $parsed")
@@ -194,7 +215,7 @@ class RustJmespathShapeTraversalGeneratorTest {
 
                         else -> listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape)))
                     }
-                generator.generate(parsed, bindings).output(RustWriter.forModule("unsupported"))
+                generator.generate(parsed, bindings, traversalContext).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown InvalidJmesPathTraversalException")
             } catch (ex: InvalidJmesPathTraversalException) {
                 ex.message shouldContain contains
@@ -211,6 +232,7 @@ class RustJmespathShapeTraversalGeneratorTest {
                 generator.generate(
                     parsed,
                     listOf(TraversalBinding.Global("_output", TraversedShape.from(model, outputShape))),
+                    traversalContext,
                 ).output(RustWriter.forModule("unsupported"))
                 fail("expression '$expression' should have thrown UnsupportedJmesPathException")
             } catch (ex: UnsupportedJmesPathException) {
@@ -248,6 +270,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             filterProjections()
             booleanOperations()
             multiSelectLists()
+            projectionFollowedByMultiSelectLists()
             complexCombinationsOfFeatures()
 
             unsupported("&('foo')", "Expression type expressions")
@@ -319,6 +342,35 @@ class RustJmespathShapeTraversalGeneratorTest {
         )
     }
 
+    private fun TestCase.projectionFollowedByMultiSelectLists() {
+        fun test(
+            name: String,
+            expression: String,
+            assertions: RustWriter.() -> Unit,
+        ) = testCase("traverse_$name", expression, assertions)
+
+        // Each struct in projection sets at least one of the selected fields, e.g. either `string` or `primitives.string` is `Some`.
+        test("wildcard_projection_followed_by_multiselectlists", "lists.structs[*].[string, primitives.string][]") {
+            rust("""assert_eq!(vec!["test", "foo"], result);""")
+        }
+
+        // The `primitives` field is `None` in structs obtained via `lists.structs[?string == 'foo']`
+        test("filter_projection_followed_by_multiselectlists_empty", "lists.structs[?string == 'foo'].[primitives.string, primitives.requiredString][]") {
+            rust("assert!(result.is_empty());")
+        }
+
+        // Unlike the previous, the `integer` field is set in a struct in the projection.
+        test("filter_projection_followed_by_multiselectlists", "lists.structs[?string == 'foo'].[integer, primitives.integer][]") {
+            rust("assert_eq!(vec![&1], result);")
+        }
+
+        test("object_projection_followed_by_multiselectlists", "maps.structs.*.[integer, primitives.integer][]") {
+            rust("let mut result = result;")
+            rust("result.sort();")
+            rust("assert_eq!(vec![&4, &5, &7], result);")
+        }
+    }
+
     private fun TestCase.flattenExpressions() {
         fun test(
             name: String,
@@ -332,6 +384,10 @@ class RustJmespathShapeTraversalGeneratorTest {
         test("no_shortcircuit", "lists.structs[].primitives.string") {
             rust("assert_eq!(1, result.len());")
             rust("assert_eq!(\"test\", result[0]);")
+        }
+        test("no_shortcircuit_continued", "lists.structs[].strings") {
+            rust("assert_eq!(1, result.len());")
+            rust("assert_eq!(\"lists_structs1_strings1\", result[0]);")
         }
         test("nested_flattens", "lists.structs[].subStructs[].subStructPrimitives.string") {
             // it should compile
@@ -364,7 +420,7 @@ class RustJmespathShapeTraversalGeneratorTest {
             assertions: RustWriter.() -> Unit,
         ) = testCase("traverse_fn_$name", expression, assertions)
 
-        test("list_length", "length(lists.structs[])", simple("assert_eq!(1, result);"))
+        test("list_length", "length(lists.structs[])", simple("assert_eq!(2, result);"))
         test("string_length", "length(primitives.string)", simple("assert_eq!(4, result);"))
 
         test("string_contains_false", "contains(primitives.string, 'foo')", expectFalse)
@@ -481,17 +537,28 @@ class RustJmespathShapeTraversalGeneratorTest {
             assertions: RustWriter.() -> Unit,
         ) = testCase("traverse_obj_projection_$name", expression, assertions)
 
-        test("traverse_obj_projection_simple", "maps.booleans.*") {
+        test("simple", "maps.booleans.*") {
             rust("assert_eq!(2, result.len());")
             // Order is non-deterministic because we're getting the values of a hash map
             rust("assert_eq!(1, result.iter().filter(|&&&b| b == true).count());")
             rust("assert_eq!(1, result.iter().filter(|&&&b| b == false).count());")
         }
-        test("traverse_obj_projection_continued", "maps.structs.*.integer") {
-            rust("assert_eq!(1, result.len());")
-            rust("assert_eq!(5, **result.get(0).unwrap());")
+        test("continued", "maps.structs.*.integer") {
+            rust("let mut result = result;")
+            rust("result.sort();")
+            rust("assert_eq!(vec![&5, &7], result);")
         }
-        test("traverse_obj_projection_complex", "length(maps.structs.*.strings) == `0`", expectTrue)
+        test("followed_by_optional_array", "maps.structs.*.strings") {
+            rust("assert_eq!(vec![\"maps_foo_struct_strings1\"], result);")
+        }
+        test("w_function", "length(maps.structs.*.strings) == `1`", expectTrue)
+
+        // Derived from https://github.com/awslabs/aws-sdk-rust/blob/8848f51e58fead8d230a0c15f0434b2812825c38/aws-models/ses.json#L2985
+        test("followed_by_required_field", "maps.structs.*.requiredInteger") {
+            rust("let mut result = result;")
+            rust("result.sort();")
+            rust("assert_eq!(vec![&2, &3], result);")
+        }
 
         unsupported("primitives.integer.*", "Object projection is only supported on map types")
         unsupported("lists.structs[?`true`].*", "Object projection cannot be done on computed maps")
@@ -505,13 +572,13 @@ class RustJmespathShapeTraversalGeneratorTest {
         ) = testCase("traverse_filter_projection_$name", expression, assertions)
 
         test("boollit", "lists.structs[?`true`]") {
-            rust("assert_eq!(1, result.len());")
+            rust("assert_eq!(2, result.len());")
         }
         test("intcmp", "lists.structs[?primitives.integer > `0`]") {
             rust("assert_eq!(1, result.len());")
         }
         test("boollit_continued_empty", "lists.structs[?`true`].integer") {
-            rust("assert_eq!(0, result.len());")
+            rust("assert_eq!(1, result.len());")
         }
         test("boollit_continued", "lists.structs[?`true`].primitives.integer") {
             rust("assert_eq!(1, result.len());")
@@ -579,6 +646,14 @@ class RustJmespathShapeTraversalGeneratorTest {
             "1",
             "(length(lists.structs[?!(integer < `0`) && integer >= `0` || `false`]) == `5`) == contains(lists.integers, length(maps.structs.*.strings))",
             itCompiles,
+        )
+
+        // Derived from https://github.com/awslabs/aws-sdk-rust/blob/8848f51e58fead8d230a0c15f0434b2812825c38/aws-models/auto-scaling.json#L4202
+        // The first argument to `contains` evaluates to `Some([true])` since `length(...)` is 1 and `requiredInteger` in that struct is 1.
+        test(
+            "2",
+            "contains(lists.structs[].[length(subStructs[?subStructPrimitives.requiredString=='why']) >= requiredInteger][], `true`)",
+            expectTrue,
         )
     }
 
@@ -660,6 +735,8 @@ class RustJmespathShapeTraversalGeneratorTest {
         }
 
         structure Struct {
+            @required
+            requiredInteger: Integer,
             primitives: EntityPrimitives,
             strings: StringList,
             integer: Integer,

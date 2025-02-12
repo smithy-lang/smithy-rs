@@ -52,7 +52,7 @@ aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }
 bytes = "1.4.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
-fastrand = "2.0.0"
+fastrand = "2.3.0"
 http-02x = { package = "http", version = "0.2.9" }
 http-1x = { package = "http", version = "1" }
 http-body-04x = { package = "http-body", version = "0.4.5" }
@@ -73,7 +73,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
 # Allow only patch-level bumps since major-level or minor-level bumps can cause seed-value-breaking changes
 # https://github.com/smol-rs/fastrand/issues/20
-fastrand = "~2.0.0"
+fastrand = "2.3.0"
 futures-util = "0.3.29"
 pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }

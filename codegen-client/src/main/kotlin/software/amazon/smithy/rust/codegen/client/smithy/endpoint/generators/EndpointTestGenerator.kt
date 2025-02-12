@@ -18,7 +18,6 @@ import software.amazon.smithy.rulesengine.traits.ExpectedEndpoint
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -49,8 +48,6 @@ internal class EndpointTestGenerator(
             "HashMap" to RuntimeType.HashMap,
             "capture_request" to RuntimeType.captureRequest(runtimeConfig),
         )
-
-    private val instantiator = ClientInstantiator(codegenContext)
 
     private fun EndpointTestCase.docs(): Writable {
         val self = this
@@ -134,7 +131,23 @@ internal class EndpointTestGenerator(
                         value.values.map { member ->
                             writable {
                                 rustTemplate(
-                                    "#{Document}::from(#{value:W})",
+                                    /*
+                                     * If we wrote "#{Document}::from(#{value:W})" here, we could encounter a
+                                     * compile error due to the following type mismatch:
+                                     *  the trait `From<Vec<Document>>` is not implemented for `Vec<std::string::String>`
+                                     *
+                                     * given the following method signature:
+                                     *  fn resource_arn_list(mut self, value: impl Into<::std::vec::Vec<::std::string::String>>)
+                                     *
+                                     * with a call site like this:
+                                     *  .resource_arn_list(vec![::aws_smithy_types::Document::from(
+                                     *      "arn:aws:dynamodb:us-east-1:333333333333:table/table_name".to_string(),
+                                     *  )])
+                                     *
+                                     * For this reason we use `into()` instead to allow types that need to be converted
+                                     * to `Document` to continue working as before, and to support the above use case.
+                                     */
+                                    "#{value:W}.into()",
                                     *codegenScope,
                                     "value" to generateValue(member),
                                 )

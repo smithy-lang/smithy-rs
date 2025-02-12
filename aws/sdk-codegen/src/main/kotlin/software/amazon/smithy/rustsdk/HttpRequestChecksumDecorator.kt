@@ -119,8 +119,8 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
             // Checksums are required but a user can't set one, so we set crc32 for them
             rust("""let checksum_algorithm = Some("crc32");""")
         } else {
-            // Use checksum algo set by user or crc32 if one has not been set
-            rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("crc32"));""")
+            // Use checksum algo set by user
+            rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str());""")
         }
 
         // If a request checksum is not required and there's no way to set one, do nothing
@@ -205,6 +205,9 @@ class HttpRequestChecksumCustomization(
                                     // From the httpChecksum trait
                                     let http_checksum_required = $requestChecksumRequired;
 
+                                    let is_presigned_req = cfg.load::<#{PresigningMarker}>().is_some();
+
+                                    // If the request is presigned we do not set a default.
                                     // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum value or algo
                                     // we default to Crc32. If it is WhenRequired and a checksum is required by the trait and the user has not
                                     // set a checksum value or algo we also set the default. In all other cases we do nothing.
@@ -212,10 +215,12 @@ class HttpRequestChecksumCustomization(
                                         request_checksum_calculation,
                                         http_checksum_required,
                                         user_set_checksum_value,
-                                        user_set_checksum_algo
+                                        user_set_checksum_algo,
+                                        is_presigned_req,
                                     ) {
-                                        (#{RequestChecksumCalculation}::WhenSupported, _, false, false)
-                                        | (#{RequestChecksumCalculation}::WhenRequired, true, false, false) => {
+                                        (_, _, _, _, true) => {}
+                                        (#{RequestChecksumCalculation}::WhenSupported, _, false, false, _)
+                                        | (#{RequestChecksumCalculation}::WhenRequired, true, false, false, _) => {
                                             request.headers_mut().insert(${requestAlgoHeader.dq()}, "CRC32");
                                         }
                                         _ => {},
@@ -254,6 +259,7 @@ class HttpRequestChecksumCustomization(
                                             codegenContext.model,
                                         ),
                                     ),
+                                "PresigningMarker" to AwsRuntimeType.presigning().resolve("PresigningMarker"),
                             )
                         }
                     }

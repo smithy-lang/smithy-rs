@@ -8,7 +8,9 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::{Context, Error};
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
-use aws_sdk_s3::types::{CompletedMultipartUpload, CompletedPart, Delete, ObjectIdentifier};
+use aws_sdk_s3::types::{
+    CompletedMultipartUpload, CompletedPart, Delete, ObjectIdentifier, RequestPayer,
+};
 use s3::config::Region;
 use s3::presigning::PresigningConfig;
 use s3::primitives::ByteStream;
@@ -31,6 +33,8 @@ mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| {
 /// Runs canary exercising S3 APIs against a regular bucket
 pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
     let test_key = Uuid::new_v4().as_u128().to_string();
+    let mut presigned_test_key = test_key.clone();
+    presigned_test_key.push_str("_presigned");
 
     // Look for the test object and expect that it doesn't exist
     match client
@@ -74,21 +78,41 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .await
         .context("s3::GetObject[2]")?;
 
-    // repeat the test with a presigned url
-    let uri = client
-        .get_object()
+    // Repeat the GET/PUT tests with a presigned url
+    let reqwest_client = reqwest::Client::new();
+
+    let presigned_put = client
+        .put_object()
         .bucket(&s3_bucket_name)
-        .key(&test_key)
+        .key(&presigned_test_key)
         .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
         .await
         .unwrap();
-    let response = reqwest::get(uri.uri().to_string())
+    let http_put = presigned_put.make_http_1x_request("presigned_test");
+    let reqwest_put = reqwest::Request::try_from(http_put).unwrap();
+    let put_resp = reqwest_client.execute(reqwest_put).await?;
+    assert_eq!(put_resp.status(), 200);
+
+    let presigned_get = client
+        .get_object()
+        .bucket(&s3_bucket_name)
+        .key(&presigned_test_key)
+        // Ensure a header is included that isn't in the query string
+        .request_payer(RequestPayer::Requester)
+        .presigned(PresigningConfig::expires_in(Duration::from_secs(120)).unwrap())
+        .await
+        .unwrap();
+    let headers = presigned_get.make_http_1x_request("").headers().clone();
+    let get_resp = reqwest_client
+        .get(presigned_get.uri().to_string())
+        .headers(headers)
+        .send()
         .await
         .context("s3::presigned")?
         .text()
         .await?;
-    if response != "test" {
-        return Err(CanaryError(format!("presigned URL returned bad data: {:?}", response)).into());
+    if get_resp != "presigned_test" {
+        return Err(CanaryError(format!("presigned URL returned bad data: {:?}", get_resp)).into());
     }
 
     let metadata_value = output
