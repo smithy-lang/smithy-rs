@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -97,7 +98,7 @@ class UnconstrainedCollectionGenerator(
         writer.rustBlock("impl std::convert::TryFrom<$name> for #{T}", constrainedSymbol) {
             rust("type Error = #T;", constraintViolationSymbol)
 
-            rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
+            rustBlock("fn try_from(value: $name) -> std::result::Result<Self, Self::Error>") {
                 if (innerShape.canReachConstrainedShape(model, symbolProvider)) {
                     val resolvesToNonPublicConstrainedValueType =
                         innerShape.canReachConstrainedShape(model, symbolProvider) &&
@@ -126,7 +127,7 @@ class UnconstrainedCollectionGenerator(
 
                     rustTemplate(
                         """
-                        let res: Result<#{Vec}<#{ConstrainedMemberSymbol}>, (usize, #{InnerConstraintViolationSymbol}) > = value
+                        let res: #{Result}<#{Vec}<#{ConstrainedMemberSymbol}>, (usize, #{InnerConstraintViolationSymbol}) > = value
                             .0
                             .into_iter()
                             .enumerate()
@@ -142,6 +143,7 @@ class UnconstrainedCollectionGenerator(
                         "ConstrainedMemberSymbol" to constrainedMemberSymbol,
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                         "ConstrainValueWritable" to constrainValueWritable,
+                        "Result" to std.resolve("result::Result"),
                     )
 
                     val constrainedValueTypeIsNotFinalType =

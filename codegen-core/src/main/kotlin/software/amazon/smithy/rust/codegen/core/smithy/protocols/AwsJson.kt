@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -103,6 +104,7 @@ class AwsJsonSerializerGenerator(
         arrayOf(
             "Error" to runtimeConfig.serializationError(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "Result" to std.resolve("result::Result"),
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -113,7 +115,7 @@ class AwsJsonSerializerGenerator(
             serializer =
                 protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
                     rustBlockTemplate(
-                        "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                        "pub fn $fnName(_input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
                         *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
                     ) {
                         rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
@@ -138,6 +140,7 @@ open class AwsJson(
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+            "Result" to std.resolve("result::Result"),
         )
 
     val version: AwsJsonVersion get() = awsJsonVersion
@@ -164,7 +167,7 @@ open class AwsJson(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -177,7 +180,7 @@ open class AwsJson(
             // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
-                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

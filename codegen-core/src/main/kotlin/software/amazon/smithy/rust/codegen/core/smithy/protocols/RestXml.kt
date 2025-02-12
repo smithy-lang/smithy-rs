@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -27,6 +28,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
             "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
             "Headers" to RuntimeType.headers(runtimeConfig),
             "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+            "Result" to std.resolve("result::Result"),
         )
 
     protected val restXmlErrors: RuntimeType =
@@ -58,7 +60,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(response_body)", restXmlErrors)
@@ -68,7 +70,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(payload.as_ref())", restXmlErrors)

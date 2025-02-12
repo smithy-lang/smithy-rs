@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
@@ -105,7 +106,7 @@ class UnconstrainedUnionGenerator(
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
 
-                    fn try_from(value: $name) -> Result<Self, Self::Error> {
+                    fn try_from(value: $name) -> #{Result}<Self, Self::Error> {
                         #{body:W}
                     }
                 }
@@ -114,6 +115,7 @@ class UnconstrainedUnionGenerator(
                 "ConstrainedSymbol" to constrainedSymbol,
                 "ConstraintViolationSymbol" to constraintViolationSymbol,
                 "body" to generateTryFromUnconstrainedUnionImpl(),
+                "Result" to std.resolve("result::Result"),
             )
         }
 

@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -72,6 +73,7 @@ class ConstrainedMapGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
+                "Result" to std.resolve("result::Result"),
             )
 
         writer.documentShape(shape, model)
@@ -108,7 +110,7 @@ class ConstrainedMapGenerator(
                 type Error = #{ConstraintViolation};
 
                 /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                fn try_from(value: $inner) -> #{Result}<Self, Self::Error> {
                     let length = value.len();
                     if ${lengthTrait.rustCondition("length")} {
                         Ok(Self(value))

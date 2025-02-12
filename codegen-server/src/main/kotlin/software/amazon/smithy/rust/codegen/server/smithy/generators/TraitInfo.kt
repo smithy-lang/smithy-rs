@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 
 /**
  * Information needed to render a constraint trait as Rust code.
@@ -60,7 +61,7 @@ fun RustWriter.renderTryFrom(
             type Error = #{ConstraintViolation};
 
             /// ${rustDocsTryFromMethod(constrainedTypeName, unconstrainedTypeName)}
-            fn try_from(value: $unconstrainedTypeName) -> Result<Self, Self::Error> {
+            fn try_from(value: $unconstrainedTypeName) -> #{Result}<Self, Self::Error> {
               #{TryFromChecks:W}
 
               Ok(Self(value))
@@ -70,5 +71,6 @@ fun RustWriter.renderTryFrom(
         "TryFrom" to RuntimeType.TryFrom,
         "ConstraintViolation" to constraintViolationError,
         "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+        "Result" to std.resolve("result::Result"),
     )
 }

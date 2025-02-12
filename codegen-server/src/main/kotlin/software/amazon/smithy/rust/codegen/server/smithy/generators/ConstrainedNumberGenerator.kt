@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -206,9 +207,9 @@ data class Range(val rangeTrait: RangeTrait) {
                     "$valueVariableName <= ${rangeTrait.max.get()}"
                 }
 
-            rust(
+            rustTemplate(
                 """
-                fn check_range($valueVariableName: $unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                fn check_range($valueVariableName: $unconstrainedTypeName) -> #{Result}<(), $constraintViolation> {
                     if $condition {
                         Ok(())
                     } else {
@@ -216,6 +217,7 @@ data class Range(val rangeTrait: RangeTrait) {
                     }
                 }
                 """,
+                "Result" to std.resolve("result::Result"),
             )
         }
 }

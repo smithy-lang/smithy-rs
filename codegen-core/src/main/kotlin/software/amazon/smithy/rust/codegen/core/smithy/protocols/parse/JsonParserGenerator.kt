@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -145,7 +146,7 @@ class JsonParserGenerator(
         return protocolFunctions.deserializeFn(shape, fnNameSuffix) { fnName ->
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             rustBlockTemplate(
-                "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> Result<#{Builder}, #{Error}>",
+                "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> #{Result}<#{Builder}, #{Error}>",
                 "Builder" to builderSymbol,
                 *codegenScope,
             ) {
@@ -172,7 +173,7 @@ class JsonParserGenerator(
         }
         return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
             rustBlockTemplate(
-                "pub(crate) fn $fnName(input: &[u8]) -> Result<#{ReturnType}, #{Error}>",
+                "pub(crate) fn $fnName(input: &[u8]) -> #{Result}<#{ReturnType}, #{Error}>",
                 *codegenScope,
                 "ReturnType" to returnSymbolToParse.symbol,
             ) {
@@ -396,7 +397,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbol,
@@ -458,7 +459,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
@@ -514,7 +515,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
@@ -549,7 +550,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> Result<Option<#{Shape}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{Shape}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     *codegenScope,

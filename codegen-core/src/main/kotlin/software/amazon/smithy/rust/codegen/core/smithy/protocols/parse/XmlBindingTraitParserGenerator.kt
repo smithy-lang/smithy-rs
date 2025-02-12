@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -111,6 +112,7 @@ class XmlBindingTraitParserGenerator(
             "try_data" to smithyXml.resolve("decode::try_data"),
             "ScopedDecoder" to scopedDecoder,
             "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
+            "Result" to std.resolve("result::Result"),
         )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
@@ -134,7 +136,7 @@ class XmlBindingTraitParserGenerator(
         }
         return protocolFunctions.deserializeFn(member) { fnName ->
             rustBlock(
-                "pub fn $fnName(inp: &[u8]) -> Result<#1T, #2T>",
+                "pub fn $fnName(inp: &[u8]) -> std::result::Result<#1T, #2T>",
                 symbolProvider.toSymbol(shape),
                 xmlDecodeError,
             ) {
@@ -186,7 +188,7 @@ class XmlBindingTraitParserGenerator(
         return protocolFunctions.deserializeFn(operationShape) { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
+                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> std::result::Result<#1T, #2T>",
                 symbolProvider.symbolForBuilder(outputShape),
                 xmlDecodeError,
             ) {
@@ -218,7 +220,7 @@ class XmlBindingTraitParserGenerator(
         return protocolFunctions.deserializeFn(errorShape, fnNameSuffix = "xml_err") { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
+                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> std::result::Result<#1T, #2T>",
                 symbolProvider.symbolForBuilder(errorShape),
                 xmlDecodeError,
             ) {
@@ -251,7 +253,7 @@ class XmlBindingTraitParserGenerator(
         return protocolFunctions.deserializeFn(operationShape) { fnName ->
             Attribute.AllowUnusedMut.render(this)
             rustBlock(
-                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> Result<#1T, #2T>",
+                "pub fn $fnName(inp: &[u8], mut builder: #1T) -> std::result::Result<#1T, #2T>",
                 symbolProvider.symbolForBuilder(inputShape),
                 xmlDecodeError,
             ) {
@@ -436,7 +438,7 @@ class XmlBindingTraitParserGenerator(
         val nestedParser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
                     *codegenScope, "Shape" to symbol,
                 ) {
                     val members = shape.members()
@@ -507,7 +509,7 @@ class XmlBindingTraitParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 Attribute.AllowNeedlessQuestionMark.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
                     *codegenScope, "Shape" to symbol,
                 ) {
                     Attribute.AllowUnusedMut.render(this)
@@ -543,7 +545,7 @@ class XmlBindingTraitParserGenerator(
         val listParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{List}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{List}, #{XmlDecodeError}>",
                     *codegenScope,
                     "List" to symbolProvider.toSymbol(target),
                 ) {
@@ -583,7 +585,7 @@ class XmlBindingTraitParserGenerator(
         val mapParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Map}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Map}, #{XmlDecodeError}>",
                     *codegenScope,
                     "Map" to symbolProvider.toSymbol(target),
                 ) {
@@ -625,7 +627,7 @@ class XmlBindingTraitParserGenerator(
     ): RuntimeType {
         return protocolFunctions.deserializeFn(target, "entry") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> Result<(), #{XmlDecodeError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> #{Result}<(), #{XmlDecodeError}>",
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target),
             ) {

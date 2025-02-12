@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
@@ -140,6 +141,7 @@ internal class EndpointResolverGenerator(
             "EndpointError" to types.resolveEndpointError,
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+            "Result" to std.resolve("result::Result"),
         )
 
     private val allowLintsForResolver =
@@ -195,7 +197,7 @@ internal class EndpointResolverGenerator(
                         Self { #{custom_fields_init:W} }
                     }
 
-                    fn resolve_endpoint(&self, params: &#{Params}) -> Result<#{SmithyEndpoint}, #{BoxError}> {
+                    fn resolve_endpoint(&self, params: &#{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                         let mut diagnostic_collector = #{DiagnosticCollector}::new();
                         Ok(#{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
                             .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))?)

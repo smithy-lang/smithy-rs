@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -101,7 +102,7 @@ class UnconstrainedMapGenerator(
         writer.rustBlock("impl std::convert::TryFrom<$name> for #{T}", constrainedSymbol) {
             rust("type Error = #T;", constraintViolationSymbol)
 
-            rustBlock("fn try_from(value: $name) -> Result<Self, Self::Error>") {
+            rustBlock("fn try_from(value: $name) -> std::result::Result<Self, Self::Error>") {
                 if (isKeyConstrained(keyShape, symbolProvider) || isValueConstrained(valueShape, model, symbolProvider)) {
                     val resolvesToNonPublicConstrainedValueType =
                         isValueConstrained(valueShape, model, symbolProvider) &&
@@ -185,7 +186,7 @@ class UnconstrainedMapGenerator(
 
                     rustTemplate(
                         """
-                        let res: Result<#{HashMap}<#{ConstrainedKeySymbol}, #{ConstrainedMemberValueSymbol}>, Self::Error> = value.0
+                        let res: #{Result}<#{HashMap}<#{ConstrainedKeySymbol}, #{ConstrainedMemberValueSymbol}>, Self::Error> = value.0
                             .into_iter()
                             .map(|(k, v)| {
                                 #{ConstrainKVWritable:W}
@@ -197,6 +198,7 @@ class UnconstrainedMapGenerator(
                         "ConstrainedKeySymbol" to constrainedKeySymbol,
                         "ConstrainedMemberValueSymbol" to constrainedMemberValueSymbol,
                         "ConstrainKVWritable" to constrainKVWritable,
+                        "Result" to std.resolve("result::Result"),
                     )
 
                     val constrainedValueTypeIsNotFinalType =

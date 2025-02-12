@@ -100,6 +100,11 @@ class ConstraintsMemberShapeTest {
             patternUnionOverride: PatternUnionOverride
             patternMap : PatternMap
             patternMapOverride: PatternMapOverride
+            result: Result
+        }
+        structure Result {
+            @documentation("Response from the agent")
+            chat: String
         }
         list ListWithIntegerMemberStruct {
             member: PlainStructWithInteger

@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
@@ -69,6 +70,7 @@ class HttpBoundProtocolPayloadGenerator(
             "BuildError" to runtimeConfig.operationBuildError(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
+            "Result" to std.resolve("result::Result"),
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -300,7 +302,7 @@ class HttpBoundProtocolPayloadGenerator(
                         RuntimeType.ByteSlab.toSymbol()
                     }
                 rustBlockTemplate(
-                    "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
+                    "pub fn $fnName(payload: $ref#{Member}) -> #{Result}<#{outputT}, #{BuildError}>",
                     "Member" to symbolProvider.toSymbol(member),
                     "outputT" to outputT,
                     *codegenScope,

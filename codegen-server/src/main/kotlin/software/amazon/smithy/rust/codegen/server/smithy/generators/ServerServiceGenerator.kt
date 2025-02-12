@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -45,6 +46,7 @@ class ServerServiceGenerator(
             "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
+            "Result" to std.resolve("result::Result"),
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -310,7 +312,7 @@ class ServerServiceGenerator(
                 ///
                 /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
                 /// unspecified route is requested.
-                pub fn build(self) -> Result<
+                pub fn build(self) -> #{Result}<
                     $serviceName<
                         #{SmithyHttpServer}::routing::RoutingService<
                             #{Router}<L::Service>,
@@ -348,6 +350,7 @@ class ServerServiceGenerator(
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
                 "PatternInitializations" to patternInitializations(),
+                "Result" to std.resolve("result::Result"),
             )
         }
 
@@ -661,7 +664,7 @@ class ServerServiceGenerator(
                     type Error = S::Error;
                     type Future = S::Future;
 
-                    fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
+                    fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<#{Result}<(), Self::Error>> {
                         self.svc.poll_ready(cx)
                     }
 

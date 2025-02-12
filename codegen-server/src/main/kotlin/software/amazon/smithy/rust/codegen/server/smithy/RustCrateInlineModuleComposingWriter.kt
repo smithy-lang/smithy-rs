@@ -352,56 +352,22 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
         inlineModuleList: MutableList<InlineModuleWithWriter>,
         lookForModule: RustModule.LeafModule,
     ): RustWriter {
-        val index = inlineModuleList.indexOfFirst { it.inlineModule.name == lookForModule.name }
-
-        return if (index == -1) {
+        val inlineModuleAndWriter =
+            inlineModuleList.firstOrNull {
+                it.inlineModule.name == lookForModule.name
+            }
+        return if (inlineModuleAndWriter == null) {
             val inlineWriter = createNewInlineModule()
             inlineModuleList.add(InlineModuleWithWriter(lookForModule, inlineWriter))
             inlineWriter
         } else {
-            val existing = inlineModuleList[index]
-
-            // Verify everything except documentation matches.
-            val existingModule = existing.inlineModule
-            check(
-                existingModule.name == lookForModule.name &&
-                    existingModule.rustMetadata == lookForModule.rustMetadata &&
-                    existingModule.parent == lookForModule.parent &&
-                    existingModule.tests == lookForModule.tests,
-            ) {
-                """
-                An inline module with the same name `${lookForModule.name}` was earlier created with different attributes:
-                1) Metadata:
-                    `${existingModule.rustMetadata}`
-                    `${lookForModule.rustMetadata}`
-                2) Parent:
-                    `${existingModule.parent}`
-                    `${lookForModule.parent}`
-                3) Tests:
-                    `${existingModule.tests}`
-                    `${lookForModule.tests}`
-                4) DocumentationOverride:
-                    `${existingModule.documentationOverride}`
-                    `${lookForModule.documentationOverride}`
-                """
+            check(inlineModuleAndWriter.inlineModule == lookForModule) {
+                """The two inline modules have the same name but different attributes on them:
+                1) ${inlineModuleAndWriter.inlineModule}
+                2) $lookForModule"""
             }
 
-            // Merge documentation
-            val mergedDoc =
-                when {
-                    existingModule.documentationOverride == null -> lookForModule.documentationOverride
-                    lookForModule.documentationOverride == null -> existingModule.documentationOverride
-                    else -> "${existingModule.documentationOverride}\n${lookForModule.documentationOverride}"
-                }
-
-            // Replace the element in the list with merged documentation
-            inlineModuleList[index] =
-                InlineModuleWithWriter(
-                    existingModule.copy(documentationOverride = mergedDoc),
-                    existing.writer,
-                )
-
-            existing.writer
+            inlineModuleAndWriter.writer
         }
     }
 

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -94,7 +95,7 @@ class ConstrainedPythonBlobGenerator(
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
 
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                fn try_from(value: $inner) -> #{Result}<Self, Self::Error> {
                     value.try_into()
                 }
             }
@@ -102,6 +103,7 @@ class ConstrainedPythonBlobGenerator(
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
             "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+            "Result" to std.resolve("result::Result"),
         )
     }
 }

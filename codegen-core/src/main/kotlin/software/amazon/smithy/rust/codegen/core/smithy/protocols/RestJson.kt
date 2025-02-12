@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -77,6 +78,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+            "Result" to std.resolve("result::Result"),
         )
 
     override val httpBindingResolver: HttpBindingResolver =
@@ -120,7 +122,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -133,7 +135,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
             // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
-                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
@@ -97,6 +98,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "MaybeConstrained" to RuntimeType.MaybeConstrained,
+            "Result" to std.resolve("result::Result"),
         )
 
     fun render(
@@ -255,7 +257,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             impl $lifetime #{TryFrom}<Builder $lifetime> for #{Structure}$lifetime {
                 type Error = ConstraintViolation;
 
-                fn try_from(builder: Builder $lifetime) -> Result<Self, Self::Error> {
+                fn try_from(builder: Builder $lifetime) -> #{Result}<Self, Self::Error> {
                     builder.build()
                 }
             }
