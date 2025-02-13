@@ -16,20 +16,17 @@ use std::alloc::System;
 
 async fn record_sync_instruments(dyn_sdk_meter: Meter) {
     //Create all 3 sync instruments and record some data for each
-    let mono_counter = dyn_sdk_meter.create_monotonic_counter(
-        "TestMonoCounter".to_string(),
-        None::<&str>,
-        None::<&str>,
-    );
+    let mono_counter = dyn_sdk_meter
+        .create_monotonic_counter("TestMonoCounter")
+        .build();
     mono_counter.add(4, None, None);
-    let ud_counter = dyn_sdk_meter.create_up_down_counter(
-        "TestUpDownCounter".to_string(),
-        None::<&str>,
-        None::<&str>,
-    );
+    let ud_counter = dyn_sdk_meter
+        .create_up_down_counter("TestUpDownCounter")
+        .build();
     ud_counter.add(-6, None, None);
-    let histogram =
-        dyn_sdk_meter.create_histogram("TestHistogram".to_string(), None::<&str>, None::<&str>);
+    let histogram = dyn_sdk_meter
+        .create_histogram("TestHistogram".to_string())
+        .build();
     histogram.record(1.234, None, None);
 }
 

@@ -5,17 +5,17 @@
 
 //! An noop implementation of the Meter traits
 
-use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::{fmt::Debug, sync::Arc};
 
+use crate::instruments::{
+    AsyncInstrumentBuilder, AsyncMeasure, Histogram, InstrumentBuilder, MonotonicCounter,
+    ProvideInstrument, UpDownCounter,
+};
 use crate::{
     attributes::Attributes,
     context::Context,
-    meter::{
-        AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideInstrument, ProvideMeter,
-        UpDownCounter,
-    },
+    meter::{Meter, ProvideMeter},
 };
 
 #[derive(Debug)]
@@ -35,57 +35,42 @@ pub(crate) struct NoopMeter;
 impl ProvideInstrument for NoopMeter {
     fn create_gauge(
         &self,
-        _name: Cow<'static, str>,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = f64>>, f64>,
     ) -> Arc<dyn AsyncMeasure<Value = f64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<f64>))
     }
 
     fn create_up_down_counter(
         &self,
-        _name: Cow<'static, str>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: InstrumentBuilder<'_, Arc<dyn UpDownCounter>>,
     ) -> Arc<dyn UpDownCounter> {
         Arc::new(NoopUpDownCounter)
     }
 
     fn create_async_up_down_counter(
         &self,
-        _name: Cow<'static, str>,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = i64>>, i64>,
     ) -> Arc<dyn AsyncMeasure<Value = i64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<i64>))
     }
 
     fn create_monotonic_counter(
         &self,
-        _name: Cow<'static, str>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: InstrumentBuilder<'_, Arc<dyn MonotonicCounter>>,
     ) -> Arc<dyn MonotonicCounter> {
         Arc::new(NoopMonotonicCounter)
     }
 
     fn create_async_monotonic_counter(
         &self,
-        _name: Cow<'static, str>,
-        _callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = u64>>, u64>,
     ) -> Arc<dyn AsyncMeasure<Value = u64>> {
         Arc::new(NoopAsyncMeasurement(PhantomData::<u64>))
     }
 
     fn create_histogram(
         &self,
-        _name: Cow<'static, str>,
-        _units: Option<Cow<'static, str>>,
-        _description: Option<Cow<'static, str>>,
+        _builder: InstrumentBuilder<'_, Arc<dyn Histogram>>,
     ) -> Arc<dyn Histogram> {
         Arc::new(NoopHistogram)
     }

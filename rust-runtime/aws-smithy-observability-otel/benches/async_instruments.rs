@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_observability::meter::{AsyncMeasure, Meter};
+use aws_smithy_observability::instruments::AsyncMeasure;
+use aws_smithy_observability::meter::Meter;
 use aws_smithy_observability::{AttributeValue, Attributes, TelemetryProvider};
 use aws_smithy_observability_otel::meter::OtelMeterProvider;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -13,53 +14,54 @@ use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
+use std::sync::Arc;
 
 async fn record_async_instruments(dyn_sdk_meter: Meter) {
     //Create all async instruments and record some data
-    let gauge = dyn_sdk_meter.create_gauge(
-        "TestGauge".to_string(),
-        // Callback function records another value with different attributes so it is deduped
-        Box::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
-            let mut attrs = Attributes::new();
-            attrs.set(
-                "TestGaugeAttr",
-                AttributeValue::String("TestGaugeAttr".into()),
-            );
-            measurement.record(6.789, Some(&attrs), None);
-        }),
-        None::<&str>,
-        None::<&str>,
-    );
+    let gauge = dyn_sdk_meter
+        .create_gauge(
+            "TestGauge".to_string(),
+            // Callback function records another value with different attributes so it is deduped
+            Arc::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestGaugeAttr",
+                    AttributeValue::String("TestGaugeAttr".into()),
+                );
+                measurement.record(6.789, Some(&attrs), None);
+            }),
+        )
+        .build();
     gauge.record(1.234, None, None);
 
-    let async_ud_counter = dyn_sdk_meter.create_async_up_down_counter(
-        "TestAsyncUpDownCounter".to_string(),
-        Box::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
-            let mut attrs = Attributes::new();
-            attrs.set(
-                "TestAsyncUpDownCounterAttr",
-                AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
-            );
-            measurement.record(12, Some(&attrs), None);
-        }),
-        None::<&str>,
-        None::<&str>,
-    );
+    let async_ud_counter = dyn_sdk_meter
+        .create_async_up_down_counter(
+            "TestAsyncUpDownCounter".to_string(),
+            Arc::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestAsyncUpDownCounterAttr",
+                    AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
+                );
+                measurement.record(12, Some(&attrs), None);
+            }),
+        )
+        .build();
     async_ud_counter.record(-6, None, None);
 
-    let async_mono_counter = dyn_sdk_meter.create_async_monotonic_counter(
-        "TestAsyncMonoCounter".to_string(),
-        Box::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
-            let mut attrs = Attributes::new();
-            attrs.set(
-                "TestAsyncMonoCounterAttr",
-                AttributeValue::String("TestAsyncMonoCounterAttr".into()),
-            );
-            measurement.record(123, Some(&attrs), None);
-        }),
-        None::<&str>,
-        None::<&str>,
-    );
+    let async_mono_counter = dyn_sdk_meter
+        .create_async_monotonic_counter(
+            "TestAsyncMonoCounter".to_string(),
+            Arc::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
+                let mut attrs = Attributes::new();
+                attrs.set(
+                    "TestAsyncMonoCounterAttr",
+                    AttributeValue::String("TestAsyncMonoCounterAttr".into()),
+                );
+                measurement.record(123, Some(&attrs), None);
+            }),
+        )
+        .build();
     async_mono_counter.record(4, None, None);
 }
 

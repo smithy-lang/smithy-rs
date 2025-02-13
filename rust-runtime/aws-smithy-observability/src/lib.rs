@@ -28,3 +28,4 @@ pub mod meter;
 mod noop;
 mod provider;
 pub use provider::{TelemetryProvider, TelemetryProviderBuilder};
+pub mod instruments;

@@ -5,15 +5,17 @@
 
 //! OpenTelemetry based implementations of the Smithy Observability Meter traits.
 
+use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
-use std::{borrow::Cow, fmt::Debug};
 
 use crate::attributes::kv_from_option_attr;
-pub use aws_smithy_observability::meter::{
-    AsyncMeasure, Histogram, Meter, MonotonicCounter, ProvideInstrument, ProvideMeter,
-    UpDownCounter,
+use aws_smithy_observability::instruments::{
+    AsyncInstrumentBuilder, AsyncMeasure, Histogram, InstrumentBuilder, MonotonicCounter,
+    ProvideInstrument, UpDownCounter,
 };
+pub use aws_smithy_observability::meter::{Meter, ProvideMeter};
+
 use aws_smithy_observability::{Attributes, Context, ErrorKind, ObservabilityError};
 use opentelemetry::metrics::{
     AsyncInstrument as OtelAsyncInstrument, Counter as OtelCounter, Histogram as OtelHistogram,
@@ -143,128 +145,116 @@ impl Deref for MeterWrap {
 impl ProvideInstrument for MeterWrap {
     fn create_gauge(
         &self,
-        name: Cow<'static, str>,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = f64>>, f64>,
     ) -> Arc<dyn AsyncMeasure<Value = f64>> {
-        let mut builder = self.f64_observable_gauge(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<f64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
+        let mut otel_builder = self.f64_observable_gauge(builder.get_name().clone());
 
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(GaugeWrap(builder.init()))
+        otel_builder = otel_builder.with_callback(move |input: &dyn OtelAsyncInstrument<f64>| {
+            let f = builder.callback.clone();
+            f(&AsyncInstrumentWrap(input));
+        });
+
+        Arc::new(GaugeWrap(otel_builder.init()))
     }
 
     fn create_up_down_counter(
         &self,
-        name: Cow<'static, str>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: InstrumentBuilder<'_, Arc<dyn UpDownCounter>>,
     ) -> Arc<dyn UpDownCounter> {
-        let mut builder = self.i64_up_down_counter(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        let mut otel_builder = self.i64_up_down_counter(builder.get_name().clone());
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(UpDownCounterWrap(builder.init()))
+        Arc::new(UpDownCounterWrap(otel_builder.init()))
     }
 
     fn create_async_up_down_counter(
         &self,
-        name: Cow<'static, str>,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = i64>>, i64>,
     ) -> Arc<dyn AsyncMeasure<Value = i64>> {
-        let mut builder = self.i64_observable_up_down_counter(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<i64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
+        let mut otel_builder = self.i64_observable_up_down_counter(builder.get_name().clone());
 
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(AsyncUpDownCounterWrap(builder.init()))
+        otel_builder = otel_builder.with_callback(move |input: &dyn OtelAsyncInstrument<i64>| {
+            let f = builder.callback.clone();
+            f(&AsyncInstrumentWrap(input));
+        });
+
+        Arc::new(AsyncUpDownCounterWrap(otel_builder.init()))
     }
 
     fn create_monotonic_counter(
         &self,
-        name: Cow<'static, str>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: InstrumentBuilder<'_, Arc<dyn MonotonicCounter>>,
     ) -> Arc<dyn MonotonicCounter> {
-        let mut builder = self.u64_counter(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        let mut otel_builder = self.u64_counter(builder.get_name().clone());
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(MonotonicCounterWrap(builder.init()))
+        Arc::new(MonotonicCounterWrap(otel_builder.init()))
     }
 
     fn create_async_monotonic_counter(
         &self,
-        name: Cow<'static, str>,
-        callback: Box<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = u64>>, u64>,
     ) -> Arc<dyn AsyncMeasure<Value = u64>> {
-        let mut builder = self.u64_observable_counter(name).with_callback(
-            move |input: &dyn OtelAsyncInstrument<u64>| {
-                callback(&AsyncInstrumentWrap(input));
-            },
-        );
+        let mut otel_builder = self.u64_observable_counter(builder.get_name().clone());
 
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(AsyncMonotonicCounterWrap(builder.init()))
+        otel_builder = otel_builder.with_callback(move |input: &dyn OtelAsyncInstrument<u64>| {
+            let f = builder.callback.clone();
+            f(&AsyncInstrumentWrap(input));
+        });
+
+        Arc::new(AsyncMonotonicCounterWrap(otel_builder.init()))
     }
 
     fn create_histogram(
         &self,
-        name: Cow<'static, str>,
-        units: Option<Cow<'static, str>>,
-        description: Option<Cow<'static, str>>,
+        builder: InstrumentBuilder<'_, Arc<dyn Histogram>>,
     ) -> Arc<dyn Histogram> {
-        let mut builder = self.f64_histogram(name);
-        if let Some(desc) = description {
-            builder = builder.with_description(desc);
+        let mut otel_builder = self.f64_histogram(builder.get_name().clone());
+        if let Some(desc) = builder.get_description() {
+            otel_builder = otel_builder.with_description(desc.clone());
         }
 
-        if let Some(u) = units {
-            builder = builder.with_unit(u);
+        if let Some(u) = builder.get_units() {
+            otel_builder = otel_builder.with_unit(u.clone());
         }
 
-        Arc::new(HistogramWrap(builder.init()))
+        Arc::new(HistogramWrap(otel_builder.init()))
     }
 }
 
@@ -313,7 +303,9 @@ impl ProvideMeter for OtelMeterProvider {
 #[cfg(test)]
 mod tests {
 
-    use aws_smithy_observability::meter::AsyncMeasure;
+    use std::sync::Arc;
+
+    use aws_smithy_observability::instruments::AsyncMeasure;
     use aws_smithy_observability::{AttributeValue, Attributes, TelemetryProvider};
     use opentelemetry_sdk::metrics::{
         data::{Gauge, Histogram, Sum},
@@ -341,13 +333,15 @@ mod tests {
         let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
 
         //Create all 3 sync instruments and record some data for each
-        let mono_counter =
-            dyn_sdk_meter.create_monotonic_counter("TestMonoCounter", None::<&str>, None::<&str>);
+        let mono_counter = dyn_sdk_meter
+            .create_monotonic_counter("TestMonoCounter")
+            .build();
         mono_counter.add(4, None, None);
-        let ud_counter =
-            dyn_sdk_meter.create_up_down_counter("TestUpDownCounter", None::<&str>, None::<&str>);
+        let ud_counter = dyn_sdk_meter
+            .create_up_down_counter("TestUpDownCounter")
+            .build();
         ud_counter.add(-6, None, None);
-        let histogram = dyn_sdk_meter.create_histogram("TestHistogram", None::<&str>, None::<&str>);
+        let histogram = dyn_sdk_meter.create_histogram("TestHistogram").build();
         histogram.record(1.234, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
@@ -404,50 +398,50 @@ mod tests {
         let dyn_sdk_meter = dyn_sdk_mp.get_meter("TestMeter", None);
 
         //Create all async instruments and record some data
-        let gauge = dyn_sdk_meter.create_gauge(
-            "TestGauge".to_string(),
-            // Callback function records another value with different attributes so it is deduped
-            Box::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
-                let mut attrs = Attributes::new();
-                attrs.set(
-                    "TestGaugeAttr",
-                    AttributeValue::String("TestGaugeAttr".into()),
-                );
-                measurement.record(6.789, Some(&attrs), None);
-            }),
-            None::<&str>,
-            None::<&str>,
-        );
+        let gauge = dyn_sdk_meter
+            .create_gauge(
+                "TestGauge".to_string(),
+                // Callback function records another value with different attributes so it is deduped
+                Arc::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
+                    let mut attrs = Attributes::new();
+                    attrs.set(
+                        "TestGaugeAttr",
+                        AttributeValue::String("TestGaugeAttr".into()),
+                    );
+                    measurement.record(6.789, Some(&attrs), None);
+                }),
+            )
+            .build();
         gauge.record(1.234, None, None);
 
-        let async_ud_counter = dyn_sdk_meter.create_async_up_down_counter(
-            "TestAsyncUpDownCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
-                let mut attrs = Attributes::new();
-                attrs.set(
-                    "TestAsyncUpDownCounterAttr",
-                    AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
-                );
-                measurement.record(12, Some(&attrs), None);
-            }),
-            None::<&str>,
-            None::<&str>,
-        );
+        let async_ud_counter = dyn_sdk_meter
+            .create_async_up_down_counter(
+                "TestAsyncUpDownCounter".to_string(),
+                Arc::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
+                    let mut attrs = Attributes::new();
+                    attrs.set(
+                        "TestAsyncUpDownCounterAttr",
+                        AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
+                    );
+                    measurement.record(12, Some(&attrs), None);
+                }),
+            )
+            .build();
         async_ud_counter.record(-6, None, None);
 
-        let async_mono_counter = dyn_sdk_meter.create_async_monotonic_counter(
-            "TestAsyncMonoCounter".to_string(),
-            Box::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
-                let mut attrs = Attributes::new();
-                attrs.set(
-                    "TestAsyncMonoCounterAttr",
-                    AttributeValue::String("TestAsyncMonoCounterAttr".into()),
-                );
-                measurement.record(123, Some(&attrs), None);
-            }),
-            None::<&str>,
-            None::<&str>,
-        );
+        let async_mono_counter = dyn_sdk_meter
+            .create_async_monotonic_counter(
+                "TestAsyncMonoCounter".to_string(),
+                Arc::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
+                    let mut attrs = Attributes::new();
+                    attrs.set(
+                        "TestAsyncMonoCounterAttr",
+                        AttributeValue::String("TestAsyncMonoCounterAttr".into()),
+                    );
+                    measurement.record(123, Some(&attrs), None);
+                }),
+            )
+            .build();
         async_mono_counter.record(4, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline

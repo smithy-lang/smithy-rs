@@ -4,6 +4,7 @@ allowed_external_types = [
     "aws_smithy_observability::meter::Histogram",
     "aws_smithy_observability::meter::Meter",
     "aws_smithy_observability::meter::MonotonicCounter",
+    "aws_smithy_observability::meter::ProvideInstrument",
     "aws_smithy_observability::meter::ProvideMeter",
     "aws_smithy_observability::meter::UpDownCounter",
     "aws_smithy_observability::provider::TelemetryProvider",

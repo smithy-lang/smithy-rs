@@ -78,8 +78,9 @@ mod tests {
         // Use the global provider to create an instrument and record a value with it
         let curr_mp = curr_provider.meter_provider();
         let curr_meter = curr_mp.get_meter("TestMeter", None);
-        let instrument =
-            curr_meter.create_monotonic_counter("TestMonoCounter", None::<&str>, None::<&str>);
+        let instrument = curr_meter
+            .create_monotonic_counter("TestMonoCounter")
+            .build();
         instrument.add(4, None, None);
     }
 }

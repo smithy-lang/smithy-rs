@@ -55,8 +55,9 @@ mod tests {
             .meter_provider()
             .get_meter("TestGlobalMeter", None);
 
-        let mono_counter =
-            global_meter.create_monotonic_counter("TestMonoCounter", None::<&str>, None::<&str>);
+        let mono_counter = global_meter
+            .create_monotonic_counter("TestMonoCounter")
+            .build();
         mono_counter.add(4, None, None);
 
         // Flush metric pipeline and extract metrics from exporter
