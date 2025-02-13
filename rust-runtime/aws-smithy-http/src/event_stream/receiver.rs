@@ -132,7 +132,7 @@ pub enum InitialMessageType {
 }
 
 impl InitialMessageType {
-    const fn as_str(&self) -> &'static str {
+    fn as_str(&self) -> &'static str {
         match self {
             InitialMessageType::Request => "initial-request",
             InitialMessageType::Response => "initial-response",
