@@ -347,7 +347,7 @@ dependencies = [
 name = "aws-smithy-checksums"
 version = "0.62.0"
 dependencies = [
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-types 1.2.13",
  "bytes",
  "bytes-utils",
@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.60.13"
+version = "0.60.14"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream 0.60.7",
@@ -512,7 +512,7 @@ name = "aws-smithy-http-server"
 version = "0.63.3"
 dependencies = [
  "aws-smithy-cbor",
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-json 0.61.2",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.13",
@@ -542,7 +542,7 @@ dependencies = [
 name = "aws-smithy-http-server-python"
 version = "0.63.2"
 dependencies = [
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-http-server",
  "aws-smithy-json 0.61.2",
  "aws-smithy-types 1.2.13",
@@ -659,7 +659,7 @@ version = "1.7.8"
 dependencies = [
  "approx",
  "aws-smithy-async 1.2.4",
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-protocol-test 0.63.0",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.13",
@@ -828,7 +828,7 @@ dependencies = [
 name = "aws-smithy-wasm"
 version = "0.1.3"
 dependencies = [
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-runtime-api 1.7.3",
  "aws-smithy-types 1.2.13",
  "bytes",
@@ -2242,7 +2242,7 @@ version = "0.1.0"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-compression",
- "aws-smithy-http 0.60.13",
+ "aws-smithy-http 0.60.14",
  "aws-smithy-json 0.61.2",
  "aws-smithy-runtime 1.7.8",
  "aws-smithy-runtime-api 1.7.3",

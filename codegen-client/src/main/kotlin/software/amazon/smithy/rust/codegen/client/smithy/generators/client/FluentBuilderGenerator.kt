@@ -210,7 +210,7 @@ class FluentBuilderGenerator(
                         #{SdkBody}::empty()))
                 }
 
-                let message = output.$eventStreamMemberName.try_recv_initial().await.map_err(response_error)?;
+                let message = output.$eventStreamMemberName.try_recv_initial_response().await.map_err(response_error)?;
 
                 match message {
                     #{Some}(_message) => {

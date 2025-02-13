@@ -99,7 +99,7 @@ class IntegrationTestDependencies(
                             CargoDependency.smithyTypes(runtimeConfig)
                                 .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                         addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
-                        addDependency(FuturesUtil)
+                        addDependency(FuturesUtil.toDevDependency())
                         addDependency(SerdeJson)
                         addDependency(smithyAsync)
                         addDependency(smithyProtocolTestHelpers(runtimeConfig))

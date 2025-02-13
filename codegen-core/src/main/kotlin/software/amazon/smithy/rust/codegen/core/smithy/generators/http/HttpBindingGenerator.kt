@@ -65,6 +65,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isPrimitive
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 
@@ -507,6 +508,14 @@ class HttpBindingGenerator(
             }
 
         if (headerBindings.isEmpty() && prefixHeaderBinding == null) {
+            return null
+        }
+
+        // Skip if we need to serialize operation input's members in an initial message of event stream
+        if (shape is OperationShape &&
+            shape.inputShape(codegenContext.model)
+                .needsToHandleEventStreamInitialMessage(codegenContext.model, codegenContext.protocol)
+        ) {
             return null
         }
 
