@@ -34,7 +34,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-#[cfg(feature = "tls-rustls")]
+#[cfg(feature = "__rustls")]
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
@@ -98,7 +98,7 @@ pub fn default_connector(
     settings: &HttpConnectorSettings,
     sleep: Option<SharedAsyncSleep>,
 ) -> Option<SharedHttpConnector> {
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "__rustls")]
     {
         tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new default connector");
         let hyper = default_connector::base(settings, sleep).build_https();
@@ -113,7 +113,7 @@ pub fn default_connector(
 
 /// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
 pub fn default_client() -> Option<SharedHttpClient> {
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "__rustls")]
     {
         tracing::trace!("creating a new default hyper 0.14.x client");
         Some(HyperClientBuilder::new().build_https())
@@ -202,7 +202,7 @@ impl HyperConnectorBuilder {
     }
 
     /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "__rustls")]
     pub fn build_https(self) -> HyperConnector {
         self.build(default_connector::https())
     }
@@ -580,7 +580,7 @@ impl HyperClientBuilder {
     ///
     /// The trusted certificates will be loaded later when this becomes the selected
     /// HTTP client for a Smithy client.
-    #[cfg(feature = "tls-rustls")]
+    #[cfg(feature = "__rustls")]
     pub fn build_https(self) -> SharedHttpClient {
         self.build_with_fn(default_connector::https)
     }

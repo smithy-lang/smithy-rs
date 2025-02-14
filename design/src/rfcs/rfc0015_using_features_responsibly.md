@@ -35,7 +35,7 @@ As noted earlier in an excerpt from the Cargo book:
 > enabling a feature should not disable functionality, and it should usually be safe to enable any combination of features. A feature should not introduce a [SemVer-incompatible change].
 
 ```rust
-#[cfg(feature = "rustls")]
+#[cfg(feature = "__rustls")]
 impl<M, R> ClientBuilder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls.
     pub fn tls_adapter(self) -> ClientBuilder<Adapter<crate::conns::Https>, M, R> {
@@ -59,7 +59,7 @@ When the example code above is compiled with both features enabled, compilation 
 Here's an updated version of the example that fixes these issues:
 
 ```rust
-#[cfg(feature = "rustls")]
+#[cfg(feature = "__rustls")]
 impl<M, R> ClientBuilder<(), M, R> {
     /// Connect to the service over HTTPS using Rustls.
     pub fn rustls(self) -> ClientBuilder<Adapter<crate::conns::Https>, M, R> {

@@ -14,7 +14,7 @@ use crate::meta::credentials::CredentialsProviderChain;
 use crate::meta::region::ProvideRegion;
 use crate::provider_config::ProviderConfig;
 
-#[cfg(feature = "rustls")]
+#[cfg(feature = "__rustls")]
 /// Default Credentials Provider chain
 ///
 /// The region from the default region provider will be used

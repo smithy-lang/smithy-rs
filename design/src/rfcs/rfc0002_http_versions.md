@@ -98,7 +98,7 @@ The `https()` method on the Builder constructs the actual Hyper client, and is d
 select the correct TLS implementation. For example:
 
 ```rust
-#[cfg(feature = "rustls")]
+#[cfg(feature = "__rustls")]
 pub fn https() -> Https {
     let https = hyper_rustls::HttpsConnector::with_native_roots();
     let client = hyper::Client::builder().build::<_, SdkBody>(https);
@@ -134,7 +134,7 @@ A default `make_connector` implementation would be provided that creates a Hyper
 Cargo feature flags. This might look something like this:
 
 ```rust
-#[cfg(feature = "rustls")]
+#[cfg(feature = "__rustls")]
 pub fn default_connector(reqs: &HttpRequirements) -> HyperAdapter {
     let https = hyper_rustls::HttpsConnector::with_native_roots();
     let mut builder = hyper::Client::builder();

@@ -1104,7 +1104,7 @@ pub(crate) mod test {
     #[cfg_attr(windows, ignore)]
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "__rustls")]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
         let client = Client::builder()

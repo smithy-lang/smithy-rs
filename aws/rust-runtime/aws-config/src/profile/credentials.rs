@@ -91,7 +91,7 @@ pub(crate) mod repr;
 ///         future::ProvideCredentials::new(self.load_credentials())
 ///     }
 /// }
-/// # if cfg!(feature = "rustls") {
+/// # if cfg!(feature = "__rustls") {
 /// let provider = ProfileFileCredentialsProvider::builder()
 ///     .with_custom_provider("Custom", MyCustomProvider)
 ///     .build();
@@ -421,7 +421,7 @@ impl Builder {
     ///     }
     /// }
     ///
-    /// # if cfg!(feature = "rustls") {
+    /// # if cfg!(feature = "__rustls") {
     /// let provider = ProfileFileCredentialsProvider::builder()
     ///     .with_custom_provider("Custom", MyCustomProvider)
     ///     .build();

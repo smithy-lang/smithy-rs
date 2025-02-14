@@ -13,12 +13,17 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
 connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream", "dep:h2"]
-tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
+tls-rustls = ["hyper-rustls/native-tokio", "__rustls"]
+tls-rustls-webpki = ["hyper-rustls/webpki-tokio", "__rustls"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
 test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json", "dep:indexmap"]
 wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
+
+# Enables common types used for rustls. Useless on its own.
+__rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
+
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
@@ -37,7 +42,7 @@ http-body-1x = { package = "http-body", version = "1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
 httparse = "1.8.0"
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
+hyper-rustls = { version = "0.24", features = ["http1", "tls12", "logging", "aws-lc-rs", "http2"], default-features = false, optional = true }
 once_cell = "1.18.0"
 pin-project-lite = "0.2.7"
 pin-utils = "0.1.0"

@@ -128,7 +128,7 @@ impl ProviderConfig {
     ///
     /// # Examples
     /// ```no_run
-    /// # #[cfg(feature = "rustls")]
+    /// # #[cfg(feature = "__rustls")]
     /// # fn example() {
     /// use aws_config::provider_config::ProviderConfig;
     /// use aws_sdk_sts::config::Region;
