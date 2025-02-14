@@ -112,7 +112,6 @@ class TimestreamDecorator : ClientCodegenDecorator {
                 "endpoint_discovery" to endpointDiscovery.toType(),
                 "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
                 "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
-                "Result" to std.resolve("result::Result"),
                 *Types(codegenContext.runtimeConfig).toArray(),
             )
         }

@@ -143,7 +143,7 @@ class UnconstrainedCollectionGenerator(
                         "ConstrainedMemberSymbol" to constrainedMemberSymbol,
                         "InnerConstraintViolationSymbol" to innerConstraintViolationSymbol,
                         "ConstrainValueWritable" to constrainValueWritable,
-                        "Result" to std.resolve("result::Result"),
+                        *RuntimeType.preludeScope
                     )
 
                     val constrainedValueTypeIsNotFinalType =

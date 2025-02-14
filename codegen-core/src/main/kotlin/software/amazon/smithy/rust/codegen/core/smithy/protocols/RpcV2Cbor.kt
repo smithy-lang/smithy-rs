@@ -165,7 +165,7 @@ open class RpcV2Cbor(
                     CargoDependency.smithyCbor(runtimeConfig).toType()
                         .resolve("decode::DeserializeError"),
                 "Headers" to RuntimeType.headers(runtimeConfig),
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
         }
 

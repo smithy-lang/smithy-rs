@@ -103,7 +103,7 @@ class ConstrainedPythonBlobGenerator(
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
             "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
     }
 }

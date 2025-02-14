@@ -104,7 +104,7 @@ class AwsJsonSerializerGenerator(
         arrayOf(
             "Error" to runtimeConfig.serializationError(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -140,7 +140,7 @@ open class AwsJson(
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     val version: AwsJsonVersion get() = awsJsonVersion

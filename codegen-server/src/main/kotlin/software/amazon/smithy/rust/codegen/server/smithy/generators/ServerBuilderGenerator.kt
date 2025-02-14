@@ -162,7 +162,7 @@ class ServerBuilderGenerator(
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "MaybeConstrained" to RuntimeType.MaybeConstrained,
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     fun render(

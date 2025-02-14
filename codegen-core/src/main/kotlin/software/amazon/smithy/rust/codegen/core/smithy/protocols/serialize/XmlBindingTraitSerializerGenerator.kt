@@ -35,8 +35,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -70,7 +68,7 @@ class XmlBindingTraitSerializerGenerator(
             "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     private val xmlIndex = XmlNameIndex.of(model)
@@ -201,7 +199,7 @@ class XmlBindingTraitSerializerGenerator(
         ProtocolFunctions.crossOperationFn("rest_xml_unset_union_payload") { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
-                *preludeScope,
+                *codegenScope,
                 "ByteSlab" to RuntimeType.ByteSlab,
             )
         }

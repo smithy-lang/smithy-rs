@@ -46,7 +46,7 @@ class ServerServiceGenerator(
             "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -350,7 +350,7 @@ class ServerServiceGenerator(
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
                 "PatternInitializations" to patternInitializations(),
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
         }
 

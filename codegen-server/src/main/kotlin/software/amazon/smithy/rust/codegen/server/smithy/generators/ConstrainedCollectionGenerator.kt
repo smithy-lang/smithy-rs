@@ -88,7 +88,7 @@ class ConstrainedCollectionGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
 
         writer.documentShape(shape, model)
@@ -318,7 +318,7 @@ sealed class CollectionTraitInfo {
                             "HashMap" to RuntimeType.HashMap,
                             "MemberSymbol" to memberSymbol,
                             "ConstraintViolation" to constraintViolation,
-                            "Result" to std.resolve("result::Result"),
+                            *RuntimeType.preludeScope
                         )
                     }
                 },
@@ -368,7 +368,7 @@ sealed class CollectionTraitInfo {
                             }
                             """,
                             "ConstraintViolation" to constraintViolation,
-                            "Result" to std.resolve("result::Result"),
+                            *RuntimeType.preludeScope
                         )
                     }
                 },

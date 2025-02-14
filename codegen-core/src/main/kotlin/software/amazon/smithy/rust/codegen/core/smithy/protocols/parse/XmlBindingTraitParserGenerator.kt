@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -112,7 +111,7 @@ class XmlBindingTraitParserGenerator(
             "try_data" to smithyXml.resolve("decode::try_data"),
             "ScopedDecoder" to scopedDecoder,
             "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)

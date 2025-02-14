@@ -70,7 +70,7 @@ class HttpBoundProtocolPayloadGenerator(
             "BuildError" to runtimeConfig.operationBuildError(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 

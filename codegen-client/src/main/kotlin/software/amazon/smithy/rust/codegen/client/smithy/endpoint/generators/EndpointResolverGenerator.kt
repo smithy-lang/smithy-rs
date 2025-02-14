@@ -141,7 +141,7 @@ internal class EndpointResolverGenerator(
             "EndpointError" to types.resolveEndpointError,
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-            "Result" to std.resolve("result::Result"),
+            *preludeScope
         )
 
     private val allowLintsForResolver =

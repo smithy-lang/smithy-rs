@@ -217,7 +217,7 @@ data class Range(val rangeTrait: RangeTrait) {
                     }
                 }
                 """,
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
         }
 }

@@ -104,7 +104,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "QueryWriter" to smithyQuery.resolve("QueryWriter"),
             "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     abstract val protocolName: String

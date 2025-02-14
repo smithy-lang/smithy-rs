@@ -73,7 +73,7 @@ class ConstrainedMapGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
 
         writer.documentShape(shape, model)

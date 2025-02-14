@@ -115,7 +115,7 @@ class UnconstrainedUnionGenerator(
                 "ConstrainedSymbol" to constrainedSymbol,
                 "ConstraintViolationSymbol" to constraintViolationSymbol,
                 "body" to generateTryFromUnconstrainedUnionImpl(),
-                "Result" to std.resolve("result::Result"),
+                *RuntimeType.preludeScope
             )
         }
 

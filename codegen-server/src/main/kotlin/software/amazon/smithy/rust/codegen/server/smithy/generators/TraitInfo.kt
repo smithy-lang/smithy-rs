@@ -71,6 +71,6 @@ fun RustWriter.renderTryFrom(
         "TryFrom" to RuntimeType.TryFrom,
         "ConstraintViolation" to constraintViolationError,
         "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
-        "Result" to std.resolve("result::Result"),
+        *RuntimeType.preludeScope
     )
 }

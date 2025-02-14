@@ -198,7 +198,7 @@ class UnconstrainedMapGenerator(
                         "ConstrainedKeySymbol" to constrainedKeySymbol,
                         "ConstrainedMemberValueSymbol" to constrainedMemberValueSymbol,
                         "ConstrainKVWritable" to constrainKVWritable,
-                        "Result" to std.resolve("result::Result"),
+                        *RuntimeType.preludeScope
                     )
 
                     val constrainedValueTypeIsNotFinalType =

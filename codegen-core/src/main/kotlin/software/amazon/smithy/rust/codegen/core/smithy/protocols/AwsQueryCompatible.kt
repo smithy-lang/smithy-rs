@@ -60,7 +60,7 @@ class AwsQueryCompatible(
                     .resolve("deserialize::error::DeserializeError"),
             "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     override val httpBindingResolver: HttpBindingResolver =

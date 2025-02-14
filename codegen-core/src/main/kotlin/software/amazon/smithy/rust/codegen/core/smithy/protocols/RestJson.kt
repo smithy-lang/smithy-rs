@@ -78,7 +78,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            "Result" to std.resolve("result::Result"),
+            *RuntimeType.preludeScope
         )
 
     override val httpBindingResolver: HttpBindingResolver =
