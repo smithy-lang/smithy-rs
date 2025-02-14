@@ -13,6 +13,7 @@ use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 
 use stats_alloc::{Region, StatsAlloc, INSTRUMENTED_SYSTEM};
 use std::alloc::System;
+use std::sync::Arc;
 
 async fn record_sync_instruments(dyn_sdk_meter: Meter) {
     //Create all 3 sync instruments and record some data for each
@@ -44,7 +45,7 @@ fn sync_instruments_benchmark(c: &mut Criterion) {
         SdkMeterProvider::builder().with_reader(reader).build()
     });
     // Create the SDK metrics types from the OTel objects
-    let sdk_mp = OtelMeterProvider::new(otel_mp);
+    let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp));
     let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
     // Get the dyn versions of the SDK metrics objects
@@ -56,7 +57,7 @@ fn sync_instruments_benchmark(c: &mut Criterion) {
             .iter(|| async { record_sync_instruments(dyn_sdk_meter.clone()) });
     });
 
-    println!("FIINISHING");
+    println!("FINISHING");
     println!("Stats at end: {:#?}", reg.change());
 }
 

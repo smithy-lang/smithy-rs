@@ -79,7 +79,7 @@ fn async_instruments_benchmark(c: &mut Criterion) {
         SdkMeterProvider::builder().with_reader(reader).build()
     });
     // Create the SDK metrics types from the OTel objects
-    let sdk_mp = OtelMeterProvider::new(otel_mp);
+    let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp));
     let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
     // Get the dyn versions of the SDK metrics objects
@@ -91,7 +91,7 @@ fn async_instruments_benchmark(c: &mut Criterion) {
             .iter(|| async { record_async_instruments(dyn_sdk_meter.clone()) });
     });
 
-    println!("FIINISHING");
+    println!("FINISHING");
     println!("Stats at end: {:#?}", reg.change());
 }
 
