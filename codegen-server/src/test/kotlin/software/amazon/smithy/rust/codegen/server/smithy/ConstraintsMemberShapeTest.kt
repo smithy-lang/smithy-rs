@@ -14,7 +14,10 @@ import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.Trait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -87,6 +90,7 @@ class ConstraintsMemberShapeTest {
             @pattern("^[g-m]+${'$'}")
             constrainedPatternString : PatternString
 
+            constrainedList : ConstrainedList
             plainStringList : PlainStringList
             patternStringList : PatternStringList
             patternStringListOverride : PatternStringListOverride
@@ -117,6 +121,11 @@ class ConstraintsMemberShapeTest {
             lat : RangedInteger
             @range(min: 10, max:100)
             long : RangedInteger
+        }
+        @length(max: 3)
+        list ConstrainedList {
+            @length(max: 8000)
+            member: String
         }
         list PlainStringList {
             member: String
@@ -285,7 +294,12 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `generate code and check member constrained shapes are in the right modules`() {
-        serverIntegrationTest(sampleModel, IntegrationTestParams(service = "constrainedMemberShape#ConstrainedService")) { codegenContext, rustCrate ->
+        serverIntegrationTest(
+            sampleModel,
+            IntegrationTestParams(
+                service = "constrainedMemberShape#ConstrainedService",
+            ),
+        ) { _, rustCrate ->
             fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
                 unitTest(
                     "builder_module_has_${typeName.toSnakeCase()}",
@@ -345,6 +359,27 @@ class ConstraintsMemberShapeTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `merging docs should not produce extra empty lines`() {
+        val docWriter =
+            object : ModuleDocProvider {
+                override fun docsWriter(module: RustModule.LeafModule): Writable? = null
+            }
+        val innerModule = InnerModule(docWriter, false)
+        innerModule.mergeDocumentation("\n\n", "") shouldBe ""
+        innerModule.mergeDocumentation(null, null) shouldBe null
+        innerModule.mergeDocumentation(null, "some docs\n") shouldBe "some docs"
+        innerModule.mergeDocumentation("some docs\n", null) shouldBe "some docs"
+        innerModule.mergeDocumentation(null, "some docs") shouldBe "some docs"
+        innerModule.mergeDocumentation("some docs", null) shouldBe "some docs"
+        innerModule.mergeDocumentation(null, "some docs\n\n") shouldBe "some docs"
+        innerModule.mergeDocumentation("some docs\n\n", null) shouldBe "some docs"
+        innerModule.mergeDocumentation(null, "some docs\n\n") shouldBe "some docs"
+        innerModule.mergeDocumentation("left side", "right side") shouldBe "left side\nright side"
+        innerModule.mergeDocumentation("left side\n", "right side\n") shouldBe "left side\nright side"
+        innerModule.mergeDocumentation("left side\n\n\n", "right side\n\n") shouldBe "left side\nright side"
     }
 
     /**
