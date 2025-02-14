@@ -21,14 +21,6 @@ pub struct ObservabilityError {
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum ErrorKind {
-    /// An error setting the global [crate::TelemetryProvider]
-    SettingGlobalProvider,
-    /// An error getting the global [crate::TelemetryProvider]
-    GettingGlobalProvider,
-    /// Error flushing metrics pipeline
-    MetricsFlush,
-    /// Error gracefully shutting down Metrics Provider
-    MetricsShutdown,
     /// A custom error that does not fall under any other error kind
     Other,
 }
@@ -55,14 +47,6 @@ impl fmt::Display for ObservabilityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
             ErrorKind::Other => write!(f, "unclassified error"),
-            ErrorKind::SettingGlobalProvider => {
-                write!(f, "failed to set global TelemetryProvider")
-            }
-            ErrorKind::GettingGlobalProvider => {
-                write!(f, "failed to get global TelemetryProvider")
-            }
-            ErrorKind::MetricsFlush => write!(f, "failed to flush metrics pipeline"),
-            ErrorKind::MetricsShutdown => write!(f, "failed to shutdown metrics provider"),
         }
     }
 }
@@ -74,13 +58,23 @@ impl std::error::Error for ObservabilityError {
 }
 
 /// An simple error to represent issues with the global [crate::TelemetryProvider].
+#[non_exhaustive]
 #[derive(Debug)]
-pub struct GlobalTelemetryProviderError;
+pub struct GlobalTelemetryProviderError {
+    reason: &'static str,
+}
+
+impl GlobalTelemetryProviderError {
+    /// Create a new [GlobalTelemetryProviderError] with a given reason for the error.
+    pub fn new(reason: &'static str) -> Self {
+        Self { reason }
+    }
+}
 
 impl std::error::Error for GlobalTelemetryProviderError {}
 
 impl fmt::Display for GlobalTelemetryProviderError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GlobalTelemetryProviderError")
+        write!(f, "GlobalTelemetryProviderError: {}", self.reason)
     }
 }

@@ -34,8 +34,8 @@ pub fn set_telemetry_provider(new_provider: TelemetryProvider) -> Result<(), Obs
         Ok(())
     } else {
         Err(ObservabilityError::new(
-            ErrorKind::SettingGlobalProvider,
-            GlobalTelemetryProviderError,
+            ErrorKind::Other,
+            GlobalTelemetryProviderError::new("Failed to set global TelemetryProvider."),
         ))
     }
 }
@@ -47,8 +47,8 @@ pub fn get_telemetry_provider() -> Result<Arc<TelemetryProvider>, ObservabilityE
         Ok(tp.telemetry_provider().clone())
     } else {
         Err(ObservabilityError::new(
-            ErrorKind::GettingGlobalProvider,
-            GlobalTelemetryProviderError,
+            ErrorKind::Other,
+            GlobalTelemetryProviderError::new("Failed to get global TelemetryProvider"),
         ))
     }
 }

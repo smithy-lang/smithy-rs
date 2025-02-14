@@ -22,14 +22,14 @@ async fn record_async_instruments(dyn_sdk_meter: Meter) {
         .create_gauge(
             "TestGauge".to_string(),
             // Callback function records another value with different attributes so it is deduped
-            Arc::new(|measurement: &dyn AsyncMeasure<Value = f64>| {
+            |measurement: &dyn AsyncMeasure<Value = f64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestGaugeAttr",
                     AttributeValue::String("TestGaugeAttr".into()),
                 );
                 measurement.record(6.789, Some(&attrs), None);
-            }),
+            },
         )
         .build();
     gauge.record(1.234, None, None);
@@ -37,14 +37,14 @@ async fn record_async_instruments(dyn_sdk_meter: Meter) {
     let async_ud_counter = dyn_sdk_meter
         .create_async_up_down_counter(
             "TestAsyncUpDownCounter".to_string(),
-            Arc::new(|measurement: &dyn AsyncMeasure<Value = i64>| {
+            |measurement: &dyn AsyncMeasure<Value = i64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncUpDownCounterAttr",
                     AttributeValue::String("TestAsyncUpDownCounterAttr".into()),
                 );
                 measurement.record(12, Some(&attrs), None);
-            }),
+            },
         )
         .build();
     async_ud_counter.record(-6, None, None);
@@ -52,14 +52,14 @@ async fn record_async_instruments(dyn_sdk_meter: Meter) {
     let async_mono_counter = dyn_sdk_meter
         .create_async_monotonic_counter(
             "TestAsyncMonoCounter".to_string(),
-            Arc::new(|measurement: &dyn AsyncMeasure<Value = u64>| {
+            |measurement: &dyn AsyncMeasure<Value = u64>| {
                 let mut attrs = Attributes::new();
                 attrs.set(
                     "TestAsyncMonoCounterAttr",
                     AttributeValue::String("TestAsyncMonoCounterAttr".into()),
                 );
                 measurement.record(123, Some(&attrs), None);
-            }),
+            },
         )
         .build();
     async_mono_counter.record(4, None, None);

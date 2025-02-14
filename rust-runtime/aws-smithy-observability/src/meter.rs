@@ -35,12 +35,15 @@ impl Meter {
 
     /// Create a new Gauge.
     #[allow(clippy::type_complexity)]
-    pub fn create_gauge(
+    pub fn create_gauge<F>(
         &self,
         name: impl Into<Cow<'static, str>>,
-        callback: Arc<dyn Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync>,
-    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = f64>>, f64> {
-        AsyncInstrumentBuilder::new(self, name.into(), callback)
+        callback: F,
+    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = f64>>, f64>
+    where
+        F: Fn(&dyn AsyncMeasure<Value = f64>) + Send + Sync + 'static,
+    {
+        AsyncInstrumentBuilder::new(self, name.into(), Arc::new(callback))
     }
 
     /// Create a new [UpDownCounter].
@@ -53,12 +56,15 @@ impl Meter {
 
     /// Create a new AsyncUpDownCounter.
     #[allow(clippy::type_complexity)]
-    pub fn create_async_up_down_counter(
+    pub fn create_async_up_down_counter<F>(
         &self,
         name: impl Into<Cow<'static, str>>,
-        callback: Arc<dyn Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync>,
-    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = i64>>, i64> {
-        AsyncInstrumentBuilder::new(self, name.into(), callback)
+        callback: F,
+    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = i64>>, i64>
+    where
+        F: Fn(&dyn AsyncMeasure<Value = i64>) + Send + Sync + 'static,
+    {
+        AsyncInstrumentBuilder::new(self, name.into(), Arc::new(callback))
     }
 
     /// Create a new [MonotonicCounter].
@@ -71,12 +77,15 @@ impl Meter {
 
     /// Create a new AsyncMonotonicCounter.
     #[allow(clippy::type_complexity)]
-    pub fn create_async_monotonic_counter(
+    pub fn create_async_monotonic_counter<F>(
         &self,
         name: impl Into<Cow<'static, str>>,
-        callback: Arc<dyn Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync>,
-    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = u64>>, u64> {
-        AsyncInstrumentBuilder::new(self, name.into(), callback)
+        callback: F,
+    ) -> AsyncInstrumentBuilder<'_, Arc<dyn AsyncMeasure<Value = u64>>, u64>
+    where
+        F: Fn(&dyn AsyncMeasure<Value = u64>) + Send + Sync + 'static,
+    {
+        AsyncInstrumentBuilder::new(self, name.into(), Arc::new(callback))
     }
 
     /// Create a new [Histogram].
