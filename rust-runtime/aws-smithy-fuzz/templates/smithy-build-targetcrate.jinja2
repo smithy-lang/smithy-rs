@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "maven": {
+    "dependencies": [
+      {% for dependency in dependencies -%} "{{ dependency }}", {% endfor %}
+      "software.amazon.smithy.rust.codegen.server.smithy:codegen-server:0.1.0"
+    ],
+    "repositories": [
+      {
+        "url": "file://{{ maven_local }}"
+      },
+      {
+        "url": "https://repo1.maven.org/maven2"
+      }
+    ]
+  },
+  "projections": {
+    "{{ revision }}": {
+      "imports": [ ],
+      "plugins": {
+        "rust-server-codegen": {
+          "runtimeConfig": {
+            "relativePath": "{{ rust_runtime }}"
+          },
+          "codegen": {},
+          "service": "{{ service }}",
+          "module": "test_target",
+          "moduleVersion": "0.0.1",
+          "moduleDescription": "test-{{ revision }}",
+          "moduleAuthors": [
+            "protocoltest@example.com"
+          ]
+        }
+      }
+    }
+  }
+}

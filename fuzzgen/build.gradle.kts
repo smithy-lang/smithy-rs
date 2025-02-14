@@ -10,29 +10,20 @@ plugins {
     `maven-publish`
 }
 
-description = "Generates Rust client code from Smithy models"
-extra["displayName"] = "Smithy :: Rust :: CodegenClient"
+description = "Plugin to generate a fuzz harness"
+extra["displayName"] = "Smithy :: Rust :: Fuzzer Generation"
 extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
 
-group = "software.amazon.smithy.rust.codegen"
+group = "software.amazon.smithy.rust.codegen.serde"
 version = "0.1.0"
 
 val smithyVersion: String by project
-val smithyRsVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
-    implementation(kotlin("stdlib-jdk8"))
-    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation(project(":codegen-client"))
+    implementation(project(":codegen-server"))
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
-
-    // `smithy.framework#ValidationException` is defined here, which is used in event stream
-    // marshalling/unmarshalling tests.
-    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
 }
 
 java {
@@ -73,12 +64,29 @@ if (isTestingEnabled.toBoolean()) {
     dependencies {
         runtimeOnly(project(":rust-runtime"))
         testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+        testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
+        testImplementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
         testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
     }
 
     tasks.compileTestKotlin {
         kotlinOptions.jvmTarget = "11"
     }
+
+    tasks.register("generateClasspath") {
+        doLast {
+            // Get the runtime classpath
+            val runtimeClasspath = sourceSets["main"].runtimeClasspath
+
+            // Add the 'libs' directory to the classpath
+            val libsDir = file(layout.buildDirectory.dir("libs"))
+            val fullClasspath = runtimeClasspath + files(libsDir.listFiles())
+
+            // Convert to classpath string
+            val classpath = fullClasspath.asPath
+        }
+    }
+
 
     tasks.test {
         useJUnitPlatform()
