@@ -17,9 +17,6 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 pub trait ProvideMeter: Send + Sync + Debug {
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter;
-
-    /// Cast to [std::any::Any]
-    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
@@ -86,8 +83,6 @@ impl Meter {
     pub fn create_histogram(
         &self,
         name: impl Into<Cow<'static, str>>,
-        // units: Option<impl Into<Cow<'static, str>>>,
-        // description: Option<impl Into<Cow<'static, str>>>,
     ) -> InstrumentBuilder<'_, Arc<dyn Histogram>> {
         InstrumentBuilder::new(self, name.into())
     }

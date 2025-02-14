@@ -144,6 +144,7 @@ impl<'a, T, M> AsyncInstrumentBuilder<'a, T, M> {
 
 /// Takes in the name of function from [ProvideInstrument] and the type of instrument being created
 /// (ex: [AsyncMeasure]) and adds a `build` function for it.
+//TODO(observability): Can I derive the measurement from the Value of the instrument type or vice versa?
 macro_rules! build_async_instrument {
     ($name:ident, $instrument:ty, $measurement:ty) => {
         impl<'a> AsyncInstrumentBuilder<'a, $instrument, $measurement> {

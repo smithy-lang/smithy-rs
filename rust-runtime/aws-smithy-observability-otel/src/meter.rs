@@ -280,23 +280,11 @@ impl OtelMeterProvider {
             Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsFlush, err)),
         }
     }
-
-    /// Gracefully shutdown the metric pipeline.
-    pub fn shutdown(&self) -> Result<(), ObservabilityError> {
-        match self.meter_provider.force_flush() {
-            Ok(_) => Ok(()),
-            Err(err) => Err(ObservabilityError::new(ErrorKind::MetricsShutdown, err)),
-        }
-    }
 }
 
 impl ProvideMeter for OtelMeterProvider {
     fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Meter {
         Meter::new(Arc::new(MeterWrap(self.meter_provider.meter(scope))))
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -325,7 +313,8 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = OtelMeterProvider::new(otel_mp);
+        let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp));
+        let sdk_ref = sdk_mp.clone();
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
@@ -345,12 +334,7 @@ mod tests {
         histogram.record(1.234, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp
-            .as_any()
-            .downcast_ref::<OtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        sdk_ref.flush().unwrap();
 
         // Extract the metrics from the exporter and assert that they are what we expect
         let finished_metrics = exporter.get_finished_metrics().unwrap();
@@ -390,7 +374,8 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = OtelMeterProvider::new(otel_mp);
+        let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp));
+        let sdk_ref = sdk_mp.clone();
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Get the dyn versions of the SDK metrics objects
@@ -445,12 +430,7 @@ mod tests {
         async_mono_counter.record(4, None, None);
 
         // Gracefully shutdown the metrics provider so all metrics are flushed through the pipeline
-        dyn_sdk_mp
-            .as_any()
-            .downcast_ref::<OtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        sdk_ref.flush().unwrap();
 
         // Extract the metrics from the exporter
         let finished_metrics = exporter.get_finished_metrics().unwrap();

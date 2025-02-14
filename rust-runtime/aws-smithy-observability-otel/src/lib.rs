@@ -25,6 +25,8 @@ pub mod meter;
 #[cfg(test)]
 mod tests {
 
+    use std::sync::Arc;
+
     use crate::meter::OtelMeterProvider;
     use aws_smithy_observability::{
         global::{get_telemetry_provider, set_telemetry_provider},
@@ -43,7 +45,8 @@ mod tests {
         let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
 
         // Create the SDK metrics types from the OTel objects
-        let sdk_mp = OtelMeterProvider::new(otel_mp);
+        let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp));
+        let sdk_ref = sdk_mp.clone();
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Set the global TelemetryProvider and then get it back out
@@ -60,14 +63,7 @@ mod tests {
             .build();
         mono_counter.add(4, None, None);
 
-        // Flush metric pipeline and extract metrics from exporter
-        global_tp
-            .meter_provider()
-            .as_any()
-            .downcast_ref::<OtelMeterProvider>()
-            .unwrap()
-            .shutdown()
-            .unwrap();
+        sdk_ref.flush().unwrap();
         let finished_metrics = exporter.get_finished_metrics().unwrap();
 
         let extracted_mono_counter_data = &finished_metrics[0].scope_metrics[0].metrics[0]
@@ -78,13 +74,5 @@ mod tests {
             .data_points[0]
             .value;
         assert_eq!(extracted_mono_counter_data, &4);
-
-        // Get the OTel TP out and shut it down
-        let foo = global_tp
-            .meter_provider()
-            .as_any()
-            .downcast_ref::<OtelMeterProvider>()
-            .unwrap();
-        foo.shutdown().unwrap();
     }
 }

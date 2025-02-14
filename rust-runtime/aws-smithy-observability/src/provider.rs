@@ -12,21 +12,21 @@ use crate::{meter::ProvideMeter, noop::NoopMeterProvider};
 /// A struct to hold the various types of telemetry providers.
 #[non_exhaustive]
 pub struct TelemetryProvider {
-    meter_provider: Box<dyn ProvideMeter + Send + Sync>,
+    meter_provider: Arc<dyn ProvideMeter + Send + Sync>,
 }
 
 impl TelemetryProvider {
     /// Returns a builder struct for [TelemetryProvider]
     pub fn builder() -> TelemetryProviderBuilder {
         TelemetryProviderBuilder {
-            meter_provider: Box::new(NoopMeterProvider),
+            meter_provider: Arc::new(NoopMeterProvider),
         }
     }
 
     /// Returns a noop [TelemetryProvider]
     pub fn noop() -> TelemetryProvider {
         Self {
-            meter_provider: Box::new(NoopMeterProvider),
+            meter_provider: Arc::new(NoopMeterProvider),
         }
     }
 
@@ -43,7 +43,7 @@ impl TelemetryProvider {
 impl Default for TelemetryProvider {
     fn default() -> Self {
         Self {
-            meter_provider: Box::new(NoopMeterProvider),
+            meter_provider: Arc::new(NoopMeterProvider),
         }
     }
 }
@@ -51,13 +51,13 @@ impl Default for TelemetryProvider {
 /// A builder for [TelemetryProvider].
 #[non_exhaustive]
 pub struct TelemetryProviderBuilder {
-    meter_provider: Box<dyn ProvideMeter + Send + Sync>,
+    meter_provider: Arc<dyn ProvideMeter + Send + Sync>,
 }
 
 impl TelemetryProviderBuilder {
     /// Set the [ProvideMeter].
-    pub fn meter_provider(mut self, meter_provider: impl ProvideMeter + 'static) -> Self {
-        self.meter_provider = Box::new(meter_provider);
+    pub fn meter_provider(mut self, meter_provider: Arc<impl ProvideMeter + 'static>) -> Self {
+        self.meter_provider = meter_provider;
         self
     }
 
