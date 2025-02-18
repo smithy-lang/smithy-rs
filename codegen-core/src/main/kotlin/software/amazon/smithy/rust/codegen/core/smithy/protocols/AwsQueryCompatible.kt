@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
@@ -60,7 +59,7 @@ class AwsQueryCompatible(
                     .resolve("deserialize::error::DeserializeError"),
             "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver =

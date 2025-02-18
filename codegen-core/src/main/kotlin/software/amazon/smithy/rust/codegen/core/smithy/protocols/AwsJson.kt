@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -104,7 +103,7 @@ class AwsJsonSerializerGenerator(
         arrayOf(
             "Error" to runtimeConfig.serializationError(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -140,7 +139,7 @@ open class AwsJson(
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     val version: AwsJsonVersion get() = awsJsonVersion

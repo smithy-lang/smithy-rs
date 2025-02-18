@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -88,7 +87,7 @@ class ConstrainedCollectionGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
 
         writer.documentShape(shape, model)
@@ -318,7 +317,7 @@ sealed class CollectionTraitInfo {
                             "HashMap" to RuntimeType.HashMap,
                             "MemberSymbol" to memberSymbol,
                             "ConstraintViolation" to constraintViolation,
-                            *RuntimeType.preludeScope
+                            *RuntimeType.preludeScope,
                         )
                     }
                 },
@@ -368,7 +367,7 @@ sealed class CollectionTraitInfo {
                             }
                             """,
                             "ConstraintViolation" to constraintViolation,
-                            *RuntimeType.preludeScope
+                            *RuntimeType.preludeScope,
                         )
                     }
                 },

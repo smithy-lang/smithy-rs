@@ -29,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
@@ -162,7 +161,7 @@ class ServerBuilderGenerator(
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
             "MaybeConstrained" to RuntimeType.MaybeConstrained,
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     fun render(

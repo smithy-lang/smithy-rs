@@ -374,7 +374,7 @@ class ConstrainedCollectionGeneratorTest {
                     pub path: String
                 }
                 """,
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
 
             val constrainedListShape = model.lookup<ListShape>("test#ConstrainedList")

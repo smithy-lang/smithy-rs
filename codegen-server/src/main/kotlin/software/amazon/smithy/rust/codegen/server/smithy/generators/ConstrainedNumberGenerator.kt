@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -217,7 +216,7 @@ data class Range(val rangeTrait: RangeTrait) {
                     }
                 }
                 """,
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
         }
 }

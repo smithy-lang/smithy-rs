@@ -46,7 +46,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
             "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
             "Headers" to RuntimeType.headers(runtimeConfig),
             "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver = AwsQueryBindingResolver(codegenContext.model)

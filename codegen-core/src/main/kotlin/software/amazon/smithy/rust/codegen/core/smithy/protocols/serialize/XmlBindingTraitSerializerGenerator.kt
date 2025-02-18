@@ -68,7 +68,7 @@ class XmlBindingTraitSerializerGenerator(
             "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     private val xmlIndex = XmlNameIndex.of(model)

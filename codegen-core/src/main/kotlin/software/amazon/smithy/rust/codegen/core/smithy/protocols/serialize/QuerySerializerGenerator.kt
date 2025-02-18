@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -104,7 +103,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "QueryWriter" to smithyQuery.resolve("QueryWriter"),
             "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     abstract val protocolName: String

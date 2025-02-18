@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
@@ -141,7 +140,7 @@ internal class EndpointResolverGenerator(
             "EndpointError" to types.resolveEndpointError,
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-            *preludeScope
+            *preludeScope,
         )
 
     private val allowLintsForResolver =

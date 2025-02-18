@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -78,7 +77,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver =

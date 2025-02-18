@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.Ec2QueryParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Ec2QuerySerializerGenerator
@@ -28,7 +27,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
             "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
             "Headers" to RuntimeType.headers(runtimeConfig),
             "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver =

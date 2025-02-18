@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -198,7 +197,7 @@ class UnconstrainedMapGenerator(
                         "ConstrainedKeySymbol" to constrainedKeySymbol,
                         "ConstrainedMemberValueSymbol" to constrainedMemberValueSymbol,
                         "ConstrainKVWritable" to constrainKVWritable,
-                        *RuntimeType.preludeScope
+                        *RuntimeType.preludeScope,
                     )
 
                     val constrainedValueTypeIsNotFinalType =

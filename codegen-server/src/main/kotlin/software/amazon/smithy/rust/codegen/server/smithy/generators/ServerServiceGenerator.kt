@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -46,7 +45,7 @@ class ServerServiceGenerator(
             "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
-            *RuntimeType.preludeScope
+            *RuntimeType.preludeScope,
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -350,7 +349,7 @@ class ServerServiceGenerator(
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
                 "PatternInitializations" to patternInitializations(),
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
         }
 

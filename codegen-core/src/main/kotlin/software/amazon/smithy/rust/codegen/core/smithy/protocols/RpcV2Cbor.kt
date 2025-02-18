@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -165,7 +164,7 @@ open class RpcV2Cbor(
                     CargoDependency.smithyCbor(runtimeConfig).toType()
                         .resolve("decode::DeserializeError"),
                 "Headers" to RuntimeType.headers(runtimeConfig),
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
         }
 

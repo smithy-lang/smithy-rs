@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
@@ -73,7 +72,7 @@ class ConstrainedMapGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
-                *RuntimeType.preludeScope
+                *RuntimeType.preludeScope,
             )
 
         writer.documentShape(shape, model)
