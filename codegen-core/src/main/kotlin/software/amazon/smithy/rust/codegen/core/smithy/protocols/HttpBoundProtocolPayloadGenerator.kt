@@ -45,8 +45,10 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 data class EventStreamBodyParams(
     val outerName: String,
     val memberName: String,
-    val marshallerConstructorFn: RuntimeType,
+    val operationShape: OperationShape,
+    val eventStreamMarshallerGenerator: EventStreamMarshallerGenerator,
     val errorMarshallerConstructorFn: RuntimeType,
+    val payloadContentType: String,
     val additionalPayloadContext: AdditionalPayloadContext,
 )
 
@@ -198,6 +200,7 @@ class HttpBoundProtocolPayloadGenerator(
             val payloadMember = operationShape.inputShape(model).expectMember(payloadMemberName)
             writer.serializeViaEventStream(
                 payloadMember,
+                operationShape,
                 serializerGenerator,
                 shapeName,
                 additionalPayloadContext,
@@ -206,6 +209,7 @@ class HttpBoundProtocolPayloadGenerator(
             val payloadMember = operationShape.outputShape(model).expectMember(payloadMemberName)
             writer.serializeViaEventStream(
                 payloadMember,
+                operationShape,
                 serializerGenerator,
                 "output",
                 additionalPayloadContext,
@@ -238,6 +242,7 @@ class HttpBoundProtocolPayloadGenerator(
 
     private fun RustWriter.serializeViaEventStream(
         memberShape: MemberShape,
+        operationShape: OperationShape,
         serializerGenerator: StructuredDataSerializerGenerator,
         outerName: String,
         additionalPayloadContext: AdditionalPayloadContext,
@@ -259,7 +264,8 @@ class HttpBoundProtocolPayloadGenerator(
                 serializerGenerator,
                 payloadContentType,
             ).render()
-        val marshallerConstructorFn =
+
+        val eventStreamMarshallerGenerator =
             EventStreamMarshallerGenerator(
                 model,
                 target,
@@ -268,17 +274,19 @@ class HttpBoundProtocolPayloadGenerator(
                 unionShape,
                 serializerGenerator,
                 payloadContentType,
-            ).render()
+            )
 
-        // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
+        // TODO(EventStream): [RPC] For server, RPC protocols need to send an initial message with the
         //  parameters that are not `@eventHeader` or `@eventPayload`.
         renderEventStreamBody(
             this,
             EventStreamBodyParams(
                 outerName,
                 memberName,
-                marshallerConstructorFn,
+                operationShape,
+                eventStreamMarshallerGenerator,
                 errorMarshallerConstructorFn,
+                payloadContentType,
                 additionalPayloadContext,
             ),
         )

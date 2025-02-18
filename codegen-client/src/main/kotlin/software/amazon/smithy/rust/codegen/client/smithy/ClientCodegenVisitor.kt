@@ -48,8 +48,8 @@ import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
-import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -234,10 +234,7 @@ class ClientCodegenVisitor(
 
                         implBlock(symbolProvider.toSymbol(shape)) {
                             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
-                            val hasNonEventStreamMemberInRpcBoundProtocol =
-                                shape.members().size > 1 && shape.members().any { it.isEventStream(model) } &&
-                                    codegenContext.protocol.isRpcBoundProtocol
-                            if (hasNonEventStreamMemberInRpcBoundProtocol) {
+                            if (shape.needsToHandleEventStreamInitialMessage(codegenContext.model, codegenContext.protocol)) {
                                 BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
                             }
                         }

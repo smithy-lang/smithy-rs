@@ -5,12 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
-import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.Arguments
-import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -29,8 +25,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
-import java.util.stream.Stream
 
 class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
@@ -129,7 +123,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
                 // This is dummy stream to satisfy input validation for the test service
                 let stream = #{futures_util}::stream::iter(vec![Ok(event)]);
-                let mut res = client
+                let mut response = client
                     .test_stream_op()
                     .value(EventStreamSender::from(stream))
                     .send()
@@ -138,12 +132,12 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
                 #{assert_initial_response:W}
 
-                if let Some(v) = res.value.recv().await.unwrap() {
-                    match v {
+                if let Some(event) = response.value.recv().await.unwrap() {
+                    match event {
                         TestStream::MessageWithString(message_with_string) => {
                             assert_eq!("hello, world!", message_with_string.data().unwrap())
                         }
-                        _ => panic!("matched on unexpected variant"),
+                        otherwise => panic!("matched on unexpected variant {otherwise:?}"),
                     }
                 } else {
                     panic!("should receive at least one frame");
@@ -165,121 +159,71 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 rust("##![allow(unused_imports, dead_code)]")
                 writeUnmarshallTestUtil(codegenContext)
 
-                if (rpcEventStreamTestCase.nonEventStreamMember != NonEventStreamMemberInOutput.NONE) {
-                    tokioTest("with_initial_response") {
-                        writeTestBody(
-                            codegenContext,
-                            initialResponseStreamGenerator =
-                                writable {
-                                    val testCase = rpcEventStreamTestCase.inner
-                                    rust(
-                                        """
-                                        let initial_response = msg(
-                                            "event",
-                                            "initial-response",
-                                            ${testCase.eventStreamMessageContentType.dq()},
-                                            ${testCase.generateRustPayloadInitializer(testCase.eventStreamInitialResponsePayload!!)},
-                                        );
-                                        let mut buffer = vec![];
-                                        aws_smithy_eventstream::frame::write_message_to(&initial_response, &mut buffer).unwrap();
-                                        let chunks: Vec<Result<bytes::Bytes, _>> = vec![Ok(buffer.into())];
-                                        let initial_response_stream = futures_util::stream::iter(chunks);
-                                        """,
-                                    )
-                                },
-                            eventStreamGenerator =
-                                writable {
-                                    rust("let event_stream = initial_response_stream.chain(futures_util::stream::iter(chunks));")
-                                },
-                            initialResponseAssertion =
-                                writable {
-                                    rust("assert_eq!(${rpcEventStreamTestCase.expectedValueInInitialResponse}, res.test_string());")
-                                },
-                        )
+                when (rpcEventStreamTestCase.nonEventStreamMember) {
+                    NonEventStreamMemberInOutput.OPTIONAL_SET, NonEventStreamMemberInOutput.REQUIRED -> {
+                        tokioTest("with_initial_response") {
+                            writeTestBody(
+                                codegenContext,
+                                initialResponseStreamGenerator =
+                                    writable {
+                                        val testCase = rpcEventStreamTestCase.inner
+                                        rust(
+                                            """
+                                            let initial_response = msg(
+                                                "event",
+                                                "initial-response",
+                                                ${testCase.eventStreamMessageContentType.dq()},
+                                                ${testCase.generateRustPayloadInitializer(testCase.eventStreamInitialResponsePayload!!)},
+                                            );
+                                            let mut buffer = vec![];
+                                            aws_smithy_eventstream::frame::write_message_to(&initial_response, &mut buffer).unwrap();
+                                            let chunks: Vec<Result<bytes::Bytes, _>> = vec![Ok(buffer.into())];
+                                            let initial_response_stream = futures_util::stream::iter(chunks);
+                                            """,
+                                        )
+                                    },
+                                eventStreamGenerator =
+                                    writable {
+                                        rust("let event_stream = initial_response_stream.chain(futures_util::stream::iter(chunks));")
+                                    },
+                                initialResponseAssertion =
+                                    writable {
+                                        rust("assert_eq!(${rpcEventStreamTestCase.expectedInInitialResponse}, response.test_string());")
+                                    },
+                            )
+                        }
                     }
-                }
-
-                if (rpcEventStreamTestCase.nonEventStreamMember == NonEventStreamMemberInOutput.OPTIONAL) {
-                    tokioTest("without_initial_response") {
-                        writeTestBody(
-                            codegenContext,
-                            initialResponseStreamGenerator = writable {},
-                            eventStreamGenerator =
-                                writable {
-                                    rust("let event_stream = futures_util::stream::iter(chunks);")
-                                },
-                            initialResponseAssertion =
-                                writable {
-                                    rust("assert!(res.test_string().is_none());")
-                                },
-                        )
+                    NonEventStreamMemberInOutput.OPTIONAL_UNSET -> {
+                        tokioTest("without_initial_response") {
+                            writeTestBody(
+                                codegenContext,
+                                initialResponseStreamGenerator = writable {},
+                                eventStreamGenerator =
+                                    writable {
+                                        rust("let event_stream = futures_util::stream::iter(chunks);")
+                                    },
+                                initialResponseAssertion =
+                                    writable {
+                                        rust("assert!(response.test_string().is_none());")
+                                    },
+                            )
+                        }
                     }
-                }
-
-                if (rpcEventStreamTestCase.nonEventStreamMember == NonEventStreamMemberInOutput.NONE) {
-                    tokioTest("event_stream_member_only") {
-                        writeTestBody(
-                            codegenContext,
-                            initialResponseStreamGenerator = writable {},
-                            eventStreamGenerator =
-                                writable {
-                                    rust("let event_stream = futures_util::stream::iter(chunks);")
-                                },
-                            initialResponseAssertion = writable {},
-                        )
+                    NonEventStreamMemberInOutput.NONE -> {
+                        tokioTest("event_stream_member_only") {
+                            writeTestBody(
+                                codegenContext,
+                                initialResponseStreamGenerator = writable {},
+                                eventStreamGenerator =
+                                    writable {
+                                        rust("let event_stream = futures_util::stream::iter(chunks);")
+                                    },
+                                initialResponseAssertion = writable {},
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
-
-private class RpcEventStreamTestCasesProvider : ArgumentsProvider {
-    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-        EventStreamTestModels.TEST_CASES.filter { testCase: EventStreamTestModels.TestCase ->
-            ShapeId.from(testCase.protocolShapeId)?.isRpcBoundProtocol ?: false
-        }.flatMap { testCase: EventStreamTestModels.TestCase ->
-            val key = "testString"
-            val value = "this is test"
-            val payload =
-                if (testCase.protocolShapeId == "smithy.protocols#rpcv2Cbor") {
-                    EventStreamTestModels.base64EncodeJson("""{"$key":"$value"}""")
-                } else {
-                    """{"$key":"$value"}"""
-                }
-            listOf(
-                RpcEventStreamTestCase(
-                    inner = testCase,
-                    nonEventStreamMember = NonEventStreamMemberInOutput.NONE,
-                    // doesn't matter since it's unreachable
-                    expectedValueInInitialResponse = "",
-                ),
-                RpcEventStreamTestCase(
-                    inner =
-                        testCase.withNonEventStreamMembers("""@httpHeader("X-Test-String")$key: String,""")
-                            .copy(eventStreamInitialResponsePayload = payload),
-                    nonEventStreamMember = NonEventStreamMemberInOutput.OPTIONAL,
-                    expectedValueInInitialResponse = "Some(${value.dq()})",
-                ),
-                RpcEventStreamTestCase(
-                    inner =
-                        testCase.withNonEventStreamMembers("""@required@httpHeader("X-Test-String")$key: String,""")
-                            .copy(eventStreamInitialResponsePayload = payload),
-                    nonEventStreamMember = NonEventStreamMemberInOutput.REQUIRED,
-                    expectedValueInInitialResponse = value.dq(),
-                ),
-            )
-        }.map { Arguments.of(it) }.stream()
-}
-
-enum class NonEventStreamMemberInOutput {
-    OPTIONAL,
-    REQUIRED,
-    NONE,
-}
-
-data class RpcEventStreamTestCase(
-    val inner: EventStreamTestModels.TestCase,
-    val nonEventStreamMember: NonEventStreamMemberInOutput,
-    val expectedValueInInitialResponse: String,
-)

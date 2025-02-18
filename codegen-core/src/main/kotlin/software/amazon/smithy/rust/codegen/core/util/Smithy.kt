@@ -170,3 +170,12 @@ private val RPC_BOUND_PROTOCOLS =
  */
 val ShapeId.isRpcBoundProtocol
     get() = RPC_BOUND_PROTOCOLS.contains(name)
+
+/**
+ * Determines whether serialization/deserialization of this shape (inputShape or outputShape) needs to handle initial
+ * messages of event stream
+ */
+fun Shape.needsToHandleEventStreamInitialMessage(
+    model: Model,
+    protocol: ShapeId,
+) = members().size > 1 && hasEventStreamMember(model) && protocol.isRpcBoundProtocol
