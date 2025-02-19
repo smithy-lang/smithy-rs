@@ -37,8 +37,10 @@ To send us a pull request, please:
 5. Send us a pull request, answering any default questions in the pull request interface. To create a changelog entry Markdown file in the `.changelog` directory, you can do either of the following:
    - Use the `new` subcommand of [changelogger](https://github.com/smithy-lang/smithy-rs/tree/main/tools/ci-build/changelogger) CLI (**preferred**)
    - Create one manually. Name the file `XXX.md`, where `XXX` can be any name you choose, as long as it is unique in the `.changelog` directory. Ensure the contents follow Markdown syntax with the YAML front matter. For reference, see [.example](https://github.com/smithy-lang/smithy-rs/blob/3e250cf9f61ee17ccd66e16314d4e47f3dd95e25/.changelog/.example) or other Markdown files in the `.changelog` directory.
-6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
-7. Ask maintainers to manually trigger [canary](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-canary.yml) and [PR bot](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-pull-request-bot.yml) workflows using your pull request number. Those workflows cannot run in your fork and are always skipped as such.
+6. Include updated Cargo lockfiles in your pull request if you have modified the `aws-config` crate or any crate(s) (excluding `inlineable`) under  [the rust-runtime workspace](https://github.com/smithy-lang/smithy-rs/tree/main/rust-runtime) or [the aws/rust-runtime workspace](https://github.com/smithy-lang/smithy-rs/tree/main/aws/rust-runtime) workspaces.
+   - If you encounter merge conflicts in a lockfile when merging the latest main branch into your branch, resolve the conflicts by running  `git checkout --theirs <path to lockfile>` to keep the changes from the main branch and rerun the tests for the updated crate.
+7. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
+8. Ask maintainers to manually trigger [canary](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-canary.yml) and [PR bot](https://github.com/smithy-lang/smithy-rs/actions/workflows/manual-pull-request-bot.yml) workflows using your pull request number. Those workflows cannot run in your fork and are always skipped as such.
 
 GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
 [creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
