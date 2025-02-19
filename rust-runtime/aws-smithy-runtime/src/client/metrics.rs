@@ -126,7 +126,8 @@ impl Intercept for MetricsInterceptor {
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
-        let call_duration = measurements.call_start.elapsed();
+        let call_end = self.time_source.now();
+        let call_duration = call_end.duration_since(measurements.call_start);
         if let Ok(elapsed) = call_duration {
             self.instruments.operation_duration.record(
                 elapsed.as_secs_f64(),
@@ -148,7 +149,7 @@ impl Intercept for MetricsInterceptor {
             .get_mut::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
-        measurements.attempts = measurements.attempts + 1;
+        measurements.attempts += 1;
         measurements.attempt_start = self.time_source.now();
 
         Ok(())
@@ -164,11 +165,13 @@ impl Intercept for MetricsInterceptor {
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
-        let attempt_duration = measurements.attempt_start.elapsed();
-        let mut attributes = self.attributes();
-        attributes.set("attempt", AttributeValue::I64(measurements.attempts.into()));
+        let attempt_end = self.time_source.now();
+        let attempt_duration = attempt_end.duration_since(measurements.attempt_start);
 
         if let Ok(elapsed) = attempt_duration {
+            let mut attributes = self.attributes();
+            attributes.set("attempt", AttributeValue::I64(measurements.attempts.into()));
+
             self.instruments.attempt_duration.record(
                 elapsed.as_secs_f64(),
                 Some(&attributes),
@@ -179,7 +182,7 @@ impl Intercept for MetricsInterceptor {
     }
 }
 
-/// Runtime plugin that adds a [MetricsInterceptor]
+/// Runtime plugin that adds an interceptor for collecting metrics
 #[derive(Debug, Default)]
 pub struct MetricsRuntimePlugin {
     service: Cow<'static, str>,
@@ -188,7 +191,7 @@ pub struct MetricsRuntimePlugin {
 }
 
 impl MetricsRuntimePlugin {
-    /// Creates a runtime plugin which installs a [MetricsInterceptor]
+    /// Creates a runtime plugin which installs an interceptor for collecting metrics
     pub fn new(
         service: impl Into<Cow<'static, str>>,
         operation: impl Into<Cow<'static, str>>,
