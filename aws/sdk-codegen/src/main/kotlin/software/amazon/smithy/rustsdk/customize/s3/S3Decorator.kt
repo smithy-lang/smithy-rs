@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
-import software.amazon.smithy.rust.codegen.client.smithy.traits.IncompatibleWithStalledStreamProtectionTrait
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.DisableStalledStreamProtection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -88,8 +88,7 @@ class S3Decorator : ClientCodegenDecorator {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
             }.letIf(operationsIncompatibleWithStalledStreamProtection.contains(shape.id)) {
-                logger.info("Adding IncompatibleWithStalledStreamProtection trait to $it")
-                (it as OperationShape).toBuilder().addTrait(IncompatibleWithStalledStreamProtectionTrait()).build()
+                (DisableStalledStreamProtection::transformOperation)((it as OperationShape))
             }
         }
             // the model has the bucket in the path
