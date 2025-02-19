@@ -106,11 +106,9 @@ object EventStreamTestModels {
 
     private fun rpcv2Cbor(): Model = fillInBaseModel("smithy.protocols#rpcv2Cbor").asSmithyModel()
 
-    private fun awsQuery(): Model =
-        fillInBaseModel("aws.protocols#awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
-
-    private fun ec2Query(): Model =
-        fillInBaseModel("aws.protocols#ec2Query", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
+    // Event streams are not supported in AWS query or EC2 query
+    // See Important in https://smithy.io/2.0/aws/protocols/aws-query-protocol.html where it states
+    // "This protocol does not support any kind of streaming requests or responses, including event streams."
 
     data class TestCase(
         val protocolShapeId: String,
