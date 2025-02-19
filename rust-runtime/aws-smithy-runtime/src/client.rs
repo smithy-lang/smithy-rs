@@ -53,3 +53,6 @@ pub mod sdk_feature;
 
 /// Smithy support-code for code generated waiters.
 pub mod waiters;
+
+/// Interceptor for collecting client metrics.
+pub mod metrics;
