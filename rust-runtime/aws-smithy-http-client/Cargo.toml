@@ -88,6 +88,9 @@ rustls = { version = "0.23", default-features = false, optional = true }
 s2n-tls-hyper = { version = "0.0.2", optional = true }
 s2n-tls = { version = "0.3.10", optional = true }
 tower = { version = "0.5.1", optional = true }
+
+rustls-pki-types = { version = "1.11.0", features = ["std"], optional = true }
+rustls-native-certs = { version = "0.8.1", optional = true }
 # end hyper 1.x stack deps
 
 # legacy hyper-0.14.x stack the SDK/runtime GA'd with
@@ -109,8 +112,13 @@ http-body-util = { version = "0.1.2", optional = true }
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
+hyper-util = { version = "0.1.7", features = ["full"] }
+rustls-pki-types = { version = "1.11.0", features = ["std"] }
+rustls-pemfile = "2.2.0"
+tokio-rustls = "0.26.1"
 
 
 [[example]]

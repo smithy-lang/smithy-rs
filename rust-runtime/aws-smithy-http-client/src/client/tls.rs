@@ -18,7 +18,25 @@ pub enum Provider {
     /// TLS provider based on [s2n-tls](https://github.com/aws/s2n-tls)
     #[cfg(feature = "s2n-tls")]
     S2nTls,
-    // TODO(hyper1): consider native-tls support?
+}
+
+// TODO - add local test that should fail now for a custom ca bundle (maybe test with override to see it _can_ work)
+// TODO - dup hyper-rustls native cert handling and don't use `with_native_certs`
+// TODO - replace all the client caching with simply caching native certs (with replaced logic)
+
+#[derive(Debug)]
+pub struct TlsContext {
+    // TODO - should we support AWS_CA_BUNDLE?
+}
+
+impl TlsContext {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    // fn with_root_ca(pem_bytes: &[u8]) {
+    //
+    // }
 }
 
 cfg_rustls! {
@@ -207,6 +225,10 @@ cfg_s2n_tls! {
             use client::connect::HttpConnector;
             use s2n_tls::security::Policy;
 
+            /// Default S2N security policy which sets protocol versions and cipher suites
+            ///  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
+            const S2N_POLICY_VERSION: &'static str = "20230317";
+
             pub(super) fn make_tls<R>(
                 resolver: R,
             ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
@@ -222,7 +244,7 @@ cfg_s2n_tls! {
                 http_connector.enforce_http(false);
                 let config = {
                     let mut builder = s2n_tls::config::Config::builder();
-                    let policy = Policy::from_version("20230317").unwrap();
+                    let policy = Policy::from_version(S2N_POLICY_VERSION).unwrap();
                     builder.set_security_policy(&policy).unwrap();
                     builder.build().unwrap()
                 };

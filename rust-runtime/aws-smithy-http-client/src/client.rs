@@ -625,7 +625,7 @@ cfg_tls! {
     }
 
     impl Builder<TlsProviderSelected> {
-        /// Create a hyper client using RusTLS for TLS
+        /// Create a HTTPS client with the selected TLS provider.
         ///
         /// The trusted certificates will be loaded later when this becomes the selected
         /// HTTP client for a Smithy client.

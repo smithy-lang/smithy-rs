@@ -498,6 +498,7 @@ version = "1.0.0"
 dependencies = [
  "aws-smithy-async 1.2.5",
  "aws-smithy-protocol-test 0.63.1",
+ "aws-smithy-runtime 1.8.0",
  "aws-smithy-runtime-api 1.7.4",
  "aws-smithy-types 1.3.0",
  "bytes",
@@ -517,11 +518,15 @@ dependencies = [
  "pin-project-lite",
  "rustls 0.21.12",
  "rustls 0.23.23",
+ "rustls-native-certs 0.8.1",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
  "s2n-tls",
  "s2n-tls-hyper",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-rustls 0.26.1",
  "tower 0.5.2",
  "tracing",
 ]
@@ -580,7 +585,7 @@ dependencies = [
  "pyo3",
  "pyo3-asyncio",
  "rcgen",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.4",
  "signal-hook",
  "socket2",
  "thiserror",
@@ -3270,6 +3275,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47796c98c480fce5406ef69d1c76378375492c3b0a0de587be0c1d9feb12f395"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring 0.17.8",
  "rustls-pki-types",
@@ -3285,7 +3291,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.4",
  "schannel",
  "security-framework 2.11.1",
 ]
@@ -3309,6 +3315,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c74cae0a4cf6ccbbf5f359f08efdf8ee7e1dc532573bf0db71968cb56b1448c"
 dependencies = [
  "base64 0.21.7",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
