@@ -26,7 +26,7 @@ pin-project-lite = "0.2.9"
 sha1 = "0.10"
 sha2 = "0.10"
 tracing = "0.1"
-crc64fast-nvme = "1.1.1"
+crc64fast-nvme = "1.2.0"
 
 [dev-dependencies]
 bytes-utils = "0.1.2"
