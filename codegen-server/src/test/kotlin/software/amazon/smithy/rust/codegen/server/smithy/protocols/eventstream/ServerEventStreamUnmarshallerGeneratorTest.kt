@@ -24,7 +24,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
 
         serverIntegrationTest(
             testCase.eventStreamTestCase.model,
-            IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
+            IntegrationTestParams(service = "test#TestService"),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {
                 writeUnmarshallTestCases(

@@ -32,7 +32,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         clientIntegrationTest(
             testCase.model,
-            IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
+            IntegrationTestParams(service = "test#TestService"),
         ) { codegenContext, rustCrate ->
             val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
 
@@ -153,7 +153,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
         clientIntegrationTest(
             rpcEventStreamTestCase.inner.model,
-            IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
+            IntegrationTestParams(service = "test#TestService"),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")

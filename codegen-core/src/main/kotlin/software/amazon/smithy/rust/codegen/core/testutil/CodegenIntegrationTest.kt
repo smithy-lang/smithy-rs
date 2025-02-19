@@ -19,7 +19,6 @@ import java.util.logging.Logger
  * signatures shorter.
  */
 data class IntegrationTestParams(
-    val addModuleToEventStreamAllowList: Boolean = false,
     val service: String? = null,
     val moduleVersion: String = "1.0.0",
     val runtimeConfig: RuntimeConfig? = null,
@@ -145,7 +144,6 @@ fun codegenIntegrationTest(
         generatePluginContext(
             model,
             params.additionalSettings,
-            params.addModuleToEventStreamAllowList,
             params.moduleVersion,
             params.service,
             params.runtimeConfig,
