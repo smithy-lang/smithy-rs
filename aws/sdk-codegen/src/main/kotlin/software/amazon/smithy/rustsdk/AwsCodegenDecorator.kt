@@ -18,7 +18,6 @@ import software.amazon.smithy.rustsdk.customize.applyExceptFor
 import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
-import software.amazon.smithy.rustsdk.customize.lambda.LambdaDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
 import software.amazon.smithy.rustsdk.customize.rds.RdsDecorator
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
@@ -30,7 +29,6 @@ import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sso.SSODecorator
 import software.amazon.smithy.rustsdk.customize.sts.STSDecorator
 import software.amazon.smithy.rustsdk.customize.timestream.TimestreamDecorator
-import software.amazon.smithy.rustsdk.customize.transcribestreaming.TranscribeStreamingDecorator
 import software.amazon.smithy.rustsdk.endpoints.AwsEndpointsStdLib
 import software.amazon.smithy.rustsdk.endpoints.OperationInputTestDecorator
 import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
@@ -80,7 +78,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
         DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#DSQL"),
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),
         GlacierDecorator().onlyApplyTo("com.amazonaws.glacier#Glacier"),
-        LambdaDecorator().onlyApplyTo("com.amazonaws.lambda#AWSGirApiService"),
         RdsDecorator().onlyApplyTo("com.amazonaws.rds#AmazonRDSv19"),
         Route53Decorator().onlyApplyTo("com.amazonaws.route53#AWSDnsV20130401"),
         "com.amazonaws.s3#AmazonS3".applyDecorators(
@@ -95,7 +92,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
         SSODecorator().onlyApplyTo("com.amazonaws.sso#SWBPortalService"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamwrite#Timestream_20181101"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamquery#Timestream_20181101"),
-        TranscribeStreamingDecorator().onlyApplyTo("com.amazonaws.transcribestreaming#Transcribe"),
         // Only build docs-rs for linux to reduce load on docs.rs
         listOf(
             DocsRsMetadataDecorator(

@@ -118,7 +118,12 @@ class StalledStreamProtectionOperationCustomization(
 
     override fun section(section: OperationSection): Writable =
         writable {
-            // Don't add the stalled stream protection interceptor if the operation is incompatible with it
+            // Don't add the stalled stream protection interceptor if the operation is incompatible with it.
+            // The absence of the stalled stream protection interceptor does not remove
+            // `StalledStreamProtectionConfig` from `ConfigBag`, nor does it disable the config. However, it will prevent
+            // `UploadThroughput` from being added to `ConfigBag`, which will eventually cause
+            // `MaybeUploadThroughputCheckFuture` to use the regular `HttpConnectorFuture` instead of `UploadThroughputCheckFuture`.
+            // `MinimumThroughputDownloadBody` will not be used, as it is only added by the stalled stream protection interceptor.
             if (operationShape.hasTrait(IncompatibleWithStalledStreamProtectionTrait.ID)) {
                 return@writable
             }

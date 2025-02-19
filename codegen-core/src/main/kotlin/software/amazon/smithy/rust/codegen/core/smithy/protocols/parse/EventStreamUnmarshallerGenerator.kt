@@ -270,8 +270,6 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallEventPayload(member: MemberShape) {
-        // TODO(EventStream): [RPC] Don't blow up on an initial-message that's not part of the union (:event-type will be "initial-request" or "initial-response")
-        // TODO(EventStream): [RPC] Incorporate initial-message into original output (:event-type will be "initial-request" or "initial-response")
         val target = model.expectShape(member.target)
         expectedContentType(target)?.also { contentType ->
             rustTemplate(

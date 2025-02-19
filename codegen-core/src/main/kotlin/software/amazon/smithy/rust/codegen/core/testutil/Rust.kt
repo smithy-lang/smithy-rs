@@ -194,7 +194,6 @@ object TestWorkspace {
 fun generatePluginContext(
     model: Model,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
-    addModuleToEventStreamAllowList: Boolean = false,
     moduleVersion: String = "1.0.0",
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
@@ -222,17 +221,6 @@ fun generatePluginContext(
                     Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
                 ).build(),
             )
-
-    if (addModuleToEventStreamAllowList) {
-        settingsBuilder =
-            settingsBuilder.withMember(
-                "codegen",
-                Node.objectNodeBuilder().withMember(
-                    "eventStreamAllowList",
-                    Node.fromStrings(moduleName),
-                ).build(),
-            )
-    }
 
     val settings = settingsBuilder.merge(additionalSettings).build()
     val pluginContext = PluginContext.builder().model(model).fileManifest(manifest).settings(settings).build()

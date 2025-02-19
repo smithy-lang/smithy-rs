@@ -109,7 +109,7 @@ class ClientEventStreamMarshallerGeneratorTest {
         val testCase = rpcEventStreamTestCase.inner
         clientIntegrationTest(
             testCase.model,
-            IntegrationTestParams(service = "test#TestService", addModuleToEventStreamAllowList = true),
+            IntegrationTestParams(service = "test#TestService"),
         ) { codegenContext, rustCrate ->
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
