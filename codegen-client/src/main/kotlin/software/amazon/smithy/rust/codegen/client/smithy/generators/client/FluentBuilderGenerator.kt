@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
+import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -130,6 +131,16 @@ class FluentBuilderGenerator(
         writable {
             docs("Fluent builder constructing a request to `${operationType.name}`.\n")
             documentShape(operation, model, autoSuppressMissingDocs = false)
+            if (outputShape.needsToHandleEventStreamInitialMessage(model, codegenContext.protocol)) {
+                docs(
+                    """
+                    [`${outputType.name}`]($outputType) contains an event stream field as well as one or more non-event stream fields.
+                    Due to its current implementation, the non-event stream fields are not fully deserialized
+                    until the [`send`](Self::send) method completes. As a result, accessing these fields of the operation
+                    output struct within an interceptor may return uninitialized values.
+                    """,
+                )
+            }
         }
 
     private fun defaultSend(): Writable =
