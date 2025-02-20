@@ -54,6 +54,13 @@ def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_
 
     if preserve_aws_sdk_build:
         get_cmd_output(f"git add -f aws/sdk/build")
+    if target_aws_sdk in targets:
+        # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
+        if preserve_aws_sdk_build:
+            get_cmd_output(f"cp -r aws/sdk/build/aws-sdk .")
+            get_cmd_output(f"git add -f aws-sdk")
+            get_cmd_output(f"git rm -r aws/rust-runtime")
+            get_cmd_output(f"git rm -r rust-runtime")
 
     get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
                    f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
