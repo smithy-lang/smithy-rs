@@ -52,8 +52,6 @@ def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_
     get_cmd_output(f"./gradlew --rerun-tasks {clean_tasks}")
     get_cmd_output(f"./gradlew --rerun-tasks {assemble_tasks}")
 
-    if preserve_aws_sdk_build:
-        get_cmd_output(f"git add -f aws/sdk/build")
     if target_aws_sdk in targets:
         # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
         if preserve_aws_sdk_build:
