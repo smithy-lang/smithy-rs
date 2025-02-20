@@ -105,7 +105,7 @@ class UnconstrainedUnionGenerator(
                 impl #{TryFrom}<$name> for #{ConstrainedSymbol} {
                     type Error = #{ConstraintViolationSymbol};
 
-                    fn try_from(value: $name) -> Result<Self, Self::Error> {
+                    fn try_from(value: $name) -> #{Result}<Self, Self::Error> {
                         #{body:W}
                     }
                 }
@@ -114,6 +114,7 @@ class UnconstrainedUnionGenerator(
                 "ConstrainedSymbol" to constrainedSymbol,
                 "ConstraintViolationSymbol" to constraintViolationSymbol,
                 "body" to generateTryFromUnconstrainedUnionImpl(),
+                *RuntimeType.preludeScope,
             )
         }
 
