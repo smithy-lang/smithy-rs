@@ -87,6 +87,7 @@ class ConstrainedCollectionGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
+                *RuntimeType.preludeScope,
             )
 
         writer.documentShape(shape, model)
@@ -135,7 +136,7 @@ class ConstrainedCollectionGenerator(
                 type Error = #{ConstraintViolation};
 
                 /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                fn try_from(value: $inner) -> #{Result}<Self, Self::Error> {
                     #{ConstraintChecks:W}
 
                     Ok(Self(value))
@@ -287,7 +288,7 @@ sealed class CollectionTraitInfo {
                         // implement `Eq` and `Hash`.
                         rustTemplate(
                             """
-                            fn check_unique_items(items: #{Vec}<#{MemberSymbol}>) -> Result<#{Vec}<#{MemberSymbol}>, #{ConstraintViolation}> {
+                            fn check_unique_items(items: #{Vec}<#{MemberSymbol}>) -> #{Result}<#{Vec}<#{MemberSymbol}>, #{ConstraintViolation}> {
                                 let mut seen = #{HashMap}::new();
                                 let mut duplicate_indices = #{Vec}::new();
                                 for (idx, item) in items.iter().enumerate() {
@@ -316,6 +317,7 @@ sealed class CollectionTraitInfo {
                             "HashMap" to RuntimeType.HashMap,
                             "MemberSymbol" to memberSymbol,
                             "ConstraintViolation" to constraintViolation,
+                            *RuntimeType.preludeScope,
                         )
                     }
                 },
@@ -356,7 +358,7 @@ sealed class CollectionTraitInfo {
                     {
                         rustTemplate(
                             """
-                            fn check_length(length: usize) -> Result<(), #{ConstraintViolation}> {
+                            fn check_length(length: usize) -> #{Result}<(), #{ConstraintViolation}> {
                                 if ${lengthTrait.rustCondition("length")} {
                                     Ok(())
                                 } else {
@@ -365,6 +367,7 @@ sealed class CollectionTraitInfo {
                             }
                             """,
                             "ConstraintViolation" to constraintViolation,
+                            *RuntimeType.preludeScope,
                         )
                     }
                 },
