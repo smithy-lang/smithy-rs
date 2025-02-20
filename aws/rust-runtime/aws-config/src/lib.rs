@@ -732,6 +732,36 @@ mod loader {
             self
         }
 
+        /// Set the checksum calculation strategy to use when making requests.
+        /// # Examples
+        /// ```
+        /// use aws_types::SdkConfig;
+        /// use aws_smithy_types::checksum_config::RequestChecksumCalculation;
+        /// let config = SdkConfig::builder().request_checksum_calculation(RequestChecksumCalculation::WhenSupported).build();
+        /// ```
+        pub fn request_checksum_calculation(
+            mut self,
+            request_checksum_calculation: RequestChecksumCalculation,
+        ) -> Self {
+            self.request_checksum_calculation = Some(request_checksum_calculation);
+            self
+        }
+
+        /// Set the checksum calculation strategy to use for responses.
+        /// # Examples
+        /// ```
+        /// use aws_types::SdkConfig;
+        /// use aws_smithy_types::checksum_config::ResponseChecksumValidation;
+        /// let config = SdkConfig::builder().response_checksum_validation(ResponseChecksumValidation::WhenSupported).build();
+        /// ```
+        pub fn response_checksum_validation(
+            mut self,
+            response_checksum_validation: ResponseChecksumValidation,
+        ) -> Self {
+            self.response_checksum_validation = Some(response_checksum_validation);
+            self
+        }
+
         /// Load the default configuration chain
         ///
         /// If fields have been overridden during builder construction, the override values will be used.
