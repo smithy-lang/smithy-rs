@@ -1010,6 +1010,7 @@ mod loader {
         use aws_types::app_name::AppName;
         use aws_types::origin::Origin;
         use aws_types::os_shim_internal::{Env, Fs};
+        use aws_types::sdk_config::{RequestChecksumCalculation, ResponseChecksumValidation};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
 
@@ -1188,6 +1189,30 @@ mod loader {
             let app_name = AppName::new("my-app-name").unwrap();
             let conf = base_conf().app_name(app_name.clone()).load().await;
             assert_eq!(Some(&app_name), conf.app_name());
+        }
+
+        #[tokio::test]
+        async fn request_checksum_calculation() {
+            let conf = base_conf()
+                .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
+                .load()
+                .await;
+            assert_eq!(
+                Some(RequestChecksumCalculation::WhenRequired),
+                conf.request_checksum_calculation()
+            );
+        }
+
+        #[tokio::test]
+        async fn response_checksum_validation() {
+            let conf = base_conf()
+                .response_checksum_validation(ResponseChecksumValidation::WhenRequired)
+                .load()
+                .await;
+            assert_eq!(
+                Some(ResponseChecksumValidation::WhenRequired),
+                conf.response_checksum_validation()
+            );
         }
 
         #[cfg(feature = "rustls")]
