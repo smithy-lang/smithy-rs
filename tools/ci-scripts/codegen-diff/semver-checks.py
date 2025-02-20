@@ -41,8 +41,8 @@ def main(skip_generation=False):
         eprint(f'checking {path}...', end='')
         if path in deny_list:
             eprint(f"skipping {path} because it is in 'deny_list'")
-        elif get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') != 0:
-            eprint(f'skipping {path} because it does not exist in base')
+        elif get_cmd_status(f'git cat-file -e base:{path}/Cargo.toml') != 0:
+            eprint(f'skipping {path} because it does not exist in base:{sdk_directory}/{path}/Cargo.toml')
         else:
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
             pkgid = parse_package_id(out)
