@@ -52,47 +52,6 @@ def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_
     get_cmd_output(f"./gradlew --rerun-tasks {clean_tasks}")
     get_cmd_output(f"./gradlew --rerun-tasks {assemble_tasks}")
 
-    # Move generated code into codegen-diff/ directory
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}")
-    get_cmd_output(f"mkdir {OUTPUT_PATH}")
-    if target_aws_sdk in targets:
-        # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
-        if preserve_aws_sdk_build:
-            get_cmd_output(f"cp -r aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-        else:
-            get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
-    for target in [target_codegen_client, target_codegen_server]:
-        if target in targets:
-            get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
-            if target == target_codegen_server:
-                get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
-                get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
-                get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
-
-    # Clean up the SDK directory
-    get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
-
-    # Clean up the client-test folder
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-client-test/source")
-    run(f"find {OUTPUT_PATH}/codegen-client-test | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-
-    # Clean up the server-test folder
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test/source")
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-python/source")
-    get_cmd_output(f"rm -rf {OUTPUT_PATH}/codegen-server-test-typescript/source")
-    run(f"find {OUTPUT_PATH}/codegen-server-test | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-python | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-    run(f"find {OUTPUT_PATH}/codegen-server-test-typescript | "
-        f"grep -E 'smithy-build-info.json|sources/manifest|model.json' | "
-        f"xargs rm -f", shell=True)
-
-    get_cmd_output(f"git add -f {OUTPUT_PATH}")
     if preserve_aws_sdk_build:
         get_cmd_output(f"git add -f aws/sdk/build")
 
