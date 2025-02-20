@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.7.8"
+version = "1.7.9"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -23,6 +23,7 @@ wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-observability = { path = "../aws-smithy-observability" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }

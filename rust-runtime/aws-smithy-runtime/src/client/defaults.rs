@@ -15,7 +15,7 @@ use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
-use aws_smithy_async::time::SystemTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -32,6 +32,8 @@ use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::time::Duration;
+
+use super::metrics::MetricsRuntimePlugin;
 
 fn default_plugin<CompFn>(name: &'static str, components_fn: CompFn) -> StaticRuntimePlugin
 where
@@ -211,6 +213,14 @@ fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
 
+fn metrics_runtime_plugin(
+    service: impl Into<Cow<'static, str>>,
+    operation: impl Into<Cow<'static, str>>,
+    time_source: SharedTimeSource,
+) -> Option<SharedRuntimePlugin> {
+    Some(MetricsRuntimePlugin::new(service, operation, time_source).into_shared())
+}
+
 fn validate_stalled_stream_protection_config(
     components: &RuntimeComponentsBuilder,
     cfg: &ConfigBag,
@@ -245,8 +255,11 @@ fn validate_stalled_stream_protection_config(
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct DefaultPluginParams {
+    // The retry_partition_name is also the service_name
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
+    operation_name: Option<Cow<'static, str>>,
+    time_source: Option<SharedTimeSource>,
 }
 
 impl DefaultPluginParams {
@@ -266,6 +279,18 @@ impl DefaultPluginParams {
         self.behavior_version = Some(version);
         self
     }
+
+    /// Sets the operation name.
+    pub fn with_operation_name(mut self, operation_name: impl Into<Cow<'static, str>>) -> Self {
+        self.operation_name = Some(operation_name.into());
+        self
+    }
+
+    /// Sets the time source.
+    pub fn with_time_source(mut self, time_source: SharedTimeSource) -> Self {
+        self.time_source = Some(time_source);
+        self
+    }
 }
 
 /// All default plugins.
@@ -275,20 +300,24 @@ pub fn default_plugins(
     let behavior_version = params
         .behavior_version
         .unwrap_or_else(BehaviorVersion::latest);
+    let service_name = params
+        .retry_partition_name
+        .expect("retry_partition_name is required");
 
     [
         default_http_client_plugin(),
         default_identity_cache_plugin(),
-        default_retry_config_plugin(
-            params
-                .retry_partition_name
-                .expect("retry_partition_name is required"),
-        ),
+        default_retry_config_plugin(service_name.clone()),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
         default_timeout_config_plugin(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
+        metrics_runtime_plugin(
+            service_name,
+            params.operation_name.unwrap_or("unknown_operation".into()),
+            params.time_source.unwrap_or_default(),
+        ),
     ]
     .into_iter()
     .flatten()
