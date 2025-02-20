@@ -56,6 +56,7 @@ class TsApplicationGenerator(
             "parking_lot" to TsServerCargoDependency.ParkingLot.toType(),
             "http" to RuntimeType.Http,
             "socket2" to TsServerCargoDependency.Socket2.toType(),
+            *RuntimeType.preludeScope
         )
 
     fun render(writer: RustWriter) {
@@ -213,7 +214,7 @@ class TsApplicationGenerator(
             }
             writer.rustBlockTemplate(
                 """pub fn new_socket(address: String, port: i32, backlog: Option<i32>) -> #{Result}<#{socket2}::Socket, Box<dyn std::error::Error>> """.trimIndent(),
-                *codegenScope,
+                *codegenScope
             ) {
                 writer.rustTemplate(
                     """
