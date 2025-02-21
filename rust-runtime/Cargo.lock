@@ -498,7 +498,6 @@ version = "1.0.0"
 dependencies = [
  "aws-smithy-async 1.2.5",
  "aws-smithy-protocol-test 0.63.1",
- "aws-smithy-runtime 1.8.0",
  "aws-smithy-runtime-api 1.7.4",
  "aws-smithy-types 1.3.0",
  "bytes",

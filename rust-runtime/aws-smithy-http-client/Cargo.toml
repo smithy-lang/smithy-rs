@@ -112,7 +112,6 @@ http-body-util = { version = "0.1.2", optional = true }
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
-aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 hyper-util = { version = "0.1.7", features = ["full"] }

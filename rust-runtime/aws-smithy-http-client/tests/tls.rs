@@ -13,7 +13,6 @@
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http_client::tls;
 use aws_smithy_http_client::tls::{TlsContext, TrustStore};
-use aws_smithy_runtime::test_util::capture_test_logs::show_test_logs;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -151,7 +150,6 @@ fn tls_context_from_pem(filename: &str) -> TlsContext {
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_rustls_aws_lc_native_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
@@ -164,7 +162,6 @@ async fn test_rustls_aws_lc_native_ca() {
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test]
 async fn test_rustls_aws_lc_custom_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
@@ -179,7 +176,6 @@ async fn test_rustls_aws_lc_custom_ca() {
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_rustls_aws_lc_fips_native_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
@@ -192,7 +188,6 @@ async fn test_rustls_aws_lc_fips_native_ca() {
 #[cfg(feature = "rustls-aws-lc-fips")]
 #[tokio::test]
 async fn test_rustls_aws_lc_fips_custom_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
@@ -207,7 +202,6 @@ async fn test_rustls_aws_lc_fips_custom_ca() {
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_rustls_ring_native_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
@@ -220,7 +214,6 @@ async fn test_rustls_ring_native_ca() {
 #[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn test_rustls_ring_custom_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
@@ -235,7 +228,6 @@ async fn test_rustls_ring_custom_ca() {
 #[should_panic(expected = "Certificate is untrusted")]
 #[tokio::test]
 async fn test_s2n_native_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::S2nTls)
         .build_https();
@@ -246,7 +238,6 @@ async fn test_s2n_native_ca() {
 #[cfg(feature = "s2n-tls")]
 #[tokio::test]
 async fn test_s2n_tls_custom_ca() {
-    let _logs = show_test_logs();
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::S2nTls)
         .tls_context(tls_context_from_pem("tests/server.pem"))
