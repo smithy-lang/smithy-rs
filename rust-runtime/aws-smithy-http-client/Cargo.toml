@@ -24,6 +24,8 @@ default-client = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+    "dep:rustls-pki-types",
+    "dep:rustls-native-certs"
 ]
 
 wire-mock = [
@@ -63,7 +65,6 @@ legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014
 rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "default-client"]
 rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "default-client"]
 rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "default-client"]
-
 s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "default-client"]
 
 [dependencies]
@@ -78,16 +79,16 @@ pin-project-lite = "0.2.14"
 tracing = "0.1.40"
 
 # hyper 1.x stack
-hyper = { version = "1.4.0", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1.7", features = ["http1", "http2"], optional = true }
+hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
+hyper-util = { version = "0.1.10", features = ["http1", "http2"], optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
-s2n-tls-hyper = { version = "0.0.2", optional = true }
-s2n-tls = { version = "0.3.10", optional = true }
-tower = { version = "0.5.1", optional = true }
+s2n-tls-hyper = { version = "0.0.4", optional = true }
+s2n-tls = { version = "0.3.12", optional = true }
+tower = { version = "0.5.2", optional = true }
 
 rustls-pki-types = { version = "1.11.0", features = ["std"], optional = true }
 rustls-native-certs = { version = "0.8.1", optional = true }

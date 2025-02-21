@@ -20,23 +20,84 @@ pub enum Provider {
     S2nTls,
 }
 
-// TODO - add local test that should fail now for a custom ca bundle (maybe test with override to see it _can_ work)
-// TODO - dup hyper-rustls native cert handling and don't use `with_native_certs`
-// TODO - replace all the client caching with simply caching native certs (with replaced logic)
-
-#[derive(Debug)]
+/// TLS related configuration object
+#[derive(Debug, Clone)]
 pub struct TlsContext {
-    // TODO - should we support AWS_CA_BUNDLE?
+    trust_store: TrustStore,
 }
 
 impl TlsContext {
+    /// Create a new default TLS context
     pub fn new() -> Self {
-        Self {}
+        Self {
+            trust_store: TrustStore::default(),
+        }
     }
 
-    // fn with_root_ca(pem_bytes: &[u8]) {
-    //
-    // }
+    /// Configure the trust store to use for the TLS context
+    pub fn with_trust_store(mut self, trust_store: TrustStore) -> Self {
+        self.trust_store = trust_store;
+        self
+    }
+}
+
+/// PEM encoded certificate
+#[derive(Debug, Clone)]
+struct CertificatePEM(Vec<u8>);
+
+impl From<&[u8]> for CertificatePEM {
+    fn from(value: &[u8]) -> Self {
+        CertificatePEM(value.to_vec())
+    }
+}
+
+/// Container for root certificates able to provide a root-of-trust for connection authentication
+///
+/// Platform native root certificates are enabled by default. To start with a clean trust
+/// store use [TrustStore::empty]
+#[derive(Debug, Clone)]
+pub struct TrustStore {
+    enable_native_roots: bool,
+    custom_certs: Vec<CertificatePEM>,
+}
+
+impl TrustStore {
+    /// Create a new empty trust store
+    pub fn empty() -> Self {
+        Self {
+            enable_native_roots: false,
+            custom_certs: Vec::new(),
+        }
+    }
+
+    /// Enable or disable using the platform's native trusted root certificate store
+    ///
+    /// Default: true
+    pub fn with_native_roots(mut self, enable_native_roots: bool) -> Self {
+        self.enable_native_roots = enable_native_roots;
+        self
+    }
+
+    /// Add the PEM encoded certificate to the trust store
+    ///
+    /// This may be called more than once to add multiple certificates.
+    /// NOTE: PEM certificate contents are not validated until passed to the configured
+    /// TLS provider.
+    pub fn with_pem_certificate(mut self, pem_bytes: &[u8]) -> Self {
+        // ideally we'd validate here but rustls-pki-types converts to DER when loading and S2N
+        // still expects PEM encoding. Store the raw bytes and let the TLS implementation validate
+        self.custom_certs.push(pem_bytes.into());
+        self
+    }
+}
+
+impl Default for TrustStore {
+    fn default() -> Self {
+        Self {
+            enable_native_roots: true,
+            custom_certs: Vec::new(),
+        }
+    }
 }
 
 cfg_rustls! {
@@ -90,56 +151,36 @@ cfg_rustls! {
             }
         }
 
-        #[allow(unused_imports)]
-        pub(crate) mod cached_connectors {
-            use client::connect::HttpConnector;
-            use hyper_util::client::legacy as client;
-            use hyper_util::client::legacy::connect::dns::GaiResolver;
-
-            use super::build_connector::make_tls;
-            use super::CryptoMode;
-
-            #[cfg(feature = "rustls-ring")]
-            static HTTPS_NATIVE_ROOTS_RING: once_cell::sync::Lazy<
-                hyper_rustls::HttpsConnector<HttpConnector>,
-            > = once_cell::sync::Lazy::new(|| {
-                make_tls(GaiResolver::new(), CryptoMode::Ring)
-            });
-
-            #[cfg(feature = "rustls-aws-lc")]
-            static HTTPS_NATIVE_ROOTS_AWS_LC: once_cell::sync::Lazy<
-                hyper_rustls::HttpsConnector<HttpConnector>,
-            > = once_cell::sync::Lazy::new(|| {
-                make_tls(GaiResolver::new(), CryptoMode::AwsLc)
-            });
-
-            #[cfg(feature = "rustls-aws-lc-fips")]
-            static HTTPS_NATIVE_ROOTS_AWS_LC_FIPS: once_cell::sync::Lazy<
-                hyper_rustls::HttpsConnector<HttpConnector>,
-            > = once_cell::sync::Lazy::new(|| {
-                make_tls(GaiResolver::new(), CryptoMode::AwsLcFips)
-            });
-
-            pub(crate) fn cached_https(
-                mode: CryptoMode,
-            ) -> hyper_rustls::HttpsConnector<HttpConnector> {
-                match mode {
-                    #[cfg(feature = "rustls-ring")]
-                    CryptoMode::Ring => HTTPS_NATIVE_ROOTS_RING.clone(),
-                    #[cfg(feature = "rustls-aws-lc")]
-                    CryptoMode::AwsLc => HTTPS_NATIVE_ROOTS_AWS_LC.clone(),
-                    #[cfg(feature = "rustls-aws-lc-fips")]
-                    CryptoMode::AwsLcFips => HTTPS_NATIVE_ROOTS_AWS_LC_FIPS.clone(),
-                }
-            }
-        }
-
         pub(crate) mod build_connector {
             use crate::client::tls::rustls_provider::CryptoMode;
+            use crate::tls::TlsContext;
             use hyper_util::client::legacy as client;
             use client::connect::HttpConnector;
             use rustls::crypto::CryptoProvider;
             use std::sync::Arc;
+            use rustls_pki_types::CertificateDer;
+            use rustls_pki_types::pem::PemObject;
+            use rustls_native_certs::CertificateResult;
+
+            /// Cached native certificates
+            ///
+            /// Creating a `with_native_roots()` hyper_rustls client re-loads system certs
+            /// each invocation (which can take 300ms on OSx). Cache the loaded certs
+            /// to avoid repeatedly incurring that cost.
+            pub(crate) static NATIVE_ROOTS: once_cell::sync::Lazy<Vec<CertificateDer<'static>>> = once_cell::sync::Lazy::new(|| {
+                let CertificateResult { certs, errors, .. } = rustls_native_certs::load_native_certs();
+                if !errors.is_empty() {
+                    tracing::warn!("native root CA certificate loading errors: {errors:?}")
+                }
+
+                if certs.is_empty() {
+                    tracing::warn!("no native root CA certificates found!");
+                }
+
+                // NOTE: unlike hyper-rustls::with_native_roots we don't validate here, we'll do that later
+                // for now we have a collection of certs that may or may not be valid.
+                certs
+            });
 
             fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
                 let suites = &[
@@ -167,28 +208,40 @@ cfg_rustls! {
                 }
             }
 
-            pub(super) fn make_tls<R>(
-                resolver: R,
-                crypto_mode: CryptoMode,
-            ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
-                // use the base connector through our `Connector` type to ensure defaults are consistent
-                let base_connector = crate::client::Connector::builder()
-                    .base_connector_with_resolver(resolver);
-                wrap_connector(base_connector, crypto_mode)
+            impl TlsContext {
+                fn rustls_root_certs(&self) -> rustls::RootCertStore {
+                    let mut roots = rustls::RootCertStore::empty();
+                    if self.trust_store.enable_native_roots {
+                        let (valid, _invalid) = roots.add_parsable_certificates(
+                           NATIVE_ROOTS.clone()
+                        );
+                        debug_assert!(valid > 0, "TrustStore configured to enable native roots but no valid root certificates parsed!");
+                    }
+
+                    for pem_cert in &self.trust_store.custom_certs {
+                        let ders = CertificateDer::pem_slice_iter(&*pem_cert.0).collect::<Result<Vec<_>, _> >().expect("valid PEM certificate");
+                        for cert in ders {
+                            roots.add(cert).expect("cert parsable")
+                        }
+                    }
+
+                    roots
+                }
             }
 
             pub(crate) fn wrap_connector<R>(
                 mut conn: HttpConnector<R>,
                 crypto_mode: CryptoMode,
+                tls_context: &TlsContext,
             ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
-                use hyper_rustls::ConfigBuilderExt;
+                let root_certs = tls_context.rustls_root_certs();
                 conn.enforce_http(false);
                 hyper_rustls::HttpsConnectorBuilder::new()
                     .with_tls_config(
                         rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_mode.provider())))
                             .with_safe_default_protocol_versions()
                             .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                            .with_native_roots().expect("error with TLS configuration.")
+                            .with_root_certificates(root_certs)
                             .with_no_client_auth()
                     )
                     .https_or_http()
@@ -203,51 +256,55 @@ cfg_rustls! {
 cfg_s2n_tls! {
     /// s2n-tls based support and adapters
     pub(crate) mod s2n_tls_provider {
-        pub(crate) mod cached_connectors {
-            use hyper_util::client::legacy as client;
-            use client::connect::HttpConnector;
-            use hyper_util::client::legacy::connect::dns::GaiResolver;
-            use super::build_connector::make_tls;
-
-            static CACHED_CONNECTOR: once_cell::sync::Lazy<
-                s2n_tls_hyper::connector::HttpsConnector<HttpConnector>,
-            > = once_cell::sync::Lazy::new(|| {
-                make_tls(GaiResolver::new())
-            });
-
-            pub(crate) fn cached_https() -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector> {
-                CACHED_CONNECTOR.clone()
-            }
-        }
-
         pub(crate) mod build_connector {
             use hyper_util::client::legacy as client;
             use client::connect::HttpConnector;
             use s2n_tls::security::Policy;
+            use crate::tls::TlsContext;
 
             /// Default S2N security policy which sets protocol versions and cipher suites
             ///  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
             const S2N_POLICY_VERSION: &'static str = "20230317";
 
-            pub(super) fn make_tls<R>(
-                resolver: R,
-            ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
-                // use the base connector through our `Connector` type to ensure defaults are consistent
-                let base_connector = crate::client::Connector::builder()
-                    .base_connector_with_resolver(resolver);
-                wrap_connector(base_connector)
+            fn base_config() -> s2n_tls::config::Builder {
+                let mut builder = s2n_tls::config::Config::builder();
+                let policy = Policy::from_version(S2N_POLICY_VERSION).unwrap();
+                builder.set_security_policy(&policy).expect("valid s2n security policy");
+                // default is true
+                builder.with_system_certs(false).unwrap();
+                builder
+            }
+
+            static CACHED_CONFIG: once_cell::sync::Lazy<s2n_tls::config::Config> = once_cell::sync::Lazy::new(|| {
+                let mut config = base_config();
+                config.with_system_certs(true).unwrap();
+                // actually loads the system certs
+                config.build().expect("valid s2n config")
+            });
+
+            impl TlsContext {
+                fn s2n_config(&self) -> s2n_tls::config::Config {
+                    // TODO(s2n-tls): s2n does not support turning a config back into a builder or a way to load a trust store and re-use it
+                    // instead if we are only using the defaults then use a cached config, otherwise pay the cost to build a new one
+                    if self.trust_store.enable_native_roots && self.trust_store.custom_certs.is_empty() {
+                        CACHED_CONFIG.clone()
+                    } else {
+                        let mut config = base_config();
+                        config.with_system_certs(self.trust_store.enable_native_roots).unwrap();
+                        for pem_cert in &self.trust_store.custom_certs {
+                            config.trust_pem(pem_cert.0.as_slice()).expect("valid certificate");
+                        }
+                        config.build().expect("valid s2n config")
+                    }
+                }
             }
 
             pub(crate) fn wrap_connector<R>(
                 mut http_connector: HttpConnector<R>,
+                tls_context: &TlsContext,
             ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
+                let config = tls_context.s2n_config();
                 http_connector.enforce_http(false);
-                let config = {
-                    let mut builder = s2n_tls::config::Config::builder();
-                    let policy = Policy::from_version(S2N_POLICY_VERSION).unwrap();
-                    builder.set_security_policy(&policy).unwrap();
-                    builder.build().unwrap()
-                };
                 let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config);
                 builder.with_plaintext_http(true);
                 builder.build()

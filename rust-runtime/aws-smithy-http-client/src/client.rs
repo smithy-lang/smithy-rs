@@ -8,6 +8,7 @@ mod timeout;
 pub mod tls;
 
 use crate::cfg::cfg_tls;
+use crate::tls::TlsContext;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -108,8 +109,6 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     client_builder: Option<hyper_util::client::legacy::Builder>,
     enable_tcp_nodelay: bool,
     interface: Option<String>,
-    // flag to indicate that cached TLS connector is ok (i.e. there are no non-default HttpConnector settings changed)
-    enable_cached_tls: bool,
     #[allow(unused)]
     tls: Tls,
 }
@@ -122,7 +121,9 @@ pub struct TlsUnset {}
 /// TLS implementation selected
 pub struct TlsProviderSelected {
     #[allow(unused)]
-    tls_provider: tls::Provider,
+    provider: tls::Provider,
+    #[allow(unused)]
+    context: TlsContext,
 }
 
 impl ConnectorBuilder<TlsUnset> {
@@ -134,9 +135,9 @@ impl ConnectorBuilder<TlsUnset> {
             client_builder: self.client_builder,
             enable_tcp_nodelay: self.enable_tcp_nodelay,
             interface: self.interface,
-            enable_cached_tls: self.enable_cached_tls,
             tls: TlsProviderSelected {
-                tls_provider: provider,
+                provider,
+                context: TlsContext::new(),
             },
         }
     }
@@ -568,6 +569,18 @@ cfg_tls! {
             self.build_https(http_connector)
         }
 
+        /// Configure the TLS context
+        pub fn tls_context(mut self, ctx: TlsContext) -> Self {
+            self.tls.context = ctx;
+            self
+        }
+
+        /// Configure the TLS context
+        pub fn set_tls_context(&mut self, ctx: TlsContext) -> &mut Self {
+            self.tls.context = ctx;
+            self
+        }
+
         /// Build a [`Connector`] that will use the given DNS resolver implementation.
         pub fn build_with_resolver<R: ResolveDns + Clone + 'static>(self, resolver: R) -> Connector {
             use crate::client::dns::HyperUtilResolver;
@@ -583,7 +596,7 @@ cfg_tls! {
             R::Future: Send,
             R::Error: Into<Box<dyn Error + Send + Sync>>,
         {
-            match &self.tls.tls_provider {
+            match &self.tls.provider {
                 // TODO(hyper1) - fix cfg_rustls! to allow matching on patterns so we can re-use it and not duplicate these cfg matches everywhere
                 #[cfg(any(
                     feature = "rustls-aws-lc",
@@ -591,41 +604,24 @@ cfg_tls! {
                     feature = "rustls-ring"
                 ))]
                 tls::Provider::Rustls(crypto_mode) => {
-                    if self.enable_cached_tls {
-                        let https_connector =
-                            tls::rustls_provider::cached_connectors::cached_https(crypto_mode.clone());
-                        self.wrap_connector(https_connector)
-                    } else {
-                        let https_connector = tls::rustls_provider::build_connector::wrap_connector(
-                            http_connector,
-                            crypto_mode.clone(),
-                        );
-                        self.wrap_connector(https_connector)
-                    }
+                    let https_connector = tls::rustls_provider::build_connector::wrap_connector(
+                        http_connector,
+                        crypto_mode.clone(),
+                        &self.tls.context,
+                    );
+                    self.wrap_connector(https_connector)
                 },
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls  => {
-                    if self.enable_cached_tls {
-                        let https_connector = tls::s2n_tls_provider::cached_connectors::cached_https();
-                        self.wrap_connector(https_connector)
-                    } else {
-                        let https_connector = tls::s2n_tls_provider::build_connector::wrap_connector(http_connector);
-                        self.wrap_connector(https_connector)
-                    }
+                    let https_connector = tls::s2n_tls_provider::build_connector::wrap_connector(http_connector, &self.tls.context);
+                    self.wrap_connector(https_connector)
                 }
             }
-        }
-
-        /// Enable cached TLS connector to be used. Used internally to indicate that no default connector
-        /// settings have been changed and that we can re-use and wrap an existing cached TLS connector
-        fn enable_cached_tls_connectors(mut self) -> Self {
-            self.enable_cached_tls = true;
-            self
         }
     }
 
     impl Builder<TlsProviderSelected> {
-        /// Create a HTTPS client with the selected TLS provider.
+        /// Create an HTTPS client with the selected TLS provider.
         ///
         /// The trusted certificates will be loaded later when this becomes the selected
         /// HTTP client for a Smithy client.
@@ -634,16 +630,14 @@ cfg_tls! {
                 self.client_builder,
                 move |client_builder, settings, runtime_components| {
                     let builder = new_conn_builder(client_builder, settings, runtime_components)
-                        .tls_provider(self.tls_provider.tls_provider.clone())
-                        // the base HTTP connector settings have not changed, and we are not using a custom resolver
-                        // mark the connector as safe to use cached TLS connectors
-                        .enable_cached_tls_connectors();
+                        .tls_provider(self.tls_provider.provider.clone())
+                        .tls_context(self.tls_provider.context.clone());
                     builder.build()
                 },
             )
         }
 
-        /// Create a hyper client using a custom DNS resolver
+        /// Create an HTTPS client using a custom DNS resolver
         pub fn build_with_resolver(
             self,
             resolver: impl ResolveDns + Clone + 'static,
@@ -652,10 +646,17 @@ cfg_tls! {
                 self.client_builder,
                 move |client_builder, settings, runtime_components| {
                     let builder = new_conn_builder(client_builder, settings, runtime_components)
-                        .tls_provider(self.tls_provider.tls_provider.clone());
+                        .tls_provider(self.tls_provider.provider.clone())
+                        .tls_context(self.tls_provider.context.clone());
                     builder.build_with_resolver(resolver.clone())
                 },
             )
+        }
+
+        /// Configure the TLS context
+        pub fn tls_context(mut self, ctx: TlsContext) -> Self {
+            self.tls_provider.context = ctx;
+            self
         }
     }
 }
@@ -683,7 +684,8 @@ impl Builder<TlsUnset> {
         Builder {
             client_builder: self.client_builder,
             tls_provider: TlsProviderSelected {
-                tls_provider: provider,
+                provider,
+                context: TlsContext::new(),
             },
         }
     }
