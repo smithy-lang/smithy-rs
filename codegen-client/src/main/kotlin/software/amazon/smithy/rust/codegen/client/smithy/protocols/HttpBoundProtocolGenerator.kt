@@ -17,8 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Proto
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamBodyParams
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 
 class ClientHttpBoundProtocolPayloadGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -61,9 +59,7 @@ private fun eventStreamWithInitialRequest(
 ): Writable? {
     val parser = protocol.structuredDataSerializer().operationInputSerializer(params.operationShape) ?: return null
 
-    if (!params.operationShape.inputShape(codegenContext.model)
-            .needsToHandleEventStreamInitialMessage(codegenContext.model, codegenContext.protocol)
-    ) {
+    if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialRequest(params.operationShape) != true) {
         return null
     }
 
