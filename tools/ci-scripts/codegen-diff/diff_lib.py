@@ -26,6 +26,13 @@ def running_in_docker_build():
     return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
 
+def run_git_commit_as_github_action(revision_sha):
+    get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
+                   f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
+                   f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
+                   f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
+
+
 def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
     if running_in_docker_build():
         eprint(f"Fetching base revision {revision_sha} from GitHub...")
@@ -89,10 +96,7 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         f"xargs rm -f", shell=True)
 
     get_cmd_output(f"git add -f {OUTPUT_PATH}")
-    get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
-                   f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
-                   f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "
-                   f"commit --no-verify -m 'Generated code for {revision_sha}' --allow-empty")
+    run_git_commit_as_github_action(revision_sha)
 
 
 def make_diff(title, path_to_diff, base_commit_sha, head_commit_sha, suffix, whitespace):

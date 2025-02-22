@@ -4,12 +4,40 @@
 #  SPDX-License-Identifier: Apache-2.0
 import sys
 import os
-from diff_lib import get_cmd_output, get_cmd_status, eprint, running_in_docker_build, checkout_commit_and_generate, \
-    OUTPUT_PATH
-
+from diff_lib import get_cmd_output, get_cmd_status, eprint, run, run_git_commit_as_github_action, running_in_docker_build
 
 CURRENT_BRANCH = 'current'
 BASE_BRANCH = 'base'
+
+
+def checkout_commit_and_generate(revision_sha, branch_name, repository_root):
+    if running_in_docker_build():
+        eprint(f"Fetching base revision {revision_sha} from GitHub...")
+        run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {revision_sha}")
+
+    # Generate code for HEAD
+    eprint(f"Creating temporary branch {branch_name} with generated code for {revision_sha}")
+    run(f"git checkout {revision_sha} -B {branch_name}")
+    _generate_and_commit(revision_sha, repository_root)
+
+
+def _generate_and_commit(revision_sha, repository_root):
+    get_cmd_output(f"./gradlew --rerun-tasks aws:sdk:clean")
+    get_cmd_output(f"./gradlew --rerun-tasks aws:sdk:assemble")
+
+    # Remove runtime crates from the repository root to prevent `cargo-semver-checks` from failing
+    # due to duplicate crates under the same root. See https://github.com/obi1kenobi/cargo-semver-checks/pull/887
+    get_cmd_output(f"git rm -r {repository_root}/aws/rust-runtime")
+    get_cmd_output(f"git rm -r {repository_root}/rust-runtime")
+
+    # From this point forward, the single source of truth for the crate layout in `cargo-semver-checks`
+    # is the `aws-sdk` located under the SDK's build directory.
+    get_cmd_output(f"cp -r {repository_root}/aws/sdk/build/aws-sdk {repository_root}")
+    get_cmd_output(f"git add -f {repository_root}/aws-sdk")
+
+    run_git_commit_as_github_action(revision_sha)
+
+
 # This script runs `cargo semver-checks` against a previous version of codegen
 def main(skip_generation=False):
     if len(sys.argv) != 3:
@@ -27,10 +55,10 @@ def main(skip_generation=False):
         sys.exit(1)
 
     if not skip_generation:
-        checkout_commit_and_generate(head_commit_sha, CURRENT_BRANCH, targets=['aws:sdk'])
-        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'])
+        checkout_commit_and_generate(head_commit_sha, CURRENT_BRANCH, repository_root)
+        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, repository_root)
     get_cmd_output(f'git checkout {CURRENT_BRANCH}')
-    sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
+    sdk_directory = os.path.join(repository_root, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
 
     failures = []
@@ -41,7 +69,7 @@ def main(skip_generation=False):
         eprint(f'checking {path}...', end='')
         if path in deny_list:
             eprint(f"skipping {path} because it is in 'deny_list'")
-        elif get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') != 0:
+        elif get_cmd_status(f'git cat-file -e base:./{path}/Cargo.toml') != 0:
             eprint(f'skipping {path} because it does not exist in base')
         else:
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
