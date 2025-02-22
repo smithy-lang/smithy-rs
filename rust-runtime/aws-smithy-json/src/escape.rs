@@ -10,6 +10,7 @@ use std::fmt;
 enum EscapeErrorKind {
     ExpectedSurrogatePair(String),
     InvalidEscapeCharacter(char),
+    #[cfg(not(feature = "replace-invalid-utf8"))]
     InvalidSurrogatePair(u16, u16),
     InvalidUnicodeEscape(String),
     InvalidUtf8,
@@ -36,6 +37,7 @@ impl fmt::Display for EscapeError {
                 )
             }
             InvalidEscapeCharacter(chr) => write!(f, "invalid JSON escape: \\{}", chr),
+            #[cfg(not(feature = "replace-invalid-utf8"))]
             InvalidSurrogatePair(high, low) => {
                 write!(f, "invalid surrogate pair: \\u{:04X}\\u{:04X}", high, low)
             }
@@ -182,6 +184,7 @@ fn read_codepoint(rest: &[u8]) -> Result<u16, EscapeError> {
     Ok(u16::from_str_radix(codepoint_str, 16).expect("hex string is valid 16-bit value"))
 }
 
+#[cfg(not(feature = "replace-invalid-utf8"))]
 /// Reads JSON Unicode escape sequences (i.e., "\u1234"). Will also read
 /// an additional codepoint if the first codepoint is the start of a surrogate pair.
 fn read_unicode_escapes(bytes: &[u8], into: &mut Vec<u8>) -> Result<usize, EscapeError> {
@@ -207,6 +210,35 @@ fn read_unicode_escapes(bytes: &[u8], into: &mut Vec<u8>) -> Result<usize, Escap
         1 => into.push(chr as u8),
         _ => into.extend_from_slice(chr.encode_utf8(&mut [0; 4]).as_bytes()),
     }
+    Ok(bytes_read)
+}
+
+#[cfg(feature = "replace-invalid-utf8")]
+fn read_unicode_escapes(bytes: &[u8], into: &mut Vec<u8>) -> Result<usize, EscapeError> {
+    let high = read_codepoint(bytes)?;
+    let (bytes_read, chr) = if is_utf16_high_surrogate(high) {
+        match read_codepoint(&bytes[6..]) {
+            Ok(low) if is_utf16_low_surrogate(low) => {
+                let codepoint = 0x10000 + (high - 0xD800) as u32 * 0x400 + (low - 0xDC00) as u32;
+                (12, std::char::from_u32(codepoint))
+            }
+            _ => (6, None),
+        }
+    } else {
+        (6, std::char::from_u32(high as u32))
+    };
+
+    match chr {
+        Some(chr) => match chr.len_utf8() {
+            1 => into.push(chr as u8),
+            _ => into.extend_from_slice(chr.encode_utf8(&mut [0; 4]).as_bytes()),
+        },
+        None => {
+            const REPLACEMENT_BYTES: &[u8] = "\u{FFFD}".as_bytes();
+            into.extend_from_slice(REPLACEMENT_BYTES)
+        }
+    }
+
     Ok(bytes_read)
 }
 
@@ -240,6 +272,7 @@ mod test {
         assert!(matches!(unescaped, Cow::Borrowed(_)));
     }
 
+    #[cfg(not(feature = "replace-invalid-utf8"))]
     #[test]
     fn unescape() {
         assert_eq!(
@@ -288,6 +321,74 @@ mod test {
             Err(EscapeErrorKind::InvalidUnicodeEscape("+04D".into()).into()),
             unescape_string("\\u+04D")
         );
+    }
+
+    #[cfg(feature = "replace-invalid-utf8")]
+    #[test]
+    fn unescape() {
+        assert_eq!(
+            "\x08f\x0Co\to\r\n",
+            unescape_string(r"\bf\fo\to\r\n").unwrap()
+        );
+        assert_eq!("\"test\"", unescape_string(r#"\"test\""#).unwrap());
+        assert_eq!("\x00", unescape_string("\\u0000").unwrap());
+        assert_eq!("\x1f", unescape_string("\\u001f").unwrap());
+        assert_eq!("foo\r\nbar", unescape_string("foo\\r\\nbar").unwrap());
+        assert_eq!("foo\r\n", unescape_string("foo\\r\\n").unwrap());
+        assert_eq!("\r\nbar", unescape_string("\\r\\nbar").unwrap());
+        assert_eq!("\u{10437}", unescape_string("\\uD801\\uDC37").unwrap());
+
+        // New tests for invalid Unicode replacement
+        assert_eq!("�", unescape_string("\\uD800").unwrap()); // High surrogate without low surrogate
+        assert_eq!("�", unescape_string("\\uDC00").unwrap()); // Low surrogate without high surrogate
+        assert_eq!("��", unescape_string("\\uD800\\uD800").unwrap()); // Two high surrogates
+        assert_eq!("��", unescape_string("\\uDC00\\uDC00").unwrap()); // Two low surrogates
+        assert_eq!("test�test", unescape_string("test\\uD800test").unwrap()); // Orphaned surrogate in middle of string
+        assert_eq!(
+            "�\u{10437}",
+            unescape_string("\\uD800\\uD801\\uDC37").unwrap()
+        ); // Invalid then valid surrogate pair
+
+        // These error cases should still work as before
+        assert_eq!(
+            Err(EscapeErrorKind::UnexpectedEndOfString.into()),
+            unescape_string("\\")
+        );
+        assert_eq!(
+            Err(EscapeErrorKind::UnexpectedEndOfString.into()),
+            unescape_string("\\u")
+        );
+        assert_eq!(
+            Err(EscapeErrorKind::UnexpectedEndOfString.into()),
+            unescape_string("\\u00")
+        );
+        assert_eq!(
+            Err(EscapeErrorKind::InvalidEscapeCharacter('z').into()),
+            unescape_string("\\z")
+        );
+        assert_eq!(
+            Err(EscapeErrorKind::InvalidUnicodeEscape("+04D".into()).into()),
+            unescape_string("\\u+04D")
+        );
+
+        // Regular character.
+        assert_eq!("A", unescape_string("\\u0041").unwrap());
+
+        // Single surrogates (should each become �).
+        assert_eq!("�", unescape_string("\\uD800").unwrap()); // High surrogate
+        assert_eq!("�", unescape_string("\\uDC00").unwrap()); // Low surrogate
+
+        // Valid surrogate pair.
+        assert_eq!("🦀", unescape_string("\\uD83E\\uDD80").unwrap());
+
+        // Invalid pairs (should each become ��).
+        assert_eq!("��", unescape_string("\\uD800\\uD801").unwrap()); // High + High
+        assert_eq!("��", unescape_string("\\uDC00\\uDC01").unwrap()); // Low + Low
+        assert_eq!("��", unescape_string("\\uDC00\\uD800").unwrap()); // Low + High
+
+        // Surrogate + non-surrogate.
+        assert_eq!("�A", unescape_string("\\uD800\\u0041").unwrap()); // High + ASCII
+        assert_eq!("�A", unescape_string("\\uDC00\\u0041").unwrap()); // Low + ASCII
     }
 
     use proptest::proptest;
