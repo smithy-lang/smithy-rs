@@ -45,6 +45,7 @@ class ServerServiceGenerator(
             "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
+            *RuntimeType.preludeScope,
         )
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -310,7 +311,7 @@ class ServerServiceGenerator(
                 ///
                 /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
                 /// unspecified route is requested.
-                pub fn build(self) -> Result<
+                pub fn build(self) -> #{Result}<
                     $serviceName<
                         #{SmithyHttpServer}::routing::RoutingService<
                             #{Router}<L::Service>,
@@ -348,6 +349,7 @@ class ServerServiceGenerator(
                 "NullabilityChecks" to nullabilityChecks,
                 "RoutesArrayElements" to routesArrayElements,
                 "PatternInitializations" to patternInitializations(),
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -661,7 +663,7 @@ class ServerServiceGenerator(
                     type Error = S::Error;
                     type Future = S::Future;
 
-                    fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
+                    fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<#{Result}<(), Self::Error>> {
                         self.svc.poll_ready(cx)
                     }
 
