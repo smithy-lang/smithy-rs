@@ -25,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.eventReceiver
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.forInlineDependency
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -35,8 +34,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
-import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
-import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -131,7 +128,7 @@ class FluentBuilderGenerator(
         writable {
             docs("Fluent builder constructing a request to `${operationType.name}`.\n")
             documentShape(operation, model, autoSuppressMissingDocs = false)
-            if (outputShape.needsToHandleEventStreamInitialMessage(model, codegenContext.protocol)) {
+            if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operation) == true) {
                 docs(
                     """
                     [`${outputType.name}`]($outputType) contains an event stream field as well as one or more non-event stream fields.
@@ -182,17 +179,15 @@ class FluentBuilderGenerator(
         }
 
     private fun handleEventStreamInitialResponse(): Writable? {
-        if (!codegenContext.protocol.isRpcBoundProtocol) {
+        if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operation) != true) {
             return null
         }
 
+        // The variable eventStreamMember is guaranteed to be non-null because of the short-circuit above
         val eventStreamMember =
             outputShape.members().find { member ->
                 member.isEventStream(codegenContext.model)
-            }
-        if (eventStreamMember == null) {
-            return null
-        }
+            }!!
 
         return writable {
             val eventStreamMemberName = symbolProvider.toMemberName(eventStreamMember)

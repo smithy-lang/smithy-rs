@@ -27,7 +27,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import java.util.stream.Stream
 
@@ -205,6 +204,18 @@ data class RpcEventStreamTestCase(
 )
 
 class RpcEventStreamTestCasesProvider : ArgumentsProvider {
+    private val rpcBoundProtocols =
+        setOf(
+            "awsJson1_0",
+            "awsJson1_1",
+            "awsQuery",
+            "ec2Query",
+            "rpcv2Cbor",
+        )
+
+    private val ShapeId.isRpcBoundProtocol
+        get() = rpcBoundProtocols.contains(name)
+
     override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
         EventStreamTestModels.TEST_CASES.filter { testCase: EventStreamTestModels.TestCase ->
             ShapeId.from(testCase.protocolShapeId)?.isRpcBoundProtocol ?: false
