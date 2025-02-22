@@ -47,6 +47,7 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = [
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tempfile = "3.16.0"
 tokio = { version = "1.23.1", features = ["macros", "rt", "io-util"] }
+hyper = { version = "0.14" }
 
 [package.metadata.docs.rs]
 all-features = true

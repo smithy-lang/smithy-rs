@@ -127,6 +127,7 @@ dependencies = [
  "http 1.2.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
+ "hyper",
  "lru",
  "ring",
  "sha2",
