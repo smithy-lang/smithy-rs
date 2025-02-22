@@ -28,7 +28,7 @@ def main(skip_generation=False):
 
     if not skip_generation:
         checkout_commit_and_generate(head_commit_sha, CURRENT_BRANCH, targets=['aws:sdk'])
-        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'], preserve_aws_sdk_build=True)
+        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'])
     get_cmd_output(f'git checkout {CURRENT_BRANCH}')
     sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
