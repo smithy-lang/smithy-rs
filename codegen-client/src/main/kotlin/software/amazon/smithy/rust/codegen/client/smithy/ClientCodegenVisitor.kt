@@ -50,7 +50,6 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.needsToHandleEventStreamInitialMessage
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -237,7 +236,7 @@ class ClientCodegenVisitor(
 
                         implBlock(symbolProvider.toSymbol(shape)) {
                             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
-                            if (shape.needsToHandleEventStreamInitialMessage(codegenContext.model, codegenContext.protocol)) {
+                            if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(shape) == true) {
                                 BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
                             }
                         }
