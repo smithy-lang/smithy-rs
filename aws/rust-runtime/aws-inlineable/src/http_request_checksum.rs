@@ -335,11 +335,19 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
         return Ok(());
     }
 
-    let original_body_size = request
-        .body()
-        .size_hint()
-        .exact()
-        .ok_or_else(|| BuildError::other(Error::UnsizedRequestBody))?;
+    // Attempt to get the size of the request body and check for the content-length header
+    // If either is populated use it, otherwise error
+    let request_body_size = request.body().size_hint().exact();
+    let content_length = request
+        .headers()
+        .get(http::header::CONTENT_LENGTH)
+        .map(u64::from_str);
+
+    let original_body_size = match (request_body_size, content_length) {
+        (Some(size), _) => size,
+        (None, Some(Ok(size))) => size,
+        _ => return Err(BuildError::other(Error::UnsizedRequestBody)),
+    };
 
     let mut body = {
         let body = mem::replace(request.body_mut(), SdkBody::taken());
@@ -399,6 +407,7 @@ mod tests {
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::BytesMut;
     use http_body::Body;
+    use std::io::Write;
     use tempfile::NamedTempFile;
 
     #[tokio::test]
@@ -474,6 +483,73 @@ mod tests {
         let body = std::str::from_utf8(&body_data).unwrap();
         let expected_checksum = base64::encode(&crc32c_checksum);
         let expected = format!("This is a large file created for testing purposes 9999\r\n0\r\nx-amz-checksum-crc32c:{expected_checksum}\r\n\r\n");
+        assert!(
+            body.ends_with(&expected),
+            "expected {body} to end with '{expected}'"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_unsized_body_can_be_wrapped_if_content_length_header_present() {
+        let mut file = NamedTempFile::new().expect("Could not create test file.");
+        let checksum_algorithm: ChecksumAlgorithm = "crc32c".parse().unwrap();
+
+        let mut crc32c_checksum = checksum_algorithm.into_impl();
+        let line = "This is a large file created for testing purposes\n";
+        let line_len = line.as_bytes().len();
+        let total_len = line_len * 10000;
+        for _ in 0..10000 {
+            file.write_all(line.as_bytes()).unwrap();
+            crc32c_checksum.update(line.as_bytes());
+        }
+        let crc32c_checksum = crc32c_checksum.finalize();
+
+        let path = file.into_temp_path();
+        let path_buf = path.to_path_buf();
+        // When checked for a size_hint this body will return 0 since it relies on a channel
+        // to send the bytes through
+        let sdk_body = SdkBody::retryable(move || {
+            let (mut tx, body) = hyper::body::Body::channel();
+            let path = path_buf.clone();
+            tokio::spawn(async move {
+                let stream = ByteStream::read_from().path(path).build().await.unwrap();
+
+                let bytes = stream.collect().await.unwrap().into_bytes();
+
+                if tx.send_data(bytes.into()).await.is_err() {
+                    return;
+                };
+            });
+            SdkBody::from_body_0_4(body)
+        });
+
+        let mut request = HttpRequest::new(sdk_body);
+
+        // Should fail if the content-length header is not included
+        assert!(wrap_streaming_request_body_in_checksum_calculating_body(
+            &mut request,
+            checksum_algorithm
+        )
+        .is_err());
+
+        request
+            .headers_mut()
+            .insert(http::header::CONTENT_LENGTH, total_len.to_string());
+
+        // Should succeed when content-length header is present
+        wrap_streaming_request_body_in_checksum_calculating_body(&mut request, checksum_algorithm)
+            .unwrap();
+
+        // ensure wrapped SdkBody is retryable
+        let mut body = request.body().try_clone().expect("body is retryable");
+
+        let mut body_data = BytesMut::new();
+        while let Some(data) = body.data().await {
+            body_data.extend_from_slice(&data.unwrap())
+        }
+        let body = std::str::from_utf8(&body_data).unwrap();
+        let expected_checksum = base64::encode(&crc32c_checksum);
+        let expected = format!("This is a large file created for testing purposes\n\r\n0\r\nx-amz-checksum-crc32c:{expected_checksum}\r\n\r\n");
         assert!(
             body.ends_with(&expected),
             "expected {body} to end with '{expected}'"
