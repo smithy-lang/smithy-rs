@@ -12,7 +12,7 @@ import software.amazon.smithy.model.traits.AnnotationTrait
 /**
  * Indicates that an operation shape is incompatible with stalled stream protection.
  */
-class IncompatibleWithStalledStreamProtectionTrait : AnnotationTrait(ID, Node.objectNode()) {
+internal class IncompatibleWithStalledStreamProtectionTrait : AnnotationTrait(ID, Node.objectNode()) {
     companion object {
         val ID: ShapeId = ShapeId.from("software.amazon.smithy.rust.codegen.client.smithy.traits#incompatibleWithStalledStreamProtectionTrait")
     }

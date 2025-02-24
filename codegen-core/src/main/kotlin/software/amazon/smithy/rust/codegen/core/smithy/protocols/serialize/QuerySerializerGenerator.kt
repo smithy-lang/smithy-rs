@@ -116,8 +116,6 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     }
 
     override fun payloadSerializer(member: MemberShape): RuntimeType {
-        // TODO(EventStream): Query payload serialization is required for RPC initial message as well as for message
-        // frames that have a struct/union type.
         TODO("$protocolName doesn't support payload serialization yet")
     }
 

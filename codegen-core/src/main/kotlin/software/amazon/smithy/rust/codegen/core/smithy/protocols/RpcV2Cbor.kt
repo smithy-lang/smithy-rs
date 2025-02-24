@@ -11,6 +11,8 @@ import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -27,6 +29,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborS
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 class RpcV2CborHttpBindingResolver(
@@ -94,6 +99,32 @@ class RpcV2CborHttpBindingResolver(
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/cbor")
+
+    override fun handlesEventStreamInitialRequest(shape: Shape): Boolean {
+        // True if the operation input contains an event stream member as well as non-event stream member.
+        return when (shape) {
+            is OperationShape -> {
+                shape.isInputEventStream(model) && requestBindings(shape).any { it.location == HttpLocation.DOCUMENT }
+            }
+
+            is StructureShape -> {
+                shape.hasEventStreamMember(model) && bindings(shape).any { it.location == HttpLocation.DOCUMENT }
+            }
+
+            else -> false
+        }
+    }
+
+    override fun handlesEventStreamInitialResponse(shape: Shape): Boolean {
+        // True if the operation output contains an event stream member.
+        // See the comment in `AwsJsonHttpBindingResolver` explaining why this is asymmetrical compared to
+        // `handlesEventStreamInitialRequest`.
+        return when (shape) {
+            is OperationShape -> shape.isOutputEventStream(model)
+            is StructureShape -> shape.hasEventStreamMember(model)
+            else -> false
+        }
+    }
 }
 
 open class RpcV2Cbor(

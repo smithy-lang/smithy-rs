@@ -38,8 +38,6 @@ import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
-import software.amazon.smithy.rust.codegen.core.util.isRpcBoundProtocol
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -244,7 +242,7 @@ class ProtocolParserGenerator(
             structuredDataParser.operationParser(operationShape)?.also { parser ->
                 // Don't deserialize non-event stream members for an event stream operation with RPC bound protocols,
                 // as they need to be deserialized from payload in the first frame of event stream.
-                if (!operationShape.isOutputEventStream(codegenContext.model) || !codegenContext.protocol.isRpcBoundProtocol) {
+                if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operationShape) != true) {
                     rust(
                         "output = #T(_response_body, output).map_err(#T::unhandled)?;",
                         parser,
