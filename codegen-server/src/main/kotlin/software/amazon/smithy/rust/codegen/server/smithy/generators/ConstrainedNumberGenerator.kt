@@ -206,9 +206,9 @@ data class Range(val rangeTrait: RangeTrait) {
                     "$valueVariableName <= ${rangeTrait.max.get()}"
                 }
 
-            rust(
+            rustTemplate(
                 """
-                fn check_range($valueVariableName: $unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                fn check_range($valueVariableName: $unconstrainedTypeName) -> #{Result}<(), $constraintViolation> {
                     if $condition {
                         Ok(())
                     } else {
@@ -216,6 +216,7 @@ data class Range(val rangeTrait: RangeTrait) {
                     }
                 }
                 """,
+                *RuntimeType.preludeScope,
             )
         }
 }

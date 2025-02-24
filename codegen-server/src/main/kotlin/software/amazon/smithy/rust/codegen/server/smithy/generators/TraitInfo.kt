@@ -60,7 +60,7 @@ fun RustWriter.renderTryFrom(
             type Error = #{ConstraintViolation};
 
             /// ${rustDocsTryFromMethod(constrainedTypeName, unconstrainedTypeName)}
-            fn try_from(value: $unconstrainedTypeName) -> Result<Self, Self::Error> {
+            fn try_from(value: $unconstrainedTypeName) -> #{Result}<Self, Self::Error> {
               #{TryFromChecks:W}
 
               Ok(Self(value))
@@ -70,5 +70,6 @@ fun RustWriter.renderTryFrom(
         "TryFrom" to RuntimeType.TryFrom,
         "ConstraintViolation" to constraintViolationError,
         "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+        *RuntimeType.preludeScope,
     )
 }

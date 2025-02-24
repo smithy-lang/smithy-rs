@@ -67,6 +67,7 @@ class AwsQueryCompatible(
                     .resolve("deserialize::error::DeserializeError"),
             "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+            *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver =
@@ -85,7 +86,7 @@ class AwsQueryCompatible(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     let mut builder =
                         #{json_errors}::parse_error_metadata(response_body, response_headers)?;
                     if let Some((error_code, error_type)) =
