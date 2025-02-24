@@ -212,7 +212,7 @@ class TsApplicationGenerator(
                 )
             }
             writer.rustBlockTemplate(
-                """pub fn new_socket(address: String, port: i32, backlog: Option<i32>) -> #{Result}<#{socket2}::Socket, Box<dyn std::error::Error>> """.trimIndent(),
+                """pub fn new_socket(address: String, port: i32, backlog: Option<i32>) -> Result<#{socket2}::Socket, Box<dyn std::error::Error>> """.trimIndent(),
                 *codegenScope,
             ) {
                 writer.rustTemplate(
