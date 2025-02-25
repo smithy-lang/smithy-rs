@@ -99,7 +99,10 @@ async fn create_client(
     port: &String,
 ) -> aws_sdk_sts::Client {
     let credentials = get_credentials();
-    let tls_context = TlsContext::new().with_trust_store(trust_store);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .build()
+        .expect("valid TLS config");
     let http_client = HttpClientBuilder::new()
         .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
