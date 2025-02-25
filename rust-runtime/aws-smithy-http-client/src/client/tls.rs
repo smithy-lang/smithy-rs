@@ -300,8 +300,8 @@ cfg_s2n_tls! {
             use s2n_tls::security::Policy;
             use crate::tls::TlsContext;
 
-            /// Default S2N security policy which sets protocol versions and cipher suites
-            ///  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
+            // Default S2N security policy which sets protocol versions and cipher suites
+            //  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
             const S2N_POLICY_VERSION: &str = "20230317";
 
             fn base_config() -> s2n_tls::config::Builder {
