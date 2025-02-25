@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::cfg::{cfg_rustls, cfg_s2n_tls};
+use aws_smithy_runtime_api::box_error::BoxError;
 
 /// Choice of underlying cryptography library
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -27,9 +28,27 @@ pub struct TlsContext {
 }
 
 impl TlsContext {
-    /// Create a new default TLS context
-    pub fn new() -> Self {
-        Self {
+    /// Create a new [TlsContext] builder
+    pub fn builder() -> TlsContextBuilder {
+        TlsContextBuilder::new()
+    }
+}
+
+impl Default for TlsContext {
+    fn default() -> Self {
+        TlsContext::builder().build().expect("valid default config")
+    }
+}
+
+/// Builder for TLS related configuration
+#[derive(Debug)]
+pub struct TlsContextBuilder {
+    trust_store: TrustStore,
+}
+
+impl TlsContextBuilder {
+    fn new() -> Self {
+        TlsContextBuilder {
             trust_store: TrustStore::default(),
         }
     }
@@ -38,6 +57,13 @@ impl TlsContext {
     pub fn with_trust_store(mut self, trust_store: TrustStore) -> Self {
         self.trust_store = trust_store;
         self
+    }
+
+    /// Build a new [TlsContext]
+    pub fn build(self) -> Result<TlsContext, BoxError> {
+        Ok(TlsContext {
+            trust_store: self.trust_store,
+        })
     }
 }
 
@@ -86,6 +112,16 @@ impl TrustStore {
     pub fn with_pem_certificate(mut self, pem_bytes: &[u8]) -> Self {
         // ideally we'd validate here but rustls-pki-types converts to DER when loading and S2N
         // still expects PEM encoding. Store the raw bytes and let the TLS implementation validate
+        self.custom_certs.push(pem_bytes.into());
+        self
+    }
+
+    /// Add the PEM encoded certificate to the trust store
+    ///
+    /// This may be called more than once to add multiple certificates.
+    /// NOTE: PEM certificate contents are not validated until passed to the configured
+    /// TLS provider.
+    pub fn add_pem_certificate(&mut self, pem_bytes: &[u8]) -> &mut Self {
         self.custom_certs.push(pem_bytes.into());
         self
     }

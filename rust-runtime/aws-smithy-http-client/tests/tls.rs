@@ -143,7 +143,10 @@ fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
 fn tls_context_from_pem(filename: &str) -> TlsContext {
     let pem_contents = fs::read(filename).unwrap();
     let trust_store = TrustStore::empty().with_pem_certificate(pem_contents.as_slice());
-    TlsContext::new().with_trust_store(trust_store)
+    TlsContext::builder()
+        .with_trust_store(trust_store)
+        .build()
+        .unwrap()
 }
 
 #[cfg(feature = "rustls-aws-lc")]

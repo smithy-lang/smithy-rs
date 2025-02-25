@@ -52,7 +52,7 @@ fn add_cert_to_store(cert: &[u8], store: &mut rustls::RootCertStore) {
     }
 }
 
-fn load_ca_bundle(filename: &String, trust_store: &mut TrustStore) {
+fn load_ca_bundle(filename: &String) -> TrustStore {
     // test the certs are supported and fail quickly if not
     match File::open(filename) {
         Ok(f) => {
@@ -77,9 +77,20 @@ fn load_ca_bundle(filename: &String, trust_store: &mut TrustStore) {
     }
 
     let pem_bytes = fs::read(filename).expect("bundle exists");
-    *trust_store = trust_store
-        .clone()
-        .with_pem_certificate(pem_bytes.as_slice());
+    TrustStore::empty().with_pem_certificate(pem_bytes.as_slice())
+}
+
+fn load_native_certs() -> TrustStore {
+    // why do we need a custom trust store when invoked with native certs?
+    // Because the trytls tests don't actually only rely on native certs.
+    // It's native certs AND the one replaced in the blank pem cert below
+    // via the `update-certs` script.
+    let pem_ca_cert = b"\
+-----BEGIN CERTIFICATE-----
+-----END CERTIFICATE-----\
+" as &[u8];
+
+    TrustStore::default().with_pem_certificate(pem_ca_cert)
 }
 
 async fn create_client(
@@ -117,20 +128,19 @@ async fn main() -> Result<(), aws_sdk_sts::Error> {
         eprintln!("Syntax: {} <hostname> <port> [ca-file]", argv[0]);
         std::process::exit(exitcode::USAGE);
     }
-    let mut trust_store = TrustStore::empty();
-    if argv.len() == 4 {
+    let trust_store = if argv.len() == 4 {
         print!(
             "Connecting to https://{}:{} with root CA bundle from {}: ",
             &argv[1], &argv[2], &argv[3]
         );
-        load_ca_bundle(&argv[3], &mut trust_store);
+        load_ca_bundle(&argv[3])
     } else {
         print!(
             "Connecting to https://{}:{} with native roots: ",
             &argv[1], &argv[2]
         );
-        trust_store = trust_store.with_native_roots(true);
-    }
+        load_native_certs()
+    };
 
     let sts_client = create_client(trust_store, &argv[1], &argv[2]).await;
     match sts_client.get_caller_identity().send().await {

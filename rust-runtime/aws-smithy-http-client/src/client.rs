@@ -137,7 +137,7 @@ impl ConnectorBuilder<TlsUnset> {
             interface: self.interface,
             tls: TlsProviderSelected {
                 provider,
-                context: TlsContext::new(),
+                context: TlsContext::default(),
             },
         }
     }
@@ -685,7 +685,7 @@ impl Builder<TlsUnset> {
             client_builder: self.client_builder,
             tls_provider: TlsProviderSelected {
                 provider,
-                context: TlsContext::new(),
+                context: TlsContext::default(),
             },
         }
     }
