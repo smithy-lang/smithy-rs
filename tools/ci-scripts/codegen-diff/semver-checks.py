@@ -32,7 +32,12 @@ def _generate_and_commit(revision_sha, repository_root):
 
     # From this point forward, the single source of truth for the crate layout in `cargo-semver-checks`
     # is the `aws-sdk` located under the SDK's build directory.
-    get_cmd_output(f"cp -r {repository_root}/aws/sdk/build/aws-sdk {repository_root}")
+    # However, if we commit `aws/sdk/build/aws-sdk` directly to the branch, path entries under `aws/sdk/build/`
+    # will be ignored by `cargo-semver-checks`, as it uses `Walk` from the `ignore` crate.
+    # https://github.com/obi1kenobi/cargo-semver-checks/blob/f55934264edbd4808fc8a7bdb9bc0350b1cc33db/src/rustdoc_gen.rs#L359
+    # To address this, we need to relocate the build artifact to a directory not included in `.gitignore`,
+    # and we’ve chosen the repository root arbitrarily.
+    get_cmd_output(f"mv {repository_root}/aws/sdk/build/aws-sdk {repository_root}")
     get_cmd_output(f"git add -f {repository_root}/aws-sdk")
 
     run_git_commit_as_github_action(revision_sha)
