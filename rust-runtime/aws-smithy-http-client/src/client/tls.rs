@@ -24,6 +24,7 @@ pub enum Provider {
 /// TLS related configuration object
 #[derive(Debug, Clone)]
 pub struct TlsContext {
+    #[allow(unused)]
     trust_store: TrustStore,
 }
 
@@ -68,6 +69,7 @@ impl TlsContextBuilder {
 }
 
 /// PEM encoded certificate
+#[allow(unused)]
 #[derive(Debug, Clone)]
 struct CertificatePEM(Vec<u8>);
 
@@ -255,7 +257,7 @@ cfg_rustls! {
                     }
 
                     for pem_cert in &self.trust_store.custom_certs {
-                        let ders = CertificateDer::pem_slice_iter(&*pem_cert.0).collect::<Result<Vec<_>, _> >().expect("valid PEM certificate");
+                        let ders = CertificateDer::pem_slice_iter(&pem_cert.0).collect::<Result<Vec<_>, _> >().expect("valid PEM certificate");
                         for cert in ders {
                             roots.add(cert).expect("cert parsable")
                         }
@@ -300,7 +302,7 @@ cfg_s2n_tls! {
 
             /// Default S2N security policy which sets protocol versions and cipher suites
             ///  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
-            const S2N_POLICY_VERSION: &'static str = "20230317";
+            const S2N_POLICY_VERSION: &str = "20230317";
 
             fn base_config() -> s2n_tls::config::Builder {
                 let mut builder = s2n_tls::config::Config::builder();

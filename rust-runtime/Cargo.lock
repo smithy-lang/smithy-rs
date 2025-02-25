@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.63.4"
+version = "0.63.5"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
