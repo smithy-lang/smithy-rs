@@ -18,6 +18,7 @@ group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
 val smithyVersion: String by project
+val smithyRsVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))

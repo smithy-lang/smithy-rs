@@ -72,6 +72,7 @@ class ConstrainedMapGenerator(
                 "From" to RuntimeType.From,
                 "TryFrom" to RuntimeType.TryFrom,
                 "ConstraintViolation" to constraintViolation,
+                *RuntimeType.preludeScope,
             )
 
         writer.documentShape(shape, model)
@@ -108,7 +109,7 @@ class ConstrainedMapGenerator(
                 type Error = #{ConstraintViolation};
 
                 /// ${rustDocsTryFromMethod(name, inner)}
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                fn try_from(value: $inner) -> #{Result}<Self, Self::Error> {
                     let length = value.len();
                     if ${lengthTrait.rustCondition("length")} {
                         Ok(Self(value))

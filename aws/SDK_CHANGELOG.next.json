@@ -6,48 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix token bucket not being set for standard and adaptive retry modes\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [
-        "aws-sdk-rust#1234"
-      ],
-      "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
-      "age": 5
-    },
-    {
-      "message": "S3 client behavior is updated to always calculate a checksum by default for operations that support it (such as PutObject or UploadPart), or require it (such as DeleteObjects). The default checksum algorithm is CRC32. Checksum behavior can be configured using `when_supported` and `when_required` options - in shared config using request_checksum_calculation, or as env variable using AWS_REQUEST_CHECKSUM_CALCULATION.\n\nThe S3 client attempts to validate response checksums for all S3 API operations that support checksums. However, if the SDK has not implemented the specified checksum algorithm then this validation is skipped. Checksum validation behavior can be configured using `when_supported` and `when_required` options - in shared config using response_checksum_validation, or as env variable using AWS_RESPONSE_CHECKSUM_VALIDATION.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "landonxjames",
-      "references": [
-        "smithy-rs#3845"
-      ],
-      "since-commit": "f7f037d3fda2d02b6a2ad1bce40dd84c787c6c35",
-      "age": 5
-    },
-    {
-      "message": "Fix bug with presigned requests introduced by new flexibile checksums functionality\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "aws-sdk-rust#1240"
-      ],
-      "since-commit": "733eab7e1a3678971ffa6bf9fb99826e17e99481",
-      "age": 4
-    },
-    {
       "message": "Allow IMDS clients to be configured with a user-provided `SharedRetryClassifier`.\n",
       "meta": {
         "bug": false,
@@ -59,7 +17,7 @@
         "aws-sdk-rust#1233"
       ],
       "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Fix `EcsCredentialsProvider` to include query params passed via `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`.\n",
@@ -73,7 +31,7 @@
         "aws-sdk-rust#1248"
       ],
       "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Stop populating `SessionMode` by default for the `CreateSession` API internally used by S3 Express. This will allow the service to choose a default value for `SessionMode` field based on bucket/access point being used.\n",
@@ -87,7 +45,7 @@
         "smithy-rs#3992"
       ],
       "since-commit": "5ed776ffe2791f577639cb25c711002719809b3a",
-      "age": 1
+      "age": 3
     },
     {
       "message": "Exclude `transfer-encoding` header from sigv4(a) signing since it is a hop by hop header that can be modified or removed by a proxy.\n",
@@ -101,7 +59,35 @@
         "smithy-rs#3991"
       ],
       "since-commit": "5ed776ffe2791f577639cb25c711002719809b3a",
-      "age": 1
+      "age": 3
+    },
+    {
+      "message": "Fix bug in Sigv4 signing that, when an endpoint contained a default port (80 for HTTP, 443 for HTTPS), would sign the request with that port in the `HOST` header even though Hyper excludes default ports from the `HOST` header.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "aws-sdk-rust#1244"
+      ],
+      "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
+      "age": 2
+    },
+    {
+      "message": "Fix bug in S3 with flexible checksum headers incorrectly included in presigned GET requests.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "aws-sdk-rust#1253"
+      ],
+      "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
+      "age": 2
     }
   ],
   "aws-sdk-model": []

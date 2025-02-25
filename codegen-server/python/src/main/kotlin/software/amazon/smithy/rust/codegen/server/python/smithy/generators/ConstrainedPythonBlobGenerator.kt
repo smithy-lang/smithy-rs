@@ -94,7 +94,7 @@ class ConstrainedPythonBlobGenerator(
             impl #{TryFrom}<$inner> for $name {
                 type Error = #{ConstraintViolation};
 
-                fn try_from(value: $inner) -> Result<Self, Self::Error> {
+                fn try_from(value: $inner) -> #{Result}<Self, Self::Error> {
                     value.try_into()
                 }
             }
@@ -102,6 +102,7 @@ class ConstrainedPythonBlobGenerator(
             "TryFrom" to RuntimeType.TryFrom,
             "ConstraintViolation" to constraintViolation,
             "TryFromChecks" to constraintsInfo.map { it.tryFromCheck }.join("\n"),
+            *RuntimeType.preludeScope,
         )
     }
 }

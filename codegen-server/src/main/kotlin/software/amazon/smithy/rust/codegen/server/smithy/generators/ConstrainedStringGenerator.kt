@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
@@ -246,9 +247,9 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
             // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
             // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
             // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
-            rust(
+            rustTemplate(
                 """
-                fn check_length(string: &str) -> Result<(), $constraintViolation> {
+                fn check_length(string: &str) -> #{Result}<(), $constraintViolation> {
                     let length = string.chars().count();
 
                     if ${lengthTrait.rustCondition("length")} {
@@ -258,6 +259,7 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                     }
                 }
                 """,
+                *preludeScope,
             )
         }
 
@@ -335,7 +337,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         return {
             rustTemplate(
                 """
-                fn check_pattern(string: $unconstrainedTypeName) -> Result<$unconstrainedTypeName, $constraintViolation> {
+                fn check_pattern(string: $unconstrainedTypeName) -> #{Result}<$unconstrainedTypeName, $constraintViolation> {
                     let regex = Self::compile_regex();
 
                     if regex.is_match(&string) {
@@ -355,6 +357,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 """,
                 "Regex" to ServerCargoDependency.Regex.toType(),
                 "OnceCell" to ServerCargoDependency.OnceCell.toType(),
+                *preludeScope,
             )
         }
     }

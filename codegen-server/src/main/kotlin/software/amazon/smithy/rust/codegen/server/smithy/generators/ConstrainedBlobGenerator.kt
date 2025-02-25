@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -205,9 +206,9 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
         unconstrainedTypeName: String,
     ): Writable =
         {
-            rust(
+            rustTemplate(
                 """
-                fn check_length(blob: &$unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                fn check_length(blob: &$unconstrainedTypeName) -> #{Result}<(), $constraintViolation> {
                     let length = blob.as_ref().len();
 
                     if ${lengthTrait.rustCondition("length")} {
@@ -217,6 +218,7 @@ data class BlobLength(val lengthTrait: LengthTrait) : BlobConstraintGenerator {
                     }
                 }
                 """,
+                *preludeScope,
             )
         }
 
