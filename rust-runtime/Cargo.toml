@@ -25,4 +25,6 @@ members = [
     "aws-smithy-mocks-experimental",
     "aws-smithy-experimental",
     "aws-smithy-xml",
+    "aws-smithy-observability",
+    "aws-smithy-observability-otel",
 ]

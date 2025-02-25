@@ -103,6 +103,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "QueryWriter" to smithyQuery.resolve("QueryWriter"),
             "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
+            *RuntimeType.preludeScope,
         )
 
     abstract val protocolName: String
@@ -133,7 +134,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(inputShape, fnNameSuffix = "input") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                "pub fn $fnName(input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 val action = operationShape.id.name
@@ -176,7 +177,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 Attribute.AllowUnusedMut.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
                     "Input" to structureSymbol,
                     *codegenScope,
                 ) {
@@ -352,7 +353,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 Attribute.AllowUnusedMut.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
                     "Input" to unionSymbol,
                     *codegenScope,
                 ) {

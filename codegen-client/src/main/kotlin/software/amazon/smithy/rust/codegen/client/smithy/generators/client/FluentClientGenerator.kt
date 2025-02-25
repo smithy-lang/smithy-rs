@@ -148,7 +148,7 @@ class FluentClientGenerator(
                         &self.handle.conf
                     }
 
-                    fn validate_config(handle: &Handle) -> Result<(), #{BoxError}> {
+                    fn validate_config(handle: &Handle) -> #{Result}<(), #{BoxError}> {
                         let mut cfg = #{ConfigBag}::base();
                         handle.runtime_plugins
                             .apply_client_configuration(&mut cfg)?

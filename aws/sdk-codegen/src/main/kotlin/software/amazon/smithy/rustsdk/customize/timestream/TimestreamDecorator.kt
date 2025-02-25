@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.std
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
@@ -60,7 +61,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
             // helper function to resolve an endpoint given a base client
             rustTemplate(
                 """
-                async fn resolve_endpoint(client: &crate::Client) -> Result<(#{Endpoint}, #{SystemTime}), #{BoxError}> {
+                async fn resolve_endpoint(client: &crate::Client) -> #{Result}<(#{Endpoint}, #{SystemTime}), #{BoxError}> {
                     let describe_endpoints =
                         client.describe_endpoints().send().await?;
                     let endpoint = describe_endpoints.endpoints().first().unwrap();

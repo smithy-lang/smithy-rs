@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 20th, 2025
+===================
+**New this release:**
+- :bug: (server) Fixed code generation failure that occurred when using `Result` as a shape name in Smithy models with constrained members by properly handling naming conflicts with Rust's built-in Result type
+- :bug: (server) Previously, models would fail to generate when both the list and at least one of its members was directly constrained with documentation comments
+
+
+February 12th, 2025
+===================
+
 February 3rd, 2025
 ==================
 

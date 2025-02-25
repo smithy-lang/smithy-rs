@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
 buildscript {
     repositories {
         mavenCentral()
@@ -14,6 +15,7 @@ buildscript {
     }
 }
 
+
 allprojects {
     val allowLocalDeps: String by project
     repositories {
@@ -23,7 +25,9 @@ allprojects {
         mavenCentral()
         google()
     }
+
 }
+
 
 val ktlint by configurations.creating
 val ktlintVersion: String by project
