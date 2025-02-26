@@ -75,9 +75,9 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 
-[package.metadata.smithy-rs-release-tooling]
-stable = true
-
 # FIXME - workaround minimal-versions check issue with base64ct (https://github.com/RustCrypto/formats/issues/1684)
 [package.metadata.cargo-udeps.ignore]
 normal = ["base64ct"]
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true
