@@ -22,7 +22,7 @@ aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-bytes = "1.4.0"
+bytes = "1.10.0"
 form_urlencoded = { version = "1.2.1", optional = true }
 hex = "0.4.3"
 hmac = "0.12"
@@ -34,6 +34,8 @@ percent-encoding = { version = "2.3.1", optional = true }
 ring = { version = "0.17.5", optional = true }
 sha2 = "0.10"
 crypto-bigint = { version = "0.5.4", optional = true }
+# Pin base64ct, a transitive dependency of crypto-bigint, to a version that doesn't require 2024 edition for minimal verisons check
+base64ct = "1.6.0"
 subtle = { version = "2.5.0", optional = true }
 time = "0.3.5"
 tracing = "0.1.40"

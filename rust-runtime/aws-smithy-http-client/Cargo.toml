@@ -102,7 +102,7 @@ legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }
 # end legacy stack deps
 
 # test util stack
-bytes = { version = "1.4.0", optional = true }
+bytes = { version = "1.10.0", optional = true }
 serde = { version = "1.0.210", features = ["derive"], optional = true }
 serde_json = { version = "1.0.128", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.6.0", features = ["serde"], optional = true }

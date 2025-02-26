@@ -28,7 +28,7 @@ http-body-1-x = [
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-bytes = "1.4.0"
+bytes = "1.10.0"
 flate2 = "1.0.30"
 futures-util = "0.3"
 http-0-2 = { package = "http", version = "0.2.9", optional = true }
