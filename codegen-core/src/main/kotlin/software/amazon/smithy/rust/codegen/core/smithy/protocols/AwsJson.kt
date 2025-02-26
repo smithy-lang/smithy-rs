@@ -103,6 +103,7 @@ class AwsJsonSerializerGenerator(
         arrayOf(
             "Error" to runtimeConfig.serializationError(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            *RuntimeType.preludeScope,
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -113,7 +114,7 @@ class AwsJsonSerializerGenerator(
             serializer =
                 protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
                     rustBlockTemplate(
-                        "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                        "pub fn $fnName(_input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
                         *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
                     ) {
                         rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
@@ -138,6 +139,7 @@ open class AwsJson(
                 CargoDependency.smithyJson(runtimeConfig).toType()
                     .resolve("deserialize::error::DeserializeError"),
             "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+            *RuntimeType.preludeScope,
         )
 
     val version: AwsJsonVersion get() = awsJsonVersion
@@ -164,7 +166,7 @@ open class AwsJson(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -177,7 +179,7 @@ open class AwsJson(
             // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """
-                pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,

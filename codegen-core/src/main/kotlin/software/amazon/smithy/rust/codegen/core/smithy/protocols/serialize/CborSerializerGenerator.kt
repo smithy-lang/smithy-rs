@@ -283,7 +283,7 @@ class CborSerializerGenerator(
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                "pub fn $fnName(input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rustTemplate("let mut encoder = #{Encoder}::new(Vec::new());", *codegenScope)

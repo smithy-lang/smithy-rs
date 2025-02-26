@@ -69,6 +69,7 @@ class HttpBoundProtocolPayloadGenerator(
             "BuildError" to runtimeConfig.operationBuildError(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
+            *RuntimeType.preludeScope,
         )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
@@ -300,7 +301,7 @@ class HttpBoundProtocolPayloadGenerator(
                         RuntimeType.ByteSlab.toSymbol()
                     }
                 rustBlockTemplate(
-                    "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
+                    "pub fn $fnName(payload: $ref#{Member}) -> #{Result}<#{outputT}, #{BuildError}>",
                     "Member" to symbolProvider.toSymbol(member),
                     "outputT" to outputT,
                     *codegenScope,

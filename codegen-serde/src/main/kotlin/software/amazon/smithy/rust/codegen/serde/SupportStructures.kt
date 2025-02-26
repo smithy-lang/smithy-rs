@@ -23,7 +23,6 @@ object SupportStructures {
 
     val codegenScope =
         arrayOf(
-            *RuntimeType.preludeScope,
             "ConfigurableSerde" to configurableSerde(),
             "SerializeConfigured" to serializeConfigured(),
             "ConfigurableSerdeRef" to configurableSerdeRef(),
@@ -41,7 +40,7 @@ object SupportStructures {
                 /// Serialize a value redacting sensitive fields
                 ///
                 /// This function is intended to be used by `serde(serialize_with = "serialize_redacted")`
-                pub fn serialize_redacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+                pub fn serialize_redacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> #{Result}<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
                 {
@@ -54,6 +53,7 @@ object SupportStructures {
                 "serde" to serde,
                 "SerializeConfigured" to serializeConfigured(),
                 "SerializationSettings" to serializationSettings(),
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -64,7 +64,7 @@ object SupportStructures {
                 /// Serialize a value without redacting sensitive fields
                 ///
                 /// This function is intended to be used by `serde(serialize_with = "serialize_unredacted")`
-                pub fn serialize_unredacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+                pub fn serialize_unredacted<T, S: #{serde}::Serializer>(value: &T, serializer: S) -> #{Result}<S::Ok, S::Error>
                 where
                     T: #{SerializeConfigured},
                 {
@@ -77,6 +77,7 @@ object SupportStructures {
                 "serde" to serde,
                 "SerializeConfigured" to serializeConfigured(),
                 "SerializationSettings" to serializationSettings(),
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -136,7 +137,7 @@ object SupportStructures {
                 where
                 T: #{serde}::Serialize,
                 {
-                    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                    fn serialize<S>(&self, serializer: S) -> #{Result}<S::Ok, S::Error>
                     where
                     S: serde::Serializer,
                     {
@@ -148,6 +149,7 @@ object SupportStructures {
                 }
                 """,
                 "serde" to CargoDependency.Serde.toType(),
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -162,7 +164,7 @@ object SupportStructures {
                 }
 
                 impl<T> #{serde}::Serialize for ConfigurableSerde<T> where for <'a> ConfigurableSerdeRef<'a, T>: #{serde}::Serialize {
-                    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                    fn serialize<S>(&self, serializer: S) -> #{Result}<S::Ok, S::Error>
                     where
                         S: #{serde}::Serializer,
                     {
@@ -177,7 +179,7 @@ object SupportStructures {
                 where
                     T: #{SerializeConfigured},
                 {
-                    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                    fn serialize<S>(&self, serializer: S) -> #{Result}<S::Ok, S::Error>
                     where
                         S: #{serde}::Serializer,
                     {
@@ -193,6 +195,7 @@ object SupportStructures {
                 "ConfigurableSerdeRef" to configurableSerdeRef(),
                 "SerializeConfigured" to serializeConfigured(),
                 "serde" to CargoDependency.Serde.toType(),
+                *RuntimeType.preludeScope,
             )
         }
 

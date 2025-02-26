@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -69,6 +68,7 @@ class XmlBindingTraitSerializerGenerator(
             "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
+            *RuntimeType.preludeScope,
         )
 
     private val xmlIndex = XmlNameIndex.of(model)
@@ -114,7 +114,7 @@ class XmlBindingTraitSerializerGenerator(
                 ?: throw CodegenException("operation must have a name if it has members")
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "op_input") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                "pub fn $fnName(input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rust("let mut out = String::new();")
@@ -199,7 +199,7 @@ class XmlBindingTraitSerializerGenerator(
         ProtocolFunctions.crossOperationFn("rest_xml_unset_union_payload") { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
-                *preludeScope,
+                *codegenScope,
                 "ByteSlab" to RuntimeType.ByteSlab,
             )
         }
@@ -215,7 +215,7 @@ class XmlBindingTraitSerializerGenerator(
                 ?: throw CodegenException("operation must have a name if it has members")
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "output") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(output: &#{target}) -> Result<String, #{Error}>",
+                "pub fn $fnName(output: &#{target}) -> #{Result}<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(outputShape),
             ) {
                 rust("let mut out = String::new();")
@@ -248,7 +248,7 @@ class XmlBindingTraitSerializerGenerator(
                 .map { it.member }
         return protocolFunctions.serializeFn(errorShape, fnNameSuffix = "error") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(error: &#{target}) -> Result<String, #{Error}>",
+                "pub fn $fnName(error: &#{target}) -> #{Result}<String, #{Error}>",
                 *codegenScope, "target" to symbolProvider.toSymbol(errorShape),
             ) {
                 rust("let mut out = String::new();")
@@ -425,7 +425,7 @@ class XmlBindingTraitSerializerGenerator(
         val structureSerializer =
             protocolFunctions.serializeFn(structureShape, fnNameSuffix = fnNameSuffix) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> #{Result}<(), #{Error}>",
                     "Input" to structureSymbol,
                     *codegenScope,
                 ) {
@@ -448,7 +448,7 @@ class XmlBindingTraitSerializerGenerator(
         val structureSerializer =
             protocolFunctions.serializeFn(unionShape) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> Result<(), #{Error}>",
+                    "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> #{Result}<(), #{Error}>",
                     "Input" to unionSymbol,
                     *codegenScope,
                 ) {

@@ -545,7 +545,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
         rustTemplate(
             """
             impl<'a> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}> {
-                fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                fn serialize<S>(&self, serializer: S) -> #{Result}<S::Ok, S::Error>
                 where
                     S: #{serde}::Serializer,
                 {
@@ -556,6 +556,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             }
             """,
             "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+            *RuntimeType.preludeScope,
         )
     }
 
@@ -567,7 +568,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             rustTemplate(
                 """
                 impl<'a, 'b> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, #{Shape}<'b>> {
-                    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+                    fn serialize<S>(&self, serializer: S) -> #{Result}<S::Ok, S::Error>
                     where
                         S: #{serde}::Serializer,
                     {
@@ -578,6 +579,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 }
                 """,
                 "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
     }
