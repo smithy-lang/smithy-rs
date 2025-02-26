@@ -77,3 +77,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# FIXME - workaround minimal-versions check issue with base64ct (https://github.com/RustCrypto/formats/issues/1684)
+[package.metadata.cargo-udeps.ignore]
+normal = ["base64ct"]
