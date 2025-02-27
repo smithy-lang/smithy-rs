@@ -183,7 +183,9 @@ class FluentBuilderGenerator(
             return null
         }
 
-        // The variable eventStreamMember is guaranteed to be non-null because of the short-circuit above
+        // The variable eventStreamMember is guaranteed to be non-null because of the short-circuit above.
+        // It's guaranteed by the spec that there is exactly one member with the streaming trait.
+        // See Validation in https://smithy.io/2.0/spec/streaming.html#streaming-trait
         val eventStreamMember =
             outputShape.members().find { member ->
                 member.isEventStream(codegenContext.model)
