@@ -29,6 +29,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
@@ -38,6 +41,17 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+
+/** EnumGenerator customization sections */
+sealed class EnumSection(name: String) : Section(name) {
+    abstract val definition: EnumDefinition
+
+    /** Hook to add additional attributes to an enum member */
+    data class AdditionalMemberAttributes(override val definition: EnumDefinition) : EnumSection("AdditionalMemberAttributes")
+}
+
+/** Customizations for EnumGenerator */
+abstract class EnumCustomization : NamedCustomization<EnumSection>()
 
 data class EnumGeneratorContext(
     val enumName: String,
@@ -86,6 +100,7 @@ class EnumMemberModel(
     private val parentShape: Shape,
     private val definition: EnumDefinition,
     private val symbolProvider: RustSymbolProvider,
+    private val customizations: List<EnumCustomization>,
 ) {
     companion object {
         /**
@@ -140,6 +155,7 @@ class EnumMemberModel(
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
         renderDeprecated(writer)
+        writer.writeCustomizations(customizations, EnumSection.AdditionalMemberAttributes(definition))
         writer.write("${derivedName()},")
     }
 }
@@ -167,6 +183,7 @@ open class EnumGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val shape: StringShape,
     private val enumType: EnumType,
+    private val customizations: List<EnumCustomization>,
 ) {
     companion object {
         /** Name of the function on the enum impl to get a vec of value names */
@@ -180,7 +197,7 @@ open class EnumGenerator(
             enumName = symbol.name,
             enumMeta = symbol.expectRustMetadata(),
             enumTrait = enumTrait,
-            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
+            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider, customizations) },
         )
 
     fun render(writer: RustWriter) {
