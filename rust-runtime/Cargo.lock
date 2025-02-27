@@ -448,7 +448,6 @@ dependencies = [
  "hyper-rustls 0.27.5",
  "hyper-util",
  "indexmap 2.7.1",
- "once_cell",
  "pin-project-lite",
  "rustls 0.21.12",
  "rustls 0.23.23",

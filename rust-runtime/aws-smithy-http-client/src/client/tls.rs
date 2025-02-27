@@ -199,13 +199,14 @@ cfg_rustls! {
             use rustls_pki_types::CertificateDer;
             use rustls_pki_types::pem::PemObject;
             use rustls_native_certs::CertificateResult;
+            use std::sync::LazyLock;
 
             /// Cached native certificates
             ///
             /// Creating a `with_native_roots()` hyper_rustls client re-loads system certs
             /// each invocation (which can take 300ms on OSx). Cache the loaded certs
             /// to avoid repeatedly incurring that cost.
-            pub(crate) static NATIVE_ROOTS: once_cell::sync::Lazy<Vec<CertificateDer<'static>>> = once_cell::sync::Lazy::new(|| {
+            pub(crate) static NATIVE_ROOTS: LazyLock<Vec<CertificateDer<'static>>> = LazyLock::new(|| {
                 let CertificateResult { certs, errors, .. } = rustls_native_certs::load_native_certs();
                 if !errors.is_empty() {
                     tracing::warn!("native root CA certificate loading errors: {errors:?}")
@@ -299,6 +300,7 @@ cfg_s2n_tls! {
             use client::connect::HttpConnector;
             use s2n_tls::security::Policy;
             use crate::tls::TlsContext;
+            use std::sync::LazyLock;
 
             // Default S2N security policy which sets protocol versions and cipher suites
             //  See https://aws.github.io/s2n-tls/usage-guide/ch06-security-policies.html
@@ -313,7 +315,7 @@ cfg_s2n_tls! {
                 builder
             }
 
-            static CACHED_CONFIG: once_cell::sync::Lazy<s2n_tls::config::Config> = once_cell::sync::Lazy::new(|| {
+            static CACHED_CONFIG: LazyLock<s2n_tls::config::Config> = LazyLock::new(|| {
                 let mut config = base_config();
                 config.with_system_certs(true).unwrap();
                 // actually loads the system certs
