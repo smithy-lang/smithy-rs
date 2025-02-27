@@ -24,6 +24,8 @@ default-client = [
     "hyper-util?/client-legacy",
     "dep:http-1x",
     "dep:tower",
+    "dep:rustls-pki-types",
+    "dep:rustls-native-certs"
 ]
 
 wire-mock = [
@@ -63,7 +65,6 @@ legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014
 rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "default-client"]
 rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "dep:hyper-rustls", "default-client"]
 rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "dep:hyper-rustls", "default-client"]
-
 s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "default-client"]
 
 [dependencies]
@@ -73,21 +74,22 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 h2 = { version = "0.4.2", default-features = false }
 tokio = { version = "1.40", features = [] }
-once_cell = "1.20.1"
 pin-project-lite = "0.2.14"
 tracing = "0.1.40"
 
 # hyper 1.x stack
-hyper = { version = "1.4.0", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1.7", features = ["http1", "http2"], optional = true }
+hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
+hyper-util = { version = "0.1.10", features = ["http1", "http2"], optional = true }
 http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
-s2n-tls-hyper = { version = "0.0.2", optional = true }
-s2n-tls = { version = "0.3.10", optional = true }
-tower = { version = "0.5.1", optional = true }
+s2n-tls-hyper = { version = "0.0.4", optional = true }
+s2n-tls = { version = "0.3.12", optional = true }
+tower = { version = "0.5.2", optional = true }
+rustls-pki-types = { version = "1.11.0", features = ["std"], optional = true }
+rustls-native-certs = { version = "0.8.1", optional = true }
 # end hyper 1.x stack deps
 
 # legacy hyper-0.14.x stack the SDK/runtime GA'd with
@@ -99,7 +101,7 @@ legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }
 # end legacy stack deps
 
 # test util stack
-bytes = { version = "1.4.0", optional = true }
+bytes = { version = "1.10.0", optional = true }
 serde = { version = "1.0.210", features = ["derive"], optional = true }
 serde_json = { version = "1.0.128", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.6.0", features = ["serde"], optional = true }
@@ -109,8 +111,13 @@ http-body-util = { version = "0.1.2", optional = true }
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "test-util"] }
+http-body-util = { version = "0.1.2" }
+hyper-util = { version = "0.1.7", features = ["full"] }
+rustls-pemfile = "2.2.0"
+rustls-pki-types = { version = "1.11.0", features = ["std"] }
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
+tokio-rustls = "0.26.1"
 
 
 [[example]]

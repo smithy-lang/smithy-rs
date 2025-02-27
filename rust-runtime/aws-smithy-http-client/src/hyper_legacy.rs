@@ -40,12 +40,13 @@ mod default_connector {
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
     use legacy_hyper_rustls as hyper_rustls;
     use legacy_rustls as rustls;
+    use std::sync::LazyLock;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
-    pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
+    pub(crate) static HTTPS_NATIVE_ROOTS: LazyLock<
         hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(default_tls);
+    > = LazyLock::new(default_tls);
 
     fn default_tls() -> hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;

@@ -14,7 +14,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
-bytes = "1.4.0"
+bytes = "1.10.0"
 http = "1.0.0"
 tracing = "0.1.40"
 # Note the wasi crate will only build for target wasm32-wasi, but having a target

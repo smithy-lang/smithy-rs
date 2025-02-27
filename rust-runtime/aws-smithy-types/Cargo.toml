@@ -32,7 +32,7 @@ serde-deserialize = []
 
 [dependencies]
 base64-simd = "0.8"
-bytes = "1.4.0"
+bytes = "1.10.0"
 bytes-utils = "0.1"
 http = { version = "0.2.9", optional = true }
 http-1x = { package = "http", version = "1", optional = true }

@@ -448,22 +448,25 @@ dependencies = [
  "hyper-rustls 0.27.5",
  "hyper-util",
  "indexmap 2.7.1",
- "once_cell",
  "pin-project-lite",
  "rustls 0.21.12",
  "rustls 0.23.23",
+ "rustls-native-certs 0.8.1",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
  "s2n-tls",
  "s2n-tls-hyper",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-rustls 0.26.1",
  "tower 0.5.2",
  "tracing",
 ]
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.63.4"
+version = "0.63.5"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -515,7 +518,7 @@ dependencies = [
  "pyo3",
  "pyo3-asyncio",
  "rcgen",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.4",
  "signal-hook",
  "socket2",
  "thiserror",
@@ -555,7 +558,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "once_cell",
@@ -619,7 +622,6 @@ dependencies = [
  "http 1.2.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
- "httparse",
  "hyper 0.14.32",
  "once_cell",
  "pin-project-lite",
@@ -939,9 +941,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.39"
+version = "0.4.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e36cc9d416881d2e24f9a963be5fb1cd90966419ac844274161d10488b3e825"
+checksum = "1a7964611d71df112cb1730f2ee67324fcf4d0fc6606acbbe9bfe06df124637c"
 dependencies = [
  "num-traits",
 ]
@@ -3037,6 +3039,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47796c98c480fce5406ef69d1c76378375492c3b0a0de587be0c1d9feb12f395"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring 0.17.11",
  "rustls-pki-types",
@@ -3052,7 +3055,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.4",
  "schannel",
  "security-framework 2.11.1",
 ]
@@ -3076,6 +3079,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c74cae0a4cf6ccbbf5f359f08efdf8ee7e1dc532573bf0db71968cb56b1448c"
 dependencies = [
  "base64 0.21.7",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -3132,9 +3144,9 @@ checksum = "6ea1a2d0a644769cc99faa24c3ad26b379b786fe7c36fd3c546254801650e6dd"
 
 [[package]]
 name = "s2n-tls"
-version = "0.3.10"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b62b5e64b457a4dfeddf03245d5f79719f3ae83fbb0eaa73d2dc7433dc6a6ad4"
+checksum = "bca784a7bd2303b31dee13fe5d8617bd27c9e983342b6f07277d7bc07a2f32ea"
 dependencies = [
  "errno",
  "hex",
@@ -3145,9 +3157,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-hyper"
-version = "0.0.2"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b1cfe6893f59828c500b07be57d3fb3bff75ffbe3046c18d18e3fcfa936d683"
+checksum = "de97dea004ba2d03d6f1618f0ee770b4a63e3ba98d1764a0fecd2e520123f9ec"
 dependencies = [
  "http 1.2.0",
  "hyper 1.6.0",
@@ -3159,9 +3171,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-sys"
-version = "0.3.10"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46efa85c33c665eefdf1f8681d441feec323062bb99c36e938f4505441054e78"
+checksum = "9ac0a964de7522dd815253bea5f17e70fd382920ab20c69783ad5294519f4712"
 dependencies = [
  "aws-lc-rs",
  "cc",
@@ -3170,9 +3182,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-tokio"
-version = "0.3.10"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ac505aec9ede552a5e74b47d2cf2bb4589d5aef423ad07136e689cb7c6a256a"
+checksum = "8ef2b3f1b676575bf221cb8fe5c0bb5720736b98957e7dc9d873cd50412cbc7a"
 dependencies = [
  "errno",
  "libc",
@@ -3985,9 +3997,9 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "uuid"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93d59ca99a559661b96bf898d8fce28ed87935fd2bea9f05983c1464dd6c71b1"
+checksum = "bd8dcafa1ca14750d8d7a05aa05988c17aab20886e1f3ae33a40223c58d92ef7"
 dependencies = [
  "getrandom 0.3.1",
  "rand 0.9.0",

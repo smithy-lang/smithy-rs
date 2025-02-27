@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::time::Duration;
+use std::{env, fs};
 
 use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::error::SdkError;
-use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 
+use aws_smithy_http_client::tls::{self, TlsContext, TrustStore};
+use aws_smithy_http_client::Builder as HttpClientBuilder;
+
+use rustls::pki_types::CertificateDer;
 #[cfg(debug_assertions)]
 use x509_parser::prelude::*;
 
@@ -40,23 +43,25 @@ fn debug_cert(cert: &[u8]) {
 }
 
 fn add_cert_to_store(cert: &[u8], store: &mut rustls::RootCertStore) {
-    let cert = rustls::Certificate(cert.to_vec());
     #[cfg(debug_assertions)]
-    debug_cert(&cert.0);
-    if let Err(e) = store.add(&cert) {
+    debug_cert(cert);
+    let der = CertificateDer::from_slice(cert);
+    if let Err(e) = store.add(der) {
         println!("Error adding root certificate: {e}");
         unsupported();
     }
 }
 
-fn load_ca_bundle(filename: &String, roots: &mut rustls::RootCertStore) {
+fn load_ca_bundle(filename: &String) -> TrustStore {
+    // test the certs are supported and fail quickly if not
     match File::open(filename) {
         Ok(f) => {
             let mut f = BufReader::new(f);
+            let mut roots = rustls::RootCertStore::empty();
             match rustls_pemfile::certs(&mut f) {
                 Ok(certs) => {
                     for cert in certs {
-                        add_cert_to_store(&cert, roots);
+                        add_cert_to_store(&cert, &mut roots);
                     }
                 }
                 Err(e) => {
@@ -70,47 +75,40 @@ fn load_ca_bundle(filename: &String, roots: &mut rustls::RootCertStore) {
             unsupported();
         }
     }
+
+    let pem_bytes = fs::read(filename).expect("bundle exists");
+    TrustStore::empty().with_pem_certificate(pem_bytes.as_slice())
 }
 
-fn load_native_certs(roots: &mut rustls::RootCertStore) {
-    let certs = rustls_native_certs::load_native_certs();
-    if let Err(ref e) = certs {
-        println!("Error reading native certificates: {e}");
-        unsupported();
-    }
-    for cert in certs.unwrap() {
-        add_cert_to_store(&cert.0, roots);
-    }
-    let mut pem_ca_cert = b"\
+fn load_native_certs() -> TrustStore {
+    // why do we need a custom trust store when invoked with native certs?
+    // Because the trytls tests don't actually only rely on native certs.
+    // It's native certs AND the one replaced in the blank pem cert below
+    // via the `update-certs` script.
+    let pem_ca_cert = b"\
 -----BEGIN CERTIFICATE-----
 -----END CERTIFICATE-----\
 " as &[u8];
-    let certs = rustls_pemfile::certs(&mut pem_ca_cert).unwrap();
-    for cert in certs {
-        add_cert_to_store(&cert, roots);
-    }
+
+    TrustStore::default().with_pem_certificate(pem_ca_cert)
 }
 
 async fn create_client(
-    roots: rustls::RootCertStore,
+    trust_store: TrustStore,
     host: &String,
     port: &String,
 ) -> aws_sdk_sts::Client {
     let credentials = get_credentials();
-    let tls_config = rustls::client::ClientConfig::builder()
-        .with_safe_default_cipher_suites()
-        .with_safe_default_kx_groups()
-        .with_safe_default_protocol_versions()
-        .unwrap()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(tls_config)
-        .https_only()
-        .enable_http1()
-        .enable_http2()
-        .build();
-    let http_client = HyperClientBuilder::new().build(tls_connector);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .build()
+        .expect("valid TLS config");
+    let http_client = HttpClientBuilder::new()
+        .tls_provider(tls::Provider::rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
     let sdk_config = aws_config::from_env()
         .http_client(http_client)
         .credentials_provider(credentials)
@@ -133,21 +131,21 @@ async fn main() -> Result<(), aws_sdk_sts::Error> {
         eprintln!("Syntax: {} <hostname> <port> [ca-file]", argv[0]);
         std::process::exit(exitcode::USAGE);
     }
-    let mut roots = rustls::RootCertStore::empty();
-    if argv.len() == 4 {
+    let trust_store = if argv.len() == 4 {
         print!(
             "Connecting to https://{}:{} with root CA bundle from {}: ",
             &argv[1], &argv[2], &argv[3]
         );
-        load_ca_bundle(&argv[3], &mut roots);
+        load_ca_bundle(&argv[3])
     } else {
         print!(
             "Connecting to https://{}:{} with native roots: ",
             &argv[1], &argv[2]
         );
-        load_native_certs(&mut roots);
-    }
-    let sts_client = create_client(roots, &argv[1], &argv[2]).await;
+        load_native_certs()
+    };
+
+    let sts_client = create_client(trust_store, &argv[1], &argv[2]).await;
     match sts_client.get_caller_identity().send().await {
         Ok(_) => println!("\nACCEPT"),
         Err(SdkError::DispatchFailure(e)) => println!("{e:?}\nREJECT"),
