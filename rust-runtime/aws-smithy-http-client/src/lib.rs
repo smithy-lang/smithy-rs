@@ -47,6 +47,9 @@ pub use client::{default_connector, tls, Builder, Connector, ConnectorBuilder};
 #[cfg(feature = "test-util")]
 pub mod test_util;
 
+mod error;
+pub use error::HttpClientError;
+
 #[allow(unused_macros, unused_imports)]
 #[macro_use]
 pub(crate) mod cfg {

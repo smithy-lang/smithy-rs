@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::cfg::{cfg_rustls, cfg_s2n_tls};
-use aws_smithy_runtime_api::box_error::BoxError;
+use crate::HttpClientError;
 
 /// Choice of underlying cryptography library
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -61,7 +61,7 @@ impl TlsContextBuilder {
     }
 
     /// Build a new [TlsContext]
-    pub fn build(self) -> Result<TlsContext, BoxError> {
+    pub fn build(self) -> Result<TlsContext, HttpClientError> {
         Ok(TlsContext {
             trust_store: self.trust_store,
         })
