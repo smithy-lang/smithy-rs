@@ -100,8 +100,8 @@ impl Intercept for MetricsInterceptor {
         _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef<'_>,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        println!("METRICS INTERCEPTOR RUNNING: read_before_execution");
         let mut layer = Layer::new("MetricsInterceptor");
+
         layer.store_put(MeasurementsContainer {
             call_start: self.time_source.now(),
             attempts: 0,
@@ -117,7 +117,6 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        println!("METRICS INTERCEPTOR RUNNING: read_after_execution");
         let measurements = cfg
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
@@ -125,8 +124,6 @@ impl Intercept for MetricsInterceptor {
         let attributes = self.get_attrs_from_cfg(cfg);
 
         if let Some(attrs) = attributes {
-            println!("ATTRS: {:#?}", attrs);
-
             let call_end = self.time_source.now();
             let call_duration = call_end.duration_since(measurements.call_start);
             if let Ok(elapsed) = call_duration {
@@ -147,8 +144,6 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        println!("METRICS INTERCEPTOR RUNNING: read_before_attempt");
-
         let measurements = cfg
             .get_mut::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
@@ -165,8 +160,6 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        println!("METRICS INTERCEPTOR RUNNING: read_after_attempt");
-
         let measurements = cfg
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");

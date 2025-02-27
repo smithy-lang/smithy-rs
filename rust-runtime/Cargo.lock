@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "once_cell",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.7.9"
+version = "1.7.10"
 dependencies = [
  "approx",
  "aws-smithy-async",
