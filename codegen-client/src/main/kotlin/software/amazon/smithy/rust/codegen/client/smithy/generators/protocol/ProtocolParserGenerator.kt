@@ -242,6 +242,7 @@ class ProtocolParserGenerator(
             structuredDataParser.operationParser(operationShape)?.also { parser ->
                 // Don't deserialize non-event stream members for an event stream operation with RPC bound protocols,
                 // as they need to be deserialized from payload in the first frame of event stream.
+                // See https://smithy.io/2.0/spec/streaming.html#initial-response
                 if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operationShape) != true) {
                     rust(
                         "output = #T(_response_body, output).map_err(#T::unhandled)?;",

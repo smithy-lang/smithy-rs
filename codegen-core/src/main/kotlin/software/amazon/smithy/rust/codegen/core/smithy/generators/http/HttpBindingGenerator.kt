@@ -511,6 +511,7 @@ class HttpBindingGenerator(
         }
 
         // Skip if we need to serialize operation input's members in an initial message of event stream
+        // See https://smithy.io/2.0/spec/streaming.html#initial-request
         if (shape is OperationShape &&
             protocol.httpBindingResolver.handlesEventStreamInitialRequest(shape)
         ) {
