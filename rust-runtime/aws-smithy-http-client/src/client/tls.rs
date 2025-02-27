@@ -111,10 +111,10 @@ impl TrustStore {
     /// This may be called more than once to add multiple certificates.
     /// NOTE: PEM certificate contents are not validated until passed to the configured
     /// TLS provider.
-    pub fn with_pem_certificate(mut self, pem_bytes: &[u8]) -> Self {
+    pub fn with_pem_certificate(mut self, pem_bytes: impl Into<Vec<u8>>) -> Self {
         // ideally we'd validate here but rustls-pki-types converts to DER when loading and S2N
         // still expects PEM encoding. Store the raw bytes and let the TLS implementation validate
-        self.custom_certs.push(pem_bytes.into());
+        self.custom_certs.push(CertificatePEM(pem_bytes.into()));
         self
     }
 
@@ -123,8 +123,8 @@ impl TrustStore {
     /// This may be called more than once to add multiple certificates.
     /// NOTE: PEM certificate contents are not validated until passed to the configured
     /// TLS provider.
-    pub fn add_pem_certificate(&mut self, pem_bytes: &[u8]) -> &mut Self {
-        self.custom_certs.push(pem_bytes.into());
+    pub fn add_pem_certificate(&mut self, pem_bytes: impl Into<Vec<u8>>) -> &mut Self {
+        self.custom_certs.push(CertificatePEM(pem_bytes.into()));
         self
     }
 }
