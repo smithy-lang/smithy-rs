@@ -382,7 +382,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             .with_client_plugins(default_plugins(
                 DefaultPluginParams::new()
                     .with_retry_partition_name(service_name.clone())
-                    .with_operation_name(operation_name.clone())
                     .with_time_source(time_source),
             ))
             .with_client_plugin(

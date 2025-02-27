@@ -9,7 +9,7 @@ use aws_smithy_observability::{
     ObservabilityError,
 };
 use aws_smithy_runtime_api::client::{
-    interceptors::Intercept, runtime_components::RuntimeComponentsBuilder,
+    interceptors::Intercept, orchestrator::Metadata, runtime_components::RuntimeComponentsBuilder,
     runtime_plugin::RuntimePlugin,
 };
 use aws_smithy_types::config_bag::{Layer, Storable, StoreReplace};
@@ -58,8 +58,6 @@ impl MetricsInterceptorInstruments {
 #[derive(Debug)]
 pub(crate) struct MetricsInterceptor {
     instruments: MetricsInterceptorInstruments,
-    service_name: Cow<'static, str>,
-    operation_name: Cow<'static, str>,
     // Holding a TimeSource here isn't ideal, but RuntimeComponents aren't available in
     // the read_before_execution hook and that is when we need to start the timer for
     // the operation.
@@ -67,32 +65,28 @@ pub(crate) struct MetricsInterceptor {
 }
 
 impl MetricsInterceptor {
-    pub(crate) fn new(
-        service_name: impl Into<Cow<'static, str>>,
-        operation_name: impl Into<Cow<'static, str>>,
-        time_source: SharedTimeSource,
-    ) -> Result<Self, ObservabilityError> {
+    pub(crate) fn new(time_source: SharedTimeSource) -> Result<Self, ObservabilityError> {
         Ok(MetricsInterceptor {
             instruments: MetricsInterceptorInstruments::new()?,
-            service_name: service_name.into(),
-            operation_name: operation_name.into(),
             time_source,
         })
     }
 
-    /// Get [Attributes] containing the service and method name for this operation
-    fn attributes(&self) -> Attributes {
-        let mut attributes = Attributes::new();
-        attributes.set(
-            "rpc.service",
-            AttributeValue::String(self.service_name.clone().into()),
-        );
-        attributes.set(
-            "rpc.method",
-            AttributeValue::String(self.operation_name.clone().into()),
-        );
+    pub(crate) fn get_attrs_from_cfg(
+        &self,
+        cfg: &aws_smithy_types::config_bag::ConfigBag,
+    ) -> Option<Attributes> {
+        let operation_metadata = cfg.load::<Metadata>();
 
-        attributes
+        if let Some(md) = operation_metadata {
+            let mut attributes = Attributes::new();
+            attributes.set("rpc.service", AttributeValue::String(md.service().into()));
+            attributes.set("rpc.method", AttributeValue::String(md.name().into()));
+
+            Some(attributes)
+        } else {
+            None
+        }
     }
 }
 
@@ -106,6 +100,7 @@ impl Intercept for MetricsInterceptor {
         _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef<'_>,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        println!("METRICS INTERCEPTOR RUNNING: read_before_execution");
         let mut layer = Layer::new("MetricsInterceptor");
         layer.store_put(MeasurementsContainer {
             call_start: self.time_source.now(),
@@ -122,18 +117,25 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        println!("METRICS INTERCEPTOR RUNNING: read_after_execution");
         let measurements = cfg
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
-        let call_end = self.time_source.now();
-        let call_duration = call_end.duration_since(measurements.call_start);
-        if let Ok(elapsed) = call_duration {
-            self.instruments.operation_duration.record(
-                elapsed.as_secs_f64(),
-                Some(&self.attributes()),
-                None,
-            );
+        let attributes = self.get_attrs_from_cfg(cfg);
+
+        if let Some(attrs) = attributes {
+            println!("ATTRS: {:#?}", attrs);
+
+            let call_end = self.time_source.now();
+            let call_duration = call_end.duration_since(measurements.call_start);
+            if let Ok(elapsed) = call_duration {
+                self.instruments.operation_duration.record(
+                    elapsed.as_secs_f64(),
+                    Some(&attrs),
+                    None,
+                );
+            }
         }
 
         Ok(())
@@ -145,6 +147,8 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        println!("METRICS INTERCEPTOR RUNNING: read_before_attempt");
+
         let measurements = cfg
             .get_mut::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
@@ -161,22 +165,22 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        println!("METRICS INTERCEPTOR RUNNING: read_after_attempt");
+
         let measurements = cfg
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
         let attempt_end = self.time_source.now();
         let attempt_duration = attempt_end.duration_since(measurements.attempt_start);
+        let attributes = self.get_attrs_from_cfg(cfg);
 
-        if let Ok(elapsed) = attempt_duration {
-            let mut attributes = self.attributes();
-            attributes.set("attempt", AttributeValue::I64(measurements.attempts.into()));
+        if let (Ok(elapsed), Some(mut attrs)) = (attempt_duration, attributes) {
+            attrs.set("attempt", AttributeValue::I64(measurements.attempts.into()));
 
-            self.instruments.attempt_duration.record(
-                elapsed.as_secs_f64(),
-                Some(&attributes),
-                None,
-            );
+            self.instruments
+                .attempt_duration
+                .record(elapsed.as_secs_f64(), Some(&attrs), None);
         }
         Ok(())
     }
@@ -185,23 +189,13 @@ impl Intercept for MetricsInterceptor {
 /// Runtime plugin that adds an interceptor for collecting metrics
 #[derive(Debug, Default)]
 pub struct MetricsRuntimePlugin {
-    service: Cow<'static, str>,
-    operation: Cow<'static, str>,
     time_source: SharedTimeSource,
 }
 
 impl MetricsRuntimePlugin {
     /// Creates a runtime plugin which installs an interceptor for collecting metrics
-    pub fn new(
-        service: impl Into<Cow<'static, str>>,
-        operation: impl Into<Cow<'static, str>>,
-        time_source: SharedTimeSource,
-    ) -> Self {
-        Self {
-            service: service.into(),
-            operation: operation.into(),
-            time_source,
-        }
+    pub fn new(time_source: SharedTimeSource) -> Self {
+        Self { time_source }
     }
 }
 
@@ -210,11 +204,7 @@ impl RuntimePlugin for MetricsRuntimePlugin {
         &self,
         _current_components: &RuntimeComponentsBuilder,
     ) -> Cow<'_, RuntimeComponentsBuilder> {
-        let interceptor = MetricsInterceptor::new(
-            self.service.clone(),
-            self.operation.clone(),
-            self.time_source.clone(),
-        );
+        let interceptor = MetricsInterceptor::new(self.time_source.clone());
         if let Ok(interceptor) = interceptor {
             Cow::Owned(RuntimeComponentsBuilder::new("Metrics").with_interceptor(interceptor))
         } else {

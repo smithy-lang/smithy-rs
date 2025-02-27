@@ -213,12 +213,8 @@ fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
 
-fn metrics_runtime_plugin(
-    service: impl Into<Cow<'static, str>>,
-    operation: impl Into<Cow<'static, str>>,
-    time_source: SharedTimeSource,
-) -> Option<SharedRuntimePlugin> {
-    Some(MetricsRuntimePlugin::new(service, operation, time_source).into_shared())
+fn metrics_runtime_plugin(time_source: SharedTimeSource) -> Option<SharedRuntimePlugin> {
+    Some(MetricsRuntimePlugin::new(time_source).into_shared())
 }
 
 fn validate_stalled_stream_protection_config(
@@ -258,7 +254,6 @@ pub struct DefaultPluginParams {
     // The retry_partition_name is also the service_name
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
-    operation_name: Option<Cow<'static, str>>,
     time_source: Option<SharedTimeSource>,
 }
 
@@ -277,12 +272,6 @@ impl DefaultPluginParams {
     /// Sets the behavior major version.
     pub fn with_behavior_version(mut self, version: BehaviorVersion) -> Self {
         self.behavior_version = Some(version);
-        self
-    }
-
-    /// Sets the operation name.
-    pub fn with_operation_name(mut self, operation_name: impl Into<Cow<'static, str>>) -> Self {
-        self.operation_name = Some(operation_name.into());
         self
     }
 
@@ -313,11 +302,7 @@ pub fn default_plugins(
         default_timeout_config_plugin(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
-        metrics_runtime_plugin(
-            service_name,
-            params.operation_name.unwrap_or("unknown_operation".into()),
-            params.time_source.unwrap_or_default(),
-        ),
+        metrics_runtime_plugin(params.time_source.unwrap_or_default()),
     ]
     .into_iter()
     .flatten()
