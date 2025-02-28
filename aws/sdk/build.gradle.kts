@@ -60,7 +60,6 @@ dependencies {
 val awsServices: AwsServices by lazy {
     discoverServices(properties.get("aws.sdk.models.path"), loadServiceMembership())
 }
-val eventStreamAllowList: Set<String> by lazy { eventStreamAllowList() }
 val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, properties) }
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
@@ -75,11 +74,6 @@ fun loadServiceMembership(): Membership {
     return membershipOverride ?: fullSdk
 }
 
-fun eventStreamAllowList(): Set<String> {
-    val list = properties.get("aws.services.eventstream.allowlist") ?: ""
-    return list.split(",").map { it.trim() }.toSet()
-}
-
 fun generateSmithyBuild(services: AwsServices): String {
     val awsConfigVersion = properties.get(CrateSet.STABLE_VERSION_PROP_NAME)
         ?: throw IllegalStateException("missing ${CrateSet.STABLE_VERSION_PROP_NAME} for aws-config version")
@@ -92,7 +86,6 @@ fun generateSmithyBuild(services: AwsServices): String {
             )
         }
         val moduleName = "aws-sdk-${service.module}"
-        val eventStreamAllowListMembers = eventStreamAllowList.joinToString(", ") { "\"$it\"" }
         val defaultConfigPath =
             services.defaultConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val partitionsConfigPath =
@@ -113,7 +106,6 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "includeEndpointUrlConfig": false,
                             "renameErrors": false,
                             "debugMode": $debugMode,
-                            "eventStreamAllowList": [$eventStreamAllowListMembers],
                             "enableUserConfigurableRuntimePlugins": false,
                             "nullabilityCheckMode": "${getNullabilityCheckMode()}"
                         },
@@ -156,7 +148,6 @@ fun generateSmithyBuild(services: AwsServices): String {
 tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
-    inputs.property("eventStreamAllowList", eventStreamAllowList)
     inputs.dir(projectDir.resolve("aws-models"))
     outputs.file(layout.buildDirectory.file("smithy-build.json"))
 

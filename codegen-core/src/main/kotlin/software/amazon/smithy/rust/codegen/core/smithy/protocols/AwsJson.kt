@@ -10,6 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.pattern.UriPattern
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
@@ -17,13 +19,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 sealed class AwsJsonVersion {
@@ -41,6 +47,8 @@ sealed class AwsJsonVersion {
 class AwsJsonHttpBindingResolver(
     private val model: Model,
     private val awsJsonVersion: AwsJsonVersion,
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): Remove todoHandlingInitialMessages once the server supports non-streaming members
+    private val todoHandlingInitialMessages: Boolean,
 ) : HttpBindingResolver {
     private val httpTrait =
         HttpTrait.builder()
@@ -51,8 +59,8 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
-        if (members.size > 1 && members.any { it.isStreaming(model) }) {
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): Remove the exception once the server supports non-streaming members
+        if (todoHandlingInitialMessages && members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
                     "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
@@ -86,6 +94,34 @@ class AwsJsonHttpBindingResolver(
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, "application/json")
+
+    override fun handlesEventStreamInitialRequest(shape: Shape): Boolean {
+        // True if the operation input contains an event stream member as well as non-event stream member.
+        return when (shape) {
+            is OperationShape -> {
+                shape.isInputEventStream(model) && requestBindings(shape).any { it.location == HttpLocation.DOCUMENT }
+            }
+
+            is StructureShape -> {
+                shape.hasEventStreamMember(model) && bindings(shape).any { it.location == HttpLocation.DOCUMENT }
+            }
+
+            else -> false
+        }
+    }
+
+    override fun handlesEventStreamInitialResponse(shape: Shape): Boolean {
+        // True if the operation output contains an event stream member.
+        // Note that this check is asymmetrical compared to `handlesEventStreamInitialRequest`, as it does not verify
+        // the presence of a non-event stream member to determine if the shape should handle the initial response.
+        // This is because the server may still send the initial response even when the operation output includes
+        // only the event stream member, so we need to defensively handle the initial response in all cases.
+        return when (shape) {
+            is OperationShape -> shape.isOutputEventStream(model)
+            is StructureShape -> shape.hasEventStreamMember(model)
+            else -> false
+        }
+    }
 }
 
 /**
@@ -145,7 +181,7 @@ open class AwsJson(
     val version: AwsJsonVersion get() = awsJsonVersion
 
     override val httpBindingResolver: HttpBindingResolver =
-        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion)
+        AwsJsonHttpBindingResolver(codegenContext.model, awsJsonVersion, codegenContext.target == CodegenTarget.SERVER)
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
 

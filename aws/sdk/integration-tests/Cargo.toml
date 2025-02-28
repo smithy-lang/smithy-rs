@@ -3,6 +3,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "cloudwatchlogs",
     "codecatalyst",
     "dynamodb",
     "ec2",

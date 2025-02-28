@@ -11,6 +11,7 @@ import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
@@ -105,6 +106,16 @@ interface HttpBindingResolver {
      * Determines the value of the event stream `:content-type` header based on union member
      */
     fun eventStreamMessageContentType(memberShape: MemberShape): String?
+
+    /**
+     * Determines whether event stream initial-request needs to be handled for given [shape]
+     */
+    fun handlesEventStreamInitialRequest(shape: Shape): Boolean
+
+    /**
+     * Determines whether event stream initial-response needs to be handled for given [shape]
+     */
+    fun handlesEventStreamInitialResponse(shape: Shape): Boolean
 }
 
 /**
@@ -197,6 +208,10 @@ open class HttpTraitHttpBindingResolver(
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =
         bindings.values.map(::HttpBindingDescriptor).sortedBy { it.memberName }
+
+    override fun handlesEventStreamInitialRequest(shape: Shape) = false
+
+    override fun handlesEventStreamInitialResponse(shape: Shape) = false
 }
 
 /**
@@ -232,4 +247,8 @@ open class StaticHttpBindingResolver(
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
         ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, eventStreamMessageContentType)
+
+    override fun handlesEventStreamInitialRequest(shape: Shape) = false
+
+    override fun handlesEventStreamInitialResponse(shape: Shape) = false
 }

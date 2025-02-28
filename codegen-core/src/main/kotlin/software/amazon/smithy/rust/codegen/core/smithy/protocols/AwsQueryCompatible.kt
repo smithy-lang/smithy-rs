@@ -7,11 +7,13 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
@@ -42,6 +44,12 @@ class AwsQueryCompatibleHttpBindingResolver(
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
         awsJsonHttpBindingResolver.eventStreamMessageContentType(memberShape)
+
+    override fun handlesEventStreamInitialRequest(shape: Shape): Boolean =
+        awsJsonHttpBindingResolver.handlesEventStreamInitialRequest(shape)
+
+    override fun handlesEventStreamInitialResponse(shape: Shape): Boolean =
+        awsJsonHttpBindingResolver.handlesEventStreamInitialResponse(shape)
 }
 
 class AwsQueryCompatible(
@@ -65,7 +73,7 @@ class AwsQueryCompatible(
     override val httpBindingResolver: HttpBindingResolver =
         AwsQueryCompatibleHttpBindingResolver(
             AwsQueryBindingResolver(codegenContext.model),
-            AwsJsonHttpBindingResolver(codegenContext.model, awsJson.version),
+            AwsJsonHttpBindingResolver(codegenContext.model, awsJson.version, codegenContext.target == CodegenTarget.SERVER),
         )
 
     override val defaultTimestampFormat = awsJson.defaultTimestampFormat

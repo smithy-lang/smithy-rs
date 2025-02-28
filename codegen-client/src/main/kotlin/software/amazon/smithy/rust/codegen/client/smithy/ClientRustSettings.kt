@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
 import software.amazon.smithy.rust.codegen.core.smithy.CoreCodegenConfig
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 
 /*
@@ -93,8 +92,6 @@ data class ClientCodegenConfig(
     val renameExceptions: Boolean = DEFAULT_RENAME_EXCEPTIONS,
     val includeFluentClient: Boolean = DEFAULT_INCLUDE_FLUENT_CLIENT,
     val addMessageToErrors: Boolean = DEFAULT_ADD_MESSAGE_TO_ERRORS,
-    // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
-    val eventStreamAllowList: Set<String> = DEFAULT_EVENT_STREAM_ALLOW_LIST,
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG,
     val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
@@ -105,7 +102,6 @@ data class ClientCodegenConfig(
         private const val DEFAULT_RENAME_EXCEPTIONS = true
         private const val DEFAULT_INCLUDE_FLUENT_CLIENT = true
         private const val DEFAULT_ADD_MESSAGE_TO_ERRORS = true
-        private val DEFAULT_EVENT_STREAM_ALLOW_LIST: Set<String> = emptySet()
         private const val DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG = true
         private const val DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS = true
         private const val DEFAULT_NULLABILITY_CHECK_MODE = "CLIENT"
@@ -121,12 +117,6 @@ data class ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_ACCESSORS),
                 debugMode = coreCodegenConfig.debugMode,
-                eventStreamAllowList =
-                    node.get().getArrayMember("eventStreamAllowList").map { array ->
-                        array.toList().mapNotNull { node ->
-                            node.asStringNode().orNull()?.value
-                        }
-                    }.orNull()?.toSet() ?: DEFAULT_EVENT_STREAM_ALLOW_LIST,
                 renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", DEFAULT_RENAME_EXCEPTIONS),
                 includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", DEFAULT_INCLUDE_FLUENT_CLIENT),
                 addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", DEFAULT_ADD_MESSAGE_TO_ERRORS),

@@ -18,15 +18,11 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import java.util.Base64
 
 object EventStreamUnmarshallTestCases {
-    fun RustWriter.writeUnmarshallTestCases(
-        codegenContext: CodegenContext,
-        testCase: EventStreamTestModels.TestCase,
-        optionalBuilderInputs: Boolean = false,
-    ) {
-        val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
-
-        val testStreamError = codegenContext.symbolProvider.symbolForEventStreamError(codegenContext.model.lookup("test#TestStream"))
+    fun RustWriter.writeUnmarshallTestUtil(codegenContext: CodegenContext) {
+        val testStreamError =
+            codegenContext.symbolProvider.symbolForEventStreamError(codegenContext.model.lookup("test#TestStream"))
         val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
+
         rust(
             """
             use aws_smithy_eventstream::frame::{UnmarshallMessage, UnmarshalledMessage};
@@ -64,6 +60,15 @@ object EventStreamUnmarshallTestCases {
             }
             """,
         )
+    }
+
+    fun RustWriter.writeUnmarshallTestCases(
+        codegenContext: CodegenContext,
+        testCase: EventStreamTestModels.TestCase,
+        optionalBuilderInputs: Boolean = false,
+    ) {
+        val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
+        writeUnmarshallTestUtil(codegenContext)
 
         unitTest("message_with_blob") {
             rustTemplate(

@@ -140,7 +140,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
                 """,
                 "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
                 "NoOpSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::NoOpSigner"),
-                "marshallerConstructorFn" to params.marshallerConstructorFn,
+                "marshallerConstructorFn" to params.eventStreamMarshallerGenerator.render(),
                 "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
             )
         },
@@ -858,13 +858,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
                                             rustTemplate(
                                                 """
-                                                    if !bytes.is_empty() {
-                                                        #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(
-                                                            &headers,
-                                                            Some("$expectedRequestContentType"),
-                                                        )?;
-                                                    }
-                                                    """,
+                                                if !bytes.is_empty() {
+                                                    #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(
+                                                        &headers,
+                                                        Some("$expectedRequestContentType"),
+                                                    )?;
+                                                }
+                                                """,
                                                 *codegenScope,
                                             )
                                         }

@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.error.Operat
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
-import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.DisableStalledStreamProtection
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -142,10 +142,10 @@ class ClientCodegenVisitor(
             .letIf(settings.codegenConfig.addMessageToErrors, AddErrorMessage::transform)
             // NormalizeOperations by ensuring every operation has an input & output shape
             .let(OperationNormalizer::transform)
-            // Drop unsupported event stream operations from the model
-            .let { RemoveEventStreamOperations.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+            // Mark operations incompatible with stalled stream protection as such
+            .let(DisableStalledStreamProtection::transformModel)
 
     /**
      * Execute code generation
@@ -236,6 +236,9 @@ class ClientCodegenVisitor(
 
                         implBlock(symbolProvider.toSymbol(shape)) {
                             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
+                            if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(shape) == true) {
+                                BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
+                            }
                         }
                     }
                     val builder: Writable = {

@@ -279,6 +279,8 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
         val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.30"))
+        val FuturesUtil: CargoDependency =
+            CargoDependency("futures-util", CratesIo("0.3.25"), defaultFeatures = false, features = setOf("alloc"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
@@ -302,8 +304,6 @@ data class CargoDependency(
         val Ciborium: CargoDependency = CargoDependency("ciborium", CratesIo("0.2"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.5.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency =
-            CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false, features = setOf("alloc"))
         val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
