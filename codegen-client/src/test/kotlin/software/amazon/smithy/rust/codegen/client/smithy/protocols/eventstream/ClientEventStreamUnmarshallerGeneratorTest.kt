@@ -78,11 +78,31 @@ class ClientEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(RpcEventStreamTestCasesProvider::class)
     fun rpcEventStreamTest(rpcEventStreamTestCase: RpcEventStreamTestCase) {
+        val defaultEventStreamReceiver =
+            writable {
+                rust(
+                    """
+                    if let Some(event) = response.value.recv().await.unwrap() {
+                        match event {
+                            TestStream::MessageWithString(message_with_string) => {
+                                assert_eq!("hello, world!", message_with_string.data().unwrap())
+                            }
+                            otherwise => panic!("matched on unexpected variant {otherwise:?}"),
+                        }
+                    } else {
+                        panic!("should receive at least one frame");
+                    }
+                    """,
+                )
+            }
+
         fun RustWriter.writeTestBody(
             codegenContext: CodegenContext,
             initialResponseStreamGenerator: Writable,
             eventStreamGenerator: Writable,
+            sendResultHandler: Writable = writable { rust("let mut response = response.unwrap();") },
             initialResponseAssertion: Writable,
+            eventStreamReceiver: Writable = defaultEventStreamReceiver,
         ) {
             rustTemplate(
                 """
@@ -123,31 +143,26 @@ class ClientEventStreamUnmarshallerGeneratorTest {
 
                 // This is dummy stream to satisfy input validation for the test service
                 let stream = #{futures_util}::stream::iter(vec![Ok(event)]);
-                let mut response = client
+                let response = client
                     .test_stream_op()
                     .value(EventStreamSender::from(stream))
                     .send()
-                    .await
-                    .unwrap();
+                    .await;
+
+                #{handle_send_result:W}
 
                 #{assert_initial_response:W}
 
-                if let Some(event) = response.value.recv().await.unwrap() {
-                    match event {
-                        TestStream::MessageWithString(message_with_string) => {
-                            assert_eq!("hello, world!", message_with_string.data().unwrap())
-                        }
-                        otherwise => panic!("matched on unexpected variant {otherwise:?}"),
-                    }
-                } else {
-                    panic!("should receive at least one frame");
-                }
+                #{receive_event_stream:W}
                 """,
                 "assert_initial_response" to initialResponseAssertion,
                 "capture_request" to RuntimeType.captureRequest(codegenContext.runtimeConfig),
                 "event_stream" to eventStreamGenerator,
                 "futures_util" to CargoDependency.FuturesUtil.toType(),
+                "handle_send_result" to sendResultHandler,
                 "initial_response_stream" to initialResponseStreamGenerator,
+                "receive_event_stream" to eventStreamGenerator,
+                "receive_event_stream" to eventStreamReceiver,
             )
         }
 
@@ -190,6 +205,63 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                     writable {
                                         rust("assert_eq!(${rpcEventStreamTestCase.expectedInInitialResponse}, response.test_string());")
                                     },
+                            )
+                        }
+                        tokioTest("with_initial_response_containing_invalid_data") {
+                            writeTestBody(
+                                codegenContext,
+                                initialResponseStreamGenerator =
+                                    writable {
+                                        val testCase = rpcEventStreamTestCase.inner
+                                        rust(
+                                            """
+                                            let initial_response = msg(
+                                                "event",
+                                                "initial-response",
+                                                ${testCase.eventStreamMessageContentType.dq()},
+                                                // Provide a bogus string when either a JSON string or the base64 encoding of a JSON string is expected
+                                                ${testCase.generateRustPayloadInitializer("abc")},
+                                            );
+                                            let mut buffer = vec![];
+                                            aws_smithy_eventstream::frame::write_message_to(&initial_response, &mut buffer).unwrap();
+                                            let chunks: Vec<Result<bytes::Bytes, _>> = vec![Ok(buffer.into())];
+                                            let initial_response_stream = futures_util::stream::iter(chunks);
+                                            """,
+                                        )
+                                    },
+                                eventStreamGenerator =
+                                    writable {
+                                        rust("let event_stream = initial_response_stream.chain(futures_util::stream::iter(chunks));")
+                                    },
+                                sendResultHandler =
+                                    writable {
+                                        rustTemplate(
+                                            """
+                                            match response {
+                                                Err(e) => {
+                                                    assert!(e
+                                                        .into_source()
+                                                        .unwrap()
+                                                        .downcast_ref::<#{DeserializeError}>()
+                                                        .is_some());
+                                                }
+                                                otherwise => {
+                                                    panic!(
+                                                        "Expected ResponseError with DeserializeError being its source, got: {otherwise:?}"
+                                                    );
+                                                }
+                                            }
+                                            """,
+                                            "DeserializeError" to
+                                                if (rpcEventStreamTestCase.inner.protocolShapeId == "smithy.protocols#rpcv2Cbor") {
+                                                    RuntimeType.smithyCbor(codegenContext.runtimeConfig).resolve("decode::DeserializeError")
+                                                } else {
+                                                    RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError")
+                                                },
+                                        )
+                                    },
+                                initialResponseAssertion = writable {},
+                                eventStreamReceiver = writable {},
                             )
                         }
                     }
