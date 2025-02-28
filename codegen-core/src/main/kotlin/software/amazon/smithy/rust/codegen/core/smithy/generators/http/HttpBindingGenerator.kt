@@ -510,6 +510,14 @@ class HttpBindingGenerator(
             return null
         }
 
+        // Skip if we need to serialize operation input's members in an initial message of event stream
+        // See https://smithy.io/2.0/spec/streaming.html#initial-request
+        if (shape is OperationShape &&
+            protocol.httpBindingResolver.handlesEventStreamInitialRequest(shape)
+        ) {
+            return null
+        }
+
         return protocolFunctions.serializeFn(shape, fnNameSuffix = "headers") { fnName ->
             // If the shape is an operation shape, the input symbol of the generated function is the input or output
             // shape, which is the shape holding the header-bound data.
