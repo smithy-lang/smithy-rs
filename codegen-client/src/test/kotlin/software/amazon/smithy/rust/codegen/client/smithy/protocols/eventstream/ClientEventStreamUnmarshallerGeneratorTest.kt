@@ -161,7 +161,6 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 "futures_util" to CargoDependency.FuturesUtil.toType(),
                 "handle_send_result" to sendResultHandler,
                 "initial_response_stream" to initialResponseStreamGenerator,
-                "receive_event_stream" to eventStreamGenerator,
                 "receive_event_stream" to eventStreamReceiver,
             )
         }
