@@ -98,9 +98,7 @@ open class EventStreamMarshallerGenerator(
                     let body = #{Bytes}::from(
                         body.bytes()
                             .expect("body should've been created from non-streaming payload for initial message")
-                            .iter()
-                            .cloned()
-                            .collect::<#{Vec}<_>>()
+                            .to_vec(),
                     );
                     #{Message}::new_from_parts(headers, body)
                     """,
