@@ -269,12 +269,16 @@ private fun baseClientRuntimePluginsFn(
                     let default_retry_partition = ${codegenContext.serviceShape.sdkId().dq()};
                     #{before_plugin_setup}
 
+                    let scope = "aws.sdk.rust.services.${codegenContext.serviceShape.sdkId()}";
+
                     let mut plugins = #{RuntimePlugins}::new()
                         // defaults
                         .with_client_plugins(#{default_plugins}(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(default_retry_partition)
                                 .with_behavior_version(config.behavior_version.expect(${behaviorVersionError.dq()}))
+                                .with_time_source(config.runtime_components.time_source().unwrap_or_default())
+                                .with_scope(scope)
                         ))
                         // user config
                         .with_client_plugin(
