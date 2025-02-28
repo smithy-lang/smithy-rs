@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMe
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
+import software.amazon.smithy.rustsdk.customize.AwsDisableStalledStreamProtection
 import software.amazon.smithy.rustsdk.customize.DisabledAuthDecorator
 import software.amazon.smithy.rustsdk.customize.IsTruncatedPaginatorDecorator
 import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
@@ -65,6 +66,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             ServiceEnvConfigDecorator(),
             HttpRequestCompressionDecorator(),
             DisablePayloadSigningDecorator(),
+            AwsDisableStalledStreamProtection(),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),
