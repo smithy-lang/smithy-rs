@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamBodyParams
@@ -70,13 +71,14 @@ private fun eventStreamWithInitialRequest(
                 use #{futures_util}::StreamExt;
                 let body = #{parser}(&input)?;
                 let initial_message = #{initial_message}(body);
-                let mut buffer = Vec::new();
+                let mut buffer = #{Vec}::new();
                 #{write_message_to}(&initial_message, &mut buffer)?;
                 let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
                 let adapter = #{message_stream_adaptor:W};
                 initial_message_stream.chain(adapter)
             }
             """,
+            *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
             "initial_message" to params.eventStreamMarshallerGenerator.renderInitialMessageGenerator(params.payloadContentType),
             "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),

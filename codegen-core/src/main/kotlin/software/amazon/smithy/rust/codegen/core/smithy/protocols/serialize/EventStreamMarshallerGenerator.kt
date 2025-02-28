@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -59,6 +60,8 @@ open class EventStreamMarshallerGenerator(
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope =
         arrayOf(
+            *preludeScope,
+            "Bytes" to RuntimeType.Bytes,
             "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
             "Message" to smithyTypes.resolve("event_stream::Message"),
             "Header" to smithyTypes.resolve("event_stream::Header"),
@@ -86,18 +89,18 @@ open class EventStreamMarshallerGenerator(
                 """,
                 *codegenScope,
             ) {
-                rust("let mut headers = Vec::new();")
+                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
                 addStringHeader(":message-type", "\"event\".into()")
                 addStringHeader(":event-type", "\"initial-request\".into()")
                 addStringHeader(":content-type", "${contentType.dq()}.into()")
                 rustTemplate(
                     """
-                    let body = bytes::Bytes::from(
+                    let body = #{Bytes}::from(
                         body.bytes()
                             .expect("body should've been created from non-streaming payload for initial message")
                             .iter()
                             .cloned()
-                            .collect::<Vec<_>>()
+                            .collect::<#{Vec}<_>>()
                     );
                     #{Message}::new_from_parts(headers, body)
                     """,
