@@ -12,12 +12,12 @@ use aws_smithy_runtime_api::client::{
     interceptors::Intercept, orchestrator::Metadata, runtime_components::RuntimeComponentsBuilder,
     runtime_plugin::RuntimePlugin,
 };
-use aws_smithy_types::config_bag::{Layer, Storable, StoreReplace};
+use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
 use std::{borrow::Cow, sync::Arc, time::SystemTime};
 
 /// Struct to hold metric data in the ConfigBag
 #[derive(Debug, Clone)]
-struct MeasurementsContainer {
+pub(crate) struct MeasurementsContainer {
     call_start: SystemTime,
     attempts: u32,
     attempt_start: SystemTime,
@@ -35,10 +35,10 @@ pub(crate) struct MetricsInterceptorInstruments {
 }
 
 impl MetricsInterceptorInstruments {
-    pub(crate) fn new() -> Result<Self, ObservabilityError> {
+    pub(crate) fn new(scope: &'static str) -> Result<Self, ObservabilityError> {
         let meter = get_telemetry_provider()?
             .meter_provider()
-            .get_meter("MetricsInterceptor", None);
+            .get_meter(scope, None);
 
         Ok(Self{
             operation_duration: meter
@@ -55,9 +55,12 @@ impl MetricsInterceptorInstruments {
     }
 }
 
+impl Storable for MetricsInterceptorInstruments {
+    type Storer = StoreReplace<Self>;
+}
+
 #[derive(Debug)]
 pub(crate) struct MetricsInterceptor {
-    instruments: MetricsInterceptorInstruments,
     // Holding a TimeSource here isn't ideal, but RuntimeComponents aren't available in
     // the read_before_execution hook and that is when we need to start the timer for
     // the operation.
@@ -66,10 +69,7 @@ pub(crate) struct MetricsInterceptor {
 
 impl MetricsInterceptor {
     pub(crate) fn new(time_source: SharedTimeSource) -> Result<Self, ObservabilityError> {
-        Ok(MetricsInterceptor {
-            instruments: MetricsInterceptorInstruments::new()?,
-            time_source,
-        })
+        Ok(MetricsInterceptor { time_source })
     }
 
     pub(crate) fn get_attrs_from_cfg(
@@ -87,6 +87,21 @@ impl MetricsInterceptor {
         } else {
             None
         }
+    }
+
+    pub(crate) fn get_measurements_and_instruments<'a>(
+        &self,
+        cfg: &'a aws_smithy_types::config_bag::ConfigBag,
+    ) -> (&'a MeasurementsContainer, &'a MetricsInterceptorInstruments) {
+        let measurements = cfg
+            .load::<MeasurementsContainer>()
+            .expect("set in `read_before_execution`");
+
+        let instruments = cfg
+            .load::<MetricsInterceptorInstruments>()
+            .expect("set in RuntimePlugin");
+
+        (measurements, instruments)
     }
 }
 
@@ -117,9 +132,7 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        let measurements = cfg
-            .load::<MeasurementsContainer>()
-            .expect("set in `read_before_execution`");
+        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
 
         let attributes = self.get_attrs_from_cfg(cfg);
 
@@ -127,11 +140,9 @@ impl Intercept for MetricsInterceptor {
             let call_end = self.time_source.now();
             let call_duration = call_end.duration_since(measurements.call_start);
             if let Ok(elapsed) = call_duration {
-                self.instruments.operation_duration.record(
-                    elapsed.as_secs_f64(),
-                    Some(&attrs),
-                    None,
-                );
+                instruments
+                    .operation_duration
+                    .record(elapsed.as_secs_f64(), Some(&attrs), None);
             }
         }
 
@@ -160,9 +171,7 @@ impl Intercept for MetricsInterceptor {
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        let measurements = cfg
-            .load::<MeasurementsContainer>()
-            .expect("set in `read_before_execution`");
+        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
 
         let attempt_end = self.time_source.now();
         let attempt_duration = attempt_end.duration_since(measurements.attempt_start);
@@ -171,7 +180,7 @@ impl Intercept for MetricsInterceptor {
         if let (Ok(elapsed), Some(mut attrs)) = (attempt_duration, attributes) {
             attrs.set("attempt", AttributeValue::I64(measurements.attempts.into()));
 
-            self.instruments
+            instruments
                 .attempt_duration
                 .record(elapsed.as_secs_f64(), Some(&attrs), None);
         }
@@ -181,14 +190,15 @@ impl Intercept for MetricsInterceptor {
 
 /// Runtime plugin that adds an interceptor for collecting metrics
 #[derive(Debug, Default)]
-pub struct MetricsRuntimePlugin {
+pub(crate) struct MetricsRuntimePlugin {
+    scope: &'static str,
     time_source: SharedTimeSource,
 }
 
 impl MetricsRuntimePlugin {
     /// Creates a runtime plugin which installs an interceptor for collecting metrics
-    pub fn new(time_source: SharedTimeSource) -> Self {
-        Self { time_source }
+    pub(crate) fn new(scope: &'static str, time_source: SharedTimeSource) -> Self {
+        Self { scope, time_source }
     }
 }
 
@@ -202,6 +212,19 @@ impl RuntimePlugin for MetricsRuntimePlugin {
             Cow::Owned(RuntimeComponentsBuilder::new("Metrics").with_interceptor(interceptor))
         } else {
             Cow::Owned(RuntimeComponentsBuilder::new("Metrics"))
+        }
+    }
+
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut cfg = Layer::new("MetricsInstruments");
+
+        let instruments = MetricsInterceptorInstruments::new(self.scope);
+
+        if let Ok(instruments) = instruments {
+            cfg.store_put(instruments);
+            Some(cfg.freeze())
+        } else {
+            None
         }
     }
 }

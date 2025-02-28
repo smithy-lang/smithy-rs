@@ -213,8 +213,11 @@ fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
 
-fn metrics_runtime_plugin(time_source: SharedTimeSource) -> Option<SharedRuntimePlugin> {
-    Some(MetricsRuntimePlugin::new(time_source).into_shared())
+fn metrics_runtime_plugin(
+    scope: &'static str,
+    time_source: SharedTimeSource,
+) -> Option<SharedRuntimePlugin> {
+    Some(MetricsRuntimePlugin::new(scope, time_source).into_shared())
 }
 
 fn validate_stalled_stream_protection_config(
@@ -255,6 +258,7 @@ pub struct DefaultPluginParams {
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
     time_source: Option<SharedTimeSource>,
+    scope: Option<&'static str>,
 }
 
 impl DefaultPluginParams {
@@ -280,6 +284,12 @@ impl DefaultPluginParams {
         self.time_source = Some(time_source);
         self
     }
+
+    /// Sets the metrics scope.
+    pub fn with_scope(mut self, scope: &'static str) -> Self {
+        self.scope = Some(scope);
+        self
+    }
 }
 
 /// All default plugins.
@@ -302,7 +312,10 @@ pub fn default_plugins(
         default_timeout_config_plugin(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
-        metrics_runtime_plugin(params.time_source.unwrap_or_default()),
+        metrics_runtime_plugin(
+            params.scope.unwrap_or("aws.sdk.rust.services.unknown"),
+            params.time_source.unwrap_or_default(),
+        ),
     ]
     .into_iter()
     .flatten()

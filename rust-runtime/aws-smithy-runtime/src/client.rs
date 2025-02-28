@@ -55,4 +55,4 @@ pub mod sdk_feature;
 pub mod waiters;
 
 /// Interceptor for collecting client metrics.
-pub mod metrics;
+mod metrics;
