@@ -19,7 +19,7 @@ use aws_smithy_runtime::client::retries::classifiers::{
 use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{
-    HttpResponse, OrchestratorError, SensitiveOutput,
+    HttpResponse, Metadata, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
@@ -88,6 +88,7 @@ impl Builder {
         path: impl Into<String>,
     ) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
+        let path = path.into();
 
         let mut builder = Operation::builder()
             .service_name("HttpCredentialProvider")
@@ -104,6 +105,7 @@ impl Builder {
             .runtime_plugin(StaticRuntimePlugin::new().with_config({
                 let mut layer = Layer::new("SensitiveOutput");
                 layer.store_put(SensitiveOutput);
+                layer.store_put(Metadata::new(path.clone(), provider_name));
                 layer.freeze()
             }));
         if let Some(http_client) = provider_config.http_client() {
@@ -126,7 +128,6 @@ impl Builder {
         } else {
             builder = builder.no_retry();
         }
-        let path = path.into();
         let operation = builder
             .serializer(move |input: HttpProviderAuth| {
                 let mut http_req = http::Request::builder()

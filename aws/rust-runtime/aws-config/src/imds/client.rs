@@ -21,7 +21,7 @@ use aws_smithy_runtime_api::client::endpoint::{
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
-    HttpRequest, OrchestratorError, SensitiveOutput,
+    HttpRequest, Metadata, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::result::SdkError;
@@ -250,6 +250,7 @@ impl ImdsCommonRuntimePlugin {
         layer.store_put(retry_config);
         layer.store_put(timeout_config);
         layer.store_put(user_agent());
+        layer.store_put(Metadata::new("get_credentials", "imds"));
 
         Self {
             config: layer.freeze(),
