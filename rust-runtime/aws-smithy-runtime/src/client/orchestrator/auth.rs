@@ -10,11 +10,13 @@ use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
     ResolveAuthSchemeOptions,
 };
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEndpoint};
+use aws_smithy_runtime_api::client::identity::Identity;
 use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -108,6 +110,82 @@ impl fmt::Display for AuthOrchestrationError {
 }
 
 impl StdError for AuthOrchestrationError {}
+
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct NoEndpointRequiredForAuthSchemeResolution;
+
+impl Storable for NoEndpointRequiredForAuthSchemeResolution {
+    type Storer = StoreReplace<Self>;
+}
+
+pub(super) async fn resolve_identity(
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> Result<(AuthSchemeId, Identity), BoxError> {
+    let params = cfg
+        .load::<AuthSchemeOptionResolverParams>()
+        .expect("auth scheme option resolver params must be set");
+    let option_resolver = runtime_components.auth_scheme_option_resolver();
+    let options = option_resolver.resolve_auth_scheme_options(params)?;
+
+    for &scheme_id in options.as_ref() {
+        if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
+            if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
+                if endpoint_auth_scheme_matches_configured_scheme_id(
+                    scheme_id,
+                    runtime_components,
+                    cfg,
+                )
+                .await
+                {
+                    let identity_cache = if identity_resolver.cache_location()
+                        == IdentityCacheLocation::RuntimeComponents
+                    {
+                        runtime_components.identity_cache()
+                    } else {
+                        IdentityCache::no_cache()
+                    };
+                    let identity = identity_cache
+                        .resolve_cached_identity(identity_resolver, runtime_components, cfg)
+                        .await?;
+                    trace!(identity = ?identity, "resolved identity");
+                    return Ok((scheme_id, identity));
+                }
+            }
+        }
+    }
+
+    Err("No matching auth scheme option".into())
+}
+
+async fn endpoint_auth_scheme_matches_configured_scheme_id(
+    scheme_id: AuthSchemeId,
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> bool {
+    if cfg
+        .load::<NoEndpointRequiredForAuthSchemeResolution>()
+        .is_some()
+    {
+        // Make it noop for services that don't require this function for auth scheme resolution
+        return true;
+    }
+
+    // Resolve endpoint (inlined below for illustration purposes)
+    let params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
+
+    let endpoint = runtime_components
+        .endpoint_resolver()
+        .resolve_endpoint(params)
+        .await
+        .unwrap();
+
+    extract_endpoint_auth_scheme_config(&endpoint, scheme_id).is_ok()
+}
 
 pub(super) async fn orchestrate_auth(
     ctx: &mut InterceptorContext,
