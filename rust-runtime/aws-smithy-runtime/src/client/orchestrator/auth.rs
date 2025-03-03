@@ -187,6 +187,39 @@ async fn endpoint_auth_scheme_matches_configured_scheme_id(
     extract_endpoint_auth_scheme_config(&endpoint, scheme_id).is_ok()
 }
 
+pub(super) fn sign_request(
+    scheme_id: AuthSchemeId,
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    trace!("signing request");
+    let request = ctx.request_mut().expect("set during serialization");
+    let identity = cfg
+        .load::<Identity>()
+        .expect("identity should be set by `resolve_identity`");
+    let endpoint = cfg
+        .load::<Endpoint>()
+        .expect("endpoint added to config bag by endpoint orchestrator");
+    let auth_scheme = runtime_components
+        .auth_scheme(scheme_id)
+        .ok_or("should be configured")?;
+    let signer = auth_scheme.signer();
+    let auth_scheme_endpoint_config = extract_endpoint_auth_scheme_config(&endpoint, scheme_id)?;
+    trace!(
+        signer = ?signer,
+        "signing implementation"
+    );
+    signer.sign_http_request(
+        request,
+        &identity,
+        auth_scheme_endpoint_config,
+        runtime_components,
+        cfg,
+    )?;
+    return Ok(());
+}
+
 pub(super) async fn orchestrate_auth(
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,

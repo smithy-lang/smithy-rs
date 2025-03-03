@@ -5,6 +5,7 @@
 
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
+use crate::client::orchestrator::auth::{resolve_identity, sign_request};
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
@@ -350,14 +351,16 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    let (scheme_id, identity) = halt_on_err!([ctx] => resolve_identity(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         modify_before_signing(ctx, runtime_components, cfg);
         read_before_signing(ctx, runtime_components, cfg);
     });
 
-    halt_on_err!([ctx] => orchestrate_auth(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+
+    halt_on_err!([ctx] => sign_request(scheme_id, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         read_after_signing(ctx, runtime_components, cfg);
