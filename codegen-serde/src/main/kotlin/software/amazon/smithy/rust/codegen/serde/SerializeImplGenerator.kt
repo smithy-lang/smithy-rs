@@ -556,6 +556,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
             }
             """,
             "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+            *RuntimeType.preludeScope,
         )
     }
 
@@ -578,6 +579,7 @@ class SerializeImplGenerator(private val codegenContext: CodegenContext) {
                 }
                 """,
                 "Shape" to shape, "body" to block, *SupportStructures.codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
     }

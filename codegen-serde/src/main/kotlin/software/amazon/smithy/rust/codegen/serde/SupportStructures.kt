@@ -23,7 +23,6 @@ object SupportStructures {
 
     val codegenScope =
         arrayOf(
-            *RuntimeType.preludeScope,
             "ConfigurableSerde" to configurableSerde(),
             "SerializeConfigured" to serializeConfigured(),
             "ConfigurableSerdeRef" to configurableSerdeRef(),
@@ -54,7 +53,7 @@ object SupportStructures {
                 "serde" to serde,
                 "SerializeConfigured" to serializeConfigured(),
                 "SerializationSettings" to serializationSettings(),
-                *codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -78,7 +77,7 @@ object SupportStructures {
                 "serde" to serde,
                 "SerializeConfigured" to serializeConfigured(),
                 "SerializationSettings" to serializationSettings(),
-                *codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -150,7 +149,7 @@ object SupportStructures {
                 }
                 """,
                 "serde" to CargoDependency.Serde.toType(),
-                *codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -196,7 +195,7 @@ object SupportStructures {
                 "ConfigurableSerdeRef" to configurableSerdeRef(),
                 "SerializeConfigured" to serializeConfigured(),
                 "serde" to CargoDependency.Serde.toType(),
-                *codegenScope,
+                *RuntimeType.preludeScope,
             )
         }
 
