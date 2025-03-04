@@ -494,7 +494,6 @@ fun Project.registerDowngradeFor(
             val crateNameToLastKnownWorkingVersions =
                 mapOf(
                     "minicbor" to "0.24.2",
-                    "base64ct" to "1.6.0",
                     "libfuzzer-sys" to "0.4.7" // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
                     )
 
