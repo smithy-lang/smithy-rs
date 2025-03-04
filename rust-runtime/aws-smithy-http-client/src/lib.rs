@@ -15,6 +15,7 @@
 //! - `rustls-ring`: Enable TLS provider based on `rustls` using `ring` as the crypto provider
 //! - `rustls-aws-lc`: Enable TLS provider based on `rustls` using `aws-lc` as the crypto provider
 //! - `rustls-aws-lc-fips`: Same as `rustls-aws-lc` feature but using a FIPS compliant version of `aws-lc`
+//! - `s2n-tls`: Enable TLS provider based on `s2n-tls` using `aws-lc` as the crypto provider.
 //! - `hyper-014`: (Deprecated) HTTP client implementation based on hyper-0.14.x.
 //! - `test-util`: Enables utilities for unit tests. DO NOT ENABLE IN PRODUCTION.
 

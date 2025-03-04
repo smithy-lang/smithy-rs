@@ -34,8 +34,6 @@ percent-encoding = { version = "2.3.1", optional = true }
 ring = { version = "0.17.5", optional = true }
 sha2 = "0.10"
 crypto-bigint = { version = "0.5.4", optional = true }
-# Pin base64ct, a transitive dependency of crypto-bigint, to a version that doesn't require 2024 edition for minimal verisons check
-base64ct = "1.6.0"
 subtle = { version = "2.5.0", optional = true }
 time = "0.3.5"
 tracing = "0.1.40"
@@ -74,10 +72,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-# FIXME - workaround minimal-versions check issue with base64ct (https://github.com/RustCrypto/formats/issues/1684)
-[package.metadata.cargo-udeps.ignore]
-normal = ["base64ct"]
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
