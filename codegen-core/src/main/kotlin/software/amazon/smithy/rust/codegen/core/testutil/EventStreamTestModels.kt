@@ -20,6 +20,7 @@ import java.util.Base64
 private fun fillInBaseModel(
     namespacedProtocolName: String,
     extraServiceAnnotations: String = "",
+    nonEventStreamMembers: String = "",
 ): String =
     """
     namespace test
@@ -77,6 +78,8 @@ private fun fillInBaseModel(
     }
 
     structure TestStreamInputOutput {
+        $nonEventStreamMembers
+
         @required
         @httpPayload
         value: TestStream
@@ -103,11 +106,9 @@ object EventStreamTestModels {
 
     private fun rpcv2Cbor(): Model = fillInBaseModel("smithy.protocols#rpcv2Cbor").asSmithyModel()
 
-    private fun awsQuery(): Model =
-        fillInBaseModel("aws.protocols#awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
-
-    private fun ec2Query(): Model =
-        fillInBaseModel("aws.protocols#ec2Query", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
+    // Event streams are not supported in AWS query or EC2 query
+    // See Important in https://smithy.io/2.0/aws/protocols/aws-query-protocol.html where it states
+    // "This protocol does not support any kind of streaming requests or responses, including event streams."
 
     data class TestCase(
         val protocolShapeId: String,
@@ -116,6 +117,7 @@ object EventStreamTestModels {
         val requestContentType: String,
         val responseContentType: String,
         val eventStreamMessageContentType: String,
+        val eventStreamInitialResponsePayload: String? = null,
         val validTestStruct: String,
         val validMessageWithNoHeaderPayloadTraits: String,
         val validTestUnion: String,
@@ -124,6 +126,9 @@ object EventStreamTestModels {
         val protocolBuilder: (CodegenContext) -> Protocol,
     ) {
         override fun toString(): String = protocolShapeId
+
+        fun withNonEventStreamMembers(nonEventStreamMembers: String): TestCase =
+            this.copy(model = fillInBaseModel(this.protocolShapeId, "", nonEventStreamMembers).asSmithyModel())
     }
 
     private fun base64Encode(input: ByteArray): String {
@@ -139,6 +144,8 @@ object EventStreamTestModels {
         // Convert the parsed data to CBOR.
         return cborMapper.writeValueAsBytes(jsonData)
     }
+
+    fun base64EncodeJson(jsonString: String) = base64Encode(createCborFromJson(jsonString))
 
     private val restJsonTestCase =
         TestCase(
@@ -170,11 +177,11 @@ object EventStreamTestModels {
                 mediaType = "application/cbor",
                 responseContentType = "application/cbor",
                 eventStreamMessageContentType = "application/cbor",
-                validTestStruct = base64Encode(createCborFromJson(restJsonTestCase.validTestStruct)),
-                validMessageWithNoHeaderPayloadTraits = base64Encode(createCborFromJson(restJsonTestCase.validMessageWithNoHeaderPayloadTraits)),
-                validTestUnion = base64Encode(createCborFromJson(restJsonTestCase.validTestUnion)),
-                validSomeError = base64Encode(createCborFromJson(restJsonTestCase.validSomeError)),
-                validUnmodeledError = base64Encode(createCborFromJson(restJsonTestCase.validUnmodeledError)),
+                validTestStruct = base64EncodeJson(restJsonTestCase.validTestStruct),
+                validMessageWithNoHeaderPayloadTraits = base64EncodeJson(restJsonTestCase.validMessageWithNoHeaderPayloadTraits),
+                validTestUnion = base64EncodeJson(restJsonTestCase.validTestUnion),
+                validSomeError = base64EncodeJson(restJsonTestCase.validSomeError),
+                validUnmodeledError = base64EncodeJson(restJsonTestCase.validUnmodeledError),
                 protocolBuilder = { RpcV2Cbor(it) },
             ),
             //
