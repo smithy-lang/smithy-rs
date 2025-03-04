@@ -16,7 +16,7 @@ use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -119,11 +119,11 @@ impl Storable for NoEndpointRequiredForAuthSchemeResolution {
     type Storer = StoreReplace<Self>;
 }
 
-pub(super) async fn resolve_identity(
+pub(super) async fn resolve_auth_scheme(
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
-    cfg: &ConfigBag,
-) -> Result<(AuthSchemeId, Identity), BoxError> {
+    cfg: &mut ConfigBag,
+) -> Result<AuthSchemeId, BoxError> {
     let params = cfg
         .load::<AuthSchemeOptionResolverParams>()
         .expect("auth scheme option resolver params must be set");
@@ -151,7 +151,10 @@ pub(super) async fn resolve_identity(
                         .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                         .await?;
                     trace!(identity = ?identity, "resolved identity");
-                    return Ok((scheme_id, identity));
+                    let mut layer = Layer::new("resolve_identity");
+                    layer.store_put(identity);
+                    cfg.push_layer(layer);
+                    return Ok(scheme_id);
                 }
             }
         }

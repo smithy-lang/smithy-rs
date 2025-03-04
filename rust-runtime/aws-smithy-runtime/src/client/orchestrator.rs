@@ -5,7 +5,7 @@
 
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
-use crate::client::orchestrator::auth::{resolve_identity, sign_request};
+use crate::client::orchestrator::auth::{resolve_auth_scheme, sign_request};
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
@@ -351,7 +351,7 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    let (scheme_id, identity) = halt_on_err!([ctx] => resolve_identity(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    let scheme_id = halt_on_err!([ctx] => resolve_auth_scheme(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         modify_before_signing(ctx, runtime_components, cfg);
