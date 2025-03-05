@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::auth::{resolve_auth_scheme, sign_request};
 use crate::client::orchestrator::http::{log_response_body, read_body};
@@ -36,6 +35,7 @@ use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
+pub use auth::NoEndpointRequiredForAuthSchemeResolution;
 
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;

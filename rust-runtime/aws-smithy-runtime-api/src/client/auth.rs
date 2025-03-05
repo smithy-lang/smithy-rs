@@ -81,6 +81,11 @@ impl Storable for AuthSchemeOptionResolverParams {
     type Storer = StoreReplace<Self>;
 }
 
+new_type_future! {
+    #[doc = "Future for [`ResolveAuthSchemeOptions::resolve_auth_scheme_options_v2`]."]
+    pub struct AuthSchemeOptionsFuture<'a, Cow<'a, [AuthSchemeId]>, BoxError>;
+}
+
 /// Resolver for auth scheme options.
 ///
 /// The orchestrator needs to select an auth scheme to sign requests with, and potentially
@@ -95,11 +100,25 @@ impl Storable for AuthSchemeOptionResolverParams {
 /// or it can be a complex code generated resolver that incorporates parameters from both
 /// the model and the resolved endpoint.
 pub trait ResolveAuthSchemeOptions: Send + Sync + fmt::Debug {
+    #[deprecated(note = "This method is deprecated, use `resolve_auth_scheme_options_v2` instead.")]
     /// Returns a list of available auth scheme options to choose from.
     fn resolve_auth_scheme_options(
         &self,
-        params: &AuthSchemeOptionResolverParams,
-    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError>;
+        _params: &AuthSchemeOptionResolverParams,
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
+        unimplemented!("This method is deprecated, use `resolve_auth_scheme_options_v2` instead.");
+    }
+
+    #[allow(deprecated)]
+    /// Returns a list of available auth scheme options to choose from.
+    fn resolve_auth_scheme_options_v2<'a>(
+        &'a self,
+        params: &'a AuthSchemeOptionResolverParams,
+        _cfg: &'a ConfigBag,
+        _runtime_components: &'a RuntimeComponents,
+    ) -> AuthSchemeOptionsFuture<'a> {
+        AuthSchemeOptionsFuture::ready(self.resolve_auth_scheme_options(params))
+    }
 }
 
 /// A shared auth scheme option resolver.
@@ -114,11 +133,21 @@ impl SharedAuthSchemeOptionResolver {
 }
 
 impl ResolveAuthSchemeOptions for SharedAuthSchemeOptionResolver {
+    #[allow(deprecated)]
     fn resolve_auth_scheme_options(
         &self,
         params: &AuthSchemeOptionResolverParams,
     ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
         (*self.0).resolve_auth_scheme_options(params)
+    }
+
+    fn resolve_auth_scheme_options_v2<'a>(
+        &'a self,
+        params: &'a AuthSchemeOptionResolverParams,
+        cfg: &'a ConfigBag,
+        runtime_components: &'a RuntimeComponents,
+    ) -> AuthSchemeOptionsFuture<'a> {
+        (*self.0).resolve_auth_scheme_options_v2(params, cfg, runtime_components)
     }
 }
 

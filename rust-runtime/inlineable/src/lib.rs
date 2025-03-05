@@ -37,7 +37,7 @@ mod serialization_settings;
 mod endpoint_lib;
 
 #[allow(unused)]
-mod auth_plugin;
+mod auth;
 
 #[allow(unused)]
 mod client_request_compression;
