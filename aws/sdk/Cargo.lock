@@ -337,7 +337,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.5.17"
+version = "1.5.18"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -500,6 +500,34 @@ dependencies = [
  "regex-lite",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aws-sdk-cloudwatchlogs"
+version = "0.0.0-local"
+dependencies = [
+ "aws-config",
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-protocol-test",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand 2.3.0",
+ "futures-util",
+ "http 0.2.12",
+ "once_cell",
+ "regex-lite",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1161,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.6"
+version = "0.60.7"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -1194,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.60.12"
+version = "0.61.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
