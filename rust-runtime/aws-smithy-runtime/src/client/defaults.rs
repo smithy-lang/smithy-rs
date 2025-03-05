@@ -299,14 +299,15 @@ pub fn default_plugins(
     let behavior_version = params
         .behavior_version
         .unwrap_or_else(BehaviorVersion::latest);
-    let service_name = params
-        .retry_partition_name
-        .expect("retry_partition_name is required");
 
     [
         default_http_client_plugin(),
         default_identity_cache_plugin(),
-        default_retry_config_plugin(service_name.clone()),
+        default_retry_config_plugin(
+            params
+                .retry_partition_name
+                .expect("retry_partition_name is required"),
+        ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
         default_timeout_config_plugin(),
