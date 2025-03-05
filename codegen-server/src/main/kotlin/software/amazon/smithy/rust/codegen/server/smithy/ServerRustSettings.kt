@@ -97,6 +97,7 @@ data class ServerCodegenConfig(
      */
     val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
     val addValidationExceptionToConstrainedOperations: Boolean = DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
+    val replaceInvalidUtf8: Boolean = DEFAULT_REPLACE_INVALID_UTF8,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -105,6 +106,7 @@ data class ServerCodegenConfig(
         private const val DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS = false
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
         private const val DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS = false
+        private const val DEFAULT_REPLACE_INVALID_UTF8 = false
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -117,6 +119,7 @@ data class ServerCodegenConfig(
                 ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
                 experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = node.get().getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
                 addValidationExceptionToConstrainedOperations = node.get().getBooleanMemberOrDefault("addValidationExceptionToConstrainedOperations", DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS),
+                replaceInvalidUtf8 = node.get().getBooleanMemberOrDefault("replaceInvalidUtf8", DEFAULT_REPLACE_INVALID_UTF8),
             )
         } else {
             ServerCodegenConfig(
