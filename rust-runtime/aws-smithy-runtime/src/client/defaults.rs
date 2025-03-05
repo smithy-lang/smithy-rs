@@ -11,6 +11,7 @@
 
 use crate::client::http::body::content_length_enforcement::EnforceContentLengthRuntimePlugin;
 use crate::client::identity::IdentityCache;
+use crate::client::orchestrator::NoEndpointRequiredForAuthSchemeResolution;
 use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
@@ -81,6 +82,9 @@ pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
         default_plugin("default_time_source_plugin", |components| {
             components.with_time_source(Some(SystemTimeSource::new()))
         })
+        .with_config(layer("auth_option_marker", |layer| {
+            layer.store_put(NoEndpointRequiredForAuthSchemeResolution);
+        }))
         .into_shared(),
     )
 }

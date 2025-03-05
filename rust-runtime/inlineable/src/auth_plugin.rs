@@ -3,20 +3,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::client::auth;
-use aws_smithy_runtime_api::{
-    box_error::BoxError,
-    client::{
-        auth::{
-            AuthSchemeId, AuthSchemeOptionResolverParams, AuthSchemeOptionsFuture,
-            ResolveAuthSchemeOptions,
-        },
-        endpoint::{EndpointResolverParams, ResolveEndpoint},
-        runtime_components::RuntimeComponents,
-    },
-};
-use aws_smithy_types::{config_bag::ConfigBag, Document};
 use std::borrow::Cow;
+
+use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
+use aws_smithy_runtime_api::client::auth::{
+    AuthSchemeId, AuthSchemeOptionResolverParams, AuthSchemeOptionsFuture, ResolveAuthSchemeOptions,
+};
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEndpoint};
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
+use aws_smithy_runtime_api::client::runtime_plugin::{Order, RuntimePlugin};
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::Document;
+
+#[derive(Debug)]
+pub(crate) struct DefaultAuthOptionsPlugin {
+    runtime_components: RuntimeComponentsBuilder,
+}
+
+impl DefaultAuthOptionsPlugin {
+    #[allow(dead_code)]
+    pub(crate) fn new(auth_schemes: Vec<AuthSchemeId>) -> Self {
+        let runtime_components = RuntimeComponentsBuilder::new("default_auth_options")
+            .with_auth_scheme_option_resolver(Some(StaticAuthSchemeOptionResolver::new(
+                auth_schemes,
+            )));
+        Self { runtime_components }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn new_endpoint_based(auth_schemes: Vec<AuthSchemeId>) -> Self {
+        let runtime_components = RuntimeComponentsBuilder::new("default_auth_options")
+            .with_auth_scheme_option_resolver(Some(EndpointBasedAuthSchemeOptionResolver::new(
+                auth_schemes,
+            )));
+        Self { runtime_components }
+    }
+}
+
+impl RuntimePlugin for DefaultAuthOptionsPlugin {
+    fn order(&self) -> Order {
+        Order::Defaults
+    }
+
+    fn runtime_components(
+        &self,
+        _current_components: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
+        Cow::Borrowed(&self.runtime_components)
+    }
+}
 
 /// New-type around a `Vec<AuthSchemeId>` that implements `ResolveAuthSchemeOptions`.
 #[derive(Debug)]
@@ -36,7 +73,7 @@ impl EndpointBasedAuthSchemeOptionResolver {
 impl ResolveAuthSchemeOptions for EndpointBasedAuthSchemeOptionResolver {
     fn resolve_auth_scheme_options_v2<'a>(
         &'a self,
-        params: &'a AuthSchemeOptionResolverParams,
+        _params: &'a AuthSchemeOptionResolverParams,
         cfg: &'a ConfigBag,
         runtime_components: &'a RuntimeComponents,
     ) -> AuthSchemeOptionsFuture<'a> {
@@ -61,7 +98,7 @@ impl ResolveAuthSchemeOptions for EndpointBasedAuthSchemeOptionResolver {
                         .as_object()
                         .and_then(|object| object.get("name"))
                         .and_then(Document::as_string);
-                    if (config_scheme_id == Some(auth_scheme.as_str())) {
+                    if config_scheme_id == Some(auth_scheme.as_str()) {
                         return Ok(Cow::Owned(vec![auth_scheme.clone()]));
                     }
                 }

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
@@ -30,9 +31,16 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
         operationShape: OperationShape,
         authSchemeOptions: List<AuthSchemeOption>,
     ) = writable {
+        val shapeId = codegenContext.serviceShape.id
+        val new =
+            if (shapeId == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
+                "new_endpoint_based"
+            } else {
+                "new"
+            }
         rustTemplate(
             """
-            #{DefaultAuthOptionsPlugin}::new(vec![#{options}])
+            #{DefaultAuthOptionsPlugin}::$new(vec![#{options}])
 
             """,
             "DefaultAuthOptionsPlugin" to RuntimeType.defaultAuthPlugin(runtimeConfig),
