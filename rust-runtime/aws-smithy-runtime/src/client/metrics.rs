@@ -216,11 +216,10 @@ impl RuntimePlugin for MetricsRuntimePlugin {
     }
 
     fn config(&self) -> Option<FrozenLayer> {
-        let mut cfg = Layer::new("MetricsInstruments");
-
         let instruments = MetricsInterceptorInstruments::new(self.scope);
 
         if let Ok(instruments) = instruments {
+            let mut cfg = Layer::new("MetricsInstruments");
             cfg.store_put(instruments);
             Some(cfg.freeze())
         } else {

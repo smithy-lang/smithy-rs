@@ -15,7 +15,7 @@ use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
-use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource};
+use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -280,8 +280,8 @@ impl DefaultPluginParams {
     }
 
     /// Sets the time source.
-    pub fn with_time_source(mut self, time_source: SharedTimeSource) -> Self {
-        self.time_source = Some(time_source);
+    pub fn with_time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.time_source = Some(SharedTimeSource::new(time_source));
         self
     }
 
