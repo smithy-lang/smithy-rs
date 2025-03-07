@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 4th, 2025
+===============
+**New this release:**
+- :tada: (client, [smithy-rs#121](https://github.com/smithy-lang/smithy-rs/issues/121)) Adds support for event stream operations with non-REST protocols such as RPC v2 CBOR.
+
+
 February 20th, 2025
 ===================
 **New this release:**
