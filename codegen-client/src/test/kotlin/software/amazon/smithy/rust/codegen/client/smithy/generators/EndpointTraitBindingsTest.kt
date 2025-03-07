@@ -205,7 +205,7 @@ internal class EndpointTraitBindingsTest {
                         }
 
                         let (http_client, _r) = capture_request(Some(
-                            http::Response::builder()
+                            #{http_1x}::Response::builder()
                                 .status(200)
                                 .body(SdkBody::from(""))
                                 .unwrap(),
@@ -249,8 +249,9 @@ internal class EndpointTraitBindingsTest {
                     }
                     """,
                     "capture_request" to
-                        CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
-                            .toType().resolve("client::http::test_util::capture_request"),
+                        CargoDependency.smithyHttpClientTestUtil(clientCodegenContext.runtimeConfig)
+                            .toType().resolve("test_util::capture_request"),
+                    "http_1x" to CargoDependency.Http1x.toType(),
                 )
             }
         }

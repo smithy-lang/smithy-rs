@@ -158,4 +158,5 @@ private fun glacierInterceptorDependencies(runtimeConfig: RuntimeConfig) =
         CargoDependency.Ring,
         CargoDependency.smithyHttp(runtimeConfig),
         CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+        CargoDependency.Http1x,
     )

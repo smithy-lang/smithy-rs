@@ -127,7 +127,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 #{event_stream:W}
 
                 let (http_client, _r) = #{capture_request}(Some(
-                    http::Response::builder()
+                    #{http_1x}::Response::builder()
                         .status(200)
                         .body(SdkBody::from_body_0_4(
                             hyper::Body::wrap_stream(event_stream),
@@ -162,6 +162,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 "handle_send_result" to sendResultHandler,
                 "initial_response_stream" to initialResponseStreamGenerator,
                 "receive_event_stream" to eventStreamReceiver,
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
 

@@ -11,9 +11,11 @@ aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", 
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
-aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client", "http-02x"] }
+# TODO(hyper1) - remove legacy-test-util feature by providing an http 1.x answer to take_requests() function
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util", "legacy-test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client", "http-1x"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2", features = ["behavior-version-latest", "test-util"] }
 tokio = { version = "1.23.1", features = ["full"]}
-http = "0.2.0"
+http-1x = { package = "http", version = "1" }
 tokio-stream = "0.1.5"

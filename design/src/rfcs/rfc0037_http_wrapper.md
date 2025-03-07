@@ -95,7 +95,7 @@ This also enables supporting request extensions for different downstream provide
 <summary>Proposed Implementation of `request`</summary>
 
 ```rust,ignore
-{{#include ../../../rust-runtime/aws-smithy-runtime-api/src/client/http/request.rs}}
+{{#include ../../../rust-runtime/aws-smithy-runtime-api/src/http/request.rs}}
 ```
 </details>
 

@@ -183,6 +183,19 @@ fn remove_unchanged_dependencies(
                 .expect("failed to determine change-status")
         });
 
+    let mut crates_to_patch = crates_to_patch;
+    for pkg in &all_crates {
+        if crate_is_new_and_used_by_existing_runtime(&crates_to_patch, pkg, aws_sdk_rust)
+            .expect("failed to determine crate status")
+        {
+            tracing::trace!(
+                "adding new crate `{}` to set of crates to be patched",
+                pkg.handle
+            );
+            crates_to_patch.push(pkg.clone());
+        }
+    }
+
     for patched_crate in &all_crates {
         tracing::trace!(
             "removing unchanged path dependencies for {}",
@@ -191,6 +204,50 @@ fn remove_unchanged_dependencies(
         remove_unchanged_path_dependencies(&unchanged_crates, patched_crate)?;
     }
     Ok(crates_to_patch.into_iter())
+}
+
+/// Check if a runtime crate is new and used by the new runtime.
+///
+/// This is an edge case where there is a new crate used by an existing runtime crate
+/// such that failure to patch in the new crate we'll get an error because the new
+/// crate won't be found. For these we need to add them to the list of crates to patch
+/// in the root SDK Cargo.toml.
+fn crate_is_new_and_used_by_existing_runtime(
+    crates_to_patch: &Vec<Package>,
+    runtime_crate: &Package,
+    aws_sdk_rust: &Repo,
+) -> Result<bool> {
+    let sdk_cargo_toml = aws_sdk_rust
+        .root
+        .join("sdk")
+        .join(&runtime_crate.handle.name)
+        .join("Cargo.toml");
+
+    if sdk_cargo_toml.exists() {
+        // existing runtime crate
+        return Ok(false);
+    }
+
+    // check if the new runtime crate is used by an existing crate that changed (i.e. is set to be patched)
+    for pkg in crates_to_patch {
+        let manifest = Manifest::from_path(pkg.manifest_path.clone())?;
+        let used = manifest
+            .dependencies
+            .iter()
+            .any(|(dep_name, dep_metadata)| {
+                runtime_crate.handle.name.as_str()
+                    == dep_metadata.package().unwrap_or(dep_name.as_str())
+            });
+        if used {
+            tracing::trace!(
+                "`{}` is a new crate and used by crate set to be patched: `{}`.",
+                runtime_crate.handle,
+                pkg.handle
+            );
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Remove `path = ...` from the dependency section for unchanged crates,

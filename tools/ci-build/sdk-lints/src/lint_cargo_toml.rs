@@ -168,7 +168,10 @@ impl Lint for DocsRs {
     }
 
     fn files_to_check(&self) -> Result<Vec<PathBuf>> {
-        Ok(all_cargo_tomls()?.collect())
+        Ok(all_cargo_tomls()?
+            // aws-lc-fips cannot build on docs.rs, grant an exception for this crate which does not follow the same cargo.toml w.r.t docs.rs
+            .filter(|path| !path.to_string_lossy().contains("aws-smithy-http-client"))
+            .collect())
     }
 }
 
@@ -372,6 +375,13 @@ impl StableCratesExposeStableCrates {
                 .filter(|tpe| {
                     !(name == "aws-smithy-runtime"
                         && ["tower_service", "serde"].contains(&tpe.as_str()))
+                })
+                // TODO(tooling): When tooling allows, specify this at the crate level. These
+                // are gated by the hyper-014 feature and carryover from relocating hyper-014.x
+                // support from aws-smithy-runtime. hyper_util is only exposed as part of test_util trait impl
+                .filter(|tpe| {
+                    !(name == "aws-smithy-http-client"
+                        && ["tower_service", "serde", "hyper_util"].contains(&tpe.as_str()))
                 })
                 .map(|crte| {
                     LintError::new(format!(

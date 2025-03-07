@@ -35,8 +35,10 @@ do
 
     echo -e "## ${C_YELLOW}Running 'cargo minimal-versions check' on ${runtime_path}...${C_RESET}"
     # Print out the cargo tree with minimal versions for easier debugging
-    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions tree || echo "cargo minimal-versions tree failed"
-    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
+    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions tree --direct || echo "cargo minimal-versions tree failed"
+    # The `--direct` flag is used to test only direct dependencies, rather than all transitive dependencies. See:
+    # https://doc.rust-lang.org/cargo/reference/unstable.html#direct-minimal-versions
+    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --direct --all-features
 
     for crate_path in *; do
         if [[ -f "${crate_path}/external-types.toml" ]]; then

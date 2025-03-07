@@ -15,6 +15,7 @@ aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", 
 aws-sdk-timestreamquery = { path = "../../build/aws-sdk/sdk/timestreamquery", features = ["behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = "0.3.17"

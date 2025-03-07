@@ -186,7 +186,7 @@ fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
-val DEV_ONLY_FEATURES = setOf("test-util")
+val DEV_ONLY_FEATURES = setOf("test-util", "legacy-test-util")
 
 /**
  * A dependency on an internal or external Cargo crate
@@ -347,7 +347,7 @@ data class CargoDependency(
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
 
         // Hyper 1.x types
-        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http", optional = true)
+        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")
         val HttpBody1x: CargoDependency =
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body", optional = true)
 
@@ -363,6 +363,11 @@ data class CargoDependency(
 
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
 
+        fun smithyHttpClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-client")
+
+        fun smithyHttpClientTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyHttpClient(runtimeConfig).toDevDependency().withFeature("test-util")
+
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
 
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
@@ -373,10 +378,6 @@ data class CargoDependency(
         fun smithyRuntime(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-runtime")
                 .withFeature("client")
-
-        fun smithyExperimental(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.smithyRuntimeCrate("smithy-experimental")
-                .withFeature("crypto-ring")
 
         fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")

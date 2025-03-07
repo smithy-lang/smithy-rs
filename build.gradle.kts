@@ -69,16 +69,18 @@ tasks.register<JavaExec>("ktlintFormat") {
     jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
 }
 
-tasks.register<JavaExec>("ktlintPreCommit") {
-    description = "Check Kotlin code style (for the pre-commit hooks)."
-    group = LifecycleBasePlugin.VERIFICATION_GROUP
-    classpath = ktlint
-    mainClass.set("com.pinterest.ktlint.Main")
-    args = listOf("--log-level=warn", "--color", "--relative", "--format", "--") +
-        System.getProperty("ktlintPreCommitArgs").let { args ->
-            check(args.isNotBlank()) { "need to pass in -DktlintPreCommitArgs=<some file paths to check>" }
-            args.split(" ")
-        }
-    // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
-    jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+if (System.getProperties().containsKey("ktlintPreCommitArgs")) {
+    tasks.register<JavaExec>("ktlintPreCommit") {
+        description = "Check Kotlin code style (for the pre-commit hooks)."
+        group = LifecycleBasePlugin.VERIFICATION_GROUP
+        classpath = ktlint
+        mainClass.set("com.pinterest.ktlint.Main")
+        args = listOf("--log-level=warn", "--color", "--relative", "--format", "--") +
+            System.getProperty("ktlintPreCommitArgs").let { args ->
+                check(args.isNotBlank()) { "need to pass in -DktlintPreCommitArgs=<some file paths to check>" }
+                args.split(" ")
+            }
+        // https://github.com/pinterest/ktlint/issues/1195#issuecomment-1009027802
+        jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+    }
 }

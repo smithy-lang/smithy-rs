@@ -241,35 +241,35 @@ jobs:
     name: Exotic platform support
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      CROSS_CONFIG: Cross.toml
     strategy:
       fail-fast: false
+      # We always exclude `aws-smithy-http-server-python`, `aws-smithy-http-server-typescript`, and `aws-smithy-experimental` since they are experimental.
+      # We exclude `aws-smithy-http-client` due to FIPS related feature flags and aws-lc-fips target support
       matrix:
         include:
-        # We always exclude `aws-smithy-http-server-python` and
-        # `aws-smithy-http-server-typescript` since they are experimental.
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-    env:
-      CROSS_CONFIG: Cross.toml
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     steps:
     - name: Checkout
       uses: actions/checkout@v4

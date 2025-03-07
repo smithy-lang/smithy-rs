@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.5.18"
+version = "1.6.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -13,11 +13,16 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 behavior-version-latest = []
-client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
 credentials-process = ["tokio/process"]
-default = ["client-hyper", "rustls", "rt-tokio", "credentials-process", "sso"]
+default = ["default-https-client", "rt-tokio", "credentials-process", "sso"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
-rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
+# NOTE: `client-hyper` and `rustls` were proxies for enabling the default HTTP client plugin of `aws-smithy-runtime`
+# there is no direct usage otherwise on hyper or rustls in this crate. These are superceded by the more appropriately
+# named `default-https-client` feature and `client-hyper` and `rustls` are now synonyms for the same
+# TODO(hyper1) - deprecate legacy `client-hyper` and `rustls` features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
+client-hyper = ["aws-smithy-runtime/default-https-client"]
+rustls = ["client-hyper"]
+default-https-client = ["aws-smithy-runtime/default-https-client"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 test-util = ["aws-runtime/test-util"]
 
@@ -36,7 +41,7 @@ aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtim
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 bytes = "1.1.0"
-http = "0.2.4"
+http = "1"
 time = { version = "0.3.4", features = ["parsing"] }
 tokio = { version = "1.13.1", features = ["sync"] }
 tracing = { version = "0.1" }
@@ -55,7 +60,9 @@ zeroize = { version = "1", optional = true }
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }
 
 [dev-dependencies]
-aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x", "test-util"] }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
+aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-http-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 futures-util = { version = "0.3.29", default-features = false }
 tracing-test = "0.2.4"
@@ -65,11 +72,6 @@ tokio = { version = "1.23.1", features = ["full", "test-util"] }
 # used for test case deserialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-
-# used for a usage example
-hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
-aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
-
 
 [package.metadata.docs.rs]
 all-features = true
@@ -83,3 +85,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 #  Crate("aws-config", STABLE_VERSION_PROP_NAME),
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# FIXME - workaround minimal-versions check issue with proc-macro < 1.0.60
+[package.metadata.cargo-udeps.ignore]
+normal = ["proc-macro2"]

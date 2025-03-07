@@ -19,7 +19,7 @@ RUST_LOG=aws_smithy_http_server=warn,aws_smithy_http_server_python=error
 
 and
 
-```rust
+```rust,ignore
 # extern crate tracing_subscriber;
 # extern crate tracing;
 # use tracing_subscriber::filter;
@@ -88,7 +88,7 @@ let app = PokemonService::builder(config)
 
 The Pokémon service example, located at `/examples/pokemon-service`, sets up a `tracing` `Subscriber` as follows:
 
-```rust
+```rust,ignore
 # extern crate tracing_subscriber;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
