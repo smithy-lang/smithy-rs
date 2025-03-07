@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 4th, 2025
+===============
+**New this release:**
+- :tada: (client, [smithy-rs#121](https://github.com/smithy-lang/smithy-rs/issues/121)) Adds support for event stream operations with non-REST protocols such as RPC v2 CBOR.
+
+
 February 20th, 2025
 ===================
 **New this release:**
@@ -168,8 +174,8 @@ July 9th, 2024
 **Breaking Changes:**
 - :warning: (server, [smithy-rs#3746](https://github.com/smithy-lang/smithy-rs/issues/3746)) `FromParts<Protocol>::Rejection` must implement `std::fmt::Display`.
 
-    Handlers can accept user-defined types if they implement 
-    [FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) with a `Rejection` 
+    Handlers can accept user-defined types if they implement
+    [FromParts<Protocol>](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) with a `Rejection`
     type that implements `std::fmt::Display` (preferably `std::error::Error`) to enable error logging when parameter construction from request parts fails.
 
     See the [changelog discussion for futher details](https://github.com/smithy-lang/smithy-rs/discussions/3749).
