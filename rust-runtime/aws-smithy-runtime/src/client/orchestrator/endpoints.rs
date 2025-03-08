@@ -71,20 +71,28 @@ pub(super) async fn orchestrate_endpoint(
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
+    identity: aws_smithy_runtime_api::client::identity::Identity,
 ) -> Result<(), BoxError> {
     trace!("orchestrating endpoint resolution");
+
+    let endpoint_resolver = runtime_components.endpoint_resolver();
 
     let params = cfg
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
+
+    let endpoint = if let Some(p) = params.try_clone() {
+        let mut p = p.with_identity(identity);
+        endpoint_resolver.finalize_params(&mut p);
+        endpoint_resolver.resolve_endpoint(&p).await?
+    } else {
+        endpoint_resolver.resolve_endpoint(params).await?
+    };
+
     let endpoint_prefix = cfg.load::<EndpointPrefix>();
     tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
     let request = ctx.request_mut().expect("set during serialization");
 
-    let endpoint = runtime_components
-        .endpoint_resolver()
-        .resolve_endpoint(params)
-        .await?;
     tracing::debug!("will use endpoint {:?}", endpoint);
     apply_endpoint(request, &endpoint, endpoint_prefix)?;
 

@@ -28,17 +28,44 @@ new_type_future! {
 /// are not known to the runtime crates. Hence, this struct is really a new-type around
 /// a [`TypeErasedBox`] that holds the actual concrete parameters in it.
 #[derive(Debug)]
-pub struct EndpointResolverParams(TypeErasedBox);
+pub struct EndpointResolverParams((TypeErasedBox, Option<super::identity::Identity>));
 
 impl EndpointResolverParams {
     /// Creates a new [`EndpointResolverParams`] from a concrete parameters instance.
     pub fn new<T: fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
-        Self(TypeErasedBox::new(params))
+        Self((TypeErasedBox::new(params), None))
+    }
+
+    /// Creates a new [`EndpointResolverParams`] from a concrete parameters instance.
+    pub fn new_with_clone<T: Clone + fmt::Debug + Send + Sync + 'static>(params: T) -> Self {
+        Self((TypeErasedBox::new_with_clone(params), None))
+    }
+
+    /// Augument existing [`EndpointResolverParams`] with given `identity`.
+    pub fn with_identity(self, identity: super::identity::Identity) -> Self {
+        Self((self.0 .0, Some(identity)))
+    }
+
+    /// Optionally clones [`EndpointResolverParams`], if the underlying `params` is cloneable.
+    pub fn try_clone(&self) -> Option<Self> {
+        let inner = self.0 .0.try_clone()?;
+        let identity = self.0 .1.clone();
+        Some(Self((inner, identity)))
     }
 
     /// Attempts to downcast the underlying concrete parameters to `T` and return it as a reference.
     pub fn get<T: fmt::Debug + Send + Sync + 'static>(&self) -> Option<&T> {
-        self.0.downcast_ref()
+        self.0 .0.downcast_ref()
+    }
+
+    /// Attempts to downcast the underlying concrete parameters to `T` and return it as a mutable reference.
+    pub fn get_mut<T: fmt::Debug + Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.0 .0.downcast_mut()
+    }
+
+    /// Returns `Identity` if set
+    pub fn identity(&self) -> Option<&super::identity::Identity> {
+        self.0 .1.as_ref()
     }
 }
 
@@ -50,6 +77,9 @@ impl Storable for EndpointResolverParams {
 pub trait ResolveEndpoint: Send + Sync + fmt::Debug {
     /// Asynchronously resolves an endpoint to use from the given endpoint parameters.
     fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>;
+
+    /// Finalize the inner service-specific endpoint parameters
+    fn finalize_params(&self, _params: &mut EndpointResolverParams) {}
 }
 
 /// Shared endpoint resolver.
@@ -68,6 +98,10 @@ impl SharedEndpointResolver {
 impl ResolveEndpoint for SharedEndpointResolver {
     fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         self.0.resolve_endpoint(params)
+    }
+
+    fn finalize_params(&self, params: &mut EndpointResolverParams) {
+        self.0.finalize_params(params);
     }
 }
 

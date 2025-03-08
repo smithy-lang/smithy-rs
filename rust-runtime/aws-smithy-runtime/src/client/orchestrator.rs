@@ -351,16 +351,16 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    let scheme_id = halt_on_err!([ctx] => resolve_auth_scheme(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    let (scheme_id, identity) = halt_on_err!([ctx] => resolve_auth_scheme(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         modify_before_signing(ctx, runtime_components, cfg);
         read_before_signing(ctx, runtime_components, cfg);
     });
 
-    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg, identity.clone()).await.map_err(OrchestratorError::other));
 
-    halt_on_err!([ctx] => sign_request(scheme_id, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => sign_request(scheme_id, ctx, runtime_components, cfg, &identity).map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         read_after_signing(ctx, runtime_components, cfg);

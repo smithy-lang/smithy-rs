@@ -54,7 +54,7 @@ pub(super) async fn resolve_auth_scheme(
     _ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
-) -> Result<AuthSchemeId, BoxError> {
+) -> Result<(AuthSchemeId, Identity), BoxError> {
     let params = cfg
         .load::<AuthSchemeOptionResolverParams>()
         .expect("auth scheme option resolver params must be set");
@@ -84,10 +84,12 @@ pub(super) async fn resolve_auth_scheme(
                         .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                         .await?;
                     trace!(identity = ?identity, "resolved identity");
+                    /*
                     let mut layer = Layer::new("resolve_identity");
                     layer.store_put(identity);
                     cfg.push_layer(layer);
-                    return Ok(scheme_id);
+                    */
+                    return Ok((scheme_id, identity));
                 }
             }
         }
@@ -129,12 +131,10 @@ pub(super) fn sign_request(
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,
+    identity: &Identity,
 ) -> Result<(), BoxError> {
     trace!("signing request");
     let request = ctx.request_mut().expect("set during serialization");
-    let identity = cfg
-        .load::<Identity>()
-        .expect("identity should be set by `resolve_identity`");
     let endpoint = cfg
         .load::<Endpoint>()
         .expect("endpoint added to config bag by endpoint orchestrator");
