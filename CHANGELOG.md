@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 10th, 2025
+================
+**New this release:**
+- (client, [aws-sdk-rust#977](https://github.com/awslabs/aws-sdk-rust/issues/977), [smithy-rs#1925](https://github.com/smithy-lang/smithy-rs/issues/1925), [smithy-rs#3710](https://github.com/smithy-lang/smithy-rs/issues/3710)) Updates the default HTTP client to be based on the 1.x version of hyper and updates the default TLS provider to [rustls](https://github.com/rustls/rustls) with [aws-lc](https://github.com/aws/aws-lc-rs). For more information see the GitHub [discussion](https://github.com/awslabs/aws-sdk-rust/discussions/1257).
+
+
 March 4th, 2025
 ===============
 **New this release:**
