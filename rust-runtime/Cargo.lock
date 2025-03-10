@@ -607,11 +607,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
+version = "1.7.9"
 version = "1.8.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
  "aws-smithy-http",
+ "aws-smithy-observability",
+ "aws-smithy-protocol-test",
  "aws-smithy-http-client",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
