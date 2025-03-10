@@ -129,11 +129,11 @@ class EndpointBuiltInsDecoratorTest {
                     """,
                     "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
                     "StaticReplayClient" to
-                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                            .resolve("client::http::test_util::StaticReplayClient"),
+                        CargoDependency.smithyHttpClientTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("test_util::StaticReplayClient"),
                     "ReplayEvent" to
-                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                            .resolve("client::http::test_util::ReplayEvent"),
+                        CargoDependency.smithyHttpClientTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("test_util::ReplayEvent"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
                 )
             }

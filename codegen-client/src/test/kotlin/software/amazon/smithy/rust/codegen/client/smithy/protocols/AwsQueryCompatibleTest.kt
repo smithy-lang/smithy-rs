@@ -74,11 +74,11 @@ class AwsQueryCompatibleTest {
                 tokioTest("should_parse_code_and_type_fields") {
                     rustTemplate(
                         """
-                        let response = |_: http::Request<#{SdkBody}>| {
-                            http::Response::builder()
+                        let response = |_: #{http_1x}::Request<#{SdkBody}>| {
+                            #{http_1x}::Response::builder()
                                 .header(
                                     "x-amzn-query-error",
-                                    http::HeaderValue::from_static("AWS.SimpleQueueService.NonExistentQueue;Sender"),
+                                    #{http_1x}::HeaderValue::from_static("AWS.SimpleQueueService.NonExistentQueue;Sender"),
                                 )
                                 .status(400)
                                 .body(
@@ -107,8 +107,9 @@ class AwsQueryCompatibleTest {
                         *RuntimeType.preludeScope,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
                         "infallible_client_fn" to
-                            CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                                .toType().resolve("client::http::test_util::infallible_client_fn"),
+                            CargoDependency.smithyHttpClientTestUtil(context.runtimeConfig)
+                                .toType().resolve("test_util::infallible_client_fn"),
+                        "http_1x" to CargoDependency.Http1x.toType(),
                     )
                 }
             }
@@ -126,8 +127,8 @@ class AwsQueryCompatibleTest {
                 tokioTest("should_parse_code_from_payload") {
                     rustTemplate(
                         """
-                        let response = |_: http::Request<#{SdkBody}>| {
-                            http::Response::builder()
+                        let response = |_: #{http_1x}::Request<#{SdkBody}>| {
+                            #{http_1x}::Response::builder()
                                 .status(400)
                                 .body(
                                     #{SdkBody}::from(
@@ -152,8 +153,9 @@ class AwsQueryCompatibleTest {
                         *RuntimeType.preludeScope,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
                         "infallible_client_fn" to
-                            CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                                .toType().resolve("client::http::test_util::infallible_client_fn"),
+                            CargoDependency.smithyHttpClientTestUtil(context.runtimeConfig)
+                                .toType().resolve("test_util::infallible_client_fn"),
+                        "http_1x" to CargoDependency.Http1x.toType(),
                     )
                 }
             }

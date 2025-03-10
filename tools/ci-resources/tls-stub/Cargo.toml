@@ -13,11 +13,9 @@ publish = false
 aws-config = {path = "../../../aws/sdk/build/aws-sdk/sdk/aws-config", features = ["client-hyper"] }
 aws-credential-types = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
 aws-sdk-sts = { path = "../../../aws/sdk/build/aws-sdk/sdk/sts" }
-aws-smithy-runtime = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
+aws-smithy-http-client = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-http-client", features = ["rustls-aws-lc"] }
 exitcode = "1"
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
-rustls = "0.21.8"
-rustls-native-certs = "0.6"
-rustls-pemfile = "1"
 tokio = { version = "1", features = ["full"] }
-x509-parser = "0.15"
+rustls = "0.23.23"
+rustls-pemfile = "1"
+x509-parser = "0.17"

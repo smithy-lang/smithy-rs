@@ -23,18 +23,18 @@ aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "be
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util", "wire-mock", "tls-rustls"] }
-aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util", "http-1x"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
-aws-smithy-experimental = { path = "../../build/aws-sdk/sdk/aws-smithy-experimental", features = ["crypto-ring"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "rustls-ring", "test-util", "wire-mock"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
 fastrand = "2.3.0"
 futures-util = { version = "0.3.29", default-features = false, features = ["alloc"] }
 hdrhistogram = "7.5.2"
-http = "0.2.3"
-http-body = "0.4.5"
+http-1x = { package = "http", version = "1" }
+http-body-1x = { package = "http-body", version = "1" }
 hyper = { version = "0.14.26", features = ["stream"] }
 once_cell = "1.18.0"
 pretty_assertions = "1.3"

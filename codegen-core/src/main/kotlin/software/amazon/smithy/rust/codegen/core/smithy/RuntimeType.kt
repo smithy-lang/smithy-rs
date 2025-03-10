@@ -498,11 +498,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             return smithyTypes(runtimeConfig).resolve("date_time::Format::$timestampFormat")
         }
 
-        fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
-            CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType().resolve("client::http::test_util")
-
         fun captureRequest(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeTestUtil(runtimeConfig).resolve("capture_request")
+            CargoDependency.smithyHttpClientTestUtil(runtimeConfig).toType().resolve("test_util::capture_request")
 
         fun forInlineDependency(inlineDependency: InlineDependency) =
             RuntimeType("crate::${inlineDependency.name}", inlineDependency)
