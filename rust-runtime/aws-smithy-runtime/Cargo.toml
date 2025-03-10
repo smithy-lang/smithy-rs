@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.7.8"
+version = "1.8.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -9,44 +9,61 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# TODO(hyper1) - deprecate legacy hyper and http testing features when available in cargo: https://github.com/rust-lang/cargo/issues/7130
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream", "dep:h2"]
-tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
+# NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
+connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
+tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
+default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
-test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json", "dep:indexmap"]
-wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
+# NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
+# and updated to work with the 1.x HTTP/hyper ecosystem. Prefer using the `test-util` and `wire-mock` features from
+# `aws-smithy-http-client` directly instead for HTTP test utils.
+test-util = [
+    "aws-smithy-runtime-api/test-util",
+    "dep:tracing-subscriber",
+    "aws-smithy-http-client/test-util",
+    # TODO(hyper1): Feature remains in place for backwards compat but in a future release we will break this flag and disable legacy HTTP test utils
+    "legacy-test-util",
+]
+
+legacy-test-util = [
+    # non HTTP test utils
+    "aws-smithy-runtime-api/test-util",
+    "dep:tracing-subscriber",
+    "aws-smithy-http-client/test-util",
+    # legacy http test utils
+    "connector-hyper-0-14-x",
+    "aws-smithy-http-client/legacy-test-util",
+]
+
+wire-mock = ["legacy-test-util", "aws-smithy-http-client/wire-mock"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
-bytes = "1"
+aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }
+bytes = "1.10.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.3.0"
-h2 = { version = "0.3", default-features = false, optional = true }
-http-02x = { package = "http", version = "0.2.8" }
-http-body-04x = { package = "http-body", version = "0.4.4" }
+http-02x = { package = "http", version = "0.2.9" }
+http-1x = { package = "http", version = "1" }
+http-body-04x = { package = "http-body", version = "0.4.5" }
 http-body-1x = { package = "http-body", version = "1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
-httparse = "1.8.0"
-hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
-once_cell = "1.18.0"
-pin-project-lite = "0.2.7"
+#httparse = "1.8.0"
+once_cell = "1.20.1"
+pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
-rustls = { version = "0.21.8", optional = true }
-serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1", features = ["preserve_order"], optional = true }
-indexmap = { version = "2", optional = true, features = ["serde"] }
-tokio = { version = "1.25", features = [] }
-tracing = "0.1.37"
+tokio = { version = "1.40.0", features = [] }
+tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.16", optional = true, features = ["env-filter", "fmt", "json"] }
 
 [dev-dependencies]
@@ -62,8 +79,8 @@ pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
+# FIXME - migrate to hyper-1
 hyper_0_14 = { package = "hyper", version = "0.14.27", features = ["client", "server", "tcp", "http1", "http2"] }
-http1 = { package = "http", version = "1" }
 
 [package.metadata.docs.rs]
 all-features = true

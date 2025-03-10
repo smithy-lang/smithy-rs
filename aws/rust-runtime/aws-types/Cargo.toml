@@ -1,6 +1,6 @@
 [package]
 name = "aws-types"
-version = "1.3.5"
+version = "1.3.6"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = "Cross-service types for the AWS SDK."
 edition = "2021"
@@ -17,7 +17,7 @@ aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", optional = true }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-tracing = "0.1"
+tracing = "0.1.40"
 # cargo does not support optional test dependencies, so to completely disable rustls
 # we need to add the webpki-roots feature here.
 # https://github.com/rust-lang/cargo/issues/1596

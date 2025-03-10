@@ -6,6 +6,7 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -162,11 +163,11 @@ class SigV4AuthDecoratorTest {
                         "ByteStream" to RuntimeType.byteStream(rc),
                         "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc).resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
-                        "ReplayEvent" to RuntimeType.smithyRuntimeTestUtil(rc).resolve("ReplayEvent"),
+                        "ReplayEvent" to CargoDependency.smithyHttpClientTestUtil(rc).toType().resolve("test_util::ReplayEvent"),
                         "Request" to RuntimeType.HttpRequest,
                         "Response" to RuntimeType.HttpResponse,
                         "SdkBody" to RuntimeType.sdkBody(rc),
-                        "StaticReplayClient" to RuntimeType.smithyRuntimeTestUtil(rc).resolve("StaticReplayClient"),
+                        "StaticReplayClient" to CargoDependency.smithyHttpClientTestUtil(rc).toType().resolve("test_util::StaticReplayClient"),
                         "tracing_subscriber" to RuntimeType.TracingSubscriber,
                     )
                 }

@@ -167,6 +167,15 @@ internal class HttpChecksumTest {
             // Note about the `//#{PresigningMarker}` below. The `RequestChecksumInterceptor` relies on the `PresigningMarker` type from
             // the presigning inlineable. The decorator for that inlineable doesn't play nicely with the test model from the SEP, so we
             // use this as a kind of blunt way to include the presigning inlineable without actually wiring it up with the model.
+            // We also have to ensure the `http-1x` feature the presigning inlineable expects is present on the generated crate.
+            rustCrate.mergeFeature(
+                Feature(
+                    "http-1x",
+                    default = false,
+                    listOf("dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
+                ),
+            )
+
             val testBase =
                 writable {
                     rustTemplate(
@@ -290,6 +299,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }
@@ -368,6 +378,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }
@@ -389,7 +400,7 @@ internal class HttpChecksumTest {
                 ##[::tokio::test]
                 async fn ${algoLower}_response_checksums_works() {
                     let (http_client, _rx) = #{capture_request}(Some(
-                        http::Response::builder()
+                        #{http_1x}::Response::builder()
                             .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
                             .body(SdkBody::from("${testDef.responsePayload}"))
                             .unwrap(),
@@ -414,6 +425,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }
@@ -435,7 +447,7 @@ internal class HttpChecksumTest {
                 ##[::tokio::test]
                 async fn ${algoLower}_response_checksums_fail_correctly() {
                     let (http_client, _rx) = #{capture_request}(Some(
-                        http::Response::builder()
+                        #{http_1x}::Response::builder()
                             .header("x-amz-checksum-$algoLower", "${testDef.checksumHeaderValue}")
                             .body(SdkBody::from("${testDef.responsePayload}"))
                             .unwrap(),
@@ -476,6 +488,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }
@@ -537,6 +550,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }
@@ -613,7 +627,7 @@ internal class HttpChecksumTest {
                 ##[::tokio::test]
                 async fn response_config_ua_supported() {
                     let (http_client, rx) = #{capture_request}(Some(
-                        http::Response::builder()
+                        #{http_1x}::Response::builder()
                             .header("x-amz-checksum-crc32", "i9aeUg==")
                             .body(SdkBody::from("Hello world"))
                             .unwrap(),
@@ -645,7 +659,7 @@ internal class HttpChecksumTest {
                 ##[::tokio::test]
                 async fn response_config_ua_required() {
                     let (http_client, rx) = #{capture_request}(Some(
-                        http::Response::builder()
+                        #{http_1x}::Response::builder()
                             .header("x-amz-checksum-crc32", "i9aeUg==")
                             .body(SdkBody::from("Hello world"))
                             .unwrap(),
@@ -680,6 +694,7 @@ internal class HttpChecksumTest {
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
+                "http_1x" to CargoDependency.Http1x.toType(),
             )
         }
     }

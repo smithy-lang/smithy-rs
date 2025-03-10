@@ -58,7 +58,7 @@ pub struct NewService<S> {
 
 and a complementary
 
-```rust
+```rust,ignore
 # extern crate tower;
 # pub struct NewService<S> { inner: S }
 use tower::{Layer, Service};
@@ -137,7 +137,7 @@ where `UpgradeLayer` is the `Layer` converting Smithy model structures to HTTP s
 
 The output of the Smithy service builder provides the user with a `Service<http::Request, Response = http::Response>` implementation. A `Layer` can be applied around the entire `Service`.
 
-```rust,no_run
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate pokemon_service_server_sdk;
 # extern crate tower;
@@ -175,7 +175,7 @@ A _single_ layer can be applied to _all_ routes inside the `Router`. This
 exists as a method on the `PokemonServiceConfig` builder object, which is passed into the
 service builder.
 
-```rust,no_run
+```rust,ignore
 # extern crate tower;
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
@@ -209,7 +209,7 @@ Note that requests pass through this middleware immediately _after_ routing succ
 
 A "HTTP layer" can be applied to specific operations.
 
-```rust,no_run
+```rust,ignore
 # extern crate tower;
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
@@ -253,7 +253,7 @@ This middleware transforms the operations HTTP requests and responses.
 
 A "model layer" can be applied to specific operations.
 
-```rust,no_run
+```rust,ignore
 # extern crate tower;
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
@@ -296,7 +296,7 @@ Suppose we want to apply a different `Layer` to every operation. In this case, p
 
 Consider the following middleware:
 
-```rust,no_run
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate tower;
 use aws_smithy_http_server::shape_id::ShapeId;
