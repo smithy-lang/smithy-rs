@@ -80,6 +80,7 @@ impl MetricsInterceptor {
 
         if let Some(md) = operation_metadata {
             let mut attributes = Attributes::new();
+            attributes.set("rpc.system", AttributeValue::String("aws-api".into()));
             attributes.set("rpc.service", AttributeValue::String(md.service().into()));
             attributes.set("rpc.method", AttributeValue::String(md.name().into()));
 
@@ -115,14 +116,12 @@ impl Intercept for MetricsInterceptor {
         _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef<'_>,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
-        let mut layer = Layer::new("MetricsInterceptor");
-
-        layer.store_put(MeasurementsContainer {
+        cfg.interceptor_state().store_put(MeasurementsContainer {
             call_start: self.time_source.now(),
             attempts: 0,
             attempt_start: SystemTime::UNIX_EPOCH,
         });
-        cfg.push_layer(layer);
+
         Ok(())
     }
 
