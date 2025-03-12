@@ -168,8 +168,7 @@ pub async fn invoke_with_stop_point(
         .maybe_timeout(operation_timeout_config)
         .await
     }
-    // Include a random, internal-only, seven-digit ID for the operation invocation so that it can be correlated in the logs.
-    .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name, sdk_invocation_id = fastrand::u32(1_000_000..10_000_000)))
+    .instrument(debug_span!("invoke"))
     .await
 }
 
