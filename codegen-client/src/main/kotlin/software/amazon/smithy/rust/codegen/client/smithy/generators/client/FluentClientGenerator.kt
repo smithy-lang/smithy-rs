@@ -269,7 +269,7 @@ private fun baseClientRuntimePluginsFn(
                     let default_retry_partition = ${codegenContext.serviceShape.sdkId().dq()};
                     #{before_plugin_setup}
 
-                    let scope = "aws.sdk.rust.services.${codegenContext.serviceShape.sdkId()}";
+                    let scope = ${codegenContext.moduleName.dq()};
 
                     let mut plugins = #{RuntimePlugins}::new()
                         // defaults

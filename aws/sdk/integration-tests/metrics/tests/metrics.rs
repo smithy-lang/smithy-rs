@@ -41,8 +41,8 @@ async fn service_clients_get_unique_scope_names() {
         .collect();
 
     // Metrics aren't necessarily aggregated in the order they were first emitted
-    assert!(scope_names.contains(&Cow::from("aws.sdk.rust.services.s3")));
-    assert!(scope_names.contains(&Cow::from("aws.sdk.rust.services.dynamodb")));
+    assert!(scope_names.contains(&Cow::from("aws-sdk-s3")));
+    assert!(scope_names.contains(&Cow::from("aws-sdk-dynamodb")));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
