@@ -80,7 +80,6 @@ impl MetricsInterceptor {
 
         if let Some(md) = operation_metadata {
             let mut attributes = Attributes::new();
-            attributes.set("rpc.system", AttributeValue::String("aws-api".into()));
             attributes.set("rpc.service", AttributeValue::String(md.service().into()));
             attributes.set("rpc.method", AttributeValue::String(md.name().into()));
 
