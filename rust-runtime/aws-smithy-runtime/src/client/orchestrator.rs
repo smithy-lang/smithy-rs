@@ -304,7 +304,9 @@ async fn try_op(
         trace!(attempt_timeout_config = ?attempt_timeout_config);
         let maybe_timeout = async {
             debug!("beginning attempt #{i}");
-            try_attempt(ctx, cfg, runtime_components, stop_point).await;
+            try_attempt(ctx, cfg, runtime_components, stop_point)
+                .instrument(debug_span!("try_attempt", "attempt_number" = i))
+                .await;
             finally_attempt(ctx, cfg, runtime_components).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
