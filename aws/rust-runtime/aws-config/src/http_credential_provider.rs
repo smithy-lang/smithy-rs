@@ -12,6 +12,7 @@ use crate::json_credentials::{parse_json_credentials, JsonCredentials, Refreshab
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
+use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::classifiers::{
     HttpStatusCodeClassifier, TransientErrorClassifier,
@@ -105,9 +106,15 @@ impl Builder {
             .runtime_plugin(StaticRuntimePlugin::new().with_config({
                 let mut layer = Layer::new("SensitiveOutput");
                 layer.store_put(SensitiveOutput);
-                layer.store_put(Metadata::new(path.clone(), provider_name));
                 layer.freeze()
-            }));
+            }))
+            .runtime_plugin(
+                MetricsRuntimePlugin::builder()
+                    .with_scope("http_credential_provider")
+                    .with_time_source(provider_config.time_source())
+                    .with_metadata(Metadata::new(path.clone(), provider_name))
+                    .build(),
+            );
         if let Some(http_client) = provider_config.http_client() {
             builder = builder.http_client(http_client);
         }

@@ -388,15 +388,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-        let time_source = self.runtime_components.time_source().unwrap_or_default();
         let mut config = self.config;
         config.store_put(Metadata::new(operation_name.clone(), service_name.clone()));
         let mut runtime_plugins = RuntimePlugins::new()
             .with_client_plugins(default_plugins(
-                DefaultPluginParams::new()
-                    .with_retry_partition_name(service_name.clone())
-                    .with_time_source(time_source)
-                    .with_scope(self.scope.unwrap_or("aws.sdk.rust.services.unknown")),
+                DefaultPluginParams::new().with_retry_partition_name(service_name.clone()),
             ))
             .with_client_plugin(
                 StaticRuntimePlugin::new()

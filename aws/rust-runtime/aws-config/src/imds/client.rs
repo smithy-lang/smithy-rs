@@ -12,6 +12,7 @@ use crate::imds::client::token::TokenRuntimePlugin;
 use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_runtime::user_agent::{ApiMetadata, AwsUserAgent, UserAgentInterceptor};
+use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -250,7 +251,6 @@ impl ImdsCommonRuntimePlugin {
         layer.store_put(retry_config);
         layer.store_put(timeout_config);
         layer.store_put(user_agent());
-        layer.store_put(Metadata::new("get_credentials", "imds"));
 
         Self {
             config: layer.freeze(),
@@ -477,6 +477,13 @@ impl Builder {
                 common_plugin,
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             ))
+            .runtime_plugin(
+                MetricsRuntimePlugin::builder()
+                    .with_scope("imds_credentials")
+                    .with_time_source(config.time_source())
+                    .with_metadata(Metadata::new("get_credentials", "imds"))
+                    .build(),
+            )
             .with_connection_poisoning()
             .serializer(|path| {
                 Ok(HttpRequest::try_from(
