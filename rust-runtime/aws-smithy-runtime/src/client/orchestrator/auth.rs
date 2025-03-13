@@ -10,11 +10,12 @@ use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
     ResolveAuthSchemeOptions,
 };
-use aws_smithy_runtime_api::client::identity::ResolveIdentity;
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEndpoint};
+use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -95,6 +96,7 @@ impl StdError for NoMatchingAuthSchemeError {}
 enum AuthOrchestrationError {
     MissingEndpointConfig,
     BadAuthSchemeEndpointConfig(Cow<'static, str>),
+    FailedToResolveEndpoint(BoxError),
 }
 
 impl fmt::Display for AuthOrchestrationError {
@@ -103,25 +105,24 @@ impl fmt::Display for AuthOrchestrationError {
             // This error is never bubbled up
             Self::MissingEndpointConfig => f.write_str("missing endpoint config"),
             Self::BadAuthSchemeEndpointConfig(message) => f.write_str(message),
+            Self::FailedToResolveEndpoint(source) => {
+                write!(f, "failed to resolve endpoint: {}", source)
+            }
         }
     }
 }
 
 impl StdError for AuthOrchestrationError {}
 
-pub(super) async fn orchestrate_auth(
-    ctx: &mut InterceptorContext,
+pub(super) async fn resolve_identity(
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,
-) -> Result<(), BoxError> {
+) -> Result<(AuthSchemeId, Identity, Option<Endpoint>), BoxError> {
     let params = cfg
         .load::<AuthSchemeOptionResolverParams>()
         .expect("auth scheme option resolver params must be set");
     let option_resolver = runtime_components.auth_scheme_option_resolver();
     let options = option_resolver.resolve_auth_scheme_options(params)?;
-    let endpoint = cfg
-        .load::<Endpoint>()
-        .expect("endpoint added to config bag by endpoint orchestrator");
 
     trace!(
         auth_scheme_option_resolver_params = ?params,
@@ -137,47 +138,39 @@ pub(super) async fn orchestrate_auth(
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
             // Use the resolved auth scheme to resolve an identity
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
-                let identity_cache = if identity_resolver.cache_location()
-                    == IdentityCacheLocation::RuntimeComponents
+                match endpoint_auth_scheme_matches_configured_scheme_id(
+                    runtime_components,
+                    cfg,
+                    scheme_id,
+                )
+                .await
                 {
-                    runtime_components.identity_cache()
-                } else {
-                    IdentityCache::no_cache()
-                };
-                let signer = auth_scheme.signer();
-                trace!(
-                    auth_scheme = ?auth_scheme,
-                    identity_cache = ?identity_cache,
-                    identity_resolver = ?identity_resolver,
-                    signer = ?signer,
-                    "resolved auth scheme, identity cache, identity resolver, and signing implementation"
-                );
-
-                match extract_endpoint_auth_scheme_config(endpoint, scheme_id) {
-                    Ok(auth_scheme_endpoint_config) => {
-                        trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
-
+                    Ok(endpoint) => {
+                        let identity_cache = if identity_resolver.cache_location()
+                            == IdentityCacheLocation::RuntimeComponents
+                        {
+                            runtime_components.identity_cache()
+                        } else {
+                            IdentityCache::no_cache()
+                        };
                         let identity = identity_cache
                             .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
-
-                        trace!("signing request");
-                        let request = ctx.request_mut().expect("set during serialization");
-                        signer.sign_http_request(
-                            request,
-                            &identity,
-                            auth_scheme_endpoint_config,
-                            runtime_components,
-                            cfg,
-                        )?;
-                        return Ok(());
+                        return Ok((scheme_id, identity, endpoint));
                     }
                     Err(AuthOrchestrationError::MissingEndpointConfig) => {
                         explored.push(scheme_id, ExploreResult::MissingEndpointConfig);
                         continue;
                     }
-                    Err(other_err) => return Err(other_err.into()),
+                    Err(AuthOrchestrationError::FailedToResolveEndpoint(source)) => {
+                        // Some negative endpoint tests expect an endpoint resolution error,
+                        // so we need to return it to satisfy them.
+                        return Err(source);
+                    }
+                    Err(other_err) => {
+                        return Err(other_err.into());
+                    }
                 }
             } else {
                 explored.push(scheme_id, ExploreResult::NoIdentityResolver);
@@ -188,6 +181,86 @@ pub(super) async fn orchestrate_auth(
     }
 
     Err(NoMatchingAuthSchemeError(explored).into())
+}
+
+pub(super) fn sign_request(
+    scheme_id: AuthSchemeId,
+    identity: &Identity,
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    trace!("signing request");
+    let request = ctx.request_mut().expect("set during serialization");
+    let endpoint = cfg
+        .load::<Endpoint>()
+        .expect("endpoint added to config bag by endpoint orchestrator");
+    let auth_scheme = runtime_components
+        .auth_scheme(scheme_id)
+        .ok_or("should be configured")?;
+    let signer = auth_scheme.signer();
+    let auth_scheme_endpoint_config = extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
+    trace!(
+        signer = ?signer,
+        "signing implementation"
+    );
+    signer.sign_http_request(
+        request,
+        identity,
+        auth_scheme_endpoint_config,
+        runtime_components,
+        cfg,
+    )?;
+    Ok(())
+}
+
+// Marker indicating that endpoint resolution for determining the auth scheme option
+// has already been performed by a `AuthSchemeOptionResolver`, such as `EndpointBasedAuthSchemeOptionResolver`.
+//
+// When this marker is present in the config bag (the default for SDKs moving forward),
+// `resolve_identity` will skip endpoint resolution.
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct AuthSchemeOptionResolverHandlesEndpointResolution;
+
+impl Storable for AuthSchemeOptionResolverHandlesEndpointResolution {
+    type Storer = StoreReplace<Self>;
+}
+
+// Checks whether an `endpoint` resolved by `SharedEndpointResolver` in `runtime_components`,
+// using `EndpointResolverParams` from `cfg`, contains `scheme_id` in its `authSchemes` property.
+//
+// Returns `Ok` if the condition is met, with the `Ok` variant also containing the actual `endpoint` used for verification.
+//
+// This function exists for backward compatibility. SDKs generated with the `AuthSchemeOptionResolverHandlesEndpointResolution`
+// do not, by default, require an endpoint outside of `SharedAuthSchemeOptionResolver`,
+// so the function short-circuits and returns `Ok(None)`.
+async fn endpoint_auth_scheme_matches_configured_scheme_id(
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+    scheme_id: AuthSchemeId,
+) -> Result<Option<Endpoint>, AuthOrchestrationError> {
+    if cfg
+        .load::<AuthSchemeOptionResolverHandlesEndpointResolution>()
+        .is_some()
+    {
+        // Short-circuit if auth scheme option resolver internally handles endpoint resolution
+        return Ok(None);
+    }
+
+    let params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
+
+    let endpoint = runtime_components
+        .endpoint_resolver()
+        .resolve_endpoint(params)
+        .await
+        .map_err(AuthOrchestrationError::FailedToResolveEndpoint)?;
+
+    let _ = extract_endpoint_auth_scheme_config(&endpoint, scheme_id)?;
+
+    Ok(Some(endpoint))
 }
 
 fn extract_endpoint_auth_scheme_config(
@@ -374,11 +447,14 @@ mod tests {
         let mut layer: Layer = Layer::new("test");
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
         layer.store_put(Endpoint::builder().url("dontcare").build());
+        layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
         let cfg = ConfigBag::of_layers(vec![layer]);
 
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
             .await
             .expect("success");
+
+        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
 
         assert_eq!(
             "success!",
@@ -425,6 +501,7 @@ mod tests {
             let mut layer = Layer::new("test");
             layer.store_put(Endpoint::builder().url("dontcare").build());
             layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
+            layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
 
             (runtime_components, ConfigBag::of_layers(vec![layer]))
         }
@@ -432,9 +509,11 @@ mod tests {
         // First, test the presence of a basic auth login and absence of a bearer token
         let (runtime_components, cfg) =
             config_with_identity(HTTP_BASIC_AUTH_SCHEME_ID, Login::new("a", "b", None));
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+
+        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
             .await
             .expect("success");
+        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
         assert_eq!(
             // "YTpi" == "a:b" in base64
             "Basic YTpi",
@@ -453,9 +532,10 @@ mod tests {
         ctx.set_request(HttpRequest::empty());
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
-        orchestrate_auth(&mut ctx, &runtime_components, &cfg)
+        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
             .await
             .expect("success");
+        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
         assert_eq!(
             "Bearer t",
             ctx.request()
@@ -606,11 +686,20 @@ mod tests {
         let mut layer = Layer::new("test");
         layer.store_put(Endpoint::builder().url("dontcare").build());
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
+        layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
         let config_bag = ConfigBag::of_layers(vec![layer]);
 
-        orchestrate_auth(&mut ctx, &runtime_components, &config_bag)
+        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &config_bag)
             .await
             .expect("success");
+        sign_request(
+            scheme_id,
+            &identity,
+            &mut ctx,
+            &runtime_components,
+            &config_bag,
+        )
+        .expect("success");
         assert_eq!(
             "result: cached (pass)",
             ctx.request()
