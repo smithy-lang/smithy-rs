@@ -110,7 +110,7 @@ impl Builder {
             }))
             .runtime_plugin(
                 MetricsRuntimePlugin::builder()
-                    .with_scope("http_credential_provider")
+                    .with_scope("aws_config::http_credential_provider")
                     .with_time_source(provider_config.time_source())
                     .with_metadata(Metadata::new(path.clone(), provider_name))
                     .build(),

@@ -479,7 +479,7 @@ impl Builder {
             ))
             .runtime_plugin(
                 MetricsRuntimePlugin::builder()
-                    .with_scope("imds_credentials")
+                    .with_scope("aws_config::imds_credentials")
                     .with_time_source(config.time_source())
                     .with_metadata(Metadata::new("get_credentials", "imds"))
                     .build(),

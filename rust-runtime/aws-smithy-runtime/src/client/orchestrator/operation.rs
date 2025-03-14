@@ -165,7 +165,6 @@ pub struct OperationBuilder<I = (), O = (), E = ()> {
     config: Layer,
     runtime_components: RuntimeComponentsBuilder,
     runtime_plugins: Vec<SharedRuntimePlugin>,
-    scope: Option<&'static str>,
     _phantom: PhantomData<(I, O, E)>,
 }
 
@@ -184,7 +183,6 @@ impl OperationBuilder<(), (), ()> {
             config: Layer::new("operation"),
             runtime_components: RuntimeComponentsBuilder::new("operation"),
             runtime_plugins: Vec::new(),
-            scope: None,
             _phantom: Default::default(),
         }
     }
@@ -200,12 +198,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     /// Configures the operation name for the builder.
     pub fn operation_name(mut self, operation_name: impl Into<Cow<'static, str>>) -> Self {
         self.operation_name = Some(operation_name.into());
-        self
-    }
-
-    /// Configures the metrics scope for the builder.
-    pub fn scope(mut self, scope: &'static str) -> Self {
-        self.scope = Some(scope);
         self
     }
 
@@ -328,7 +320,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             config: self.config,
             runtime_components: self.runtime_components,
             runtime_plugins: self.runtime_plugins,
-            scope: self.scope,
             _phantom: Default::default(),
         }
     }
@@ -355,7 +346,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             config: self.config,
             runtime_components: self.runtime_components,
             runtime_plugins: self.runtime_plugins,
-            scope: self.scope,
             _phantom: Default::default(),
         }
     }
@@ -379,7 +369,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             config: self.config,
             runtime_components: self.runtime_components,
             runtime_plugins: self.runtime_plugins,
-            scope: self.scope,
             _phantom: Default::default(),
         }
     }

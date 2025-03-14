@@ -285,7 +285,6 @@ fn validate_stalled_stream_protection_config(
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct DefaultPluginParams {
-    // The retry_partition_name is also the service_name
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
 }
