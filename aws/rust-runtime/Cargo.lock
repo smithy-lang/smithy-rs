@@ -207,7 +207,6 @@ dependencies = [
  "http 0.2.12",
  "http 1.2.0",
  "httparse",
- "once_cell",
  "p256",
  "percent-encoding",
  "pretty_assertions",
@@ -254,7 +253,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.7"
+version = "0.60.8"
 dependencies = [
  "aws-smithy-types",
  "bytes",
