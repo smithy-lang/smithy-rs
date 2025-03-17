@@ -133,8 +133,8 @@ pub enum StopPoint {
 ///
 /// See the docs on [`invoke`] for more details.
 pub async fn invoke_with_stop_point(
-    service_name: &str,
-    operation_name: &str,
+    _service_name: &str,
+    _operation_name: &str,
     input: Input,
     runtime_plugins: &RuntimePlugins,
     stop_point: StopPoint,
@@ -352,7 +352,7 @@ async fn try_attempt(
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
     halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg)
-                            .instrument(debug_span!("resolve_endpoint"))
+                            .instrument(debug_span!("orchestrate_endpoint"))
                             .await
                             .map_err(OrchestratorError::other));
 

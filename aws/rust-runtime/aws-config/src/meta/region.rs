@@ -40,7 +40,7 @@ impl RegionProviderChain {
         for provider in &self.providers {
             if let Some(region) = provider
                 .region()
-                .instrument(tracing::info_span!("region_provider_chain", provider = ?provider))
+                .instrument(tracing::debug_span!("region_provider_chain", provider = ?provider))
                 .await
             {
                 return Some(region);

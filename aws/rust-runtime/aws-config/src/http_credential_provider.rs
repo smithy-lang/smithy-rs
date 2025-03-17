@@ -106,7 +106,6 @@ impl Builder {
             .runtime_plugin(StaticRuntimePlugin::new().with_config({
                 let mut layer = Layer::new("SensitiveOutput");
                 layer.store_put(SensitiveOutput);
-                layer.store_put(Metadata::new(path.clone(), provider_name));
                 layer.freeze()
             }))
             .runtime_plugin(

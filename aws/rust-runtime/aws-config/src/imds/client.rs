@@ -251,7 +251,6 @@ impl ImdsCommonRuntimePlugin {
         layer.store_put(retry_config);
         layer.store_put(timeout_config);
         layer.store_put(user_agent());
-        layer.store_put(Metadata::new("get_credentials", "imds"));
 
         Self {
             config: layer.freeze(),

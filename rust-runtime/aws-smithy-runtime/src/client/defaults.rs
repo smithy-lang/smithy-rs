@@ -15,7 +15,7 @@ use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
-use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource, TimeSource};
+use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -32,8 +32,6 @@ use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::time::Duration;
-
-use super::metrics::MetricsRuntimePlugin;
 
 fn default_plugin<CompFn>(name: &'static str, components_fn: CompFn) -> StaticRuntimePlugin
 where
@@ -253,13 +251,6 @@ fn enforce_content_length_runtime_plugin() -> Option<SharedRuntimePlugin> {
     Some(EnforceContentLengthRuntimePlugin::new().into_shared())
 }
 
-fn metrics_runtime_plugin(
-    scope: &'static str,
-    time_source: SharedTimeSource,
-) -> Option<SharedRuntimePlugin> {
-    Some(MetricsRuntimePlugin::new(scope, time_source).into_shared())
-}
-
 fn validate_stalled_stream_protection_config(
     components: &RuntimeComponentsBuilder,
     cfg: &ConfigBag,
@@ -294,11 +285,8 @@ fn validate_stalled_stream_protection_config(
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct DefaultPluginParams {
-    // The retry_partition_name is also the service_name
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
-    time_source: Option<SharedTimeSource>,
-    scope: Option<&'static str>,
 }
 
 impl DefaultPluginParams {
@@ -316,18 +304,6 @@ impl DefaultPluginParams {
     /// Sets the behavior major version.
     pub fn with_behavior_version(mut self, version: BehaviorVersion) -> Self {
         self.behavior_version = Some(version);
-        self
-    }
-
-    /// Sets the time source.
-    pub fn with_time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
-        self.time_source = Some(SharedTimeSource::new(time_source));
-        self
-    }
-
-    /// Sets the metrics scope.
-    pub fn with_scope(mut self, scope: &'static str) -> Self {
-        self.scope = Some(scope);
         self
     }
 }
@@ -353,10 +329,6 @@ pub fn default_plugins(
         default_timeout_config_plugin(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
-        metrics_runtime_plugin(
-            params.scope.unwrap_or("aws.sdk.rust.services.unknown"),
-            params.time_source.unwrap_or_default(),
-        ),
     ]
     .into_iter()
     .flatten()
