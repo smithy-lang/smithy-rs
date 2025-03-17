@@ -263,11 +263,17 @@ impl MetricsRuntimePluginBuilder {
     }
 
     /// Build a [MetricsRuntimePlugin]
-    pub fn build(self) -> MetricsRuntimePlugin {
-        MetricsRuntimePlugin {
-            scope: self.scope.unwrap_or("unknown_metrics_scope"),
-            time_source: self.time_source.unwrap_or_default(),
-            metadata: self.metadata,
+    pub fn build(
+        self,
+    ) -> Result<MetricsRuntimePlugin, aws_smithy_runtime_api::box_error::BoxError> {
+        if let Some(scope) = self.scope {
+            Ok(MetricsRuntimePlugin {
+                scope,
+                time_source: self.time_source.unwrap_or_default(),
+                metadata: self.metadata,
+            })
+        } else {
+            Err("Scope is required for MetricsRuntimePlugin.".into())
         }
     }
 }

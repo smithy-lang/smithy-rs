@@ -482,7 +482,8 @@ impl Builder {
                     .with_scope("aws_config::imds_credentials")
                     .with_time_source(config.time_source())
                     .with_metadata(Metadata::new("get_credentials", "imds"))
-                    .build(),
+                    .build()
+                    .expect("Scope has been set"),
             )
             .with_connection_poisoning()
             .serializer(|path| {

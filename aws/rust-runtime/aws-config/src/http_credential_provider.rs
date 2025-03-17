@@ -113,7 +113,8 @@ impl Builder {
                     .with_scope("aws_config::http_credential_provider")
                     .with_time_source(provider_config.time_source())
                     .with_metadata(Metadata::new(path.clone(), provider_name))
-                    .build(),
+                    .build()
+                    .expect("Scope has been set"),
             );
         if let Some(http_client) = provider_config.http_client() {
             builder = builder.http_client(http_client);

@@ -292,6 +292,7 @@ private fun baseClientRuntimePluginsFn(
                                 .with_scope(scope)
                                 .with_time_source(config.runtime_components.time_source().unwrap_or_default())
                                 .build()
+                                .expect("Scope has been set")
                         );
 
                     #{additional_client_plugins:W}
