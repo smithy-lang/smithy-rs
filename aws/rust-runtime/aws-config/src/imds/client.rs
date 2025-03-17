@@ -483,7 +483,7 @@ impl Builder {
                     .with_time_source(config.time_source())
                     .with_metadata(Metadata::new("get_credentials", "imds"))
                     .build()
-                    .expect("Scope has been set"),
+                    .expect("All required fields have been set"),
             )
             .with_connection_poisoning()
             .serializer(|path| {

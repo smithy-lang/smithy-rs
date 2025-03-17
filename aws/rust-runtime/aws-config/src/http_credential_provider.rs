@@ -114,7 +114,7 @@ impl Builder {
                     .with_time_source(provider_config.time_source())
                     .with_metadata(Metadata::new(path.clone(), provider_name))
                     .build()
-                    .expect("Scope has been set"),
+                    .expect("All required fields have been set"),
             );
         if let Some(http_client) = provider_config.http_client() {
             builder = builder.http_client(http_client);
