@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_observability::{
     global::get_telemetry_provider, instruments::Histogram, AttributeValue, Attributes,
     ObservabilityError,
@@ -29,12 +29,12 @@ impl Storable for MeasurementsContainer {
 
 /// Instruments for recording a single operation
 #[derive(Debug, Clone)]
-pub(crate) struct MetricsInterceptorInstruments {
+pub(crate) struct OperationTelemetry {
     pub(crate) operation_duration: Arc<dyn Histogram>,
     pub(crate) attempt_duration: Arc<dyn Histogram>,
 }
 
-impl MetricsInterceptorInstruments {
+impl OperationTelemetry {
     pub(crate) fn new(scope: &'static str) -> Result<Self, ObservabilityError> {
         let meter = get_telemetry_provider()?
             .meter_provider()
@@ -55,7 +55,7 @@ impl MetricsInterceptorInstruments {
     }
 }
 
-impl Storable for MetricsInterceptorInstruments {
+impl Storable for OperationTelemetry {
     type Storer = StoreReplace<Self>;
 }
 
@@ -92,13 +92,13 @@ impl MetricsInterceptor {
     pub(crate) fn get_measurements_and_instruments<'a>(
         &self,
         cfg: &'a aws_smithy_types::config_bag::ConfigBag,
-    ) -> (&'a MeasurementsContainer, &'a MetricsInterceptorInstruments) {
+    ) -> (&'a MeasurementsContainer, &'a OperationTelemetry) {
         let measurements = cfg
             .load::<MeasurementsContainer>()
             .expect("set in `read_before_execution`");
 
         let instruments = cfg
-            .load::<MetricsInterceptorInstruments>()
+            .load::<OperationTelemetry>()
             .expect("set in RuntimePlugin");
 
         (measurements, instruments)
@@ -188,15 +188,16 @@ impl Intercept for MetricsInterceptor {
 
 /// Runtime plugin that adds an interceptor for collecting metrics
 #[derive(Debug, Default)]
-pub(crate) struct MetricsRuntimePlugin {
+pub struct MetricsRuntimePlugin {
     scope: &'static str,
     time_source: SharedTimeSource,
+    metadata: Option<Metadata>,
 }
 
 impl MetricsRuntimePlugin {
-    /// Creates a runtime plugin which installs an interceptor for collecting metrics
-    pub(crate) fn new(scope: &'static str, time_source: SharedTimeSource) -> Self {
-        Self { scope, time_source }
+    /// Create a [MetricsRuntimePluginBuilder]
+    pub fn builder() -> MetricsRuntimePluginBuilder {
+        MetricsRuntimePluginBuilder::default()
     }
 }
 
@@ -214,14 +215,65 @@ impl RuntimePlugin for MetricsRuntimePlugin {
     }
 
     fn config(&self) -> Option<FrozenLayer> {
-        let instruments = MetricsInterceptorInstruments::new(self.scope);
+        let instruments = OperationTelemetry::new(self.scope);
 
         if let Ok(instruments) = instruments {
-            let mut cfg = Layer::new("MetricsInstruments");
+            let mut cfg = Layer::new("Metrics");
             cfg.store_put(instruments);
+
+            if let Some(metadata) = &self.metadata {
+                cfg.store_put(metadata.clone());
+            }
+
             Some(cfg.freeze())
         } else {
             None
+        }
+    }
+}
+
+/// Builder for [MetricsRuntimePlugin]
+#[derive(Debug, Default)]
+pub struct MetricsRuntimePluginBuilder {
+    scope: Option<&'static str>,
+    time_source: Option<SharedTimeSource>,
+    metadata: Option<Metadata>,
+}
+
+impl MetricsRuntimePluginBuilder {
+    /// Set the scope for the metrics
+    pub fn with_scope(mut self, scope: &'static str) -> Self {
+        self.scope = Some(scope);
+        self
+    }
+
+    /// Set the [TimeSource] for the metrics
+    pub fn with_time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.time_source = Some(SharedTimeSource::new(time_source));
+        self
+    }
+
+    /// Set the [Metadata] for the metrics.
+    ///
+    /// Note: the Metadata is optional, most operations set it themselves, but this is useful
+    /// for operations that do not, like some of the credential providers.
+    pub fn with_metadata(mut self, metadata: Metadata) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Build a [MetricsRuntimePlugin]
+    pub fn build(
+        self,
+    ) -> Result<MetricsRuntimePlugin, aws_smithy_runtime_api::box_error::BoxError> {
+        if let Some(scope) = self.scope {
+            Ok(MetricsRuntimePlugin {
+                scope,
+                time_source: self.time_source.unwrap_or_default(),
+                metadata: self.metadata,
+            })
+        } else {
+            Err("Scope is required for MetricsRuntimePlugin.".into())
         }
     }
 }

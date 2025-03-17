@@ -614,7 +614,6 @@ dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-client",
  "aws-smithy-observability",
- "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",

@@ -47,7 +47,6 @@ wire-mock = ["legacy-test-util", "aws-smithy-http-client/wire-mock"]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-observability = { path = "../aws-smithy-observability" }
-aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }

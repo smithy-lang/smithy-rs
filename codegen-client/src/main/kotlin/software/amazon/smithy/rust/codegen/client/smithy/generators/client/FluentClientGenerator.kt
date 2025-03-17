@@ -288,7 +288,14 @@ private fun baseClientRuntimePluginsFn(
                         )
                         // codegen config
                         .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
-                        .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+                        .with_client_plugin(#{NoAuthRuntimePlugin}::new())
+                        .with_client_plugin(
+                            #{MetricsRuntimePlugin}::builder()
+                                .with_scope(scope)
+                                .with_time_source(config.runtime_components.time_source().unwrap_or_default())
+                                .build()
+                                .expect("All required fields have been set")
+                        );
 
                     #{additional_client_plugins:W}
 
@@ -318,6 +325,7 @@ private fun baseClientRuntimePluginsFn(
                 "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
                 "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
+                "MetricsRuntimePlugin" to rt.resolve("client::metrics::MetricsRuntimePlugin"),
                 "update_bmv" to
                     featureGatedBlock(BehaviorVersionLatest) {
                         rustTemplate(
