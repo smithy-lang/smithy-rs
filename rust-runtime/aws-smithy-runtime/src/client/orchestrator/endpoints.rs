@@ -77,11 +77,11 @@ pub(super) async fn orchestrate_endpoint(
     let params = cfg
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
+    tracing::debug!(endpoint_params = ?params, "resolving endpoint");
     let endpoint = runtime_components
         .endpoint_resolver()
         .resolve_endpoint(params)
         .await?;
-    tracing::debug!(endpoint_params = ?params, "will use endpoint {:?}", endpoint);
 
     apply_endpoint(&endpoint, ctx, cfg)?;
 
@@ -96,7 +96,7 @@ pub(super) fn apply_endpoint(
     cfg: &ConfigBag,
 ) -> Result<(), BoxError> {
     let endpoint_prefix = cfg.load::<EndpointPrefix>();
-    tracing::debug!(endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
+    tracing::debug!(endpoint_prefix = ?endpoint_prefix, "will apply endpoint {:?}", endpoint);
     let request = ctx.request_mut().expect("set during serialization");
 
     apply_endpoint_to_request(request, endpoint, endpoint_prefix)

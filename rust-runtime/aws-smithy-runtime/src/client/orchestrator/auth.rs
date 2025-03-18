@@ -255,6 +255,8 @@ async fn legacy_try_resolve_endpoint(
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
 
+    tracing::debug!(endpoint_params = ?params, "resolving endpoint");
+
     let endpoint = runtime_components
         .endpoint_resolver()
         .resolve_endpoint(params)
