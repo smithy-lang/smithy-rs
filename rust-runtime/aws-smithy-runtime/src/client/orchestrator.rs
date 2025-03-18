@@ -36,7 +36,7 @@ use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
-pub use auth::AuthSchemeOptionResolverHandlesEndpointResolution;
+pub use auth::AuthSchemeAndEndpointOrchestrationV2;
 
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
@@ -356,7 +356,7 @@ async fn try_attempt(
 
     match endpoint {
         Some(endpoint) => {
-            // This branch is for backward compatibility when `AuthSchemeOptionResolverHandlesEndpointResolution` is not present in the config bag.
+            // This branch is for backward compatibility when `AuthSchemeAndEndpointOrchestrationV2` is not present in the config bag.
             // `resolve_identity` internally resolved an endpoint to determine the most suitable scheme ID, and returned that endpoint.
             halt_on_err!([ctx] => apply_endpoint(&endpoint, ctx, cfg).map_err(OrchestratorError::other));
             // Make the endpoint config available to interceptors

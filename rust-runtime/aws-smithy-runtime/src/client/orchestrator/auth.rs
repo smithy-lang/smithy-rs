@@ -214,16 +214,26 @@ pub(super) fn sign_request(
     Ok(())
 }
 
-// Marker indicating that endpoint resolution for determining the auth scheme option
-// has already been performed by a `AuthSchemeOptionResolver`, such as `EndpointBasedAuthSchemeOptionResolver`.
+// Marker indicating the correct resolution order: identity resolution first,
+// followed by endpoint resolution, as specified in the SRA.
 //
-// When this marker is present in the config bag (the default for SDKs moving forward),
-// `resolve_identity` will skip endpoint resolution.
+// This marker is included in the config bag to signify the intended resolution order
+// by design. When the crate was released for GA, the resolution order was reversed
+// (endpoint resolution first, followed by identity resolution). However, we later
+// discovered the order needed correcting without breaking existing SDKs.
+// This marker signals the runtime to support both resolution orders without introducing
+// `aws-smithy-runtime` version 2.x.
+//
+// When this marker is present in the config bag (the default behavior for forward compatibility),
+// `resolve_identity` skips endpoint resolution, ensuring that `try_attempt` follows
+// the correct resolution order: auth scheme → identity → endpoint.
+// If the marker is absent, `try_attempt` continues using
+// the legacy, incorrect resolution order: endpoint → auth scheme → identity.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
-pub struct AuthSchemeOptionResolverHandlesEndpointResolution;
+pub struct AuthSchemeAndEndpointOrchestrationV2;
 
-impl Storable for AuthSchemeOptionResolverHandlesEndpointResolution {
+impl Storable for AuthSchemeAndEndpointOrchestrationV2 {
     type Storer = StoreReplace<Self>;
 }
 
@@ -232,7 +242,7 @@ impl Storable for AuthSchemeOptionResolverHandlesEndpointResolution {
 //
 // Returns `Ok` if the condition is met, with the `Ok` variant also containing the actual `endpoint` used for verification.
 //
-// This function exists for backward compatibility. SDKs generated with the `AuthSchemeOptionResolverHandlesEndpointResolution`
+// This function exists for backward compatibility. SDKs generated with the `AuthSchemeAndEndpointOrchestrationV2`
 // do not, by default, require an endpoint outside of `SharedAuthSchemeOptionResolver`,
 // so the function short-circuits and returns `Ok(None)`.
 async fn endpoint_auth_scheme_matches_configured_scheme_id(
@@ -240,10 +250,7 @@ async fn endpoint_auth_scheme_matches_configured_scheme_id(
     cfg: &ConfigBag,
     scheme_id: AuthSchemeId,
 ) -> Result<Option<Endpoint>, AuthOrchestrationError> {
-    if cfg
-        .load::<AuthSchemeOptionResolverHandlesEndpointResolution>()
-        .is_some()
-    {
+    if cfg.load::<AuthSchemeAndEndpointOrchestrationV2>().is_some() {
         // Short-circuit if auth scheme option resolver internally handles endpoint resolution
         return Ok(None);
     }
@@ -447,7 +454,7 @@ mod tests {
         let mut layer: Layer = Layer::new("test");
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
         layer.store_put(Endpoint::builder().url("dontcare").build());
-        layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
+        layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
         let cfg = ConfigBag::of_layers(vec![layer]);
 
         let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
@@ -501,7 +508,7 @@ mod tests {
             let mut layer = Layer::new("test");
             layer.store_put(Endpoint::builder().url("dontcare").build());
             layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-            layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
+            layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
 
             (runtime_components, ConfigBag::of_layers(vec![layer]))
         }
@@ -686,7 +693,7 @@ mod tests {
         let mut layer = Layer::new("test");
         layer.store_put(Endpoint::builder().url("dontcare").build());
         layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-        layer.store_put(AuthSchemeOptionResolverHandlesEndpointResolution);
+        layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
         let config_bag = ConfigBag::of_layers(vec![layer]);
 
         let (scheme_id, identity, _) = resolve_identity(&runtime_components, &config_bag)
