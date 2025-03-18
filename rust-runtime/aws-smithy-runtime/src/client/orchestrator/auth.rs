@@ -265,6 +265,12 @@ async fn endpoint_auth_scheme_matches_configured_scheme_id(
         .await
         .map_err(AuthOrchestrationError::FailedToResolveEndpoint)?;
 
+    // This line repurposes `extract_endpoint_auth_scheme_config` to check whether
+    // the function returns `Ok` for the given `endpoint`.
+    // Essentially, we want verify if the `authSchemes` property of `endpoint` contains `scheme_id`,
+    // which is done by `schemes.iter().find(...).ok_or(...)` within the function.
+    // However, this execution path is only exercised for legacy auth scheme and endpoint orchestration,
+    // so we don't bother refactoring the predicate out of the function.
     let _ = extract_endpoint_auth_scheme_config(&endpoint, scheme_id)?;
 
     Ok(Some(endpoint))
