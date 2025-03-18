@@ -138,13 +138,7 @@ pub(super) async fn resolve_identity(
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
             // Use the resolved auth scheme to resolve an identity
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
-                match endpoint_auth_scheme_matches_configured_scheme_id(
-                    runtime_components,
-                    cfg,
-                    scheme_id,
-                )
-                .await
-                {
+                match legacy_try_resolve_endpoint(runtime_components, cfg, scheme_id).await {
                     Ok(endpoint) => {
                         let identity_cache = if identity_resolver.cache_location()
                             == IdentityCacheLocation::RuntimeComponents
@@ -237,21 +231,23 @@ impl Storable for AuthSchemeAndEndpointOrchestrationV2 {
     type Storer = StoreReplace<Self>;
 }
 
-// Checks whether an `endpoint` resolved by `SharedEndpointResolver` in `runtime_components`,
-// using `EndpointResolverParams` from `cfg`, contains `scheme_id` in its `authSchemes` property.
+// Conditionally return an `endpoint` resolved by `SharedEndpointResolver` in `runtime_components`
+// whose `authSchemes` property matches the given `scheme_id`
 //
-// Returns `Ok` if the condition is met, with the `Ok` variant also containing the actual `endpoint` used for verification.
-//
-// This function exists for backward compatibility. SDKs generated with the `AuthSchemeAndEndpointOrchestrationV2`
-// do not, by default, require an endpoint outside of `SharedAuthSchemeOptionResolver`,
-// so the function short-circuits and returns `Ok(None)`.
-async fn endpoint_auth_scheme_matches_configured_scheme_id(
+// Return the `Ok` variant in the following cases:
+// - If `AuthSchemeAndEndpointOrchestrationV2` is present in the config bag, indicating that the runtime doesn't require the functionality of this function.
+//   In this case, the function short-circuits and returns `Ok(None)`, as no endpoint needs resolution. Instead, a custom `AuthSchemeOptionResolver`
+//   should have resolved it internally for auth scheme selection.
+// - If the runtime uses the legacy auth scheme and endpoint orchestration and resolves an endpoint that matches the given condition,
+//   the function returns `Ok(endpoint)`, which will then be applied to the request.
+async fn legacy_try_resolve_endpoint(
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,
     scheme_id: AuthSchemeId,
 ) -> Result<Option<Endpoint>, AuthOrchestrationError> {
     if cfg.load::<AuthSchemeAndEndpointOrchestrationV2>().is_some() {
-        // Short-circuit if auth scheme option resolver internally handles endpoint resolution
+        // The orchestrator uses the correct auth scheme and endpoint resolution order,
+        // and no endpoint needs to be resolved within this function.
         return Ok(None);
     }
 
