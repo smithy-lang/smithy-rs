@@ -77,23 +77,32 @@ pub(super) async fn orchestrate_endpoint(
     let params = cfg
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
-    let endpoint_prefix = cfg.load::<EndpointPrefix>();
-    tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
-    let request = ctx.request_mut().expect("set during serialization");
-
+    tracing::debug!(endpoint_params = ?params, "resolving endpoint");
     let endpoint = runtime_components
         .endpoint_resolver()
         .resolve_endpoint(params)
         .await?;
-    tracing::debug!("will use endpoint {:?}", endpoint);
-    apply_endpoint(request, &endpoint, endpoint_prefix)?;
+
+    apply_endpoint(&endpoint, ctx, cfg)?;
 
     // Make the endpoint config available to interceptors
     cfg.interceptor_state().store_put(endpoint);
     Ok(())
 }
 
-fn apply_endpoint(
+pub(super) fn apply_endpoint(
+    endpoint: &Endpoint,
+    ctx: &mut InterceptorContext,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    let endpoint_prefix = cfg.load::<EndpointPrefix>();
+    tracing::debug!(endpoint_prefix = ?endpoint_prefix, "will apply endpoint {:?}", endpoint);
+    let request = ctx.request_mut().expect("set during serialization");
+
+    apply_endpoint_to_request(request, endpoint, endpoint_prefix)
+}
+
+fn apply_endpoint_to_request(
     request: &mut HttpRequest,
     endpoint: &Endpoint,
     endpoint_prefix: Option<&EndpointPrefix>,
@@ -157,7 +166,8 @@ mod test {
         req.set_uri("/foo?bar=1").unwrap();
         let endpoint = Endpoint::builder().url("https://s3.amazon.com").build();
         let prefix = EndpointPrefix::new("prefix.subdomain.").unwrap();
-        super::apply_endpoint(&mut req, &endpoint, Some(&prefix)).expect("should succeed");
+        super::apply_endpoint_to_request(&mut req, &endpoint, Some(&prefix))
+            .expect("should succeed");
         assert_eq!(
             req.uri(),
             "https://prefix.subdomain.s3.amazon.com/foo?bar=1"
