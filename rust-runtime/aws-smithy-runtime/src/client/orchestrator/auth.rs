@@ -255,7 +255,7 @@ async fn legacy_try_resolve_endpoint(
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
 
-    tracing::debug!(endpoint_params = ?params, "resolving endpoint");
+    tracing::debug!(scheme_id = ?scheme_id, endpoint_params = ?params, "using legacy auth and endpoint orchestration, resolving endpoint for auth scheme selection");
 
     let endpoint = runtime_components
         .endpoint_resolver()
@@ -265,7 +265,7 @@ async fn legacy_try_resolve_endpoint(
 
     // This line repurposes `extract_endpoint_auth_scheme_config` to check whether
     // the function returns `Ok` for the given `endpoint`.
-    // Essentially, we want verify if the `authSchemes` property of `endpoint` contains `scheme_id`,
+    // Essentially, we verify if the `authSchemes` property of `endpoint` contains `scheme_id`,
     // which is done by `schemes.iter().find(...).ok_or(...)` within the function.
     // However, this execution path is only exercised for legacy auth scheme and endpoint orchestration,
     // so we don't bother refactoring the predicate out of the function.
