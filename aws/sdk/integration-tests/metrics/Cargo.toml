@@ -23,3 +23,6 @@ opentelemetry = { version = "0.26.0", features = ["metrics"] }
 opentelemetry_sdk = { version = "0.26.0", features = ["metrics", "testing"] }
 serial_test = "3.1.1"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+tracing-fluent-assertions = "0.3.0"

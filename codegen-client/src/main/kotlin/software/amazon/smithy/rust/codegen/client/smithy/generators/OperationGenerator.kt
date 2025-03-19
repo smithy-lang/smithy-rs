@@ -139,7 +139,7 @@ open class OperationGenerator(
                                 "$serviceName.$operationName",
                                 "rpc.system" = "aws-api",
                                 "rpc.service" = ${serviceName.dq()},
-                                "rpc.operation" = ${operationName.dq()},
+                                "rpc.method" = ${operationName.dq()},
                                 "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000)
                             ))
                         .await

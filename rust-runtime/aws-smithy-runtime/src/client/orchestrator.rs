@@ -307,7 +307,9 @@ async fn try_op(
             try_attempt(ctx, cfg, runtime_components, stop_point)
                 .instrument(debug_span!("try_attempt", "attempt_number" = i))
                 .await;
-            finally_attempt(ctx, cfg, runtime_components).await;
+            finally_attempt(ctx, cfg, runtime_components)
+                .instrument(debug_span!("finally_attempt", "attempt_number" = i))
+                .await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
         .maybe_timeout(attempt_timeout_config)
@@ -342,7 +344,6 @@ async fn try_op(
     }
 }
 
-#[instrument(skip_all, level = "debug")]
 async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -442,7 +443,6 @@ async fn try_attempt(
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
 }
 
-#[instrument(skip_all, level = "debug")]
 async fn finally_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
