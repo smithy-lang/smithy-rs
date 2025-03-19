@@ -133,8 +133,8 @@ pub enum StopPoint {
 ///
 /// See the docs on [`invoke`] for more details.
 pub async fn invoke_with_stop_point(
-    _service_name: &str,
-    _operation_name: &str,
+    service_name: &str,
+    operation_name: &str,
     input: Input,
     runtime_plugins: &RuntimePlugins,
     stop_point: StopPoint,
@@ -168,7 +168,11 @@ pub async fn invoke_with_stop_point(
         .maybe_timeout(operation_timeout_config)
         .await
     }
-    .instrument(debug_span!("invoke"))
+    .instrument(debug_span!(
+        "invoke",
+        "rpc.service" = service_name,
+        "rpc.method" = operation_name
+    ))
     .await
 }
 

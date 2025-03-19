@@ -22,6 +22,7 @@ use opentelemetry_sdk::{
     testing::metrics::InMemoryMetricsExporter,
 };
 use tracing::{
+    field::{Field, Visit},
     span::{Attributes, Id},
     Subscriber,
 };
@@ -137,12 +138,15 @@ where
     S: Subscriber,
     S: for<'lookup> LookupSpan<'lookup>,
 {
-    fn on_new_span(&self, _attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
         let span = ctx.span(id).unwrap();
 
+        println!("Span Created: {}", span.metadata().name());
         span.extensions_mut().insert(Timing {
             started_at: Instant::now(),
         });
+
+        attrs.values().record(&mut PrintVisitor);
     }
 
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
@@ -155,5 +159,16 @@ where
             span.metadata().name(),
             (Instant::now() - started_at).as_micros(),
         );
+    }
+}
+
+#[allow(unused)]
+pub(crate) struct PrintVisitor;
+
+impl Visit for PrintVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        let field_name = field.name();
+        let field_value = format!("{value:?}").replace("\"", "");
+        println!("ATTR: {field_name}: {field_value}")
     }
 }

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_config::meta::region::RegionProviderChain;
+use aws_config::{BehaviorVersion, Region};
 use std::collections::HashMap;
 use std::fmt;
 use tracing::field::{Field, Visit};
@@ -184,6 +186,82 @@ async fn all_expected_operation_spans_emitted_with_correct_nesting() {
     finally_op.assert();
     invoke.assert();
     operation.assert();
+}
+
+#[tokio::test]
+async fn config_spans_emitted() {
+    let assertion_registry = AssertionRegistry::default();
+    let base_subscriber = tracing_subscriber::Registry::default();
+    let subscriber = base_subscriber.with(AssertionsLayer::new(&assertion_registry));
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let load_config_file = assertion_registry
+        .build()
+        .with_name("load_config_file")
+        .with_span_field("file")
+        .was_closed_exactly(2)
+        .finalize();
+
+    let build_profile_file_credentials_provider = assertion_registry
+        .build()
+        .with_name("build_profile_file_credentials_provider")
+        .was_closed_exactly(1)
+        .finalize();
+
+    let build_profile_token_provider = assertion_registry
+        .build()
+        .with_name("build_profile_token_provider")
+        .was_closed_exactly(1)
+        .finalize();
+
+    let _config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::from_static("foo"))
+        .load()
+        .await;
+
+    load_config_file.assert();
+    build_profile_file_credentials_provider.assert();
+    build_profile_token_provider.assert();
+}
+
+#[tokio::test]
+async fn region_spans_emitted() {
+    let assertion_registry = AssertionRegistry::default();
+    let base_subscriber = tracing_subscriber::Registry::default();
+    let subscriber = base_subscriber.with(AssertionsLayer::new(&assertion_registry));
+    let _guard = tracing::subscriber::set_default(subscriber);
+
+    let region_provider_chain = assertion_registry
+        .build()
+        .with_name("region_provider_chain")
+        .with_span_field("provider")
+        .was_closed_exactly(5)
+        .finalize();
+
+    let imds_load_region = assertion_registry
+        .build()
+        .with_name("imds_load_region")
+        .with_parent_name("region_provider_chain")
+        .was_closed_exactly(1)
+        .finalize();
+
+    // IMDS calls invoke twice, once with get and once with get_token
+    let invoke = assertion_registry
+        .build()
+        .with_name("invoke")
+        .with_parent_name("imds_load_region")
+        .was_closed_exactly(2)
+        .finalize();
+
+    let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+    let _config = aws_config::defaults(BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
+
+    region_provider_chain.assert();
+    imds_load_region.assert();
+    invoke.assert();
 }
 
 struct TestLayer<F: Fn() -> Box<dyn Visit> + 'static> {
