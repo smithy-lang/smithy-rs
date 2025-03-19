@@ -365,11 +365,15 @@ impl fmt::Debug for ExploredList {
 #[cfg(all(test, any(feature = "test-util", feature = "legacy-test-util")))]
 mod tests {
     use super::*;
+    use crate::client::orchestrator::endpoints::{
+        StaticUriEndpointResolver, StaticUriEndpointResolverParams,
+    };
     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeId, AuthSchemeOptionResolverParams, SharedAuthScheme,
         SharedAuthSchemeOptionResolver, Sign,
     };
+    use aws_smithy_runtime_api::client::endpoint::SharedEndpointResolver;
     use aws_smithy_runtime_api::client::identity::{
         Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
     };
@@ -437,44 +441,66 @@ mod tests {
             }
         }
 
-        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
-        ctx.enter_serialization_phase();
-        ctx.set_request(HttpRequest::empty());
-        let _ = ctx.take_input();
-        ctx.enter_before_transmit_phase();
+        async fn run_test(add_more_to_layer: impl Fn(Layer) -> Layer) {
+            let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+            ctx.enter_serialization_phase();
+            ctx.set_request(HttpRequest::empty());
+            let _ = ctx.take_input();
+            ctx.enter_before_transmit_phase();
 
-        let runtime_components = RuntimeComponentsBuilder::for_tests()
-            .with_auth_scheme(SharedAuthScheme::new(TestAuthScheme { signer: TestSigner }))
-            .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
-                StaticAuthSchemeOptionResolver::new(vec![TEST_SCHEME_ID]),
-            )))
-            .with_identity_resolver(
-                TEST_SCHEME_ID,
-                SharedIdentityResolver::new(TestIdentityResolver),
-            )
-            .build()
-            .unwrap();
+            let runtime_components = RuntimeComponentsBuilder::for_tests()
+                .with_auth_scheme(SharedAuthScheme::new(TestAuthScheme { signer: TestSigner }))
+                .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
+                    StaticAuthSchemeOptionResolver::new(vec![TEST_SCHEME_ID]),
+                )))
+                .with_identity_resolver(
+                    TEST_SCHEME_ID,
+                    SharedIdentityResolver::new(TestIdentityResolver),
+                )
+                .with_endpoint_resolver(Some(SharedEndpointResolver::new(
+                    StaticUriEndpointResolver::http_localhost(8080),
+                )))
+                .build()
+                .unwrap();
 
-        let mut layer: Layer = Layer::new("test");
-        layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-        layer.store_put(Endpoint::builder().url("dontcare").build());
-        layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
-        let cfg = ConfigBag::of_layers(vec![layer]);
+            let mut layer: Layer = Layer::new("test");
+            layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
+            layer.store_put(Endpoint::builder().url("dontcare").build());
+            let layer = add_more_to_layer(layer);
+            let cfg = ConfigBag::of_layers(vec![layer]);
 
-        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
-            .await
-            .expect("success");
+            let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
+                .await
+                .expect("success");
 
-        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
+            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+                .expect("success");
 
-        assert_eq!(
-            "success!",
-            ctx.request()
-                .expect("request is set")
-                .headers()
-                .get("Authorization")
-                .unwrap()
-        );
+            assert_eq!(
+                "success!",
+                ctx.request()
+                    .expect("request is set")
+                    .headers()
+                    .get("Authorization")
+                    .unwrap()
+            );
+        }
+
+        // test for correct auth and endpoint orchestration
+        run_test(|mut layer| {
+            layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
+            layer
+        })
+        .await;
+
+        // test for legacy auth and endpoint orchestration (no `AuthSchemeAndEndpointOrchestrationV2` in `layer`)
+        run_test(|mut layer| {
+            layer.store_put(EndpointResolverParams::from(
+                StaticUriEndpointResolverParams::new(),
+            ));
+            layer
+        })
+        .await;
     }
 
     #[cfg(feature = "http-auth")]
@@ -486,16 +512,63 @@ mod tests {
         };
         use aws_smithy_runtime_api::client::identity::http::{Login, Token};
 
-        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
-        ctx.enter_serialization_phase();
-        ctx.set_request(HttpRequest::empty());
-        let _ = ctx.take_input();
-        ctx.enter_before_transmit_phase();
+        async fn run_test(add_more_to_layer: impl Fn(Layer) -> Layer) {
+            let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+            ctx.enter_serialization_phase();
+            ctx.set_request(HttpRequest::empty());
+            let _ = ctx.take_input();
+            ctx.enter_before_transmit_phase();
+
+            // First, test the presence of a basic auth login and absence of a bearer token
+            let (runtime_components, layer) =
+                config_with_identity(HTTP_BASIC_AUTH_SCHEME_ID, Login::new("a", "b", None));
+            let layer = add_more_to_layer(layer);
+            let cfg = ConfigBag::of_layers(vec![layer]);
+
+            let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
+                .await
+                .expect("success");
+            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+                .expect("success");
+            assert_eq!(
+                // "YTpi" == "a:b" in base64
+                "Basic YTpi",
+                ctx.request()
+                    .expect("request is set")
+                    .headers()
+                    .get("Authorization")
+                    .unwrap()
+            );
+
+            // Next, test the presence of a bearer token and absence of basic auth
+            let (runtime_components, layer) =
+                config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
+            let layer = add_more_to_layer(layer);
+            let cfg = ConfigBag::of_layers(vec![layer]);
+            let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
+            ctx.enter_serialization_phase();
+            ctx.set_request(HttpRequest::empty());
+            let _ = ctx.take_input();
+            ctx.enter_before_transmit_phase();
+            let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
+                .await
+                .expect("success");
+            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+                .expect("success");
+            assert_eq!(
+                "Bearer t",
+                ctx.request()
+                    .expect("request is set")
+                    .headers()
+                    .get("Authorization")
+                    .unwrap()
+            );
+        }
 
         fn config_with_identity(
             scheme_id: AuthSchemeId,
             identity: impl ResolveIdentity + 'static,
-        ) -> (RuntimeComponents, ConfigBag) {
+        ) -> (RuntimeComponents, Layer) {
             let runtime_components = RuntimeComponentsBuilder::for_tests()
                 .with_auth_scheme(SharedAuthScheme::new(BasicAuthScheme::new()))
                 .with_auth_scheme(SharedAuthScheme::new(BearerAuthScheme::new()))
@@ -506,55 +579,34 @@ mod tests {
                     ]),
                 )))
                 .with_identity_resolver(scheme_id, SharedIdentityResolver::new(identity))
+                .with_endpoint_resolver(Some(SharedEndpointResolver::new(
+                    StaticUriEndpointResolver::http_localhost(8080),
+                )))
                 .build()
                 .unwrap();
 
             let mut layer = Layer::new("test");
             layer.store_put(Endpoint::builder().url("dontcare").build());
             layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-            layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
 
-            (runtime_components, ConfigBag::of_layers(vec![layer]))
+            (runtime_components, layer)
         }
 
-        // First, test the presence of a basic auth login and absence of a bearer token
-        let (runtime_components, cfg) =
-            config_with_identity(HTTP_BASIC_AUTH_SCHEME_ID, Login::new("a", "b", None));
+        // test for correct auth and endpoint orchestration
+        run_test(|mut layer| {
+            layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
+            layer
+        })
+        .await;
 
-        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
-            .await
-            .expect("success");
-        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
-        assert_eq!(
-            // "YTpi" == "a:b" in base64
-            "Basic YTpi",
-            ctx.request()
-                .expect("request is set")
-                .headers()
-                .get("Authorization")
-                .unwrap()
-        );
-
-        // Next, test the presence of a bearer token and absence of basic auth
-        let (runtime_components, cfg) =
-            config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
-        let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
-        ctx.enter_serialization_phase();
-        ctx.set_request(HttpRequest::empty());
-        let _ = ctx.take_input();
-        ctx.enter_before_transmit_phase();
-        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
-            .await
-            .expect("success");
-        sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg).expect("success");
-        assert_eq!(
-            "Bearer t",
-            ctx.request()
-                .expect("request is set")
-                .headers()
-                .get("Authorization")
-                .unwrap()
-        );
+        // test for legacy auth and endpoint orchestration (no `AuthSchemeAndEndpointOrchestrationV2` in `layer`)
+        run_test(|mut layer| {
+            layer.store_put(EndpointResolverParams::from(
+                StaticUriEndpointResolverParams::new(),
+            ));
+            layer
+        })
+        .await;
     }
 
     #[test]
@@ -653,18 +705,6 @@ mod tests {
         use aws_smithy_runtime_api::client::identity::http::Token;
         use aws_smithy_types::body::SdkBody;
 
-        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
-        ctx.enter_serialization_phase();
-        ctx.set_request(
-            http_02x::Request::builder()
-                .body(SdkBody::empty())
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        );
-        let _ = ctx.take_input();
-        ctx.enter_before_transmit_phase();
-
         #[derive(Debug)]
         struct Cache;
         impl ResolveCachedIdentity for Cache {
@@ -678,47 +718,80 @@ mod tests {
             }
         }
 
-        let runtime_components = RuntimeComponentsBuilder::for_tests()
-            .with_auth_scheme(SharedAuthScheme::new(ApiKeyAuthScheme::new(
-                "result:",
-                ApiKeyLocation::Header,
-                "Authorization",
-            )))
-            .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
-                StaticAuthSchemeOptionResolver::new(vec![HTTP_API_KEY_AUTH_SCHEME_ID]),
-            )))
-            .with_identity_cache(Some(Cache))
-            .with_identity_resolver(
-                HTTP_API_KEY_AUTH_SCHEME_ID,
-                SharedIdentityResolver::new(Token::new("uncached (fail)", None)),
-            )
-            .build()
-            .unwrap();
-        let mut layer = Layer::new("test");
-        layer.store_put(Endpoint::builder().url("dontcare").build());
-        layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
-        layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
-        let config_bag = ConfigBag::of_layers(vec![layer]);
+        async fn run_test(add_more_to_layer: impl Fn(Layer) -> Layer) {
+            let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+            ctx.enter_serialization_phase();
+            ctx.set_request(
+                http_02x::Request::builder()
+                    .body(SdkBody::empty())
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+            );
+            let _ = ctx.take_input();
+            ctx.enter_before_transmit_phase();
 
-        let (scheme_id, identity, _) = resolve_identity(&runtime_components, &config_bag)
-            .await
+            let runtime_components = RuntimeComponentsBuilder::for_tests()
+                .with_auth_scheme(SharedAuthScheme::new(ApiKeyAuthScheme::new(
+                    "result:",
+                    ApiKeyLocation::Header,
+                    "Authorization",
+                )))
+                .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
+                    StaticAuthSchemeOptionResolver::new(vec![HTTP_API_KEY_AUTH_SCHEME_ID]),
+                )))
+                .with_identity_cache(Some(Cache))
+                .with_identity_resolver(
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                    SharedIdentityResolver::new(Token::new("uncached (fail)", None)),
+                )
+                .with_endpoint_resolver(Some(SharedEndpointResolver::new(
+                    StaticUriEndpointResolver::http_localhost(8080),
+                )))
+                .build()
+                .unwrap();
+            let mut layer = Layer::new("test");
+            layer.store_put(Endpoint::builder().url("dontcare").build());
+            layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
+            let layer = add_more_to_layer(layer);
+            let config_bag = ConfigBag::of_layers(vec![layer]);
+
+            let (scheme_id, identity, _) = resolve_identity(&runtime_components, &config_bag)
+                .await
+                .expect("success");
+            sign_request(
+                scheme_id,
+                &identity,
+                &mut ctx,
+                &runtime_components,
+                &config_bag,
+            )
             .expect("success");
-        sign_request(
-            scheme_id,
-            &identity,
-            &mut ctx,
-            &runtime_components,
-            &config_bag,
-        )
-        .expect("success");
-        assert_eq!(
-            "result: cached (pass)",
-            ctx.request()
-                .expect("request is set")
-                .headers()
-                .get("Authorization")
-                .unwrap()
-        );
+            assert_eq!(
+                "result: cached (pass)",
+                ctx.request()
+                    .expect("request is set")
+                    .headers()
+                    .get("Authorization")
+                    .unwrap()
+            );
+        }
+
+        // test for correct auth and endpoint orchestration
+        run_test(|mut layer| {
+            layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
+            layer
+        })
+        .await;
+
+        // test for legacy auth and endpoint orchestration (no `AuthSchemeAndEndpointOrchestrationV2` in `layer`)
+        run_test(|mut layer| {
+            layer.store_put(EndpointResolverParams::from(
+                StaticUriEndpointResolverParams::new(),
+            ));
+            layer
+        })
+        .await;
     }
 
     #[test]
