@@ -122,7 +122,9 @@ pub(super) async fn resolve_identity(
         .load::<AuthSchemeOptionResolverParams>()
         .expect("auth scheme option resolver params must be set");
     let option_resolver = runtime_components.auth_scheme_option_resolver();
-    let options = option_resolver.resolve_auth_scheme_options(params)?;
+    let options = option_resolver
+        .resolve_auth_scheme_options_v2(params, cfg, runtime_components)
+        .await?;
 
     trace!(
         auth_scheme_option_resolver_params = ?params,
@@ -133,7 +135,10 @@ pub(super) async fn resolve_identity(
     let mut explored = ExploredList::default();
 
     // Iterate over IDs of possibly-supported auth schemes
-    for &scheme_id in options.as_ref() {
+    for auth_scheme_option in &options {
+        // `AuthSchemeId` may become non-`Copy`able in the future when the underlying field becomes `Cow` instad of `&'static str`
+        #[allow(clippy::clone_on_copy)]
+        let scheme_id = auth_scheme_option.scheme_id().clone();
         // For each ID, try to resolve the corresponding auth scheme.
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
             // Use the resolved auth scheme to resolve an identity

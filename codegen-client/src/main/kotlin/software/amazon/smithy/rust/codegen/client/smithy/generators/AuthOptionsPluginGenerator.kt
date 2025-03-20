@@ -11,22 +11,35 @@ import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import java.util.logging.Logger
 
-class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContext) {
-    private val runtimeConfig = codegenContext.runtimeConfig
+private fun authPlugin(
+    name: String,
+    vararg additionalDependency: RustDependency,
+) = InlineDependency.forRustFile(
+    RustModule.pubCrate(
+        name,
+        parent = RustModule.private("auth_plugin"),
+    ),
+    "/inlineable/src/auth_plugin/$name.rs",
+    *additionalDependency,
+)
 
+class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContext) {
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    fun authPlugin(
+    fun defaultAuthPlugin(
         operationShape: OperationShape,
         authSchemeOptions: List<AuthSchemeOption>,
     ) = writable {
@@ -35,7 +48,23 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
             #{DefaultAuthOptionsPlugin}::new(vec![#{options}])
 
             """,
-            "DefaultAuthOptionsPlugin" to RuntimeType.defaultAuthPlugin(runtimeConfig),
+            "DefaultAuthOptionsPlugin" to authPlugin("default").toType().resolve("DefaultAuthOptionsPlugin"),
+            "options" to actualAuthSchemes(operationShape, authSchemeOptions).join(", "),
+        )
+    }
+
+    fun endpointBasedAuthPlugin(
+        operationShape: OperationShape,
+        authSchemeOptions: List<AuthSchemeOption>,
+    ) = writable {
+        rustTemplate(
+            """
+            #{EndpointBasedAuthOptionsPlugin}::new(vec![#{options}])
+
+            """,
+            "EndpointBasedAuthOptionsPlugin" to
+                authPlugin("endpoint_based").toType()
+                    .resolve("EndpointBasedAuthOptionsPlugin"),
             "options" to actualAuthSchemes(operationShape, authSchemeOptions).join(", "),
         )
     }
