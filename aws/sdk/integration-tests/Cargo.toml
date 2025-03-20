@@ -11,6 +11,7 @@ members = [
     "iam",
     "kms",
     "lambda",
+    "metrics",
     "no-default-features",
     "polly",
     "qldbsession",
