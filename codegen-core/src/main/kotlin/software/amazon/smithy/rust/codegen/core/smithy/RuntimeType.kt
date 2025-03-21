@@ -277,6 +277,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
+        val FastRand = CargoDependency.FastRand.toType()
         val Http = CargoDependency.Http.toType()
         val HttpBody = CargoDependency.HttpBody.toType()
         val HttpRequest = Http.resolve("Request")
@@ -474,7 +475,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
                 when (format) {
                     TimestampFormatTrait.Format.EPOCH_SECONDS -> "EpochSeconds"
                     // clients allow offsets, servers do nt
-                    TimestampFormatTrait.Format.DATE_TIME -> codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+                    TimestampFormatTrait.Format.DATE_TIME ->
+                        codegenTarget.ifClient { "DateTimeWithOffset" }
+                            ?: "DateTime"
+
                     TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                     TimestampFormatTrait.Format.UNKNOWN -> TODO()
                 }
