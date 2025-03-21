@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http"
-version = "0.60.12"
+version = "0.62.0"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
   "Russell Cohen <rcoh@amazon.com>",
@@ -18,18 +18,20 @@ rt-tokio = ["aws-smithy-types/rt-tokio"]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
-bytes = "1"
+bytes = "1.10.0"
 bytes-utils = "0.1"
-http-02x = { package = "http", version = "0.2.3" }
-http-body-04x = { package = "http-body", version = "0.4.4" }
-once_cell = "1.10"
-percent-encoding = "2.1.0"
-pin-project-lite = "0.2.9"
+# TODO(hyper1) - Complete the breaking changes by updating to http 1.x ecosystem fully in this crate. Also remove hyper 0.14 from dev
+http-02x = { package = "http", version = "0.2.9" }
+http-1x = { package = "http", version = "1" }
+http-body-04x = { package = "http-body", version = "0.4.5" }
+once_cell = "1.20.1"
+percent-encoding = "2.3.1"
+pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
-tracing = "0.1"
+tracing = "0.1.40"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
-futures-core = "0.3.29"
+futures-core = "0.3.31"
 
 [dev-dependencies]
 async-stream = "0.3"

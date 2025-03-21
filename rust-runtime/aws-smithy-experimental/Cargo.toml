@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-experimental"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Experiments for the smithy-rs ecosystem"
 edition = "2021"
@@ -8,46 +8,11 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
-crypto-ring = ["rustls/ring"]
-crypto-aws-lc = ["rustls/aws_lc_rs"]
-crypto-aws-lc-fips = ["rustls/fips"]
+crypto-ring = []
 
 [dependencies]
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
-aws-smithy-runtime-api = { features = ["client", "http-1x"], path = "../aws-smithy-runtime-api" }
-aws-smithy-runtime = { features = ["client"], path = "../aws-smithy-runtime" }
-aws-smithy-async = { path = "../aws-smithy-async" }
-hyper = { version = "1", features = ["client", "http1", "http2"] }
-pin-project-lite = "0.2.13"
-hyper-util = "0.1.7"
-http = "1"
-tokio = "1"
-hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false }
-rustls = { version = "0.23", default-features = false }
-h2 = "0.4"
-once_cell = "1.18.0"
-tracing = "0.1.40"
-tower = "0.4.1"
 
 [dev-dependencies]
-aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
-aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client", "test-util", "connector-hyper-0-14-x"]}
-tokio = { version = "1", features = ["full", "test-util"]}
-
-[[example]]
-name = "client-ring"
-required-features = ["crypto-ring"]
-doc-scrape-examples = true
-
-[[example]]
-name = "client-aws-lc"
-required-features = ["crypto-aws-lc", "crypto-aws-lc-fips"]
-doc-scrape-examples = true
-
-[[example]]
-name = "custom-dns"
-required-features = ["crypto-ring"]
-doc-scrape-examples = true
 
 [package.metadata.docs.rs]
 all-features = true
@@ -55,10 +20,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[package.metadata.cargo-udeps.ignore]
-# used only in doc strings
-normal = ["fs_extra"]
-
-[lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(crypto_unstable)'] }

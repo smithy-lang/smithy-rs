@@ -12,6 +12,7 @@ use crate::imds::client::token::TokenRuntimePlugin;
 use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_runtime::user_agent::{ApiMetadata, AwsUserAgent, UserAgentInterceptor};
+use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -21,7 +22,7 @@ use aws_smithy_runtime_api::client::endpoint::{
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
-    HttpRequest, OrchestratorError, SensitiveOutput,
+    HttpRequest, Metadata, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::result::SdkError;
@@ -476,6 +477,14 @@ impl Builder {
                 common_plugin,
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             ))
+            .runtime_plugin(
+                MetricsRuntimePlugin::builder()
+                    .with_scope("aws_config::imds_credentials")
+                    .with_time_source(config.time_source())
+                    .with_metadata(Metadata::new("get_credentials", "imds"))
+                    .build()
+                    .expect("All required fields have been set"),
+            )
             .with_connection_poisoning()
             .serializer(|path| {
                 Ok(HttpRequest::try_from(
@@ -638,9 +647,7 @@ pub(crate) mod test {
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
-    use aws_smithy_runtime::client::http::test_util::{
-        capture_request, ReplayEvent, StaticReplayClient,
-    };
+    use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,
@@ -1104,7 +1111,7 @@ pub(crate) mod test {
     #[cfg_attr(windows, ignore)]
     /// Verify that the end-to-end real client has a 1-second connect timeout
     #[tokio::test]
-    #[cfg(feature = "rustls")]
+    #[cfg(feature = "default-https-client")]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
         let client = Client::builder()

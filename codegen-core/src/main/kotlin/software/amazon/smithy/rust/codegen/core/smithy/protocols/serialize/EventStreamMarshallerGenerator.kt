@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -59,11 +60,14 @@ open class EventStreamMarshallerGenerator(
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope =
         arrayOf(
+            *preludeScope,
+            "Bytes" to RuntimeType.Bytes,
             "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
             "Message" to smithyTypes.resolve("event_stream::Message"),
             "Header" to smithyTypes.resolve("event_stream::Header"),
             "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
             "Error" to smithyEventStream.resolve("error::Error"),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         )
 
     open fun render(): RuntimeType {
@@ -72,6 +76,35 @@ open class EventStreamMarshallerGenerator(
 
         return RuntimeType.forInlineFun("${marshallerType.name}::new", eventStreamSerdeModule) {
             renderMarshaller(marshallerType, unionSymbol)
+        }
+    }
+
+    fun renderInitialMessageGenerator(contentType: String): RuntimeType {
+        return RuntimeType.forInlineFun("initial_message_from_body", eventStreamSerdeModule) {
+            rustBlockTemplate(
+                """
+                pub(crate) fn initial_message_from_body(
+                    body: #{SdkBody}
+                ) -> #{Message}
+                """,
+                *codegenScope,
+            ) {
+                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
+                addStringHeader(":message-type", "\"event\".into()")
+                addStringHeader(":event-type", "\"initial-request\".into()")
+                addStringHeader(":content-type", "${contentType.dq()}.into()")
+                rustTemplate(
+                    """
+                    let body = #{Bytes}::from(
+                        body.bytes()
+                            .expect("body should've been created from non-streaming payload for initial message")
+                            .to_vec(),
+                    );
+                    #{Message}::new_from_parts(headers, body)
+                    """,
+                    *codegenScope,
+                )
+            }
         }
     }
 

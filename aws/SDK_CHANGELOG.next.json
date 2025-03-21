@@ -6,34 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Allow IMDS clients to be configured with a user-provided `SharedRetryClassifier`.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "landonxjames",
-      "references": [
-        "aws-sdk-rust#1233"
-      ],
-      "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
-      "age": 5
-    },
-    {
-      "message": "Fix `EcsCredentialsProvider` to include query params passed via `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "aws-sdk-rust#1248"
-      ],
-      "since-commit": "721e8a6762ed19194432bed0cb78b08a460d2fe4",
-      "age": 5
-    },
-    {
       "message": "Stop populating `SessionMode` by default for the `CreateSession` API internally used by S3 Express. This will allow the service to choose a default value for `SessionMode` field based on bucket/access point being used.\n",
       "meta": {
         "bug": true,
@@ -45,7 +17,7 @@
         "smithy-rs#3992"
       ],
       "since-commit": "5ed776ffe2791f577639cb25c711002719809b3a",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Exclude `transfer-encoding` header from sigv4(a) signing since it is a hop by hop header that can be modified or removed by a proxy.\n",
@@ -59,7 +31,7 @@
         "smithy-rs#3991"
       ],
       "since-commit": "5ed776ffe2791f577639cb25c711002719809b3a",
-      "age": 3
+      "age": 5
     },
     {
       "message": "Fix bug in Sigv4 signing that, when an endpoint contained a default port (80 for HTTP, 443 for HTTPS), would sign the request with that port in the `HOST` header even though Hyper excludes default ports from the `HOST` header.\n",
@@ -73,7 +45,7 @@
         "aws-sdk-rust#1244"
       ],
       "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
-      "age": 2
+      "age": 4
     },
     {
       "message": "Fix bug in S3 with flexible checksum headers incorrectly included in presigned GET requests.\n",
@@ -87,7 +59,52 @@
         "aws-sdk-rust#1253"
       ],
       "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
+      "age": 4
+    },
+    {
+      "message": "Adds support for event stream operations with non-REST protocols such as AWS JSON. This update enables operations, including `SubscribeToShard` in Kinesis and `StartLiveTail` in CloudWatchLogs in the Rust SDK.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "ysaito1001",
+      "references": [
+        "aws-sdk-rust#213",
+        "aws-sdk-rust#1188"
+      ],
+      "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
       "age": 2
+    },
+    {
+      "message": "Add missing `request_checksum_calculation` and `response_checksum_validation` setters to the `ConfigLoader`\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#920"
+      ],
+      "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
+      "age": 2
+    },
+    {
+      "message": "Updates the default HTTP client to be based on the 1.x version of hyper and updates the default TLS provider to [rustls](https://github.com/rustls/rustls) with [aws-lc](https://github.com/aws/aws-lc-rs). For more information see the GitHub [discussion](https://github.com/awslabs/aws-sdk-rust/discussions/1257).\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [
+        "aws-sdk-rust#977",
+        "smithy-rs#1925",
+        "smithy-rs#3710"
+      ],
+      "since-commit": "bdec1a232a5dfdba16bafd1f637c99a920a30734",
+      "age": 1
     }
   ],
   "aws-sdk-model": []

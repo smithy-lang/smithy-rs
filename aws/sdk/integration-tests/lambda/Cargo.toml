@@ -13,11 +13,12 @@ aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", 
 aws-sdk-lambda = { path = "../../build/aws-sdk/sdk/lambda", features = ["behavior-version-latest"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 base64 = "0.13.0"
 bytes = "1.0.0"
 futures-core = "0.3.29"
-http = "0.2.0"
+http-1x = { package = "http", version = "1" }
 serde_json = "1.0.0"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

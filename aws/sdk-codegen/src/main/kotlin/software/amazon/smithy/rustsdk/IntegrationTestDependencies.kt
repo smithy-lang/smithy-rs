@@ -18,7 +18,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.FuturesUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HdrHistogram
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http1x
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody1x
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
@@ -27,16 +28,18 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyExperimental
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyHttpClient
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rustsdk.AwsCargoDependency.awsConfig
 import software.amazon.smithy.rustsdk.AwsCargoDependency.awsRuntime
 import java.nio.file.Files
@@ -76,12 +79,14 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
 }
 
 class IntegrationTestDependencies(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
     private val moduleName: String,
     private val hasTests: Boolean,
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val serviceShape = codegenContext.serviceShape
+    private val model = codegenContext.model
 
     override fun section(section: LibRsSection) =
         when (section) {
@@ -89,25 +94,33 @@ class IntegrationTestDependencies(
                 testDependenciesOnly {
                     if (hasTests) {
                         val smithyAsync =
-                            CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                            CargoDependency.smithyAsync(runtimeConfig)
                                 .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                         val smithyTypes =
-                            CargoDependency.smithyTypes(codegenContext.runtimeConfig)
+                            CargoDependency.smithyTypes(runtimeConfig)
                                 .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                         addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
-                        addDependency(FuturesUtil)
+                        addDependency(FuturesUtil.toDevDependency())
                         addDependency(SerdeJson)
                         addDependency(smithyAsync)
-                        addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
-                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(smithyProtocolTestHelpers(runtimeConfig))
+                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
                         addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
                         addDependency(smithyTypes)
                         addDependency(Tokio)
                         addDependency(Tracing.toDevDependency())
                         addDependency(TracingSubscriber)
+                        addDependency(smithyHttpClient(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(Http1x.toDevDependency())
                     }
                     if (hasBenches) {
                         addDependency(Criterion)
+                    }
+                    if (serviceShape.hasEventStreamOperations(model)) {
+                        addDependency(
+                            CargoDependency.smithyEventStream(runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev),
+                        )
                     }
                     for (serviceSpecific in serviceSpecificCustomizations()) {
                         serviceSpecific.section(section)(this)
@@ -120,7 +133,7 @@ class IntegrationTestDependencies(
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
             "transcribestreaming" -> listOf(TranscribeTestDependencies())
-            "s3" -> listOf(S3TestDependencies(codegenContext))
+            "s3" -> listOf(S3TestDependencies(runtimeConfig))
             "dynamodb" -> listOf(DynamoDbTestDependencies())
             else -> emptyList()
         }
@@ -142,17 +155,17 @@ class DynamoDbTestDependencies : LibRsCustomization() {
         }
 }
 
-class S3TestDependencies(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+class S3TestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
-            addDependency(awsConfig(codegenContext.runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
-            addDependency(smithyExperimental(codegenContext.runtimeConfig).toDevDependency())
+            addDependency(awsConfig(runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
+            addDependency(smithyHttpClient(runtimeConfig).toDevDependency().withFeature("rustls-ring"))
             addDependency(AsyncStd)
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())
             addDependency(FuturesUtil.toDevDependency())
             addDependency(HdrHistogram)
-            addDependency(HttpBody.toDevDependency())
+            addDependency(HttpBody1x.toDevDependency().copy(optional = false))
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)

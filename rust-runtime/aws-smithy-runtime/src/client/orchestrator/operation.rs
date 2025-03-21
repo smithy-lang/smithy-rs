@@ -21,8 +21,8 @@ use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::Intercept;
-use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
+use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, Metadata};
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
@@ -377,14 +377,15 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-
+        let mut config = self.config;
+        config.store_put(Metadata::new(operation_name.clone(), service_name.clone()));
         let mut runtime_plugins = RuntimePlugins::new()
             .with_client_plugins(default_plugins(
                 DefaultPluginParams::new().with_retry_partition_name(service_name.clone()),
             ))
             .with_client_plugin(
                 StaticRuntimePlugin::new()
-                    .with_config(self.config.freeze())
+                    .with_config(config.freeze())
                     .with_runtime_components(self.runtime_components),
             );
         for runtime_plugin in self.runtime_plugins {
@@ -400,7 +401,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 
             assert!(
                 components.http_client().is_some(),
-                "a http_client is required. Enable the `rustls` crate feature or configure a HTTP client to fix this."
+                "a http_client is required. Enable the `default-https-client` crate feature or configure an HTTP client to fix this."
             );
             assert!(
                 components.endpoint_resolver().is_some(),
@@ -437,12 +438,12 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, any(feature = "test-util", feature = "legacy-test-util")))]
 mod tests {
     use super::*;
-    use crate::client::http::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use crate::client::retries::classifiers::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+    use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime_api::client::result::ConnectorError;
     use aws_smithy_types::body::SdkBody;
     use std::convert::Infallible;
@@ -450,7 +451,7 @@ mod tests {
     #[tokio::test]
     async fn operation() {
         let (connector, request_rx) = capture_request(Some(
-            http_02x::Response::builder()
+            http_1x::Response::builder()
                 .status(418)
                 .body(SdkBody::from(&b"I'm a teapot!"[..]))
                 .unwrap(),
@@ -487,21 +488,21 @@ mod tests {
     async fn operation_retries() {
         let connector = StaticReplayClient::new(vec![
             ReplayEvent::new(
-                http_02x::Request::builder()
+                http_1x::Request::builder()
                     .uri("http://localhost:1234/")
                     .body(SdkBody::from(&b"what are you?"[..]))
                     .unwrap(),
-                http_02x::Response::builder()
+                http_1x::Response::builder()
                     .status(503)
                     .body(SdkBody::from(&b""[..]))
                     .unwrap(),
             ),
             ReplayEvent::new(
-                http_02x::Request::builder()
+                http_1x::Request::builder()
                     .uri("http://localhost:1234/")
                     .body(SdkBody::from(&b"what are you?"[..]))
                     .unwrap(),
-                http_02x::Response::builder()
+                http_1x::Response::builder()
                     .status(418)
                     .body(SdkBody::from(&b"I'm a teapot!"[..]))
                     .unwrap(),

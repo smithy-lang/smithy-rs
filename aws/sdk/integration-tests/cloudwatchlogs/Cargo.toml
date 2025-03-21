@@ -1,0 +1,26 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "cloudwatchlogs-tests"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime" }
+aws-sdk-cloudwatchlogs = { path = "../../build/aws-sdk/sdk/cloudwatchlogs", features = ["test-util", "behavior-version-latest"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
+aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream", features = ["test-util"] }
+aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
+bytes = "1.0.0"
+http = "0.2.0"
+tokio = { version = "1.23.1", features = ["full", "test-util"] }
+tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

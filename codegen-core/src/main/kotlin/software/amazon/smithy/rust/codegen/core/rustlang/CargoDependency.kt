@@ -186,7 +186,7 @@ fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
-val DEV_ONLY_FEATURES = setOf("test-util")
+val DEV_ONLY_FEATURES = setOf("test-util", "legacy-test-util")
 
 /**
  * A dependency on an internal or external Cargo crate
@@ -279,6 +279,8 @@ data class CargoDependency(
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
         val Flate2: CargoDependency = CargoDependency("flate2", CratesIo("1.0.30"))
+        val FuturesUtil: CargoDependency =
+            CargoDependency("futures-util", CratesIo("0.3.25"), defaultFeatures = false, features = setOf("alloc"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
@@ -302,8 +304,6 @@ data class CargoDependency(
         val Ciborium: CargoDependency = CargoDependency("ciborium", CratesIo("0.2"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.5.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency =
-            CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false, features = setOf("alloc"))
         val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
@@ -347,7 +347,7 @@ data class CargoDependency(
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
 
         // Hyper 1.x types
-        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http", optional = true)
+        val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")
         val HttpBody1x: CargoDependency =
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body", optional = true)
 
@@ -363,6 +363,11 @@ data class CargoDependency(
 
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
 
+        fun smithyHttpClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-client")
+
+        fun smithyHttpClientTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyHttpClient(runtimeConfig).toDevDependency().withFeature("test-util")
+
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
 
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
@@ -373,10 +378,6 @@ data class CargoDependency(
         fun smithyRuntime(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-runtime")
                 .withFeature("client")
-
-        fun smithyExperimental(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.smithyRuntimeCrate("smithy-experimental")
-                .withFeature("crypto-ring")
 
         fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")

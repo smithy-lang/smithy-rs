@@ -14,7 +14,8 @@ publish = false
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts", features = ["behavior-version-latest"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

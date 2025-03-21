@@ -240,11 +240,16 @@ class ProtocolParserGenerator(
         rust("let mut output = #T::default();", symbolProvider.symbolForBuilder(outputShape))
         if (outputShape.id == operationShape.output.get()) {
             structuredDataParser.operationParser(operationShape)?.also { parser ->
-                rust(
-                    "output = #T(_response_body, output).map_err(#T::unhandled)?;",
-                    parser,
-                    errorSymbol,
-                )
+                // Don't deserialize non-event stream members for an event stream operation with RPC bound protocols,
+                // as they need to be deserialized from payload in the first frame of event stream.
+                // See https://smithy.io/2.0/spec/streaming.html#initial-response
+                if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(operationShape) != true) {
+                    rust(
+                        "output = #T(_response_body, output).map_err(#T::unhandled)?;",
+                        parser,
+                        errorSymbol,
+                    )
+                }
             }
         } else {
             check(outputShape.hasTrait<ErrorTrait>()) { "should only be called on outputs or errors $outputShape" }

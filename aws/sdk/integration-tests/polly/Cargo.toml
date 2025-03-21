@@ -15,6 +15,6 @@ aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", 
 aws-sdk-polly = { path = "../../build/aws-sdk/sdk/polly", features = ["behavior-version-latest"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 bytes = "1.0.0"
-http = "0.2.0"
+http-1x = { package = "http", version = "1" }
 tokio = { version = "1.23.1", features = ["full"]}
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
