@@ -309,10 +309,10 @@ async fn try_op(
         let maybe_timeout = async {
             debug!("beginning attempt #{i}");
             try_attempt(ctx, cfg, runtime_components, stop_point)
-                .instrument(debug_span!("try_attempt", "attempt_number" = i))
+                .instrument(debug_span!("try_attempt", "attempt" = i))
                 .await;
             finally_attempt(ctx, cfg, runtime_components)
-                .instrument(debug_span!("finally_attempt", "attempt_number" = i))
+                .instrument(debug_span!("finally_attempt", "attempt" = i))
                 .await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }

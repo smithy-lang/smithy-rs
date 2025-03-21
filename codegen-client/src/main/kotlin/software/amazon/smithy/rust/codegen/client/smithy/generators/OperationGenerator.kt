@@ -137,7 +137,6 @@ open class OperationGenerator(
                         // seven-digit ID for the operation orchestration so that it can be correlated in the logs.
                         .instrument(#{Tracing}::debug_span!(
                                 "$serviceName.$operationName",
-                                "rpc.system" = "aws-api",
                                 "rpc.service" = ${serviceName.dq()},
                                 "rpc.method" = ${operationName.dq()},
                                 "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000)

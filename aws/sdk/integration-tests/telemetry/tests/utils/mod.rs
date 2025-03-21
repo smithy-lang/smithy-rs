@@ -124,7 +124,24 @@ pub(crate) fn make_config(with_retry: bool) -> SdkConfig {
         .build()
 }
 
-// Util for printing spans for debugging purposes
+/// Util for printing spans for debugging purposes. Can be used with:
+/// ```
+/// let subscriber = tracing_subscriber::registry::Registry::default().with(PrintLayer);
+/// let _guard = tracing::subscriber::set_default(subscriber);
+/// ```
+///
+/// Outputs logs like:
+/// ```sh
+/// Span Created: s3.GetObject
+/// ATTR: rpc.service: s3
+/// ATTR: rpc.method: GetObject
+/// ATTR: sdk_invocation_id: 7048479
+/// Span Created: invoke
+/// ATTR: rpc.service: s3
+/// ATTR: rpc.method: GetObject
+/// Span Created: apply_configuration
+/// Span Closed: apply_configuration, Duration:  150
+/// ```
 #[allow(unused)]
 pub(crate) struct PrintLayer;
 
@@ -155,7 +172,7 @@ where
         let started_at = span.extensions().get::<Timing>().unwrap().started_at;
 
         println!(
-            "span {} took {}",
+            "Span Closed: {}, Duration:  {}",
             span.metadata().name(),
             (Instant::now() - started_at).as_micros(),
         );

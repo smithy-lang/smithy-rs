@@ -96,10 +96,10 @@ async fn metrics_have_expected_attributes() {
     // The attempt metric contains an attempt counter attribute that correctly increments
     assert!(attempt_duration_attributes
         .iter()
-        .find(|attrs| attrs.contains(&KeyValue::new("attempt_number", 1)))
+        .find(|attrs| attrs.contains(&KeyValue::new("attempt", 1)))
         .is_some());
     assert!(attempt_duration_attributes
         .iter()
-        .find(|attrs| attrs.contains(&KeyValue::new("attempt_number", 2)))
+        .find(|attrs| attrs.contains(&KeyValue::new("attempt", 2)))
         .is_some());
 }

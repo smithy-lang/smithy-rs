@@ -27,7 +27,7 @@ async fn top_level_spans_exist_with_correct_attributes() {
             ("dynamodb.GetItem", ddb_top_level),
         ]),
     });
-    let _ = tracing::subscriber::set_default(subscriber);
+    let _guard = tracing::subscriber::set_default(subscriber);
 
     let config = make_config(false);
     make_s3_call(&config).await;
@@ -44,7 +44,7 @@ async fn try_attempt_spans_emitted_per_retry() {
     let two_try_attempts = assertion_registry
         .build()
         .with_name("try_attempt")
-        .with_span_field("attempt_number")
+        .with_span_field("attempt")
         .was_closed_exactly(2)
         .finalize();
 
@@ -126,7 +126,7 @@ async fn all_expected_operation_spans_emitted_with_correct_nesting() {
     let try_attempt = assertion_registry
         .build()
         .with_name(TRY_ATTEMPT)
-        .with_span_field("attempt_number")
+        .with_span_field("attempt")
         .with_parent_name(OPERATION_NAME)
         .with_parent_name(INVOKE)
         .with_parent_name(TRY_OP)
@@ -264,6 +264,8 @@ async fn region_spans_emitted() {
     invoke.assert();
 }
 
+/// Layer for testing top-level spans. Takes in a hashmap where the keys are the names of top level spans
+/// and the values are structs implementing [Visit] that make assertions about the attributes of those spans
 struct TestLayer<F: Fn() -> Box<dyn Visit> + 'static> {
     visitor_factories: HashMap<&'static str, F>,
 }
@@ -278,10 +280,11 @@ where
         let span = ctx.span(id).unwrap();
         let span_name = span.metadata().name();
 
-        // Assert that any top level spans are the operation spans
+        // Assert that any top level spans are the operation spans from
+        // visitor_factories
         if span.parent().is_none() {
             assert!(
-                span_name == "dynamodb.GetItem" || span_name == "s3.GetObject",
+                self.visitor_factories.contains_key(span_name),
                 "Encountered unexpected top level span {span_name}"
             )
         }

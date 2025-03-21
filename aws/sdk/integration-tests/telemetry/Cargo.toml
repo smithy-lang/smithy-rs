@@ -1,6 +1,6 @@
 # This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
-name = "metrics-tests"
+name = "telemetry-tests"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 edition = "2021"

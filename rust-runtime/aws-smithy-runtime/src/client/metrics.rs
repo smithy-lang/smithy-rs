@@ -176,10 +176,7 @@ impl Intercept for MetricsInterceptor {
         let attributes = self.get_attrs_from_cfg(cfg);
 
         if let (Ok(elapsed), Some(mut attrs)) = (attempt_duration, attributes) {
-            attrs.set(
-                "attempt_number",
-                AttributeValue::I64(measurements.attempts.into()),
-            );
+            attrs.set("attempt", AttributeValue::I64(measurements.attempts.into()));
 
             instruments
                 .attempt_duration
