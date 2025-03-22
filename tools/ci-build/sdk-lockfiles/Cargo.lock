@@ -939,7 +939,6 @@ dependencies = [
  "cargo-lock",
  "clap",
  "itertools",
- "once_cell",
  "petgraph",
  "smithy-rs-tool-common",
  "tracing",
