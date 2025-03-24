@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.der
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -108,15 +107,7 @@ open class OperationGenerator(
                 writable {
                     writeCustomizations(
                         operationCustomizations,
-                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
-                    )
-                    rustTemplate(
-                        ".with_client_plugin(#{auth_plugin})",
-                        "auth_plugin" to
-                            AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                operationShape,
-                                authSchemeOptions,
-                            ),
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape, authSchemeOptions),
                     )
                 }
             rustTemplate(
@@ -186,15 +177,19 @@ open class OperationGenerator(
                         .resolve("client::orchestrator::invoke_with_stop_point"),
                 "additional_runtime_plugins" to
                     writable {
-                        if (additionalPlugins.isNotEmpty()) {
-                            rustTemplate(
-                                """
-                                runtime_plugins = runtime_plugins
-                                    #{additional_runtime_plugins};
-                                """,
-                                "additional_runtime_plugins" to additionalPlugins,
-                            )
-                        }
+                        rustTemplate(
+                            """
+                            runtime_plugins = runtime_plugins
+                                .with_client_plugin(#{auth_plugin})
+                                #{additional_runtime_plugins};
+                            """,
+                            "additional_runtime_plugins" to additionalPlugins,
+                            "auth_plugin" to
+                                AuthOptionsPluginGenerator(codegenContext).defaultAuthPlugin(
+                                    operationShape,
+                                    authSchemeOptions,
+                                ),
+                        )
                     },
             )
 
