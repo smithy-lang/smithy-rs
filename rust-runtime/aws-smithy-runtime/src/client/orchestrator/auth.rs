@@ -145,6 +145,7 @@ pub(super) async fn resolve_identity(
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
                 match legacy_try_resolve_endpoint(runtime_components, cfg, scheme_id).await {
                     Ok(endpoint) => {
+                        trace!(scheme_id= ?scheme_id, "resolving identity");
                         let identity_cache = if identity_resolver.cache_location()
                             == IdentityCacheLocation::RuntimeComponents
                         {

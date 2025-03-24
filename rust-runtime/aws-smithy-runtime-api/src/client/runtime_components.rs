@@ -634,6 +634,14 @@ impl RuntimeComponentsBuilder {
         self
     }
 
+    /// Returns [`SharedIdentityResolver`] configured in the builder for a given `scheme_id`.
+    pub fn identity_resolver(&self, scheme_id: &AuthSchemeId) -> Option<SharedIdentityResolver> {
+        self.identity_resolvers
+            .as_ref()
+            .and_then(|resolvers| resolvers.get(scheme_id))
+            .map(|tracked| tracked.value.clone())
+    }
+
     /// This method is broken since it does not replace an existing identity resolver of the given auth scheme ID.
     /// Use `set_identity_resolver` instead.
     #[deprecated(
