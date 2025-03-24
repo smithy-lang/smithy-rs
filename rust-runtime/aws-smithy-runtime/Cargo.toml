@@ -13,10 +13,11 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [features]
 client = ["aws-smithy-runtime-api/client", "aws-smithy-types/http-body-1-x"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
+aws-smithy-http-client = ["dep:dep:aws-smithy-http-client"]
 # NOTE: connector-hyper-0-14-x and tls-rustls are "legacy" features related to default HTTP client based on hyper 0.14.x ecosystem
-connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
-tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
-default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
+connector-hyper-0-14-x = ["aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
+tls-rustls = ["aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
+default-https-client = ["aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
