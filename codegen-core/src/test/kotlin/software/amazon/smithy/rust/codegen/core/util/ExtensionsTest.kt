@@ -1,3 +1,7 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package software.amazon.smithy.rust.codegen.core.util
 
 import io.kotest.matchers.shouldBe
@@ -21,17 +25,17 @@ class ExtensionsTest {
                     events: Events
                 }
             }
-            
-            @streaming 
+
+            @streaming
             union Events {
                 foo: Foo
                 bar: Bar,
             }
-            
+
             structure Foo {
                 foo: String
             }
-            
+
             structure Bar {
                 bar: Long
             }
@@ -49,7 +53,7 @@ class ExtensionsTest {
             service TestService {
                 resources: [ TestResource ]
             }
-            
+
             resource TestResource {
                 operations: [ EventStreamOp ]
             }
@@ -59,17 +63,17 @@ class ExtensionsTest {
                     events: Events
                 }
             }
-            
-            @streaming 
+
+            @streaming
             union Events {
                 foo: Foo
                 bar: Bar,
             }
-            
+
             structure Foo {
                 foo: String
             }
-            
+
             structure Bar {
                 bar: Long
             }
