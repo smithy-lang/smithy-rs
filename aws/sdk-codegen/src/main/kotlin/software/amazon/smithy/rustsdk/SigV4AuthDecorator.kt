@@ -205,7 +205,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                     val serviceHasEventStream =
                         codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
                     if (serviceHasEventStream) {
-                        // enable the aws-runtime `sign-eventstream` feature
+                        // enable the aws-runtime `event-stream` feature
                         addDependency(
                             AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType()
                                 .toSymbol(),

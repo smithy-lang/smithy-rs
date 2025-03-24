@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
@@ -21,8 +23,12 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
 /** Returns true if the model has normal streaming operations (excluding event streams) */
-private fun hasStreamingOperations(model: Model): Boolean {
-    return model.operationShapes.any { operation ->
+private fun hasStreamingOperations(
+    model: Model,
+    serviceShape: ServiceShape,
+): Boolean {
+    val operations = TopDownIndex.of(model).getContainedOperations(serviceShape)
+    return operations.any { operation ->
         val input = model.expectShape(operation.inputShape, StructureShape::class.java)
         val output = model.expectShape(operation.outputShape, StructureShape::class.java)
         (input.hasStreamingMember(model) && !input.hasEventStreamMember(model)) ||
@@ -69,7 +75,7 @@ fun pubUseSmithyPrimitives(
                 "Format" to RuntimeType.format(rc),
             )
         }
-        if (hasStreamingOperations(model)) {
+        if (hasStreamingOperations(model, codegenContext.serviceShape)) {
             rustCrate.mergeFeature(
                 Feature(
                     "rt-tokio",
