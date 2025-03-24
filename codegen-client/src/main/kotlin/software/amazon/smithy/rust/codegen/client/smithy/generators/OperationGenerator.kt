@@ -120,6 +120,13 @@ open class OperationGenerator(
                             ),
                     )
                 }
+            val additionalSpanFields =
+                writable {
+                    writeCustomizations(
+                        operationCustomizations,
+                        OperationSection.AdditionalOperationSpanFields(operationCustomizations, operationShape),
+                    )
+                }
             rustTemplate(
                 """
                 pub(crate) async fn orchestrate(
@@ -139,7 +146,8 @@ open class OperationGenerator(
                                 "$serviceName.$operationName",
                                 "rpc.service" = ${serviceName.dq()},
                                 "rpc.method" = ${operationName.dq()},
-                                "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000)
+                                "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000),
+                                #{AdditionalSpanFields}
                             ))
                         .await
                         .map_err(map_err)?;
@@ -208,6 +216,7 @@ open class OperationGenerator(
                     },
                 "Tracing" to RuntimeType.Tracing,
                 "FastRand" to RuntimeType.FastRand,
+                "AdditionalSpanFields" to additionalSpanFields,
             )
 
             writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))
