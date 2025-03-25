@@ -9,6 +9,7 @@ use crate::auth::{
     PayloadSigningOverride, SigV4OperationSigningConfig, SigV4SessionTokenNameOverride,
     SigV4SigningError,
 };
+use aws_credential_types::provider::AwsIdentity;
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
     sign, SignableBody, SignableRequest, SigningParams, SigningSettings,
@@ -84,8 +85,9 @@ impl SigV4Signer {
         request_timestamp: SystemTime,
     ) -> Result<v4::SigningParams<'a, SigningSettings>, SigV4SigningError> {
         let creds = identity
-            .data::<Credentials>()
-            .ok_or_else(|| SigV4SigningError::WrongIdentityType(identity.clone()))?;
+            .data::<AwsIdentity<Credentials>>()
+            .ok_or_else(|| SigV4SigningError::WrongIdentityType(identity.clone()))?
+            .inner();
 
         if let Some(expires_in) = settings.expires_in {
             if let Some(creds_expires_time) = creds.expiry() {
@@ -153,7 +155,7 @@ impl Sign for SigV4Signer {
         runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
-        if identity.data::<Credentials>().is_none() {
+        if identity.data::<AwsIdentity<Credentials>>().is_none() {
             return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
         };
 
@@ -383,14 +385,16 @@ mod tests {
         let mut settings = SigningSettings::default();
         settings.expires_in = Some(creds_expire_in - Duration::from_secs(10));
 
-        let identity = Credentials::new(
+        let creds = Credentials::new(
             "test-access-key",
             "test-secret-key",
             Some("test-session-token".into()),
             Some(now + creds_expire_in),
             "test",
-        )
-        .into();
+        );
+        let expiry = creds.expiry();
+        let identity = Identity::new(AwsIdentity::new(creds), expiry);
+
         let operation_config = SigV4OperationSigningConfig {
             region: Some(SigningRegion::from_static("test")),
             name: Some(SigningName::from_static("test")),

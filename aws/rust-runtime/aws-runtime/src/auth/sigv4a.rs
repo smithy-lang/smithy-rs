@@ -7,6 +7,7 @@ use crate::auth::{
     apply_signing_instructions, extract_endpoint_auth_scheme_signing_name,
     SigV4OperationSigningConfig, SigV4SigningError,
 };
+use aws_credential_types::provider::AwsIdentity;
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::sign::v4a;
@@ -170,7 +171,7 @@ impl Sign for SigV4aSigner {
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
         let request_time = runtime_components.time_source().unwrap_or_default().now();
 
-        if identity.data::<Credentials>().is_none() {
+        if identity.data::<AwsIdentity<Credentials>>().is_none() {
             return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
         }
 

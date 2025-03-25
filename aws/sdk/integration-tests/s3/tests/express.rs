@@ -478,3 +478,25 @@ async fn no_auth_should_be_selected_when_no_credentials_is_configured() {
         "resolving identity scheme_id=AuthSchemeId { scheme_id: \"no_auth\" }"
     ));
 }
+
+#[::tokio::test]
+#[::tracing_test::traced_test]
+async fn s3_preserves_embedded_dot_segment_in_uri_label_request() {
+    let (http_client, _request) = ::aws_smithy_http_client::test_util::capture_request(None);
+    let config_builder = Config::builder()
+        .with_test_defaults()
+        .endpoint_url("https://s3.us-west-2.amazonaws.com");
+
+    let mut config_builder = config_builder;
+    config_builder.set_region(Some(Region::new("us-east-1")));
+
+    let config = config_builder.http_client(http_client).build();
+    let client = crate::Client::from_conf(config);
+    let result = client
+        .get_object()
+        .set_bucket(::std::option::Option::Some("mybucket".to_owned()))
+        .set_key(::std::option::Option::Some("foo/../key.txt".to_owned()))
+        .send()
+        .await;
+    let _ = dbg!(result);
+}

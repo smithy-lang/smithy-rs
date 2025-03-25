@@ -79,6 +79,8 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::sync::Arc;
 
+use super::AwsIdentity;
+
 /// Result type for credential providers.
 pub type Result = std::result::Result<Credentials, super::error::CredentialsError>;
 
@@ -169,7 +171,11 @@ impl ResolveIdentity for SharedCredentialsProvider {
         _runtime_components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        IdentityFuture::new(async move { Ok(self.provide_credentials().await?.into()) })
+        IdentityFuture::new(async move {
+            let creds = self.provide_credentials().await?;
+            let expiry = creds.expiry();
+            Ok(Identity::new(AwsIdentity(creds), expiry))
+        })
     }
 
     fn fallback_on_interrupt(&self) -> Option<Identity> {

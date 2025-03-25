@@ -76,4 +76,39 @@ pub mod error;
 pub mod future;
 pub mod token;
 
+use std::borrow::Cow;
+
 pub use credentials::{ProvideCredentials, Result, SharedCredentialsProvider};
+
+///
+pub trait ProvideAwsIdentityAttributes {
+    ///
+    fn account_id(&self) -> Option<Cow<'_, str>> {
+        None
+    }
+}
+
+///
+#[derive(Debug)]
+pub struct AwsIdentity<T>(T);
+
+impl<T> AwsIdentity<T> {
+    ///
+    pub fn new(t: T) -> Self {
+        Self(t)
+    }
+
+    ///
+    pub fn inner(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T> ProvideAwsIdentityAttributes for AwsIdentity<T>
+where
+    T: ProvideAwsIdentityAttributes,
+{
+    fn account_id(&self) -> Option<Cow<'_, str>> {
+        self.0.account_id()
+    }
+}

@@ -14,12 +14,14 @@
 
 use crate::{provider::error::TokenError, provider::future, Token};
 use aws_smithy_runtime_api::client::{
-    identity::{IdentityCachePartition, IdentityFuture, ResolveIdentity},
+    identity::{Identity, IdentityCachePartition, IdentityFuture, ResolveIdentity},
     runtime_components::RuntimeComponents,
 };
 use aws_smithy_runtime_api::impl_shared_conversions;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::sync::Arc;
+
+use super::AwsIdentity;
 
 /// Result type for token providers
 pub type Result = std::result::Result<Token, TokenError>;
@@ -84,7 +86,11 @@ impl ResolveIdentity for SharedTokenProvider {
         _runtime_components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        IdentityFuture::new(async move { Ok(self.provide_token().await?.into()) })
+        IdentityFuture::new(async move {
+            let token = self.provide_token().await?;
+            let expiration = token.expiration();
+            Ok(Identity::new(AwsIdentity(token), expiration))
+        })
     }
 
     fn cache_partition(&self) -> Option<IdentityCachePartition> {

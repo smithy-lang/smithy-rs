@@ -69,7 +69,7 @@ use crate::sign::v4;
 #[cfg(feature = "sigv4a")]
 use crate::sign::v4a;
 use crate::SignatureVersion;
-use aws_credential_types::Credentials;
+use aws_credential_types::{provider::AwsIdentity, Credentials};
 pub use error::SigningError;
 pub use settings::{
     PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignatureLocation, SigningSettings,
@@ -113,8 +113,9 @@ impl<'a> SigningParams<'a> {
         };
 
         identity
-            .data::<Credentials>()
+            .data::<AwsIdentity<Credentials>>()
             .ok_or_else(SigningError::unsupported_identity_type)
+            .map(|aws_identity| aws_identity.inner())
     }
 
     /// If the signing params are for SigV4, return the region. Otherwise, return `None`.
