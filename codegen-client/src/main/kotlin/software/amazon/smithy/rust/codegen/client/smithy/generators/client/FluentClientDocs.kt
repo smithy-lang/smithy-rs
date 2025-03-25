@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -59,17 +58,17 @@ object FluentClientDocs {
         writable {
             val model = codegenContext.model
             val symbolProvider = codegenContext.symbolProvider
-            if (model.operationShapes.isNotEmpty()) {
+            val operations = TopDownIndex.of(model).getContainedOperations(codegenContext.serviceShape)
+            if (operations.isNotEmpty()) {
                 // Find an operation with a simple string member shape
                 val (operation, member) =
-                    codegenContext.serviceShape.operations
-                        .map { id ->
-                            val operationShape = model.expectShape(id, OperationShape::class.java)
+                    operations
+                        .map { op ->
                             val member =
-                                operationShape.inputShape(model)
+                                op.inputShape(model)
                                     .members()
                                     .firstOrNull { model.expectShape(it.target) is StringShape }
-                            operationShape to member
+                            op to member
                         }
                         .sortedBy { it.first.id }
                         .firstOrNull { (_, member) -> member != null } ?: (null to null)
