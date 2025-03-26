@@ -337,7 +337,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -496,6 +496,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -577,6 +578,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -686,6 +688,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-util",
  "hex",
  "http 0.2.12",
@@ -719,6 +722,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -747,6 +751,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -776,6 +781,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -805,6 +811,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -834,6 +841,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -861,6 +869,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "pretty_assertions",
@@ -966,6 +975,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -987,6 +997,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "http 0.2.12",
  "once_cell",
  "regex-lite",
@@ -1011,6 +1022,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
+ "fastrand 2.3.0",
  "futures-util",
  "http 0.2.12",
  "http 1.2.0",
@@ -1094,6 +1106,7 @@ dependencies = [
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "fastrand 2.3.0",
  "futures-core",
  "futures-util",
  "hound",
@@ -1322,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aws-smithy-runtime-api",
  "once_cell",
@@ -1371,12 +1384,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.0"
+version = "1.8.1"
 dependencies = [
  "approx",
  "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-http-client",
+ "aws-smithy-observability",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
