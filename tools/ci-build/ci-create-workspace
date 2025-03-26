@@ -28,6 +28,7 @@ cp -r "${SCRIPT_PATH}/../ci-scripts" "${ACTION_PATH}/workspace/"
 
 # Copy inputs into workspace
 for input_name in \
+    "aws-doc-sdk-examples" \
     "aws-sdk-rust" \
     "aws-sdk" \
     "aws-sdk-smoketest" \
