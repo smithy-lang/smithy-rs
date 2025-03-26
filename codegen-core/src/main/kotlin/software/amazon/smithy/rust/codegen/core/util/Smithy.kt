@@ -154,4 +154,4 @@ fun String.shapeId() = ShapeId.from(this)
 fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default
 
 /** Returns the SDK ID of the given service shape */
-fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)
+fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId ?: id.getName(this)
