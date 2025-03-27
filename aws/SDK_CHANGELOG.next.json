@@ -6,34 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix bug in Sigv4 signing that, when an endpoint contained a default port (80 for HTTP, 443 for HTTPS), would sign the request with that port in the `HOST` header even though Hyper excludes default ports from the `HOST` header.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "aws-sdk-rust#1244"
-      ],
-      "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
-      "age": 5
-    },
-    {
-      "message": "Fix bug in S3 with flexible checksum headers incorrectly included in presigned GET requests.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "landonxjames",
-      "references": [
-        "aws-sdk-rust#1253"
-      ],
-      "since-commit": "0071c6db2e5e4979d592f6d9f1c019068a4afa02",
-      "age": 5
-    },
-    {
       "message": "Adds support for event stream operations with non-REST protocols such as AWS JSON. This update enables operations, including `SubscribeToShard` in Kinesis and `StartLiveTail` in CloudWatchLogs in the Rust SDK.\n",
       "meta": {
         "bug": false,
@@ -46,7 +18,7 @@
         "aws-sdk-rust#1188"
       ],
       "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add missing `request_checksum_calculation` and `response_checksum_validation` setters to the `ConfigLoader`\n",
@@ -60,7 +32,7 @@
         "smithy-rs#920"
       ],
       "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Updates the default HTTP client to be based on the 1.x version of hyper and updates the default TLS provider to [rustls](https://github.com/rustls/rustls) with [aws-lc](https://github.com/aws/aws-lc-rs). For more information see the GitHub [discussion](https://github.com/awslabs/aws-sdk-rust/discussions/1257).\n",
@@ -76,7 +48,7 @@
         "smithy-rs#3710"
       ],
       "since-commit": "bdec1a232a5dfdba16bafd1f637c99a920a30734",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Update spans to better align with spec.\n",
@@ -90,7 +62,7 @@
         "smithy-rs#4052"
       ],
       "since-commit": "7558d31f17b69bce8785ffa833c575d0b172209c",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
