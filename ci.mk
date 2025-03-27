@@ -28,10 +28,6 @@ check-aws-sdk-canary: generate-aws-sdk-smoketest
 check-aws-sdk-adhoc-tests:
 	$(CI_ACTION) $@ $(ARGS)
 
-.PHONY: check-aws-sdk-examples
-check-aws-sdk-examples: generate-aws-sdk
-	$(CI_ACTION) $@ $(ARGS)
-
 .PHONY: check-aws-sdk-services
 check-aws-sdk-services: generate-aws-sdk
 	$(CI_ACTION) $@ $(ARGS)
