@@ -18,12 +18,12 @@ unredacted-logging = []
 request-id = ["dep:uuid"]
 
 [dependencies]
-aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
-aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
-aws-smithy-xml = { path = "../aws-smithy-xml" }
-aws-smithy-cbor = { path = "../aws-smithy-cbor" }
+aws-smithy-http = { features = ["rt-tokio"] , version = "0.60.12" }
+aws-smithy-json = { version = "0.61.2" }
+aws-smithy-runtime-api = { features = ["http-02x"] , version = "1.7.3" }
+aws-smithy-types = { features = ["http-body-0-4-x", "hyper-0-14-x"] , version = "1.2.13" }
+aws-smithy-xml = { version = "0.60.9" }
+aws-smithy-cbor = { version = "0.61.0" }
 bytes = "1.1"
 futures-util = { version = "0.3.29", default-features = false }
 http = "0.2"
