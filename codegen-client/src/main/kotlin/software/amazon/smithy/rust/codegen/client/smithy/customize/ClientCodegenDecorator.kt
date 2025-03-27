@@ -32,9 +32,8 @@ sealed interface AuthSchemeOption {
         val constructor: List<Writable>,
     ) : AuthSchemeOption
 
-    class CustomResolver(
-        // unimplemented
-    ) : AuthSchemeOption
+    /** Auth scheme for the `EndpointBasedAuthSchemeOptionResolver` */
+    data object EndpointBasedAuthSchemeOption : AuthSchemeOption
 }
 
 /**

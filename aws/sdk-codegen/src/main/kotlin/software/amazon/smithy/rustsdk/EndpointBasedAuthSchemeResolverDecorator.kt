@@ -10,13 +10,10 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
-import software.amazon.smithy.rust.codegen.client.smithy.generators.AuthOptionsPluginGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
@@ -44,29 +41,12 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             override val name: String get() = "EndpointBasedAuthSchemeResolverDecorator"
             override val order: Byte = 0
 
-            override fun operationCustomizations(
+            override fun authOptions(
                 codegenContext: ClientCodegenContext,
-                operation: OperationShape,
-                baseCustomizations: List<OperationCustomization>,
-            ): List<OperationCustomization> =
-                baseCustomizations +
-                    object : OperationCustomization() {
-                        override fun section(section: OperationSection) =
-                            writable {
-                                when (section) {
-                                    is OperationSection.AdditionalRuntimePlugins -> {
-                                        section.addClientPlugin(
-                                            this,
-                                            AuthOptionsPluginGenerator(codegenContext).endpointBasedAuthPlugin(
-                                                section.operationShape,
-                                                section.authSchemeOptions,
-                                            ),
-                                        )
-                                    }
-
-                                    else -> {}
-                                }
-                            }
-                    }
+                operationShape: OperationShape,
+                baseAuthSchemeOptions: List<AuthSchemeOption>,
+            ): List<AuthSchemeOption> =
+                baseAuthSchemeOptions +
+                    AuthSchemeOption.EndpointBasedAuthSchemeOption
         },
 )
