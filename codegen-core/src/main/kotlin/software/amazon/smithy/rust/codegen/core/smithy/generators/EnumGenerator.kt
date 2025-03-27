@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -44,10 +45,13 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 /** EnumGenerator customization sections */
 sealed class EnumSection(name: String) : Section(name) {
-    abstract val definition: EnumDefinition
+    abstract val shape: Shape
 
     /** Hook to add additional attributes to an enum member */
-    data class AdditionalMemberAttributes(override val definition: EnumDefinition) : EnumSection("AdditionalMemberAttributes")
+    data class AdditionalMemberAttributes(override val shape: Shape, val definition: EnumDefinition) :
+        EnumSection("AdditionalMemberAttributes")
+
+    data class AdditionalTraitImpls(override val shape: Shape) : EnumSection("AdditionalTraitImpls")
 }
 
 /** Customizations for EnumGenerator */
@@ -155,7 +159,10 @@ class EnumMemberModel(
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
         renderDeprecated(writer)
-        writer.writeCustomizations(customizations, EnumSection.AdditionalMemberAttributes(definition))
+        writer.writeCustomizations(
+            customizations,
+            EnumSection.AdditionalMemberAttributes(parentShape, definition),
+        )
         writer.write("${derivedName()},")
     }
 }
@@ -197,7 +204,8 @@ open class EnumGenerator(
             enumName = symbol.name,
             enumMeta = symbol.expectRustMetadata(),
             enumTrait = enumTrait,
-            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider, customizations) },
+            sortedMembers = enumTrait.values.sortedBy { it.value }
+                .map { EnumMemberModel(shape, it, symbolProvider, customizations) },
         )
 
     fun render(writer: RustWriter) {
@@ -210,6 +218,7 @@ open class EnumGenerator(
             writer.renderUnnamedEnum()
         }
         enumType.additionalEnumImpls(context)(writer)
+        writer.writeCustomizations(customizations, EnumSection.AdditionalTraitImpls(shape))
 
         if (shape.shouldRedact(model)) {
             writer.renderDebugImplForSensitiveEnum()
