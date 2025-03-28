@@ -67,7 +67,7 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
                 .load::<aws_smithy_runtime_api::client::endpoint::EndpointResolverParams>()
                 .expect("endpoint resolver params must be set");
 
-            tracing::debug!(endpoint_params = ?endpoint_params, "resolving endpoint for auth scheme selection");
+            //tracing::debug!(endpoint_params = ?endpoint_params, "resolving endpoint for auth scheme selection");
 
             let endpoint = runtime_components
                 .endpoint_resolver()

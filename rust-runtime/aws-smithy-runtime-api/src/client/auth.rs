@@ -49,8 +49,8 @@ impl AuthSchemeOption {
     ///
     /// This config layer is applied to the [`ConfigBag`] to ensure the information is
     /// available during both the identity resolution and signature generation processes.
-    pub fn properties(&self) -> Option<&FrozenLayer> {
-        self.properties.as_ref()
+    pub fn properties(&self) -> Option<FrozenLayer> {
+        self.properties.clone()
     }
 }
 
@@ -133,6 +133,12 @@ impl std::error::Error for AuthSchemeOptionBuilderError {}
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AuthSchemeId {
     scheme_id: Cow<'static, str>,
+}
+
+impl AsRef<AuthSchemeId> for &AuthSchemeId {
+    fn as_ref(&self) -> &AuthSchemeId {
+        self
+    }
 }
 
 impl AuthSchemeId {
