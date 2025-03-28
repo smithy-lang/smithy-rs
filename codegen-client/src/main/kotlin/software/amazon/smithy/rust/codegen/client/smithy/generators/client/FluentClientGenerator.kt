@@ -253,6 +253,7 @@ private fun baseClientRuntimePluginsFn(
         RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
             val api = RuntimeType.smithyRuntimeApiClient(rc)
             val rt = RuntimeType.smithyRuntime(rc)
+            val serviceId = codegenContext.serviceShape.sdkId().lowercase().replace(" ", "")
             val behaviorVersionError =
                 "Invalid client configuration: A behavior major version must be set when sending a " +
                     "request or constructing a client. You must set it during client construction or by enabling the " +
@@ -266,8 +267,10 @@ private fun baseClientRuntimePluginsFn(
                     ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                     #{update_bmv}
 
-                    let default_retry_partition = ${codegenContext.serviceShape.sdkId().dq()};
+                    let default_retry_partition = ${serviceId.dq()};
                     #{before_plugin_setup}
+
+                    let scope = ${codegenContext.moduleName.dq()};
 
                     let mut plugins = #{RuntimePlugins}::new()
                         // defaults
@@ -284,7 +287,14 @@ private fun baseClientRuntimePluginsFn(
                         )
                         // codegen config
                         .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config.clone()))
-                        .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+                        .with_client_plugin(#{NoAuthRuntimePlugin}::new())
+                        .with_client_plugin(
+                            #{MetricsRuntimePlugin}::builder()
+                                .with_scope(scope)
+                                .with_time_source(config.runtime_components.time_source().unwrap_or_default())
+                                .build()
+                                .expect("All required fields have been set")
+                        );
 
                     #{additional_client_plugins:W}
 
@@ -314,6 +324,7 @@ private fun baseClientRuntimePluginsFn(
                 "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
                 "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
+                "MetricsRuntimePlugin" to rt.resolve("client::metrics::MetricsRuntimePlugin"),
                 "update_bmv" to
                     featureGatedBlock(BehaviorVersionLatest) {
                         rustTemplate(

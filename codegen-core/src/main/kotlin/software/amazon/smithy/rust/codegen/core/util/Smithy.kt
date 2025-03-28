@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.util
 import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -81,9 +82,11 @@ fun OperationShape.isOutputEventStream(model: Model): Boolean =
 fun OperationShape.isEventStream(model: Model): Boolean = isInputEventStream(model) || isOutputEventStream(model)
 
 fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
-    operations.any { id ->
-        model.expectShape(id, OperationShape::class.java).isEventStream(model)
-    }
+    TopDownIndex.of(model)
+        .getContainedOperations(this)
+        .any { op ->
+            op.isEventStream(model)
+        }
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when {
@@ -151,4 +154,4 @@ fun String.shapeId() = ShapeId.from(this)
 fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default
 
 /** Returns the SDK ID of the given service shape */
-fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)
+fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId ?: id.getName(this)

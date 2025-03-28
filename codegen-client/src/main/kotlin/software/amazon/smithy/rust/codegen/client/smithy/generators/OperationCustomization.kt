@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 sealed class OperationSection(name: String) : Section(name) {
     abstract val customizations: List<OperationCustomization>
@@ -132,6 +133,22 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("CustomizableOperationImpl")
+
+    /**
+     * Hook for adding additional fields to the operation's tracing span.
+     */
+    data class AdditionalOperationSpanFields(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("AdditionalOperationSpanFields") {
+        fun addField(
+            writer: RustWriter,
+            metricName: String,
+            value: Writable,
+        ) {
+            writer.rustTemplate("${metricName.dq()} = #{value},", "value" to value)
+        }
+    }
 }
 
 abstract class OperationCustomization : NamedCustomization<OperationSection>()

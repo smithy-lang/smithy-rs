@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.sdkId
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class ServiceEnvConfigDecorator : ClientCodegenDecorator {
     override val name: String = "ServiceEnvConfigDecorator"
@@ -24,7 +23,7 @@ class ServiceEnvConfigDecorator : ClientCodegenDecorator {
         rustCrate: RustCrate,
     ) {
         val rc = codegenContext.runtimeConfig
-        val serviceId = codegenContext.serviceShape.sdkId().toSnakeCase().dq()
+        val serviceId = codegenContext.serviceShape.sdkId().dq()
         rustCrate.withModule(ClientRustModule.config) {
             Attribute.AllowDeadCode.render(this)
             rustTemplate(

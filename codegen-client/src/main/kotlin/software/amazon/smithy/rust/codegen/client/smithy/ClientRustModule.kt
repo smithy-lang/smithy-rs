@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -156,11 +157,12 @@ class ClientModuleDocProvider(
     private fun customizeModuleDoc(): Writable =
         writable {
             val model = codegenContext.model
+            val operations = TopDownIndex.of(model).getContainedOperations(codegenContext.serviceShape)
             docs("Operation customization and supporting types.\n")
-            if (codegenContext.serviceShape.operations.isNotEmpty()) {
+            if (operations.isNotEmpty()) {
                 val opFnName =
                     FluentClientGenerator.clientOperationFnName(
-                        codegenContext.serviceShape.operations.minOf { it }
+                        operations.minOf { it.id }
                             .let { model.expectShape(it, OperationShape::class.java) },
                         codegenContext.symbolProvider,
                     )

@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 27th, 2025
+================
+
+March 25th, 2025
+================
+**New this release:**
+- :bug: (client, [smithy-rs#4054](https://github.com/smithy-lang/smithy-rs/issues/4054)) Fix traversal of operations bound to resources in several places including logic to determine if an event stream exists
+- (client, [smithy-rs#4052](https://github.com/smithy-lang/smithy-rs/issues/4052)) Update spans to better align with spec.
+
+
 March 10th, 2025
 ================
 **New this release:**
