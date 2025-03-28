@@ -253,6 +253,7 @@ private fun baseClientRuntimePluginsFn(
         RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
             val api = RuntimeType.smithyRuntimeApiClient(rc)
             val rt = RuntimeType.smithyRuntime(rc)
+            val serviceId = codegenContext.serviceShape.sdkId().lowercase().replace(" ", "")
             val behaviorVersionError =
                 "Invalid client configuration: A behavior major version must be set when sending a " +
                     "request or constructing a client. You must set it during client construction or by enabling the " +
@@ -266,7 +267,7 @@ private fun baseClientRuntimePluginsFn(
                     ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                     #{update_bmv}
 
-                    let default_retry_partition = ${codegenContext.serviceShape.sdkId().dq()};
+                    let default_retry_partition = ${serviceId.dq()};
                     #{before_plugin_setup}
 
                     let scope = ${codegenContext.moduleName.dq()};
