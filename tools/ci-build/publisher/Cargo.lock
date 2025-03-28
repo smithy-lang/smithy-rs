@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "publisher"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -983,7 +983,6 @@ dependencies = [
  "dialoguer",
  "fs-err",
  "handlebars",
- "once_cell",
  "pretty_assertions",
  "regex-lite",
  "semver",
