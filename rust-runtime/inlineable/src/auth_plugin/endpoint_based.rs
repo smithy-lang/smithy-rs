@@ -74,7 +74,7 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
                 .resolve_endpoint(endpoint_params)
                 .await?;
 
-            let mut endpoint_auth_scheme_id_strs = Vec::new();
+            let mut endpoint_auth_scheme_ids = Vec::new();
 
             if let Some(aws_smithy_types::Document::Array(endpoint_auth_schemes)) =
                 endpoint.properties().get("authSchemes")
@@ -85,15 +85,13 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
                         .and_then(|object| object.get("name"))
                         .and_then(aws_smithy_types::Document::as_string);
                     if let Some(scheme_id_str) = scheme_id_str {
-                        endpoint_auth_scheme_id_strs.push(scheme_id_str);
+                        endpoint_auth_scheme_ids
+                            .push(AuthSchemeId::from(Cow::Owned(scheme_id_str.to_owned())));
                     }
                 }
             }
 
-            let result = move_endpoint_auth_scheme_ids_to_front(
-                &self.auth_scheme_ids,
-                &endpoint_auth_scheme_id_strs,
-            );
+            let result = merge_auth_scheme_ids(&self.auth_scheme_ids, endpoint_auth_scheme_ids);
 
             // TODO(AccountIdBasedRouting): Before merging the final PR to main, experiment pupulating the `properties`
             // field of `AuthSchemeOption` to avoid the orchestrator relying upon `AuthSchemeEndpointConfig`.
@@ -112,87 +110,55 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
 
 // Returns newly allocated `Vec<AuthSchemeId>` with the same elements from `model_auth_scheme_options`
 // but with those appear in `endpoint_auth_scheme_strs` moved to the front of the list.
-fn move_endpoint_auth_scheme_ids_to_front(
+fn merge_auth_scheme_ids(
     model_auth_scheme_options: &[AuthSchemeId],
-    endpoint_auth_scheme_strs: &[&str],
+    mut endpoint_auth_schemes: Vec<AuthSchemeId>,
 ) -> Vec<AuthSchemeId> {
     // Right after `partition`, `result` only contains the intersection of `AuthSchemeId`s that appear both in the endpoint and in the model.
-    let (mut result, model_only_auth_scheme_ids): (Vec<_>, Vec<_>) = model_auth_scheme_options
+    let (_, model_only_auth_scheme_ids): (Vec<_>, Vec<_>) = model_auth_scheme_options
         .iter()
-        .partition(|auth_scheme_id| endpoint_auth_scheme_strs.contains(&auth_scheme_id.as_str()));
+        .partition(|auth_scheme_id| endpoint_auth_schemes.contains(auth_scheme_id));
 
-    // Sort result according to the order of elements in endpoint_auth_scheme_strs.
-    result.sort_by(|a: &AuthSchemeId, b: &AuthSchemeId| {
-        let index_a = endpoint_auth_scheme_strs
-            .iter()
-            .position(|&x| x == a.as_str())
-            .unwrap();
-        let index_b = endpoint_auth_scheme_strs
-            .iter()
-            .position(|&x| x == b.as_str())
-            .unwrap();
-        index_a.cmp(&index_b)
-    });
+    endpoint_auth_schemes.extend(model_only_auth_scheme_ids.into_iter().cloned());
 
-    // Extend `result` with `AuthSchemeId`s that only appear in the model.
-    // As a result, the intersection of `AuthSchemeId`s are brought to the front of the vec,
-    // while placing those that only exist in the model towards the end of the vec.
-    result.extend(model_only_auth_scheme_ids.iter());
-
-    result
+    endpoint_auth_schemes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn into_auth_scheme_ids<const N: usize>(strs: [&'static str; N]) -> Vec<AuthSchemeId> {
+        strs.into_iter().map(AuthSchemeId::from).collect::<Vec<_>>()
+    }
+
     #[test]
-    fn move_endpoint_auth_scheme_ids_to_front_basic() {
-        let model_auth_scheme_ids = ["schemeA", "schemeX", "schemeB", "schemeY"]
-            .into_iter()
-            .map(AuthSchemeId::from)
-            .collect::<Vec<_>>();
-        let endpoint_auth_scheme_id_strs = vec!["schemeY", "schemeX"];
-        let expected = ["schemeY", "schemeX", "schemeA", "schemeB"]
-            .into_iter()
-            .map(AuthSchemeId::from)
-            .collect::<Vec<_>>();
-        let actual = move_endpoint_auth_scheme_ids_to_front(
-            &model_auth_scheme_ids,
-            &endpoint_auth_scheme_id_strs,
-        );
+    fn merge_auth_scheme_ids_basic() {
+        let model_auth_scheme_ids =
+            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let endpoint_auth_scheme_id_strs = into_auth_scheme_ids(["schemeY", "schemeX"]);
+        let expected = into_auth_scheme_ids(["schemeY", "schemeX", "schemeA", "schemeB"]);
+        let actual = merge_auth_scheme_ids(&model_auth_scheme_ids, endpoint_auth_scheme_id_strs);
         assert_eq!(expected, actual);
     }
 
     #[test]
-    fn move_endpoint_auth_scheme_ids_to_front_with_empty_endpoint_auth_scheme_ids() {
-        let model_auth_scheme_ids = ["schemeA", "schemeX", "schemeB", "schemeY"]
-            .into_iter()
-            .map(AuthSchemeId::from)
-            .collect::<Vec<_>>();
-        let endpoint_auth_scheme_id_strs = vec![""];
-        let actual = move_endpoint_auth_scheme_ids_to_front(
-            &model_auth_scheme_ids,
-            &endpoint_auth_scheme_id_strs,
-        );
+    fn merge_auth_scheme_ids_with_empty_endpoint_auth_scheme_ids() {
+        let model_auth_scheme_ids =
+            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let endpoint_auth_scheme_id_strs = Vec::new();
+        let actual = merge_auth_scheme_ids(&model_auth_scheme_ids, endpoint_auth_scheme_id_strs);
         assert_eq!(model_auth_scheme_ids, actual);
     }
 
     #[test]
-    fn move_endpoint_auth_scheme_ids_to_front_with_foreign_endpoint_auth_scheme_ids() {
-        let model_auth_scheme_ids = ["schemeA", "schemeX", "schemeB", "schemeY"]
-            .into_iter()
-            .map(AuthSchemeId::from)
-            .collect::<Vec<_>>();
-        let endpoint_auth_scheme_id_strs = vec!["schemeY", "schemeZ"];
-        let expected = ["schemeY", "schemeA", "schemeX", "schemeB"]
-            .into_iter()
-            .map(AuthSchemeId::from)
-            .collect::<Vec<_>>();
-        let actual = move_endpoint_auth_scheme_ids_to_front(
-            &model_auth_scheme_ids,
-            &endpoint_auth_scheme_id_strs,
-        );
+    fn merge_auth_scheme_ids_should_include_those_only_in_endpoint_auth_scheme_ids() {
+        let model_auth_scheme_ids =
+            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let endpoint_auth_scheme_id_strs = into_auth_scheme_ids(["schemeY", "schemeZ"]);
+        let expected =
+            into_auth_scheme_ids(["schemeY", "schemeZ", "schemeA", "schemeX", "schemeB"]);
+        let actual = merge_auth_scheme_ids(&model_auth_scheme_ids, endpoint_auth_scheme_id_strs);
         assert_eq!(expected, actual);
     }
 }

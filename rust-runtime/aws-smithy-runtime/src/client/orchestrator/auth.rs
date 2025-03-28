@@ -55,7 +55,7 @@ impl fmt::Display for NoMatchingAuthSchemeError {
             write!(
                 f,
                 " \"{}\" wasn't a valid option because ",
-                item.scheme_id.as_str()
+                item.scheme_id.inner()
             )?;
             f.write_str(match item.result {
                 ExploreResult::NoAuthScheme => {
@@ -136,14 +136,12 @@ pub(super) async fn resolve_identity(
 
     // Iterate over IDs of possibly-supported auth schemes
     for auth_scheme_option in &options {
-        // `AuthSchemeId` may become non-`Copy`able in the future when the underlying field becomes `Cow` instad of `&'static str`
-        #[allow(clippy::clone_on_copy)]
         let scheme_id = auth_scheme_option.scheme_id().clone();
         // For each ID, try to resolve the corresponding auth scheme.
-        if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
+        if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id.clone()) {
             // Use the resolved auth scheme to resolve an identity
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
-                match legacy_try_resolve_endpoint(runtime_components, cfg, scheme_id).await {
+                match legacy_try_resolve_endpoint(runtime_components, cfg, &scheme_id).await {
                     Ok(endpoint) => {
                         trace!(scheme_id= ?scheme_id, "resolving identity");
                         let identity_cache = if identity_resolver.cache_location()
@@ -196,10 +194,10 @@ pub(super) fn sign_request(
         .load::<Endpoint>()
         .expect("endpoint added to config bag by endpoint orchestrator");
     let auth_scheme = runtime_components
-        .auth_scheme(scheme_id)
+        .auth_scheme(scheme_id.clone())
         .ok_or("should be configured")?;
     let signer = auth_scheme.signer();
-    let auth_scheme_endpoint_config = extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
+    let auth_scheme_endpoint_config = extract_endpoint_auth_scheme_config(endpoint, &scheme_id)?;
     trace!(
         signer = ?signer,
         "signing implementation"
@@ -249,7 +247,7 @@ impl Storable for AuthSchemeAndEndpointOrchestrationV2 {
 async fn legacy_try_resolve_endpoint(
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,
-    scheme_id: AuthSchemeId,
+    scheme_id: &AuthSchemeId,
 ) -> Result<Option<Endpoint>, AuthOrchestrationError> {
     if cfg.load::<AuthSchemeAndEndpointOrchestrationV2>().is_some() {
         // The orchestrator uses the correct auth scheme and endpoint resolution order,
@@ -280,13 +278,13 @@ async fn legacy_try_resolve_endpoint(
     Ok(Some(endpoint))
 }
 
-fn extract_endpoint_auth_scheme_config(
-    endpoint: &Endpoint,
-    scheme_id: AuthSchemeId,
-) -> Result<AuthSchemeEndpointConfig<'_>, AuthOrchestrationError> {
+fn extract_endpoint_auth_scheme_config<'a>(
+    endpoint: &'a Endpoint,
+    scheme_id: &AuthSchemeId,
+) -> Result<AuthSchemeEndpointConfig<'a>, AuthOrchestrationError> {
     // TODO(P96049742): Endpoint config doesn't currently have a concept of optional auth or "no auth", so
     // we are short-circuiting lookup of endpoint auth scheme config if that is the selected scheme.
-    if scheme_id == NO_AUTH_SCHEME_ID {
+    if scheme_id == &NO_AUTH_SCHEME_ID {
         return Ok(AuthSchemeEndpointConfig::empty());
     }
     let auth_schemes = match endpoint.properties().get("authSchemes") {
@@ -306,7 +304,7 @@ fn extract_endpoint_auth_scheme_config(
                 .as_object()
                 .and_then(|object| object.get("name"))
                 .and_then(Document::as_string);
-            config_scheme_id == Some(scheme_id.as_str())
+            config_scheme_id == Some(scheme_id.inner())
         })
         .ok_or(AuthOrchestrationError::MissingEndpointConfig)?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
