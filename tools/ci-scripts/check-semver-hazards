@@ -29,10 +29,13 @@ cp "$(pwd)/smithy-rs/aws/sdk/Cargo.lock" "$(pwd)/aws-sdk-rust/"
 
 echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
 for sdk in aws-sdk-rust/sdk/*; do
-  if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
-    echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
-    pushd "$sdk" &>/dev/null
-    cargo test --all-features
-    popd &>/dev/null
-  fi
+  # Run this check only against SDKs, excluding runtime crates
+  if [[ ! "$(basename "$sdk")" =~ ^(aws-|aws-smithy-) ]]; then
+    if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
+      echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
+      pushd "$sdk" &>/dev/null
+      cargo test --all-features
+      popd &>/dev/null
+    fi
+ fi
 done
