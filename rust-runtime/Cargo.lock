@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.64.0"
+version = "0.65.0"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
@@ -604,7 +604,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.1"
+version = "1.8.2"
 dependencies = [
  "approx",
  "aws-smithy-async",

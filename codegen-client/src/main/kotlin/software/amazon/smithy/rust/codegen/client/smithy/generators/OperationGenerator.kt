@@ -138,17 +138,7 @@ open class OperationGenerator(
                             err.downcast::<#{OperationError}>().expect("correct error type")
                         })
                     };
-                    use #{Tracing}::Instrument;
                     let context = Self::orchestrate_with_stop_point(runtime_plugins, input, #{StopPoint}::None)
-                        // Create a parent span for the entire operation. Includes a random, internal-only,
-                        // seven-digit ID for the operation orchestration so that it can be correlated in the logs.
-                        .instrument(#{Tracing}::debug_span!(
-                                "$serviceName.$operationName",
-                                "rpc.service" = ${serviceName.dq()},
-                                "rpc.method" = ${operationName.dq()},
-                                "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000),
-                                #{AdditionalSpanFields}
-                            ))
                         .await
                         .map_err(map_err)?;
                     let output = context.finalize().map_err(map_err)?;
@@ -161,13 +151,24 @@ open class OperationGenerator(
                     stop_point: #{StopPoint},
                 ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
                     let input = #{Input}::erase(input);
+                    use #{Tracing}::Instrument;
                     #{invoke_with_stop_point}(
                         ${serviceName.dq()},
                         ${operationName.dq()},
                         input,
                         runtime_plugins,
                         stop_point
-                    ).await
+                    )
+                    // Create a parent span for the entire operation. Includes a random, internal-only,
+                    // seven-digit ID for the operation orchestration so that it can be correlated in the logs.
+                    .instrument(#{Tracing}::debug_span!(
+                            "$serviceName.$operationName",
+                            "rpc.service" = ${serviceName.dq()},
+                            "rpc.method" = ${operationName.dq()},
+                            "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000),
+                            #{AdditionalSpanFields}
+                        ))
+                    .await
                 }
 
                 pub(crate) fn operation_runtime_plugins(
