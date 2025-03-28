@@ -17,6 +17,7 @@ members = [
     "s3",
     "s3control",
     "sts",
+    "telemetry",
     "timestreamquery",
     "transcribestreaming",
     "webassembly",

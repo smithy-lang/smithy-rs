@@ -70,6 +70,7 @@ open class OperationGenerator(
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
+        val serviceName = codegenContext.serviceShape.sdkId()
 
         // pub struct Operation { ... }
         operationWriter.rust(
@@ -119,6 +120,13 @@ open class OperationGenerator(
                             ),
                     )
                 }
+            val additionalSpanFields =
+                writable {
+                    writeCustomizations(
+                        operationCustomizations,
+                        OperationSection.AdditionalOperationSpanFields(operationCustomizations, operationShape),
+                    )
+                }
             rustTemplate(
                 """
                 pub(crate) async fn orchestrate(
@@ -143,13 +151,24 @@ open class OperationGenerator(
                     stop_point: #{StopPoint},
                 ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
                     let input = #{Input}::erase(input);
+                    use #{Tracing}::Instrument;
                     #{invoke_with_stop_point}(
-                        ${codegenContext.serviceShape.sdkId().dq()},
+                        ${serviceName.dq()},
                         ${operationName.dq()},
                         input,
                         runtime_plugins,
                         stop_point
-                    ).await
+                    )
+                    // Create a parent span for the entire operation. Includes a random, internal-only,
+                    // seven-digit ID for the operation orchestration so that it can be correlated in the logs.
+                    .instrument(#{Tracing}::debug_span!(
+                            "$serviceName.$operationName",
+                            "rpc.service" = ${serviceName.dq()},
+                            "rpc.method" = ${operationName.dq()},
+                            "sdk_invocation_id" = #{FastRand}::u32(1_000_000..10_000_000),
+                            #{AdditionalSpanFields}
+                        ))
+                    .await
                 }
 
                 pub(crate) fn operation_runtime_plugins(
@@ -196,6 +215,9 @@ open class OperationGenerator(
                             )
                         }
                     },
+                "Tracing" to RuntimeType.Tracing,
+                "FastRand" to RuntimeType.FastRand,
+                "AdditionalSpanFields" to additionalSpanFields,
             )
 
             writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))

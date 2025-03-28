@@ -21,8 +21,8 @@ use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::Intercept;
-use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
+use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, Metadata};
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
@@ -43,6 +43,7 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;
+use tracing::{debug_span, Instrument};
 
 struct FnSerializer<F, I> {
     f: F,
@@ -150,6 +151,11 @@ where
             input,
             &self.runtime_plugins,
         )
+        .instrument(debug_span!(
+            "invoke",
+            "rpc.service" = &self.service_name.as_ref(),
+            "rpc.method" = &self.operation_name.as_ref()
+        ))
         .await
         .map_err(|err| err.map_service_error(|e| e.downcast().expect("correct type")))?;
 
@@ -377,14 +383,15 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-
+        let mut config = self.config;
+        config.store_put(Metadata::new(operation_name.clone(), service_name.clone()));
         let mut runtime_plugins = RuntimePlugins::new()
             .with_client_plugins(default_plugins(
                 DefaultPluginParams::new().with_retry_partition_name(service_name.clone()),
             ))
             .with_client_plugin(
                 StaticRuntimePlugin::new()
-                    .with_config(self.config.freeze())
+                    .with_config(config.freeze())
                     .with_runtime_components(self.runtime_components),
             );
         for runtime_plugin in self.runtime_plugins {
