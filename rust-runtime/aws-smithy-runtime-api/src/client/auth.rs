@@ -135,7 +135,7 @@ pub struct AuthSchemeId {
     scheme_id: Cow<'static, str>,
 }
 
-impl AsRef<AuthSchemeId> for &AuthSchemeId {
+impl AsRef<AuthSchemeId> for AuthSchemeId {
     fn as_ref(&self) -> &AuthSchemeId {
         self
     }
