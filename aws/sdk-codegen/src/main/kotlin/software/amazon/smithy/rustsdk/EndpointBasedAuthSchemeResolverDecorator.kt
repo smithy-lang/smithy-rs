@@ -12,13 +12,18 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.core.util.sdkId
 
-/** Contains a list of SDK IDs that are allowed to use EndpointBasedAuthSchemeResolver */
+/**
+ * Contains a list of SDK IDs that are allowed to use EndpointBasedAuthSchemeOptionResolver
+ *
+ * Going forward, we expect new services to leverage static information in a model as much as possible (e.g., the auth
+ * trait). It helps avoid runtime factors, such as endpoints, influencing auth option resolution behavior.
+ */
 private val EndpointBasedAuthSchemeAllowList =
     setOf(
-        "cloudfrontkeyvaluestore",
-        "eventbridge",
-        "s3",
-        "sesv2",
+        "CloudFront KeyValueStore",
+        "EventBridge",
+        "S3",
+        "SESv2",
     )
 
 class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(

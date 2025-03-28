@@ -5,6 +5,26 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpAuthDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpConnectorConfigDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SensitiveOutputDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.StaticSdkFeatureTrackerDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointParamsDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionDecorator
+import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -130,7 +150,12 @@ class SigV4AuthDecoratorTest {
 
     @Test
     fun unsignedPayloadSetsCorrectHeaderForSigV4a() {
-        awsSdkIntegrationTest(modelWithSigV4aAuthScheme) { clientCodegenContext, rustCrate ->
+        awsSdkIntegrationTest(
+            modelWithSigV4aAuthScheme,
+            // TODO(IdentityAndAuth): Remove buildPlugin parameter override once codegen respects the order of auth
+            //  trait entries in a model
+            buildPlugin = ForceEndpointBaseAuthRustClientCodegenPlugin(),
+        ) { clientCodegenContext, rustCrate ->
             val moduleUseName = clientCodegenContext.moduleUseName()
             val rc = clientCodegenContext.runtimeConfig
 
@@ -173,5 +198,54 @@ class SigV4AuthDecoratorTest {
                 }
             }
         }
+    }
+}
+
+// TODO(IdentityAndAuth): Remove this class once codegen respects the order of auth trait entries in a model
+// This is a workaround to use `EndpointBasedAuthSchemeOptionDecorator` is during testing, as it is allow-listed
+// based on services in production code.
+// Without `EndpointBasedAuthSchemeOptionDecorator`, the `unsignedPayloadSetsCorrectHeaderForSigV4a` test would
+// fail because `StaticAuthSchemeOptionResolver` would be used instead. The codegen does NOT pass to it auth trait
+// entries in the order specified in `modelWithSigV4aAuthScheme` and instead passes sigv4 first and sigv4a in a list.
+private class ForceEndpointBaseAuthRustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
+    override fun getName(): String = "force-endpoint-based-auth-rust-client-codegen"
+
+    override fun executeWithDecorator(
+        context: PluginContext,
+        vararg decorator: ClientCodegenDecorator,
+    ) {
+        // Same combined decorators in `RustClientCodegenPlugin`, used by `awsSdkIntegrationTest`,
+        // plus a decorator to enable `EndpointBasedAuthSchemeOption`
+        val codegenDecorator =
+            CombinedClientCodegenDecorator.fromClasspath(
+                context,
+                ClientCustomizations(),
+                RequiredCustomizations(),
+                FluentClientDecorator(),
+                EndpointsDecorator(),
+                EndpointParamsDecorator(),
+                NoAuthDecorator(),
+                HttpAuthDecorator(),
+                HttpConnectorConfigDecorator(),
+                SensitiveOutputDecorator(),
+                IdempotencyTokenDecorator(),
+                StalledStreamProtectionDecorator(),
+                StaticSdkFeatureTrackerDecorator(),
+                object : ClientCodegenDecorator {
+                    override val name: String get() = "ForceEndpointBasedAuthSchemeOptionDecorator"
+                    override val order: Byte = 0
+
+                    override fun authOptions(
+                        codegenContext: ClientCodegenContext,
+                        operationShape: OperationShape,
+                        baseAuthSchemeOptions: List<AuthSchemeOption>,
+                    ): List<AuthSchemeOption> =
+                        baseAuthSchemeOptions +
+                            AuthSchemeOption.EndpointBasedAuthSchemeOption
+                },
+                *decorator,
+            )
+
+        ClientCodegenVisitor(context, codegenDecorator).execute()
     }
 }
