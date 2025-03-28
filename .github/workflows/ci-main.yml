@@ -64,8 +64,6 @@ jobs:
   ci:
     needs: acquire-base-image
     uses: ./.github/workflows/ci.yml
-    with:
-      run_sdk_examples: true
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.acquire-base-image.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
