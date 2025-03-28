@@ -11,6 +11,8 @@ import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -61,11 +63,14 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
                 it is AuthSchemeOption.EndpointBasedAuthSchemeOption
             }
         ) {
-            authPlugin("endpoint_based").toType()
+            authPlugin(
+                "endpoint_based", CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+                Tracing,
+            ).toType()
                 .resolve("EndpointBasedAuthOptionsPlugin")
         } else {
-            authPlugin("endpoint_based").toType()
-                .resolve("EndpointBasedAuthOptionsPlugin")
+            authPlugin("default", CargoDependency.smithyRuntimeApiClient(runtimeConfig)).toType()
+                .resolve("DefaultAuthOptionsPlugin")
         }
     }
 
@@ -85,8 +90,9 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
                 authSchemeOptions.filter {
                     when (it) {
                         is AuthSchemeOption.EndpointBasedAuthSchemeOption -> {
-                            // Codegen should skip this auth option since it is not modeled but created on the fly,
-                            // as `EndpointBasedAuthSchemeResolver` resolves auth options from an endpoint.
+                            // Codegen should skip and not pass this auth scheme as modeled to the auth scheme
+                            // resolver. Since this is endpoint based, `EndpointBasedAuthSchemeResolver` will generate
+                            // auth scheme option on the fly from an endpoint at runtime.
                             false
                         }
                         is AuthSchemeOption.StaticAuthSchemeOption -> {
