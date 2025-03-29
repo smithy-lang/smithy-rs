@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 29th, 2025
+================
+**New this release:**
+- (client) remove redundant span attributes and improve log output format
+
+
 March 27th, 2025
 ================
 
