@@ -6,11 +6,9 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
-import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -42,25 +40,6 @@ class S3ExpressDecorator : ClientCodegenDecorator {
 
     // This decorator must decorate after SigV4AuthDecorator so that sigv4 appears before sigv4-s3express within auth_scheme_options
     override val order: Byte = (SigV4AuthDecorator.ORDER - 1).toByte()
-
-    private fun sigv4S3Express(runtimeConfig: RuntimeConfig) =
-        writable {
-            rust(
-                "#T",
-                s3ExpressModule(runtimeConfig).resolve("auth::SCHEME_ID"),
-            )
-        }
-
-    override fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
-        baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> =
-        baseAuthSchemeOptions +
-            AuthSchemeOption.StaticAuthSchemeOption(
-                SigV4Trait.ID,
-                listOf(sigv4S3Express(codegenContext.runtimeConfig)),
-            )
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,

@@ -380,7 +380,7 @@ async fn try_attempt(
         read_before_signing(ctx, runtime_components, cfg);
     });
 
-    halt_on_err!([ctx] => sign_request(scheme_id, &identity, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => sign_request(&scheme_id, &identity, ctx, runtime_components, cfg).map_err(OrchestratorError::other));
 
     run_interceptors!(halt_on_err: {
         read_after_signing(ctx, runtime_components, cfg);

@@ -55,7 +55,7 @@ impl fmt::Display for NoMatchingAuthSchemeError {
             write!(
                 f,
                 " \"{}\" wasn't a valid option because ",
-                item.scheme_id.as_str()
+                item.scheme_id.inner()
             )?;
             f.write_str(match item.result {
                 ExploreResult::NoAuthScheme => {
@@ -135,10 +135,8 @@ pub(super) async fn resolve_identity(
     let mut explored = ExploredList::default();
 
     // Iterate over IDs of possibly-supported auth schemes
-    for auth_scheme_option in &options {
-        // `AuthSchemeId` may become non-`Copy`able in the future when the underlying field becomes `Cow` instad of `&'static str`
-        #[allow(clippy::clone_on_copy)]
-        let scheme_id = auth_scheme_option.scheme_id().clone();
+    for auth_scheme_option in options {
+        let scheme_id = auth_scheme_option.scheme_id();
         // For each ID, try to resolve the corresponding auth scheme.
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
             // Use the resolved auth scheme to resolve an identity
@@ -157,10 +155,10 @@ pub(super) async fn resolve_identity(
                             .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
-                        return Ok((scheme_id, identity, endpoint));
+                        return Ok((scheme_id.clone(), identity, endpoint));
                     }
                     Err(AuthOrchestrationError::MissingEndpointConfig) => {
-                        explored.push(scheme_id, ExploreResult::MissingEndpointConfig);
+                        explored.push(scheme_id.clone(), ExploreResult::MissingEndpointConfig);
                         continue;
                     }
                     Err(AuthOrchestrationError::FailedToResolveEndpoint(source)) => {
@@ -173,10 +171,10 @@ pub(super) async fn resolve_identity(
                     }
                 }
             } else {
-                explored.push(scheme_id, ExploreResult::NoIdentityResolver);
+                explored.push(scheme_id.clone(), ExploreResult::NoIdentityResolver);
             }
         } else {
-            explored.push(scheme_id, ExploreResult::NoAuthScheme);
+            explored.push(scheme_id.clone(), ExploreResult::NoAuthScheme);
         }
     }
 
@@ -184,7 +182,7 @@ pub(super) async fn resolve_identity(
 }
 
 pub(super) fn sign_request(
-    scheme_id: AuthSchemeId,
+    scheme_id: &AuthSchemeId,
     identity: &Identity,
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
@@ -249,7 +247,7 @@ impl Storable for AuthSchemeAndEndpointOrchestrationV2 {
 async fn legacy_try_resolve_endpoint(
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,
-    scheme_id: AuthSchemeId,
+    scheme_id: &AuthSchemeId,
 ) -> Result<Option<Endpoint>, AuthOrchestrationError> {
     if cfg.load::<AuthSchemeAndEndpointOrchestrationV2>().is_some() {
         // The orchestrator uses the correct auth scheme and endpoint resolution order,
@@ -280,13 +278,13 @@ async fn legacy_try_resolve_endpoint(
     Ok(Some(endpoint))
 }
 
-fn extract_endpoint_auth_scheme_config(
-    endpoint: &Endpoint,
-    scheme_id: AuthSchemeId,
-) -> Result<AuthSchemeEndpointConfig<'_>, AuthOrchestrationError> {
+fn extract_endpoint_auth_scheme_config<'a>(
+    endpoint: &'a Endpoint,
+    scheme_id: &AuthSchemeId,
+) -> Result<AuthSchemeEndpointConfig<'a>, AuthOrchestrationError> {
     // TODO(P96049742): Endpoint config doesn't currently have a concept of optional auth or "no auth", so
     // we are short-circuiting lookup of endpoint auth scheme config if that is the selected scheme.
-    if scheme_id == NO_AUTH_SCHEME_ID {
+    if scheme_id == &NO_AUTH_SCHEME_ID {
         return Ok(AuthSchemeEndpointConfig::empty());
     }
     let auth_schemes = match endpoint.properties().get("authSchemes") {
@@ -306,7 +304,7 @@ fn extract_endpoint_auth_scheme_config(
                 .as_object()
                 .and_then(|object| object.get("name"))
                 .and_then(Document::as_string);
-            config_scheme_id == Some(scheme_id.as_str())
+            config_scheme_id == Some(scheme_id.inner())
         })
         .ok_or(AuthOrchestrationError::MissingEndpointConfig)?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
@@ -479,7 +477,7 @@ mod tests {
                 .await
                 .expect("success");
 
-            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+            sign_request(&scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
                 .expect("success");
 
             assert_eq!(
@@ -534,7 +532,7 @@ mod tests {
             let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
                 .await
                 .expect("success");
-            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+            sign_request(&scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
                 .expect("success");
             assert_eq!(
                 // "YTpi" == "a:b" in base64
@@ -559,7 +557,7 @@ mod tests {
             let (scheme_id, identity, _) = resolve_identity(&runtime_components, &cfg)
                 .await
                 .expect("success");
-            sign_request(scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
+            sign_request(&scheme_id, &identity, &mut ctx, &runtime_components, &cfg)
                 .expect("success");
             assert_eq!(
                 "Bearer t",
@@ -621,8 +619,9 @@ mod tests {
             .url("dontcare")
             .property("something-unrelated", Document::Null)
             .build();
-        let config = extract_endpoint_auth_scheme_config(&endpoint, "test-scheme-id".into())
-            .expect("success");
+        let config =
+            extract_endpoint_auth_scheme_config(&endpoint, &AuthSchemeId::from("test-scheme-id"))
+                .expect("success");
         assert!(config.as_document().is_none());
     }
 
@@ -632,7 +631,7 @@ mod tests {
             .url("dontcare")
             .property("authSchemes", Document::String("bad".into()))
             .build();
-        extract_endpoint_auth_scheme_config(&endpoint, "test-scheme-id".into())
+        extract_endpoint_auth_scheme_config(&endpoint, &AuthSchemeId::from("test-scheme-id"))
             .expect_err("should fail because authSchemes is the wrong type");
     }
 
@@ -659,7 +658,7 @@ mod tests {
                 ],
             )
             .build();
-        extract_endpoint_auth_scheme_config(&endpoint, "test-scheme-id".into())
+        extract_endpoint_auth_scheme_config(&endpoint, &AuthSchemeId::from("test-scheme-id"))
             .expect_err("should fail because authSchemes doesn't include the desired scheme");
     }
 
@@ -687,8 +686,9 @@ mod tests {
                 ],
             )
             .build();
-        let config = extract_endpoint_auth_scheme_config(&endpoint, "test-scheme-id".into())
-            .expect("should find test-scheme-id");
+        let config =
+            extract_endpoint_auth_scheme_config(&endpoint, &AuthSchemeId::from("test-scheme-id"))
+                .expect("should find test-scheme-id");
         assert_eq!(
             "magic string value",
             config
@@ -766,7 +766,7 @@ mod tests {
                 .await
                 .expect("success");
             sign_request(
-                scheme_id,
+                &scheme_id,
                 &identity,
                 &mut ctx,
                 &runtime_components,
