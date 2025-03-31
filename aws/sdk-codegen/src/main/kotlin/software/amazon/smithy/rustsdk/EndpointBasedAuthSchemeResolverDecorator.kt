@@ -46,6 +46,8 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             if (EndpointBasedAuthSchemeAllowList.contains(codegenContext.serviceShape.sdkId())) {
                 true
             } else {
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4076): Remove this else once the task has
+                //  been completed.
                 // Although we'd like to restrict the usage of this decorator to the services listed above,
                 // some services still define "sigv4a" in their endpoint rules.
                 // If these services use `StaticBasedAuthSchemeOptionResolver`, the code generator currently does NOT
