@@ -12,6 +12,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyRuntime
 
+/**
+ * A service runtime plugin customization that places `AuthSchemeAndEndpointOrchestrationV2` in the config bag.
+ *
+ * SDKs generated with this marker signal to the Smithy runtime that they follow the correct resolution order:
+ * authentication scheme resolution, identity resolution, and endpoint resolution, as specified in the SRA.
+ */
 class AuthEndpointOrchestrationV2MarkerCustomization(codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig

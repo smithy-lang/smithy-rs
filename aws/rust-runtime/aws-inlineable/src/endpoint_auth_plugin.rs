@@ -12,6 +12,7 @@ use aws_smithy_runtime_api::client::{
     runtime_plugin::{Order, RuntimePlugin},
 };
 
+// A runtime plugin that registers `EndpointBasedAuthSchemeOptionResolver` with `RuntimeComponents`.
 #[derive(Debug)]
 pub(crate) struct EndpointBasedAuthOptionsPlugin {
     runtime_components: RuntimeComponentsBuilder,
@@ -122,7 +123,6 @@ fn merge_auth_scheme_ids(
     modeled_auth_scheme_ids: &[AuthSchemeId],
     mut endpoint_auth_scheme_ids: Vec<AuthSchemeId>,
 ) -> Vec<AuthSchemeId> {
-    // Right after `partition`, `result` only contains the intersection of `AuthSchemeId`s that appear both in the endpoint and in the model.
     let (_, model_only_auth_scheme_ids): (Vec<_>, Vec<_>) = modeled_auth_scheme_ids
         .iter()
         .partition(|auth_scheme_id| endpoint_auth_scheme_ids.contains(auth_scheme_id));

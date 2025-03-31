@@ -212,8 +212,8 @@ pub(super) fn sign_request(
     Ok(())
 }
 
-// Marker indicating the correct resolution order: identity resolution first,
-// followed by endpoint resolution, as specified in the SRA.
+// Marker indicating the correct resolution order: auth scheme resolution, identity resolution,
+// and then endpoint resolution, as specified in the SRA.
 //
 // This marker is included in the config bag to signify the intended resolution order
 // by design. When the crate was released for GA, the resolution order was reversed

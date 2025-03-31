@@ -135,6 +135,7 @@ pub struct AuthSchemeId {
     scheme_id: Cow<'static, str>,
 }
 
+// See: https://doc.rust-lang.org/std/convert/trait.AsRef.html#reflexivity
 impl AsRef<AuthSchemeId> for AuthSchemeId {
     fn as_ref(&self) -> &AuthSchemeId {
         self
