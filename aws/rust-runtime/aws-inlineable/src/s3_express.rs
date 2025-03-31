@@ -655,6 +655,9 @@ pub(crate) mod runtime_plugin {
     }
 
     impl S3ExpressRuntimePlugin {
+        // `new` will be called as `additional_client_plugins` within `base_client_runtime_plugins`.
+        // This guarantees that `new` receives a fully constructed service config, with required
+        // runtime components registered with `RuntimeComponents`.
         pub(crate) fn new(service_config: crate::config::Config) -> Self {
             Self::new_with(service_config, Env::real())
         }
