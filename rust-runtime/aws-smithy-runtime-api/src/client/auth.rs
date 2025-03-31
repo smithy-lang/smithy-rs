@@ -49,8 +49,8 @@ impl AuthSchemeOption {
     ///
     /// This config layer is applied to the [`ConfigBag`] to ensure the information is
     /// available during both the identity resolution and signature generation processes.
-    pub fn properties(&self) -> Option<&FrozenLayer> {
-        self.properties.as_ref()
+    pub fn properties(&self) -> Option<FrozenLayer> {
+        self.properties.clone()
     }
 }
 
@@ -130,26 +130,55 @@ impl std::error::Error for AuthSchemeOptionBuilderError {}
 /// Each auth scheme must have a unique string identifier associated with it,
 /// which is used to refer to auth schemes by the auth scheme option resolver, and
 /// also used to select an identity resolver to use.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AuthSchemeId {
-    scheme_id: &'static str,
+    scheme_id: Cow<'static, str>,
+}
+
+impl AsRef<AuthSchemeId> for AuthSchemeId {
+    fn as_ref(&self) -> &AuthSchemeId {
+        self
+    }
 }
 
 impl AuthSchemeId {
     /// Creates a new auth scheme ID.
     pub const fn new(scheme_id: &'static str) -> Self {
-        Self { scheme_id }
+        Self {
+            scheme_id: Cow::Borrowed(scheme_id),
+        }
     }
 
     /// Returns the string equivalent of this auth scheme ID.
+    #[deprecated(
+        note = "This function is no longer functional. Use `inner` instead",
+        since = "1.8.0"
+    )]
     pub const fn as_str(&self) -> &'static str {
-        self.scheme_id
+        match self.scheme_id {
+            Cow::Borrowed(val) => val,
+            Cow::Owned(_) => {
+                // cannot obtain `&'static str` from `String` unless we use `Box::leak`
+                ""
+            }
+        }
+    }
+
+    /// Returns the string equivalent of this auth scheme ID.
+    pub fn inner(&self) -> &str {
+        &self.scheme_id
     }
 }
 
 impl From<&'static str> for AuthSchemeId {
     fn from(scheme_id: &'static str) -> Self {
         Self::new(scheme_id)
+    }
+}
+
+impl From<Cow<'static, str>> for AuthSchemeId {
+    fn from(scheme_id: Cow<'static, str>) -> Self {
+        Self { scheme_id }
     }
 }
 
