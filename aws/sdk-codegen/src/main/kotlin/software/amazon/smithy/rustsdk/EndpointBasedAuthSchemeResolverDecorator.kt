@@ -6,28 +6,50 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
 import software.amazon.smithy.rust.codegen.client.smithy.generators.AuthOptionsPluginGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.sdkId
+
+/**
+ * Contains a list of SDK IDs that are allowed to use `EndpointBasedAuthSchemeOptionResolver`
+ *
+ * Going forward, we expect new services to leverage static information in a model as much as possible (e.g., the auth
+ * trait). This helps avoid runtime factors, such as endpoints, influencing auth option resolution behavior.
+ */
+private val EndpointBasedAuthSchemeAllowList =
+    setOf(
+        "CloudFront KeyValueStore",
+        "EventBridge",
+        "S3",
+        "SESv2",
+    )
 
 class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
     predicate = { codegenContext, _ ->
         codegenContext?.let {
-            if (codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
-                // S3 must use an `EndpointBasedAuthSchemeResolver`, as it supports S3Express where
-                // `sigv4-s3express` is referred to in endpoint rules.
+            if (EndpointBasedAuthSchemeAllowList.contains(codegenContext.serviceShape.sdkId())) {
                 true
             } else {
-                // While `sigv4a` has a Smithy auth trait, it may also be listed in endpoint rules.
+                // Although we'd like to restrict the usage of this decorator to the services listed above,
+                // some services still define "sigv4a" in their endpoint rules.
+                // If these services use `StaticBasedAuthSchemeOptionResolver`, the code generator currently does NOT
+                // prioritize "sigv4a" as the first authentication scheme option; it defaults to "sigv4", instead.
                 val endpointAuthSchemes =
                     codegenContext.serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let {
                         EndpointRuleSet.fromNode(
@@ -44,6 +66,14 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             override val name: String get() = "EndpointBasedAuthSchemeResolverDecorator"
             override val order: Byte = 0
 
+            override fun authOptions(
+                codegenContext: ClientCodegenContext,
+                operationShape: OperationShape,
+                baseAuthSchemeOptions: List<AuthSchemeOption>,
+            ): List<AuthSchemeOption> =
+                baseAuthSchemeOptions +
+                    AuthSchemeOption.EndpointBasedAuthSchemeOption
+
             override fun operationCustomizations(
                 codegenContext: ClientCodegenContext,
                 operation: OperationShape,
@@ -51,22 +81,29 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             ): List<OperationCustomization> =
                 baseCustomizations +
                     object : OperationCustomization() {
-                        override fun section(section: OperationSection) =
-                            writable {
-                                when (section) {
-                                    is OperationSection.AdditionalRuntimePlugins -> {
-                                        section.addClientPlugin(
-                                            this,
-                                            AuthOptionsPluginGenerator(codegenContext).endpointBasedAuthPlugin(
-                                                section.operationShape,
-                                                section.authSchemeOptions,
-                                            ),
+                        override fun section(section: OperationSection): Writable {
+                            return when (section) {
+                                is OperationSection.AdditionalRuntimePlugins ->
+                                    writable {
+                                        rustTemplate(
+                                            ".with_client_plugin(#{auth_plugin})",
+                                            "auth_plugin" to
+                                                AuthOptionsPluginGenerator(codegenContext).authPlugin(
+                                                    InlineAwsDependency.forRustFile(
+                                                        "endpoint_auth_plugin", visibility = Visibility.PUBCRATE,
+                                                        CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
+                                                        Tracing,
+                                                    ).toType()
+                                                        .resolve("EndpointBasedAuthOptionsPlugin"),
+                                                    section.operationShape,
+                                                    section.authSchemeOptions,
+                                                ),
                                         )
                                     }
 
-                                    else -> {}
-                                }
+                                else -> emptySection
                             }
+                        }
                     }
         },
 )

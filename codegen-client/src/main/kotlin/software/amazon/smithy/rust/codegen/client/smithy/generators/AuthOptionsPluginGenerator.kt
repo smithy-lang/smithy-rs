@@ -11,60 +11,30 @@ import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
-import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import java.util.logging.Logger
 
-private fun authPlugin(
-    name: String,
-    vararg additionalDependency: RustDependency,
-) = InlineDependency.forRustFile(
-    RustModule.pubCrate(
-        name,
-        parent = RustModule.private("auth_plugin"),
-    ),
-    "/inlineable/src/auth_plugin/$name.rs",
-    *additionalDependency,
-)
-
 class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContext) {
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    fun defaultAuthPlugin(
+    fun authPlugin(
+        pluginType: RuntimeType,
         operationShape: OperationShape,
         authSchemeOptions: List<AuthSchemeOption>,
     ) = writable {
         rustTemplate(
             """
-            #{DefaultAuthOptionsPlugin}::new(vec![#{options}])
+            #{pluginType}::new(vec![#{options}])
 
             """,
-            "DefaultAuthOptionsPlugin" to authPlugin("default").toType().resolve("DefaultAuthOptionsPlugin"),
-            "options" to actualAuthSchemes(operationShape, authSchemeOptions).join(", "),
-        )
-    }
-
-    fun endpointBasedAuthPlugin(
-        operationShape: OperationShape,
-        authSchemeOptions: List<AuthSchemeOption>,
-    ) = writable {
-        rustTemplate(
-            """
-            #{EndpointBasedAuthOptionsPlugin}::new(vec![#{options}])
-
-            """,
-            "EndpointBasedAuthOptionsPlugin" to
-                authPlugin("endpoint_based").toType()
-                    .resolve("EndpointBasedAuthOptionsPlugin"),
+            "pluginType" to pluginType,
             "options" to actualAuthSchemes(operationShape, authSchemeOptions).join(", "),
         )
     }
@@ -84,7 +54,12 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
             val optionsForScheme =
                 authSchemeOptions.filter {
                     when (it) {
-                        is AuthSchemeOption.CustomResolver -> false
+                        is AuthSchemeOption.EndpointBasedAuthSchemeOption -> {
+                            // Code generation should skip this auth scheme and not pass it to the auth scheme resolver.
+                            // Since this is endpoint-based, `EndpointBasedAuthSchemeOptionResolver` will dynamically
+                            // generate the auth scheme option from an endpoint at runtime.
+                            false
+                        }
                         is AuthSchemeOption.StaticAuthSchemeOption -> {
                             it.schemeShapeId == schemeShapeId
                         }
