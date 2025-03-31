@@ -8,7 +8,6 @@ use anyhow::bail;
 use anyhow::{Context, Result};
 use cargo_lock::dependency::graph::{Graph, NodeIndex};
 use cargo_lock::{package::Package, Lockfile, Name, Version};
-use once_cell::sync::Lazy;
 use petgraph::visit::EdgeRef;
 use smithy_rs_tool_common::git::find_git_repository_root;
 use smithy_rs_tool_common::here;
@@ -19,6 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::iter;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 // Struct representing a potential dependency that may eventually be reported as an error by `audit`,
 // indicating that the crate `to` is not covered by the SDK lockfile even though `to` is reported as a dependency
@@ -97,7 +97,7 @@ fn package_with_name(name: &str) -> Package {
 // on `pin-project` in the above section is incorrect, and we need to teach the tool to recognize this.
 //
 // The following set serves as an allowlist whose entries should not be reported as audit errors.
-static FALSE_POSITIVES: Lazy<HashSet<SuspectDependency>> = Lazy::new(|| {
+static FALSE_POSITIVES: LazyLock<HashSet<SuspectDependency>> = LazyLock::new(|| {
     include_str!("../false-positives.txt")
         .lines()
         .map(|line| {
