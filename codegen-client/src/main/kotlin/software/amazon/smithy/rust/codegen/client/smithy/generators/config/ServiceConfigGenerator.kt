@@ -421,7 +421,7 @@ class ServiceConfigGenerator(
                 cloneable: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                behavior_version: #{Option}<#{BehaviorVersion}>,
+                pub(crate) behavior_version: #{Option}<#{BehaviorVersion}>,
                 """,
                 *codegenScope,
             )

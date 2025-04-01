@@ -6,11 +6,9 @@
 package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
-import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -30,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
@@ -43,25 +40,6 @@ class S3ExpressDecorator : ClientCodegenDecorator {
 
     // This decorator must decorate after SigV4AuthDecorator so that sigv4 appears before sigv4-s3express within auth_scheme_options
     override val order: Byte = (SigV4AuthDecorator.ORDER - 1).toByte()
-
-    private fun sigv4S3Express(runtimeConfig: RuntimeConfig) =
-        writable {
-            rust(
-                "#T",
-                s3ExpressModule(runtimeConfig).resolve("auth::SCHEME_ID"),
-            )
-        }
-
-    override fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
-        baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> =
-        baseAuthSchemeOptions +
-            AuthSchemeOption.StaticAuthSchemeOption(
-                SigV4Trait.ID,
-                listOf(sigv4S3Express(codegenContext.runtimeConfig)),
-            )
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
@@ -131,9 +109,6 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                     .resolve("client::identity::SharedIdentityResolver"),
         )
     }
-    val behaviorVersionError =
-        "Invalid client configuration: A behavior version must be set when creating an inner S3 client. " +
-            "A behavior version should be set in the outer S3 client, so it needs to be passed down to the inner client."
 
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
@@ -145,24 +120,6 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             *codegenScope,
                         )
                     }
-
-                    section.registerIdentityResolver(
-                        this,
-                        writable {
-                            rustTemplate("#{S3_EXPRESS_SCHEME_ID}", *codegenScope)
-                        },
-                        writable {
-                            rustTemplate(
-                                """
-                                #{DefaultS3ExpressIdentityProvider}::builder()
-                                    .behavior_version(${section.serviceConfigName}.behavior_version.expect(${behaviorVersionError.dq()}))
-                                    .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
-                                    .build()
-                                """,
-                                *codegenScope,
-                            )
-                        },
-                    )
                 }
 
                 else -> {}
@@ -246,12 +203,7 @@ class S3ExpressFluentClientCustomization(
                     rustTemplate(
                         """
                         ${section.plugins} = ${section.plugins}.with_client_plugin(
-                            #{S3ExpressRuntimePlugin}::new(
-                                ${section.config}
-                                    .config
-                                    .load::<crate::config::DisableS3ExpressSessionAuth>()
-                                    .cloned()
-                            )
+                            #{S3ExpressRuntimePlugin}::new(${section.config}.clone())
                         );
                         """,
                         *codegenScope,
