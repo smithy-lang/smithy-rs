@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumMemberModel
@@ -278,7 +279,10 @@ data class InfallibleEnumType(
     }
 }
 
-class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringShape) :
+class ClientEnumGenerator(
+    codegenContext: ClientCodegenContext, shape: StringShape,
+    customizations: List<EnumCustomization>,
+) :
     EnumGenerator(
         codegenContext.model,
         codegenContext.symbolProvider,
@@ -290,6 +294,7 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
                 parent = ClientRustModule.primitives,
             ),
         ),
+        customizations,
     )
 
 private fun unknownVariantError(): RuntimeType =
