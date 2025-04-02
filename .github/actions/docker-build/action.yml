@@ -47,7 +47,7 @@ runs:
       # it and tag it as the base image to use for this action. This will prevent acquire-build-image
       # from attempting to download an image from ECR since it will already exist,
       # which enables testing build image modifications as part of the pull request.
-      if [[ -d smithy-rs-base-image ]] && [[ ${{ inputs.use_cache }} ]]; then
+      if [[ -d smithy-rs-base-image ]] && [[ ${{ inputs.use-cache }} ]]; then
         IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
         docker load -i smithy-rs-base-image/smithy-rs-base-image
         docker tag "smithy-rs-base-image:${IMAGE_TAG}" "smithy-rs-base-image:local"
