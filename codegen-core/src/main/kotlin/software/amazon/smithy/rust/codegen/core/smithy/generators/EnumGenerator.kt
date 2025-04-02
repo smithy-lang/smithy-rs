@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -29,6 +30,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
@@ -38,6 +42,20 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
+
+/** EnumGenerator customization sections */
+sealed class EnumSection(name: String) : Section(name) {
+    abstract val shape: Shape
+
+    /** Hook to add additional attributes to an enum member */
+    data class AdditionalMemberAttributes(override val shape: Shape, val definition: EnumDefinition) :
+        EnumSection("AdditionalMemberAttributes")
+
+    data class AdditionalTraitImpls(override val shape: Shape) : EnumSection("AdditionalTraitImpls")
+}
+
+/** Customizations for EnumGenerator */
+abstract class EnumCustomization : NamedCustomization<EnumSection>()
 
 data class EnumGeneratorContext(
     val enumName: String,
@@ -86,6 +104,7 @@ class EnumMemberModel(
     private val parentShape: Shape,
     private val definition: EnumDefinition,
     private val symbolProvider: RustSymbolProvider,
+    private val customizations: List<EnumCustomization>,
 ) {
     companion object {
         /**
@@ -140,6 +159,10 @@ class EnumMemberModel(
     fun render(writer: RustWriter) {
         renderDocumentation(writer)
         renderDeprecated(writer)
+        writer.writeCustomizations(
+            customizations,
+            EnumSection.AdditionalMemberAttributes(parentShape, definition),
+        )
         writer.write("${derivedName()},")
     }
 }
@@ -167,6 +190,7 @@ open class EnumGenerator(
     private val symbolProvider: RustSymbolProvider,
     private val shape: StringShape,
     private val enumType: EnumType,
+    private val customizations: List<EnumCustomization>,
 ) {
     companion object {
         /** Name of the function on the enum impl to get a vec of value names */
@@ -180,7 +204,8 @@ open class EnumGenerator(
             enumName = symbol.name,
             enumMeta = symbol.expectRustMetadata(),
             enumTrait = enumTrait,
-            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
+            sortedMembers = enumTrait.values.sortedBy { it.value }
+                .map { EnumMemberModel(shape, it, symbolProvider, customizations) },
         )
 
     fun render(writer: RustWriter) {
@@ -193,6 +218,7 @@ open class EnumGenerator(
             writer.renderUnnamedEnum()
         }
         enumType.additionalEnumImpls(context)(writer)
+        writer.writeCustomizations(customizations, EnumSection.AdditionalTraitImpls(shape))
 
         if (shape.shouldRedact(model)) {
             writer.renderDebugImplForSensitiveEnum()
