@@ -24,15 +24,20 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticImplDisplayTrait
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -104,26 +109,75 @@ open class StructureGenerator(
         ) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
-
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own
-                    val fieldValue =
-                        if (shape.shouldRedact(model)) {
-                            REDACTION
-                        } else {
-                            member.redactIfNecessary(
-                                model,
-                                "self.$memberName",
-                            )
-                        }
-
+                    val fieldValue = getFieldValue(member, memberName)
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
                 }
                 writeCustomizations(customizations, StructureSection.AdditionalDebugFields(shape, "formatter"))
                 rust("formatter.finish()")
+            }
+        }
+    }
+
+    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own.
+    private fun getFieldValue(
+        member: MemberShape,
+        memberName: String?,
+    ): String {
+        val fieldValue =
+            if (shape.shouldRedact(model)) {
+                REDACTION
+            } else {
+                member.redactIfNecessary(
+                    model,
+                    "self.$memberName",
+                )
+            }
+        return fieldValue
+    }
+
+    private fun renderImplDisplayIfSyntheticImplDisplayTraitApplied() {
+        if (shape.getTrait<SyntheticImplDisplayTrait>() == null) {
+            return
+        }
+
+        val lifetime = shape.lifetimeDeclaration(symbolProvider)
+        writer.rustBlock(
+            "impl ${shape.lifetimeDeclaration(symbolProvider)} #T for $name $lifetime",
+            RuntimeType.Display,
+        ) {
+            writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
+                write("""::std::write!(f, "$name {{")?;""")
+
+                members.forEachIndexed { index, member ->
+                    val separator = if (index > 0) ", " else ""
+                    val memberName = symbolProvider.toMemberName(member)
+                    val shouldRedact = shape.shouldRedact(model) || member.shouldRedact(model)
+
+                    // If the shape is redacted then each member shape will be redacted.
+                    if (shouldRedact) {
+                        write("""::std::write!(f, "$separator$memberName={}", $REDACTION)?;""")
+                    } else {
+                        val variable = ValueExpression.Reference("&self.$memberName")
+                        val memberSymbol = symbolProvider.toSymbol(member)
+
+                        if (memberSymbol.isOptional()) {
+                            rustBlockTemplate("if let #{Some}(inner) = ${variable.asRef()}", *preludeScope) {
+                                write("""::std::write!(f, "$separator$memberName=Some({})", inner)?;""")
+                            }
+                            rustBlock("else") {
+                                write("""::std::write!(f, "$separator$memberName=None")?;""")
+                            }
+                        } else {
+                            write("""::std::write!(f, "$separator$memberName={}", ${variable.asRef()})?;""")
+                        }
+                    }
+                }
+
+                write("""::std::write!(f, "}}")""")
             }
         }
     }
@@ -209,6 +263,7 @@ open class StructureGenerator(
         if (!containerMeta.hasDebugDerive()) {
             renderDebugImpl()
         }
+        renderImplDisplayIfSyntheticImplDisplayTraitApplied()
 
         writer.writeCustomizations(customizations, StructureSection.AdditionalTraitImpls(shape, name))
     }

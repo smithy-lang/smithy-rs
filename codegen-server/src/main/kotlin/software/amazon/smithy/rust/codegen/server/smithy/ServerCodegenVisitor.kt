@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.AddSyntheticTraitForImplDisplay
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -213,6 +214,9 @@ open class ServerCodegenVisitor(
             .let { ServerProtocolBasedTransformationFactory.transform(it, settings) }
             // Normalize event stream operations
             .let(EventStreamNormalizer::transform)
+            // Add synthetic trait to shapes referenced by error types to ensure they implement Display.
+            // This ensures error formatting works correctly for nested structures.
+            .let(AddSyntheticTraitForImplDisplay::transform)
 
     /**
      * Exposure purely for unit test purposes.
