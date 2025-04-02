@@ -33,7 +33,7 @@ jobs:
             head_revision: response.data.head.sha,
           };
           console.log("data:", data);
-          if(data.head_revision !== "${{ inputs.commit_sha }}""){
+          if(data.head_revision !== "${{ inputs.commit_sha }}"){
             throw new Error("Input SHA does not match retrieved SHA")
           }
           return data;

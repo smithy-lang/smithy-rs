@@ -38,7 +38,7 @@ jobs:
             commit_sha: response.data.head.sha,
           };
           console.log("data:", data);
-          if(data.commit_sha !== "${{ inputs.commit_sha }}""){
+          if(data.commit_sha !== "${{ inputs.commit_sha }}"){
             throw new Error("Input SHA does not match retrieved SHA")
           }
           return data;
