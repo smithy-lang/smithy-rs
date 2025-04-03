@@ -16,15 +16,10 @@ operation SampleOperation {
     input:= {}
     errors: [
         SimpleError,
-        ErrorWithCompositeShape,
+        ErrorInInput,
         ErrorWithDeepCompositeShape,
-        ComposedSensitiveError
+        ComposedSensitiveError,
     ]
-}
-
-@error("client")
-structure ErrorWithCompositeShape {
-    message: ErrorMessage
 }
 
 @error("client")
@@ -32,14 +27,19 @@ structure SimpleError {
     message: String
 }
 
+@error("client")
+structure ErrorInInput {
+    message: ErrorMessage
+}
+
 structure ErrorMessage {
     @required
-    statusCode: String
+    statusCode: Integer
     @required
     errorMessage: String
     requestId: String
     @required
-    toolName: String
+    isRetryable: Boolean
 }
 
 structure WrappedErrorMessage {

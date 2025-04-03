@@ -24,7 +24,7 @@ class NestedErrorStructureTest {
     private var sampleModel = File("../codegen-core/common-test-models/nested-error.smithy").readText().asSmithyModel()
     private val model = sampleModel.let(AddSyntheticTraitForImplDisplay::transform)
 
-    private val errorWithCompositeShape = model.lookup<StructureShape>("sample#ErrorWithCompositeShape")
+    private val errorInInput = model.lookup<StructureShape>("sample#ErrorInInput")
     private val simpleError = model.lookup<StructureShape>("sample#SimpleError")
     private val errorWithDeepCompositeShape = model.lookup<StructureShape>("sample#ErrorWithDeepCompositeShape")
     private val composedSensitiveError = model.lookup<StructureShape>("sample#ComposedSensitiveError")
@@ -35,7 +35,7 @@ class NestedErrorStructureTest {
 
     private val allStructures =
         arrayOf(
-            errorWithCompositeShape,
+            errorInInput,
             simpleError,
             errorWithDeepCompositeShape,
             composedSensitiveError,
@@ -46,7 +46,7 @@ class NestedErrorStructureTest {
         )
     private val errorShapes =
         arrayOf(
-            errorWithCompositeShape,
+            errorInInput,
             simpleError,
             errorWithDeepCompositeShape,
             errorWithNestedError,
@@ -95,13 +95,13 @@ class NestedErrorStructureTest {
                 rustTemplate(
                     """
                         let message = crate::test_model::ErrorMessage {
-                            status_code: "200".to_owned(),
+                            status_code: 333,
                             error_message: "this is an error".to_owned(),
                             request_id: None,
-                            tool_name : "vscode".to_owned()
+                            is_retryable: false,
                         };
                         let formatted = format!("{message}");
-                        assert_eq!(formatted, "ErrorMessage {status_code=200, error_message=this is an error, request_id=None, tool_name=vscode}");
+                        assert_eq!(formatted, "ErrorMessage {status_code=333, error_message=this is an error, request_id=None, is_retryable=false}");
                         """,
                 )
             }
@@ -109,13 +109,13 @@ class NestedErrorStructureTest {
                 rustTemplate(
                     """
                         let message = crate::test_model::ErrorMessage {
-                            status_code: "200".to_owned(),
+                            status_code: 419,
                             error_message: "this is an error".to_owned(),
                             request_id: Some("1234".to_owned()),
-                            tool_name : "vscode".to_owned()
+                            is_retryable : true,
                         };
                         let formatted = format!("{message}");
-                        assert_eq!(formatted, "ErrorMessage {status_code=200, error_message=this is an error, request_id=Some(1234), tool_name=vscode}");
+                        assert_eq!(formatted, "ErrorMessage {status_code=419, error_message=this is an error, request_id=Some(1234), is_retryable=true}");
                         """,
                 )
             }
@@ -142,10 +142,10 @@ class NestedErrorStructureTest {
                             message: Some(crate::test_model::WrappedErrorMessage {
                                 some_value: Some(123),
                                 contained: Some(crate::test_model::ErrorMessage {
-                                    status_code: "200".to_owned(),
+                                    status_code: 509,
                                     error_message: "this is an error".to_owned(),
                                     request_id: Some("1234".to_owned()),
-                                    tool_name: "vscode".to_owned(),
+                                    is_retryable: false,
                                 }),
                             }),
                         }),
@@ -153,10 +153,9 @@ class NestedErrorStructureTest {
                     let formatted = format!("{message}");
                     const EXPECTED: &str = "ErrorWithNestedError: ErrorWithDeepCompositeShape: \
                         WrappedErrorMessage {some_value=Some(123), \
-                        contained=Some(ErrorMessage {status_code=200, \
+                        contained=Some(ErrorMessage {status_code=509, \
                         error_message=this is an error, \
-                        request_id=Some(1234), \
-                        tool_name=vscode})}";
+                        request_id=Some(1234), is_retryable=false})}";
                     assert_eq!(formatted, EXPECTED);
                     """,
                 )

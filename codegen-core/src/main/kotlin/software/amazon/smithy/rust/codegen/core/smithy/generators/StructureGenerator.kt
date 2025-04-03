@@ -109,9 +109,20 @@ open class StructureGenerator(
         ) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
+
                 members.forEach { member ->
                     val memberName = symbolProvider.toMemberName(member)
-                    val fieldValue = getFieldValue(member, memberName)
+                    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own
+                    val fieldValue =
+                        if (shape.shouldRedact(model)) {
+                            REDACTION
+                        } else {
+                            member.redactIfNecessary(
+                                model,
+                                "self.$memberName",
+                            )
+                        }
+
                     rust(
                         "formatter.field(${memberName.dq()}, &$fieldValue);",
                     )
@@ -120,23 +131,6 @@ open class StructureGenerator(
                 rust("formatter.finish()")
             }
         }
-    }
-
-    // If the struct is marked sensitive all fields get redacted, otherwise each field is determined on its own.
-    private fun getFieldValue(
-        member: MemberShape,
-        memberName: String?,
-    ): String {
-        val fieldValue =
-            if (shape.shouldRedact(model)) {
-                REDACTION
-            } else {
-                member.redactIfNecessary(
-                    model,
-                    "self.$memberName",
-                )
-            }
-        return fieldValue
     }
 
     private fun renderImplDisplayIfSyntheticImplDisplayTraitApplied() {
