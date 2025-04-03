@@ -12,8 +12,8 @@ inputs:
   action-arguments:
     description: Arguments to pass to the action
     required: false
-  use-cache:
-    description: Whether to use the cache
+  use_cache:
+    description: Whether to use the gradle cache
     required: false
     default: true
 
@@ -21,7 +21,7 @@ runs:
   using: composite
   steps:
   - name: Gradle Cache
-    if: ${{ inputs.use-cache }} == 'true'
+    if: ${{ inputs.use_cache }}
     uses: actions/cache@v4
     with:
       path: |
