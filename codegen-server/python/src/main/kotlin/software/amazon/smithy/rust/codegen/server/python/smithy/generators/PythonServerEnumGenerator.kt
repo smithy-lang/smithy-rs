@@ -59,20 +59,27 @@ class PythonConstrainedEnum(
         }
 
     private fun pyEnumName(context: EnumGeneratorContext): Writable =
-        writable {
-            rustBlock(
-                """
-                ##[getter]
-                pub fn name(&self) -> &str
-                """,
-            ) {
-                rustBlock("match self") {
-                    context.sortedMembers.forEach { member ->
-                        val memberName = member.name()?.name
-                        rust("""${context.enumName}::$memberName => ${memberName?.dq()},""")
+        // Only named enums have a `name` property. Do not generate `fn name` for
+        // unnamed enums.
+        if (context.enumTrait.hasNames()) {
+            writable {
+                rustBlock(
+                    """
+                    ##[getter]
+                    pub fn name(&self) -> &str
+                    """,
+                ) {
+                    rustBlock("match self") {
+                        context.sortedMembers.forEach { member ->
+                            val memberName = member.name()?.name
+                            check(memberName != null) { "${context.enumTrait} cannot have null members" }
+                            rust("""${context.enumName}::$memberName => ${memberName?.dq()},""")
+                        }
                     }
                 }
             }
+        } else {
+            writable {}
         }
 }
 
