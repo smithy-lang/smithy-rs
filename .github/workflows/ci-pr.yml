@@ -31,6 +31,7 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Attempt to load a docker login password
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -62,6 +63,7 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -124,6 +126,7 @@ jobs:
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

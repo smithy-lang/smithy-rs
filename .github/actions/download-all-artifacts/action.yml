@@ -6,6 +6,7 @@ description: Downloads and untars all available build artifacts
 runs:
   using: composite
   steps:
+  - uses: GitHubSecurityLab/actions-permissions/monitor@v1
   - name: Download artifacts
     uses: actions/download-artifact@v4
   - name: Untar artifacts

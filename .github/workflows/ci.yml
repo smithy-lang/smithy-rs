@@ -56,6 +56,7 @@ jobs:
         - action: generate-aws-sdk-smoketest
         - action: generate-smithy-rs-release
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -127,6 +128,7 @@ jobs:
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -144,6 +146,7 @@ jobs:
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -188,6 +191,7 @@ jobs:
         - action: check-aws-sdk-standalone-integration-tests
           runner: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -207,6 +211,7 @@ jobs:
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
@@ -266,6 +271,7 @@ jobs:
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
       uses: actions/checkout@v4
       with:
@@ -344,6 +350,7 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -368,6 +375,7 @@ jobs:
     if: ${{ !inputs.run_canary }}
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - run: |
         echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
         exit 1
@@ -387,6 +395,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Matrix Success
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Verify jobs succeeded
       # Pinned to commit hash of v1.2.2
       uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe

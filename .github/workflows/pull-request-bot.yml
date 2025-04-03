@@ -46,6 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -81,6 +82,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
     - uses: actions/cache@v4
       name: Gradle Cache
@@ -147,6 +149,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

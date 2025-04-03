@@ -30,6 +30,7 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
       uses: actions/checkout@v4
     - name: Acquire credentials
