@@ -37,9 +37,28 @@ structure ErrorMessage {
     statusCode: Integer
     @required
     errorMessage: String
-    requestId: String
     @required
     isRetryable: Boolean
+    requestId: String
+    timeStamp: Timestamp
+    ratio: Float
+    precision: Double
+    dataSize: Long
+    byteCount: Short
+    flags: Byte
+    documentData: Document
+    blobData: Blob
+    tags: Map
+    errorCodes: List
+}
+
+map Map {
+    key: String,
+    value: String
+}
+
+list List {
+    member: Integer
 }
 
 structure WrappedErrorMessage {

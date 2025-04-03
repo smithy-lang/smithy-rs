@@ -72,6 +72,199 @@ class NestedErrorStructureTest {
         shape: StructureShape,
     ) = ErrorImplGenerator(model, provider, writer, shape, shape.getTrait<ErrorTrait>()!!, emptyList())
 
+    /**
+     * Generates Rust code to create an ErrorMessage with specified fields and returns the expected formatting.
+     *
+     * @param statusCode The required status code value
+     * @param errorMessage The required error message string
+     * @param isRetryable The required boolean flag for retryability
+     * @param optionalValues Map of optional field names to values (null indicates None)
+     * @return Pair of (Rust initialization code, assert_eq! statement)
+     */
+    private fun generateErrorMessageWithAssert(
+        statusCode: Int,
+        errorMessage: String,
+        isRetryable: Boolean,
+        optionalValues: Map<String, Any?> = emptyMap()
+    ): Pair<String, String> {
+        // Generate the Rust initialization code
+        val rustCode = generateErrorMessage(statusCode, errorMessage, isRetryable, optionalValues = optionalValues)
+
+        // Build the expected output string for assert_eq!
+        val expectedOutput = buildExpectedOutput(statusCode, errorMessage, isRetryable, optionalValues = optionalValues)
+
+        // Generate the assert_eq! statement
+        val assertStatement = """
+            let formatted = format!("{message}");
+            assert_eq!(formatted, "$expectedOutput");
+            """
+
+        return Pair(rustCode, assertStatement)
+    }
+
+    /**
+     * Builds the expected string representation of the ErrorMessage
+     */
+    private fun buildExpectedOutput(
+        statusCode: Int,
+        errorMessage: String,
+        isRetryable: Boolean,
+        optionalValues: Map<String, Any?> = emptyMap()
+    ): String {
+        val parts = mutableListOf(
+            "status_code=$statusCode",
+            "error_message=$errorMessage",
+            "is_retryable=$isRetryable"
+        )
+        val codeBuilder = StringBuilder(parts.joinToString(", "))
+        codeBuilder.append(", ")
+
+        // For assertions, just use quoted strings without .to_owned()
+        fillOptionalValues(
+            codeBuilder,
+            assignmentOperator = "=",
+            lineSeparator = ", ",
+            optionalValues = optionalValues,
+            stringFormatter = { "$it" } // Simple quoted string for assertions
+        )
+
+        val optional = codeBuilder.toString().dropLast(2)
+
+        // Return the formatted string
+        return "ErrorMessage {$optional}"
+    }
+
+    /**
+     * Generates Rust code to create an ErrorMessage with specified fields.
+     */
+    private fun generateErrorMessage(
+        statusCode: Int,
+        errorMessage: String,
+        isRetryable: Boolean,
+        prefix: String = "let message = ",
+        suffix: String = ";",
+        optionalValues: Map<String, Any?> = emptyMap()
+    ): String {
+        val codeBuilder = StringBuilder("$prefix crate::test_model::ErrorMessage {\n")
+
+        // Add required fields
+        codeBuilder.append("    status_code: $statusCode,\n")
+        codeBuilder.append("    error_message: \"$errorMessage\".to_owned(),\n")
+        codeBuilder.append("    is_retryable: $isRetryable,\n")
+
+        // Add optional fields with indentation and proper syntax for code generation
+        codeBuilder.append("    ")
+        fillOptionalValues(
+            codeBuilder,
+            assignmentOperator = ": ",
+            lineSeparator = ",\n    ",
+            optionalValues = optionalValues,
+            stringFormatter = { "\"$it\".to_owned()" } // Use .to_owned() for code generation
+        )
+
+        codeBuilder.append("\n} $suffix")
+        return codeBuilder.toString()
+    }
+
+    /**
+     * Fills optional values in the provided StringBuilder
+     *
+     * @param codeBuilder StringBuilder to append formatted values to
+     * @param assignmentOperator Operator for assignment (e.g., ":" or "=")
+     * @param lineSeparator Separator between lines (e.g., ",\n" or ", ")
+     * @param optionalValues Map of field names to values
+     * @param stringFormatter Lambda for formatting string values
+     */
+    private fun fillOptionalValues(
+        codeBuilder: StringBuilder,
+        assignmentOperator: String = ":",
+        lineSeparator: String = ",\n",
+        optionalValues: Map<String, Any?> = emptyMap(),
+        stringFormatter: (String) -> String = { "\"$it\".to_owned()" } // Default uses .to_owned()
+    ) {
+        // List of all optional fields
+        val allOptionalFields = listOf(
+            "request_id",
+            "time_stamp",
+            "ratio",
+            "precision",
+            "data_size",
+            "byte_count",
+            "flags",
+            "document_data",
+            "blob_data",
+            "tags",
+            "error_codes",
+        )
+
+        // Add all optional fields, using provided values or None
+        for (field in allOptionalFields) {
+            val value = optionalValues[field]
+            val formattedValue = formatOptionalValue(field, value, stringFormatter)
+            codeBuilder.append("$field$assignmentOperator$formattedValue$lineSeparator")
+        }
+    }
+
+    /**
+     * Formats an optional value as Some(value) or None
+     *
+     * @param field Field name
+     * @param value Field value
+     * @param stringFormatter Lambda for formatting string values
+     * @return Formatted value string
+     */
+    private fun formatOptionalValue(
+        field: String,
+        value: Any?,
+        stringFormatter: (String) -> String
+    ): String {
+        return if (value == null) {
+            "None"
+        } else when (field) {
+            "request_id" -> "Some(${stringFormatter(value.toString())})"
+            "time_stamp" -> {
+                if (value is String) {
+                    "Some(aws_smithy_types::DateTime::from_str(\"$value\", aws_smithy_types::date_time::Format::DateTime).unwrap())"
+                } else {
+                    "Some(aws_smithy_types::DateTime::from_secs($value))"
+                }
+            }
+            "document_data" -> {
+                if (value is String) {
+                    "Some(aws_smithy_json::Value::from_str(\"$value\").unwrap())"
+                } else {
+                    "Some($value)"
+                }
+            }
+            "blob_data" -> "Some(aws_smithy_types::Blob::new($value))"
+            "tags" -> {
+                if (value is Map<*, *>) {
+                    val mapEntries = value.entries.joinToString(", ") { (k, v) ->
+                        "${stringFormatter(k.toString())} => ${stringFormatter(v.toString())}"
+                    }
+                    "Some(std::collections::HashMap::from([$mapEntries]))"
+                } else {
+                    "Some($value)"
+                }
+            }
+            "error_codes" -> {
+                if (value is List<*>) {
+                    val items = value.joinToString(", ")
+                    "Some(vec![$items])"
+                } else {
+                    "Some($value)"
+                }
+            }
+            else -> {
+                if (value is String) {
+                    "Some(${stringFormatter(value)})"
+                } else {
+                    "Some($value)"
+                }
+            }
+        }
+    }
+
     @Test
     fun `generate nested error structure`() {
         val project = TestWorkspace.testProject(provider)
@@ -92,33 +285,35 @@ class NestedErrorStructureTest {
             RustModule.public("tests"),
         ) {
             unitTest("optional_field_prints_none") {
-                rustTemplate(
-                    """
-                        let message = crate::test_model::ErrorMessage {
-                            status_code: 333,
-                            error_message: "this is an error".to_owned(),
-                            request_id: None,
-                            is_retryable: false,
-                        };
-                        let formatted = format!("{message}");
-                        assert_eq!(formatted, "ErrorMessage {status_code=333, error_message=this is an error, request_id=None, is_retryable=false}");
-                        """,
+                val (rustCode, assertStatement) = generateErrorMessageWithAssert(
+                    statusCode = 333,
+                    errorMessage = "this is an error",
+                    isRetryable = false,
+                    optionalValues = mapOf("request_id" to null)
                 )
+
+                rustTemplate("""
+                    $rustCode
+                    $assertStatement
+                """)
             }
+
             unitTest("optional_field_prints_value") {
+                val (rustCode, assertStatement) = generateErrorMessageWithAssert(
+                    statusCode = 419,
+                    errorMessage = "this is an error",
+                    isRetryable = true,
+                    optionalValues = mapOf("request_id" to "1234")
+                )
+
                 rustTemplate(
                     """
-                        let message = crate::test_model::ErrorMessage {
-                            status_code: 419,
-                            error_message: "this is an error".to_owned(),
-                            request_id: Some("1234".to_owned()),
-                            is_retryable : true,
-                        };
-                        let formatted = format!("{message}");
-                        assert_eq!(formatted, "ErrorMessage {status_code=419, error_message=this is an error, request_id=Some(1234), is_retryable=true}");
-                        """,
+                    $rustCode
+                    $assertStatement
+                """
                 )
             }
+
             unitTest("sensitive_is_redacted") {
                 val redacted = REDACTION.removeSurrounding("\"")
                 rustTemplate(
@@ -134,28 +329,23 @@ class NestedErrorStructureTest {
                 )
             }
             unitTest("nested_error_structure_do_not_implement_display_twice") {
-                val redacted = REDACTION.removeSurrounding("\"")
+                val rustCode = generateErrorMessage(509, "this is an error", false, prefix = "", suffix = "")
+                val expectedOutput = buildExpectedOutput(509, "this is an error", false)
+
                 rustTemplate(
                     """
                     let message = crate::test_error::ErrorWithNestedError {
                         message: Some(crate::test_error::ErrorWithDeepCompositeShape {
                             message: Some(crate::test_model::WrappedErrorMessage {
                                 some_value: Some(123),
-                                contained: Some(crate::test_model::ErrorMessage {
-                                    status_code: 509,
-                                    error_message: "this is an error".to_owned(),
-                                    request_id: Some("1234".to_owned()),
-                                    is_retryable: false,
-                                }),
+                                contained: Some($rustCode),
                             }),
                         }),
                     };
                     let formatted = format!("{message}");
                     const EXPECTED: &str = "ErrorWithNestedError: ErrorWithDeepCompositeShape: \
                         WrappedErrorMessage {some_value=Some(123), \
-                        contained=Some(ErrorMessage {status_code=509, \
-                        error_message=this is an error, \
-                        request_id=Some(1234), is_retryable=false})}";
+                        contained=Some($expectedOutput)}";
                     assert_eq!(formatted, EXPECTED);
                     """,
                 )

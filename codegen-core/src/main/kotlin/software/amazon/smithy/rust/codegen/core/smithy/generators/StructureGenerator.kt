@@ -7,7 +7,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
@@ -37,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.shape
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticImplDisplayTrait
 import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -146,28 +152,51 @@ open class StructureGenerator(
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 write("""::std::write!(f, "$name {{")?;""")
 
-                members.forEachIndexed { index, member ->
-                    val separator = if (index > 0) ", " else ""
+                var separator = ""
+                for (index in members.indices) {
+                    val member = members[index]
                     val memberName = symbolProvider.toMemberName(member)
-                    val shouldRedact = shape.shouldRedact(model) || member.shouldRedact(model)
+                    val memberSymbol = symbolProvider.toSymbol(member)
 
+                    val shouldRedact = shape.shouldRedact(model) || member.shouldRedact(model)
                     // If the shape is redacted then each member shape will be redacted.
                     if (shouldRedact) {
                         write("""::std::write!(f, "$separator$memberName={}", $REDACTION)?;""")
                     } else {
                         val variable = ValueExpression.Reference("&self.$memberName")
-                        val memberSymbol = symbolProvider.toSymbol(member)
 
-                        if (memberSymbol.isOptional()) {
-                            rustBlockTemplate("if let #{Some}(inner) = ${variable.asRef()}", *preludeScope) {
-                                write("""::std::write!(f, "$separator$memberName=Some({})", inner)?;""")
+                        val target = model.expectShape(member.target)
+                        when (target) {
+                            is DocumentShape,  is BlobShape, is MapShape, is ListShape -> {
+                                // Just print the member field name but not the value.
+                                if (memberSymbol.isOptional()) {
+                                    rustBlockTemplate("if let #{Some}(_) = ${variable.asRef()}", *preludeScope) {
+                                        write("""::std::write!(f, "$separator$memberName=Some()")?;""")
+                                    }
+                                    rustBlock("else") {
+                                        write("""::std::write!(f, "$separator$memberName=None")?;""")
+                                    }
+                                } else {
+                                    write("""::std::write!(f, "$separator$memberName=")?;""")
+                                }
                             }
-                            rustBlock("else") {
-                                write("""::std::write!(f, "$separator$memberName=None")?;""")
+                            else -> {
+                                if (memberSymbol.isOptional()) {
+                                    rustBlockTemplate("if let #{Some}(inner) = ${variable.asRef()}", *preludeScope) {
+                                        write("""::std::write!(f, "$separator$memberName=Some({})", inner)?;""")
+                                    }
+                                    rustBlock("else") {
+                                        write("""::std::write!(f, "$separator$memberName=None")?;""")
+                                    }
+                                } else {
+                                    write("""::std::write!(f, "$separator$memberName={}", ${variable.asRef()})?;""")
+                                }
                             }
-                        } else {
-                            write("""::std::write!(f, "$separator$memberName={}", ${variable.asRef()})?;""")
                         }
+                    }
+
+                    if (separator.isEmpty()) {
+                        separator = ", "
                     }
                 }
 
