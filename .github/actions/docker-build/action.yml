@@ -22,7 +22,7 @@ runs:
   using: composite
   steps:
   - name: Gradle Cache
-    if: ${{ inputs.use_cache }}
+    if: ${{ github.event.inputs.use_cache == 'true' }}
     uses: actions/cache@v4
     with:
       path: |
