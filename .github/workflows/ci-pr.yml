@@ -15,21 +15,7 @@ concurrency:
 env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
-permissions:
-  actions: write
-  attestations: write
-  checks: write
-  contents: write
-  # deployments: write
-  # discussions: write
-  id-token: write
-  # issues: write
-  # packages: write
-  # pages: write
-  pull-requests: write
-  # repository-projects: write
-  security-events: write
-  statuses: write
+permissions: write-all
 
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
