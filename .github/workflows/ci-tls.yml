@@ -25,7 +25,6 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
-    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Install packages
       shell: bash
       run: |
