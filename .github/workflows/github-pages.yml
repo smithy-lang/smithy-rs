@@ -20,6 +20,7 @@ jobs:
     if: github.repository == 'smithy-lang/smithy-rs'
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
       uses: actions/checkout@v4
       with:

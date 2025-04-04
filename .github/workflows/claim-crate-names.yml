@@ -25,6 +25,7 @@ jobs:
     name: Check that workflow is running in main
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Main branch check
       if: ${{ github.ref_name != 'main' }}
       uses: actions/github-script@v7
@@ -35,10 +36,14 @@ jobs:
   # This job will be a no-op if an image was already built on main by another workflow.
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - main-branch-check
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -60,6 +65,7 @@ jobs:
     - acquire-base-image
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
