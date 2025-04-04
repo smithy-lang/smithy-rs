@@ -19,10 +19,10 @@ permissions:
   # actions: write
   # attestations: write
   # checks: write
-  # contents: write
+  contents: write
   # deployments: write
   # discussions: write
-  # id-token: write
+  id-token: write
   # issues: write
   # packages: write
   # pages: write
