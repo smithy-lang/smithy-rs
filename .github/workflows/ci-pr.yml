@@ -17,6 +17,7 @@ env:
 
 permissions:
   actions: write
+  attestations: write
   checks: write
   id-token: write
   contents: write
