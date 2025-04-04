@@ -21,6 +21,7 @@ permissions:
   id-token: write
   contents: write
   pull-requests: write
+  statuses: write
 
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
