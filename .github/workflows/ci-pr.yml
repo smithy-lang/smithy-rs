@@ -29,7 +29,7 @@ permissions:
   pull-requests: write
   # repository-projects: write
   security-events: write
-  # statuses: write
+  statuses: write
 
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
