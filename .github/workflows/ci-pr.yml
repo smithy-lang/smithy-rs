@@ -19,8 +19,9 @@ permissions:
   actions: write
   attestations: write
   checks: write
-  id-token: write
   contents: write
+  deployments: write
+  id-token: write
   pull-requests: write
   statuses: write
 
