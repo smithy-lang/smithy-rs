@@ -64,6 +64,9 @@ jobs:
   # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - check-actor-for-prod-run
     # We need `always` here otherwise this job won't run if the previous job has been skipped

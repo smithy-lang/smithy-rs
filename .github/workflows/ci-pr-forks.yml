@@ -19,6 +19,9 @@ jobs:
   acquire-base-image:
     name: Acquire Base Image
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
+    permissions:
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

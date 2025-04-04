@@ -114,6 +114,8 @@ jobs:
 
   semver-checks:
     name: Check PR semver compliance
+    permissions:
+      pull-requests: read
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 20
     needs:

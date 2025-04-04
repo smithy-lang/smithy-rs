@@ -48,6 +48,9 @@ jobs:
 
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - get-pr-info
     runs-on: ubuntu-latest
