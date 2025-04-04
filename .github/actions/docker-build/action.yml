@@ -12,11 +12,18 @@ inputs:
   action-arguments:
     description: Arguments to pass to the action
     required: false
+  use_cache:
+    description: Whether to use the gradle cache
+    type: boolean
+    required: false
+    default: true
+
 runs:
   using: composite
   steps:
-  - uses: actions/cache@v4
-    name: Gradle Cache
+  - name: Gradle Cache
+    if: ${{ github.event.inputs.use_cache == 'true' }}
+    uses: actions/cache@v4
     with:
       path: |
         gradle/caches
@@ -24,7 +31,7 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
-    # Pinned to the commit hash of v2.7.3
+       # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
       shared-key: ${{ runner.os }}-${{ github.job }}
@@ -53,7 +60,7 @@ runs:
       # configuration won't cause each individual action to build its own image, which would
       # drastically increase the total CI time. Fail fast!
       ALLOW_LOCAL_BUILD=false ./smithy-rs/.github/scripts/acquire-build-image
-    # This runs the commands from the matrix strategy
+     # This runs the commands from the matrix strategy
   - name: Run ${{ inputs.action }}
     shell: bash
     run: |

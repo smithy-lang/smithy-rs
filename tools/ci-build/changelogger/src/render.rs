@@ -6,7 +6,6 @@
 use crate::entry::{ChangeSet, ChangelogEntries, ChangelogEntry};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
@@ -20,6 +19,7 @@ use std::env;
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use time::OffsetDateTime;
 
 pub const EXAMPLE_ENTRY: &str = r#"# Example changelog entry, Markdown with YAML front matter
@@ -37,7 +37,7 @@ pub const EXAMPLE_ENTRY: &str = r#"# Example changelog entry, Markdown with YAML
 pub const USE_UPDATE_CHANGELOGS: &str =
     "<!-- Do not manually edit this file. Use the `changelogger` tool. -->";
 
-static MAINTAINERS: Lazy<Vec<String>> = Lazy::new(|| {
+static MAINTAINERS: LazyLock<Vec<String>> = LazyLock::new(|| {
     include_str!("../smithy-rs-maintainers.txt")
         .lines()
         .map(|name| name.to_ascii_lowercase())

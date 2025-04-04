@@ -4,13 +4,13 @@
  */
 
 use anyhow::Result;
-use once_cell::sync::Lazy;
 use regex_lite::Regex;
 use smithy_rs_tool_common::shell::{handle_failure, output_text, ShellOperation};
 use std::process::Command;
+use std::sync::LazyLock;
 
-static LINE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^([\w\d\-_:]+)\s+\([\w\d\s\-_]+\)$").unwrap());
+static LINE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^([\w\d\-_:]+)\s+\([\w\d\s\-_]+\)$").unwrap());
 
 pub struct GetOwners {
     program: &'static str,
