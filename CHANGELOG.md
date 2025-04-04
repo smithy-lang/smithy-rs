@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 4th, 2025
+===============
+**New this release:**
+- (all, @FalkWoldmann) Removes the once_cell crate from the rust-runtime crates
+- (client) remove redundant span attributes and improve log output format
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann
+
+
 March 27th, 2025
 ================
 
