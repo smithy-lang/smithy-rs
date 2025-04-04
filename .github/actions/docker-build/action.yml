@@ -21,7 +21,6 @@ inputs:
 runs:
   using: composite
   steps:
-  - uses: GitHubSecurityLab/actions-permissions/monitor@v1
   - name: Gradle Cache
     if: ${{ github.event.inputs.use_cache == 'true' }}
     uses: actions/cache@v4
