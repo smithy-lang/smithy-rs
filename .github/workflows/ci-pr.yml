@@ -17,7 +17,7 @@ env:
 
 permissions:
   actions: write
-  # attestations: write
+  attestations: write
   checks: write
   contents: write
   # deployments: write
