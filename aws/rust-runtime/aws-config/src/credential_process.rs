@@ -9,6 +9,7 @@
 
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::sensitive_command::CommandWithSensitiveArgs;
+use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_json::deserialize::Token;
@@ -142,6 +143,7 @@ pub(crate) fn parse_credential_process_json_credentials(
     let mut secret_access_key = None;
     let mut session_token = None;
     let mut expiration = None;
+    let mut account_id = None;
     json_parse_loop(credentials_response.as_bytes(), |key, value| {
         match (key, value) {
             /*
@@ -149,7 +151,8 @@ pub(crate) fn parse_credential_process_json_credentials(
              "AccessKeyId": "ASIARTESTID",
              "SecretAccessKey": "TESTSECRETKEY",
              "SessionToken": "TESTSESSIONTOKEN",
-             "Expiration": "2022-05-02T18:36:00+00:00"
+             "Expiration": "2022-05-02T18:36:00+00:00",
+             "AccountId": "111122223333"
             */
             (key, Token::ValueNumber { value, .. }) if key.eq_ignore_ascii_case("Version") => {
                 version = Some(i32::try_from(*value).map_err(|err| {
@@ -172,6 +175,9 @@ pub(crate) fn parse_credential_process_json_credentials(
             }
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Expiration") => {
                 expiration = Some(value.to_unescaped()?)
+            }
+            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccountId") => {
+                account_id = Some(value.to_unescaped()?)
             }
 
             _ => {}
@@ -197,13 +203,14 @@ pub(crate) fn parse_credential_process_json_credentials(
     if expiration.is_none() {
         tracing::debug!("no expiration provided for credentials provider credentials. these credentials will never be refreshed.")
     }
-    Ok(Credentials::new(
-        access_key_id,
-        secret_access_key,
-        session_token.map(|tok| tok.to_string()),
-        expiration,
-        "CredentialProcess",
-    ))
+    let mut builder = Credentials::builder()
+        .access_key_id(access_key_id)
+        .secret_access_key(secret_access_key)
+        .provider_name("CredentialProcess");
+    builder.set_session_token(session_token.map(String::from));
+    builder.set_expiry(expiration);
+    builder.set_account_id(account_id.map(AccountId::from));
+    Ok(builder.build())
 }
 
 fn parse_expiration(expiration: impl AsRef<str>) -> Result<SystemTime, InvalidJsonCredentials> {

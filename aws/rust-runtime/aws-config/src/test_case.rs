@@ -45,6 +45,7 @@ pub(crate) struct Credentials {
     pub(crate) access_key_id: String,
     pub(crate) secret_access_key: String,
     pub(crate) session_token: Option<String>,
+    pub(crate) account_id: Option<String>,
     pub(crate) expiry: Option<u64>,
 }
 
@@ -64,6 +65,7 @@ impl From<&aws_credential_types::Credentials> for Credentials {
             access_key_id: credentials.access_key_id().into(),
             secret_access_key: credentials.secret_access_key().into(),
             session_token: credentials.session_token().map(ToString::to_string),
+            account_id: credentials.account_id().map(|id| id.as_str().to_string()),
             expiry: credentials
                 .expiry()
                 .map(|t| t.duration_since(UNIX_EPOCH).unwrap().as_secs()),

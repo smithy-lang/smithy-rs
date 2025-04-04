@@ -15,6 +15,7 @@
 use crate::profile::credentials::ProfileFileError;
 use crate::profile::{Profile, ProfileSet};
 use crate::sensitive_command::CommandWithSensitiveArgs;
+use aws_credential_types::attributes::AccountId;
 use aws_credential_types::Credentials;
 
 /// Chain of Profile Providers
@@ -230,6 +231,7 @@ mod static_credentials {
     pub(super) const AWS_ACCESS_KEY_ID: &str = "aws_access_key_id";
     pub(super) const AWS_SECRET_ACCESS_KEY: &str = "aws_secret_access_key";
     pub(super) const AWS_SESSION_TOKEN: &str = "aws_session_token";
+    pub(super) const AWS_ACCOUNT_ID: &str = "aws_account_id";
 }
 
 mod credential_process {
@@ -439,13 +441,13 @@ fn static_creds_from_profile(profile: &Profile) -> Result<Credentials, ProfileFi
         message: "profile missing aws_secret_access_key".into(),
     })?;
     // There might not be an active session token so we don't error out if it's missing
-    Ok(Credentials::new(
-        access_key,
-        secret_key,
-        session_token.map(|s| s.to_string()),
-        None,
-        PROVIDER_NAME,
-    ))
+    let mut builder = Credentials::builder()
+        .access_key_id(access_key)
+        .secret_access_key(secret_key)
+        .provider_name(PROVIDER_NAME);
+    builder.set_session_token(session_token.map(String::from));
+    builder.set_account_id(profile.get(AWS_ACCOUNT_ID).map(AccountId::from));
+    Ok(builder.build())
 }
 
 /// Load credentials from `credential_process`

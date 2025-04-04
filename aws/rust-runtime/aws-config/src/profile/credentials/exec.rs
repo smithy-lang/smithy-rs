@@ -42,16 +42,19 @@ impl AssumeRoleProvider {
         let session_name = &self.session_name.as_ref().cloned().unwrap_or_else(|| {
             sts::util::default_session_name("assume-role-from-profile", self.time_source.now())
         });
-        let assume_role_creds = client
+        let assume_role_output = client
             .assume_role()
             .role_arn(&self.role_arn)
             .set_external_id(self.external_id.clone())
             .role_session_name(session_name)
             .send()
             .await
-            .map_err(CredentialsError::provider_error)?
-            .credentials;
-        sts::util::into_credentials(assume_role_creds, "AssumeRoleProvider")
+            .map_err(CredentialsError::provider_error)?;
+        sts::util::into_credentials(
+            assume_role_output.credentials,
+            assume_role_output.assumed_role_user,
+            "AssumeRoleProvider",
+        )
     }
 }
 
