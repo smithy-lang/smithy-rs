@@ -16,6 +16,7 @@ env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
 permissions:
+  actions: write
   checks: write
   id-token: write
   contents: read
