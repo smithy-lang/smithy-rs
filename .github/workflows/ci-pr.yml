@@ -21,6 +21,7 @@ permissions:
   checks: write
   contents: write
   deployments: write
+  discussions: write
   id-token: write
   pull-requests: write
   statuses: write
