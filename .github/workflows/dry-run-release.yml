@@ -23,8 +23,10 @@ on:
         default: true
 
 permissions:
-  id-token: write
+  actions: read
   contents: read
+  id-token: write
+  pull-requests: read
 
 jobs:
   smithy-rs-manual-dry-run-release:

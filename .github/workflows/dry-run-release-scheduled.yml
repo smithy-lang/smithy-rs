@@ -12,8 +12,10 @@ on:
   - cron: 0 0 * * *
 
 permissions:
-  id-token: write
+  actions: read
   contents: read
+  id-token: write
+  pull-requests: read
 
 jobs:
   smithy-rs-scheduled-dry-run-release:
