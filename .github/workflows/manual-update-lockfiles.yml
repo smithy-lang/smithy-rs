@@ -16,6 +16,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  id-token: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ inputs.base_branch }}
   cancel-in-progress: true

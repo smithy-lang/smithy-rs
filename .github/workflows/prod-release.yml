@@ -17,6 +17,12 @@ on:
         required: true
         type: string
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  pull-requests: read
+
 jobs:
   smithy-rs-prod-release:
     name: Prod release
