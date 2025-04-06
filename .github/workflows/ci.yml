@@ -38,7 +38,10 @@ env:
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
-# permissions: write-all
+permissions:
+  actions: read
+  pull-requests: read
+  id-token: write
 
 jobs:
   # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
