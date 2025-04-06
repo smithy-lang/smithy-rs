@@ -19,9 +19,10 @@ env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
 permissions:
+  actions: read
+  contents: read
   id-token: write
   pull-requests: read
-  contents: read
 
 jobs:
   # Build and upload the Docker build image if necessary
