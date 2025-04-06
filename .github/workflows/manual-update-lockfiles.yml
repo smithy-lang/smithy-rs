@@ -17,6 +17,7 @@ on:
         default: false
 
 permissions:
+  contents: read
   id-token: write
 
 concurrency:
