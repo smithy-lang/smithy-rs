@@ -22,6 +22,9 @@ on:
         type: boolean
         default: true
 
+permissions:
+  id-token: write
+
 jobs:
   smithy-rs-manual-dry-run-release:
     name: Manual dry run release
