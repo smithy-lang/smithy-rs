@@ -12,6 +12,12 @@ concurrency:
   group: ci-forks-yaml-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  pull-requests: read
+
 jobs:
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
@@ -19,9 +25,13 @@ jobs:
   acquire-base-image:
     name: Acquire Base Image
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
+    permissions:
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

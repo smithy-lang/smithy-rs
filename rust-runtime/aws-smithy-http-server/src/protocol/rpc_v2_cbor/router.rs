@@ -5,10 +5,10 @@
 
 use std::convert::Infallible;
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use http::header::ToStrError;
 use http::HeaderMap;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use thiserror::Error;
 use tower::Layer;
@@ -83,7 +83,7 @@ impl<S> RpcV2CborRouter<S> {
         //   absolute shape ID is `com.example#TheService`, a service should accept both
         //   `TheService` and `com.example.TheService` as values for the `serviceName`
         //   segment.
-        static PATH_REGEX: Lazy<Regex> = Lazy::new(|| {
+        static PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(&format!(
                 r#"/service/({}\.)*(?P<service>{})/operation/(?P<operation>{})$"#,
                 IDENTIFIER_PATTERN, IDENTIFIER_PATTERN, IDENTIFIER_PATTERN,
@@ -95,7 +95,8 @@ impl<S> RpcV2CborRouter<S> {
     }
 
     pub fn wire_format_regex() -> &'static Regex {
-        static SMITHY_PROTOCOL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^rpc-v2-(?P<format>\w+)$"#).unwrap());
+        static SMITHY_PROTOCOL_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"^rpc-v2-(?P<format>\w+)$"#).unwrap());
 
         &SMITHY_PROTOCOL_REGEX
     }

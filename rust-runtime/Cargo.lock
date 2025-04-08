@@ -397,7 +397,7 @@ version = "0.2.0"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -411,7 +411,6 @@ dependencies = [
  "http 1.3.1",
  "http-body 0.4.6",
  "hyper 0.14.32",
- "once_cell",
  "percent-encoding",
  "pin-project-lite",
  "pin-utils",
@@ -479,7 +478,6 @@ dependencies = [
  "lambda_http",
  "mime",
  "nom",
- "once_cell",
  "pin-project-lite",
  "pretty_assertions",
  "regex",
@@ -555,10 +553,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "aws-smithy-runtime-api",
- "once_cell",
  "serial_test",
 ]
 
@@ -621,7 +618,6 @@ dependencies = [
  "http-body 0.4.6",
  "http-body 1.0.1",
  "hyper 0.14.32",
- "once_cell",
  "pin-project-lite",
  "pin-utils",
  "pretty_assertions",
@@ -2003,7 +1999,6 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "md-5",
- "once_cell",
  "percent-encoding",
  "pin-project-lite",
  "proptest",
