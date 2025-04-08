@@ -46,6 +46,7 @@ jobs:
     env:
       ACTOR: ${{ github.actor }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Check actor for prod run
       run: |
         set -e
@@ -63,6 +64,9 @@ jobs:
   # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - check-actor-for-prod-run
     # We need `always` here otherwise this job won't run if the previous job has been skipped
@@ -72,6 +76,7 @@ jobs:
       (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
     runs-on: smithy_ubuntu-latest_16-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -110,6 +115,7 @@ jobs:
     if: always()
     runs-on: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -124,6 +130,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-semver-hazards
+        use_cache: false
 
   get-or-create-release-branch:
     name: Get or create a release branch
@@ -142,6 +149,7 @@ jobs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
@@ -170,6 +178,7 @@ jobs:
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
@@ -185,13 +194,14 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: generate-smithy-rs-release
+        use_cache: false
     - name: Download all artifacts
       uses: ./smithy-rs/.github/actions/download-all-artifacts
-    # This step is not idempotent, as it pushes release artifacts to the `smithy-rs-release-1.x.y` branch. However,
-    # if this step succeeds but a subsequent step fails, retrying the release workflow is "safe" in that it does not
-    # create any inconsistent states; this step would simply fail because the release branch would be ahead of `main`
-    # due to previously pushed artifacts.
-    # To successfully retry a release, revert the commits in the release branch that pushed the artifacts.
+        # This step is not idempotent, as it pushes release artifacts to the `smithy-rs-release-1.x.y` branch. However,
+        # if this step succeeds but a subsequent step fails, retrying the release workflow is "safe" in that it does not
+        # create any inconsistent states; this step would simply fail because the release branch would be ahead of `main`
+        # due to previously pushed artifacts.
+        # To successfully retry a release, revert the commits in the release branch that pushed the artifacts.
     - name: Push smithy-rs changes
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
@@ -219,7 +229,7 @@ jobs:
           fi
         fi
         echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
-    # This step is idempotent; the `publisher` will not publish a crate if the version is already published on crates.io.
+       # This step is idempotent; the `publisher` will not publish a crate if the version is already published on crates.io.
     - name: Publish to crates.io
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
@@ -241,8 +251,8 @@ jobs:
         else
           publisher publish -y --location .
         fi
-    # This step is not idempotent and MUST be performed last, as it will generate a new release in the `smithy-rs`
-    # repository with the release tag that is always unique and has an increasing numerical suffix.
+       # This step is not idempotent and MUST be performed last, as it will generate a new release in the `smithy-rs`
+        # repository with the release tag that is always unique and has an increasing numerical suffix.
     - name: Tag release
       uses: actions/github-script@v7
       with:

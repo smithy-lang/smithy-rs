@@ -8,6 +8,10 @@ on:
     # Runs 22:00 UTC every Tuesday
   - cron: 0 22 * * 2
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   cargo-update-runtime-lockfiles-and-sdk-lockfile:
     name: Run cargo update on the runtime lockfiles and the SDK lockfile

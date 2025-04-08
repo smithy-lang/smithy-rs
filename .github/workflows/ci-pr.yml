@@ -15,6 +15,12 @@ concurrency:
 env:
   ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  pull-requests: write
+
 jobs:
   # This job will, if possible, save a docker login password to the job outputs. The token will
   # be encrypted with the passphrase stored as a GitHub secret. The login password expires after 12h.
@@ -31,6 +37,7 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Attempt to load a docker login password
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -44,7 +51,6 @@ jobs:
           gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
-
 
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
   # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
@@ -62,6 +68,7 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -112,6 +119,8 @@ jobs:
 
   semver-checks:
     name: Check PR semver compliance
+    permissions:
+      pull-requests: read
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 20
     needs:
@@ -124,6 +133,7 @@ jobs:
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

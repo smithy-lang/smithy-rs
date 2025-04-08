@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.65.0"
+version = "0.65.1"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -32,7 +32,6 @@ hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "s
 lambda_http = { version = "0.8.3", optional = true }
 mime = "0.3.17"
 nom = "7.1.3"
-once_cell = "1.20.1"
 pin-project-lite = "0.2.14"
 regex = "1.5.5"
 serde_urlencoded = "0.7"
