@@ -24,6 +24,7 @@ jobs:
     name: Get PR info
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Get PR info
       id: get-pr-info
       uses: actions/github-script@v7
@@ -47,10 +48,14 @@ jobs:
 
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - get-pr-info
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -75,6 +80,7 @@ jobs:
     - get-pr-info
     runs-on: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -94,6 +100,7 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

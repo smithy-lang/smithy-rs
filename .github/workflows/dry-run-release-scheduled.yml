@@ -11,6 +11,12 @@ on:
     # Runs 00:00 UTC every day
   - cron: 0 0 * * *
 
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+  pull-requests: read
+
 jobs:
   smithy-rs-scheduled-dry-run-release:
     name: Scheduled dry-run release

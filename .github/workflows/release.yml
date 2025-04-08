@@ -46,6 +46,7 @@ jobs:
     env:
       ACTOR: ${{ github.actor }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Check actor for prod run
       run: |
         set -e
@@ -63,6 +64,9 @@ jobs:
   # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - check-actor-for-prod-run
     # We need `always` here otherwise this job won't run if the previous job has been skipped
@@ -72,6 +76,7 @@ jobs:
       (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
     runs-on: smithy_ubuntu-latest_16-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -110,6 +115,7 @@ jobs:
     if: always()
     runs-on: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -143,6 +149,7 @@ jobs:
       release_branch: ${{ steps.branch-push.outputs.release_branch }}
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
@@ -171,6 +178,7 @@ jobs:
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
