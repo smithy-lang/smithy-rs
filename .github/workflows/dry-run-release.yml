@@ -26,7 +26,7 @@ permissions:
   actions: read
   contents: read
   id-token: write
-  pull-requests: read
+  # pull-requests: read
 
 jobs:
   smithy-rs-manual-dry-run-release:
