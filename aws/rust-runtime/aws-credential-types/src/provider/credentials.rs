@@ -221,7 +221,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let actual = identity.get::<AccountId>().unwrap();
+        let actual = identity.property::<AccountId>().unwrap();
         assert_eq!(expected_account_id, actual.as_str());
     }
 }

@@ -296,8 +296,8 @@ impl Identity {
         self.expiration
     }
 
-    /// Returns arbitrary data associated with this `Identity`.
-    pub fn get<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
+    /// Returns arbitrary property associated with this `Identity`.
+    pub fn property<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.properties
             .get(&TypeId::of::<T>())
             .and_then(|b| b.downcast_ref())
@@ -472,7 +472,7 @@ mod tests {
         assert_eq!("foo", identity.data::<MyIdentityData>().unwrap().first);
         assert_eq!("bar", identity.data::<MyIdentityData>().unwrap().last);
         assert_eq!(Some(expiration), identity.expiration());
-        assert!(identity.get::<PropertyAlpha>().is_some());
-        assert!(identity.get::<PropertyBeta>().is_some());
+        assert!(identity.property::<PropertyAlpha>().is_some());
+        assert!(identity.property::<PropertyBeta>().is_some());
     }
 }
