@@ -54,7 +54,7 @@ use time::OffsetDateTime;
 #[derive(Debug)]
 pub struct CredentialProcessProvider {
     command: CommandWithSensitiveArgs<String>,
-    fallback_account_id: Option<AccountId>,
+    profile_account_id: Option<AccountId>,
 }
 
 impl ProvideCredentials for CredentialProcessProvider {
@@ -71,7 +71,7 @@ impl CredentialProcessProvider {
     pub fn new(command: String) -> Self {
         Self {
             command: CommandWithSensitiveArgs::new(command),
-            fallback_account_id: None,
+            profile_account_id: None,
         }
     }
 
@@ -121,20 +121,21 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        parse_credential_process_json_credentials(output, self.fallback_account_id.as_ref())
-            .map_err(|invalid| {
+        parse_credential_process_json_credentials(output, self.profile_account_id.as_ref()).map_err(
+            |invalid| {
                 CredentialsError::provider_error(format!(
                 "Error retrieving credentials from external process, could not parse response: {}",
                 invalid
             ))
-            })
+            },
+        )
     }
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Builder {
     command: Option<CommandWithSensitiveArgs<String>>,
-    fallback_account_id: Option<AccountId>,
+    profile_account_id: Option<AccountId>,
 }
 
 impl Builder {
@@ -150,13 +151,13 @@ impl Builder {
     }
 
     pub(crate) fn set_account_id(&mut self, account_id: Option<AccountId>) {
-        self.fallback_account_id = account_id;
+        self.profile_account_id = account_id;
     }
 
     pub(crate) fn build(self) -> CredentialProcessProvider {
         CredentialProcessProvider {
             command: self.command.expect("should be set"),
-            fallback_account_id: self.fallback_account_id,
+            profile_account_id: self.profile_account_id,
         }
     }
 }
@@ -166,17 +167,20 @@ impl Builder {
 /// Returns an error if the response cannot be successfully parsed or is missing keys.
 ///
 /// Keys are case insensitive.
-/// The function optionally takes `fallback_account_id` that originates from the profile section.
+/// The function optionally takes `profile_account_id` that originates from the profile section.
 /// If process execution result does not contain an account ID, the function uses it as a fallback.
 pub(crate) fn parse_credential_process_json_credentials(
     credentials_response: &str,
-    fallback_account_id: Option<&AccountId>,
+    profile_account_id: Option<&AccountId>,
 ) -> Result<Credentials, InvalidJsonCredentials> {
     let mut version = None;
     let mut access_key_id = None;
     let mut secret_access_key = None;
     let mut session_token = None;
     let mut expiration = None;
+    // This variable could be initialized with `profile_account_id` as a fallback in case the process output doesn't
+    // contain credentials. However, doing so would require preemptively cloning `AccountId`, even if the fallback
+    // isn't actually needed. Therefore, we'll assign `None` initially.
     let mut account_id = None;
     json_parse_loop(credentials_response.as_bytes(), |key, value| {
         match (key, value) {
@@ -245,7 +249,7 @@ pub(crate) fn parse_credential_process_json_credentials(
     builder.set_expiry(expiration);
     let account_id = match account_id {
         Some(id) => Some(AccountId::from(id)),
-        None => fallback_account_id.cloned(),
+        None => profile_account_id.cloned(),
     };
     builder.set_account_id(account_id);
     Ok(builder.build())
