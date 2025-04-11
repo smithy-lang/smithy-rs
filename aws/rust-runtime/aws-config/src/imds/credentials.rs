@@ -12,7 +12,6 @@ use super::client::error::ImdsError;
 use crate::imds::{self, Client};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
-use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_async::time::SharedTimeSource;
@@ -239,15 +238,16 @@ impl ImdsCredentialsProvider {
                 expiration,
                 ..
             })) => {
+                // TODO(IMDSv2.X): Use `account_id` once the design is finalized
+                let _ = account_id;
                 let expiration = self.maybe_extend_expiration(expiration);
-                let mut builder = Credentials::builder()
-                    .access_key_id(access_key_id)
-                    .secret_access_key(secret_access_key)
-                    .session_token(session_token)
-                    .expiry(expiration)
-                    .provider_name("IMDSv2");
-                builder.set_account_id(account_id.map(AccountId::from));
-                let creds = builder.build();
+                let creds = Credentials::new(
+                    access_key_id,
+                    secret_access_key,
+                    Some(session_token.to_string()),
+                    expiration.into(),
+                    "IMDSv2",
+                );
                 *self.last_retrieved_credentials.write().unwrap() = Some(creds.clone());
                 Ok(creds)
             }
