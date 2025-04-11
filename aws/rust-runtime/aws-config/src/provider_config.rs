@@ -217,7 +217,11 @@ impl ProviderConfig {
         };
 
         let mut builder = SdkConfig::builder()
-            .retry_config(self.retry_config.clone().unwrap_or(RetryConfig::standard()))
+            .retry_config(
+                self.retry_config
+                    .as_ref()
+                    .map_or(RetryConfig::standard(), |config| config.clone()),
+            )
             .region(self.region())
             .time_source(self.time_source())
             .use_fips(self.use_fips().unwrap_or_default())
