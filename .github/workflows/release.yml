@@ -115,6 +115,7 @@ jobs:
     if: always()
     runs-on: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1.0.2-beta6
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
