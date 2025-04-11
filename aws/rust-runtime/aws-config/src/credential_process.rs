@@ -13,6 +13,7 @@ use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_json::deserialize::Token;
+use std::borrow::Cow;
 use std::process::Command;
 use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
@@ -178,10 +179,9 @@ pub(crate) fn parse_credential_process_json_credentials(
     let mut secret_access_key = None;
     let mut session_token = None;
     let mut expiration = None;
-    // This variable could be initialized with `profile_account_id` as a fallback in case the process output doesn't
-    // contain credentials. However, doing so would require preemptively cloning `AccountId`, even if the fallback
-    // isn't actually needed. Therefore, we'll assign `None` initially.
-    let mut account_id = None;
+    let mut account_id = profile_account_id
+        .as_ref()
+        .map(|id| Cow::Borrowed(id.as_str()));
     json_parse_loop(credentials_response.as_bytes(), |key, value| {
         match (key, value) {
             /*
@@ -247,11 +247,7 @@ pub(crate) fn parse_credential_process_json_credentials(
         .provider_name("CredentialProcess");
     builder.set_session_token(session_token.map(String::from));
     builder.set_expiry(expiration);
-    let account_id = match account_id {
-        Some(id) => Some(AccountId::from(id)),
-        None => profile_account_id.cloned(),
-    };
-    builder.set_account_id(account_id);
+    builder.set_account_id(account_id.map(AccountId::from));
     Ok(builder.build())
 }
 
