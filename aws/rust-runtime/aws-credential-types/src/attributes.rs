@@ -5,13 +5,10 @@
 
 //! Types representing specific pieces of data contained within credentials or within token
 
-use zeroize::Zeroizing;
-
 /// Type representing a unique identifier representing an AWS account.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccountId {
-    // Ensure it is zeroed in memory when dropped.
-    inner: Zeroizing<String>,
+    inner: String,
 }
 
 impl AccountId {
@@ -27,7 +24,19 @@ where
 {
     fn from(value: T) -> Self {
         Self {
-            inner: Zeroizing::new(value.into()),
+            inner: value.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn account_id_creation() {
+        let expected = "012345678901";
+        assert_eq!(expected, AccountId::from(expected).as_str());
+        assert_eq!(expected, AccountId::from(String::from(expected)).as_str());
     }
 }
