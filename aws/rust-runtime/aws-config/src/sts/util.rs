@@ -49,6 +49,8 @@ pub(crate) fn default_session_name(base: &str, ts: SystemTime) -> String {
 // `Arn` is `pub(crate)` within generated SDKs, making it inaccessible from `aws-config`.
 // As a result, a subset is inlined here, with less defensive verification
 // since it only deals with the string-form ARN returned by STS.
+//
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/4090): Consider making a `pub` Arn parser
 fn parse_account_id(arn: &str) -> Result<AccountId, CredentialsError> {
     let mut split = arn.splitn(6, ':');
     let invalid_format =
