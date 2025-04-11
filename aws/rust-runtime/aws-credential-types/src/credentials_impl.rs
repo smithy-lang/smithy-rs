@@ -194,7 +194,8 @@ impl Credentials {
 ///
 /// Similar to [`Credentials::new`], the use of the builder is intended for a custom credentials provider implementation.
 /// It is __NOT__ secure to hardcode credentials into your application.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Clone)]
+#[allow(missing_debug_implementations)] // for security reasons, and we can add manual `impl Debug` just like `Credentials`, if needed.
 pub struct CredentialsBuilder {
     access_key_id: Option<Zeroizing<String>>,
     secret_access_key: Option<Zeroizing<String>>,
