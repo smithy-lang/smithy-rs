@@ -396,9 +396,11 @@ internal class EndpointResolverGenerator(
 }
 
 fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
+    val ctx = this
     val generator = EndpointTypesGenerator.fromContext(this)
+    val endpointCustomizations = rootDecorator.endpointCustomizations(this)
     return RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
-        val ctx =
+        val codegenScope =
             arrayOf(*preludeScope, "Params" to generator.paramsStruct(), *Types(runtimeConfig).toArray(), "Debug" to RuntimeType.Debug)
         rustTemplate(
             """
@@ -431,10 +433,16 @@ fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
                     };
                     ep
                 }
+                #{override_defaulted_methods:W}
             }
 
             """,
-            *ctx,
+            *codegenScope,
+            "override_defaulted_methods" to (
+                endpointCustomizations.firstNotNullOfOrNull {
+                    it.overrideResolveEndpointDefaultedTraitMethods(ctx)
+                } ?: writable {}
+            ),
         )
     }
 }
