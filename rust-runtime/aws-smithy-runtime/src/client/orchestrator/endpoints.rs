@@ -6,6 +6,7 @@
 use aws_smithy_runtime_api::client::endpoint::{
     error::ResolveEndpointError, EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
+use aws_smithy_runtime_api::client::identity::Identity;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -68,6 +69,7 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
 }
 
 pub(super) async fn orchestrate_endpoint(
+    identity: Identity,
     ctx: &mut InterceptorContext,
     runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
@@ -75,13 +77,16 @@ pub(super) async fn orchestrate_endpoint(
     trace!("orchestrating endpoint resolution");
 
     let params = cfg
-        .load::<EndpointResolverParams>()
-        .expect("endpoint resolver params must be set");
+        .get_mut_from_interceptor_state::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set in the interceptor state");
+    params.set_property(identity);
+
+    let endpoint_resolver = runtime_components.endpoint_resolver();
+
+    endpoint_resolver.finalize_params(params).await?;
+
     tracing::debug!(endpoint_params = ?params, "resolving endpoint");
-    let endpoint = runtime_components
-        .endpoint_resolver()
-        .resolve_endpoint(params)
-        .await?;
+    let endpoint = endpoint_resolver.resolve_endpoint(params).await?;
 
     apply_endpoint(&endpoint, ctx, cfg)?;
 

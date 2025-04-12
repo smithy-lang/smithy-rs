@@ -367,8 +367,7 @@ async fn try_attempt(
             cfg.interceptor_state().store_put(endpoint);
         }
         None => {
-            // TODO(AccountIdBasedRouting): Pass `identity` to `orchestrate_endpoint`.
-            halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg)
+            halt_on_err!([ctx] => orchestrate_endpoint(identity.clone(), ctx, runtime_components, cfg)
 				    .instrument(debug_span!("orchestrate_endpoint"))
 				    .await
 				    .map_err(OrchestratorError::other));
