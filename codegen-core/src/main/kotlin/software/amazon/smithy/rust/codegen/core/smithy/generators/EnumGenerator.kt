@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
@@ -51,7 +50,12 @@ sealed class EnumSection(name: String) : Section(name) {
     data class AdditionalMemberAttributes(override val shape: Shape, val definition: EnumDefinition) :
         EnumSection("AdditionalMemberAttributes")
 
+    /** Hook to add additional trait implementations */
     data class AdditionalTraitImpls(override val shape: Shape) : EnumSection("AdditionalTraitImpls")
+
+    /** Hook to add additional enum members */
+    data class AdditionalEnumMembers(override val shape: Shape) :
+        EnumSection("AdditionalEnumMembers")
 }
 
 /** Customizations for EnumGenerator */
@@ -292,6 +296,10 @@ open class EnumGenerator(
         context.enumMeta.render(this)
         rustBlock("enum ${context.enumName}") {
             context.sortedMembers.forEach { member -> member.render(this) }
+            writeCustomizations(
+                customizations,
+                EnumSection.AdditionalEnumMembers(shape),
+            )
             enumType.additionalEnumMembers(context)(this)
         }
     }
