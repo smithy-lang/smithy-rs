@@ -137,6 +137,9 @@ fun Model.sdkConfigSetter(
  *  as it is not available when the `read_before_execution` method of the endpoint parameters interceptor is executed.
  */
 class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltIn(builtIn) {
+    // TODO(AccountIdBasedRouting): Override `configCustomizations` to avoid rendering `account_id` and `set_account_id`
+    //  on client config builder, and deprecate those that have already been exposed.
+
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return emptyList()
     }
@@ -147,9 +150,7 @@ class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltI
         if (rulesetContainsBuiltIn(codegenContext) && builtIn == AwsBuiltIns.ACCOUNT_ID) {
             listOf(
                 object : EndpointCustomization {
-                    override fun overrideResolveEndpointDefaultedTraitMethods(
-                        codegenContext: ClientCodegenContext,
-                    ): Writable? {
+                    override fun overrideFinalizeEndpointParams(codegenContext: ClientCodegenContext): Writable? {
                         val runtimeConfig = codegenContext.runtimeConfig
                         return writable {
                             rustTemplate(

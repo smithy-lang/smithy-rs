@@ -440,7 +440,7 @@ fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
             *codegenScope,
             "override_defaulted_methods" to (
                 endpointCustomizations.firstNotNullOfOrNull {
-                    it.overrideResolveEndpointDefaultedTraitMethods(ctx)
+                    it.overrideFinalizeEndpointParams(ctx)
                 } ?: writable {}
             ),
         )

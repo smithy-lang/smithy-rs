@@ -81,12 +81,12 @@ interface EndpointCustomization {
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
 
     /**
-     * Allows overriding the default implementation of a method in the `ResolveEndpoint` trait.
+     * Allows overriding the `finalize_params` method  in the `ResolveEndpoint` trait.
      *
-     * For example, `ResolveEndpoint::finalize_params` provides a default no-op implementation,
+     * `ResolveEndpoint::finalize_params` provides a default no-op implementation,
      * and this customization enables the implementor to provide an alternative implementation.
      */
-    fun overrideResolveEndpointDefaultedTraitMethods(codegenContext: ClientCodegenContext): Writable? = null
+    fun overrideFinalizeEndpointParams(codegenContext: ClientCodegenContext): Writable? = null
 }
 
 /**
