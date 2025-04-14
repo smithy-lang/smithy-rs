@@ -170,5 +170,6 @@ class ServerEnumGenerator(
     codegenContext.model,
     codegenContext.symbolProvider,
     shape,
-    enumType = ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator), customizations,
+    enumType = ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
+    customizations,
 )

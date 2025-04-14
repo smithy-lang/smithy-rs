@@ -280,7 +280,8 @@ data class InfallibleEnumType(
 }
 
 class ClientEnumGenerator(
-    codegenContext: ClientCodegenContext, shape: StringShape,
+    codegenContext: ClientCodegenContext,
+    shape: StringShape,
     customizations: List<EnumCustomization>,
 ) :
     EnumGenerator(
