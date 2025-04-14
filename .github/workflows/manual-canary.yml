@@ -8,6 +8,10 @@ on:
         description: The PR number to invoke the canary for.
         required: true
         type: string
+      commit_sha:
+        description: The the full SHA for the HEAD commit of the PR
+        required: true
+        type: string
 run-name: ${{ github.workflow }} for Pull Request ${{ inputs.pull_request_number }}
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
@@ -20,6 +24,7 @@ jobs:
     name: Get PR info
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Get PR info
       id: get-pr-info
       uses: actions/github-script@v7
@@ -34,22 +39,29 @@ jobs:
             commit_sha: response.data.head.sha,
           };
           console.log("data:", data);
+          if(data.commit_sha !== "${{ inputs.commit_sha }}"){
+            throw new Error("Input SHA does not match retrieved SHA")
+          }
           return data;
     outputs:
       pull_data: ${{ steps.get-pr-info.outputs.result }}
 
   acquire-base-image:
     name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
     needs:
     - get-pr-info
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
             # The ref used needs to match the HEAD revision of the PR being diffed, or else
-          # the `docker-build` action won't find the built Docker image.
-        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+            # the `docker-build` action won't find the built Docker image.
+        ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
     - name: Acquire base image
       id: acquire
@@ -68,10 +80,11 @@ jobs:
     - get-pr-info
     runs-on: smithy_ubuntu-latest_8-core
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
-        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+        ref: ${{ inputs.commit_sha }}
     - name: Generate a subset of SDKs for the canary
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -87,10 +100,11 @@ jobs:
       id-token: write
       contents: read
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
-        ref: ${{ fromJSON(needs.get-pr-info.outputs.pull_data).commit_sha }}
+        ref: ${{ inputs.commit_sha }}
     - name: Configure credentials
       id: creds
       uses: aws-actions/configure-aws-credentials@v4
