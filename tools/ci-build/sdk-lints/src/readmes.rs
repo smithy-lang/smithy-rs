@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 const CRATES_TO_BE_USED_DIRECTLY: &[&str] = [
     "aws-config",
     "aws-smithy-types-convert",
-    "aws-smithy-mocks-experimental",
+    "aws-smithy-mocks",
     "aws-smithy-experimental",
 ]
 .as_slice();
