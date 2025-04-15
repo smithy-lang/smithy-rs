@@ -44,7 +44,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
 /// use aws_sdk_s3::Client;
 /// use aws_smithy_types::byte_stream::ByteStream;
-/// use aws_smithy_mocks_experimental::mock;
+/// use aws_smithy_mocks::mock;
 /// let get_object_happy_path = mock!(Client::get_object)
 ///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
 ///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build());
@@ -55,7 +55,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 /// use aws_sdk_s3::operation::get_object::GetObjectError;
 /// use aws_sdk_s3::types::error::NoSuchKey;
 /// use aws_sdk_s3::Client;
-/// use aws_smithy_mocks_experimental::mock;
+/// use aws_smithy_mocks::mock;
 /// let get_object_error_path = mock!(Client::get_object)
 ///   .then_error(||GetObjectError::NoSuchKey(NoSuchKey::builder().build()));
 /// ```
@@ -88,7 +88,7 @@ macro_rules! mock {
 /// use aws_sdk_s3::types::error::NoSuchKey;
 /// use aws_sdk_s3::Client;
 /// use aws_smithy_types::byte_stream::ByteStream;
-/// use aws_smithy_mocks_experimental::{mock_client, mock, RuleMode};
+/// use aws_smithy_mocks::{mock_client, mock, RuleMode};
 /// let get_object_happy_path = mock!(Client::get_object)
 ///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
 ///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build());
@@ -102,7 +102,7 @@ macro_rules! mock {
 /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
 /// use aws_sdk_s3::Client;
 /// use aws_smithy_types::byte_stream::ByteStream;
-/// use aws_smithy_mocks_experimental::{mock_client, mock, RuleMode};
+/// use aws_smithy_mocks::{mock_client, mock, RuleMode};
 /// let get_object_happy_path = mock!(Client::get_object)
 ///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
 ///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build());
