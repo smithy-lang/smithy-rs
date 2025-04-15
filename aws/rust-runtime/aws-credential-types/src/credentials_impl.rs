@@ -301,6 +301,18 @@ impl Credentials {
     }
 }
 
+#[cfg(feature = "test-util")]
+impl CredentialsBuilder {
+    /// Creates a test `CredentialsBuilder` with the required fields:
+    /// `access_key_id`, `secret_access_key`, and `provider_name`.
+    pub fn for_tests() -> Self {
+        CredentialsBuilder::default()
+            .access_key_id("ANOTREAL")
+            .secret_access_key("notrealrnrELgWzOk3IfjzDKtFBhDby")
+            .provider_name("test")
+    }
+}
+
 impl From<Credentials> for Identity {
     fn from(val: Credentials) -> Self {
         let expiry = val.expiry();

@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rustsdk.AwsRuntimeType
 import java.util.logging.Logger
 
 class OperationInputTestDecorator : ClientCodegenDecorator {
@@ -211,6 +212,26 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                         setter(this)
                     } else {
                         Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
+                    }
+                    // If the test case uses the AWS::Auth::AccountId built-in parameter,
+                    // override the credentials provider (set via `with_test_defaults`)
+                    // with one that supplies the account ID.
+                    if (builtIn.value == AwsBuiltIns.ACCOUNT_ID.builtIn.get()) {
+                        rustTemplate(
+                            """
+                            let builder = builder.credentials_provider(#{SharedCredentialsProvider}::new(
+                                #{CredentialsBuilder}::for_tests()
+                                    .account_id(${value.expectStringNode().value.dq()})
+                                    .build()
+                            ));
+                            """,
+                            "SharedCredentialsProvider" to
+                                AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                                    .resolve("provider::SharedCredentialsProvider"),
+                            "CredentialsBuilder" to
+                                AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig)
+                                    .resolve("CredentialsBuilder"),
+                        )
                     }
                 }
                 // If the test contains Endpoint built-ins and does not contain an AWS::Region then we set one
