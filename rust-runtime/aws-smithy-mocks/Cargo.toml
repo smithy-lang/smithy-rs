@@ -9,7 +9,9 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x"] }
+aws-smithy-http-client = { path = "../aws-smithy-http-client", features = ["test-util"] }
+http = "1.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"]}
