@@ -543,8 +543,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-smithy-mocks-experimental"
-version = "0.2.3"
+name = "aws-smithy-mocks"
+version = "0.3.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",

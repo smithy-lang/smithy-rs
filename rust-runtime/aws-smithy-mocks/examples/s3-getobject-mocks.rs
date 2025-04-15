@@ -10,7 +10,7 @@ async fn main() {
     // this is an example of writing tests, see the tests
 }
 
-// TODO(fix-aws-smithy-mocks-experimental) This is currently broken because it
+// TODO(fix-aws-smithy-mocks) This is currently broken because it
 //     depends on a generated crate examples must have a `main()` fn so it was
 //     easier to comment out the code below rather than cfg-gate it.
 // use aws_sdk_s3::operation::get_object::GetObjectError;
