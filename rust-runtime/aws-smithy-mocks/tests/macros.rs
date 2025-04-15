@@ -53,5 +53,5 @@ mod fake_crate {
 }
 #[test]
 fn mock_client() {
-    aws_smithy_mocks_experimental::mock_client!(fake_crate, &[]);
+    aws_smithy_mocks::mock_client!(fake_crate, &[]);
 }
