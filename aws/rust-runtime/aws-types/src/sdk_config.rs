@@ -81,6 +81,7 @@ pub struct SdkConfig {
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
+    account_id_endpoint_mode: Option<String>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -111,6 +112,7 @@ pub struct Builder {
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
+    account_id_endpoint_mode: Option<String>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -161,6 +163,21 @@ impl Builder {
     /// ```
     pub fn set_region(&mut self, region: impl Into<Option<Region>>) -> &mut Self {
         self.region = region.into();
+        self
+    }
+
+    /// Set the account ID endpoint mode for [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html).
+    pub fn account_id_endpoint_mode(mut self, account_id_endpoint_mode: impl Into<String>) -> Self {
+        self.set_account_id_endpoint_mode(Some(account_id_endpoint_mode.into()));
+        self
+    }
+
+    /// Set the account ID endpoint mode for [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html).
+    pub fn set_account_id_endpoint_mode(
+        &mut self,
+        account_id_endpoint_mode: Option<String>,
+    ) -> &mut Self {
+        self.account_id_endpoint_mode = account_id_endpoint_mode;
         self
     }
 
@@ -761,6 +778,7 @@ impl Builder {
             credentials_provider: self.credentials_provider,
             token_provider: self.token_provider,
             region: self.region,
+            account_id_endpoint_mode: self.account_id_endpoint_mode,
             endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
@@ -856,6 +874,11 @@ impl SdkConfig {
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
+    }
+
+    /// Configured account ID endpoint mode
+    pub fn account_id_endpoint_mode(&self) -> Option<&str> {
+        self.account_id_endpoint_mode.as_deref()
     }
 
     /// Configured endpoint URL
@@ -986,6 +1009,7 @@ impl SdkConfig {
             credentials_provider: self.credentials_provider,
             token_provider: self.token_provider,
             region: self.region,
+            account_id_endpoint_mode: self.account_id_endpoint_mode,
             endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
