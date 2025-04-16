@@ -195,6 +195,7 @@ fun loadFromConfigBag(
             "newtype" to newtype,
             "f" to
                 writable {
+                    rust("/*$innerTypeName*/")
                     if (innerTypeName == "bool") {
                         rust("|ty| ty.0")
                     } else {

@@ -18,11 +18,8 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -39,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -129,91 +125,10 @@ fun Model.sdkConfigSetter(
     }
 }
 
-/**
- * Create a client codegen decorator for the `accountID` built-in parameter.
- *
- * The `accountID` parameter is special because:
- * - It is neither exposed in the `SdkConfig` setter nor in config builder.
- * - It does not require customizations like `loadBuiltInFromServiceConfig`,
- *  as it is not available when the `read_before_execution` method of the endpoint parameters interceptor is executed.
- */
-fun decoratorForAccountId() =
-    ConditionalDecorator(
-        predicate =
-            {
-                    codegenContext, _ ->
-                codegenContext?.let {
-                    codegenContext.getBuiltIn(AwsBuiltIns.ACCOUNT_ID) != null
-                } ?: false
-            },
-        delegateTo =
-            object : ClientCodegenDecorator {
-                override val name: String get() = "DecoratorForAccountId"
-                override val order: Byte = 0
-
-                override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =
-                    listOf(
-                        object : EndpointCustomization {
-                            override fun overrideFinalizeEndpointParams(
-                                codegenContext: ClientCodegenContext,
-                            ): Writable? {
-                                val runtimeConfig = codegenContext.runtimeConfig
-                                return writable {
-                                    rustTemplate(
-                                        """
-                                        fn finalize_params<'a>(&'a self, params: &'a mut #{EndpointResolverParams}) -> #{FinalizeParamsFuture}<'a> {
-                                            // This is required to satisfy the borrow checker. By obtaining an `Option<Identity>`,
-                                            // `params` is no longer mutably borrowed in the match expression below.
-                                            // Furthermore, by using `std::mem::replace` with an empty `Identity`, we avoid
-                                            // leaving the sensitive `Identity` inside `params` within `EndpointResolverParams`.
-                                            let identity = params
-                                                .get_property_mut::<#{Identity}>()
-                                                .map(|id| {
-                                                    std::mem::replace(
-                                                        id,
-                                                        #{Identity}::new((), #{None}),
-                                                    )
-                                                });
-                                            match (
-                                                params.get_mut::<#{Params}>(),
-                                                identity
-                                                    .as_ref()
-                                                    .and_then(|id| id.property::<#{AccountId}>()),
-                                            ) {
-                                                (#{Some}(concrete_params), #{Some}(account_id)) => {
-                                                    concrete_params.account_id = #{Some}(account_id.as_str().to_string());
-                                                }
-                                                (#{Some}(_), #{None}) => {
-                                                    // No account ID; nothing to do.
-                                                }
-                                                (#{None}, _) => {
-                                                    return #{FinalizeParamsFuture}::ready(
-                                                        #{Err}("service-specific endpoint params was not present".into()),
-                                                    );
-                                                }
-                                            }
-                                            #{FinalizeParamsFuture}::ready(#{Ok}(()))
-                                        }
-                                        """,
-                                        *preludeScope,
-                                        *Types(runtimeConfig).toArray(),
-                                        "AccountId" to
-                                            AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                                                .resolve("attributes::AccountId"),
-                                        "FinalizeParamsFuture" to
-                                            RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                                                .resolve("client::endpoint::FinalizeParamsFuture"),
-                                        "Identity" to
-                                            RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                                                .resolve("client::identity::Identity"),
-                                        "Params" to EndpointTypesGenerator.fromContext(codegenContext).paramsStruct(),
-                                    )
-                                }
-                            }
-                        },
-                    )
-            },
-    )
+private fun rulesetContainsBuiltIn(
+    codegenContext: ClientCodegenContext,
+    builtIn: Parameter,
+) = codegenContext.getBuiltIn(builtIn) != null
 
 /**
  * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide
@@ -229,9 +144,6 @@ fun decoratorForBuiltIn(
         override val name: String = "Auto${builtIn.builtIn.get()}"
         override val order: Byte = 0
 
-        private fun rulesetContainsBuiltIn(codegenContext: ClientCodegenContext) =
-            codegenContext.getBuiltIn(builtIn) != null
-
         override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
             listOfNotNull(
                 codegenContext.model.sdkConfigSetter(
@@ -245,7 +157,7 @@ fun decoratorForBuiltIn(
             codegenContext: ClientCodegenContext,
             baseCustomizations: List<ConfigCustomization>,
         ): List<ConfigCustomization> {
-            return baseCustomizations.extendIf(rulesetContainsBuiltIn(codegenContext)) {
+            return baseCustomizations.extendIf(rulesetContainsBuiltIn(codegenContext, builtIn)) {
                 standardConfigParam(
                     clientParamBuilder?.toConfigParam(builtIn, codegenContext.runtimeConfig) ?: ConfigParam.Builder()
                         .toConfigParam(builtIn, codegenContext.runtimeConfig),
@@ -329,6 +241,6 @@ val PromotedBuiltInsDecorators =
                 .type(RuntimeType.String.toSymbol())
                 .setterDocs(endpointUrlDocs),
         ),
-        decoratorForBuiltIn(AwsBuiltIns.ACCOUNT_ID_ENDPOINT_MODE),
-        decoratorForAccountId(),
+        AccountIdEndpointModeDecorator(),
+        AccountIdDecorator(),
     ).toTypedArray()
