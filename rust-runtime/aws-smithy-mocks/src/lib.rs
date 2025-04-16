@@ -20,7 +20,7 @@ use aws_smithy_http_client::test_util::infallible_client_fn;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextMut,
     BeforeTransmitInterceptorContextMut, Error, FinalizerInterceptorContextMut, Input, Output,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
@@ -377,12 +377,20 @@ impl Rule {
     }
 }
 
-// Store active rule and response in config bag
+// Store active rule in config bag
 #[derive(Debug, Clone)]
-struct ActiveRule(Rule, Option<ResponseEntry>);
+struct ActiveRule(Rule);
 
 impl Storable for ActiveRule {
     type Storer = StoreReplace<ActiveRule>;
+}
+
+// Store response entry from the rule
+#[derive(Debug, Clone)]
+struct ActiveResponseEntry(ResponseEntry);
+
+impl Storable for ActiveResponseEntry {
+    type Storer = StoreReplace<ActiveResponseEntry>;
 }
 
 /// Interceptor which produces mock responses based on a list of rules
@@ -471,11 +479,8 @@ impl Intercept for MockResponseInterceptor {
 
         match rule {
             Some(rule) => {
-                // Get the next response from the rule
-                let response_entry = rule.next_response();
-                // Store the rule and response entry in the config bag
-                cfg.interceptor_state()
-                    .store_put(ActiveRule(rule, response_entry));
+                // Store the rule in the config bag
+                cfg.interceptor_state().store_put(ActiveRule(rule));
             }
             None => {
                 if self.must_match {
@@ -497,44 +502,22 @@ impl Intercept for MockResponseInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         if let Some(active_rule) = cfg.load::<ActiveRule>() {
-            // If the response is an HTTP response, store the function in the request extensions
-            if let Some(entry) = &active_rule.1 {
+            if let Some(entry) = active_rule.0.next_response() {
+                active_rule.0.record_usage();
                 if let MockOutput::HttpResponse(output_fn) = &entry.output {
-                    // Store the function which is cloneable (needed by Extensions), not the result
+                    // Store the function as an extension and the HTTP client will use it
                     context
                         .request_mut()
                         .add_extension(MockHttpResponse(output_fn.clone()));
                 }
+
+                // Store the response entry in the config bag for this attempt
+                cfg.interceptor_state()
+                    .store_put(ActiveResponseEntry(entry));
+            } else {
+                // TODO - error if not match/passthrough?
             }
         }
-        Ok(())
-    }
-
-    fn modify_before_deserialization(
-        &self,
-        context: &mut BeforeDeserializationInterceptorContextMut<'_>,
-        _runtime_components: &RuntimeComponents,
-        cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        if let Some(active_rule) = cfg.load::<ActiveRule>() {
-            let rule = &active_rule.0;
-            let response_entry = &active_rule.1;
-
-            if let Some(entry) = response_entry {
-                if let MockOutput::HttpResponse(output_fn) = &entry.output {
-                    let result = output_fn();
-                    rule.record_usage();
-
-                    match result {
-                        Ok(http_response) => *context.response_mut() = http_response,
-                        Err(e) => context
-                            .inner_mut()
-                            .set_output_or_error(Err(OrchestratorError::response(e))),
-                    }
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -544,25 +527,18 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(active_rule) = cfg.load::<ActiveRule>() {
-            let rule = &active_rule.0;
-            let response_entry = &active_rule.1;
-
-            if let Some(entry) = response_entry {
-                if let MockOutput::ModeledResponse(output_fn) = &entry.output {
-                    let result = output_fn();
-                    rule.record_usage();
-
-                    if result.is_err() {
-                        // The orchestrator will panic if no response is present
-                        context.inner_mut().set_response(Response::new(
-                            StatusCode::try_from(500).unwrap(),
-                            SdkBody::from("stubbed error response"),
-                        ))
-                    }
-
-                    context.inner_mut().set_output_or_error(result);
+        if let Some(entry) = cfg.load::<ActiveResponseEntry>() {
+            if let MockOutput::ModeledResponse(output_fn) = &entry.0.output {
+                let result = output_fn();
+                if result.is_err() {
+                    // The orchestrator will panic if no response is present
+                    context.inner_mut().set_response(Response::new(
+                        StatusCode::try_from(500).unwrap(),
+                        SdkBody::from("stubbed error response"),
+                    ))
                 }
+
+                context.inner_mut().set_output_or_error(result);
             }
         }
 
@@ -591,8 +567,239 @@ pub fn create_mock_http_client() -> SharedHttpClient {
 
         // Default dummy response if no mock response is defined
         http::Response::builder()
-            .status(200)
+            .status(418)
             .body(SdkBody::from("Mock HTTP client dummy response"))
             .unwrap()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+    use aws_smithy_runtime::client::orchestrator::operation::Operation;
+    use aws_smithy_runtime::client::retries::classifiers::HttpStatusCodeClassifier;
+    use aws_smithy_runtime_api::client::interceptors::context::Input;
+    use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::retry::RetryConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
+    
+    use std::time::Duration;
+
+    // Simple test input and output types
+    #[derive(Debug)]
+    struct TestInput {
+        bucket: String,
+        key: String,
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct TestOutput {
+        content: String,
+    }
+
+    #[derive(Debug)]
+    struct TestError {
+        message: String,
+    }
+
+    impl std::fmt::Display for TestError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.message)
+        }
+    }
+
+    impl std::error::Error for TestError {}
+
+    #[test]
+    fn test_rule_builder_sequence() {
+        // Create a RuleBuilder with a sequence of responses
+        let rule = RuleBuilder::new(
+            || TestInput {
+                bucket: "".to_string(),
+                key: "".to_string(),
+            },
+            || {
+                let fut: std::future::Ready<Result<TestOutput, SdkError<TestError, HttpResponse>>> =
+                    std::future::ready(Ok(TestOutput {
+                        content: "".to_string(),
+                    }));
+                fut
+            },
+        )
+        .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
+        .then_output(|| TestOutput {
+            content: "first response".to_string(),
+        })
+        .then_http_response(|| {
+            HttpResponse::new(
+                StatusCode::try_from(503).unwrap(),
+                SdkBody::from("service unavailable"),
+            )
+        })
+        .then_output(|| TestOutput {
+            content: "second response".to_string(),
+        })
+        .build();
+
+        // Verify the rule has the expected structure
+        assert_eq!(rule.responses.len(), 3);
+
+        // Test that the matcher works
+        let matching_input = TestInput {
+            bucket: "test-bucket".to_string(),
+            key: "test-key".to_string(),
+        };
+        let non_matching_input = TestInput {
+            bucket: "wrong-bucket".to_string(),
+            key: "test-key".to_string(),
+        };
+
+        let input_matches = (rule.matcher)(&Input::erase(matching_input));
+        let input_does_not_match = (rule.matcher)(&Input::erase(non_matching_input));
+
+        assert!(input_matches);
+        assert!(!input_does_not_match);
+    }
+
+    #[test]
+    fn test_rule_builder_repetition() {
+        // Create a RuleBuilder with a repeated response
+        let rule = RuleBuilder::new(
+            || TestInput {
+                bucket: "".to_string(),
+                key: "".to_string(),
+            },
+            || {
+                let fut: std::future::Ready<Result<TestOutput, SdkError<TestError, HttpResponse>>> =
+                    std::future::ready(Ok(TestOutput {
+                        content: "".to_string(),
+                    }));
+                fut
+            },
+        )
+        .then_http_response(|| {
+            HttpResponse::new(
+                StatusCode::try_from(503).unwrap(),
+                SdkBody::from("service unavailable"),
+            )
+        })
+        .repeat(2) // Repeat 3 times total (original + 2 repeats)
+        .then_output(|| TestOutput {
+            content: "success".to_string(),
+        })
+        .build();
+
+        // Verify the rule has the expected structure
+        assert_eq!(rule.responses.len(), 2);
+        assert_eq!(rule.responses[0].repeat_count, 2);
+        assert_eq!(rule.responses[1].repeat_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_repeat() {
+        // Create a rule with repeated error responses followed by success
+        let rule = RuleBuilder::new(
+            || TestInput {
+                bucket: "".to_string(),
+                key: "".to_string(),
+            },
+            || {
+                // Explicitly specify the return type to include TestError
+                let fut: std::future::Ready<Result<TestOutput, SdkError<TestError, HttpResponse>>> =
+                    std::future::ready(Ok(TestOutput {
+                        content: "".to_string(),
+                    }));
+                fut
+            },
+        )
+        .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
+        // First response: 503 Service Unavailable repeated 3 times (should trigger retries)
+        .then_http_response(|| {
+            HttpResponse::new(
+                StatusCode::try_from(503).unwrap(),
+                SdkBody::from("service unavailable"),
+            )
+        })
+        .repeat(2) // Repeat 3 times total (original + 2 repeats)
+        // Final response: 200 OK with success output
+        .then_output(|| TestOutput {
+            content: "success after retries".to_string(),
+        })
+        .build();
+
+        // Create a mock HTTP client
+        let mock_http_client = create_mock_http_client();
+
+        // Create an interceptor with the rule
+        let interceptor = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::Sequential)
+            .with_rule(&rule);
+
+        // Create a retry config with minimal delays for testing
+        let retry_config = RetryConfig::standard()
+            .with_max_attempts(5)
+            .with_initial_backoff(Duration::from_millis(1))
+            .with_max_backoff(Duration::from_millis(5));
+
+        // Create an operation that uses our interceptor, mock HTTP client, and retry strategy
+        let operation = Operation::builder()
+            .service_name("test")
+            .operation_name("test")
+            .http_client(mock_http_client)
+            .endpoint_url("http://localhost:1234")
+            .no_auth()
+            .standard_retry(&retry_config)
+            .retry_classifier(HttpStatusCodeClassifier::default())
+            .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+            .timeout_config(TimeoutConfig::disabled())
+            .interceptor(interceptor)
+            .serializer(|input: TestInput| {
+                // Simple serializer that just creates a request with the input data
+                let mut request = HttpRequest::new(SdkBody::empty());
+                request
+                    .set_uri(format!("/{}/{}", input.bucket, input.key))
+                    .expect("valid URI");
+                Ok(request)
+            })
+            .deserializer::<TestOutput, TestError>(|response| {
+                // Simple deserializer that extracts the body as a string or returns an error
+                if response.status().is_success() {
+                    let body = std::str::from_utf8(response.body().bytes().unwrap())
+                        .unwrap_or("empty body")
+                        .to_string();
+                    Ok(TestOutput { content: body })
+                } else {
+                    Err(OrchestratorError::operation(TestError {
+                        message: format!("Error: {}", response.status()),
+                    }))
+                }
+            })
+            .build();
+
+        // Make a single request - it should automatically retry through the sequence
+        let result = operation
+            .invoke(TestInput {
+                bucket: "test-bucket".to_string(),
+                key: "test-key".to_string(),
+            })
+            .await;
+
+        // Should succeed with the final output after retries
+        assert!(
+            result.is_ok(),
+            "Expected success but got error: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            result.unwrap(),
+            TestOutput {
+                content: "success after retries".to_string()
+            }
+        );
+
+        // Verify the rule was used the expected number of times (all 4 responses: 3 errors + 1 success)
+        assert_eq!(rule.num_calls(), 4);
+    }
 }
