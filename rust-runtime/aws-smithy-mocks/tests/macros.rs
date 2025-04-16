@@ -18,6 +18,7 @@ mod fake_crate {
     }
 
     pub(crate) mod config {
+        use aws_smithy_runtime_api::client::http::SharedHttpClient;
         use aws_smithy_runtime_api::client::interceptors::Intercept;
 
         pub(crate) struct Config {}
@@ -35,6 +36,9 @@ mod fake_crate {
                 Self {}
             }
             pub fn with_test_defaults(self) -> Self {
+                Self {}
+            }
+            pub fn http_client(self, _http_client: SharedHttpClient) -> Self {
                 Self {}
             }
 

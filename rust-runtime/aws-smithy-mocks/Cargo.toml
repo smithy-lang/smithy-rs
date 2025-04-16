@@ -15,6 +15,8 @@ http = "1.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"]}
+aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client"] }
 
 [package.metadata.docs.rs]
 all-features = true
