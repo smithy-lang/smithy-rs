@@ -11,6 +11,7 @@
 
 use crate::app_name::AppName;
 use crate::docs_for;
+use crate::endpoint_config::AccountIdEndpointMode;
 use crate::origin::Origin;
 use crate::region::Region;
 use crate::service_config::LoadServiceConfig;
@@ -70,6 +71,17 @@ This is useful for request bodies because, for small request bodies, compression
 **Only some services support request compression.** For services
 that don't support request compression, this setting does nothing.
 " };
+        (account_id_endpoint_mode) => {
+"Controls the account ID-based routing behavior.
+
+By default, the routing behavior is set to `preferred`.
+Customers can adjust this setting to other values to switch between different routing patterns or temporarily disable the feature.
+
+See the developer guide on [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html)
+for more information.
+
+For services that do not use the account-based endpoints, this setting does nothing.
+" };
     }
 }
 
@@ -81,7 +93,7 @@ pub struct SdkConfig {
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
-    account_id_endpoint_mode: Option<String>,
+    account_id_endpoint_mode: Option<AccountIdEndpointMode>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -112,7 +124,7 @@ pub struct Builder {
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
-    account_id_endpoint_mode: Option<String>,
+    account_id_endpoint_mode: Option<AccountIdEndpointMode>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -166,16 +178,19 @@ impl Builder {
         self
     }
 
-    /// Set the account ID endpoint mode for [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html).
-    pub fn account_id_endpoint_mode(mut self, account_id_endpoint_mode: impl Into<String>) -> Self {
-        self.set_account_id_endpoint_mode(Some(account_id_endpoint_mode.into()));
+    #[doc = docs_for!(account_id_endpoint_mode)]
+    pub fn account_id_endpoint_mode(
+        mut self,
+        account_id_endpoint_mode: AccountIdEndpointMode,
+    ) -> Self {
+        self.set_account_id_endpoint_mode(Some(account_id_endpoint_mode));
         self
     }
 
-    /// Set the account ID endpoint mode for [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html).
+    #[doc = docs_for!(account_id_endpoint_mode)]
     pub fn set_account_id_endpoint_mode(
         &mut self,
-        account_id_endpoint_mode: Option<String>,
+        account_id_endpoint_mode: Option<AccountIdEndpointMode>,
     ) -> &mut Self {
         self.account_id_endpoint_mode = account_id_endpoint_mode;
         self
@@ -877,8 +892,8 @@ impl SdkConfig {
     }
 
     /// Configured account ID endpoint mode
-    pub fn account_id_endpoint_mode(&self) -> Option<&str> {
-        self.account_id_endpoint_mode.as_deref()
+    pub fn account_id_endpoint_mode(&self) -> Option<&AccountIdEndpointMode> {
+        self.account_id_endpoint_mode.as_ref()
     }
 
     /// Configured endpoint URL
