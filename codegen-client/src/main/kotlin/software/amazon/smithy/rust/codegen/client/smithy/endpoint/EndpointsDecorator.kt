@@ -81,12 +81,32 @@ interface EndpointCustomization {
     fun customRuntimeFunctions(codegenContext: ClientCodegenContext): List<CustomRuntimeFunction> = listOf()
 
     /**
-     * Allows overriding the `finalize_params` method  in the `ResolveEndpoint` trait.
+     * Allows overriding the `finalize_params` method  in the `ResolveEndpoint` trait within
+     * service-specific EndpointResolver, which is rendered in `serviceSpecificEndpointResolver`.
      *
      * `ResolveEndpoint::finalize_params` provides a default no-op implementation,
      * and this customization enables the implementor to provide an alternative implementation.
+     *
+     * Example:
+     * ```kotlin
+     * override fun serviceSpecificEndpointParamsFinalizer(codegenContext: ClientCodegenContext, params: String): Writable? {
+     *     return writable {
+     *         rustTemplate("""
+     *             let identity = $params
+     *                 .get_property_mut::<#{Identity}>();
+     *             // do more things on `params`
+     *         """,
+     *         "Identity" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+     *             .resolve("client::identity::Identity"),
+     *         )
+     *     }
+     * }
+     * ```
      */
-    fun overrideFinalizeEndpointParams(codegenContext: ClientCodegenContext): Writable? = null
+    fun serviceSpecificEndpointParamsFinalizer(
+        codegenContext: ClientCodegenContext,
+        params: String,
+    ): Writable? = null
 }
 
 /**

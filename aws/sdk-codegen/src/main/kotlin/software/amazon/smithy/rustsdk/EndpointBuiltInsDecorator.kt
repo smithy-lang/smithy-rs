@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -150,50 +149,47 @@ class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltI
         if (rulesetContainsBuiltIn(codegenContext) && builtIn == AwsBuiltIns.ACCOUNT_ID) {
             listOf(
                 object : EndpointCustomization {
-                    override fun overrideFinalizeEndpointParams(codegenContext: ClientCodegenContext): Writable? {
+                    override fun serviceSpecificEndpointParamsFinalizer(
+                        codegenContext: ClientCodegenContext,
+                        params: String,
+                    ): Writable? {
                         val runtimeConfig = codegenContext.runtimeConfig
                         return writable {
                             rustTemplate(
                                 """
-                                fn finalize_params<'a>(&'a self, params: &'a mut #{EndpointResolverParams}) -> #{Result}<(), #{BoxError}> {
-                                    // This is required to satisfy the borrow checker. By obtaining an `Option<Identity>`,
-                                    // `params` is no longer mutably borrowed in the match expression below.
-                                    // Furthermore, by using `std::mem::replace` with an empty `Identity`, we avoid
-                                    // leaving the sensitive `Identity` inside `params` within `EndpointResolverParams`.
-                                    let identity = params
-                                        .get_property_mut::<#{Identity}>()
-                                        .map(|id| {
-                                            std::mem::replace(
-                                                id,
-                                                #{Identity}::new((), #{None}),
-                                            )
-                                        });
-                                    match (
-                                        params.get_mut::<#{Params}>(),
-                                        identity
-                                            .as_ref()
-                                            .and_then(|id| id.property::<#{AccountId}>()),
-                                    ) {
-                                        (#{Some}(concrete_params), #{Some}(account_id)) => {
-                                            concrete_params.account_id = #{Some}(account_id.as_str().to_string());
-                                        }
-                                        (#{Some}(_), #{None}) => {
-                                            // No account ID; nothing to do.
-                                        }
-                                        (#{None}, _) => {
-                                            return #{Err}("service-specific endpoint params was not present".into());
-                                        }
+                                // This is required to satisfy the borrow checker. By obtaining an `Option<Identity>`,
+                                // `params` is no longer mutably borrowed in the match expression below.
+                                // Furthermore, by using `std::mem::replace` with an empty `Identity`, we avoid
+                                // leaving the sensitive `Identity` inside `params` within `EndpointResolverParams`.
+                                let identity = $params
+                                    .get_property_mut::<#{Identity}>()
+                                    .map(|id| {
+                                        std::mem::replace(
+                                            id,
+                                            #{Identity}::new((), #{None}),
+                                        )
+                                    });
+                                match (
+                                    $params.get_mut::<#{Params}>(),
+                                    identity
+                                        .as_ref()
+                                        .and_then(|id| id.property::<#{AccountId}>()),
+                                ) {
+                                    (#{Some}(concrete_params), #{Some}(account_id)) => {
+                                        concrete_params.account_id = #{Some}(account_id.as_str().to_string());
                                     }
-                                    #{Ok}(())
+                                    (#{Some}(_), #{None}) => {
+                                        // No account ID; nothing to do.
+                                    }
+                                    (#{None}, _) => {
+                                        return #{Err}("service-specific endpoint params was not present".into());
+                                    }
                                 }
                                 """,
                                 *preludeScope,
-                                *Types(runtimeConfig).toArray(),
                                 "AccountId" to
                                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                                         .resolve("attributes::AccountId"),
-                                "BoxError" to
-                                    RuntimeType.boxError(runtimeConfig),
                                 "Identity" to
                                     RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                                         .resolve("client::identity::Identity"),
