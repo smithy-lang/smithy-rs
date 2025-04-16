@@ -9,12 +9,12 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /* End of automatically managed default lints */
 use std::collections::VecDeque;
-use std::fmt;
 use std::fmt::Formatter;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::{fmt, panic};
 
 use aws_smithy_http_client::test_util::infallible_client_fn;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -174,6 +174,14 @@ impl fmt::Debug for MockOutput {
         }
     }
 }
+
+// FIXME - leftoff at figuring out sequential rule mode when a rule has multiple outputs defined
+// There are two possible interpretations of how RuleMode::Sequential should work:
+// 1. Rule-level sequencing: Each rule is used once and then removed from the list. This is the current implementation.
+// 2. Response-level sequencing: Each rule can have multiple responses, and we progress through all responses in a rule before moving to the next rule.
+
+// Also discussed a proc macro possibly as well as a .serve(|op, idx| { ... }) function for arbitrary serving of responses
+// TODO test with multiple rules for same op but decreasing specificity and MatchAny
 
 /// RuleMode describes how rules will be interpreted.
 /// - In RuleMode::MatchAny, the first matching rule will be applied, and the rules will remain unchanged.
@@ -375,6 +383,20 @@ impl Rule {
     fn is_exhausted(&self) -> bool {
         self.current_index.load(Ordering::Relaxed) >= self.responses.len()
     }
+
+    // Check if the rule will be exhausted after the next response
+    fn is_exhausted_after_next(&self) -> bool {
+        let current_index = self.current_index.load(Ordering::Relaxed);
+        if current_index >= self.responses.len() {
+            return true;
+        }
+
+        let entry = &self.responses[current_index];
+        let current_repeat = entry.current_repeat.load(Ordering::Relaxed);
+
+        // If this is the last response and we've used all repeats
+        current_index == self.responses.len() - 1 && current_repeat >= entry.repeat_count
+    }
 }
 
 // Store active rule in config bag
@@ -460,16 +482,31 @@ impl Intercept for MockResponseInterceptor {
         let mut rules = self.rules.lock().unwrap();
         let rule = match self.rule_mode {
             RuleMode::Sequential => {
-                let rule = rules
-                    .pop_front()
-                    .expect("no more rules but a new request was received");
-                if !(rule.matcher)(context.input()) {
-                    panic!(
-                        "In order matching was enforced but the next rule did not match {:?}",
-                        context.input()
-                    );
+                // Find the first rule that isn't exhausted
+                let rule_index = rules.iter().position(|rule| !rule.is_exhausted());
+
+                match rule_index {
+                    Some(index) => {
+                        // Get a reference to the rule without removing it
+                        let rule = &rules[index];
+
+                        if !(rule.matcher)(context.input()) {
+                            panic!(
+                                "In order matching was enforced but the next rule did not match {:?}",
+                                context.input()
+                            );
+                        }
+
+                        // If the rule is exhausted after this use, remove it
+                        let rule = rule.clone();
+                        if rule.is_exhausted_after_next() {
+                            rules.remove(index);
+                        }
+
+                        Some(rule)
+                    }
+                    None => panic!("no more rules but a new request was received"),
                 }
-                Some(rule)
             }
             RuleMode::MatchAny => rules
                 .iter()
@@ -610,7 +647,7 @@ mod tests {
     impl TestOutput {
         fn new(content: &str) -> Self {
             Self {
-                content: content.to_string()
+                content: content.to_string(),
             }
         }
     }
@@ -636,23 +673,27 @@ mod tests {
 
     impl std::error::Error for TestError {}
 
-
     // Helper function to create a RuleBuilder with proper type hints
     fn create_rule_builder() -> RuleBuilder<TestInput, TestOutput, TestError> {
         RuleBuilder::new(
-            || TestInput { bucket: "".to_string(), key: "".to_string() },
+            || TestInput {
+                bucket: "".to_string(),
+                key: "".to_string(),
+            },
             || {
                 let fut: std::future::Ready<Result<TestOutput, SdkError<TestError, HttpResponse>>> =
-                    std::future::ready(Ok(TestOutput { content: "".to_string() }));
+                    std::future::ready(Ok(TestOutput {
+                        content: "".to_string(),
+                    }));
                 fut
-            }
+            },
         )
     }
 
     // Helper function to create an Operation with common configuration
     fn create_test_operation(
         interceptor: MockResponseInterceptor,
-        enable_retries: bool
+        enable_retries: bool,
     ) -> Operation<TestInput, TestOutput, TestError> {
         let builder = Operation::builder()
             .service_name("test")
@@ -665,7 +706,9 @@ mod tests {
             .interceptor(interceptor)
             .serializer(|input: TestInput| {
                 let mut request = HttpRequest::new(SdkBody::empty());
-                request.set_uri(format!("/{}/{}", input.bucket, input.key)).expect("valid URI");
+                request
+                    .set_uri(format!("/{}/{}", input.bucket, input.key))
+                    .expect("valid URI");
                 Ok(request)
             })
             .deserializer::<TestOutput, TestError>(|response| {
@@ -687,10 +730,11 @@ mod tests {
                 .with_initial_backoff(Duration::from_millis(1))
                 .with_max_backoff(Duration::from_millis(5));
 
-            builder.retry_classifier(HttpStatusCodeClassifier::default())
+            builder
+                .retry_classifier(HttpStatusCodeClassifier::default())
                 .standard_retry(&retry_config)
                 .build()
-        }else {
+        } else {
             builder.no_retry().build()
         }
     }
@@ -802,7 +846,7 @@ mod tests {
         // Test that setting repeat(0) doesn't change behavior
         let rule = create_rule_builder()
             .then_output(|| TestOutput::new("first"))
-            .repeat(0)  // Should have no effect
+            .repeat(0) // Should have no effect
             .then_output(|| TestOutput::new("second"))
             .build();
 
@@ -858,7 +902,6 @@ mod tests {
             .then_output(|| TestOutput::new("response2"))
             .build();
 
-
         // Create an interceptor with both rules in MatchAny mode
         let interceptor = MockResponseInterceptor::new()
             .rule_mode(RuleMode::MatchAny)
@@ -872,23 +915,167 @@ mod tests {
             .invoke(TestInput::new("bucket1", "test-key"))
             .await;
         assert!(result1.is_ok());
-        assert_eq!(
-            result1.unwrap(),
-            TestOutput::new("response1")
-        );
+        assert_eq!(result1.unwrap(), TestOutput::new("response1"));
 
         // Call with bucket2 should match rule2
         let result2 = operation
             .invoke(TestInput::new("bucket2", "test-key"))
             .await;
         assert!(result2.is_ok());
-        assert_eq!(
-            result2.unwrap(),
-            TestOutput::new("response2")
-        );
+        assert_eq!(result2.unwrap(), TestOutput::new("response2"));
 
         // Verify the rules were used the expected number of times
         assert_eq!(rule1.num_calls(), 1);
         assert_eq!(rule2.num_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_mixed_response_types() {
+        // Create a rule with all three types of responses
+        let rule = create_rule_builder()
+            // First: modeled output
+            .then_output(|| TestOutput::new("first output"))
+            // Second: modeled error
+            .then_error(|| TestError::new("expected error"))
+            // Third: HTTP response
+            .then_http_response(|| {
+                HttpResponse::new(
+                    StatusCode::try_from(200).unwrap(),
+                    SdkBody::from("http response"),
+                )
+            })
+            .build();
+
+        // Create an interceptor with the rule
+        let interceptor = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::Sequential)
+            .with_rule(&rule);
+
+        let operation = create_test_operation(interceptor, false);
+
+        // First call should return the modeled output
+        let result1 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), TestOutput::new("first output"));
+
+        // Second call should return the modeled error
+        let result2 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result2.is_err());
+        let sdk_err = result2.unwrap_err();
+        let err = sdk_err.as_service_error().expect("expected service error");
+        assert_eq!(err.to_string(), "expected error");
+
+        // Third call should return the HTTP response
+        let result3 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result3.is_ok());
+        assert_eq!(result3.unwrap(), TestOutput::new("http response"));
+
+        // Verify the rule was used the expected number of times
+        assert_eq!(rule.num_calls(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_exhausted_sequence() {
+        // Create a rule with a sequence that will be exhausted
+        let rule = create_rule_builder()
+            .then_output(|| TestOutput::new("response 1"))
+            .then_output(|| TestOutput::new("response 2"))
+            .build();
+
+        // Create another rule to use after the first one is exhausted
+        let fallback_rule = create_rule_builder()
+            .then_output(|| TestOutput::new("fallback response"))
+            .build();
+
+        // Create an interceptor with both rules
+        let interceptor = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::Sequential)
+            .with_rule(&rule)
+            .with_rule(&fallback_rule);
+
+        let operation = create_test_operation(interceptor, false);
+
+        // First two calls should use the first rule
+        let result1 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result1.is_ok());
+        assert_eq!(result1.unwrap(), TestOutput::new("response 1"));
+
+        let result2 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result2.is_ok());
+        assert_eq!(result2.unwrap(), TestOutput::new("response 2"));
+
+        // Third call should use the fallback rule
+        let result3 = operation
+            .invoke(TestInput::new("test-bucket", "test-key"))
+            .await;
+        assert!(result3.is_ok());
+        assert_eq!(result3.unwrap(), TestOutput::new("fallback response"));
+
+        // Verify the rules were used the expected number of times
+        assert_eq!(rule.num_calls(), 2);
+        assert_eq!(fallback_rule.num_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_usage() {
+        use std::sync::Arc;
+        use tokio::task;
+
+        // Create a rule with multiple responses
+        let rule = Arc::new(
+            create_rule_builder()
+                .then_output(|| TestOutput::new("response 1"))
+                .then_output(|| TestOutput::new("response 2"))
+                .then_output(|| TestOutput::new("response 3"))
+                .build(),
+        );
+
+        // Create an interceptor with the rule
+        let interceptor = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::Sequential)
+            .with_rule(&rule);
+
+        let operation = Arc::new(create_test_operation(interceptor, false));
+
+        // Spawn multiple tasks that use the operation concurrently
+        let mut handles = vec![];
+        for i in 0..3 {
+            let op = operation.clone();
+            let handle = task::spawn(async move {
+                let result = op
+                    .invoke(TestInput::new(&format!("bucket-{}", i), "test-key"))
+                    .await;
+                result.unwrap()
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks to complete
+        let mut results = vec![];
+        for handle in handles {
+            results.push(handle.await.unwrap());
+        }
+
+        // Sort the results to make the test deterministic
+        results.sort_by(|a, b| a.content.cmp(&b.content));
+
+        // Verify we got all three responses
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0], TestOutput::new("response 1"));
+        assert_eq!(results[1], TestOutput::new("response 2"));
+        assert_eq!(results[2], TestOutput::new("response 3"));
+
+        // Verify the rule was used the expected number of times
+        assert_eq!(rule.num_calls(), 3);
     }
 }
