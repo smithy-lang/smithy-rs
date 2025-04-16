@@ -24,11 +24,6 @@ new_type_future! {
     pub struct EndpointFuture<'a, Endpoint, BoxError>;
 }
 
-new_type_future! {
-    #[doc = "Future for [`ResolveEndpoint::finalize_params`]."]
-    pub struct FinalizeParamsFuture<'a, (), BoxError>;
-}
-
 /// Parameters originating from the Smithy endpoint ruleset required for endpoint resolution.
 ///
 /// The actual endpoint parameters are code generated from the Smithy model, and thus,
@@ -105,8 +100,8 @@ pub trait ResolveEndpoint: Send + Sync + fmt::Debug {
     fn finalize_params<'a>(
         &'a self,
         _params: &'a mut EndpointResolverParams,
-    ) -> FinalizeParamsFuture<'a> {
-        FinalizeParamsFuture::ready(Ok(()))
+    ) -> Result<(), BoxError> {
+        Ok(())
     }
 }
 
@@ -131,7 +126,7 @@ impl ResolveEndpoint for SharedEndpointResolver {
     fn finalize_params<'a>(
         &'a self,
         params: &'a mut EndpointResolverParams,
-    ) -> FinalizeParamsFuture<'a> {
+    ) -> Result<(), BoxError> {
         self.0.finalize_params(params)
     }
 }

@@ -83,7 +83,7 @@ pub(super) async fn orchestrate_endpoint(
 
     let endpoint_resolver = runtime_components.endpoint_resolver();
 
-    endpoint_resolver.finalize_params(params).await?;
+    endpoint_resolver.finalize_params(params)?;
 
     tracing::debug!(endpoint_params = ?params, "resolving endpoint");
     let endpoint = endpoint_resolver.resolve_endpoint(params).await?;

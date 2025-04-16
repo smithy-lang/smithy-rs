@@ -155,7 +155,7 @@ class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltI
                         return writable {
                             rustTemplate(
                                 """
-                                fn finalize_params<'a>(&'a self, params: &'a mut #{EndpointResolverParams}) -> #{FinalizeParamsFuture}<'a> {
+                                fn finalize_params<'a>(&'a self, params: &'a mut #{EndpointResolverParams}) -> #{Result}<(), #{BoxError}> {
                                     // This is required to satisfy the borrow checker. By obtaining an `Option<Identity>`,
                                     // `params` is no longer mutably borrowed in the match expression below.
                                     // Furthermore, by using `std::mem::replace` with an empty `Identity`, we avoid
@@ -181,12 +181,10 @@ class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltI
                                             // No account ID; nothing to do.
                                         }
                                         (#{None}, _) => {
-                                            return #{FinalizeParamsFuture}::ready(
-                                                #{Err}("service-specific endpoint params was not present".into()),
-                                            );
+                                            return #{Err}("service-specific endpoint params was not present".into());
                                         }
                                     }
-                                    #{FinalizeParamsFuture}::ready(#{Ok}(()))
+                                    #{Ok}(())
                                 }
                                 """,
                                 *preludeScope,
@@ -194,9 +192,8 @@ class DecoratorForAccountId(private val builtIn: Parameter) : DecoratorForBuiltI
                                 "AccountId" to
                                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                                         .resolve("attributes::AccountId"),
-                                "FinalizeParamsFuture" to
-                                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                                        .resolve("client::endpoint::FinalizeParamsFuture"),
+                                "BoxError" to
+                                    RuntimeType.boxError(runtimeConfig),
                                 "Identity" to
                                     RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                                         .resolve("client::identity::Identity"),
