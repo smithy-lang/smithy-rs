@@ -28,7 +28,10 @@ ARG rust_nightly_version
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
-    CARGO_INCREMENTAL=0
+    CARGO_INCREMENTAL=0 \
+    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
+    GRADLE_USER_HOME=/home/build/.gradle
+
 WORKDIR /root
 RUN yum -y install --allowerasing \
         autoconf \
@@ -40,6 +43,7 @@ RUN yum -y install --allowerasing \
         gcc \
         gcc-c++ \
         git \
+        java-17-amazon-corretto-headless \
         make \
         openssl-devel \
         perl \
@@ -83,6 +87,8 @@ RUN set -eux; \
         git clone https://github.com/smithy-lang/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
+        # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
+        ./gradlew; \
     fi; \
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
@@ -161,7 +167,6 @@ RUN set -eux; \
         git \
         glibc-langpack-en \
         go \
-        java-17-amazon-corretto-headless \
         make \
         openssl-devel \
         pkgconfig \
@@ -197,8 +202,6 @@ ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
-    GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
