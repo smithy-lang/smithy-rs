@@ -3,13 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use aws_smithy_runtime_api::client::{
     auth::{AuthSchemeId, AuthSchemeOption},
     endpoint::ResolveEndpoint,
     runtime_components::RuntimeComponentsBuilder,
     runtime_plugin::{Order, RuntimePlugin},
+};
+use aws_smithy_types::{config_bag::Layer, Document};
+use aws_types::{
+    region::{Region, SigningRegion},
+    SigningName,
 };
 
 // A runtime plugin that registers `EndpointBasedAuthSchemeOptionResolver` with `RuntimeComponents`.
@@ -49,14 +54,22 @@ impl RuntimePlugin for EndpointBasedAuthOptionsPlugin {
 // will dynamically generate the option and add it to the resulting list.
 #[derive(Debug)]
 pub(crate) struct EndpointBasedAuthSchemeOptionResolver {
-    modeled_auth_scheme_ids: Vec<AuthSchemeId>,
+    modeled_auth_scheme_options: Vec<AuthSchemeOption>,
 }
 
 impl EndpointBasedAuthSchemeOptionResolver {
     /// Creates a new instance of `EndpointBasedAuthSchemeOptionResolver`.
     pub(crate) fn new(modeled_auth_scheme_ids: Vec<AuthSchemeId>) -> Self {
         Self {
-            modeled_auth_scheme_ids,
+            modeled_auth_scheme_options: modeled_auth_scheme_ids
+                .into_iter()
+                .map(|scheme_id| {
+                    AuthSchemeOption::builder()
+                        .scheme_id(scheme_id.clone())
+                        .build()
+                        .expect("required field set")
+                })
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -82,91 +95,142 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
                 .resolve_endpoint(endpoint_params)
                 .await?;
 
-            let mut endpoint_auth_scheme_ids = Vec::new();
-
-            if let Some(aws_smithy_types::Document::Array(endpoint_auth_schemes)) =
-                endpoint.properties().get("authSchemes")
-            {
-                for endpoint_auth_scheme in endpoint_auth_schemes {
-                    let scheme_id_str = endpoint_auth_scheme
-                        .as_object()
-                        .and_then(|object| object.get("name"))
-                        .and_then(aws_smithy_types::Document::as_string);
-                    if let Some(scheme_id_str) = scheme_id_str {
-                        endpoint_auth_scheme_ids
-                            .push(AuthSchemeId::from(Cow::Owned(scheme_id_str.to_owned())));
-                    }
-                }
-            }
-
-            let result =
-                merge_auth_scheme_ids(&self.modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
-
-            // TODO(AccountIdBasedRouting): Before merging the final PR to main, experiment pupulating the `properties`
-            // field of `AuthSchemeOption` to avoid the orchestrator relying upon `AuthSchemeEndpointConfig`.
-            Ok(result
-                .into_iter()
-                .map(|auth_scheme_id| {
-                    AuthSchemeOption::builder()
-                        .scheme_id(auth_scheme_id)
-                        .build()
-                        .expect("required fields set")
+            let endpoint_auth_scheme_ids = endpoint
+                .properties()
+                .get("authSchemes")
+                .and_then(|prop| prop.as_array())
+                .map(|array| {
+                    array
+                        .into_iter()
+                        .flat_map(|auth_schemes_property| {
+                            auth_scheme_option_from_auth_schemes_property(auth_schemes_property)
+                        })
+                        .collect::<Vec<_>>()
                 })
-                .collect::<Vec<_>>())
+                .unwrap_or_default();
+
+            Ok(merge_auth_scheme_options(
+                &self.modeled_auth_scheme_options,
+                endpoint_auth_scheme_ids,
+            ))
         })
     }
 }
 
 // Merge a list of `AuthSchemeId`s both in `modeled_auth_scheme_ids` and in `endpoint_auth_scheme_ids`,
 // but with those in `endpoint_auth_scheme_ids` placed at the front of the resulting list.
-fn merge_auth_scheme_ids(
-    modeled_auth_scheme_ids: &[AuthSchemeId],
-    mut endpoint_auth_scheme_ids: Vec<AuthSchemeId>,
-) -> Vec<AuthSchemeId> {
-    let (_, model_only_auth_scheme_ids): (Vec<_>, Vec<_>) = modeled_auth_scheme_ids
+fn merge_auth_scheme_options(
+    modeled_auth_scheme_options: &[AuthSchemeOption],
+    mut endpoint_auth_scheme_options: Vec<AuthSchemeOption>,
+) -> Vec<AuthSchemeOption> {
+    let (_, model_only_auth_scheme_options): (Vec<_>, Vec<_>) = modeled_auth_scheme_options
         .iter()
-        .partition(|auth_scheme_id| endpoint_auth_scheme_ids.contains(auth_scheme_id));
+        .partition(|auth_scheme_option| {
+            endpoint_auth_scheme_options
+                .iter()
+                .any(|opt| opt.scheme_id() == auth_scheme_option.scheme_id())
+        });
 
-    endpoint_auth_scheme_ids.extend(model_only_auth_scheme_ids.into_iter().cloned());
+    // There is no need to merge properties from `modeled_auth_scheme_options` because they have already been added to the config bag
+    // within client's config `Builder`:
+    // https://github.com/awslabs/aws-sdk-rust/blob/cb818835c3846d030a81ec1dcda5f91d56326f71/sdk/s3/src/config.rs#L1226-L1230
+    // Merging them again within endpoint `AuthSchemeOption`'s `FrozenLayer` means we would end up adding modeled `AuthSchemeOption`'s properties
+    // to the config bag, again.
 
-    endpoint_auth_scheme_ids
+    endpoint_auth_scheme_options.extend(model_only_auth_scheme_options.into_iter().cloned());
+
+    endpoint_auth_scheme_options
+}
+
+fn auth_scheme_option_from_auth_schemes_property<'a>(
+    auth_schemes_property: &Document,
+) -> Option<AuthSchemeOption> {
+    fn get<'a>(field_name: &'static str, object: &'a HashMap<String, Document>) -> Option<&'a str> {
+        object
+            .get(field_name)
+            .and_then(aws_smithy_types::Document::as_string)
+    }
+
+    if let Some(object) = auth_schemes_property.as_object() {
+        if let Some(auch_scheme_id) = get("name", object) {
+            let mut layer = Layer::new("Test");
+            get("signingRegion", object)
+                .map(|s| layer.store_put(SigningRegion::from(Region::new(s.to_owned()))));
+            get("signingName", object).map(|s| layer.store_put(SigningName::from(s.to_owned())));
+            return Some(
+                AuthSchemeOption::builder()
+                    .scheme_id(AuthSchemeId::from(Cow::Owned(auch_scheme_id.to_owned())))
+                    .properties(layer.freeze())
+                    .build()
+                    .expect("required fields set"),
+            );
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn into_auth_scheme_ids<const N: usize>(strs: [&'static str; N]) -> Vec<AuthSchemeId> {
-        strs.into_iter().map(AuthSchemeId::from).collect::<Vec<_>>()
+    fn into_auth_scheme_options<const N: usize>(strs: [&'static str; N]) -> Vec<AuthSchemeOption> {
+        strs.into_iter()
+            .map(|s| {
+                AuthSchemeOption::builder()
+                    .scheme_id(AuthSchemeId::from(s))
+                    .build()
+                    .unwrap()
+            })
+            .collect::<Vec<_>>()
     }
 
     #[test]
-    fn merge_auth_scheme_ids_basic() {
-        let modeled_auth_scheme_ids =
-            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
-        let endpoint_auth_scheme_ids = into_auth_scheme_ids(["schemeY", "schemeX"]);
-        let expected = into_auth_scheme_ids(["schemeY", "schemeX", "schemeA", "schemeB"]);
-        let actual = merge_auth_scheme_ids(&modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
-        assert_eq!(expected, actual);
+    fn merge_auth_scheme_options_basic() {
+        let modeled_auth_scheme_options =
+            into_auth_scheme_options(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let endpoint_auth_scheme_options = into_auth_scheme_options(["schemeY", "schemeX"]);
+        let expected = ["schemeY", "schemeX", "schemeA", "schemeB"];
+        let actual =
+            merge_auth_scheme_options(&modeled_auth_scheme_options, endpoint_auth_scheme_options);
+        assert_eq!(
+            expected.to_vec(),
+            actual
+                .iter()
+                .map(|opt| opt.scheme_id().inner())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
-    fn merge_auth_scheme_ids_with_empty_endpoint_auth_scheme_ids() {
-        let modeled_auth_scheme_ids =
-            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
-        let endpoint_auth_scheme_ids = Vec::new();
-        let actual = merge_auth_scheme_ids(&modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
-        assert_eq!(modeled_auth_scheme_ids, actual);
+    fn merge_auth_scheme_options_with_empty_endpoint_auth_scheme_options() {
+        let expected = ["schemeA", "schemeX", "schemeB", "schemeY"];
+        let modeled_auth_scheme_options = into_auth_scheme_options(expected);
+        let endpoint_auth_scheme_options = Vec::new();
+        let actual =
+            merge_auth_scheme_options(&modeled_auth_scheme_options, endpoint_auth_scheme_options);
+        assert_eq!(
+            expected.to_vec(),
+            actual
+                .iter()
+                .map(|opt| opt.scheme_id().inner())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
-    fn merge_auth_scheme_ids_should_also_include_those_only_in_endpoint_auth_scheme_ids() {
+    fn merge_auth_scheme_options_should_also_include_those_only_in_endpoint_auth_scheme_options() {
         let modeled_auth_scheme_ids =
-            into_auth_scheme_ids(["schemeA", "schemeX", "schemeB", "schemeY"]);
-        let endpoint_auth_scheme_ids = into_auth_scheme_ids(["schemeY", "schemeZ"]);
-        let expected =
-            into_auth_scheme_ids(["schemeY", "schemeZ", "schemeA", "schemeX", "schemeB"]);
-        let actual = merge_auth_scheme_ids(&modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
-        assert_eq!(expected, actual);
+            into_auth_scheme_options(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let endpoint_auth_scheme_ids = into_auth_scheme_options(["schemeY", "schemeZ"]);
+        let expected = ["schemeY", "schemeZ", "schemeA", "schemeX", "schemeB"];
+        let actual = merge_auth_scheme_options(&modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
+        assert_eq!(
+            expected.to_vec(),
+            actual
+                .iter()
+                .map(|opt| opt.scheme_id().inner())
+                .collect::<Vec<_>>()
+        );
     }
 }
