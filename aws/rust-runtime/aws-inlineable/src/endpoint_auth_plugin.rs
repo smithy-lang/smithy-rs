@@ -102,8 +102,6 @@ impl aws_smithy_runtime_api::client::auth::ResolveAuthSchemeOptions
             let result =
                 merge_auth_scheme_ids(&self.modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
 
-            // TODO(AccountIdBasedRouting): Before merging the final PR to main, experiment pupulating the `properties`
-            // field of `AuthSchemeOption` to avoid the orchestrator relying upon `AuthSchemeEndpointConfig`.
             Ok(result
                 .into_iter()
                 .map(|auth_scheme_id| {
