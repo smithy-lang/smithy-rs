@@ -28,7 +28,10 @@ ARG rust_nightly_version
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
-    CARGO_INCREMENTAL=0
+    CARGO_INCREMENTAL=0 \
+    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
+    GRADLE_USER_HOME=/home/build/.gradle
+
 WORKDIR /root
 RUN yum -y install --allowerasing \
         autoconf \
@@ -40,6 +43,7 @@ RUN yum -y install --allowerasing \
         gcc \
         gcc-c++ \
         git \
+        java-17-amazon-corretto-headless \
         make \
         openssl-devel \
         perl \
@@ -83,6 +87,8 @@ RUN set -eux; \
         git clone https://github.com/smithy-lang/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
+        # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
+        ./gradlew; \
     fi; \
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
@@ -197,8 +203,6 @@ ENV PATH=$PATH:/usr/local/musl/bin/
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
-    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
-    GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
@@ -212,8 +216,8 @@ ENV PATH=/opt/cargo/bin:$PATH \
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
-COPY sanity-test /home/build/sanity-test
 # RUSTUP_TOOLCHAIN takes precedence over everything except `+<toolchain>` args. This will allow us to ignore the toolchain
 # file during CI, avoiding issues during Rust version upgrades.
 ENV RUSTUP_TOOLCHAIN=${rust_stable_version}
+COPY sanity-test /home/build/sanity-test
 RUN /home/build/sanity-test
