@@ -201,9 +201,9 @@ class SmokeTestsInstantiator(
         rustTemplate("#{config_builder_initializer}", "config_builder_initializer" to configBuilderInitializer())
         indent()
 
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3776) Once Account ID routing is supported,
-        //  reflect the config setting here, especially to disable it if needed, as it is enabled by default in
-        //  `AwsVendorParams`.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863) When re-enabling service smoke tests,
+        //  include the config setting for account ID, especially to disable it if needed, as it is enabled
+        //  by default in `AwsVendorParams`.
 
         val vendorParams = AwsSmokeTestModel.getAwsVendorParams(testCase)
         vendorParams.orNull()?.let { params ->
