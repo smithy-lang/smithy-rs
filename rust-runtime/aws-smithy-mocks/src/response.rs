@@ -107,7 +107,7 @@ macro_rules! mock_response {
     // Status code with body
     (status: $status:expr, body: $body:expr) => {{
         let response =
-            $crate::HttpResponse::new(StatusCode::try_from($status).unwrap(), SdkBody::from($body));
+            HttpResponse::new(StatusCode::try_from($status).unwrap(), SdkBody::from($body));
         $crate::MockResponse::Http(response)
     }};
 }

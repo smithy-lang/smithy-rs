@@ -99,7 +99,6 @@ impl Rule {
         self.call_count.load(Ordering::SeqCst)
     }
 
-    // TODO - evaluate if we need/want this
     /// Resets the call count to zero.
     pub fn reset(&self) {
         self.call_count.store(0, Ordering::SeqCst);
