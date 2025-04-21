@@ -199,7 +199,9 @@ pub use rule::{Rule, RuleBuilder, RuleMode};
 /// See the `examples` folder of this crate for fully worked examples.
 ///
 /// # Examples
+///
 /// **Mock and return a success response**:
+///
 /// ```rust,ignore
 /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
 /// use aws_sdk_s3::Client;
@@ -219,6 +221,7 @@ pub use rule::{Rule, RuleBuilder, RuleMode};
 /// let get_object_error_path = mock!(Client::get_object)
 ///   .then_error(||GetObjectError::NoSuchKey(NoSuchKey::builder().build()));
 /// ```
+///
 #[macro_export]
 macro_rules! mock {
     ($operation: expr) => {
@@ -242,8 +245,10 @@ macro_rules! mock {
 /// `mock_client!` macro produces a Client configured with a number of Rules and appropriate test default configuration.
 ///
 /// # Examples
+///
 /// **Create a client that uses a mock failure and then a success**:
-/// rust,ignore
+///
+/// ```rust,ignore
 /// use aws_sdk_s3::operation::get_object::{GetObjectOutput, GetObjectError};
 /// use aws_sdk_s3::types::error::NoSuchKey;
 /// use aws_sdk_s3::Client;
@@ -276,6 +281,7 @@ macro_rules! mock {
 ///     // Perhaps you need to force path style
 ///     |client_builder|client_builder.force_path_style(true)
 /// );
+/// ```
 ///
 #[macro_export]
 macro_rules! mock_client {
