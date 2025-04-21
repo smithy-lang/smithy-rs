@@ -634,4 +634,46 @@ mod tests {
         // Verify the rule was used the expected number of times
         assert_eq!(rule.num_calls(), 3);
     }
+
+    #[tokio::test]
+    async fn test_sequential_rule_removal() {
+        // Create a rule that matches only when key != "correct-key"
+        let rule1 = create_rule_builder()
+            .match_requests(|input| input.bucket == "test-bucket" && input.key != "correct-key")
+            .then_http_response(|| {
+                HttpResponse::new(
+                    StatusCode::try_from(404).unwrap(),
+                    SdkBody::from("not found"),
+                )
+            });
+
+        // Create a rule that matches only when key == "correct-key"
+        let rule2 = create_rule_builder()
+            .match_requests(|input| input.bucket == "test-bucket" && input.key == "correct-key")
+            .then_output(|| TestOutput::new("success"));
+
+        // Create an interceptor with both rules in Sequential mode
+        let interceptor = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::Sequential)
+            .with_rule(&rule1)
+            .with_rule(&rule2);
+
+        let operation = create_test_operation(interceptor, true);
+
+        // First call with key="foo" should match rule1
+        let result1 = operation.invoke(TestInput::new("test-bucket", "foo")).await;
+        assert!(result1.is_err());
+        assert_eq!(rule1.num_calls(), 1);
+
+        // Second call with key="correct-key" should match rule2
+        // But this will fail if rule1 is not removed after being used
+        let result2 = operation
+            .invoke(TestInput::new("test-bucket", "correct-key"))
+            .await;
+
+        // This should succeed, rule1 doesn't match but should have been removed
+        assert!(result2.is_ok());
+        assert_eq!(result2.unwrap(), TestOutput::new("success"));
+        assert_eq!(rule2.num_calls(), 1);
+    }
 }
