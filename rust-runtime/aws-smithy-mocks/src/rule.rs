@@ -238,6 +238,9 @@ where
     /// The handler function takes the call index and returns an optional response.
     /// If the handler returns None, the rule is considered exhausted.
     ///
+    /// This is particularly useful for testing retry behavior, where you might want to return
+    /// error responses for the first few attempts and then succeed.
+    ///
     /// # Examples
     ///
     /// ```rust,ignore
@@ -245,15 +248,31 @@ where
     /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
     /// use aws_sdk_s3::error::GetObjectError;
     ///
+    /// // Create a rule that returns 503 errors for the first two calls, then succeeds
     /// let rule = mock!(aws_sdk_s3::Client::get_object)
     ///     .serve(|idx| {
     ///         if idx < 2 {
-    ///             // First two calls for non-important keys return 503
+    ///             // First two calls return 503
     ///             Some(mock_response!(status: 503))
     ///         } else {
     ///             // Subsequent calls succeed
     ///             Some(mock_response!(GetObjectOutput::builder().build()))
     ///         }
+    ///     });
+    /// ```
+    ///
+    /// You can also use pattern matching for more complex scenarios:
+    ///
+    /// ```rust,ignore
+    /// let rule = mock!(Client::get_object)
+    ///     .serve(|idx| match idx {
+    ///         0 => Some(mock_response!(TestOutput::new("first output"))),
+    ///         1 => Some(mock_response!(error: TestError::new("expected error"))),
+    ///         2 => Some(mock_response!(http: HttpResponse::new(
+    ///             StatusCode::try_from(200).unwrap(),
+    ///             SdkBody::from("http response")
+    ///         ))),
+    ///         _ => None  // No more responses after the third call
     ///     });
     /// ```
     ///
@@ -264,333 +283,3 @@ where
         Rule::new::<O, E>(self.input_filter, Arc::new(handler))
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use std::error::Error as StdError;
-//     use std::fmt;
-//     use aws_smithy_runtime_api::http::StatusCode;
-//
-//     // Simple test types
-//     #[derive(Debug, Clone, PartialEq)]
-//     struct TestInput {
-//         bucket: String,
-//         key: String,
-//     }
-//
-//     impl TestInput {
-//         fn new(bucket: &str, key: &str) -> Self {
-//             Self {
-//                 bucket: bucket.to_string(),
-//                 key: key.to_string(),
-//             }
-//         }
-//     }
-//
-//     #[derive(Debug, Clone, PartialEq)]
-//     struct TestOutput {
-//         content: String,
-//     }
-//
-//     impl TestOutput {
-//         fn new(content: &str) -> Self {
-//             Self {
-//                 content: content.to_string(),
-//             }
-//         }
-//     }
-//
-//     #[derive(Debug, Clone, PartialEq)]
-//     struct TestError {
-//         message: String,
-//     }
-//
-//     impl TestError {
-//         fn new(message: &str) -> Self {
-//             Self {
-//                 message: message.to_string(),
-//             }
-//         }
-//     }
-//
-//     impl fmt::Display for TestError {
-//         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//             write!(f, "{}", self.message)
-//         }
-//     }
-//
-//     impl StdError for TestError {}
-//
-//     #[test]
-//     fn test_rule_next_response() {
-//         // Create a rule with a sequence of responses
-//         let rule = Rule::new(
-//             Arc::new(|_| true),
-//             Arc::new(|_, idx| match idx {
-//                 0 => Some(MockResponse::Output(TestOutput::new("first"))),
-//                 1 => Some(MockResponse::Error(TestError::new("error"))),
-//                 2 => Some(MockResponse::status(503)),
-//                 _ => None,
-//             }),
-//         );
-//
-//         // Test that responses are returned in order
-//         let input = TestInput::new("test-bucket", "test-key");
-//
-//         // First call should return the first output
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Output(output) => assert_eq!(output, TestOutput::new("first")),
-//             _ => panic!("Expected Output variant"),
-//         }
-//
-//         // Second call should return the error
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Error(error) => assert_eq!(error, TestError::new("error")),
-//             _ => panic!("Expected Error variant"),
-//         }
-//
-//         // Third call should return the HTTP response
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Http(http_response) => {
-//                 assert_eq!(http_response.status().as_u16(), 503);
-//             },
-//             _ => panic!("Expected Http variant"),
-//         }
-//
-//         // Fourth call should return None (rule is exhausted)
-//         let response = rule.next_response(&input);
-//         assert!(response.is_none());
-//     }
-//
-//     #[test]
-//     fn test_rule_num_calls() {
-//         // Create a rule with a sequence of responses
-//         let rule = Rule::new(
-//             Arc::new(|_| true),
-//             Arc::new(|_, idx| match idx {
-//                 0 => Some(MockResponse::Output(TestOutput::new("first"))),
-//                 1 => Some(MockResponse::Error(TestError::new("error"))),
-//                 _ => None,
-//             }),
-//         );
-//
-//         // Test that num_calls returns the correct value
-//         assert_eq!(rule.num_calls(), 0);
-//
-//         let input = Input::erase(TestInput::new("test-bucket", "test-key"));
-//
-//         // First call
-//         rule.next_response(&input);
-//         assert_eq!(rule.num_calls(), 1);
-//
-//         // Second call
-//         rule.next_response(&input);
-//         assert_eq!(rule.num_calls(), 2);
-//
-//         // Third call (rule is exhausted)
-//         rule.next_response(&input);
-//         assert_eq!(rule.num_calls(), 3);
-//     }
-//
-//     // #[test]
-//     // fn test_rule_reset() {
-//     //     // Create a rule with a sequence of responses
-//     //     let rule = Rule::new(
-//     //         Arc::new(|_| true),
-//     //         Arc::new(|_, idx| match idx {
-//     //             0 => Some(MockResponse::Output(TestOutput::new("first"))),
-//     //             _ => None,
-//     //         }),
-//     //         true,
-//     //     );
-//     //
-//     //     let input = TestInput::new("test-bucket", "test-key");
-//     //
-//     //     // Call next_response to increment the counter
-//     //     rule.next_response(&input);
-//     //     assert_eq!(rule.num_calls(), 1);
-//     //
-//     //     // Reset the rule
-//     //     rule.reset();
-//     //     assert_eq!(rule.num_calls(), 0);
-//     //
-//     //     // After reset, we should get the first response again
-//     //     let response = rule.next_response(&input);
-//     //     assert!(response.is_some());
-//     //     match response.unwrap() {
-//     //         MockResponse::Output(output) => assert_eq!(output, TestOutput::new("first")),
-//     //         _ => panic!("Expected Output variant"),
-//     //     }
-//     // }
-//
-//
-//     #[test]
-//     fn test_rule_builder_then_output() {
-//         // Create a rule with a single output
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .then_output(|| TestOutput::new("test"));
-//
-//         // Test that the rule returns the output
-//         let input = TestInput::new("test-bucket", "test-key");
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Output(output) => assert_eq!(output, TestOutput::new("test")),
-//             _ => panic!("Expected Output variant"),
-//         }
-//
-//         // Test that the rule is exhausted after one call
-//         let response = rule.next_response(&input);
-//         assert!(response.is_none());
-//     }
-//
-//     #[test]
-//     fn test_rule_builder_then_error() {
-//         // Create a rule with a single error
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .then_error(|| TestError::new("test error"));
-//
-//         // Test that the rule returns the error
-//         let input = TestInput::new("test-bucket", "test-key");
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Error(error) => assert_eq!(error, TestError::new("test error")),
-//             _ => panic!("Expected Error variant"),
-//         }
-//
-//         // Test that the rule is exhausted after one call
-//         let response = rule.next_response(&input);
-//         assert!(response.is_none());
-//     }
-//
-//     #[test]
-//     fn test_rule_builder_then_http_response() {
-//         // Create a rule with a single HTTP response
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .then_http_response(|| {
-//                 HttpResponse::new(
-//                     StatusCode::try_from(200).unwrap(),
-//                     aws_smithy_types::body::SdkBody::from("test body"),
-//                 )
-//             });
-//
-//         // Test that the rule returns the HTTP response
-//         let input = TestInput::new("test-bucket", "test-key");
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Http(http_response) => {
-//                 assert_eq!(http_response.status().as_u16(), 200);
-//                 assert_eq!(http_response.body().bytes().unwrap(), b"test body");
-//             },
-//             _ => panic!("Expected Http variant"),
-//         }
-//
-//         // Test that the rule is exhausted after one call
-//         let response = rule.next_response(&input);
-//         assert!(response.is_none());
-//     }
-//
-//     #[test]
-//     fn test_rule_builder_serve() {
-//         // Create a rule with a sequence of responses
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .serve(|_, idx| match idx {
-//                 0 => Some(mock_response!(TestOutput::new("first"))),
-//                 1 => Some(mock_response!(error: TestError::new("error"))),
-//                 2 => Some(mock_response!(status: 503)),
-//                 _ => None,
-//             });
-//
-//         // Test that responses are returned in order
-//         let input = TestInput::new("test-bucket", "test-key");
-//
-//         // First call should return the first output
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Output(output) => assert_eq!(output, TestOutput::new("first")),
-//             _ => panic!("Expected Output variant"),
-//         }
-//
-//         // Second call should return the error
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Error(error) => assert_eq!(error, TestError::new("error")),
-//             _ => panic!("Expected Error variant"),
-//         }
-//
-//         // Third call should return the HTTP response
-//         let response = rule.next_response(&input);
-//         assert!(response.is_some());
-//         match response.unwrap() {
-//             MockResponse::Http(http_response) => {
-//                 assert_eq!(http_response.status().as_u16(), 503);
-//             },
-//             _ => panic!("Expected Http variant"),
-//         }
-//
-//         // Fourth call should return None (rule is exhausted)
-//         let response = rule.next_response(&input);
-//         assert!(response.is_none());
-//     }
-//
-//     #[test]
-//     fn test_rule_builder_serve_with_input() {
-//         // Create a rule that uses the input to determine the response
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .serve(|input, _| {
-//                 if input.bucket == "special-bucket" {
-//                     Some(mock_response!(TestOutput::new("special")))
-//                 } else {
-//                     Some(mock_response!(TestOutput::new("normal")))
-//                 }
-//             });
-//
-//         // Test that the rule returns different responses based on the input
-//         let input1 = TestInput::new("special-bucket", "test-key");
-//         let response1 = rule.next_response(&input1);
-//         assert!(response1.is_some());
-//         match response1.unwrap() {
-//             MockResponse::Output(output) => assert_eq!(output, TestOutput::new("special")),
-//             _ => panic!("Expected Output variant"),
-//         }
-//
-//         let input2 = TestInput::new("normal-bucket", "test-key");
-//         let response2 = rule.next_response(&input2);
-//         assert!(response2.is_some());
-//         match response2.unwrap() {
-//             MockResponse::Output(output) => assert_eq!(output, TestOutput::new("normal")),
-//             _ => panic!("Expected Output variant"),
-//         }
-//     }
-//
-//     #[test]
-//     fn test_rule_builder_match_requests() {
-//         // Create a rule that only matches specific inputs
-//         let rule = RuleBuilder::<TestInput, TestOutput, TestError>::new()
-//             .match_requests(|input| input.bucket == "matched-bucket")
-//             .serve(|_, _| Some(mock_response!(TestOutput::new("matched"))));
-//
-//         // Test that the rule matcher works
-//         let input1 = TestInput::new("matched-bucket", "test-key");
-//         let input2 = TestInput::new("unmatched-bucket", "test-key");
-//
-//         let input_matches = (rule.matcher)(&Input::erase(input1.clone()));
-//         let input_does_not_match = (rule.matcher)(&Input::erase(input2.clone()));
-//
-//         assert!(input_matches);
-//         assert!(!input_does_not_match);
-//     }
-//
-// }
-//
