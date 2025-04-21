@@ -8,11 +8,14 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /* End of automatically managed default lints */
+#![warn(
+    missing_docs,
+    rustdoc::missing_crate_level_docs,
+    unreachable_pub,
+    rust_2018_idioms
+)]
+
 use std::collections::VecDeque;
-use std::fmt::Formatter;
-use std::future::Future;
-use std::marker::PhantomData;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{fmt, panic};
 
@@ -21,15 +24,19 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, Error,
-    FinalizerInterceptorContextMut, Input, Output,
+    FinalizerInterceptorContextMut, Output,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
-use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_runtime_api::http::{Response, StatusCode};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+
+mod response;
+mod rule;
+
+pub use response::MockResponse;
+pub use rule::{Rule, RuleBuilder, RuleMode};
 
 // why do we need a macro for this?
 // We want customers to be able to provide an ergonomic way to say the method they're looking for,
@@ -156,249 +163,6 @@ macro_rules! mock_client {
     }};
 }
 
-type MatchFn = Arc<dyn Fn(&Input) -> bool + Send + Sync>;
-type OutputFn = Arc<dyn Fn() -> Result<Output, OrchestratorError<Error>> + Send + Sync>;
-type HttpResponseFn = Arc<dyn Fn() -> Result<HttpResponse, BoxError> + Send + Sync>;
-
-#[derive(Clone)]
-enum MockOutput {
-    HttpResponse(HttpResponseFn),
-    ModeledResponse(OutputFn),
-}
-
-impl fmt::Debug for MockOutput {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            MockOutput::HttpResponse(_) => write!(f, "MockOutput::HttpResponse"),
-            MockOutput::ModeledResponse(_) => write!(f, "MockOutput::ModeledResponse"),
-        }
-    }
-}
-
-// FIXME - leftoff at figuring out sequential rule mode when a rule has multiple outputs defined
-// There are two possible interpretations of how RuleMode::Sequential should work:
-// 1. Rule-level sequencing: Each rule is used once and then removed from the list. This is the current implementation.
-// 2. Response-level sequencing: Each rule can have multiple responses, and we progress through all responses in a rule before moving to the next rule.
-
-// Also discussed a proc macro possibly as well as a .serve(|op, idx| { ... }) function for arbitrary serving of responses
-// TODO test with multiple rules for same op but decreasing specificity and MatchAny
-
-/// RuleMode describes how rules will be interpreted.
-/// - In RuleMode::MatchAny, the first matching rule will be applied, and the rules will remain unchanged.
-/// - In RuleMode::Sequential, the first matching rule will be applied, and that rule will be removed from the list of rules.
-#[derive()]
-pub enum RuleMode {
-    MatchAny,
-    Sequential,
-}
-
-pub struct RuleBuilder<I, O, E> {
-    _ty: PhantomData<(I, O, E)>,
-    input_filter: MatchFn,
-    responses: Vec<ResponseEntry>,
-}
-
-impl<I, O, E> RuleBuilder<I, O, E>
-where
-    I: Send + Sync + fmt::Debug + 'static,
-    O: Send + Sync + fmt::Debug + 'static,
-    E: Send + Sync + fmt::Debug + std::error::Error + 'static,
-{
-    /// Creates a new [`RuleBuilder`]. This is normally constructed with the [`mock!`] macro
-    pub fn new<F, R>(_input_hint: impl Fn() -> I, _output_hint: impl Fn() -> F) -> Self
-    where
-        F: Future<Output = Result<O, SdkError<E, R>>>,
-    {
-        Self {
-            _ty: Default::default(),
-            input_filter: Arc::new(|i: &Input| i.downcast_ref::<I>().is_some()),
-            responses: Vec::new(),
-        }
-    }
-
-    /// Add an additional filter to constrain which inputs match this rule.
-    ///
-    /// For examples, see the examples directory of this repository.
-    pub fn match_requests(mut self, filter: impl Fn(&I) -> bool + Send + Sync + 'static) -> Self {
-        self.input_filter = Arc::new(move |i: &Input| match i.downcast_ref::<I>() {
-            Some(typed_input) => filter(typed_input),
-            _ => false,
-        });
-        self
-    }
-
-    /// If the rule matches, then return a specific HTTP response.
-    ///
-    /// This is the recommended way of testing error behavior.
-    pub fn then_http_response(
-        mut self,
-        response: impl Fn() -> HttpResponse + Send + Sync + 'static,
-    ) -> Self {
-        self.responses.push(ResponseEntry::new(
-            MockOutput::HttpResponse(Arc::new(move || Ok(response()))),
-            0,
-        ));
-        self
-    }
-
-    /// If a rule matches, then return a specific output
-    pub fn then_output(mut self, output: impl Fn() -> O + Send + Sync + 'static) -> Self {
-        self.responses.push(ResponseEntry::new(
-            MockOutput::ModeledResponse(Arc::new(move || Ok(Output::erase(output())))),
-            0,
-        ));
-        self
-    }
-
-    /// If a rule matches, then return a specific error
-    ///
-    /// Although this _basically_ works, using `then_http_response` is strongly recommended to
-    /// create a higher fidelity mock. Error handling is quite complex in practice and returning errors
-    /// directly often will not perfectly capture the way the error is actually returned to the SDK.
-    pub fn then_error(mut self, output: impl Fn() -> E + Send + Sync + 'static) -> Self {
-        self.responses.push(ResponseEntry::new(
-            MockOutput::ModeledResponse(Arc::new(move || {
-                Err(OrchestratorError::operation(Error::erase(output())))
-            })),
-            0,
-        ));
-        self
-    }
-
-    /// Repeat the last response in the sequence a specified number of times.
-    ///
-    /// This is useful for testing retry behavior. For example, you can return a 503 error
-    /// response multiple times before returning a success response.
-    ///
-    /// # Examples
-    ///
-    /// rust
-    /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
-    /// use aws_sdk_s3::Client;
-    /// use aws_smithy_types::byte_stream::ByteStream;
-    /// use aws_smithy_mocks::mock;
-    /// let get_object_output = mock!(Client::get_object)
-    ///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
-    ///   .then_http_response(||
-    ///       http::Response::builder()
-    ///           .status(503)
-    ///           .body(SdkBody::from(&b""[..]))
-    ///           .unwrap()
-    ///   )
-    ///   .repeat(2)  // Return the 503 response 3 times total (original + 2 repeats)
-    ///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build())
-    ///   .build();
-    ///
-    pub fn repeat(mut self, count: usize) -> Self {
-        if let Some(last) = self.responses.last_mut() {
-            last.repeat_count = count;
-        } else {
-            panic!("Cannot repeat: no response has been added yet");
-        }
-        self
-    }
-
-    /// Build the rule.
-    ///
-    /// This method creates a Rule from the RuleBuilder.
-    pub fn build(self) -> Rule {
-        if self.responses.is_empty() {
-            panic!("Cannot build a rule with no responses");
-        }
-        Rule::new(self.input_filter, self.responses)
-    }
-}
-
-#[derive(Debug, Clone)]
-struct ResponseEntry {
-    output: MockOutput,
-    repeat_count: usize,
-    current_repeat: Arc<AtomicUsize>,
-}
-
-impl ResponseEntry {
-    fn new(output: MockOutput, repeat_count: usize) -> Self {
-        Self {
-            output,
-            repeat_count,
-            current_repeat: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Rule {
-    matcher: MatchFn,
-    responses: Vec<ResponseEntry>,
-    current_index: Arc<AtomicUsize>,
-    used_count: Arc<AtomicUsize>,
-}
-
-impl fmt::Debug for Rule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Rule")
-    }
-}
-
-impl Rule {
-    fn new(matcher: MatchFn, responses: Vec<ResponseEntry>) -> Self {
-        Self {
-            matcher,
-            responses,
-            current_index: Arc::new(AtomicUsize::new(0)),
-            used_count: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    fn record_usage(&self) {
-        self.used_count.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Returns the number of times this rule has been hit.
-    pub fn num_calls(&self) -> usize {
-        self.used_count.load(Ordering::Relaxed)
-    }
-
-    /// Get the next response in the sequence
-    fn next_response(&self) -> Option<ResponseEntry> {
-        let index = self.current_index.load(Ordering::Relaxed);
-        if index >= self.responses.len() {
-            return None;
-        }
-
-        let entry = &self.responses[index];
-        let repeat_count = entry.repeat_count;
-        let current_repeat = entry.current_repeat.fetch_add(1, Ordering::Relaxed);
-
-        // If we've repeated enough times, move to the next response
-        if current_repeat >= repeat_count {
-            self.current_index.fetch_add(1, Ordering::Relaxed);
-            entry.current_repeat.store(0, Ordering::Relaxed);
-        }
-
-        Some(entry.clone())
-    }
-
-    // Check if the sequence is exhausted
-    fn is_exhausted(&self) -> bool {
-        self.current_index.load(Ordering::Relaxed) >= self.responses.len()
-    }
-
-    // Check if the rule will be exhausted after the next response
-    fn is_exhausted_after_next(&self) -> bool {
-        let current_index = self.current_index.load(Ordering::Relaxed);
-        if current_index >= self.responses.len() {
-            return true;
-        }
-
-        let entry = &self.responses[current_index];
-        let current_repeat = entry.current_repeat.load(Ordering::Relaxed);
-
-        // If this is the last response and we've used all repeats
-        current_index == self.responses.len() - 1 && current_repeat >= entry.repeat_count
-    }
-}
-
 // Store active rule in config bag
 #[derive(Debug, Clone)]
 struct ActiveRule(Rule);
@@ -407,19 +171,12 @@ impl Storable for ActiveRule {
     type Storer = StoreReplace<ActiveRule>;
 }
 
-// Store response entry from the rule
-#[derive(Debug, Clone)]
-struct ActiveResponseEntry(ResponseEntry);
-
-impl Storable for ActiveResponseEntry {
-    type Storer = StoreReplace<ActiveResponseEntry>;
-}
-
 /// Interceptor which produces mock responses based on a list of rules
 pub struct MockResponseInterceptor {
     rules: Arc<Mutex<VecDeque<Rule>>>,
     rule_mode: RuleMode,
     must_match: bool,
+    active_response: Arc<Mutex<Option<MockResponse<Output, Error>>>>,
 }
 
 impl fmt::Debug for MockResponseInterceptor {
@@ -435,11 +192,15 @@ impl Default for MockResponseInterceptor {
 }
 
 impl MockResponseInterceptor {
+    /// Create a new [MockResponseInterceptor]
+    ///
+    /// This is normally created and registered on a client through the [`mock_client`] macro.
     pub fn new() -> Self {
         Self {
             rules: Default::default(),
             rule_mode: RuleMode::MatchAny,
             must_match: true,
+            active_response: Default::default(),
         }
     }
     /// Add a rule to the Interceptor
@@ -480,50 +241,66 @@ impl Intercept for MockResponseInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut rules = self.rules.lock().unwrap();
-        let rule = match self.rule_mode {
+        let input = context.inner().input().expect("input set");
+
+        // Find a matching rule and get its response
+        let mut matching_rule = None;
+        let mut matching_response = None;
+
+        match self.rule_mode {
             RuleMode::Sequential => {
-                // Find the first rule that isn't exhausted
-                let rule_index = rules.iter().position(|rule| !rule.is_exhausted());
-
-                match rule_index {
-                    Some(index) => {
-                        // Get a reference to the rule without removing it
-                        let rule = &rules[index];
-
-                        if !(rule.matcher)(context.input()) {
-                            panic!(
-                                "In order matching was enforced but the next rule did not match {:?}",
-                                context.input()
-                            );
-                        }
-
-                        // If the rule is exhausted after this use, remove it
-                        let rule = rule.clone();
-                        if rule.is_exhausted_after_next() {
-                            rules.remove(index);
-                        }
-
-                        Some(rule)
+                // Try rules in order until we find one that matches and has a response
+                let mut i = 0;
+                while i < rules.len() && matching_response.is_none() {
+                    let rule = &rules[i];
+                    if !(rule.matcher)(input) {
+                        // Rule doesn't match, this is an error in sequential mode
+                        panic!(
+                            "In order matching was enforced but rule did not match {:?}",
+                            input
+                        );
                     }
-                    None => panic!("no more rules but a new request was received"),
+                    // Get the next response
+                    if let Some(response) = rule.next_response() {
+                        matching_rule = Some(rule.clone());
+                        matching_response = Some(response);
+                    } else {
+                        // Rule is exhausted, remove it and try the next one
+                        rules.remove(i);
+                        continue; // Don't increment i since we removed an element
+                    }
+                    i += 1;
                 }
             }
-            RuleMode::MatchAny => rules
-                .iter()
-                .find(|rule| (rule.matcher)(context.input()))
-                .cloned(),
+            RuleMode::MatchAny => {
+                // Find any matching rule with a response
+                for rule in rules.iter() {
+                    if (rule.matcher)(input) {
+                        if let Some(response) = rule.next_response() {
+                            matching_rule = Some(rule.clone());
+                            matching_response = Some(response);
+                            break;
+                        }
+                    }
+                }
+            }
         };
 
-        match rule {
-            Some(rule) => {
+        match (matching_rule, matching_response) {
+            (Some(rule), Some(response)) => {
                 // Store the rule in the config bag
                 cfg.interceptor_state().store_put(ActiveRule(rule));
+                // store the response on the interceptor (because going
+                // through interceptor context requires the type to impl Clone)
+                let mut active_resp = self.active_response.lock().unwrap();
+                let _ = std::mem::replace(&mut *active_resp, Some(response));
             }
-            None => {
+            _ => {
+                // No matching rule or no response
                 if self.must_match {
                     panic!(
-                        "must_match was enabled but no rules matches {:?}",
-                        context.input()
+                        "must_match was enabled but no rules matched or all rules were exhausted for {:?}",
+                        input
                     );
                 }
             }
@@ -538,23 +315,31 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(active_rule) = cfg.load::<ActiveRule>() {
-            if let Some(entry) = active_rule.0.next_response() {
-                active_rule.0.record_usage();
-                if let MockOutput::HttpResponse(output_fn) = &entry.output {
-                    // Store the function as an extension and the HTTP client will use it
-                    context
-                        .request_mut()
-                        .add_extension(MockHttpResponse(output_fn.clone()));
-                }
-
-                // Store the response entry in the config bag for this attempt
-                cfg.interceptor_state()
-                    .store_put(ActiveResponseEntry(entry));
-            } else {
-                // TODO - error if not match/passthrough?
+        let mut state = self.active_response.lock().unwrap();
+        let mut active_response = (*state).take();
+        if active_response.is_none() {
+            // in the case of retries we try to get the next response if it has been consumed
+            if let Some(active_rule) = cfg.load::<ActiveRule>() {
+                let next_resp = active_rule.0.next_response();
+                active_response = next_resp;
             }
         }
+
+        if let Some(resp) = active_response {
+            match resp {
+                // place the http response into the extensions and let the HTTP client return it
+                MockResponse::Http(http_resp) => {
+                    context
+                        .request_mut()
+                        .add_extension(MockHttpResponse(Arc::new(http_resp)));
+                }
+                _ => {
+                    // put it back for modeled output/errors
+                    let _ = std::mem::replace(&mut *state, Some(resp));
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -562,20 +347,24 @@ impl Intercept for MockResponseInterceptor {
         &self,
         context: &mut FinalizerInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
-        cfg: &mut ConfigBag,
+        _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(entry) = cfg.load::<ActiveResponseEntry>() {
-            if let MockOutput::ModeledResponse(output_fn) = &entry.0.output {
-                let result = output_fn();
-                if result.is_err() {
-                    // The orchestrator will panic if no response is present
-                    context.inner_mut().set_response(Response::new(
-                        StatusCode::try_from(500).unwrap(),
-                        SdkBody::from("stubbed error response"),
-                    ))
+        // Handle modeled responses
+        let mut state = self.active_response.lock().unwrap();
+        let active_response = (*state).take();
+        if let Some(resp) = active_response {
+            match resp {
+                MockResponse::Output(output) => {
+                    context.inner_mut().set_output_or_error(Ok(output));
                 }
-
-                context.inner_mut().set_output_or_error(result);
+                MockResponse::Error(error) => {
+                    context
+                        .inner_mut()
+                        .set_output_or_error(Err(OrchestratorError::operation(error)));
+                }
+                MockResponse::Http(_) => {
+                    // HTTP responses are handled by the mock HTTP client
+                }
             }
         }
 
@@ -585,21 +374,16 @@ impl Intercept for MockResponseInterceptor {
 
 /// Extension for storing mock HTTP responses in request extensions
 #[derive(Clone)]
-struct MockHttpResponse(HttpResponseFn);
+struct MockHttpResponse(Arc<HttpResponse>);
 
 /// Create a mock HTTP client that works with the interceptor using existing utilities
 pub fn create_mock_http_client() -> SharedHttpClient {
-    infallible_client_fn(|req| {
+    infallible_client_fn(|mut req| {
         // Try to get the mock HTTP response generator from the extensions
-        if let Some(mock_response_gen) = req.extensions().get::<MockHttpResponse>() {
-            // Invoke the function to get the actual response
-            match (mock_response_gen.0)() {
-                Ok(response) => return response.try_into_http1x().unwrap(),
-                Err(e) => panic!(
-                    "Error generating mock HTTP response from provided closure: {}",
-                    e
-                ),
-            }
+        if let Some(mock_response) = req.extensions_mut().remove::<MockHttpResponse>() {
+            let http_resp =
+                Arc::try_unwrap(mock_response.0).expect("mock HTTP response has single reference");
+            return http_resp.try_into_http1x().unwrap();
         }
 
         // Default dummy response if no mock response is defined
@@ -616,8 +400,9 @@ mod tests {
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_runtime::client::orchestrator::operation::Operation;
     use aws_smithy_runtime::client::retries::classifiers::HttpStatusCodeClassifier;
-    use aws_smithy_runtime_api::client::interceptors::context::Input;
     use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+    use aws_smithy_runtime_api::client::result::SdkError;
+    use aws_smithy_runtime_api::http::StatusCode;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -675,7 +460,7 @@ mod tests {
 
     // Helper function to create a RuleBuilder with proper type hints
     fn create_rule_builder() -> RuleBuilder<TestInput, TestOutput, TestError> {
-        RuleBuilder::new(
+        RuleBuilder::new_from_mock(
             || TestInput {
                 bucket: "".to_string(),
                 key: "".to_string(),
@@ -739,71 +524,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_rule_builder_sequence() {
-        // Create a RuleBuilder with a sequence of responses
-        let rule = create_rule_builder()
-            .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
-            .then_output(|| TestOutput::new("first response"))
-            .then_http_response(|| {
-                HttpResponse::new(
-                    StatusCode::try_from(503).unwrap(),
-                    SdkBody::from("service unavailable"),
-                )
-            })
-            .then_output(|| TestOutput::new("second response"))
-            .build();
-
-        // Verify the rule has the expected structure
-        assert_eq!(rule.responses.len(), 3);
-
-        // Test that the matcher works
-        let matching_input = TestInput::new("test-bucket", "test-key");
-        let non_matching_input = TestInput::new("wrong-bucket", "test-key");
-
-        let input_matches = (rule.matcher)(&Input::erase(matching_input));
-        let input_does_not_match = (rule.matcher)(&Input::erase(non_matching_input));
-
-        assert!(input_matches);
-        assert!(!input_does_not_match);
-    }
-
-    #[test]
-    fn test_rule_builder_repetition() {
-        // Create a RuleBuilder with a repeated response
-        let rule = create_rule_builder()
-            .then_http_response(|| {
-                HttpResponse::new(
-                    StatusCode::try_from(503).unwrap(),
-                    SdkBody::from("service unavailable"),
-                )
-            })
-            .repeat(2) // Repeat 3 times total (original + 2 repeats)
-            .then_output(|| TestOutput::new("success"))
-            .build();
-
-        // Verify the rule has the expected structure
-        assert_eq!(rule.responses.len(), 2);
-        assert_eq!(rule.responses[0].repeat_count, 2);
-        assert_eq!(rule.responses[1].repeat_count, 0);
-    }
-
     #[tokio::test]
-    async fn test_retry_with_repeat() {
+    async fn test_retry_serve() {
         // Create a rule with repeated error responses followed by success
         let rule = create_rule_builder()
             .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
-            // First response: 503 Service Unavailable repeated 3 times (should trigger retries)
-            .then_http_response(|| {
-                HttpResponse::new(
-                    StatusCode::try_from(503).unwrap(),
-                    SdkBody::from("service unavailable"),
-                )
-            })
-            .repeat(2) // Repeat 3 times total (original + 2 repeats)
-            // Final response: 200 OK with success output
-            .then_output(|| TestOutput::new("success after retries"))
-            .build();
+            .serve(|idx| match idx {
+                0 | 1 => Some(mock_response!(status: 503)),
+                2 => Some(mock_response!(TestOutput::new("success after retries"))),
+                _ => None,
+            });
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
@@ -830,45 +560,17 @@ mod tests {
             }
         );
 
-        // Verify the rule was used the expected number of times (all 4 responses: 3 errors + 1 success)
-        assert_eq!(rule.num_calls(), 4);
+        // Verify the rule was used the expected number of times (all 4 responses: 2 errors + 1 success)
+        assert_eq!(rule.num_calls(), 3);
     }
 
-    #[should_panic(expected = "Cannot build a rule with no responses")]
-    #[test]
-    fn test_empty_rule_builder_panics() {
-        // Creating a rule with no responses should panic
-        let _rule = create_rule_builder().build();
-    }
-
-    #[test]
-    fn test_zero_repetition() {
-        // Test that setting repeat(0) doesn't change behavior
-        let rule = create_rule_builder()
-            .then_output(|| TestOutput::new("first"))
-            .repeat(0) // Should have no effect
-            .then_output(|| TestOutput::new("second"))
-            .build();
-
-        // Verify the rule has the expected structure
-        assert_eq!(rule.responses.len(), 2);
-        assert_eq!(rule.responses[0].repeat_count, 0);
-    }
-
-    #[should_panic(expected = "Cannot repeat: no response has been added yet")]
-    #[test]
-    fn test_repeat_without_response_panics() {
-        // Calling repeat() before adding any responses should panic
-        let _rule = create_rule_builder().repeat(2).build();
-    }
-
-    #[should_panic(expected = "no more rules but a new request was received")]
+    #[should_panic(
+        expected = "must_match was enabled but no rules matched or all rules were exhausted for"
+    )]
     #[tokio::test]
     async fn test_exhausted_rules() {
         // Create a rule with a single response
-        let rule = create_rule_builder()
-            .then_output(|| TestOutput::new("only response"))
-            .build();
+        let rule = create_rule_builder().then_output(|| TestOutput::new("only response"));
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
@@ -894,13 +596,11 @@ mod tests {
         // Create two rules with different matchers
         let rule1 = create_rule_builder()
             .match_requests(|input| input.bucket == "bucket1")
-            .then_output(|| TestOutput::new("response1"))
-            .build();
+            .then_output(|| TestOutput::new("response1"));
 
         let rule2 = create_rule_builder()
             .match_requests(|input| input.bucket == "bucket2")
-            .then_output(|| TestOutput::new("response2"))
-            .build();
+            .then_output(|| TestOutput::new("response2"));
 
         // Create an interceptor with both rules in MatchAny mode
         let interceptor = MockResponseInterceptor::new()
@@ -932,19 +632,15 @@ mod tests {
     #[tokio::test]
     async fn test_mixed_response_types() {
         // Create a rule with all three types of responses
-        let rule = create_rule_builder()
-            // First: modeled output
-            .then_output(|| TestOutput::new("first output"))
-            // Second: modeled error
-            .then_error(|| TestError::new("expected error"))
-            // Third: HTTP response
-            .then_http_response(|| {
-                HttpResponse::new(
-                    StatusCode::try_from(200).unwrap(),
-                    SdkBody::from("http response"),
-                )
-            })
-            .build();
+        let rule = create_rule_builder().serve(|idx| match idx {
+            0 => Some(mock_response!(TestOutput::new("first output"))),
+            1 => Some(mock_response!(error: TestError::new("expected error"))),
+            2 => Some(mock_response!(http: HttpResponse::new(
+                StatusCode::try_from(200).unwrap(),
+                SdkBody::from("http response")
+            ))),
+            _ => None,
+        });
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
@@ -983,15 +679,15 @@ mod tests {
     #[tokio::test]
     async fn test_exhausted_sequence() {
         // Create a rule with a sequence that will be exhausted
-        let rule = create_rule_builder()
-            .then_output(|| TestOutput::new("response 1"))
-            .then_output(|| TestOutput::new("response 2"))
-            .build();
+        let rule = create_rule_builder().serve(|idx| match idx {
+            0 => Some(mock_response!(TestOutput::new("response 1"))),
+            1 => Some(mock_response!(TestOutput::new("response 2"))),
+            _ => None,
+        });
 
         // Create another rule to use after the first one is exhausted
-        let fallback_rule = create_rule_builder()
-            .then_output(|| TestOutput::new("fallback response"))
-            .build();
+        let fallback_rule =
+            create_rule_builder().then_output(|| TestOutput::new("fallback response"));
 
         // Create an interceptor with both rules
         let interceptor = MockResponseInterceptor::new()
@@ -1032,13 +728,12 @@ mod tests {
         use tokio::task;
 
         // Create a rule with multiple responses
-        let rule = Arc::new(
-            create_rule_builder()
-                .then_output(|| TestOutput::new("response 1"))
-                .then_output(|| TestOutput::new("response 2"))
-                .then_output(|| TestOutput::new("response 3"))
-                .build(),
-        );
+        let rule = Arc::new(create_rule_builder().serve(|idx| match idx {
+            0 => Some(mock_response!(TestOutput::new("response 1"))),
+            1 => Some(mock_response!(TestOutput::new("response 2"))),
+            2 => Some(mock_response!(TestOutput::new("response 3"))),
+            _ => None,
+        }));
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
