@@ -12,6 +12,7 @@ const CRATES_TO_BE_USED_DIRECTLY: &[&str] = [
     "aws-config",
     "aws-smithy-types-convert",
     "aws-smithy-mocks",
+    "aws-smithy-mocks-experimental",
     "aws-smithy-experimental",
 ]
 .as_slice();

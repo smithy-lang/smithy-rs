@@ -556,6 +556,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-mocks-experimental"
+version = "0.2.4"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "tokio",
+]
+
+[[package]]
 name = "aws-smithy-observability"
 version = "0.1.3"
 dependencies = [
