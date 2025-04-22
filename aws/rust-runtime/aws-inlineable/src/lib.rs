@@ -22,6 +22,10 @@
     unreachable_pub
 )]
 
+/// An endpoint-based `AuthSchemeOptionResolver` type, with `RuntimePlugin` trait impl for registering it in `RuntimeComponents`.
+#[allow(dead_code)]
+pub mod endpoint_auth_plugin;
+
 /// Interceptors for API Gateway
 pub mod apigateway_interceptors;
 
