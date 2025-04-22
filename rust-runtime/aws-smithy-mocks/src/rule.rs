@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::MockResponse;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::result::SdkError;
@@ -13,6 +12,23 @@ use std::fmt;
 use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+/// A mock response that can be returned by a rule.
+///
+/// This enum represents the different types of responses that can be returned by a mock rule:
+/// - `Output`: A successful modeled response
+/// - `Error`: A modeled error
+/// - `Http`: An HTTP response
+///
+#[derive(Debug)]
+pub(crate) enum MockResponse<O, E> {
+    /// A successful modeled response.
+    Output(O),
+    /// A modeled error.
+    Error(E),
+    /// An HTTP response.
+    Http(HttpResponse),
+}
 
 /// A function that matches requests.
 type MatchFn = Arc<dyn Fn(&Input) -> bool + Send + Sync>;
@@ -200,7 +216,7 @@ where
     }
 }
 
-pub(crate) type SequenceGeneratorFn<O, E> = Arc<dyn Fn() -> MockResponse<O, E> + Send + Sync>;
+type SequenceGeneratorFn<O, E> = Arc<dyn Fn() -> MockResponse<O, E> + Send + Sync>;
 
 /// A builder for creating response sequences
 pub struct ResponseSequenceBuilder<I, O, E> {

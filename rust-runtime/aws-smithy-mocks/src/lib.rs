@@ -190,11 +190,10 @@
 )]
 
 mod interceptor;
-mod response;
 mod rule;
 
 pub use interceptor::{create_mock_http_client, MockResponseInterceptor};
-pub use response::MockResponse;
+pub(crate) use rule::MockResponse;
 pub use rule::{Rule, RuleBuilder, RuleMode};
 
 // why do we need a macro for this?
