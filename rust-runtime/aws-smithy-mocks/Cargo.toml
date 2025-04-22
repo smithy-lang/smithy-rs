@@ -24,7 +24,3 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[[example]]
-name = "s3-getobject-mocks"
-doc-scrape-examples = true
