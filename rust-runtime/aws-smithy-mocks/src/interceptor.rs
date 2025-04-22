@@ -106,10 +106,19 @@ impl Intercept for MockResponseInterceptor {
 
         match self.rule_mode {
             RuleMode::Sequential => {
-                // Try rules in order until we find one that matches and has a response
-                let mut i = 0;
+                // Sequential mode requires rules match in-order
+                let i = 0;
                 while i < rules.len() && matching_response.is_none() {
                     let rule = &rules[i];
+
+                    // Check if the rule is already exhausted
+                    if rule.is_exhausted() {
+                        // Rule is exhausted, remove it and try the next one
+                        rules.remove(i);
+                        continue; // Don't increment i since we removed an element
+                    }
+
+                    // Check if the rule matches
                     if !(rule.matcher)(input) {
                         // Rule doesn't match, this is an error in sequential mode
                         panic!(
@@ -117,7 +126,8 @@ impl Intercept for MockResponseInterceptor {
                             input
                         );
                     }
-                    // Get the next response
+
+                    // Rule matches and is not exhausted, get the response
                     if let Some(response) = rule.next_response() {
                         matching_rule = Some(rule.clone());
                         matching_response = Some(response);
@@ -126,12 +136,19 @@ impl Intercept for MockResponseInterceptor {
                         rules.remove(i);
                         continue; // Don't increment i since we removed an element
                     }
-                    i += 1;
+
+                    // We found a matching rule and got a response, so we're done
+                    break;
                 }
             }
             RuleMode::MatchAny => {
                 // Find any matching rule with a response
                 for rule in rules.iter() {
+                    // Skip exhausted rules
+                    if rule.is_exhausted() {
+                        continue;
+                    }
+
                     if (rule.matcher)(input) {
                         if let Some(response) = rule.next_response() {
                             matching_rule = Some(rule.clone());
@@ -265,9 +282,7 @@ mod tests {
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
 
-    use crate::{
-        create_mock_http_client, mock_response, MockResponseInterceptor, RuleBuilder, RuleMode,
-    };
+    use crate::{create_mock_http_client, MockResponseInterceptor, RuleBuilder, RuleMode};
     use std::time::Duration;
 
     // Simple test input and output types
@@ -386,15 +401,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_retry_serve() {
+    async fn test_retry_sequence() {
         // Create a rule with repeated error responses followed by success
         let rule = create_rule_builder()
             .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
-            .serve(|idx| match idx {
-                0 | 1 => Some(mock_response!(status: 503)),
-                2 => Some(mock_response!(TestOutput::new("success after retries"))),
-                _ => None,
-            });
+            .sequence()
+            .http_status(503, None)
+            .times(2)
+            .output(|| TestOutput::new("success after retries"))
+            .build();
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
@@ -493,15 +508,17 @@ mod tests {
     #[tokio::test]
     async fn test_mixed_response_types() {
         // Create a rule with all three types of responses
-        let rule = create_rule_builder().serve(|idx| match idx {
-            0 => Some(mock_response!(TestOutput::new("first output"))),
-            1 => Some(mock_response!(error: TestError::new("expected error"))),
-            2 => Some(mock_response!(http: HttpResponse::new(
-                StatusCode::try_from(200).unwrap(),
-                SdkBody::from("http response")
-            ))),
-            _ => None,
-        });
+        let rule = create_rule_builder()
+            .sequence()
+            .output(|| TestOutput::new("first output"))
+            .error(|| TestError::new("expected error"))
+            .http_response(|| {
+                HttpResponse::new(
+                    StatusCode::try_from(200).unwrap(),
+                    SdkBody::from("http response"),
+                )
+            })
+            .build();
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()
@@ -540,11 +557,11 @@ mod tests {
     #[tokio::test]
     async fn test_exhausted_sequence() {
         // Create a rule with a sequence that will be exhausted
-        let rule = create_rule_builder().serve(|idx| match idx {
-            0 => Some(mock_response!(TestOutput::new("response 1"))),
-            1 => Some(mock_response!(TestOutput::new("response 2"))),
-            _ => None,
-        });
+        let rule = create_rule_builder()
+            .sequence()
+            .output(|| TestOutput::new("response 1"))
+            .output(|| TestOutput::new("response 2"))
+            .build();
 
         // Create another rule to use after the first one is exhausted
         let fallback_rule =
@@ -589,12 +606,14 @@ mod tests {
         use tokio::task;
 
         // Create a rule with multiple responses
-        let rule = Arc::new(create_rule_builder().serve(|idx| match idx {
-            0 => Some(mock_response!(TestOutput::new("response 1"))),
-            1 => Some(mock_response!(TestOutput::new("response 2"))),
-            2 => Some(mock_response!(TestOutput::new("response 3"))),
-            _ => None,
-        }));
+        let rule = Arc::new(
+            create_rule_builder()
+                .sequence()
+                .output(|| TestOutput::new("response 1"))
+                .output(|| TestOutput::new("response 2"))
+                .output(|| TestOutput::new("response 3"))
+                .build(),
+        );
 
         // Create an interceptor with the rule
         let interceptor = MockResponseInterceptor::new()

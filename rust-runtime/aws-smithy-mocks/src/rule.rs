@@ -7,6 +7,8 @@ use crate::MockResponse;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::http::StatusCode;
+use aws_smithy_types::body::SdkBody;
 use std::fmt;
 use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,25 +22,6 @@ type ServeFn = Arc<dyn Fn(usize) -> Option<MockResponse<Output, Error>> + Send +
 ///
 /// Rules are created using the `mock!` macro or the `RuleBuilder`.
 ///
-/// # Examples
-///
-/// ```rust,ignore
-/// use aws_smithy_mocks::{mock, MockResponse};
-/// use aws_sdk_s3::operation::get_object::GetObjectOutput;
-/// use aws_sdk_s3::error::GetObjectError;
-///
-/// // Create a rule with a single response
-/// let rule = mock!(aws_sdk_s3::Client::get_object)
-///     .then_output(|| GetObjectOutput::builder().build());
-///
-/// // Create a rule with a sequence of responses using serve
-/// let rule = mock!(aws_sdk_s3::Client::get_object)
-///     .serve(|idx| match idx {
-///         0 => Some(GetObjectOutput::builder().build()),
-///         1 => Some(503),
-///         _ => None,  // Rule is exhausted after 2 calls
-///     });
-/// ```
 #[derive(Clone)]
 pub struct Rule {
     /// Function that determines if this rule matches a request.
@@ -49,6 +32,9 @@ pub struct Rule {
 
     /// Number of times this rule has been called.
     pub(crate) call_count: Arc<AtomicUsize>,
+
+    /// Maximum number of responses this rule will provide.
+    pub(crate) max_responses: usize,
 }
 
 impl fmt::Debug for Rule {
@@ -58,10 +44,11 @@ impl fmt::Debug for Rule {
 }
 
 impl Rule {
-    /// Creates a new rule with the given matcher and response handler.
+    /// Creates a new rule with the given matcher, response handler, and max responses.
     pub(crate) fn new<O, E>(
         matcher: MatchFn,
         response_handler: Arc<dyn Fn(usize) -> Option<MockResponse<O, E>> + Send + Sync>,
+        max_responses: usize,
     ) -> Self
     where
         O: fmt::Debug + Send + Sync + 'static,
@@ -70,28 +57,25 @@ impl Rule {
         Rule {
             matcher,
             response_handler: Arc::new(move |idx: usize| {
-                response_handler(idx).map(|resp| match resp {
-                    MockResponse::Output(o) => MockResponse::Output(Output::erase(o)),
-                    MockResponse::Error(e) => MockResponse::Error(Error::erase(e)),
-                    MockResponse::Http(http_resp) => MockResponse::http(http_resp),
-                })
+                if idx < max_responses {
+                    response_handler(idx).map(|resp| match resp {
+                        MockResponse::Output(o) => MockResponse::Output(Output::erase(o)),
+                        MockResponse::Error(e) => MockResponse::Error(Error::erase(e)),
+                        MockResponse::Http(http_resp) => MockResponse::Http(http_resp),
+                    })
+                } else {
+                    None
+                }
             }),
             call_count: Arc::new(AtomicUsize::new(0)),
+            max_responses,
         }
     }
 
-    /// Gets the next response for the given input.
-    ///
-    /// This increments the call count and returns the response from the handler.
+    /// Gets the next response.
     pub(crate) fn next_response(&self) -> Option<MockResponse<Output, Error>> {
         let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
-        match (self.response_handler)(idx) {
-            None => {
-                self.call_count.fetch_sub(1, Ordering::SeqCst);
-                None
-            }
-            Some(resp) => Some(resp),
-        }
+        (self.response_handler)(idx)
     }
 
     /// Returns the number of times this rule has been called.
@@ -99,9 +83,9 @@ impl Rule {
         self.call_count.load(Ordering::SeqCst)
     }
 
-    /// Resets the call count to zero.
-    pub fn reset(&self) {
-        self.call_count.store(0, Ordering::SeqCst);
+    /// Checks if this rule is exhausted (has provided all its responses).
+    pub fn is_exhausted(&self) -> bool {
+        self.num_calls() >= self.max_responses
     }
 }
 
@@ -122,27 +106,6 @@ pub enum RuleMode {
 /// A builder for creating rules.
 ///
 /// This builder provides a fluent API for creating rules with different response types.
-///
-/// # Examples
-///
-/// ```rust,ignore
-/// use aws_smithy_mocks::{mock, mock_response};
-/// use aws_sdk_s3::operation::get_object::GetObjectOutput;
-/// use aws_sdk_s3::error::GetObjectError;
-///
-/// // Create a rule with a single response
-/// let rule = mock!(aws_sdk_s3::Client::get_object)
-///     .then_output(|| GetObjectOutput::builder().build());
-///
-/// // Create a rule with a sequence of responses using serve
-/// let rule = mock!(aws_sdk_s3::Client::get_object)
-///     .serve(|idx| match idx {
-///         0 => Some(mock_response!(GetObjectOutput::builder().build())),
-///         1 => Some(mock_response!(status: 503)),
-///         2 => Some(mock_response!(error: GetObjectError::NoSuchKey(Default::default()))),
-///  => None,  // Rule is exhausted after 3 calls
-///     });
-/// ```
 ///
 pub struct RuleBuilder<I, O, E> {
     /// Function that determines if this rule matches a request.
@@ -191,20 +154,12 @@ where
         self
     }
 
-    /// Helper function for single-response rules.
-    fn serve_once<R>(self, response: R) -> Rule
-    where
-        R: Into<MockResponse<O, E>> + Send + Sync + 'static,
-    {
-        let mu = Arc::new(std::sync::Mutex::new(Some(response)));
-        self.serve(move |idx| {
-            if idx == 0 {
-                let response = mu.lock().unwrap().take().expect("response already taken");
-                Some(response.into())
-            } else {
-                None
-            }
-        })
+    /// Start building a response sequence
+    ///
+    /// A sequence allows a single rule to generate multiple responses which can
+    /// be used to test retry behavior.
+    pub fn sequence(self) -> ResponseSequenceBuilder<I, O, E> {
+        ResponseSequenceBuilder::new(self.input_filter)
     }
 
     /// Creates a rule that returns a modeled output.
@@ -212,7 +167,7 @@ where
     where
         F: Fn() -> O + Send + Sync + 'static,
     {
-        self.serve_once(MockResponse::Output(output_fn()))
+        self.sequence().output(output_fn).build()
     }
 
     /// Creates a rule that returns a modeled error.
@@ -220,7 +175,7 @@ where
     where
         F: Fn() -> E + Send + Sync + 'static,
     {
-        self.serve_once(MockResponse::Error(error_fn()))
+        self.sequence().error(error_fn).build()
     }
 
     /// Creates a rule that returns an HTTP response.
@@ -228,57 +183,116 @@ where
     where
         F: Fn() -> HttpResponse + Send + Sync + 'static,
     {
-        self.serve_once(MockResponse::Http(response_fn()))
+        self.sequence().http_response(response_fn).build()
+    }
+}
+
+pub(crate) type SequenceGeneratorFn<O, E> = Arc<dyn Fn() -> MockResponse<O, E> + Send + Sync>;
+
+/// A builder for creating response sequences
+pub struct ResponseSequenceBuilder<I, O, E> {
+    /// The response generators in the sequence
+    generators: Vec<SequenceGeneratorFn<O, E>>,
+
+    /// Function that determines if this rule matches a request
+    input_filter: MatchFn,
+
+    /// Marker for the input, output, and error types
+    _marker: std::marker::PhantomData<I>,
+}
+
+impl<I, O, E> ResponseSequenceBuilder<I, O, E>
+where
+    I: fmt::Debug + Send + Sync + 'static,
+    O: fmt::Debug + Send + Sync + 'static,
+    E: fmt::Debug + Send + Sync + std::error::Error + 'static,
+{
+    /// Create a new response sequence builder
+    pub(crate) fn new(input_filter: MatchFn) -> Self {
+        Self {
+            generators: Vec::new(),
+            input_filter,
+            _marker: std::marker::PhantomData,
+        }
     }
 
-    /// Creates a rule that returns responses based on the call index.
-    ///
-    /// This method allows for complex response patterns based on the call sequence.
-    /// The handler function takes the call index and returns an optional response.
-    /// If the handler returns None, the rule is considered exhausted.
-    ///
-    /// This is particularly useful for testing retry behavior, where you might want to return
-    /// error responses for the first few attempts and then succeed.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use aws_smithy_mocks::{mock, mock_response};
-    /// use aws_sdk_s3::operation::get_object::GetObjectOutput;
-    /// use aws_sdk_s3::error::GetObjectError;
-    ///
-    /// // Create a rule that returns 503 errors for the first two calls, then succeeds
-    /// let rule = mock!(aws_sdk_s3::Client::get_object)
-    ///     .serve(|idx| {
-    ///         if idx < 2 {
-    ///             // First two calls return 503
-    ///             Some(mock_response!(status: 503))
-    ///         } else {
-    ///             // Subsequent calls succeed
-    ///             Some(mock_response!(GetObjectOutput::builder().build()))
-    ///         }
-    ///     });
-    /// ```
-    ///
-    /// You can also use pattern matching for more complex scenarios:
-    ///
-    /// ```rust,ignore
-    /// let rule = mock!(Client::get_object)
-    ///     .serve(|idx| match idx {
-    ///         0 => Some(mock_response!(TestOutput::new("first output"))),
-    ///         1 => Some(mock_response!(error: TestError::new("expected error"))),
-    ///         2 => Some(mock_response!(http: HttpResponse::new(
-    ///             StatusCode::try_from(200).unwrap(),
-    ///             SdkBody::from("http response")
-    ///         ))),
-    ///         _ => None  // No more responses after the third call
-    ///     });
-    /// ```
-    ///
-    pub fn serve<F>(self, handler: F) -> Rule
+    /// Add a modeled output response to the sequence
+    pub fn output<F>(mut self, output_fn: F) -> Self
     where
-        F: Fn(usize) -> Option<MockResponse<O, E>> + Send + Sync + 'static,
+        F: Fn() -> O + Send + Sync + 'static,
     {
-        Rule::new::<O, E>(self.input_filter, Arc::new(handler))
+        let generator = Arc::new(move || MockResponse::Output(output_fn()));
+        self.generators.push(generator);
+        self
+    }
+
+    /// Add a modeled error response to the sequence
+    pub fn error<F>(mut self, error_fn: F) -> Self
+    where
+        F: Fn() -> E + Send + Sync + 'static,
+    {
+        let generator = Arc::new(move || MockResponse::Error(error_fn()));
+        self.generators.push(generator);
+        self
+    }
+
+    /// Add an HTTP status code response to the sequence
+    pub fn http_status(mut self, status: u16, body: Option<String>) -> Self {
+        let status_code = StatusCode::try_from(status).unwrap();
+
+        let generator: SequenceGeneratorFn<O, E> = match body {
+            Some(body) => Arc::new(move || {
+                MockResponse::Http(HttpResponse::new(status_code, SdkBody::from(body.clone())))
+            }),
+            None => Arc::new(move || {
+                MockResponse::Http(HttpResponse::new(status_code, SdkBody::empty()))
+            }),
+        };
+
+        self.generators.push(generator);
+        self
+    }
+
+    /// Add an HTTP response to the sequence
+    pub fn http_response<F>(mut self, response_fn: F) -> Self
+    where
+        F: Fn() -> HttpResponse + Send + Sync + 'static,
+    {
+        let generator = Arc::new(move || MockResponse::Http(response_fn()));
+        self.generators.push(generator);
+        self
+    }
+
+    /// Repeat the last added response multiple times (total count)
+    pub fn times(mut self, count: usize) -> Self {
+        if count <= 1 {
+            return self;
+        }
+
+        if let Some(last_generator) = self.generators.last().cloned() {
+            // Add count-1 more copies (we already have one)
+            for _ in 1..count {
+                self.generators.push(last_generator.clone());
+            }
+        }
+        self
+    }
+
+    /// Build the rule with this response sequence
+    pub fn build(self) -> Rule {
+        let generators = self.generators;
+        let count = generators.len();
+
+        Rule::new(
+            self.input_filter,
+            Arc::new(move |idx| {
+                if idx < count {
+                    Some(generators[idx]())
+                } else {
+                    None
+                }
+            }),
+            count,
+        )
     }
 }
