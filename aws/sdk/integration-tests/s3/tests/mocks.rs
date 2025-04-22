@@ -8,7 +8,7 @@
 
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
 use aws_sdk_s3::operation::list_buckets::ListBucketsError;
-use aws_smithy_mocks::{mock, mock_client, mock_response, RuleMode};
+use aws_smithy_mocks::{mock, mock_client, RuleMode};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
@@ -89,14 +89,16 @@ async fn test_mock_client() {
 }
 
 #[tokio::test]
-async fn test_mock_client_serve() {
-    let rule = mock!(aws_sdk_s3::Client::get_object).serve(|idx| match idx {
-        0 => Some(mock_response!(status: 400, body: S3_NO_SUCH_KEY)),
-        1 => Some(mock_response!(GetObjectOutput::builder()
-            .body(ByteStream::from_static(b"test-test-test"))
-            .build())),
-        _ => None,
-    });
+async fn test_mock_client_sequence() {
+    let rule = mock!(aws_sdk_s3::Client::get_object)
+        .sequence()
+        .http_status(400, Some(S3_NO_SUCH_KEY.to_string()))
+        .output(|| {
+            GetObjectOutput::builder()
+                .body(ByteStream::from_static(b"test-test-test"))
+                .build()
+        })
+        .build();
 
     // test client builder override
     let s3 = mock_client!(
