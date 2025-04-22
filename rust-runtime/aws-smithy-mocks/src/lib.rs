@@ -34,7 +34,8 @@
 //!         .match_requests(|req| req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
 //!         .then_output(|| GetObjectOutput::builder()
 //!             .body(ByteStream::from_static(b"test-content"))
-//!             .build());
+//!             .build()
+//!          );
 //!
 //!     // Create a mocked client with the rule
 //!     let s3 = mock_client!(aws_sdk_s3, [&get_object_rule]);
@@ -91,19 +92,27 @@
 //!
 //! ### Response Sequences
 //!
-//! For testing retry behavior or complex scenarios, you can define sequences of responses using the [`serve`](RuleBuilder::serve) method:
+//! For testing retry behavior or complex scenarios, you can define sequences of responses using the sequence builder API:
 //!
 //! ```rust,ignore
 //! let retry_rule = mock!(Client::get_object)
-//!     .serve(|idx| match idx {
-//!         0 | 1 => Some(mock_response!(status: 503)),  // First two calls return 503
-//!         2 => Some(mock_response!(GetObjectOutput::builder().build())),  // Third call succeeds
-//!         _ => None  // No more responses
-//!     });
+//!     .sequence()
+//!     .http_status(503, None)                          // First call returns 503
+//!     .http_status(503, None)                          // Second call returns 503
+//!     .output(|| GetObjectOutput::builder().build())   // Third call succeeds
+//!     .build();
+//!
+//! // With repetition using `times()`
+//! let retry_rule = mock!(Client::get_object)
+//!     .sequence()
+//!     .http_status(503, None)
+//!     .times(2)                                        // First two calls return 503
+//!     .output(|| GetObjectOutput::builder().build())   // Third call succeeds
+//!     .build();
 //! ```
 //!
-//! The `serve` method takes a closure that receives the call index and returns an optional response.
-//! When the closure returns `None`, the rule is considered exhausted.
+//! The sequence builder API provides a fluent interface for defining sequences of responses.
+//! After providing all responses in the sequence, the rule is considered exhausted.
 //!
 //! ## Creating Mocked Clients
 //!
@@ -148,11 +157,11 @@
 //! async fn test_retry() {
 //!     // Create a rule that returns errors for the first two attempts, then succeeds
 //!     let rule = mock!(Client::get_object)
-//!         .serve(|idx| match idx {
-//!             0 | 1 => Some(mock_response!(status: 503)),  // Service unavailable
-//!             2 => Some(mock_response!(GetObjectOutput::builder().build())),  // Success
-//!             _ => None
-//!         });
+//!         .sequence()
+//!         .http_status(503, None)
+//!         .times(2)                                       // Service unavailable for first two calls
+//!         .output(|| GetObjectOutput::builder().build())  // Success on third call
+//!         .build();
 //!
 //!     // Create a client with retry enabled
 //!     let client = mock_client!(aws_sdk_s3, [&rule]);

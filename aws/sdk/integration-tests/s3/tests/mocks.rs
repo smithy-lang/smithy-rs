@@ -6,6 +6,7 @@
 //! Integration tests for `aws-smithy-mocks`. These tests are not necessarily specific to S3 but
 //! we need to test the macros against an actual SDK.
 
+use aws_sdk_s3::config::retry::RetryConfig;
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
 use aws_sdk_s3::operation::list_buckets::ListBucketsError;
 use aws_smithy_mocks::{mock, mock_client, RuleMode};
@@ -136,4 +137,44 @@ async fn test_mock_client_sequence() {
 
     assert_eq!(data, b"test-test-test");
     assert_eq!(2, rule.num_calls());
+}
+
+#[tokio::test]
+async fn test_mock_client_retries() {
+    let rule = mock!(aws_sdk_s3::Client::get_object)
+        .sequence()
+        .http_status(503, None)
+        .times(2)
+        .output(|| {
+            GetObjectOutput::builder()
+                .body(ByteStream::from_static(b"test-test-test"))
+                .build()
+        })
+        .build();
+
+    // test client builder override
+    let s3 = mock_client!(
+        aws_sdk_s3,
+        RuleMode::Sequential,
+        [&rule],
+        |client_builder| {
+            client_builder.retry_config(RetryConfig::standard().with_max_attempts(3))
+        }
+    );
+
+    let data = s3
+        .get_object()
+        .bucket("test-bucket")
+        .key("correct-key")
+        .send()
+        .await
+        .expect("success response")
+        .body
+        .collect()
+        .await
+        .expect("successful read")
+        .to_vec();
+
+    assert_eq!(data, b"test-test-test");
+    assert_eq!(3, rule.num_calls());
 }

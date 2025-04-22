@@ -158,6 +158,19 @@ where
     ///
     /// A sequence allows a single rule to generate multiple responses which can
     /// be used to test retry behavior.
+    ///
+    /// # Examples
+    ///
+    /// With repetition using `times()`:
+    ///
+    /// ```rust,ignore
+    /// let rule = mock!(Client::get_object)
+    ///     .sequence()
+    ///     .http_status(503, None)
+    ///     .times(2)                                        // First two calls return 503
+    ///     .output(|| GetObjectOutput::builder().build())   // Third call succeeds
+    ///     .build();
+    /// ```
     pub fn sequence(self) -> ResponseSequenceBuilder<I, O, E> {
         ResponseSequenceBuilder::new(self.input_filter)
     }
@@ -217,6 +230,15 @@ where
     }
 
     /// Add a modeled output response to the sequence
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// let rule = mock!(Client::get_object)
+    ///     .sequence()
+    ///     .output(|| GetObjectOutput::builder().build())
+    ///     .build();
+    /// ```
     pub fn output<F>(mut self, output_fn: F) -> Self
     where
         F: Fn() -> O + Send + Sync + 'static,

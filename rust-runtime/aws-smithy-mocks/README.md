@@ -13,10 +13,10 @@ async fn test_s3() {
             .body(ByteStream::from_static(b"test-content"))
             .build()
     });
-    
+
     // Create a mocked client with the rule
     let s3 = mock_client!(aws_sdk_s3, [&s3_rule]);
-    
+
     // Use the client as you would normally
     let result = s3
         .get_object()
@@ -25,11 +25,11 @@ async fn test_s3() {
         .send()
         .await
         .expect("success response");
-    
+
     // Verify the response
     let data = result.body.collect().await.expect("successful read").to_vec();
     assert_eq!(data, b"test-content");
-    
+
     // Verify the rule was used
     assert_eq!(s3_rule.num_calls(), 1);
 }
@@ -73,12 +73,21 @@ let http_rule = mock!(Client::get_object)
 Define sequences of responses for testing retry behavior:
 
 ```rust
+// Using the sequence builder API
 let retry_rule = mock!(Client::get_object)
-    .serve(|idx| match idx {
-        0 | 1 => Some(mock_response!(status: 503)),  // First two calls return 503
-        2 => Some(mock_response!(GetObjectOutput::builder().build())),  // Third call succeeds
-        _ => None  // No more responses
-    });
+    .sequence()
+    .http_status(503, None)                          // First call returns 503
+    .http_status(503, None)                          // Second call returns 503
+    .output(|| GetObjectOutput::builder().build())   // Third call succeeds
+    .build();
+
+// With repetition using times()
+let retry_rule = mock!(Client::get_object)
+    .sequence()
+    .http_status(503)
+    .times(2)                                        // First two calls return 503
+    .output(|| GetObjectOutput::builder().build())   // Third call succeeds
+    .build();
 ```
 
 ### Rule Modes
@@ -91,6 +100,100 @@ let client = mock_client!(aws_sdk_s3, RuleMode::Sequential, [&rule1, &rule2]);
 
 // MatchAny mode: The first matching rule is used, regardless of order
 let client = mock_client!(aws_sdk_s3, RuleMode::MatchAny, [&rule1, &rule2]);
+```
+
+## Advanced Examples
+
+### Testing Retry Behavior
+
+```rust
+#[tokio::test]
+async fn test_retry_behavior() {
+    // Create a rule that returns 503 twice, then succeeds
+    let retry_rule = mock!(Client::get_object)
+        .sequence()
+        .http_status(503, None)
+        .times(2)
+        .output(|| GetObjectOutput::builder()
+            .body(ByteStream::from_static(b"success"))
+            .build())
+        .build();
+
+    // Create a mocked client with the rule
+    let s3 = mock_client!(
+        aws_sdk_s3,
+        RuleMode::Sequential,
+        [&retry_rule],
+        |client_builder| {
+            client_builder.retry_config(RetryConfig::standard().with_max_attempts(3))
+        }
+    );
+
+    // This should succeed after two retries
+    let result = s3
+        .get_object()
+        .bucket("test-bucket")
+        .key("test-key")
+        .send()
+        .await
+        .expect("success after retries");
+
+    // Verify the response
+    let data = result.body.collect().await.expect("successful read").to_vec();
+    assert_eq!(data, b"success");
+
+    // Verify all responses were used
+    assert_eq!(retry_rule.num_calls(), 3);
+}
+```
+
+### Testing Different Responses Based on Request Parameters
+
+```rust
+#[tokio::test]
+async fn test_different_responses() {
+    // Create rules for different request parameters
+    let exists_rule = mock!(Client::get_object)
+        .match_requests(|req| req.bucket() == Some("test-bucket") && req.key() == Some("exists"))
+        .sequence()
+        .output(|| GetObjectOutput::builder()
+            .body(ByteStream::from_static(b"found"))
+            .build())
+        .build();
+
+    let not_exists_rule = mock!(Client::get_object)
+        .match_requests(|req| req.bucket() == Some("test-bucket") && req.key() == Some("not-exists"))
+        .sequence()
+        .error(|| GetObjectError::NoSuchKey(NoSuchKey::builder().build()))
+        .build();
+
+    // Create a mocked client with the rules in MatchAny mode
+    let s3 = mock_client!(aws_sdk_s3, RuleMode::MatchAny, [&exists_rule, &not_exists_rule]);
+
+    // Test the "exists" case
+    let result1 = s3
+        .get_object()
+        .bucket("test-bucket")
+        .key("exists")
+        .send()
+        .await
+        .expect("object exists");
+
+    let data = result1.body.collect().await.expect("successful read").to_vec();
+    assert_eq!(data, b"found");
+
+    // Test the "not-exists" case
+    let result2 = s3
+        .get_object()
+        .bucket("test-bucket")
+        .key("not-exists")
+        .send()
+        .await;
+
+    assert!(result2.is_err());
+    assert!(matches!(result2.unwrap_err().into_service_error(),
+                    GetObjectError::NoSuchKey(_)));
+}
 ```
 
 <!-- anchor_start:footer -->
