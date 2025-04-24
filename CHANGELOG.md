@@ -1,4 +1,18 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 23rd, 2025
+================
+**Breaking Changes:**
+- :warning: (client, [smithy-rs#3776](https://github.com/smithy-lang/smithy-rs/issues/3776)) [AuthSchemeId](https://docs.rs/aws-smithy-runtime-api/1.7.4/aws_smithy_runtime_api/client/auth/struct.AuthSchemeId.html) no longer implements the `Copy` trait. This type has primarily been used by the Smithy code generator, so this change is not expected to affect users of SDKs.
+
+**New this release:**
+- (all, [smithy-rs#4050](https://github.com/smithy-lang/smithy-rs/issues/4050), @FalkWoldmann) Replace the `once_cell` crate with the `std` counterpart in Smithy runtime crates.
+- (client) remove redundant span attributes and improve log output format
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4050](https://github.com/smithy-lang/smithy-rs/issues/4050))
+
+
 March 27th, 2025
 ================
 

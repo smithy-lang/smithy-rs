@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.comment
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -396,10 +397,22 @@ internal class EndpointResolverGenerator(
 }
 
 fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
+    val ctx = this
     val generator = EndpointTypesGenerator.fromContext(this)
+    val endpointCustomizations = rootDecorator.endpointCustomizations(this)
     return RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
-        val ctx =
-            arrayOf(*preludeScope, "Params" to generator.paramsStruct(), *Types(runtimeConfig).toArray(), "Debug" to RuntimeType.Debug)
+        val codegenScope =
+            arrayOf(
+                *preludeScope,
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "Params" to generator.paramsStruct(),
+                *Types(runtimeConfig).toArray(),
+                "Debug" to RuntimeType.Debug,
+            )
+        val paramsFinalizers =
+            endpointCustomizations.mapNotNull {
+                it.serviceSpecificEndpointParamsFinalizer(ctx, "params")
+            }
         rustTemplate(
             """
             /// Endpoint resolver trait specific to ${serviceShape.serviceNameOrDefault("this service")}
@@ -431,10 +444,31 @@ fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
                     };
                     ep
                 }
+                #{finalize_endpoint_params:W}
             }
 
             """,
-            *ctx,
+            *codegenScope,
+            "finalize_endpoint_params" to finalizeEndpointParams(codegenScope, paramsFinalizers),
         )
+    }
+}
+
+private fun finalizeEndpointParams(
+    codegenScope: Array<Pair<String, RuntimeType>>,
+    paramsFinalizers: List<Writable>,
+) = writable {
+    if (paramsFinalizers.isNotEmpty()) {
+        rustBlockTemplate(
+            """
+            fn finalize_params<'a>(&'a self, params: &'a mut #{EndpointResolverParams}) -> #{Result}<(), #{BoxError}>
+            """,
+            *codegenScope,
+        ) {
+            paramsFinalizers.forEach {
+                it(this)
+            }
+            rustTemplate("#{Ok}(())", *codegenScope)
+        }
     }
 }
