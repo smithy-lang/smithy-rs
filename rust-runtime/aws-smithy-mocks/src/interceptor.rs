@@ -51,7 +51,7 @@ impl Default for MockResponseInterceptor {
 impl MockResponseInterceptor {
     /// Create a new [MockResponseInterceptor]
     ///
-    /// This is normally created and registered on a client through the [`mock_client`] macro.
+    /// This is normally created and registered on a client through the [`mock_client`](crate::mock_client) macro.
     pub fn new() -> Self {
         Self {
             rules: Default::default(),

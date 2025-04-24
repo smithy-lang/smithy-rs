@@ -115,7 +115,7 @@ async fn test_mock_client_sequence() {
         .key("foo")
         .send()
         .await
-        .expect_err("404"); // async fn mock_client() {
+        .expect_err("404");
 
     assert!(matches!(
         error.into_service_error(),
