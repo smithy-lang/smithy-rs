@@ -370,27 +370,25 @@ mod test {
     const TOKEN_A: &str = "token_a";
 
     #[tokio::test]
-    async fn profile_is_not_cached() {
+    async fn returns_valid_credentials_with_account_id() {
         let http_client = StaticReplayClient::new(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
+            // A profile is not cached, so we should expect a network call to obtain one.
             ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended", TOKEN_A),
                 imds_response(r#"profile-name"#),
             ),
             ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
-                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"AccountId\" : \"123456789101\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
             ),
+            // For the second call to `provide_credentials`, we shouldn't expect a network call to obtain a profile since it's been resolved and cached.
             ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
-                imds_response(r#"different-profile"#),
-            ),
-            ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/different-profile", TOKEN_A),
-                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"AccountId\" : \"123456789101\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
             ),
         ]);
         let client = ImdsCredentialsProvider::builder()
@@ -398,9 +396,12 @@ mod test {
             .configure(&ProviderConfig::no_configuration())
             .build();
         let creds1 = client.provide_credentials().await.expect("valid creds");
-        let creds2 = client.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
+        assert_eq!(creds1.account_id().unwrap().as_str(), "123456789101");
+
+        let creds2 = client.provide_credentials().await.expect("valid creds");
         assert_eq!(creds2.access_key_id(), "ASIARTEST2");
+        assert_eq!(creds1.account_id().unwrap().as_str(), "123456789101");
         http_client.assert_requests_match(&[]);
     }
 
@@ -413,11 +414,11 @@ mod test {
                 token_response(21600, TOKEN_A),
             ),
             ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended", TOKEN_A),
                 imds_response(r#"profile-name"#),
             ),
             ReplayEvent::new(
-                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
                 imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
             ),
         ]);
@@ -449,6 +450,7 @@ mod test {
         // There should not be logs indicating credentials are extended for stability.
         assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
+
     #[tokio::test]
     #[traced_test]
     async fn expired_credentials_should_be_extended() {
@@ -458,11 +460,11 @@ mod test {
                     token_response(21600, TOKEN_A),
                 ),
                 ReplayEvent::new(
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
                 ReplayEvent::new(
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
             ]);
@@ -528,8 +530,6 @@ mod test {
         );
     }
 
-    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
-    #[cfg_attr(windows, ignore)]
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
@@ -574,17 +574,17 @@ mod test {
                     token_response(21600, TOKEN_A),
                 ),
                 ReplayEvent::new(
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
                 ReplayEvent::new(
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
                 // The following request/response pair corresponds to the second call to `provide_credentials`.
                 // During the call, IMDS returns response code 500.
                 ReplayEvent::new(
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials-extended/profile-name", TOKEN_A),
                     http::Response::builder().status(500).body(SdkBody::empty()).unwrap(),
                 ),
             ]);
@@ -594,9 +594,11 @@ mod test {
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
-        // `creds1` should be returned as fallback credentials and assigned to `creds2`
-        let creds2 = provider.provide_credentials().await.expect("valid creds");
-        assert_eq!(creds1, creds2);
+        // `creds1` should be returned as fallback credentials
+        assert_eq!(
+            creds1,
+            provider.provide_credentials().await.expect("valid creds")
+        );
         http_client.assert_requests_match(&[]);
     }
 }
