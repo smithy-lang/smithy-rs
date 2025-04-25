@@ -12,6 +12,7 @@ use super::client::error::ImdsError;
 use crate::imds::{self, Client};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_async::time::SharedTimeSource;
@@ -44,6 +45,20 @@ impl StdError for ImdsCommunicationError {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum ApiVersion {
+    #[default]
+    Unknown,
+    Extended,
+    Legacy,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ProviderState {
+    api_version: ApiVersion,
+    resolved_profile: Option<String>,
+}
+
 /// IMDSv2 Credentials Provider
 ///
 /// _Note: This credentials provider will NOT fallback to the IMDSv1 flow._
@@ -54,6 +69,7 @@ pub struct ImdsCredentialsProvider {
     profile: Option<String>,
     time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
+    provider_state: Arc<RwLock<ProviderState>>,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -116,6 +132,7 @@ impl Builder {
             profile: self.profile_override,
             time_source: provider_config.time_source(),
             last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
+            provider_state: Arc::new(RwLock::new(ProviderState::default())),
         }
     }
 }
@@ -150,14 +167,34 @@ impl ImdsCredentialsProvider {
         }
     }
 
+    fn uri_base(&self) -> &str {
+        let api_version = &self.provider_state.read().unwrap().api_version;
+        use ApiVersion::*;
+        match api_version {
+            Legacy => "/latest/meta-data/iam/security-credentials",
+            _ => "/latest/meta-data/iam/security-credentials-extended",
+        }
+    }
+
     /// Retrieve the instance profile from IMDS
-    async fn get_profile_uncached(&self) -> Result<String, CredentialsError> {
-        match self
-            .client
-            .get("/latest/meta-data/iam/security-credentials/")
-            .await
-        {
-            Ok(profile) => Ok(profile.as_ref().into()),
+    async fn resolve_profile_name(&self) -> Result<Cow<'_, str>, CredentialsError> {
+        if let Some(profile) = &self.profile {
+            return Ok(profile.into());
+        }
+
+        if let Some(profile) = &self.provider_state.read().unwrap().resolved_profile {
+            return Ok(profile.clone().into());
+        }
+
+        match self.client.get(self.uri_base()).await {
+            Ok(profile) => {
+                let state = &mut self.provider_state.write().unwrap();
+                state.resolved_profile = Some(profile.clone().into());
+                if state.api_version == ApiVersion::Unknown {
+                    state.api_version = ApiVersion::Extended;
+                }
+                Ok(Cow::Owned(profile.into()))
+            }
             Err(ImdsError::ErrorResponse(context))
                 if context.response().status().as_u16() == 404 =>
             {
@@ -165,7 +202,17 @@ impl ImdsCredentialsProvider {
                     "received 404 from IMDS when loading profile information. \
                     Hint: This instance may not have an IAM role associated."
                 );
-                Err(CredentialsError::not_loaded("received 404 from IMDS"))
+
+                {
+                    let state = &mut self.provider_state.write().unwrap();
+                    if state.api_version == ApiVersion::Unknown {
+                        state.api_version = ApiVersion::Legacy;
+                    } else {
+                        return Err(CredentialsError::not_loaded("received 404 from IMDS"));
+                    }
+                }
+
+                Box::pin(self.resolve_profile_name()).await
             }
             Err(ImdsError::FailedToLoadToken(context)) if context.is_dispatch_failure() => {
                 Err(CredentialsError::not_loaded(ImdsCommunicationError {
@@ -215,20 +262,44 @@ impl ImdsCredentialsProvider {
             tracing::debug!(err);
             return Err(CredentialsError::not_loaded(err));
         }
+
         tracing::debug!("loading credentials from IMDS");
-        let profile: Cow<'_, str> = match &self.profile {
-            Some(profile) => profile.into(),
-            None => self.get_profile_uncached().await?.into(),
-        };
+
+        let profile = self.resolve_profile_name().await?;
         tracing::debug!(profile = %profile, "loaded profile");
-        let credentials = self
+
+        let credentials = match self
             .client
-            .get(format!(
-                "/latest/meta-data/iam/security-credentials/{}",
-                profile
-            ))
+            .get(format!("{uri_base}/{profile}", uri_base = self.uri_base()))
             .await
-            .map_err(CredentialsError::provider_error)?;
+        {
+            Ok(credentials) => {
+                let state = &mut self.provider_state.write().unwrap();
+                state.resolved_profile = Some(profile.to_string());
+                if state.api_version == ApiVersion::Unknown {
+                    state.api_version = ApiVersion::Extended;
+                }
+                Ok(credentials)
+            }
+            Err(ImdsError::ErrorResponse(raw)) if raw.response().status().as_u16() == 404 => {
+                {
+                    let state = &mut self.provider_state.write().unwrap();
+                    if state.api_version == ApiVersion::Unknown {
+                        state.api_version = ApiVersion::Legacy;
+                    } else if self.profile.is_none() {
+                        state.resolved_profile = None;
+                    } else {
+                        return Err(CredentialsError::provider_error(ImdsError::ErrorResponse(
+                            raw,
+                        )));
+                    }
+                }
+                return Box::pin(self.retrieve_credentials()).await;
+            }
+            otherwise => otherwise,
+        }
+        .map_err(CredentialsError::provider_error)?;
+
         match parse_json_credentials(credentials.as_ref()) {
             Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,
@@ -238,16 +309,15 @@ impl ImdsCredentialsProvider {
                 expiration,
                 ..
             })) => {
-                // TODO(IMDSv2.X): Use `account_id` once the design is finalized
-                let _ = account_id;
                 let expiration = self.maybe_extend_expiration(expiration);
-                let creds = Credentials::new(
-                    access_key_id,
-                    secret_access_key,
-                    Some(session_token.to_string()),
-                    expiration.into(),
-                    "IMDSv2",
-                );
+                let mut builder = Credentials::builder()
+                    .access_key_id(access_key_id)
+                    .secret_access_key(secret_access_key)
+                    .session_token(session_token)
+                    .expiry(expiration)
+                    .provider_name("IMDSv2");
+                builder.set_account_id(account_id.map(AccountId::from));
+                let creds = builder.build();
                 *self.last_retrieved_credentials.write().unwrap() = Some(creds.clone());
                 Ok(creds)
             }
