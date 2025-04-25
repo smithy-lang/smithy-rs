@@ -17,6 +17,7 @@ use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::{ci::running_in_ci, package::parse_version};
 use std::collections::BTreeMap;
+use std::env;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
@@ -55,8 +56,11 @@ pub async fn subcommand_fix_manifests(
         false => Mode::Execute,
     };
     let manifest_paths = discover_manifests(location).await?;
+    println!("MANIFEST_PATHS: {manifest_paths:#?}");
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
+    println!("MANIFESTS: {manifests:#?}");
     let versions = package_versions(&manifests)?;
+    println!("VERSIONS: {versions:#?}");
 
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
     validate::validate_after_fixes(location).await?;
@@ -64,6 +68,7 @@ pub async fn subcommand_fix_manifests(
     Ok(())
 }
 
+#[derive(Debug)]
 struct Manifest {
     path: PathBuf,
     metadata: toml::Value,
@@ -82,6 +87,7 @@ impl Manifest {
     }
 }
 
+#[derive(Debug)]
 struct Versions(BTreeMap<String, VersionWithMetadata>);
 #[derive(Copy, Clone)]
 enum FilterType {
@@ -110,6 +116,7 @@ impl Versions {
     }
 }
 
+#[derive(Debug)]
 struct VersionWithMetadata {
     version: Version,
     publish: bool,
@@ -223,19 +230,34 @@ fn conditionally_disallow_publish(
     manifest_path: &Path,
     metadata: &mut toml::Value,
 ) -> Result<bool> {
-    let is_github_actions = running_in_ci();
+    let is_gh_action_or_smithy_rs_docker = running_in_ci();
     let is_example = is_example_manifest(manifest_path);
+    let is_preview_build = is_preview_build();
 
     // Safe-guard to prevent accidental publish to crates.io. Add some friction
     // to publishing from a local development machine by detecting that the tool
     // is not being run from CI, and disallow publish in that case. Also disallow
-    // publishing of examples.
-    if !is_github_actions || is_example {
+    // publishing of examples and Trebuchet preview builds.
+    if !is_gh_action_or_smithy_rs_docker || is_example || is_preview_build {
         if let Some(value) = set_publish_false(manifest_path, metadata, is_example) {
             return Ok(value);
         }
     }
     Ok(false)
+}
+
+fn is_preview_build() -> bool {
+    let build_type = env::var("BUILD_TYPE");
+
+    if let Ok(build_type) = build_type {
+        if build_type.eq_ignore_ascii_case("PREVIEW")
+            || build_type.eq_ignore_ascii_case("\"PREVIEW\"")
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn set_publish_false(manifest_path: &Path, metadata: &mut Value, is_example: bool) -> Option<bool> {
