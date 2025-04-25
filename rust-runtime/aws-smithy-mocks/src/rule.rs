@@ -302,9 +302,15 @@ where
     }
 
     /// Repeat the last added response multiple times (total count)
+    ///
+    /// NOTE: `times(1)` has no effect and `times(0)` will panic
     pub fn times(mut self, count: usize) -> Self {
-        if count <= 1 {
-            return self;
+        match count {
+            0 => panic!("repeat count must be greater than zero"),
+            1 => {
+                return self;
+            }
+            _ => {}
         }
 
         if let Some(last_generator) = self.generators.last().cloned() {
