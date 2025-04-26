@@ -246,7 +246,7 @@ fn conditionally_disallow_publish(
     Ok(false)
 }
 
-fn is_preview_build() -> bool {
+pub(crate) fn is_preview_build() -> bool {
     let build_type = env::var("BUILD_TYPE");
 
     if let Ok(build_type) = build_type {

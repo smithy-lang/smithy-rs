@@ -5,6 +5,7 @@
 
 use crate::fs::Fs;
 use crate::package::discover_packages;
+use crate::subcommand::fix_manifests::is_preview_build;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
@@ -113,8 +114,12 @@ pub async fn subcommand_generate_version_manifest(
         crates,
         release: None,
     };
-    versions_manifest.release =
-        generate_release_metadata(&versions_manifest, previous_release_versions)?;
+
+    // Don't generate release metadata on preview builds
+    if !is_preview_build() {
+        versions_manifest.release =
+            generate_release_metadata(&versions_manifest, previous_release_versions)?;
+    }
     let manifest_file_name = output_location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
