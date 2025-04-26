@@ -58,7 +58,7 @@ pub async fn subcommand_fix_manifests(
     let manifest_paths = discover_manifests(location).await?;
     println!("MANIFEST_PATHS: {manifest_paths:#?}");
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
-    println!("MANIFESTS: {manifests:#?}");
+    // println!("MANIFESTS: {manifests:#?}");
     let versions = package_versions(&manifests)?;
     println!("VERSIONS: {versions:#?}");
 
@@ -315,6 +315,13 @@ async fn fix_manifests(
 }
 
 fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
+    // In the case of a preview build we do not update the examples manifests
+    // since most SDKs will not be generated so the particular crate referred to
+    // by an example is unlikely to exist
+    if is_example_manifest(&manifest.path) && is_preview_build() {
+        debug!(package = ?&manifest.path, "Skipping example package for preview build");
+        return Ok(0);
+    }
     let mut view = versions.published();
     if !manifest.publish()? {
         debug!(package = ?&manifest.path, "package has publishing disabled, allowing unpublished crates to be used");
