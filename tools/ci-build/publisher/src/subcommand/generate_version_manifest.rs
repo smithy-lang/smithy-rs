@@ -5,11 +5,11 @@
 
 use crate::fs::Fs;
 use crate::package::discover_packages;
-use crate::subcommand::fix_manifests::is_preview_build;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use serde::Deserialize;
+use smithy_rs_tool_common::ci::is_preview_build;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::shell;

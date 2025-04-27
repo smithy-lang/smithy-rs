@@ -15,7 +15,10 @@ use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
-use smithy_rs_tool_common::{ci::running_in_ci, package::parse_version};
+use smithy_rs_tool_common::{
+    ci::{is_preview_build, running_in_ci},
+    package::parse_version,
+};
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsStr;
@@ -244,20 +247,6 @@ fn conditionally_disallow_publish(
         }
     }
     Ok(false)
-}
-
-pub(crate) fn is_preview_build() -> bool {
-    let build_type = env::var("BUILD_TYPE");
-
-    if let Ok(build_type) = build_type {
-        if build_type.eq_ignore_ascii_case("PREVIEW")
-            || build_type.eq_ignore_ascii_case("\"PREVIEW\"")
-        {
-            return true;
-        }
-    }
-
-    false
 }
 
 fn set_publish_false(manifest_path: &Path, metadata: &mut Value, is_example: bool) -> Option<bool> {

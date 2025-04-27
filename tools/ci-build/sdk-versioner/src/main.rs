@@ -5,6 +5,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use smithy_rs_tool_common::ci::is_preview_build;
 use smithy_rs_tool_common::package::{PackageCategory, SDK_PREFIX};
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 use std::ffi::OsStr;
@@ -113,6 +114,16 @@ fn main() -> Result<()> {
             versions_manifest: Some(VersionsManifest::from_file(versions_toml)?),
         },
     };
+
+    // In the case of a preview build we avoid updating the examples directories since
+    // we only generate the single preview SDK, so most SDKs referred to in the examples
+    // will be missing
+    if is_preview_build()
+        && !args.crate_paths().is_empty()
+        && args.crate_paths()[0].ends_with("examples")
+    {
+        return Ok(());
+    }
 
     let start_time = Instant::now();
     let mut manifest_paths = Vec::new();
@@ -236,7 +247,7 @@ fn updated_dependency_value(
             let dependency_path = sdk_path
                 .join(crate_path_name(dependency_name))
                 .canonicalize()
-                .context("failed to canonicalize dependency path")?;
+                .context(format!("failed to canonicalize sdk_path: {sdk_path:#?} with dependency_name: {dependency_name}"))?;
             if let Some(relative_path) = pathdiff::diff_paths(&dependency_path, &crate_path) {
                 value["path"] = toml_edit::value(
                     relative_path
