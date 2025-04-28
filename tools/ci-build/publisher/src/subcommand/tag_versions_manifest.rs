@@ -5,8 +5,8 @@
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use smithy_rs_tool_common::versions_manifest::VersionsManifest;
-use std::path::PathBuf;
+use smithy_rs_tool_common::versions_manifest::{Release, VersionsManifest};
+use std::{collections::BTreeMap, path::PathBuf};
 
 #[derive(Parser, Debug)]
 pub struct TagVersionsManifestArgs {
@@ -21,11 +21,17 @@ pub struct TagVersionsManifestArgs {
 pub fn subcommand_tag_versions_manifest(
     TagVersionsManifestArgs { manifest_path, tag }: &TagVersionsManifestArgs,
 ) -> Result<()> {
+    println!("Tagging manifest at: {manifest_path:#?}");
     let mut manifest = VersionsManifest::from_file(manifest_path)?;
-    if let Some(release) = manifest.release.as_mut() {
-        release.tag = Some(tag.to_string());
+    let mut release = manifest.release.as_mut();
+    if let Some(rel) = release {
+        rel.tag = Some(tag.to_string());
     } else {
-        bail!("The given versions manifest file doesn't have a `[release]` section in it to add the tag to");
+        release = Some(&mut Release {
+            tag: Some(tag.to_string()),
+            crates: BTreeMap::new(),
+        });
+        // bail!("The given versions manifest file doesn't have a `[release]` section in it to add the tag to");
     }
     manifest.write_to_file(manifest_path)?;
     Ok(())
