@@ -9,14 +9,17 @@
 //! This credential provider will NOT fallback to IMDSv1. Ensure that IMDSv2 is enabled on your instances.
 
 use super::client::error::ImdsError;
+use crate::environment::parse_bool;
 use crate::imds::{self, Client};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
+use aws_runtime::env_config::EnvConfigValue;
+use aws_sdk_sso::error::DisplayErrorContext;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_types::os_shim_internal::Env;
+use aws_types::origin::Origin;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
@@ -65,7 +68,7 @@ struct ProviderState {
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
     client: Client,
-    env: Env,
+    provider_config: ProviderConfig,
     profile: Option<String>,
     time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
@@ -122,15 +125,14 @@ impl Builder {
     /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let env = provider_config.env();
         let client = self
             .imds_override
             .unwrap_or_else(|| imds::Client::builder().configure(&provider_config).build());
         ImdsCredentialsProvider {
             client,
-            env,
             profile: self.profile_override,
             time_source: provider_config.time_source(),
+            provider_config,
             last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
             provider_state: Arc::new(RwLock::new(ProviderState::default())),
         }
@@ -160,10 +162,59 @@ impl ImdsCredentialsProvider {
         Builder::default()
     }
 
-    fn imds_disabled(&self) -> bool {
-        match self.env.get(super::env::EC2_METADATA_DISABLED) {
-            Ok(value) => value.eq_ignore_ascii_case("true"),
-            _ => false,
+    // Retrieves the value for "disable ec2 metadata". If the value is `true`, the method also returns
+    // the source that set it to `true`.
+    //
+    // This checks the following sources:
+    // 1. The environment variable `AWS_EC2_METADATA_DISABLED=true/false`
+    // 2. The profile key `disable_ec2_metadata=true/false`
+    async fn imds_disabled(&self) -> (bool, Origin) {
+        EnvConfigValue::new()
+            .env(super::env::EC2_METADATA_DISABLED)
+            .profile(super::profile_key::EC2_METADATA_DISABLED)
+            .validate_and_return_origin(
+                &self.provider_config.env(),
+                self.provider_config.profile().await,
+                parse_bool,
+            )
+            .map_err(
+                |err| tracing::warn!(err = %DisplayErrorContext(&err), "invalid value for `disable ec2 metadata` setting"),
+            )
+            .map(|(disabled, origin)| (disabled.unwrap_or_default(), origin))
+            .unwrap_or_default()
+    }
+
+    // Return a configured instance profile name. If the profile name is blank, the method returns
+    // a `CredentialsError`.
+    //
+    // This checks the following sources:
+    // 1. The profile name configured via [`Builder::profile`]
+    // 2. The environment variable `AWS_EC2_INSTANCE_PROFILE_NAME`
+    // 3. The profile key `ec2_instance_profile_name`
+    async fn configured_instance_profile_name(
+        &self,
+    ) -> Result<Option<Cow<'_, str>>, CredentialsError> {
+        let configured = match &self.profile {
+            Some(profile) => Some(profile.into()),
+            None => EnvConfigValue::new()
+                .env(super::env::EC2_INSTANCE_PROFILE_NAME)
+                .profile(super::profile_key::EC2_INSTANCE_PROFILE_NAME)
+                .validate(
+                    &self.provider_config.env(),
+                    self.provider_config.profile().await,
+                    |s| Ok::<String, std::convert::Infallible>(s.to_owned()),
+                )
+                .expect("validator is infallible")
+                .map(Cow::Owned),
+        };
+
+        match configured {
+            Some(configured) if configured.trim().is_empty() => {
+                return Err(CredentialsError::not_loaded(
+                    "blank profile name is not allowed",
+                ));
+            }
+            otherwise @ _ => Ok(otherwise),
         }
     }
 
@@ -176,10 +227,10 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    /// Retrieve the instance profile from IMDS
+    // Retrieve the instance profile from IMDS
     async fn resolve_profile_name(&self) -> Result<Cow<'_, str>, CredentialsError> {
-        if let Some(profile) = &self.profile {
-            return Ok(profile.into());
+        if let Some(profile) = self.configured_instance_profile_name().await? {
+            return Ok(profile);
         }
 
         if let Some(profile) = &self.provider_state.read().unwrap().resolved_profile {
@@ -254,11 +305,8 @@ impl ImdsCredentialsProvider {
     }
 
     async fn retrieve_credentials(&self) -> provider::Result {
-        if self.imds_disabled() {
-            let err = format!(
-                "IMDS disabled by {} env var set to `true`",
-                super::env::EC2_METADATA_DISABLED
-            );
+        if let (true, origin) = self.imds_disabled().await {
+            let err = format!("IMDS disabled by {origin} set to `true`",);
             tracing::debug!(err);
             return Err(CredentialsError::not_loaded(err));
         }
@@ -360,11 +408,13 @@ mod test {
         imds_request, imds_response, imds_response_404, make_imds_client, token_request,
         token_response,
     };
+    use crate::imds::env;
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_types::body::SdkBody;
+    use aws_types::os_shim_internal::{Env, Fs};
     use std::convert::identity as IdentityFn;
     use std::future::Future;
     use std::pin::Pin;
@@ -372,6 +422,223 @@ mod test {
     use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
+
+    #[tokio::test]
+    #[traced_test]
+    async fn warn_on_invalid_value_for_disable_ec2_metadata() {
+        let provider_config = ProviderConfig::empty().with_env(Env::from_slice(&[(
+            env::EC2_METADATA_DISABLED,
+            "not-a-boolean",
+        )]));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        assert!(!provider.imds_disabled().await.0);
+        assert!(logs_contain(
+            "invalid value for `disable ec2 metadata` setting"
+        ));
+        assert!(logs_contain(env::EC2_METADATA_DISABLED));
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn environment_priority_on_disable_ec2_metadata() {
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[(env::EC2_METADATA_DISABLED, "TRUE")]))
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    crate::profile::profile_file::ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            crate::profile::profile_file::ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\ndisable_ec2_metadata = false",
+            )]));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        assert_eq!(
+            (true, Origin::shared_environment_variable()),
+            provider.imds_disabled().await
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn disable_ec2_metadata_via_profile_file() {
+        let provider_config = ProviderConfig::empty()
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    crate::profile::profile_file::ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            crate::profile::profile_file::ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\ndisable_ec2_metadata = true",
+            )]));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        assert_eq!(
+            (true, Origin::shared_profile_file()),
+            provider.imds_disabled().await
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn creds_provider_configuration_priority_on_ec2_instance_profile_name() {
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[(
+                env::EC2_INSTANCE_PROFILE_NAME,
+                "profile-via-env",
+            )]))
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    crate::profile::profile_file::ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            crate::profile::profile_file::ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\nec2_instance_profile_name = profile-via-profile-file",
+            )]));
+
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .profile("profile-via-creds-provider")
+            .configure(&provider_config)
+            .imds_client(client.clone())
+            .build();
+        assert_eq!(
+            Some(Cow::Borrowed("profile-via-creds-provider")),
+            provider.configured_instance_profile_name().await.unwrap()
+        );
+
+        // negative test with a blank profile name
+        let provider = ImdsCredentialsProvider::builder()
+            .profile("")
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        let err = provider
+            .configured_instance_profile_name()
+            .await
+            .err()
+            .unwrap();
+        assert!(
+            format!("{}", DisplayErrorContext(&err)).contains("blank profile name is not allowed")
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn environment_priority_on_ec2_instance_profile_name() {
+        let provider_config = ProviderConfig::empty()
+            .with_env(Env::from_slice(&[(
+                env::EC2_INSTANCE_PROFILE_NAME,
+                "profile-via-env",
+            )]))
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    crate::profile::profile_file::ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            crate::profile::profile_file::ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\nec2_instance_profile_name = profile-via-profile-file",
+            )]));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        assert_eq!(
+            Some(Cow::Borrowed("profile-via-env")),
+            provider.configured_instance_profile_name().await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn ec2_instance_profile_name_via_profile_file() {
+        let provider_config = ProviderConfig::empty()
+            .with_profile_config(
+                Some(
+                    #[allow(deprecated)]
+                    crate::profile::profile_file::ProfileFiles::builder()
+                        .with_file(
+                            #[allow(deprecated)]
+                            crate::profile::profile_file::ProfileFileKind::Config,
+                            "conf",
+                        )
+                        .build(),
+                ),
+                None,
+            )
+            .with_fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\nec2_instance_profile_name = profile-via-profile-file",
+            )]));
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build();
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        assert_eq!(
+            Some(Cow::Borrowed("profile-via-profile-file")),
+            provider.configured_instance_profile_name().await.unwrap()
+        );
+    }
 
     #[tokio::test]
     #[traced_test]
