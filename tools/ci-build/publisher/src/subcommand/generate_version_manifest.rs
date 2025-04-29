@@ -115,11 +115,9 @@ pub async fn subcommand_generate_version_manifest(
         release: None,
     };
 
-    // Don't generate release metadata on preview builds
-    if !is_preview_build() {
-        versions_manifest.release =
-            generate_release_metadata(&versions_manifest, previous_release_versions)?;
-    }
+    versions_manifest.release =
+        generate_release_metadata(&versions_manifest, previous_release_versions)?;
+
     let manifest_file_name = output_location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
@@ -130,14 +128,21 @@ fn generate_release_metadata(
     versions_manifest: &VersionsManifest,
     maybe_previous_release_versions: &Option<PathBuf>,
 ) -> Result<Option<Release>> {
-    if let Some(previous_release_versions) = maybe_previous_release_versions {
+    // For release builds we generate a real release section
+    if let (Some(previous_release_versions), false) =
+        (maybe_previous_release_versions, is_preview_build())
+    {
         let old_versions = VersionsManifest::from_file(previous_release_versions)?;
         Ok(Some(Release {
             tag: None,
             crates: find_released_versions(&old_versions, versions_manifest)?,
         }))
+    // For preview builds we insert an empty section
     } else {
-        Ok(None)
+        Ok(Some(Release {
+            tag: None,
+            crates: BTreeMap::new(),
+        }))
     }
 }
 

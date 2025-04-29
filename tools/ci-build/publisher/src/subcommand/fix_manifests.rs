@@ -16,7 +16,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::{
-    ci::{is_preview_build, running_in_ci},
+    ci::{is_example_manifest, is_preview_build, running_in_ci},
     package::parse_version,
 };
 use std::collections::BTreeMap;
@@ -59,11 +59,8 @@ pub async fn subcommand_fix_manifests(
         false => Mode::Execute,
     };
     let manifest_paths = discover_manifests(location).await?;
-    println!("MANIFEST_PATHS: {manifest_paths:#?}");
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
-    // println!("MANIFESTS: {manifests:#?}");
     let versions = package_versions(&manifests)?;
-    println!("VERSIONS: {versions:#?}");
 
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
     validate::validate_after_fixes(location).await?;
@@ -213,20 +210,6 @@ fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<us
     changed += fix_dep_set(&versions.all_crates(), "dev-dependencies", metadata)?;
     changed += fix_dep_set(versions, "build-dependencies", metadata)?;
     Ok(changed)
-}
-
-fn is_example_manifest(manifest_path: impl AsRef<Path>) -> bool {
-    // Examine parent directories until either `examples/` or `aws-sdk-rust/` is found
-    let mut path = manifest_path.as_ref();
-    while let Some(parent) = path.parent() {
-        path = parent;
-        if path.file_name() == Some(OsStr::new("examples")) {
-            return true;
-        } else if path.file_name() == Some(OsStr::new(SDK_REPO_NAME)) {
-            break;
-        }
-    }
-    false
 }
 
 fn conditionally_disallow_publish(
@@ -445,22 +428,5 @@ mod tests {
             ",
             actual_build_deps.to_string()
         );
-    }
-
-    #[test]
-    fn test_is_example_manifest() {
-        assert!(!is_example_manifest("aws-sdk-rust/sdk/s3/Cargo.toml"));
-        assert!(!is_example_manifest(
-            "aws-sdk-rust/sdk/aws-config/Cargo.toml"
-        ));
-        assert!(!is_example_manifest(
-            "/path/to/aws-sdk-rust/sdk/aws-config/Cargo.toml"
-        ));
-        assert!(!is_example_manifest("sdk/aws-config/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/bar/Cargo.toml"));
-        assert!(is_example_manifest(
-            "aws-sdk-rust/examples/foo/bar/Cargo.toml"
-        ));
     }
 }
