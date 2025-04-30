@@ -423,6 +423,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn warn_on_invalid_value_for_disable_ec2_metadata() {
         let provider_config = ProviderConfig::empty().with_env(Env::from_slice(&[(
             env::EC2_METADATA_DISABLED,
@@ -444,6 +445,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn environment_priority_on_disable_ec2_metadata() {
         let provider_config = ProviderConfig::empty()
             .with_env(Env::from_slice(&[(env::EC2_METADATA_DISABLED, "TRUE")]))
@@ -479,6 +481,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn disable_ec2_metadata_via_profile_file() {
         let provider_config = ProviderConfig::empty()
             .with_profile_config(
@@ -513,6 +516,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn creds_provider_configuration_priority_on_ec2_instance_profile_name() {
         let provider_config = ProviderConfig::empty()
             .with_env(Env::from_slice(&[(
@@ -568,6 +572,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn environment_priority_on_ec2_instance_profile_name() {
         let provider_config = ProviderConfig::empty()
             .with_env(Env::from_slice(&[(
@@ -606,6 +611,7 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg(feature = "default-https-client")]
     async fn ec2_instance_profile_name_via_profile_file() {
         let provider_config = ProviderConfig::empty()
             .with_profile_config(
