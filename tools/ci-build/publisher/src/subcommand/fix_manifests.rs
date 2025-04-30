@@ -11,7 +11,6 @@
 
 use crate::fs::Fs;
 use crate::package::discover_manifests;
-use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
@@ -20,8 +19,6 @@ use smithy_rs_tool_common::{
     package::parse_version,
 };
 use std::collections::BTreeMap;
-use std::env;
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
 use toml::Value;
