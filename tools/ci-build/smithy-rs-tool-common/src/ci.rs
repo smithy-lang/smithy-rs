@@ -11,13 +11,13 @@ pub fn running_in_ci() -> bool {
         || std::env::var("SMITHY_RS_DOCKER_BUILD_IMAGE").unwrap_or_default() == "1"
 }
 
+/// The `BUILD_TYPE` env var is only set for Codebuild jobs, will always
+/// return `false` in other CI environments
 pub fn is_preview_build() -> bool {
     let build_type = std::env::var("BUILD_TYPE");
 
     if let Ok(build_type) = build_type {
-        if build_type.eq_ignore_ascii_case("PREVIEW")
-            || build_type.eq_ignore_ascii_case("\"PREVIEW\"")
-        {
+        if build_type.eq_ignore_ascii_case("PREVIEW") {
             return true;
         }
     }
