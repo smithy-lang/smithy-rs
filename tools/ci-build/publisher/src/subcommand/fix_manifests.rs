@@ -16,7 +16,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::{
-    ci::{is_example_manifest, is_preview_build, running_in_ci},
+    ci::{is_in_example_dir, is_preview_build, running_in_ci},
     package::parse_version,
 };
 use std::collections::BTreeMap;
@@ -217,7 +217,7 @@ fn conditionally_disallow_publish(
     metadata: &mut toml::Value,
 ) -> Result<bool> {
     let is_gh_action_or_smithy_rs_docker = running_in_ci();
-    let is_example = is_example_manifest(manifest_path);
+    let is_example = is_in_example_dir(manifest_path);
     let is_preview_build = is_preview_build();
 
     // Safe-guard to prevent accidental publish to crates.io. Add some friction
@@ -290,7 +290,7 @@ fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
     // In the case of a preview build we do not update the examples manifests
     // since most SDKs will not be generated so the particular crate referred to
     // by an example is unlikely to exist
-    if is_example_manifest(&manifest.path) && is_preview_build() {
+    if is_in_example_dir(&manifest.path) && is_preview_build() {
         debug!(package = ?&manifest.path, "Skipping example package for preview build");
         return Ok(0);
     }

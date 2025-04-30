@@ -5,7 +5,7 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use smithy_rs_tool_common::ci::{is_example_manifest, is_preview_build};
+use smithy_rs_tool_common::ci::{is_in_example_dir, is_preview_build};
 use smithy_rs_tool_common::package::{PackageCategory, SDK_PREFIX};
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 use std::ffi::OsStr;
@@ -118,7 +118,7 @@ fn main() -> Result<()> {
     // In the case of a preview build we avoid updating the examples directories since
     // we only generate the single preview SDK, so most SDKs referred to in the examples
     // will be missing
-    if is_preview_build() && is_example_manifest(&args.crate_paths()[0]) {
+    if is_preview_build() && is_in_example_dir(&args.crate_paths()[0]) {
         return Ok(());
     }
 

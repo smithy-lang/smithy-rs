@@ -25,9 +25,13 @@ pub fn is_preview_build() -> bool {
     false
 }
 
-pub fn is_example_manifest(manifest_path: impl AsRef<Path>) -> bool {
-    // Examine parent directories until either `examples/` or `aws-sdk-rust/` is found
+pub fn is_in_example_dir(manifest_path: impl AsRef<Path>) -> bool {
     let mut path = manifest_path.as_ref();
+    // Check if current dir is examples
+    if path.ends_with("examples") {
+        return true;
+    }
+    // Examine parent directories until either `examples/` or `aws-sdk-rust/` is found
     while let Some(parent) = path.parent() {
         path = parent;
         if path.file_name() == Some(OsStr::new("examples")) {
@@ -44,19 +48,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_example_manifest() {
-        assert!(!is_example_manifest("aws-sdk-rust/sdk/s3/Cargo.toml"));
-        assert!(!is_example_manifest(
-            "aws-sdk-rust/sdk/aws-config/Cargo.toml"
-        ));
-        assert!(!is_example_manifest(
+    fn test_is_in_example_dir() {
+        assert!(!is_in_example_dir("aws-sdk-rust/sdk/s3/Cargo.toml"));
+        assert!(!is_in_example_dir("aws-sdk-rust/sdk/aws-config/Cargo.toml"));
+        assert!(!is_in_example_dir(
             "/path/to/aws-sdk-rust/sdk/aws-config/Cargo.toml"
         ));
-        assert!(!is_example_manifest("sdk/aws-config/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/bar/Cargo.toml"));
-        assert!(is_example_manifest(
+        assert!(!is_in_example_dir("sdk/aws-config/Cargo.toml"));
+        assert!(is_in_example_dir("examples/foo/Cargo.toml"));
+        assert!(is_in_example_dir("examples/foo/bar/Cargo.toml"));
+        assert!(is_in_example_dir(
             "aws-sdk-rust/examples/foo/bar/Cargo.toml"
         ));
+        assert!(is_in_example_dir("aws-sdk-rust/examples/"));
     }
 }
