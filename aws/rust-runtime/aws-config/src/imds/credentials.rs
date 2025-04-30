@@ -209,12 +209,10 @@ impl ImdsCredentialsProvider {
         };
 
         match configured {
-            Some(configured) if configured.trim().is_empty() => {
-                return Err(CredentialsError::not_loaded(
-                    "blank profile name is not allowed",
-                ));
-            }
-            otherwise @ _ => Ok(otherwise),
+            Some(configured) if configured.trim().is_empty() => Err(CredentialsError::not_loaded(
+                "blank profile name is not allowed",
+            )),
+            otherwise => Ok(otherwise),
         }
     }
 
