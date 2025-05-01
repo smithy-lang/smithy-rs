@@ -220,7 +220,11 @@ impl ImdsCredentialsProvider {
     }
 
     fn uri_base(&self) -> &str {
-        let api_version = &self.provider_state.read().unwrap().api_version;
+        let api_version = &self
+            .provider_state
+            .read()
+            .expect("write critical section does not cause panic")
+            .api_version;
         use ApiVersion::*;
         match api_version {
             Legacy => "/latest/meta-data/iam/security-credentials/",
@@ -239,13 +243,21 @@ impl ImdsCredentialsProvider {
             return Ok(profile);
         }
 
-        if let Some(profile) = &self.provider_state.read().unwrap().resolved_profile {
+        if let Some(profile) = &self
+            .provider_state
+            .read()
+            .expect("write critical section does not cause panic")
+            .resolved_profile
+        {
             return Ok(profile.clone().into());
         }
 
         match self.client.get(self.uri_base()).await {
             Ok(profile) => {
-                let state = &mut self.provider_state.write().unwrap();
+                let state = &mut self
+                    .provider_state
+                    .write()
+                    .expect("write critical section does not cause panic");
                 state.resolved_profile = Some(profile.clone().into());
                 if state.api_version == ApiVersion::Unknown {
                     state.api_version = ApiVersion::Extended;
@@ -261,7 +273,10 @@ impl ImdsCredentialsProvider {
                 );
 
                 {
-                    let state = &mut self.provider_state.write().unwrap();
+                    let state = &mut self
+                        .provider_state
+                        .write()
+                        .expect("write critical section does not cause panic");
                     if state.api_version == ApiVersion::Unknown {
                         tracing::debug!("retrieving an IMDS profile name failed using the extended API, switching to the legacy API and trying again");
                         state.api_version = ApiVersion::Legacy;
@@ -329,7 +344,7 @@ impl ImdsCredentialsProvider {
             .await
         {
             Ok(credentials) => {
-                let state = &mut self.provider_state.write().unwrap();
+                let state = &mut self.provider_state.write().expect("write critical section does not cause panic");
                 state.resolved_profile = Some(profile.to_string());
                 if state.api_version == ApiVersion::Unknown {
                     state.api_version = ApiVersion::Extended;
@@ -338,7 +353,7 @@ impl ImdsCredentialsProvider {
             }
             Err(ImdsError::ErrorResponse(raw)) if raw.response().status().as_u16() == 404 => {
                 {
-                    let state = &mut self.provider_state.write().unwrap();
+                    let state = &mut self.provider_state.write().expect("write critical section does not cause panic");
                     if state.api_version == ApiVersion::Unknown {
                         tracing::debug!("retrieving credentials failed using the extended API, switching to the legacy API and trying again");
                         state.api_version = ApiVersion::Legacy;
