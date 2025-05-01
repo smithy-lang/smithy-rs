@@ -260,13 +260,6 @@ impl ImdsCredentialsProvider {
                     Hint: This instance may not have an IAM role associated."
                 );
 
-                // A block is required to drop the `RwLockWriteGuard`,
-                // as calling `.drop` on the guard didn't satisfy the compiler as shown below:
-                //
-                //  note: future is not `Send` as this value is used across an await
-                //
-                //  return Box::pin(self.resolve_profile_name()).await;
-                //                                               ^^^^^ await occurs here, with `self.provider_state.write().unwrap()` maybe used later
                 {
                     let state = &mut self.provider_state.write().unwrap();
                     if state.api_version == ApiVersion::Unknown {
@@ -344,13 +337,6 @@ impl ImdsCredentialsProvider {
                 Ok(credentials)
             }
             Err(ImdsError::ErrorResponse(raw)) if raw.response().status().as_u16() == 404 => {
-                // A block is required to drop the `RwLockWriteGuard`,
-                // as calling `.drop` on the guard didn't satisfy the compiler as shown below:
-                //
-                //  note: future is not `Send` as this value is used across an await
-                //
-                //  return Box::pin(self.retrieve_credentials()).await;
-                //                                               ^^^^^ await occurs here, with `self.provider_state.write().unwrap()` maybe used later
                 {
                     let state = &mut self.provider_state.write().unwrap();
                     if state.api_version == ApiVersion::Unknown {
