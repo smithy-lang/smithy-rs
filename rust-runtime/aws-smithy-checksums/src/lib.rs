@@ -196,25 +196,25 @@ impl Checksum for Crc32c {
     }
 }
 
-#[derive(Default)]
 struct Crc64Nvme {
-    hasher: crc64fast_nvme::Digest,
+    hasher: crc_fast::Digest,
 }
 
-// crc64fast_nvme::Digest doesn't impl Debug so we can't derive the impl
-impl Debug for Crc64Nvme {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Crc64Nvme").finish()
+impl Default for Crc64Nvme {
+    fn default() -> Self {
+        Self {
+            hasher: crc_fast::Digest::new(crc_fast::CrcAlgorithm::Crc64Nvme),
+        }
     }
 }
 
 impl Crc64Nvme {
     fn update(&mut self, bytes: &[u8]) {
-        self.hasher.write(bytes);
+        self.hasher.update(bytes);
     }
 
     fn finalize(self) -> Bytes {
-        Bytes::copy_from_slice(self.hasher.sum64().to_be_bytes().as_slice())
+        Bytes::copy_from_slice(self.hasher.finalize().to_be_bytes().as_slice())
     }
 
     // Size of the checksum in bytes
