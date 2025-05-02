@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 2nd, 2025
+=============
+
 April 23rd, 2025
 ================
 **Breaking Changes:**
