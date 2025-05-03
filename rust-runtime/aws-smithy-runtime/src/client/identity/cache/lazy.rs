@@ -374,6 +374,91 @@ impl ResolveCachedIdentity for LazyCache {
             }
         })
     }
+
+    fn resolve_cached_identity_tracked<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        let (time_source, sleep_impl) = (
+            runtime_components.time_source().expect("validated"),
+            runtime_components.sleep_impl().expect("validated"),
+        );
+
+        let now = time_source.now();
+        let timeout_future = sleep_impl.sleep(self.load_timeout);
+        let load_timeout = self.load_timeout;
+        let partition = resolver.cache_partition();
+        let cache = self.partitions.partition(partition);
+        let default_expiration = self.default_expiration;
+
+        IdentityFuture::new(async move {
+            // Attempt to get cached identity, or clear the cache if they're expired
+            if let Some(identity) = cache.yield_or_clear_if_expired(now).await {
+                tracing::debug!(
+                    buffer_time=?self.buffer_time,
+                    cached_expiration=?identity.expiration(),
+                    now=?now,
+                    "loaded identity from cache"
+                );
+                Ok(identity)
+            } else {
+                // If we didn't get identity from the cache, then we need to try and load.
+                // There may be other threads also loading simultaneously, but this is OK
+                // since the futures are not eagerly executed, and the cache will only run one
+                // of them.
+                let start_time = time_source.now();
+                let result = cache
+                    .get_or_load(|| {
+                        let span = tracing::debug_span!("lazy_load_identity");
+                        async move {
+                            let fut = Timeout::new(
+                                resolver.resolve_identity_tracked(runtime_components, config_bag),
+                                timeout_future,
+                            );
+                            let identity = match fut.await {
+                                Ok(result) => result?,
+                                Err(_err) => match resolver.fallback_on_interrupt() {
+                                    Some(identity) => identity,
+                                    None => {
+                                        return Err(BoxError::from(TimedOutError(load_timeout)))
+                                    }
+                                },
+                            };
+                            // If the identity don't have an expiration time, then create a default one
+                            let expiration =
+                                identity.expiration().unwrap_or(now + default_expiration);
+
+                            let jitter = self
+                                .buffer_time
+                                .mul_f64((self.buffer_time_jitter_fraction)());
+
+                            // Logging for cache miss should be emitted here as opposed to after the call to
+                            // `cache.get_or_load` above. In the case of multiple threads concurrently executing
+                            // `cache.get_or_load`, logging inside `cache.get_or_load` ensures that it is emitted
+                            // only once for the first thread that succeeds in populating a cache value.
+                            let printable = DateTime::from(expiration);
+                            tracing::debug!(
+                                new_expiration=%printable,
+                                valid_for=?expiration.duration_since(time_source.now()).unwrap_or_default(),
+                                partition=?partition,
+                                "identity cache miss occurred; added new identity (took {:?})",
+                                time_source.now().duration_since(start_time).unwrap_or_default()
+                            );
+
+                            Ok((identity, expiration + jitter))
+                        }
+                        // Only instrument the the actual load future so that no span
+                        // is opened if the cache decides not to execute it.
+                        .instrument(span)
+                    })
+                    .await;
+                tracing::debug!("loaded identity");
+                result
+            }
+        })
+    }
 }
 
 #[derive(Debug)]

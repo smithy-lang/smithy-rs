@@ -92,4 +92,17 @@ impl ResolveCachedIdentity for NoCache {
                 .await
         })
     }
+
+    fn resolve_cached_identity_tracked<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::new(async move {
+            resolver
+                .resolve_identity_tracked(runtime_components, config_bag)
+                .await
+        })
+    }
 }

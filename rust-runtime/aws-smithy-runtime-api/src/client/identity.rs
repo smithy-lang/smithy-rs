@@ -65,6 +65,16 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a>;
 
+    #[doc(hidden)]
+    fn resolve_cached_identity_tracked<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        self.resolve_cached_identity(resolver, runtime_components, config_bag)
+    }
+
     #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
     fn validate_base_client_config(
         &self,
@@ -106,6 +116,16 @@ impl ResolveCachedIdentity for SharedIdentityCache {
     ) -> IdentityFuture<'a> {
         self.0
             .resolve_cached_identity(resolver, runtime_components, config_bag)
+    }
+
+    fn resolve_cached_identity_tracked<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        self.0
+            .resolve_cached_identity_tracked(resolver, runtime_components, config_bag)
     }
 }
 
@@ -177,6 +197,15 @@ pub trait ResolveIdentity: Send + Sync + Debug {
     fn cache_partition(&self) -> Option<IdentityCachePartition> {
         None
     }
+
+    #[doc(hidden)]
+    fn resolve_identity_tracked<'a>(
+        &'a self,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        self.resolve_identity(runtime_components, config_bag)
+    }
 }
 
 /// Cache location for identity caching.
@@ -241,6 +270,15 @@ impl ResolveIdentity for SharedIdentityResolver {
 
     fn cache_partition(&self) -> Option<IdentityCachePartition> {
         Some(self.cache_partition())
+    }
+
+    fn resolve_identity_tracked<'a>(
+        &'a self,
+        runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        self.inner
+            .resolve_identity_tracked(runtime_components, config_bag)
     }
 }
 
