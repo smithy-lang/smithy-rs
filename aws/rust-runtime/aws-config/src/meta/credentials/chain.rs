@@ -7,6 +7,7 @@ use aws_credential_types::{
     provider::{self, error::CredentialsError, future, ProvideCredentials},
     Credentials,
 };
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -111,6 +112,36 @@ impl CredentialsProviderChain {
             "no providers in chain provided credentials",
         ))
     }
+
+    async fn credentials_tracked<'a>(&'a self, config_bag: &'a mut ConfigBag) -> provider::Result {
+        for (name, provider) in &self.providers {
+            let span = tracing::debug_span!("credentials_provider_chain", provider = %name);
+            match provider
+                .provide_credentials_tracked(config_bag)
+                .instrument(span)
+                .await
+            {
+                Ok(credentials) => {
+                    tracing::debug!(provider = %name, "loaded credentials");
+                    // Just an example to show a feature can be added here.
+                    config_bag
+                        .interceptor_state()
+                        .store_append(aws_runtime::sdk_feature::AwsSdkFeature::S3Transfer);
+                    return Ok(credentials);
+                }
+                Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
+                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
+                }
+                Err(err) => {
+                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
+                    return Err(err);
+                }
+            }
+        }
+        Err(CredentialsError::not_loaded(
+            "no providers in chain provided credentials",
+        ))
+    }
 }
 
 impl ProvideCredentials for CredentialsProviderChain {
@@ -129,6 +160,16 @@ impl ProvideCredentials for CredentialsProviderChain {
             }
         }
         None
+    }
+
+    fn provide_credentials_tracked<'a>(
+        &'a self,
+        config_bag: &'a mut ConfigBag,
+    ) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.credentials_tracked(config_bag))
     }
 }
 

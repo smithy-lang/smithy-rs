@@ -7,6 +7,7 @@ use std::borrow::Cow;
 
 use aws_credential_types::provider::{self, future, ProvideCredentials};
 use aws_credential_types::Credentials;
+use aws_smithy_types::config_bag::ConfigBag;
 use tracing::Instrument;
 
 use crate::environment::credentials::EnvironmentVariableCredentialsProvider;
@@ -75,6 +76,13 @@ impl DefaultCredentialsChain {
             .instrument(tracing::debug_span!("default_credentials_chain"))
             .await
     }
+
+    async fn credentials_tracked<'a>(&'a self, config_bag: &mut ConfigBag) -> provider::Result {
+        self.provider_chain
+            .provide_credentials_tracked(config_bag)
+            .instrument(tracing::debug_span!("default_credentials_chain"))
+            .await
+    }
 }
 
 impl ProvideCredentials for DefaultCredentialsChain {
@@ -87,6 +95,16 @@ impl ProvideCredentials for DefaultCredentialsChain {
 
     fn fallback_on_interrupt(&self) -> Option<Credentials> {
         self.provider_chain.fallback_on_interrupt()
+    }
+
+    fn provide_credentials_tracked<'a>(
+        &'a self,
+        config_bag: &'a mut ConfigBag,
+    ) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.credentials_tracked(config_bag))
     }
 }
 

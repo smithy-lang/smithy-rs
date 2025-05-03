@@ -494,27 +494,31 @@ pub(crate) mod identity_provider {
         async fn identity<'a>(
             &'a self,
             runtime_components: &'a RuntimeComponents,
-            config_bag: &'a ConfigBag,
+            config_bag: &'a mut ConfigBag,
         ) -> Result<Identity, BoxError> {
-            let bucket_name = self.bucket_name(config_bag)?;
-
             let sigv4_identity_resolver = runtime_components
                 .identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID)
                 .ok_or("identity resolver for sigv4 should be set for S3")?;
             let aws_identity = runtime_components
                 .identity_cache()
-                .resolve_cached_identity(sigv4_identity_resolver, runtime_components, config_bag)
+                .resolve_cached_identity_tracked(
+                    sigv4_identity_resolver,
+                    runtime_components,
+                    config_bag,
+                )
                 .await?;
+
+            let bucket_name = self.bucket_name(config_bag)?.to_owned();
 
             let credentials = aws_identity.data::<Credentials>().ok_or(
                 "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
             )?;
 
-            let key = self.cache.key(bucket_name, credentials);
+            let key = self.cache.key(&bucket_name, credentials);
             self.cache
                 .get_or_load(key, || async move {
                     let creds = self
-                        .express_session_credentials(bucket_name, runtime_components, config_bag)
+                        .express_session_credentials(&bucket_name, runtime_components, config_bag)
                         .await?;
                     let data = Credentials::try_from(creds)?;
                     Ok((
@@ -618,8 +622,16 @@ pub(crate) mod identity_provider {
     impl ResolveIdentity for DefaultS3ExpressIdentityProvider {
         fn resolve_identity<'a>(
             &'a self,
+            _runtime_components: &'a RuntimeComponents,
+            _config_bag: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
+            unimplemented!("replaced by `resolve_identity_tracked`");
+        }
+
+        fn resolve_identity_tracked<'a>(
+            &'a self,
             runtime_components: &'a RuntimeComponents,
-            config_bag: &'a ConfigBag,
+            config_bag: &'a mut ConfigBag,
         ) -> IdentityFuture<'a> {
             IdentityFuture::new(async move { self.identity(runtime_components, config_bag).await })
         }

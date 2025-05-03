@@ -89,6 +89,17 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     where
         Self: 'a;
 
+    #[doc(hidden)]
+    fn provide_credentials_tracked<'a>(
+        &'a self,
+        _config_bag: &'a mut ConfigBag,
+    ) -> super::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        self.provide_credentials()
+    }
+
     /// Returns fallback credentials.
     ///
     /// This method should be used as a fallback plan, i.e., when
@@ -118,6 +129,16 @@ impl ProvideCredentials for Arc<dyn ProvideCredentials> {
         Self: 'a,
     {
         self.as_ref().provide_credentials()
+    }
+
+    fn provide_credentials_tracked<'a>(
+        &'a self,
+        config_bag: &'a mut ConfigBag,
+    ) -> super::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        self.as_ref().provide_credentials_tracked(config_bag)
     }
 }
 
@@ -157,6 +178,16 @@ impl ProvideCredentials for SharedCredentialsProvider {
     {
         self.0.provide_credentials()
     }
+
+    fn provide_credentials_tracked<'a>(
+        &'a self,
+        config_bag: &'a mut ConfigBag,
+    ) -> super::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        self.0.provide_credentials_tracked(config_bag)
+    }
 }
 
 impl Storable for SharedCredentialsProvider {
@@ -170,6 +201,16 @@ impl ResolveIdentity for SharedCredentialsProvider {
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         IdentityFuture::new(async move { Ok(self.provide_credentials().await?.into()) })
+    }
+
+    fn resolve_identity_tracked<'a>(
+        &'a self,
+        _runtime_components: &'a RuntimeComponents,
+        config_bag: &'a mut ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::new(async move {
+            Ok(self.provide_credentials_tracked(config_bag).await?.into())
+        })
     }
 
     fn fallback_on_interrupt(&self) -> Option<Identity> {
