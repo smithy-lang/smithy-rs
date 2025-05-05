@@ -72,8 +72,7 @@ class ConstrainedStringGenerator(
             .mapNotNull { shape.getTrait(it).orNull() }
             .map { StringTraitInfo.fromTrait(symbol, it, isSensitive = shape.hasTrait<SensitiveTrait>()) }
     private val constraintsInfo: List<TraitInfo> =
-        stringConstraintsInfo
-            .map(StringTraitInfo::toTraitInfo)
+        stringConstraintsInfo.map(StringTraitInfo::toTraitInfo)
 
     fun render() {
         val name = symbol.name
@@ -184,7 +183,9 @@ class ConstrainedStringGenerator(
                     #{StringShapeConstraintViolationImplBlock:W}
                 }
                 """,
-                "StringShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.stringShapeConstraintViolationImplBlock(stringConstraintsInfo),
+                "StringShapeConstraintViolationImplBlock" to
+                    validationExceptionConversionGenerator
+                        .stringShapeConstraintViolationImplBlock(stringConstraintsInfo),
             )
         }
     }
@@ -275,7 +276,8 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
         }
 }
 
-data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
+data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) :
+    StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo {
         return TraitInfo(
             tryFromCheck = { rust("let value = Self::check_pattern(value)?;") },
@@ -350,13 +352,12 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 /// Attempts to compile the regex for this constrained type's `@pattern`.
                 /// This can fail if the specified regex is not supported by the `#{Regex}` crate.
                 pub fn compile_regex() -> &'static #{Regex}::Regex {
-                    static REGEX: #{OnceCell}::sync::Lazy<#{Regex}::Regex> = #{OnceCell}::sync::Lazy::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
+                    static REGEX: std::sync::LazyLock<#{Regex}::Regex> = std::sync::LazyLock::new(|| #{Regex}::Regex::new(r##"$pattern"##).expect(r##"$errorMessageForUnsupportedRegex"##));
 
                     &REGEX
                 }
                 """,
                 "Regex" to ServerCargoDependency.Regex.toType(),
-                "OnceCell" to ServerCargoDependency.OnceCell.toType(),
                 *preludeScope,
             )
         }
@@ -364,7 +365,8 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
 
     override fun shapeConstraintViolationDisplayMessage(shape: Shape) =
         writable {
-            val errorMessage = patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
+            val errorMessage =
+                patternTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
             val pattern = patternTrait.pattern.toString().replace("#", "##")
             rustTemplate(
                 """
@@ -386,11 +388,9 @@ sealed class StringTraitInfo {
             is PatternTrait -> {
                 Pattern(symbol, trait, isSensitive)
             }
-
             is LengthTrait -> {
                 Length(trait)
             }
-
             else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
         }
     }
