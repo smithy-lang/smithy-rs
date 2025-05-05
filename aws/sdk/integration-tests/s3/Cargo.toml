@@ -27,6 +27,7 @@ aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", feat
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util", "http-1x"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["default-client", "rustls-ring", "test-util", "wire-mock"] }
+aws-smithy-mocks = { path = "../../build/aws-sdk/sdk/aws-smithy-mocks" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"

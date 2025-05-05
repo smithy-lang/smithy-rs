@@ -70,6 +70,7 @@ object CrateSet {
             "aws-smithy-http-auth",
             "aws-smithy-http-tower",
             "aws-smithy-json",
+            "aws-smithy-mocks",
             "aws-smithy-mocks-experimental",
             "aws-smithy-observability",
             "aws-smithy-observability-otel",
