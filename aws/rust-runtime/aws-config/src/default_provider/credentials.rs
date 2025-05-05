@@ -70,18 +70,18 @@ impl DefaultCredentialsChain {
         Builder::default()
     }
 
-    async fn credentials(&self) -> provider::Result {
-        self.provider_chain
-            .provide_credentials()
-            .instrument(tracing::debug_span!("default_credentials_chain"))
-            .await
-    }
-
-    async fn credentials_tracked<'a>(&'a self, config_bag: &mut ConfigBag) -> provider::Result {
-        self.provider_chain
-            .provide_credentials_tracked(config_bag)
-            .instrument(tracing::debug_span!("default_credentials_chain"))
-            .await
+    async fn credentials<'a>(&'a self, config_bag: Option<&'a mut ConfigBag>) -> provider::Result {
+        if let Some(cfg) = config_bag {
+            self.provider_chain
+                .provide_credentials_tracked(cfg)
+                .instrument(tracing::debug_span!("default_credentials_chain"))
+                .await
+        } else {
+            self.provider_chain
+                .provide_credentials()
+                .instrument(tracing::debug_span!("default_credentials_chain"))
+                .await
+        }
     }
 }
 
@@ -90,7 +90,7 @@ impl ProvideCredentials for DefaultCredentialsChain {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.credentials())
+        future::ProvideCredentials::new(self.credentials(None))
     }
 
     fn fallback_on_interrupt(&self) -> Option<Credentials> {
@@ -104,7 +104,7 @@ impl ProvideCredentials for DefaultCredentialsChain {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.credentials_tracked(config_bag))
+        future::ProvideCredentials::new(self.credentials(Some(config_bag)))
     }
 }
 

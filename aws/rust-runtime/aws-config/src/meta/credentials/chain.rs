@@ -91,42 +91,23 @@ impl CredentialsProviderChain {
         )
     }
 
-    async fn credentials(&self) -> provider::Result {
+    async fn credentials<'a>(
+        &'a self,
+        mut config_bag: Option<&'a mut ConfigBag>,
+    ) -> provider::Result {
         for (name, provider) in &self.providers {
             let span = tracing::debug_span!("credentials_provider_chain", provider = %name);
-            match provider.provide_credentials().instrument(span).await {
+            let creds_result = if let Some(cfg) = config_bag.as_deref_mut() {
+                provider
+                    .provide_credentials_tracked(cfg)
+                    .instrument(span)
+                    .await
+            } else {
+                provider.provide_credentials().instrument(span).await
+            };
+            match creds_result {
                 Ok(credentials) => {
                     tracing::debug!(provider = %name, "loaded credentials");
-                    return Ok(credentials);
-                }
-                Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
-                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
-                }
-                Err(err) => {
-                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
-                    return Err(err);
-                }
-            }
-        }
-        Err(CredentialsError::not_loaded(
-            "no providers in chain provided credentials",
-        ))
-    }
-
-    async fn credentials_tracked<'a>(&'a self, config_bag: &'a mut ConfigBag) -> provider::Result {
-        for (name, provider) in &self.providers {
-            let span = tracing::debug_span!("credentials_provider_chain", provider = %name);
-            match provider
-                .provide_credentials_tracked(config_bag)
-                .instrument(span)
-                .await
-            {
-                Ok(credentials) => {
-                    tracing::debug!(provider = %name, "loaded credentials");
-                    // Just an example to show a feature can be added here.
-                    config_bag
-                        .interceptor_state()
-                        .store_append(aws_runtime::sdk_feature::AwsSdkFeature::S3Transfer);
                     return Ok(credentials);
                 }
                 Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
@@ -149,7 +130,7 @@ impl ProvideCredentials for CredentialsProviderChain {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.credentials())
+        future::ProvideCredentials::new(self.credentials(None))
     }
 
     fn fallback_on_interrupt(&self) -> Option<Credentials> {
@@ -169,7 +150,7 @@ impl ProvideCredentials for CredentialsProviderChain {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.credentials_tracked(config_bag))
+        future::ProvideCredentials::new(self.credentials(Some(config_bag)))
     }
 }
 
