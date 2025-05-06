@@ -427,6 +427,11 @@ impl RuntimeComponents {
         self.interceptors.iter().map(|s| s.value.clone())
     }
 
+    /// Returns an iterator over the interceptors
+    pub fn interceptors_ref(&self) -> impl Iterator<Item = &SharedInterceptor> {
+        self.interceptors.iter().map(|s| &s.value)
+    }
+
     /// Returns an iterator over the retry classifiers.
     pub fn retry_classifiers(&self) -> impl Iterator<Item = SharedRetryClassifier> + '_ {
         self.retry_classifiers.iter().map(|s| s.value.clone())
@@ -686,6 +691,11 @@ impl RuntimeComponentsBuilder {
     /// Returns the interceptors.
     pub fn interceptors(&self) -> impl Iterator<Item = SharedInterceptor> + '_ {
         self.interceptors.iter().map(|s| s.value.clone())
+    }
+
+    /// Returns an iterator over the interceptors
+    pub fn interceptors_ref(&self) -> impl Iterator<Item = &SharedInterceptor> {
+        self.interceptors.iter().map(|s| &s.value)
     }
 
     /// Adds all the given interceptors.

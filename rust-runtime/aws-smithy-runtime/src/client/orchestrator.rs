@@ -87,7 +87,7 @@ macro_rules! run_interceptors {
         halt_on_err!([$ctx] => run_interceptors!(__private $interceptor($ctx, $rc, $cfg)))
     };
     (__private $interceptor:ident($ctx:ident, $rc:ident, $cfg:ident)) => {
-        Interceptors::new($rc.interceptors()).$interceptor($ctx, $rc, $cfg)
+        Interceptors::new($rc.interceptors_ref()).$interceptor($ctx, $rc, $cfg)
     };
 }
 
@@ -186,10 +186,10 @@ fn apply_configuration(
     runtime_plugins: &RuntimePlugins,
 ) -> Result<RuntimeComponents, BoxError> {
     let client_rc_builder = runtime_plugins.apply_client_configuration(cfg)?;
-    continue_on_err!([ctx] => Interceptors::new(client_rc_builder.interceptors()).read_before_execution(false, ctx, cfg));
+    continue_on_err!([ctx] => Interceptors::new(client_rc_builder.interceptors_ref()).read_before_execution(false, ctx, cfg));
 
     let operation_rc_builder = runtime_plugins.apply_operation_configuration(cfg)?;
-    continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors()).read_before_execution(true, ctx, cfg));
+    continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors_ref()).read_before_execution(true, ctx, cfg));
 
     // The order below is important. Client interceptors must run before operation interceptors.
     let components = RuntimeComponents::builder("merged orchestrator components")
