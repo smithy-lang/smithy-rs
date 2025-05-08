@@ -28,7 +28,7 @@ class ClientEnumGeneratorTest {
             val context = testClientCodegenContext(model)
             val project = TestWorkspace.testProject(context.symbolProvider)
             project.moduleFor(shape) {
-                ClientEnumGenerator(context, shape).render(this)
+                ClientEnumGenerator(context, shape, emptyList()).render(this)
                 unitTest(
                     "matching_on_enum_should_be_forward_compatible",
                     """
@@ -88,7 +88,7 @@ class ClientEnumGeneratorTest {
         val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
-            ClientEnumGenerator(context, shape).render(this)
+            ClientEnumGenerator(context, shape, emptyList()).render(this)
             unitTest(
                 "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
                 """
@@ -123,7 +123,7 @@ class ClientEnumGeneratorTest {
         val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
-            ClientEnumGenerator(context, shape).render(this)
+            ClientEnumGenerator(context, shape, emptyList()).render(this)
             unitTest(
                 "it_escapes_the_unknown_variant_if_the_enum_has_an_unknown_value_in_the_model",
                 """
@@ -156,7 +156,7 @@ class ClientEnumGeneratorTest {
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shape) {
             rust("##![allow(deprecated)]")
-            ClientEnumGenerator(context, shape).render(this)
+            ClientEnumGenerator(context, shape, emptyList()).render(this)
             unitTest(
                 "generated_named_enums_roundtrip",
                 """
