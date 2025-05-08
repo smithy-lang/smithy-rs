@@ -7,7 +7,7 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.82.0
-ARG rust_nightly_version=nightly-2024-10-17
+ARG rust_nightly_version=nightly-2025-05-04
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -118,7 +118,7 @@ ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.13
+ARG cargo_check_external_types_version=0.2.0
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
