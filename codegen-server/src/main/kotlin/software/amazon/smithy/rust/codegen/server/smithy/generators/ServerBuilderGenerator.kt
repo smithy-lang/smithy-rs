@@ -351,9 +351,21 @@ class ServerBuilderGenerator(
                     if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
 
                     if (wrapInMaybeConstrained) {
-                        conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
-                            conditionalBlock("Box::new(", ")", conditional = hasBox) {
-                                rust("$maybeConstrainedVariant($varExpr)")
+                        // Temporary fix for `#[allow(clippy::redundant_closure)]` not working in `rustc` version 1.82.
+                        // The issue occurs specifically when we generate code in the form:
+                        // ```rust
+                        // input.map(|v| MaybeConstrained(v))
+                        // ```
+                        // This pattern triggers a clippy warning about redundant closures, even with the allow attribute.
+                        // For this specific pattern, we directly use the constructor function reference.
+                        // Other cases like `Box::new(v)` or `v.into()` are valid closure usages and remain unchanged.
+                        if (symbol.isOptional() && varExpr == "v") {
+                            rust("input.map($maybeConstrainedVariant)")
+                        } else {
+                            conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
+                                conditionalBlock("Box::new(", ")", conditional = hasBox) {
+                                    rust("$maybeConstrainedVariant($varExpr)")
+                                }
                             }
                         }
                     } else {
