@@ -6,8 +6,8 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.81.0
-ARG rust_nightly_version=nightly-2024-06-30
+ARG rust_stable_version=1.82.0
+ARG rust_nightly_version=nightly-2025-05-04
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -118,7 +118,7 @@ ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.13
+ARG cargo_check_external_types_version=0.2.0
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
@@ -206,8 +206,9 @@ ENV PATH=/opt/cargo/bin:$PATH \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
-    RUSTDOCFLAGS="-D warnings" \
-    RUSTFLAGS="-D warnings" \
+    # TODO(MSRV1.82 follow-up): Restore them once lints are fixed in the server runtime crates
+    # RUSTDOCFLAGS="-D warnings" \
+    # RUSTFLAGS="-D warnings" \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 # SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.

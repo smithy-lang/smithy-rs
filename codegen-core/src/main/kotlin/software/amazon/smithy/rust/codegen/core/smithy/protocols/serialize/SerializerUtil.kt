@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.AddedDefaultTrait
 import software.amazon.smithy.model.traits.ClientOptionalTrait
 import software.amazon.smithy.model.traits.InputTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -30,6 +31,10 @@ class SerializerUtil(private val model: Model, private val symbolProvider: Symbo
         if (
             shape.isRequired ||
             shape.hasTrait<ClientOptionalTrait>() ||
+            // Treating `addedDefault` as `default` could break existing serializers.
+            // Fields that were previously marked as `required` but later replaced with `addedDefault`
+            // may no longer be serialized. This could occur when an explicitly set value matches the default.
+            shape.hasTrait<AddedDefaultTrait>() ||
             // Zero values are always serialized in lists and collections, this only applies to structures
             container !is StructureShape ||
             container.hasTrait<InputTrait>()
