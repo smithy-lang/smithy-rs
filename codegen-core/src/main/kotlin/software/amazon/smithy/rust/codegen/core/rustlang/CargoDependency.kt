@@ -409,6 +409,9 @@ data class CargoDependency(
 
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 
+        fun smithyMocks(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-mocks", scope = DependencyScope.Dev)
+
         // behind feature-gate
         val Serde =
             CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)
