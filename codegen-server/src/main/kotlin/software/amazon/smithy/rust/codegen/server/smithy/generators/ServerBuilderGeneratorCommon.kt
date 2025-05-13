@@ -86,10 +86,15 @@ fun generateFallbackCodeToDefaultValue(
     publicConstrainedTypes: Boolean,
 ) {
     val targetShape = model.expectShape(member.target)
+    // TODO(https://github.com/rust-lang/rust-clippy/issues/14789):
     // Temporary fix for `#[allow(clippy::redundant_closure)]` not working in `rustc` version 1.82.
     // The issue occurs specifically when we generate code in the form:
     // ```rust
     // .unwrap_or_else(HashMap::new())
+    // ```
+    // Instead of the linter suggested code:
+    // ```rust
+    // .unwrap_or_default()
     // ```
     if (isTargetListOrMap(targetShape, member)) {
         writer.rustTemplate(".unwrap_or_default()")
