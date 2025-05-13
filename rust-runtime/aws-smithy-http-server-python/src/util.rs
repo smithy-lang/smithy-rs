@@ -158,19 +158,43 @@ class Types:
 
             assert_eq!(
                 true,
-                is_optional_of::<PyString>(py, type_hints.get_item("opt_of_str").unwrap())?
+                is_optional_of::<PyString>(
+                    py,
+                    type_hints
+                        .get_item("opt_of_str")
+                        .expect("Python exception occurred during dictionary lookup")
+                        .unwrap()
+                )?
             );
             assert_eq!(
                 false,
-                is_optional_of::<PyString>(py, type_hints.get_item("regular_str").unwrap())?
+                is_optional_of::<PyString>(
+                    py,
+                    type_hints
+                        .get_item("regular_str")
+                        .expect("Python exception occurred during dictionary lookup")
+                        .unwrap()
+                )?
             );
             assert_eq!(
                 true,
-                is_optional_of::<PyBool>(py, type_hints.get_item("opt_of_bool").unwrap())?
+                is_optional_of::<PyBool>(
+                    py,
+                    type_hints
+                        .get_item("opt_of_bool")
+                        .expect("Python exception occurred during dictionary lookup")
+                        .unwrap()
+                )?
             );
             assert_eq!(
                 false,
-                is_optional_of::<PyString>(py, type_hints.get_item("opt_of_bool").unwrap())?
+                is_optional_of::<PyString>(
+                    py,
+                    type_hints
+                        .get_item("opt_of_bool")
+                        .expect("Python exception occurred during dictionary lookup")
+                        .unwrap()
+                )?
             );
 
             Ok(())
