@@ -345,7 +345,6 @@ impl ImdsCredentialsProvider {
         {
             Ok(credentials) => {
                 let state = &mut self.provider_state.write().expect("write critical section does not cause panic");
-                state.resolved_profile = Some(profile.to_string());
                 if state.api_version == ApiVersion::Unknown {
                     state.api_version = ApiVersion::Extended;
                 }
