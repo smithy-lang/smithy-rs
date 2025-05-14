@@ -57,6 +57,10 @@ private val allowedRustdocLints =
         // Rustdoc warns about redundant explicit links in doc comments. This is fine for handwritten
         // crates, but is impractical to manage for code generated crates. Thus, allow it.
         "redundant_explicit_links",
+        // The documentation directly from the model may contain invalid HTML tags. For instance,
+        // <p><code><bucketloggingstatus xmlns="http://doc.s3.amazonaws.com/2006-03-01" /></code></p>
+        // is considered an invalid self-closing HTML tag `bucketloggingstatus`
+        "invalid_html_tags",
     )
 
 class AllowLintsCustomization(
