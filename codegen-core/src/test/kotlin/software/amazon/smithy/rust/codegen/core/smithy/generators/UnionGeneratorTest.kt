@@ -7,9 +7,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.SymbolProvider
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -35,6 +37,28 @@ class UnionGeneratorTest {
             """
             let var_a = MyUnion::StringConfig("abc".to_string());
             let var_b = MyUnion::IntConfig(10);
+            assert_ne!(var_a, var_b);
+            assert_eq!(var_a, var_a);
+            """,
+        )
+        writer.toString() shouldContain "#[non_exhaustive]"
+    }
+
+    @Test
+    fun `generate basic union with member names Unknown`() {
+        val writer =
+            generateUnion(
+                """
+                union MyUnion {
+                    unknown: String
+                }
+                """,
+            )
+
+        writer.compileAndTest(
+            """
+            let var_a = MyUnion::UnknownValue("abc".to_string());
+            let var_b = MyUnion::Unknown;
             assert_ne!(var_a, var_b);
             assert_eq!(var_a, var_a);
             """,
@@ -232,9 +256,31 @@ class UnionGeneratorTest {
         unknownVariant: Boolean = true,
     ): RustWriter {
         val model = "namespace test\n$modelSmithy".asSmithyModel()
-        val provider: SymbolProvider = testSymbolProvider(model)
+        // Reserved words to test generation of renamed members
+        val reservedWords =
+            RustReservedWordConfig(
+                structureMemberMap =
+                    StructureGenerator.structureMemberNameMap,
+                unionMemberMap =
+                    mapOf(
+                        // Unions contain an `Unknown` variant. This exists to support parsing data returned from the server
+                        // that represent union variants that have been added since this SDK was generated.
+                        UnionGenerator.UNKNOWN_VARIANT_NAME to "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value",
+                        "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value" to "${UnionGenerator.UNKNOWN_VARIANT_NAME}Value_",
+                    ),
+                enumMemberMap =
+                    mapOf(),
+            )
+        val provider: RustSymbolProvider = testSymbolProvider(model)
+        val reservedWordsProvider = RustReservedWordSymbolProvider(provider, reservedWords)
         val writer = RustWriter.forModule("model")
-        UnionGenerator(model, provider, writer, model.lookup("test#$unionName"), renderUnknownVariant = unknownVariant).render()
+        UnionGenerator(
+            model,
+            reservedWordsProvider,
+            writer,
+            model.lookup("test#$unionName"),
+            renderUnknownVariant = unknownVariant,
+        ).render()
         return writer
     }
 }
