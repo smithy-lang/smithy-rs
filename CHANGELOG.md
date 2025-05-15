@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 15th, 2025
+==============
+**New this release:**
+- :bug: (all, [smithy-rs#4132](https://github.com/smithy-lang/smithy-rs/issues/4132)) Smithy unions that contain members named "unknown" will now codegen correctly
+- (all, [smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105), @FalkWoldmann) Replace once_cell with std equivalents
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105))
+
+
 May 9th, 2025
 =============
 **Breaking Changes:**
