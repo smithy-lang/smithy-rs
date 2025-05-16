@@ -15,6 +15,7 @@ service RpcV2CborService {
         ComplexStructOperation
         EmptyStructOperation
         SingleMemberStructOperation
+        RecursiveUnionOperation
     ]
 }
 
@@ -47,6 +48,11 @@ operation EmptyStructOperation {
 operation SingleMemberStructOperation {
     input: SingleMemberStruct
     output: SingleMemberStruct
+}
+
+operation RecursiveUnionOperation {
+    input: RecursiveOperationInputOutput
+    output: RecursiveOperationInputOutput
 }
 
 apply EmptyStructOperation @httpMalformedRequestTests([
@@ -244,6 +250,52 @@ apply SimpleStructOperation @httpResponseTests([
     }
 ])
 
+apply RecursiveUnionOperation @httpResponseTests([
+    {
+        id: "RpcV2CborRecursiveShapesWithUnion",
+        documentation: "Serializes recursive structures with union",
+        protocol: rpcv2Cbor,
+        code: 200,
+        body: "v2ZuZXN0ZWS/Y2Zvb2RGb28xZ3ZhcmlhbnS/Z2Nob2ljZTFrT3V0ZXJDaG9pY2X/Zm5lc3RlZL9jYmFyZEJhcjFvcmVjdXJzaXZlTWVtYmVyv2Nmb29kRm9vMmd2YXJpYW50v2djaG9pY2Uyv2Nmb29kRm9vM2ZuZXN0ZWS/Y2JhcmRCYXIzb3JlY3Vyc2l2ZU1lbWJlcr9jZm9vZEZvbzRndmFyaWFudL9nY2hvaWNlMWtJbm5lckNob2ljZf//////Zm5lc3RlZL9jYmFyZEJhcjL//////w==",
+        bodyMediaType: "application/cbor",
+        headers: {
+            "smithy-protocol": "rpc-v2-cbor",
+            "Content-Type": "application/cbor"
+        },
+        params: {
+            nested: {
+                foo: "Foo1",
+                variant: {
+                    choice1: "OuterChoice"
+                },
+                nested: {
+                    bar: "Bar1",
+                    recursiveMember: {
+                        foo: "Foo2",
+                        variant: {
+                            choice2: {
+                                foo: "Foo3",
+                                nested: {
+                                    bar: "Bar3",
+                                    recursiveMember: {
+                                        foo: "Foo4",
+                                        variant: {
+                                            choice1: "InnerChoice"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        nested: {
+                            bar: "Bar2"
+                        }
+                    }
+                }
+            }
+        }
+    }
+])
+
 structure ErrorSerializationOperationOutput {
     errorShape: ValidationException
 }
@@ -359,4 +411,24 @@ enum Suit {
     CLUB
     HEART
     SPADE
+}
+
+structure RecursiveOperationInputOutput {
+    nested: RecursiveOperationInputOutputNested1
+}
+
+structure RecursiveOperationInputOutputNested1 {
+    foo: String,
+    nested: RecursiveOperationInputOutputNested2,
+    variant: FooChoice,
+}
+
+structure RecursiveOperationInputOutputNested2 {
+    bar: String,
+    recursiveMember: RecursiveOperationInputOutputNested1,
+}
+
+union FooChoice {
+    choice1: String
+    choice2: RecursiveOperationInputOutputNested1
 }

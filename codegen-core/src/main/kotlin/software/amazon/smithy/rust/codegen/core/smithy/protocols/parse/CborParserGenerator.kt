@@ -366,6 +366,11 @@ class CborParserGenerator(
                         } else {
                             withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
                                 deserializeMember(member).invoke(this)
+
+                                val symbol = symbolProvider.toSymbol(member)
+                                if (symbol.isRustBoxed()) {
+                                    rust(".map(Box::new)")
+                                }
                             }
                         }
                     }
