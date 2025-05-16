@@ -147,7 +147,7 @@ class AwsQuerySerializerGeneratorTest {
                     renderUnknownVariant = generateUnknownVariant,
                 ).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
-                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
         }
 
@@ -316,7 +316,7 @@ class AwsQuerySerializerGeneratorTest {
                     renderUnknownVariant = generateUnknownVariant,
                 ).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
-                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
         }
 
