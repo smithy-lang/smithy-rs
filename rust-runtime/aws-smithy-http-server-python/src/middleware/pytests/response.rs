@@ -27,7 +27,12 @@ response = Response(200, {"Content-Type": "application/json"}, b"hello world")
         )
         .unwrap();
 
-        let py_response: Py<PyResponse> = locals.get_item("response").unwrap().extract().unwrap();
+        let py_response: Py<PyResponse> = locals
+            .get_item("response")
+            .expect("Python exception occurred during dictionary lookup")
+            .unwrap()
+            .extract()
+            .unwrap();
         let response = py_response.borrow_mut(py).take_inner();
         response.unwrap()
     });
