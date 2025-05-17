@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.AddSyntheticTraitForImplDisplay
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -146,6 +147,9 @@ class ClientCodegenVisitor(
             .let(EventStreamNormalizer::transform)
             // Mark operations incompatible with stalled stream protection as such
             .let(DisableStalledStreamProtection::transformModel)
+            // Add synthetic trait to shapes referenced by error types to ensure they implement `Display`.
+            // This ensures error formatting works correctly for nested structures.
+            .let(AddSyntheticTraitForImplDisplay::transform)
 
     /**
      * Execute code generation
