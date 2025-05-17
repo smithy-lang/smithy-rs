@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 17th, 2025
+==============
+
 May 15th, 2025
 ==============
 **New this release:**
