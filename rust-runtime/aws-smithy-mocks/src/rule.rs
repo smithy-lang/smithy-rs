@@ -55,7 +55,7 @@ pub struct Rule {
     /// Flag indicating this is a "simple" rule which changes how it is interpreted
     /// depending on the RuleMode.
     ///
-    /// See https://github.com/smithy-lang/smithy-rs/issues/4135
+    /// See [smithy-rs#4135](https://github.com/smithy-lang/smithy-rs/issues/4135)
     is_simple: bool,
 }
 
