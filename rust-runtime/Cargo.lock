@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http-client",
