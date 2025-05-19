@@ -104,7 +104,18 @@ let retry_rule = mock!(Client::get_object)
     .times(2)                                        // First two calls return 503
     .output(|| GetObjectOutput::builder().build())   // Third call succeeds
     .build();
+
+// Repeat a response indefinitely
+let infinite_rule = mock!(Client::get_object)
+    .sequence()
+    .error(|| GetObjectError::NoSuchKey(NoSuchKey::builder().build()))
+    .output(|| GetObjectOutput::builder().build())   // Second call succeeds
+    .repeatedly()                                    // All subsequent calls succeed
+    .build();
 ```
+
+The `times(n)` method repeats the last added response `n` times, while `repeatedly()` causes the last response to
+repeat indefinitely, making the rule never exhaust.
 
 The sequence builder API provides a fluent interface for defining sequences of responses.
 After providing all responses in the sequence, the rule is considered exhausted.
