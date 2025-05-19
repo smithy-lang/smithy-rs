@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.63.2"
+version = "0.63.3"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -1299,7 +1299,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http-client",
