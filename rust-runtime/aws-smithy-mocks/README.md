@@ -144,8 +144,15 @@ let client = mock_client!(
 
 The [`RuleMode`] enum controls how rules are matched and applied:
 
+Given a simple (non-sequenced) based rule (e.g. `.then_output()`, `.then_error()`, or `.then_http_response()`):
+- `RuleMode::Sequential`: The rule is used once and then the next rule is used.
+- `RuleMode::MatchAny`: Rule is used repeatedly as many times as it is matched.
+
+In other words, simple rules behave as single use rules in `Sequential` mode and as infinite sequences in `MatchAny` mode.
+
+Given a sequenced rule (e.g. via `.sequence()`):
 - `RuleMode::Sequential`: Rules are tried in order. When a rule is exhausted, the next rule is used.
-- `RuleMode::MatchAny`: The first matching rule is used, regardless of order.
+- `RuleMode::MatchAny`: The first (non-exhausted) matching rule is used, regardless of order.
 
 ```rust,ignore
 let interceptor = MockResponseInterceptor::new()
