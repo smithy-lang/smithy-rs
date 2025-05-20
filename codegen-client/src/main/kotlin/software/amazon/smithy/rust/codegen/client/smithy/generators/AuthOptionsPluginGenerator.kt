@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import java.util.logging.Logger
@@ -25,34 +24,31 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
     fun authPlugin(
-        pluginType: RuntimeType,
         operationShape: OperationShape,
         authSchemeOptions: List<AuthSchemeOption>,
     ) = writable {
         rustTemplate(
             """
-            #{pluginType}::new(vec![#{options}])
-
+            vec![#{options}]
             """,
-            "pluginType" to pluginType,
             "options" to actualAuthSchemes(operationShape, authSchemeOptions).join(", "),
         )
     }
 
     private fun actualAuthSchemes(
         operationShape: OperationShape,
-        authSchemeOptions: List<AuthSchemeOption>,
+        codegenSupportedAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<Writable> {
         val out: MutableList<Writable> = mutableListOf()
 
         var noSupportedAuthSchemes = true
-        val authSchemes =
+        val effectiveAuthSchemesInModel =
             ServiceIndex.of(codegenContext.model)
                 .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
 
-        for (schemeShapeId in authSchemes.keys) {
+        for (modelEffectiveAuthScheme in effectiveAuthSchemesInModel.keys) {
             val optionsForScheme =
-                authSchemeOptions.filter {
+                codegenSupportedAuthSchemeOptions.filter {
                     when (it) {
                         is AuthSchemeOption.EndpointBasedAuthSchemeOption -> {
                             // Code generation should skip this auth scheme and not pass it to the auth scheme resolver.
@@ -61,7 +57,7 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
                             false
                         }
                         is AuthSchemeOption.StaticAuthSchemeOption -> {
-                            it.schemeShapeId == schemeShapeId
+                            it.schemeShapeId == modelEffectiveAuthScheme
                         }
                     }
                 }
@@ -71,14 +67,14 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
                 noSupportedAuthSchemes = false
             } else {
                 logger.warning(
-                    "No auth scheme implementation available for $schemeShapeId. " +
+                    "No auth scheme implementation available for $modelEffectiveAuthScheme. " +
                         "The generated client will not attempt to use this auth scheme.",
                 )
             }
         }
         if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
             val authOption =
-                authSchemeOptions.find {
+                codegenSupportedAuthSchemeOptions.find {
                     it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
                 }
                     ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")

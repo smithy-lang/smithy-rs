@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.aws.traits.auth.SigV4ATrait
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -38,7 +39,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 internal fun ClientCodegenContext.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
@@ -84,13 +85,19 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 operationShape: OperationShape,
                 baseAuthSchemeOptions: List<AuthSchemeOption>,
             ): List<AuthSchemeOption> {
-                val supportsSigV4a =
-                    codegenContext.usesSigV4a().thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
                 return baseAuthSchemeOptions +
-                    AuthSchemeOption.StaticAuthSchemeOption(
-                        SigV4Trait.ID,
-                        listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
-                    )
+                    listOf(
+                        AuthSchemeOption.StaticAuthSchemeOption(
+                            SigV4Trait.ID,
+                            listOf(sigv4(codegenContext.runtimeConfig)),
+                        ),
+                    ).letIf(codegenContext.usesSigV4a()) {
+                        it +
+                            AuthSchemeOption.StaticAuthSchemeOption(
+                                SigV4ATrait.ID,
+                                listOf(sigv4a(codegenContext.runtimeConfig)),
+                            )
+                    }
             }
 
             override fun serviceRuntimePluginCustomizations(

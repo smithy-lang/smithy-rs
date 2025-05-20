@@ -13,16 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOpt
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
-import software.amazon.smithy.rust.codegen.client.smithy.generators.AuthOptionsPluginGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Tracing
-import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.sdkId
 
@@ -75,37 +65,5 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             ): List<AuthSchemeOption> =
                 baseAuthSchemeOptions +
                     AuthSchemeOption.EndpointBasedAuthSchemeOption
-
-            override fun operationCustomizations(
-                codegenContext: ClientCodegenContext,
-                operation: OperationShape,
-                baseCustomizations: List<OperationCustomization>,
-            ): List<OperationCustomization> =
-                baseCustomizations +
-                    object : OperationCustomization() {
-                        override fun section(section: OperationSection): Writable {
-                            return when (section) {
-                                is OperationSection.AdditionalRuntimePlugins ->
-                                    writable {
-                                        rustTemplate(
-                                            ".with_client_plugin(#{auth_plugin})",
-                                            "auth_plugin" to
-                                                AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                                    InlineAwsDependency.forRustFile(
-                                                        "endpoint_auth_plugin", visibility = Visibility.PUBCRATE,
-                                                        CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
-                                                        Tracing,
-                                                    ).toType()
-                                                        .resolve("EndpointBasedAuthOptionsPlugin"),
-                                                    section.operationShape,
-                                                    section.authSchemeOptions,
-                                                ),
-                                        )
-                                    }
-
-                                else -> emptySection
-                            }
-                        }
-                    }
         },
 )

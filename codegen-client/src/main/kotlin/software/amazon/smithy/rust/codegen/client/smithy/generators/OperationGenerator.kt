@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.defaultAuthPlugin
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
@@ -110,23 +109,8 @@ open class OperationGenerator(
                 writable {
                     writeCustomizations(
                         operationCustomizations,
-                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape, authSchemeOptions),
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
                     )
-                    // If all auth scheme options can be handled statically, then we register the default auth plugin.
-                    if (authSchemeOptions.all {
-                            it is AuthSchemeOption.StaticAuthSchemeOption
-                        }
-                    ) {
-                        rustTemplate(
-                            ".with_client_plugin(#{auth_plugin})",
-                            "auth_plugin" to
-                                AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                    defaultAuthPlugin(codegenContext.runtimeConfig),
-                                    operationShape,
-                                    authSchemeOptions,
-                                ),
-                        )
-                    }
                 }
             val additionalSpanFields =
                 writable {
@@ -235,6 +219,7 @@ open class OperationGenerator(
             operationWriter,
             operationShape,
             operationName,
+            authSchemeOptions,
             operationCustomizations,
         )
 

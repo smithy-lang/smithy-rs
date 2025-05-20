@@ -66,6 +66,7 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val newLayerName: String,
         val operationShape: OperationShape,
+        val authSchemeOptions: List<AuthSchemeOption>,
     ) : OperationSection("AdditionalRuntimePluginConfig")
 
     data class AdditionalInterceptors(
@@ -100,7 +101,6 @@ sealed class OperationSection(name: String) : Section(name) {
     data class AdditionalRuntimePlugins(
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
-        val authSchemeOptions: List<AuthSchemeOption> = emptyList(),
     ) : OperationSection("AdditionalRuntimePlugins") {
         fun addClientPlugin(
             writer: RustWriter,

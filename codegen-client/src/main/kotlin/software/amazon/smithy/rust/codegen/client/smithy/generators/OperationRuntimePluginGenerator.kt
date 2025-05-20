@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -27,7 +28,6 @@ class OperationRuntimePluginGenerator(
             val smithyTypes = RuntimeType.smithyTypes(rc)
             arrayOf(
                 *preludeScope,
-                "AuthSchemeOptionResolverParams" to runtimeApi.resolve("client::auth::AuthSchemeOptionResolverParams"),
                 "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
                 "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
                 "Cow" to RuntimeType.Cow,
@@ -40,8 +40,6 @@ class OperationRuntimePluginGenerator(
                 "SharedAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::SharedAuthSchemeOptionResolver"),
                 "SharedRequestSerializer" to runtimeApi.resolve("client::ser_de::SharedRequestSerializer"),
                 "SharedResponseDeserializer" to runtimeApi.resolve("client::ser_de::SharedResponseDeserializer"),
-                "StaticAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolver"),
-                "StaticAuthSchemeOptionResolverParams" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolverParams"),
             )
         }
 
@@ -49,6 +47,7 @@ class OperationRuntimePluginGenerator(
         writer: RustWriter,
         operationShape: OperationShape,
         operationStructName: String,
+        authSchemeOptions: List<AuthSchemeOption>,
         customizations: List<OperationCustomization>,
     ) {
         val layerName = operationShape.id.name.dq()
@@ -60,9 +59,6 @@ class OperationRuntimePluginGenerator(
 
                     cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.store_put(#{SharedResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
-
-                    ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
-                    cfg.store_put(#{AuthSchemeOptionResolverParams}::new(#{StaticAuthSchemeOptionResolverParams}::new()));
 
                     #{additional_config}
 
@@ -91,6 +87,7 @@ class OperationRuntimePluginGenerator(
                             customizations,
                             newLayerName = "cfg",
                             operationShape,
+                            authSchemeOptions,
                         ),
                     )
                 },

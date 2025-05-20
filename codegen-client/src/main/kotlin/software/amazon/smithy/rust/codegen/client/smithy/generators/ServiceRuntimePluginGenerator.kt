@@ -56,6 +56,13 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
+        fun registerAuthSchemeOptionResolver(
+            writer: RustWriter,
+            resolver: Writable,
+        ) {
+            writer.rust("runtime_components.set_auth_scheme_option_resolver(Some(#T));", resolver)
+        }
+
         fun registerEndpointResolver(
             writer: RustWriter,
             resolver: Writable,
