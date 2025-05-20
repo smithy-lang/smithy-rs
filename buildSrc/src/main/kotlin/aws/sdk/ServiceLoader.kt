@@ -104,12 +104,16 @@ fun Project.discoverServices(
     val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
     val extrasDir = project.file("aws-models-extra")
     logger.info("Using model path: $models")
+    val fileNames = fileTree(models).map { file -> file.name }
+    logger.info("Discovered potential model files: $fileNames")
     val baseServices =
         fileTree(models)
             .sortedBy { file -> file.name }
             .mapNotNull { file ->
+                logger.info("Begin processing file: ${file.name}")
                 val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
                 val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
+                logger.info("Detected services: ${services.map { it.id.toString() }}")
                 if (services.size > 1) {
                     throw Exception("There must be exactly one service in each aws model file")
                 }
@@ -118,6 +122,7 @@ fun Project.discoverServices(
                     null
                 } else {
                     val service = services[0]
+                    logger.info("Begin processing service: ${service.id}")
                     val title = service.expectTrait(TitleTrait::class.java).value
                     val sdkId =
                         service.expectTrait(ServiceTrait::class.java).sdkId
@@ -134,15 +139,19 @@ fun Project.discoverServices(
                         } else {
                             listOf()
                         }
-                    AwsService(
-                        service = service.id.toString(),
-                        module = sdkId,
-                        moduleDescription = "AWS SDK for $title",
-                        modelFile = file,
-                        // Order is important for the versions.toml model hash calculation
-                        extraFiles = extras.sorted(),
-                        humanName = title,
-                    )
+
+                    val processedService =
+                        AwsService(
+                            service = service.id.toString(),
+                            module = sdkId,
+                            moduleDescription = "AWS SDK for $title",
+                            modelFile = file,
+                            // Order is important for the versions.toml model hash calculation
+                            extraFiles = extras.sorted(),
+                            humanName = title,
+                        )
+                    logger.info("Successfully processed service: $processedService")
+                    processedService
                 }
             }
     val baseModules = baseServices.map { it.module }.toSet()
