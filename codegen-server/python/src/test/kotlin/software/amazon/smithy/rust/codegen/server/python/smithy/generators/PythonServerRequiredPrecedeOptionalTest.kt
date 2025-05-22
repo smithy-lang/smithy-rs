@@ -153,8 +153,10 @@ internal class PythonServerRequiredPrecedeOptionalTest {
             ) = writable {
                 rustTemplate(
                     """
+                    // Default values are not exported from Rust. However, they
+                    // are marked as non-optional.
                     py.run(
-                        "data = $typeName(\"a\")",
+                        "data = $typeName(\"b\", \"a\")",
                         Some(globals),
                         Some(locals),
                     ).unwrap();
@@ -167,7 +169,7 @@ internal class PythonServerRequiredPrecedeOptionalTest {
                         .extract::<$module::$typeName>()
                         .unwrap();
                     assert_eq!(data.a, Some("a".to_string()));
-                    assert_eq!(data.b, "hi");
+                    assert_eq!(data.b, "b");
                     """,
                 )
             }
