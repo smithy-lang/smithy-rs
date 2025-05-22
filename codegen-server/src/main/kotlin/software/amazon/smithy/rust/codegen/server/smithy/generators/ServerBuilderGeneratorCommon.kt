@@ -27,6 +27,7 @@ import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -84,8 +85,23 @@ fun generateFallbackCodeToDefaultValue(
     symbolProvider: RustSymbolProvider,
     publicConstrainedTypes: Boolean,
 ) {
-    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
     val targetShape = model.expectShape(member.target)
+    // TODO(https://github.com/rust-lang/rust-clippy/issues/14789):
+    // Temporary fix for `#[allow(clippy::redundant_closure)]` not working in `rustc` version 1.82.
+    // The issue occurs specifically when we generate code in the form:
+    // ```rust
+    // .unwrap_or_else(HashMap::new())
+    // ```
+    // Instead of the linter suggested code:
+    // ```rust
+    // .unwrap_or_default()
+    // ```
+    if (isTargetListOrMap(targetShape, member)) {
+        writer.rustTemplate(".unwrap_or_default()")
+        return
+    }
+
+    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
     val targetSymbol = symbolProvider.toSymbol(targetShape)
     // We need an .into() conversion to create defaults for the server types. A larger scale refactoring could store this information in the
     // symbol, however, retrieving it in this manner works for the moment.
@@ -123,6 +139,22 @@ fun generateFallbackCodeToDefaultValue(
             writer.rustTemplate(".unwrap_or_else(##[allow(clippy::redundant_closure)] || #{DefaultValue:W})", "DefaultValue" to defaultValue)
         }
     }
+}
+
+private fun isTargetListOrMap(
+    targetShape: Shape?,
+    member: MemberShape,
+): Boolean {
+    if (targetShape is ListShape) {
+        val node = member.expectTrait<DefaultTrait>().toNode()!!
+        check(node is ArrayNode && node.isEmpty)
+        return true
+    } else if (targetShape is MapShape) {
+        val node = member.expectTrait<DefaultTrait>().toNode()!!
+        check(node is ObjectNode && node.isEmpty)
+        return true
+    }
+    return false
 }
 
 /**
