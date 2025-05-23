@@ -119,6 +119,7 @@ internal class PythonServerTypesTest {
 
                                 locals
                                     .get_item("output")
+                                    .expect("Python exception occurred during dictionary lookup")
                                     .unwrap()
                                     .extract::<output::EchoOutput>()
                                     .unwrap()
@@ -212,6 +213,7 @@ internal class PythonServerTypesTest {
 
                             locals
                                 .get_item("output")
+                                .expect("Python exception occurred during dictionary lookup")
                                 .unwrap()
                                 .extract::<output::EchoOutput>()
                                 .unwrap()

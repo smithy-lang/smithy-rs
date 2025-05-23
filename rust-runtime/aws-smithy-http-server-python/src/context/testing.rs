@@ -25,6 +25,7 @@ pub fn get_context(code: &str) -> PyContext {
         py.run(code, Some(globals), Some(locals))?;
         let context = locals
             .get_item("ctx")
+            .expect("Python exception occurred during dictionary lookup")
             .expect("you should assing your context class to `ctx` variable")
             .into_py(py);
         Ok::<_, PyErr>(context)

@@ -41,7 +41,7 @@ class PythonServerModuleGenerator(
             rustBlockTemplate(
                 """
                 ##[#{pyo3}::pymodule]
-                ##[#{pyo3}(name = "$libName")]
+                ##[pyo3(name = "$libName")]
                 pub fn python_library(py: #{pyo3}::Python<'_>, m: &#{pyo3}::types::PyModule) -> #{pyo3}::PyResult<()>
                 """,
                 *codegenScope,

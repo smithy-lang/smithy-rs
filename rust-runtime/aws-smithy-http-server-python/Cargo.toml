@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-python"
-version = "0.65.0"
+version = "0.66.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -29,8 +29,8 @@ lambda_http = { version = "0.8.3" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2.14"
-pyo3 = "0.18.2"
-pyo3-asyncio = { version = "0.18.0", features = ["tokio-runtime"] }
+pyo3 = "0.20"
+pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.5", features = ["all"] }
 thiserror = "1.0.40"
@@ -46,7 +46,7 @@ pretty_assertions = "1"
 futures-util = { version = "0.3.29", default-features = false }
 tower-test = "0.4"
 tokio-test = "0.4"
-pyo3-asyncio = { version = "0.18.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
+pyo3-asyncio = { version = "0.20.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
 rcgen = "0.10.0"
 hyper-rustls = { version = "0.24", features = ["http2"] }
 

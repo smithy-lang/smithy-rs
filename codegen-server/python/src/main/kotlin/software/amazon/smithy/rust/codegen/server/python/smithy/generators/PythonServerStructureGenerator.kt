@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
@@ -125,9 +126,17 @@ class PythonServerStructureGenerator(
         )
     }
 
+    // Python function parameters require that all required parameters appear before optional ones.
+    // This function sorts the member fields to ensure required fields precede optional fields.
+    private fun sortedMembers() =
+        members.sortedBy { member ->
+            val memberSymbol = symbolProvider.toSymbol(member)
+            memberSymbol.isOptional()
+        }
+
     private fun renderStructSignatureMembers(): Writable =
         writable {
-            forEachMember(members) { _, memberName, memberSymbol ->
+            forEachMember(sortedMembers()) { _, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()
                 rust("$memberName: ${memberType.render()},")
             }
@@ -135,14 +144,14 @@ class PythonServerStructureGenerator(
 
     private fun renderStructBodyMembers(): Writable =
         writable {
-            forEachMember(members) { _, memberName, _ ->
+            forEachMember(sortedMembers()) { _, memberName, _ ->
                 rust("$memberName,")
             }
         }
 
     private fun renderConstructorSignature(): Writable =
         writable {
-            forEachMember(members) { member, memberName, memberSymbol ->
+            forEachMember(sortedMembers()) { member, memberName, memberSymbol ->
                 val memberType = memberPythonType(member, memberSymbol)
                 rust("/// :param $memberName ${memberType.renderAsDocstring()}:")
             }
