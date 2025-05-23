@@ -9,7 +9,6 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -54,7 +53,6 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
     private val codegenScope =
         arrayOf(
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
-            "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
             "tracing" to RuntimeType.Tracing,
         )
 
@@ -70,8 +68,8 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
                             """
                             // Loading the partition JSON is expensive since it involves many regex compilations,
                             // so cache the result so that it only need to be paid for the first constructed client.
-                            pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
-                                #{Lazy}::new(|| {
+                            pub(crate) static DEFAULT_PARTITION_RESOLVER: std::sync::LazyLock<#{PartitionResolver}> =
+                                std::sync::LazyLock::new(|| {
                                     match std::env::var("SMITHY_CLIENT_SDK_CUSTOM_PARTITION") {
                                         Ok(partitions) => {
                                             #{tracing}::debug!("loading custom partitions located at {partitions}");
@@ -106,10 +104,7 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             rustTemplate("partition_resolver: #{PartitionResolver}", *codegenScope)
         }
 
-    override fun usage() =
-        writable {
-            rust("partition_resolver.resolve_partition")
-        }
+    override fun usage() = writable { rust("partition_resolver.resolve_partition") }
 }
 
 /**

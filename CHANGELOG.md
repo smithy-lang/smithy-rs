@@ -1,4 +1,46 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 19th, 2025
+==============
+**New this release:**
+- :tada: (client, [smithy-rs#4135](https://github.com/smithy-lang/smithy-rs/issues/4135)) Introduce a new `repeatedly()` function to `aws-smithy-mocks` sequence builder to build mock rules that behave as an
+    infinite sequence.
+
+    ```rust
+    let rule = mock!(aws_sdk_s3::Client::get_object)
+        .sequence()
+        .http_status(503, None)
+        .times(2)        // repeat the last output twice before moving onto the next response in the sequence
+        .output(|| GetObjectOutput::builder()
+            .body(ByteStream::from_static(b"success"))
+            .build()
+        )
+        .repeatedly()    // repeat the last output forever
+        .build();
+    ```
+- :bug: (client, [aws-sdk-rust#1291](https://github.com/awslabs/aws-sdk-rust/issues/1291)) Removing the `optimize_crc32_auto` feature flag from the `crc-fast` dependency of the `aws-smithy-checksums` crate since it was causing build issues for some customers.
+- :bug: (client, [smithy-rs#4137](https://github.com/smithy-lang/smithy-rs/issues/4137)) Fix bug with enum codegen
+
+    When the first enum generated has the `@sensitive` trait the opaque type
+    underlying the `UnknownVariant` inherits that sensitivity. This means that
+    it does not derive `Debug`. Since the module is only generated once this
+    causes a problem for non-sensitive enums that rely on the type deriving
+    `Debug` so that they can also derive `Debug`. We manually add `Debug` to
+    the module so it will always be there since the `UnknownVariant` is not
+    modeled and cannot be `@sensitive`.
+- :bug: (client, [smithy-rs#4135](https://github.com/smithy-lang/smithy-rs/issues/4135)) fix simple rules behavior with `RuleMode::MatchAny`
+
+
+May 15th, 2025
+==============
+**New this release:**
+- :bug: (all, [smithy-rs#4132](https://github.com/smithy-lang/smithy-rs/issues/4132)) Smithy unions that contain members named "unknown" will now codegen correctly
+- (all, [smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105), @FalkWoldmann) Replace once_cell with std equivalents
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105))
+
+
 May 9th, 2025
 =============
 **Breaking Changes:**

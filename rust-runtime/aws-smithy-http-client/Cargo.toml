@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.0.2"
+version = "1.0.3"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -14,6 +14,7 @@ hyper-014 = [
     "dep:http-02x",
     "dep:http-body-04x",
     "dep:hyper-0-14",
+    "dep:h2-0-3"
 ]
 
 default-client = [
@@ -100,6 +101,7 @@ http-body-04x = { package = "http-body", version = "0.4.5" , optional = true}
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, features = ["client", "http1", "http2", "tcp", "stream"], optional = true }
 legacy-hyper-rustls = { package = "hyper-rustls", version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }
+h2-0-3 = { package = "h2", version = "0.3.24", optional = true }
 # end legacy stack deps
 
 # test util stack
