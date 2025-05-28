@@ -214,6 +214,7 @@ class ServerInstantiatorTest {
                 codegenContext,
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
+                emptyList(),
             ).render(this)
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
@@ -237,6 +238,7 @@ class ServerInstantiatorTest {
                 codegenContext,
                 shape,
                 SmithyValidationExceptionConversionGenerator(codegenContext),
+                emptyList(),
             ).render(this)
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
