@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.aws.traits.auth.SigV4ATrait
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -38,7 +39,9 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 internal fun ClientCodegenContext.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
@@ -78,6 +81,105 @@ class SigV4AuthDecorator : ConditionalDecorator(
                         rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
                     }
                 }
+
+            override fun authSchemeOptions(
+                codegenContext: ClientCodegenContext,
+                baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+            ): List<AuthSchemeOptionV2> {
+                return (
+                    baseAuthSchemeOptions +
+                        object : AuthSchemeOptionV2 {
+                            override val shapeId = SigV4Trait.ID
+
+                            override fun render(
+                                codegenContext: ClientCodegenContext,
+                                operation: OperationShape?,
+                            ) = writable {
+                                rustTemplate(
+                                    """
+                                    #{AuthSchemeOption}::builder()
+                                        .scheme_id(#{SIGV4_SCHEME_ID})
+                                        #{properties:W}
+                                        .build()
+                                        .expect("required fields set")
+                                    """,
+                                    "AuthSchemeOption" to
+                                        RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                            .resolve("client::auth::AuthSchemeOption"),
+                                    "SIGV4_SCHEME_ID" to
+                                        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                            .resolve("auth::sigv4::SCHEME_ID"),
+                                    "properties" to
+                                        writable {
+                                            if (operation?.hasTrait<UnsignedPayloadTrait>() == true) {
+                                                rustTemplate(
+                                                    """
+                                                    .properties({
+                                                        let mut layer = #{Layer}::new("AuthSchemeOptionPropertiesFor${operation.id.name}");
+                                                        layer.store_put(#{PayloadSigningOverride}::unsigned_payload());
+                                                        layer.freeze()
+                                                    })
+                                                    """,
+                                                    "Layer" to
+                                                        RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                                                            .resolve("config_bag::Layer"),
+                                                    "PayloadSigningOverride" to
+                                                        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                                            .resolve("auth::PayloadSigningOverride"),
+                                                )
+                                            }
+                                        },
+                                )
+                            }
+                        }
+                ).letIf(codegenContext.usesSigV4a()) {
+                    it +
+                        object : AuthSchemeOptionV2 {
+                            override val shapeId = SigV4ATrait.ID
+
+                            override fun render(
+                                codegenContext: ClientCodegenContext,
+                                operation: OperationShape?,
+                            ) = writable {
+                                rustTemplate(
+                                    """
+                                    #{AuthSchemeOption}::builder()
+                                        .scheme_id(#{SIGV4A_SCHEME_ID})
+                                        #{properties:W}
+                                        .build()
+                                        .expect("required fields set")
+                                    """,
+                                    "AuthSchemeOption" to
+                                        RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                            .resolve("client::auth::AuthSchemeOption"),
+                                    "SIGV4A_SCHEME_ID" to
+                                        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                            .resolve("auth::sigv4a::SCHEME_ID"),
+                                    "properties" to
+                                        writable {
+                                            if (operation?.hasTrait<UnsignedPayloadTrait>() == true) {
+                                                rustTemplate(
+                                                    """
+                                                    .properties({
+                                                        let mut layer = #{Layer}::new("AuthSchemeOptionPropertiesFor${operation.id.name}");
+                                                        layer.store_put(#{PayloadSigningOverride}::unsigned_payload());
+                                                        layer.freeze()
+                                                    })
+                                                    """,
+                                                    "Layer" to
+                                                        RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                                                            .resolve("config_bag::Layer"),
+                                                    "PayloadSigningOverride" to
+                                                        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                                            .resolve("auth::PayloadSigningOverride"),
+                                                )
+                                            }
+                                        },
+                                )
+                            }
+                        }
+                }
+            }
 
             override fun authOptions(
                 codegenContext: ClientCodegenContext,

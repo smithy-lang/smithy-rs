@@ -10,6 +10,7 @@ import software.amazon.smithy.build.SmithyBuildPlugin
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
@@ -30,6 +31,13 @@ fun clientIntegrationTest(
             object : ClientCodegenDecorator {
                 override val name: String = "Add tests"
                 override val order: Byte = 0
+
+                override fun authSchemeOptions(
+                    codegenContext: ClientCodegenContext,
+                    baseAuthSchemeOptions: List<AuthSchemeOption>,
+                ): List<AuthSchemeOption> {
+                    return super.authSchemeOptions(codegenContext, baseAuthSchemeOptions)
+                }
 
                 override fun classpathDiscoverable(): Boolean = false
 

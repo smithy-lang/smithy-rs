@@ -22,9 +22,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDeco
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenContext>
 
+// TODO(AuthAlignment): Remove this once the codebase has switched over to
+//  software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 sealed interface AuthSchemeOption {
     /** Auth scheme for the `StaticAuthSchemeOptionResolver` */
     data class StaticAuthSchemeOption(
@@ -44,6 +47,12 @@ sealed interface AuthSchemeOption {
  * attributes to the generated classes.
  */
 interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, ClientRustSettings> {
+    fun authSchemeOptions(
+        codegenContext: ClientCodegenContext,
+        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+    ): List<AuthSchemeOptionV2> = baseAuthSchemeOptions
+
+    // TODO(AuthAlignment): Remove this once the codebase has switched over to `authSchemeOptions`
     fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
@@ -104,6 +113,14 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
         get() = "CombinedClientCodegenDecorator"
     override val order: Byte
         get() = 0
+
+    override fun authSchemeOptions(
+        codegenContext: ClientCodegenContext,
+        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+    ): List<AuthSchemeOptionV2> =
+        combineCustomizations(baseAuthSchemeOptions) { decorator, authOptions ->
+            decorator.authSchemeOptions(codegenContext, authOptions)
+        }
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,

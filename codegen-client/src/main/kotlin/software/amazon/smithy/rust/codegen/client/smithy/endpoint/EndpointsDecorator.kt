@@ -9,6 +9,7 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
@@ -19,6 +20,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -158,6 +160,8 @@ class EndpointsDecorator : ClientCodegenDecorator {
                                 codegenContext.defaultEndpointResolver()?.also { resolver ->
                                     section.registerEndpointResolver(this, resolver)
                                 }
+
+                                rust("// #T", AuthSchemeResolverGenerator(codegenContext).defaultAuthSchemeResolver())
                             }
 
                         else -> emptySection

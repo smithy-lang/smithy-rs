@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
@@ -85,6 +86,52 @@ private data class HttpAuthSchemes(
 class HttpAuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "HttpAuthDecorator"
     override val order: Byte = 0
+
+    override fun authSchemeOptions(
+        codegenContext: ClientCodegenContext,
+        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+    ): List<AuthSchemeOptionV2> {
+        val serviceIndex = ServiceIndex.of(codegenContext.model)
+        val authSchemes = serviceIndex.getAuthSchemes(codegenContext.serviceShape)
+        val options = ArrayList<AuthSchemeOptionV2>()
+        for (authScheme in authSchemes.keys) {
+            fun addOption(
+                schemeShapeId: ShapeId,
+                name: String,
+            ) {
+                options.add(
+                    object : AuthSchemeOptionV2 {
+                        override val shapeId = schemeShapeId
+
+                        override fun render(
+                            codegenContext: ClientCodegenContext,
+                            operation: OperationShape?,
+                        ) = writable {
+                            rustTemplate(
+                                """
+                                #{AuthSchemeOption}::builder()
+                                    .scheme_id(${name.dq()})
+                                    .build()
+                                    .expect("required fields set")
+                                """,
+                                "AuthSchemeOption" to
+                                    RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                        .resolve("client::auth::AuthSchemeOption"),
+                            )
+                        }
+                    },
+                )
+            }
+            when (authScheme) {
+                HttpApiKeyAuthTrait.ID -> addOption(authScheme, "#{HTTP_API_KEY_AUTH_SCHEME_ID}")
+                HttpBasicAuthTrait.ID -> addOption(authScheme, "#{HTTP_BASIC_AUTH_SCHEME_ID}")
+                HttpBearerAuthTrait.ID -> addOption(authScheme, "#{HTTP_BEARER_AUTH_SCHEME_ID}")
+                HttpDigestAuthTrait.ID -> addOption(authScheme, "#{HTTP_DIGEST_AUTH_SCHEME_ID}")
+                else -> {}
+            }
+        }
+        return baseAuthSchemeOptions + options
+    }
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,

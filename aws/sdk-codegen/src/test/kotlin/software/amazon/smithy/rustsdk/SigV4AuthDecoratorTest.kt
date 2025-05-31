@@ -82,7 +82,7 @@ class SigV4AuthDecoratorTest {
         use aws.auth#unsignedPayload
         use smithy.test#httpRequestTests
 
-        @auth([sigv4a,sigv4])
+        @auth([sigv4a])
         @sigv4(name: "dontcare")
         @sigv4a(name: "dontcare")
         @restJson1
@@ -124,7 +124,9 @@ class SigV4AuthDecoratorTest {
 
         structure SomeOutput { something: String }
 
+        @unsignedPayload
         @http(uri: "/", method: "POST")
+        @auth([sigv4])
         operation SomeOperation { input: SomeInput, output: SomeOutput }
         """.asSmithyModel(smithyVersion = "2.0")
 

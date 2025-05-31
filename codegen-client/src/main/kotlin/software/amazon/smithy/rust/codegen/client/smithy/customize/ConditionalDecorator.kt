@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustom
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 /**
  * Delegating decorator that only applies when a condition is true
@@ -50,6 +51,14 @@ open class ConditionalDecorator(
 
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
+
+    final override fun authSchemeOptions(
+        codegenContext: ClientCodegenContext,
+        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+    ): List<AuthSchemeOptionV2> =
+        baseAuthSchemeOptions.maybeApply(codegenContext) {
+            delegateTo.authSchemeOptions(codegenContext, baseAuthSchemeOptions)
+        }
 
     final override fun authOptions(
         codegenContext: ClientCodegenContext,
