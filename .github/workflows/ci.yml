@@ -43,7 +43,7 @@ jobs:
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
-    timeout-minutes: 25
+    timeout-minutes: 30
     runs-on: smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -238,7 +238,7 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       CROSS_CONFIG: Cross.toml
     strategy:
