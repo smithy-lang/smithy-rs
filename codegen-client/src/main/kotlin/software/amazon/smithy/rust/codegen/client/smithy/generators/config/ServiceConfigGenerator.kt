@@ -371,7 +371,7 @@ class ServiceConfigGenerator(
                 ///     .build();
                 /// let client = $moduleUseName::Client::from_conf(config);
                 /// ```
-            """
+            ///"""
             rustTemplate(
                 """
                 $docs
@@ -541,7 +541,10 @@ class ServiceConfigGenerator(
             docs("Apply test defaults to the builder")
             rustBlock("pub fn apply_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
-                rustTemplate("self.behavior_version = #{Some}(crate::config::BehaviorVersion::latest());", *preludeScope)
+                rustTemplate(
+                    "self.behavior_version = #{Some}(crate::config::BehaviorVersion::latest());",
+                    *preludeScope,
+                )
                 rust("self")
             }
 
