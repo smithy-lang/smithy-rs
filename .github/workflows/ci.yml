@@ -22,7 +22,7 @@ on:
         type: string
         default: ''
     secrets:
-      # the docker login password for ECR. This is
+      # the docker login password for ECR (encrypted with the DOCKER_LOGIN_TOKEN_PASSPHRASE)
       ENCRYPTED_DOCKER_PASSWORD:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
