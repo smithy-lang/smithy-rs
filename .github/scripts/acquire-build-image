@@ -66,7 +66,8 @@ class Context:
         script_path = os.path.dirname(os.path.realpath(__file__))
         tools_path = get_cmd_output("git rev-parse --show-toplevel", cwd=script_path)[1] + "/tools"
         user_id = get_cmd_output("id -u")[1]
-        image_tag = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
+        tools_image_hash = get_cmd_output("./docker-image-hash", cwd=script_path)[1]
+        image_tag = f"ci-{tools_image_hash}"
         allow_local_build = os.getenv("ALLOW_LOCAL_BUILD") != "false"
         github_actions = os.getenv("GITHUB_ACTIONS") == "true"
         encrypted_docker_password = os.getenv("ENCRYPTED_DOCKER_PASSWORD") or None
