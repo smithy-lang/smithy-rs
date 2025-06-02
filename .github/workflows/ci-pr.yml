@@ -102,7 +102,9 @@ jobs:
   pr_bot:
     name: PR Bot
     if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
-    needs: acquire-base-image
+    needs:
+    - save-docker-login-token
+    - acquire-base-image
     uses: ./.github/workflows/pull-request-bot.yml
     with:
       issue_number: ${{ github.event.number }}
@@ -152,6 +154,9 @@ jobs:
           console.log("data:", data);
           return data;
     - name: Run semver check
+      env:
+        ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+        DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-semver
