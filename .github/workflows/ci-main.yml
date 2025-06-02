@@ -46,7 +46,7 @@ jobs:
       id: set-token
       run: |
         ENCRYPTED_PAYLOAD=$(
-          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr get-login-password --region us-west-2) | base64 -w0
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
     - name: Acquire base image
