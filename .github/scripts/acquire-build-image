@@ -105,11 +105,11 @@ class Shell:
         return status == 0
 
     def docker_login(self, password):
-        get_cmd_output(f"{oci_exe()} --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+        get_cmd_output(f"{oci_exe()} login --username AWS --password-stdin {AWS_ACCOUNT_ID}.dkr.ecr.{AWS_REGION}.amazonaws.com", input=password.encode('utf-8'))
 
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
-        (status, stdout, stderr) = get_cmd_output(f"${oci_exe()} pull \"{image_name}:{image_tag}\"", check=False)
+        (status, stdout, stderr) = get_cmd_output(f"{oci_exe()} pull \"{image_name}:{image_tag}\"", check=False)
         print(f"{oci_exe()} pull output:")
         print("-------------------")
         print(stdout)
