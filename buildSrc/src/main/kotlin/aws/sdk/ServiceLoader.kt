@@ -104,9 +104,10 @@ fun Project.discoverServices(
     val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
     val extrasDir = project.file("aws-models-extra")
     logger.info("Using model path: $models")
+    val files = fileTree(models).sortedBy { file -> file.name }
+    logger.info("Discovered potential model files: ${files.map { file -> file.name }}")
     val baseServices =
-        fileTree(models)
-            .sortedBy { file -> file.name }
+        files
             .mapNotNull { file ->
                 val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
                 val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
@@ -134,6 +135,7 @@ fun Project.discoverServices(
                         } else {
                             listOf()
                         }
+
                     AwsService(
                         service = service.id.toString(),
                         module = sdkId,
