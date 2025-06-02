@@ -138,7 +138,7 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.36.0
+ARG cargo_semver_checks_version=0.41.0
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
