@@ -33,7 +33,7 @@ pyo3 = "0.20"
 pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.5", features = ["all"] }
-thiserror = "1.0.40"
+thiserror = "2"
 tokio = { version = "1.40.0", features = ["full"] }
 tokio-stream = "0.1.2"
 tower = { version = "0.4.13", features = ["util"] }
