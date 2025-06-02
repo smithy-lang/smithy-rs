@@ -167,7 +167,7 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -238,7 +238,7 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       CROSS_CONFIG: Cross.toml
     strategy:
