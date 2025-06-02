@@ -13,9 +13,11 @@ import time
 import unittest
 import base64
 
-REMOTE_BASE_IMAGE_NAME = "public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci"
+AWS_ACCOUNT_ID="686190543447"
+AWS_REGION="us-west-2"
+ECR_REPOSITORY="smithy-rs-build-image"
+REMOTE_BASE_IMAGE_NAME = f"{AWS_ACCOUNT_ID}.dkr.ecr.{AWS_REGION}.amazonaws.com/{ECR_REPOSITORY}"
 LOCAL_BASE_IMAGE_NAME = "smithy-rs-base-image"
-BUILD_IMAGE_NAME = "smithy-rs-build-image"
 LOCAL_TAG = "local"
 
 C_YELLOW = '\033[1;33m'
@@ -39,6 +41,9 @@ class Platform(Enum):
     X86_64 = 0
     ARM_64 = 1
 
+
+def oci_exe():
+    return os.getenv("OCI_EXE", "docker")
 
 # Script context
 class Context:
@@ -96,16 +101,16 @@ class Shell:
 
     # Returns True if the given `image_name` and `image_tag` exist locally
     def docker_image_exists_locally(self, image_name, image_tag):
-        (status, _, _) = get_cmd_output(f"docker inspect \"{image_name}:{image_tag}\"", check=False)
+        (status, _, _) = get_cmd_output(f"{oci_exe()} inspect \"{image_name}:{image_tag}\"", check=False)
         return status == 0
 
     def docker_login(self, password):
-        get_cmd_output("docker login --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
+        get_cmd_output(f"{oci_exe()} --username AWS --password-stdin public.ecr.aws", input=password.encode('utf-8'))
 
     # Pulls the requested `image_name` with `image_tag`. Returns `DockerPullResult`.
     def docker_pull(self, image_name, image_tag):
-        (status, stdout, stderr) = get_cmd_output(f"docker pull \"{image_name}:{image_tag}\"", check=False)
-        print("Docker pull output:")
+        (status, stdout, stderr) = get_cmd_output(f"${oci_exe()} pull \"{image_name}:{image_tag}\"", check=False)
+        print(f"{oci_exe()} pull output:")
         print("-------------------")
         print(stdout)
         print("-------------------")
@@ -127,22 +132,22 @@ class Shell:
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
     def docker_build_base_image(self, image_tag, path):
-        run(f"docker build -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
+        run(f"{oci_exe()} build -t \"smithy-rs-base-image:{image_tag}\" .", cwd=path)
 
     # Builds the local build image
     def docker_build_build_image(self, user_id, docker_image_path):
         run(
-            f"docker build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID={user_id} .",
+            f"{oci_exe()} build -t smithy-rs-build-image --file add-local-user.dockerfile --build-arg=USER_ID={user_id} .",
             cwd=docker_image_path
         )
 
     # Saves the Docker image named `image_name` with `image_tag` to `output_path`
     def docker_save(self, image_name, image_tag, output_path):
-        run(f"docker save -o \"{output_path}\" \"{image_name}:{image_tag}\"")
+        run(f"{oci_exe()} save -o \"{output_path}\" \"{image_name}:{image_tag}\"")
 
     # Tags an image with a new image name and tag
     def docker_tag(self, image_name, image_tag, new_image_name, new_image_tag):
-        run(f"docker tag \"{image_name}:{image_tag}\" \"{new_image_name}:{new_image_tag}\"")
+        run(f"{oci_exe()} tag \"{image_name}:{image_tag}\" \"{new_image_name}:{new_image_tag}\"")
 
 
 # Pulls a Docker image and retries if it gets throttled
@@ -153,7 +158,7 @@ def docker_pull_with_retry(shell, image_name, image_tag, throttle_sleep_time=120
         announce(f"Attempting to pull remote image {image_name}:{image_tag} (attempt {attempt})...")
         result = shell.docker_pull(image_name, image_tag)
         if result == DockerPullResult.ERROR_THROTTLED:
-            announce("Docker pull failed due to throttling. Waiting and trying again...")
+            announce("Pull failed due to throttling. Waiting and trying again...")
             time.sleep(throttle_sleep_time)
         elif result == DockerPullResult.RETRYABLE_ERROR:
             announce("A retryable error occurred. Trying again...")
@@ -198,7 +203,7 @@ def decrypt_and_login(shell, secret, passphrase):
         ["gpg", "--decrypt", "--batch", "--quiet", "--passphrase", passphrase, "--output", "-"],
         input=decoded)
     shell.docker_login(password)
-    print("Docker login success!")
+    print(f"{oci_exe()} login success!")
 
 
 def acquire_build_image(context=Context.default(), shell=Shell()):
