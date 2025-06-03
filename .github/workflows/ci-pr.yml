@@ -50,7 +50,7 @@ jobs:
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
 
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
-  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # build Docker image. Otherwise, it downloads a build image from ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
@@ -130,7 +130,8 @@ jobs:
     if: |
       always() &&
       !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
+      !contains(needs.*.result, 'cancelled') &&
+      github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs'
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
