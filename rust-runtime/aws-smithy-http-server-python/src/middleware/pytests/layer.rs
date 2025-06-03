@@ -321,6 +321,7 @@ fn py_handler(code: &str) -> PyMiddlewareHandler {
         py.run(code, Some(globals), Some(locals))?;
         let handler = locals
             .get_item("middleware")
+            .expect("Python exception occurred during dictionary lookup")
             .expect("your handler must be named `middleware`")
             .into();
         PyMiddlewareHandler::new(py, handler)
