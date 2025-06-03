@@ -43,7 +43,9 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to baseType.makeOptional(), "body" to generateBody(path, false),
+                "Input" to symbolProvider.toSymbol(root),
+                "Output" to baseType.makeOptional(),
+                "body" to generateBody(path, false),
             )
         }
     }
@@ -66,7 +68,9 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                     #{body:W}
                 }
                 """,
-                "Input" to symbolProvider.toSymbol(root), "Output" to referencedType, "body" to generateBody(path, true),
+                "Input" to symbolProvider.toSymbol(root),
+                "Output" to referencedType,
+                "body" to generateBody(path, true),
             )
         }
     }
@@ -89,10 +93,7 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                 if (symbolProvider.toSymbol(head).isOptional()) {
                     rustTemplate(
                         """
-                        let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
-                            #{None} => return #{None},
-                            #{Some}(t) => t
-                        };
+                        let input = ${ref}input.${symbolProvider.toMemberName(head)}?;
                         """,
                         *preludeScope,
                     )
