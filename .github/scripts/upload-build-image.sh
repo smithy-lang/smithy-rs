@@ -35,12 +35,17 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo "Pushing image to ECR..."
-${OCI_EXE} push ${ECR_IMAGE}
+if [[ "${DRY_RUN}" == "true" ]]; then
+  echo "Dry run enabled - skipping push to ECR"
+  exit 0
+else
+  echo "Pushing image to ECR..."
+  ${OCI_EXE} push ${ECR_IMAGE}
 
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to push the image"
-    exit 1
+  if [ $? -ne 0 ]; then
+      echo "Error: Failed to push the image"
+      exit 1
+  fi
+
+  echo "Successfully uploaded image to ECR: ${ECR_IMAGE}"
 fi
-
-echo "Successfully uploaded image to ECR: ${ECR_IMAGE}"
