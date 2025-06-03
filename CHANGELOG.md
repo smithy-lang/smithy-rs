@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 3rd, 2025
+==============
+**New this release:**
+- :bug: (client, [aws-sdk-rust#1272](https://github.com/awslabs/aws-sdk-rust/issues/1272)) Fix h2 GoAway errors not being retried by hyper legacy client
+
+
 May 19th, 2025
 ==============
 **New this release:**
