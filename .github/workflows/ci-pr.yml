@@ -113,6 +113,8 @@ jobs:
     secrets:
       SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
   semver-checks:
     name: Check PR semver compliance
