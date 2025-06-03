@@ -37,6 +37,8 @@ on:
         required: true
       CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
         required: true
+      SMITHY_RS_ECR_PUSH_ROLE_ARN:
+        required: true
 
 jobs:
   check-actor-for-prod-run:
