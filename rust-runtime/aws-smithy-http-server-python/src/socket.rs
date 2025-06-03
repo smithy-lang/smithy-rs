@@ -25,7 +25,7 @@ use std::net::SocketAddr;
 /// :param port int:
 /// :param backlog typing.Optional\[int\]:
 /// :rtype None:
-#[pyclass(text_signature = "($self, address, port, backlog=None)")]
+#[pyclass]
 #[derive(Debug)]
 pub struct PySocket {
     pub(crate) inner: Socket,
@@ -35,6 +35,7 @@ pub struct PySocket {
 impl PySocket {
     /// Create a new UNIX `SharedSocket` from an address, port and backlog.
     /// If not specified, the backlog defaults to 1024 connections.
+    #[pyo3(text_signature = "($self, address, port, backlog=None)")]
     #[new]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
         let address: SocketAddr = format!("{}:{}", address, port).parse()?;

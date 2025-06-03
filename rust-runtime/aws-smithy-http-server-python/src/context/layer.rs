@@ -107,8 +107,16 @@ counter = ctx.counter
                     .unwrap();
 
                     (
-                        locals.get_item("req_id").unwrap().to_string(),
-                        locals.get_item("counter").unwrap().to_string(),
+                        locals
+                            .get_item("req_id")
+                            .expect("Python exception occurred during dictionary lookup")
+                            .unwrap()
+                            .to_string(),
+                        locals
+                            .get_item("counter")
+                            .expect("Python exception occurred during dictionary lookup")
+                            .unwrap()
+                            .to_string(),
                     )
                 });
                 Ok::<_, Infallible>(Response::new((req_id, counter)))
