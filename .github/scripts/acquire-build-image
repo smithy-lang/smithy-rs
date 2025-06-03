@@ -35,6 +35,7 @@ class DockerPullResult(Enum):
     RETRYABLE_ERROR = 4
     NOT_FOUND = 5
     UNKNOWN_ERROR = 6
+    UNAUTHENTICATED = 7
 
 
 class Platform(Enum):
@@ -112,23 +113,28 @@ class Shell:
     def docker_pull(self, image_name, image_tag):
         (status, stdout, stderr) = get_cmd_output(f"{oci_exe()} pull \"{image_name}:{image_tag}\"", check=False)
         print(f"{oci_exe()} pull output:")
-        print("-------------------")
+        print("------STDOUT---------")
         print(stdout)
-        print("-------------------")
+        print("------STDERR---------")
         print(stderr)
         print("-------------------")
 
         not_found_messages = ["not found: manifest unknown"]
         throttle_messages = ["toomanyrequests:"]
         retryable_messages = ["net/http: TLS handshake timeout"]
+        unauthenticated_messages = ["no basic auth credentials"]
         if status == 0:
             return DockerPullResult.SUCCESS
-        elif output_contains_any(stdout, stderr, throttle_messages):
+
+        print(f"{oci_exe()} pull status: {status}")
+        if output_contains_any(stdout, stderr, throttle_messages):
             return DockerPullResult.ERROR_THROTTLED
         elif output_contains_any(stdout, stderr, not_found_messages):
             return DockerPullResult.NOT_FOUND
         elif output_contains_any(stdout, stderr, retryable_messages):
             return DockerPullResult.RETRYABLE_ERROR
+        elif output_contains_any(stdout, stderr, unauthenticated_messages):
+            return DockerPullResult.UNAUTHENTICATED
         return DockerPullResult.UNKNOWN_ERROR
 
     # Builds the base image with the Dockerfile in `path` and tags with with `image_tag`
@@ -220,6 +226,8 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
             elif pull_result == DockerPullResult.UNKNOWN_ERROR:
                 announce("An unknown failure happened during Docker pull. This needs to be examined.")
                 return 1
+            elif pull_result == DockerPullResult.UNAUTHENTICATED:
+                announce("Unable to authenticate and pull image from remote repository. A local build is required.")
             else:
                 announce("Failed to pull remote image, which can happen if it doesn't exist.")
 
