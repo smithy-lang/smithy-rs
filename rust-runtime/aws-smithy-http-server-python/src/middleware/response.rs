@@ -5,6 +5,8 @@
 
 //! Python-compatible middleware [http::Response] implementation.
 
+#![allow(non_local_definitions)]
+
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;

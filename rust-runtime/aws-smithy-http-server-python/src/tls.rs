@@ -8,6 +8,8 @@
 //! [PyTlsConfig] implementation is mostly borrowed from:
 //! <https://github.com/seanmonstar/warp/blob/4e9c4fd6ce238197fd1088061bbc07fa2852cb0f/src/tls.rs>
 
+#![allow(non_local_definitions)]
+
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::PathBuf;
