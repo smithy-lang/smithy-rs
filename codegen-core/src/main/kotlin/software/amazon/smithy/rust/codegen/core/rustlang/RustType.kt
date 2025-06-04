@@ -251,7 +251,12 @@ fun RustType.render(fullyQualified: Boolean = true): String {
             is RustType.String -> this.name
             is RustType.Vec -> "${this.name}::<${this.member.render(fullyQualified)}>"
             is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
-            is RustType.HashMap -> "${this.name}::<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
+            is RustType.HashMap -> "${this.name}::<${this.key.render(fullyQualified)}, ${
+                this.member.render(
+                    fullyQualified,
+                )
+            }>"
+
             is RustType.HashSet -> "${this.name}::<${this.member.render(fullyQualified)}>"
             is RustType.Reference -> {
                 if (this.lifetime == "&") {
@@ -260,10 +265,12 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                     "&${this.lifetime?.let { "'$it " } ?: ""}${this.member.render(fullyQualified)}"
                 }
             }
+
             is RustType.Application -> {
                 val args = this.args.joinToString(", ") { it.render(fullyQualified) }
                 "${this.name}<$args>"
             }
+
             is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
             is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
             is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
@@ -381,7 +388,12 @@ fun RustType.replaceLifetimes(newLifetime: String?): RustType =
         is RustType.Option -> copy(member = member.replaceLifetimes(newLifetime))
         is RustType.Vec -> copy(member = member.replaceLifetimes(newLifetime))
         is RustType.HashSet -> copy(member = member.replaceLifetimes(newLifetime))
-        is RustType.HashMap -> copy(key = key.replaceLifetimes(newLifetime), member = member.replaceLifetimes(newLifetime))
+        is RustType.HashMap ->
+            copy(
+                key = key.replaceLifetimes(newLifetime),
+                member = member.replaceLifetimes(newLifetime),
+            )
+
         is RustType.Reference -> copy(lifetime = newLifetime)
         else -> this
     }
@@ -522,19 +534,44 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     // You can find the discussion here.
     // https://github.com/smithy-lang/smithy-rs/discussions/2248
     fun serdeSerialize(): Attribute {
-        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+        return Attribute(
+            cfgAttr(
+                all(writable("aws_sdk_unstable"), feature("serde-serialize")),
+                derive(RuntimeType.SerdeSerialize),
+            ),
+        )
     }
 
     fun serdeDeserialize(): Attribute {
-        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+        return Attribute(
+            cfgAttr(
+                all(writable("aws_sdk_unstable"), feature("serde-deserialize")),
+                derive(RuntimeType.SerdeDeserialize),
+            ),
+        )
     }
 
     fun serdeSkip(): Attribute {
-        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
+        return Attribute(
+            cfgAttr(
+                all(
+                    writable("aws_sdk_unstable"),
+                    any(feature("serde-serialize"), feature("serde-deserialize")),
+                ),
+                serde("skip"),
+            ),
+        )
     }
 
     fun serdeSerializeOrDeserialize(): Attribute {
-        return Attribute(cfg(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize")))))
+        return Attribute(
+            cfg(
+                all(
+                    writable("aws_sdk_unstable"),
+                    any(feature("serde-serialize"), feature("serde-deserialize")),
+                ),
+            ),
+        )
     }
 
     companion object {
@@ -544,6 +581,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))
         val AllowClippyNeedlessLifetimes = Attribute(allow("clippy::needless_lifetimes"))
         val AllowClippyNewWithoutDefault = Attribute(allow("clippy::new_without_default"))
+        val AllowClippyNonLocalDefinitions = Attribute(allow("clippy::non_local_definitions"))
         val AllowClippyUnnecessaryWraps = Attribute(allow("clippy::unnecessary_wraps"))
         val AllowClippyUselessConversion = Attribute(allow("clippy::useless_conversion"))
         val AllowClippyUnnecessaryLazyEvaluations = Attribute(allow("clippy::unnecessary_lazy_evaluations"))
