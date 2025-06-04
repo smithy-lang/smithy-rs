@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -25,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustom
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 /**
  * Delegating decorator that only applies when a condition is true
@@ -50,6 +52,14 @@ open class ConditionalDecorator(
 
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
+
+    final override fun authSchemeOptions(
+        codegenContext: ClientCodegenContext,
+        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
+    ): List<AuthSchemeOptionV2> =
+        baseAuthSchemeOptions.maybeApply(codegenContext) {
+            delegateTo.authSchemeOptions(codegenContext, baseAuthSchemeOptions)
+        }
 
     final override fun authOptions(
         codegenContext: ClientCodegenContext,
@@ -79,6 +89,14 @@ open class ConditionalDecorator(
     final override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         emptyMap<String, Any?>().maybeApply(codegenContext) {
             delegateTo.crateManifestCustomizations(codegenContext)
+        }
+
+    final override fun authCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AuthCustomization>,
+    ): List<AuthCustomization> =
+        baseCustomizations.maybeApply(codegenContext) {
+            delegateTo.authCustomizations(codegenContext, baseCustomizations)
         }
 
     final override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =

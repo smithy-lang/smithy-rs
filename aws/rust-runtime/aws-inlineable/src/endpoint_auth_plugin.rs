@@ -5,12 +5,39 @@
 
 use std::borrow::Cow;
 
-use aws_smithy_runtime_api::client::{
-    auth::{AuthSchemeId, AuthSchemeOption},
-    endpoint::ResolveEndpoint,
-    runtime_components::RuntimeComponentsBuilder,
-    runtime_plugin::{Order, RuntimePlugin},
+use aws_smithy_runtime_api::{
+    box_error::BoxError,
+    client::{
+        auth::{AuthSchemeId, AuthSchemeOption},
+        endpoint::{EndpointResolverParams, ResolveEndpoint},
+        runtime_components::{RuntimeComponents, RuntimeComponentsBuilder},
+        runtime_plugin::{Order, RuntimePlugin},
+    },
 };
+use aws_smithy_types::config_bag::ConfigBag;
+
+pub(crate) async fn resolve_endpoint_based_auth_scheme_options<'a>(
+    _modeled_auth_scheme_options: Vec<AuthSchemeOption>,
+    cfg: &'a ConfigBag,
+    runtime_components: &'a RuntimeComponents,
+) -> Result<Vec<AuthSchemeOption>, BoxError> {
+    let endpoint_params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
+
+    tracing::debug!(endpoint_params = ?endpoint_params, "resolving endpoint for auth scheme selection");
+
+    let _endpoint = runtime_components
+        .endpoint_resolver()
+        .resolve_endpoint(endpoint_params)
+        .await?;
+
+    // TODO(AuthAlignment): Obtain auth scheme options from endpoint and
+    // merge them with `modeled_auth_scheme_options`
+    todo!()
+}
+
+// TODO(AuthAlignment): Remove `EndpointBasedAuthOptionsPlugin` and `EndpointBasedAuthSchemeOptionResolver`
 
 // A runtime plugin that registers `EndpointBasedAuthSchemeOptionResolver` with `RuntimeComponents`.
 #[derive(Debug)]

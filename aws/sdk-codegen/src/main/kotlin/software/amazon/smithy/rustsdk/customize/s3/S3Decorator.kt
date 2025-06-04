@@ -213,8 +213,8 @@ class FilterEndpointTests(
 private class AddOptionalAuth {
     fun transform(model: Model): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
-            // Add @optionalAuth to all S3 operations
-            if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
+            // Add @optionalAuth to the service so all operations inherit it
+            if (shape is ServiceShape && !shape.hasTrait<OptionalAuthTrait>()) {
                 shape.toBuilder()
                     .addTrait(OptionalAuthTrait())
                     .build()
