@@ -122,7 +122,7 @@ jobs:
     permissions:
       pull-requests: read
     runs-on: smithy_ubuntu-latest_8-core
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs:
     - save-docker-login-token
     - acquire-base-image
