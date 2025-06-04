@@ -9,6 +9,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSection
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
@@ -23,6 +25,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.sdkId
 
@@ -68,6 +72,7 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
             override val name: String get() = "EndpointBasedAuthSchemeResolverDecorator"
             override val order: Byte = 0
 
+            // TODO(AuthAlignment): Remove this override once `AuthDecorator` is fully implemented and used
             override fun authOptions(
                 codegenContext: ClientCodegenContext,
                 operationShape: OperationShape,
@@ -76,6 +81,7 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
                 baseAuthSchemeOptions +
                     AuthSchemeOption.EndpointBasedAuthSchemeOption
 
+            // TODO(AuthAlignment): Remove this override once `AuthDecorator` is fully implemented and used
             override fun operationCustomizations(
                 codegenContext: ClientCodegenContext,
                 operation: OperationShape,
@@ -91,12 +97,7 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
                                             ".with_client_plugin(#{auth_plugin})",
                                             "auth_plugin" to
                                                 AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                                    InlineAwsDependency.forRustFile(
-                                                        "endpoint_auth_plugin", visibility = Visibility.PUBCRATE,
-                                                        CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
-                                                        Tracing,
-                                                    ).toType()
-                                                        .resolve("EndpointBasedAuthOptionsPlugin"),
+                                                    inlineModule(codegenContext.runtimeConfig).resolve("EndpointBasedAuthOptionsPlugin"),
                                                     section.operationShape,
                                                     section.authSchemeOptions,
                                                 ),
@@ -107,5 +108,45 @@ class EndpointBasedAuthSchemeResolverDecorator : ConditionalDecorator(
                             }
                         }
                     }
+
+            override fun authCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<AuthCustomization>,
+            ): List<AuthCustomization> =
+                baseCustomizations +
+                    object : AuthCustomization() {
+                        val ctx = codegenContext
+
+                        override fun section(section: AuthSection) =
+                            writable {
+                                when (section) {
+                                    is AuthSection.DefaultResolverAdditionalImpl -> {
+                                        rustTemplate(
+                                            """
+                                            let _fut = #{AuthSchemeOptionsFuture}::new(async move {
+                                                #{resolve_endpoint_based_auth_scheme_options}(
+                                                    modeled_auth_options.clone(),
+                                                    _cfg,
+                                                    _runtime_components,
+                                                ).await
+                                            });
+                                            """,
+                                            "AuthSchemeOptionsFuture" to RuntimeType.smithyRuntimeApiClient(ctx.runtimeConfig).resolve("client::auth::AuthSchemeOptionsFuture"),
+                                            "AuthSchemeOptionResolverParams" to RuntimeType.smithyRuntimeApiClient(ctx.runtimeConfig).resolve("client::auth::AuthSchemeOptionResolverParams"),
+                                            "resolve_endpoint_based_auth_scheme_options" to inlineModule(ctx.runtimeConfig).resolve("resolve_endpoint_based_auth_scheme_options"),
+                                        )
+                                    }
+
+                                    else -> emptySection
+                                }
+                            }
+                    }
         },
 )
+
+private fun inlineModule(runtimeConfig: RuntimeConfig) =
+    InlineAwsDependency.forRustFile(
+        "endpoint_auth_plugin", visibility = Visibility.PUBCRATE,
+        CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+        Tracing,
+    ).toType()
