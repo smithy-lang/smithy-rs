@@ -343,10 +343,7 @@ impl From<Bytes> for BodyData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpConnector};
-    use aws_smithy_types::body::SdkBody;
-    use aws_smithy_types::byte_stream::ByteStream;
-    use bytes::Bytes;
+
     use std::error::Error;
     use std::fs;
 

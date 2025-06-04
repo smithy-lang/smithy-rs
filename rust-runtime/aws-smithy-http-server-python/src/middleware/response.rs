@@ -51,7 +51,7 @@ impl PyResponse {
         let body = {
             let body = mem::take(&mut self.body);
             let body = Arc::try_unwrap(body).ok()?;
-            body.into_inner().take()?
+            body.into_inner()?
         };
         Some(Response::from_parts(parts, body))
     }

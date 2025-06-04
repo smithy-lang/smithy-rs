@@ -72,7 +72,7 @@ impl<'a, F> Label<'a, F> {
     }
 }
 
-impl<'a, F> Display for Label<'a, F>
+impl<F> Display for Label<'_, F>
 where
     F: Fn(usize) -> bool,
 {

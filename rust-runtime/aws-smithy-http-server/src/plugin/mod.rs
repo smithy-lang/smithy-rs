@@ -233,7 +233,7 @@ pub trait Plugin<Ser, Op, T> {
     fn apply(&self, input: T) -> Self::Output;
 }
 
-impl<'a, Ser, Op, T, Pl> Plugin<Ser, Op, T> for &'a Pl
+impl<Ser, Op, T, Pl> Plugin<Ser, Op, T> for &Pl
 where
     Pl: Plugin<Ser, Op, T>,
 {
@@ -252,7 +252,7 @@ where
 /// Compare with [`ModelMarker`] in the [module](crate::plugin) documentation, which contains an
 /// example implementation too.
 pub trait HttpMarker {}
-impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
+impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 
 /// A model plugin is a plugin that acts on the modeled operation input after it is deserialized,
 /// and acts on the modeled operation output or the modeled operation error before it is
@@ -461,4 +461,4 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 /// }
 /// ```
 pub trait ModelMarker {}
-impl<'a, Pl> ModelMarker for &'a Pl where Pl: ModelMarker {}
+impl<Pl> ModelMarker for &Pl where Pl: ModelMarker {}
