@@ -347,6 +347,11 @@ mod tests {
     use std::error::Error;
     use std::fs;
 
+    use aws_smithy_runtime_api::client::http::HttpConnector;
+    use aws_smithy_runtime_api::client::http::SharedHttpConnector;
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::byte_stream::ByteStream;
+
     #[tokio::test]
     async fn correctly_fixes_content_lengths() -> Result<(), Box<dyn Error>> {
         let network_traffic = fs::read_to_string("test-data/example.com.json")?;
