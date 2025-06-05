@@ -36,14 +36,14 @@ class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, C
     ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
     companion object {
         val DefaultProtocols =
-            mapOf(
+            linkedMapOf(
+                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
                 AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
                 AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
-                AwsQueryTrait.ID to ClientAwsQueryFactory(),
-                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
                 RestJson1Trait.ID to ClientRestJsonFactory(),
                 RestXmlTrait.ID to ClientRestXmlFactory(),
-                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
+                AwsQueryTrait.ID to ClientAwsQueryFactory(),
+                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
             )
         val Default = ClientProtocolLoader(DefaultProtocols)
     }
