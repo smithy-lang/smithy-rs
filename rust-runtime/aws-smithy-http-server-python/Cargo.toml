@@ -14,14 +14,25 @@ publish = true
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = [
+    "aws-lambda",
+] }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = [
+    "byte-stream-poll-next",
+    "http-body-0-4-x",
+] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.10.0"
 futures = "0.3"
 http = "0.2.9"
-hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+hyper = { version = "0.14.26", features = [
+    "server",
+    "http1",
+    "http2",
+    "tcp",
+    "stream",
+] }
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
 tokio-rustls = "0.24.0"
@@ -29,8 +40,8 @@ lambda_http = { version = "0.8.3" }
 num_cpus = "1.13.1"
 parking_lot = "0.12.1"
 pin-project-lite = "0.2.14"
-pyo3 = "0.20"
-pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
+pyo3 = "0.25"
+pyo3-async-runtimes = { version = "0.25", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.5", features = ["all"] }
 thiserror = "2"
@@ -39,21 +50,26 @@ tokio-stream = "0.1.2"
 tower = { version = "0.4.13", features = ["util"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
-tracing-appender = { version = "0.2.2"}
+tracing-appender = { version = "0.2.2" }
 
 [dev-dependencies]
 pretty_assertions = "1"
 futures-util = { version = "0.3.29", default-features = false }
 tower-test = "0.4"
 tokio-test = "0.4"
-pyo3-asyncio = { version = "0.20.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
+pyo3-async-runtimes = { version = "0.25", features = [
+    "testing",
+    "attributes",
+    "tokio-runtime",
+    "unstable-streams",
+] }
 rcgen = "0.10.0"
 hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # PyO3 Asyncio tests cannot use Cargo's default testing harness because `asyncio`
-# wants to control the main thread. So we need to use testing harness provided by `pyo3_asyncio`
+# wants to control the main thread. So we need to use testing harness provided by `pyo3_async_runtimes`
 # for the async Python tests. For more detail see:
-# https://docs.rs/pyo3-asyncio/0.18.0/pyo3_asyncio/testing/index.html#pyo3-asyncio-testing-utilities
+# https://docs.rs/pyo3_async_runtimes/0.25.0/pyo3_async_runtimes/testing/index.html#pyo3-asyncio-testing-utilities
 [[test]]
 name = "middleware_tests"
 path = "src/middleware/pytests/harness.rs"

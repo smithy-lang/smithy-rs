@@ -46,7 +46,7 @@ mod tests {
     use std::sync::Once;
 
     use pyo3::{PyErr, Python};
-    use pyo3_asyncio::TaskLocals;
+    use pyo3_async_runtimes::TaskLocals;
 
     static INIT: Once = Once::new();
 

@@ -124,7 +124,7 @@ impl PyRequest {
     #[getter]
     fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
         let body = self.body.clone();
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let body = {
                 let mut body_guard = body.lock().await;
                 let body = body_guard.take().ok_or(PyMiddlewareError::RequestGone)?;

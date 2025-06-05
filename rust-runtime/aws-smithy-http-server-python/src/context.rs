@@ -6,7 +6,7 @@
 //! Python context definition.
 
 use http::Extensions;
-use pyo3::{PyObject, PyResult, Python, ToPyObject};
+use pyo3::{Bound, BoundObject, IntoPyObject, PyAny, PyErr, PyObject, PyResult, Python};
 
 mod lambda;
 pub mod layer;
@@ -50,9 +50,13 @@ impl PyContext {
     }
 }
 
-impl ToPyObject for PyContext {
-    fn to_object(&self, _py: Python<'_>) -> PyObject {
-        self.inner.clone()
+impl<'py> IntoPyObject<'py> for PyContext {
+    type Target = PyAny;
+    type Error = PyErr;
+    type Output = Bound<'py, Self::Target>;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(self.inner.bind(py).clone())
     }
 }
 

@@ -7,8 +7,9 @@
 
 use aws_smithy_http_server::body::{Body, BoxBody};
 use http::{Request, Response};
+use parking_lot::Mutex;
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyFunction};
-use pyo3_asyncio::TaskLocals;
+use pyo3_async_runtimes::TaskLocals;
 use tower::{util::BoxService, BoxError, Service};
 
 use crate::util::func_metadata;
@@ -18,9 +19,13 @@ use super::{PyMiddlewareError, PyRequest, PyResponse};
 // PyNextInner represents the inner service Tower layer applied to.
 type PyNextInner = BoxService<Request<Body>, Response<BoxBody>, BoxError>;
 
+trait CallBackTrait: Send {
+    fn call(&self, py: Python, request: Request<Body>) -> PyResult<PyObject>;
+}
+
 // PyNext wraps inner Tower service and makes it callable from Python.
 #[pyo3::pyclass]
-struct PyNext(Option<PyNextInner>);
+struct PyNext(Mutex<Option<PyNextInner>>);
 
 impl PyNext {
     fn new(inner: PyNextInner) -> Self {
@@ -45,7 +50,7 @@ impl PyNext {
     // but since we are crossing the Python boundary we can't express it in natural Rust terms.
     //
     // Naming the method `__call__` allows `next` to be called like `next(...)`.
-    fn __call__<'p>(&'p mut self, py: Python<'p>, py_req: Py<PyRequest>) -> PyResult<&'p PyAny> {
+    fn __call__<'p>(&'p mut self, py: Python<'p>, py_req: Py<PyRequest>) -> PyResult<Bound<PyAny>> {
         let req = py_req
             .borrow_mut(py)
             .take_inner()
@@ -53,12 +58,12 @@ impl PyNext {
         let mut inner = self
             .take_inner()
             .ok_or(PyMiddlewareError::NextAlreadyCalled)?;
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let res = inner
                 .call(req)
                 .await
                 .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-            Ok(Python::with_gil(|py| PyResponse::new(res).into_py(py)))
+            Ok::<_, PyErr>(Python::with_gil(|py| PyResponse::new(res).into_py(py)))
         })
     }
 }
@@ -97,18 +102,18 @@ impl PyMiddlewareHandler {
 
         let handler = self.func;
         let result = if self.is_coroutine {
-            pyo3_asyncio::tokio::scope(locals, async move {
+            pyo3_async_runtimes::tokio::scope(locals, async move {
                 Python::with_gil(|py| {
-                    let py_handler: &PyFunction = handler.extract(py)?;
+                    let py_handler: &Bound<'_, PyFunction> = handler.downcast_bound(py)?;
                     let output = py_handler.call1((py_req, py_next))?;
-                    pyo3_asyncio::tokio::into_future(output)
+                    pyo3_async_runtimes::tokio::into_future(output)
                 })?
                 .await
             })
             .await?
         } else {
             Python::with_gil(|py| {
-                let py_handler: &PyFunction = handler.extract(py)?;
+                let py_handler: &Bound<'_, PyFunction> = handler.downcast_bound(py)?;
                 let output = py_handler.call1((py_req, py_next))?;
                 Ok::<_, PyErr>(output.into())
             })?

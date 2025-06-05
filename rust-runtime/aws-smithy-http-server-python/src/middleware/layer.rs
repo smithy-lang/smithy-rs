@@ -19,7 +19,7 @@ use aws_smithy_http_server::{
 use futures::{future::BoxFuture, TryFutureExt};
 use http::{Request, Response};
 use pyo3::Python;
-use pyo3_asyncio::TaskLocals;
+use pyo3_async_runtimes::TaskLocals;
 use tower::{util::BoxService, Layer, Service, ServiceExt};
 
 use super::PyMiddlewareHandler;

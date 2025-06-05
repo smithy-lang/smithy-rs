@@ -12,7 +12,7 @@ use pyo3::{
     types::{IntoPyDict, PyDict},
 };
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn building_response_in_python() -> PyResult<()> {
     let response = Python::with_gil(|py| {
         let globals = [("Response", py.get_type::<PyResponse>())].into_py_dict(py);
@@ -51,7 +51,7 @@ response = Response(200, {"Content-Type": "application/json"}, b"hello world")
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn accessing_response_properties() -> PyResult<()> {
     let response = Response::builder()
         .status(StatusCode::IM_A_TEAPOT)
@@ -80,7 +80,7 @@ assert res.headers["x-foo"] == "bar"
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn accessing_and_changing_response_body() -> PyResult<()> {
     let response = Response::builder()
         .body(to_boxed("hello world"))
@@ -103,7 +103,7 @@ async def handler(res):
         let handler = module.getattr("handler")?;
 
         let output = handler.call1((py_response,))?;
-        Ok::<_, PyErr>(pyo3_asyncio::tokio::into_future(output))
+        Ok::<_, PyErr>(pyo3_async_runtimes::tokio::into_future(output))
     })??
     .await?;
 

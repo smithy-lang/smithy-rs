@@ -16,12 +16,12 @@ use aws_smithy_http_server_python::{
 use http::{Request, Response, StatusCode};
 use pretty_assertions::assert_eq;
 use pyo3::{prelude::*, types::PyDict};
-use pyo3_asyncio::TaskLocals;
+use pyo3_async_runtimes::TaskLocals;
 use tokio_test::assert_ready_ok;
 use tower::{layer::util::Stack, util::BoxCloneService, Layer, Service, ServiceExt};
 use tower_test::mock;
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn identity_middleware() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -50,7 +50,7 @@ async def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn returning_response_from_python_middleware() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -67,7 +67,7 @@ def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn convert_exception_from_middleware_to_protocol_specific_response() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -86,7 +86,7 @@ def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn uses_status_code_and_message_from_middleware_exception() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -105,7 +105,7 @@ def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn nested_middlewares() -> PyResult<()> {
     let first_layer = layer(
         r#"
@@ -133,7 +133,7 @@ def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn changes_request() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -183,7 +183,7 @@ async def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn changes_response() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -219,7 +219,7 @@ async def middleware(request, next):
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn fails_if_req_is_used_after_calling_next() -> PyResult<()> {
     let layer = layer(
         r#"
@@ -297,7 +297,9 @@ fn layer(code: &str) -> PyMiddlewareLayer<RestJson1> {
 
 fn task_locals() -> TaskLocals {
     Python::with_gil(|py| {
-        Ok::<_, PyErr>(TaskLocals::new(pyo3_asyncio::tokio::get_current_loop(py)?))
+        Ok::<_, PyErr>(TaskLocals::new(
+            pyo3_async_runtimes::tokio::get_current_loop(py)?,
+        ))
     })
     .unwrap()
 }

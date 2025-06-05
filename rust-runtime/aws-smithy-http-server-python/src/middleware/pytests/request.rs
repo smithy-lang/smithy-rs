@@ -8,7 +8,7 @@ use http::{Request, Version};
 use hyper::Body;
 use pyo3::{exceptions::PyValueError, prelude::*, py_run};
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn accessing_request_properties() -> PyResult<()> {
     let request = Request::builder()
         .method("POST")
@@ -41,7 +41,7 @@ assert req.headers["x-foo"] == "bar"
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn accessing_and_changing_request_body() -> PyResult<()> {
     let request = Request::builder()
         .body(Body::from("hello world"))
@@ -65,14 +65,14 @@ async def handler(req):
         let handler = module.getattr("handler")?;
 
         let output = handler.call1((py_request,))?;
-        Ok::<_, PyErr>(pyo3_asyncio::tokio::into_future(output))
+        Ok::<_, PyErr>(pyo3_async_runtimes::tokio::into_future(output))
     })??
     .await?;
 
     Ok(())
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn accessing_and_changing_request_uri() -> PyResult<()> {
     let request = Request::builder()
         .uri("/op1")
@@ -100,7 +100,7 @@ async def handler(req):
         let handler = module.getattr("handler")?;
         let output = handler.call1((req_ref,))?;
 
-        Ok::<_, PyErr>(pyo3_asyncio::tokio::into_future(output))
+        Ok::<_, PyErr>(pyo3_async_runtimes::tokio::into_future(output))
     })??
     .await?;
 

@@ -13,7 +13,7 @@ use pyo3::{prelude::*, py_run};
 use aws_smithy_http_server_python::types::ByteStream;
 use aws_smithy_types::body::SdkBody;
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 fn consuming_stream_on_python_synchronously() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
@@ -37,7 +37,7 @@ except StopIteration:
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 fn consuming_stream_on_python_synchronously_with_loop() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
@@ -57,7 +57,7 @@ assert total == [b"hello", b" ", b"world"]
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 fn consuming_stream_on_python_asynchronously() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
@@ -86,7 +86,7 @@ asyncio.run(main(bytestream))
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 fn consuming_stream_on_python_asynchronously_with_loop() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
@@ -110,7 +110,7 @@ asyncio.run(main(bytestream))
     })
 }
 
-#[pyo3_asyncio::tokio::test]
+#[pyo3_async_runtimes::tokio::test]
 async fn streaming_back_to_rust_from_python() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     let py_stream = Python::with_gil(|py| {
@@ -127,7 +127,7 @@ async def handler(bytestream):
         )?;
         let handler = module.getattr("handler")?;
         let output = handler.call1((bytestream,))?;
-        Ok::<_, PyErr>(pyo3_asyncio::tokio::into_stream_v2(output))
+        Ok::<_, PyErr>(pyo3_async_runtimes::tokio::into_stream_v2(output))
     })??;
 
     let mut py_stream = py_stream.map(|v| Python::with_gil(|py| v.extract::<String>(py).unwrap()));

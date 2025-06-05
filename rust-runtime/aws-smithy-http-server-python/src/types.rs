@@ -27,7 +27,6 @@ use std::{
 use bytes::Bytes;
 use pyo3::{
     exceptions::{PyRuntimeError, PyStopAsyncIteration, PyTypeError},
-    iter::IterNextOutput,
     prelude::*,
 };
 use tokio::{runtime::Handle, sync::Mutex};
@@ -54,12 +53,7 @@ impl Blob {
     }
 }
 
-impl AsRef<[u8]> for Blob {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
-    }
-}
-
+#[allow(non_local_definitions)]
 #[pymethods]
 impl Blob {
     /// Create a new Python instance of `Blob`.
@@ -80,6 +74,12 @@ impl Blob {
     #[setter(data)]
     pub fn set_data(&mut self, data: Vec<u8>) {
         *self = Self::pynew(data);
+    }
+}
+
+impl AsRef<[u8]> for Blob {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 
@@ -422,7 +422,7 @@ impl ByteStream {
     /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
-        pyo3_asyncio::tokio::future_into_py(py, async move {
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
@@ -444,12 +444,12 @@ impl ByteStream {
     /// inside a call blocking the Tokio runtime.
     ///
     /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__next__.>`
-    pub fn __next__(slf: PyRefMut<Self>) -> PyResult<IterNextOutput<Py<PyAny>, PyObject>> {
+    pub fn __next__(slf: PyRefMut<Self>) -> PyResult<Option<Py<PyAny>>> {
         let body = slf.0.clone();
         let data_chunk = futures::executor::block_on(yield_data_chunk(body));
         match data_chunk {
-            Ok(Some(data_chunk)) => Ok(IterNextOutput::Yield(data_chunk.into_py(slf.py()))),
-            Ok(None) => Ok(IterNextOutput::Return(slf.py().None())),
+            Ok(Some(data_chunk)) => Ok(Some(data_chunk.into_py(slf.py()))),
+            Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -478,7 +478,7 @@ impl ByteStream {
     /// using extra `Option` just to make PyO3 happy.
     pub fn __anext__(slf: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
         let body = slf.0.clone();
-        let fut = pyo3_asyncio::tokio::future_into_py(slf.py(), async move {
+        let fut = pyo3_async_runtimes::tokio::future_into_py(slf.py(), async move {
             let data = yield_data_chunk(body).await?;
             match data {
                 Some(data) => Ok(Python::with_gil(|py| data.into_py(py))),
@@ -493,8 +493,12 @@ impl ByteStream {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Document(aws_smithy_types::Document);
 
-impl IntoPy<PyObject> for Document {
-    fn into_py(self, py: Python<'_>) -> PyObject {
+impl<'py> IntoPyObject<'py> for Document {
+    type Target = PyAny;
+    type Output = Bound<'py, PyAny>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         use aws_smithy_types::{Document as D, Number};
 
         match self.0 {
@@ -519,7 +523,7 @@ impl IntoPy<PyObject> for Document {
 }
 
 impl FromPyObject<'_> for Document {
-    fn extract(obj: &PyAny) -> PyResult<Self> {
+    fn extract_bound(obj: &Bound<'_, PyAny>) -> PyResult<Self> {
         use aws_smithy_types::{Document as D, Number};
 
         if let Ok(obj) = obj.extract::<HashMap<String, Document>>() {
