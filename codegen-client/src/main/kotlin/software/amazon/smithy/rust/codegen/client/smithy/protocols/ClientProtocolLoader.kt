@@ -36,7 +36,7 @@ class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, C
     ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
     companion object {
         val DefaultProtocols =
-            linkedMapOf(
+            mapOf(
                 Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
                 AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
                 AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
