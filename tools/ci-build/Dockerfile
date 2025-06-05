@@ -199,6 +199,7 @@ RUN set -eux; \
         glibc-langpack-en \
         go \
         java-17-amazon-corretto-headless \
+        jq \
         make \
         openssl-devel \
         pkgconfig \
