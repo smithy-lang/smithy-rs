@@ -13,6 +13,7 @@ fi
 # Set OCI executor - default to docker if not set
 : "${OCI_EXE:=docker}"
 
+DRY_RUN=${DRY_RUN:-false}
 TAG_NAME=$1
 AWS_REGION="us-west-2"
 AWS_ACCOUNT_ID="686190543447"
