@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -406,6 +407,12 @@ class ServiceConfigGenerator(
             the <a href="https://crates.io/crates/aws-config" target="_blank">aws-config</a> crate.
             </div>
         """
+
+        // The doc line directly following this attribute is sometimes followed by empty lines.
+        // This triggers a clippy lint. I cannot figure out what is adding those lines, so
+        // allowing the line for now. Setting it as an inner attribute since this happens several
+        // times in this file.
+        Attribute.AllowClippyEmptyLineAfterDocComments.render(writer, AttributeKind.Inner)
         writer.docs("Configuration for a $moduleUseName service client.\n")
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
