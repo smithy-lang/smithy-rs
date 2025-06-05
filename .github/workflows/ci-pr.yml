@@ -12,9 +12,6 @@ concurrency:
   group: ci-yaml-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
-
 permissions:
   actions: read
   contents: read
@@ -41,19 +38,19 @@ jobs:
     - name: Attempt to load a docker login password
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Save the docker login password to the output
       id: set-token
       run: |
         ENCRYPTED_PAYLOAD=$(
-          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr get-login-password --region us-west-2) | base64 -w0
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
 
   # This job detects if the PR made changes to build tools. If it did, then it builds a new
-  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
+  # build Docker image. Otherwise, it downloads a build image from ECR. In both cases,
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
@@ -80,15 +77,13 @@ jobs:
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Upload image
       run: |
-        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
-        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
-        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-        docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
+        ./smithy-rs/.github/scripts/upload-build-image.sh $IMAGE_TAG
 
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
@@ -107,7 +102,9 @@ jobs:
   pr_bot:
     name: PR Bot
     if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
-    needs: acquire-base-image
+    needs:
+    - save-docker-login-token
+    - acquire-base-image
     uses: ./.github/workflows/pull-request-bot.yml
     with:
       issue_number: ${{ github.event.number }}
@@ -116,6 +113,8 @@ jobs:
     secrets:
       SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_S3_BUCKET_NAME }}
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN: ${{ secrets.SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN }}
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
   semver-checks:
     name: Check PR semver compliance
@@ -131,7 +130,8 @@ jobs:
     if: |
       always() &&
       !contains(needs.*.result, 'failure') &&
-      !contains(needs.*.result, 'cancelled')
+      !contains(needs.*.result, 'cancelled') &&
+      github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs'
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -157,6 +157,9 @@ jobs:
           console.log("data:", data);
           return data;
     - name: Run semver check
+      env:
+        ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+        DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: check-semver
