@@ -149,6 +149,39 @@ FROM install_rust AS cargo_mdbook_mermaid
 ARG cargo_mdbook_mermaid_version=0.13.0
 RUN cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
 
+# nodejs needed by internal release process
+FROM install_rust AS nodejs
+ARG node_version=v22.12.0
+ENV NODE_HOME=/opt/nodejs \
+    PATH=/opt/nodejs/bin:${PATH}
+RUN set -eux; \
+    # Determine architecture and set download URL + checksum
+    ARCH="$(uname -m)"; \
+    case "${ARCH}" in \
+        aarch64|arm64) \
+            NODE_URL="https://nodejs.org/dist/${node_version}/node-${node_version}-linux-arm64.tar.xz"; \
+            NODE_CHECKSUM="8cfd5a8b9afae5a2e0bd86b0148ca31d2589c0ea669c2d0b11c132e35d90ed68"; \
+            ;; \
+        x86_64) \
+            NODE_URL="https://nodejs.org/dist/${node_version}/node-${node_version}-linux-x64.tar.xz"; \
+            NODE_CHECKSUM="22982235e1b71fa8850f82edd09cdae7e3f32df1764a9ec298c72d25ef2c164f"; \
+            ;; \
+        *) \
+            echo "Unsupported architecture: ${ARCH}"; \
+            exit 1; \
+            ;; \
+    esac; \
+    # Download and verify Node.js
+    curl -fsSL "${NODE_URL}" -o node.tar.xz; \
+    echo "${NODE_CHECKSUM}  node.tar.xz" | sha256sum --check; \
+    # Extract and install
+    mkdir -p "${NODE_HOME}"; \
+    tar -xJf node.tar.xz -C "${NODE_HOME}" --strip-components=1; \
+    rm node.tar.xz; \
+    # Verify installation
+    node --version; \
+    npm --version;
+
 #
 # Final image
 #
@@ -196,9 +229,10 @@ COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
 COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
+COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
-ENV PATH=$PATH:/usr/local/musl/bin/
-ENV PATH=/opt/cargo/bin:$PATH \
+ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
+    NODE_HOME=/opt/nodejs \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
     RUST_STABLE_VERSION=${rust_stable_version} \
