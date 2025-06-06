@@ -5,6 +5,8 @@
 
 //! Socket implementation that can be shared between multiple Python processes.
 
+#![allow(non_local_definitions)]
+
 use pyo3::prelude::*;
 
 use socket2::{Domain, Protocol, Socket, Type};

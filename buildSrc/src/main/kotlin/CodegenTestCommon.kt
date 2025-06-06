@@ -291,7 +291,7 @@ fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
                 .writeText(
                     """
                     [build]
-                    rustflags = ["--cfg", "aws_sdk_unstable"]
+                    rustflags = ["--deny", "warnings", "--cfg", "aws_sdk_unstable"]
                     """.trimIndent(),
                 )
         }

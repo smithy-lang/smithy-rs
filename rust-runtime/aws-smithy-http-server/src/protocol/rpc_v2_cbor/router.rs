@@ -389,7 +389,7 @@ mod tests {
             "/prefix/service/Service/operation/ThisOperationDoesNotExist",
         ] {
             let invalid_request = &req(&Method::POST, bad_uri, Some(headers()));
-            assert!(matches!(router.match_route(&invalid_request), Err(Error::NotFound)));
+            assert!(matches!(router.match_route(invalid_request), Err(Error::NotFound)));
         }
 
         // The request would be valid if it specified a supported wire format in the
@@ -399,7 +399,7 @@ mod tests {
             headers.insert("smithy-protocol", HeaderValue::from_static(header_name));
             let invalid_request = &req(&Method::POST, good_uri, Some(headers));
             assert!(matches!(
-                router.match_route(&invalid_request),
+                router.match_route(invalid_request),
                 Err(Error::InvalidWireFormatHeader(_))
             ));
         }

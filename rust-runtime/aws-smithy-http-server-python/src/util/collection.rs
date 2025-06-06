@@ -22,6 +22,8 @@
 //!
 //! [collections.abc]: https://docs.python.org/3/library/collections.abc.html
 
+#![allow(non_local_definitions)]
+
 use pyo3::PyResult;
 
 /// Rust version of [collections.abc.MutableMapping].

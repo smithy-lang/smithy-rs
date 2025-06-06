@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.61.0"
+version = "0.61.1"
 dependencies = [
  "aws-smithy-types",
  "criterion",
@@ -358,7 +358,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-compression"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.8"
+version = "0.60.9"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -423,7 +423,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.0.3"
+version = "1.0.5"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.65.3"
+version = "0.65.5"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -491,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.66.0"
+version = "0.66.1"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
@@ -534,7 +534,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.3"
+version = "0.61.4"
 dependencies = [
  "aws-smithy-types",
  "proptest",
@@ -573,7 +573,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability-otel"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-global-executor",
  "async-task",
@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.2"
+version = "0.63.4"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.0"
+version = "1.8.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.9"
+version = "0.60.10"
 dependencies = [
  "aws-smithy-protocol-test",
  "base64 0.13.1",

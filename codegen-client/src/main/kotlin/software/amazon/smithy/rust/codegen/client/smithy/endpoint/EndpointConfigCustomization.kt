@@ -62,10 +62,10 @@ internal class EndpointConfigCustomization(
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
                     val defaultResolverDocs =
                         if (typesGenerator.defaultResolver() != null) {
-                            """
+                            """///
                             /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                             /// rules for `$moduleUseName`.
-                            """
+                            ///"""
                         } else {
                             "/// This service does not define a default endpoint resolver."
                         }

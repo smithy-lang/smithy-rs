@@ -73,7 +73,7 @@ class IdentityCacheConfigCustomization(codegenContext: ClientCodegenContext) : C
                         ///     .build();
                         /// let client = $moduleUseName::Client::from_conf(config);
                         /// ```
-                    """
+                    ///"""
                     rustTemplate(
                         """
                         $docs
