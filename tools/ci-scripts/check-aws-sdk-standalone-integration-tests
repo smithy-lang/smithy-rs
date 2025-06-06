@@ -42,6 +42,10 @@ cargo check --tests --all-features
 
 # Running WebAssembly (WASI) specific integration tests
 pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly" &>/dev/null
+ls -a .
+ls ./.cargo/
+cat ./.cargo/config.toml
+cat Cargo.toml
 cargo check --tests --all-features --all-targets
 
 popd
