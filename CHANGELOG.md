@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 7th, 2025
+==============
+**Breaking Changes:**
+- :bug::warning: (server) Fixed SmithyRpcV2CBOR Router to properly respect case in service names, preventing routing failures for services with mixed-case service shape ID.
+
+
 June 3rd, 2025
 ==============
 **New this release:**
