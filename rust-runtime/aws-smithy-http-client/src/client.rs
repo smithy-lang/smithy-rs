@@ -661,6 +661,14 @@ cfg_tls! {
     }
 }
 
+impl<Tls> Builder<Tls> {
+    /// Configure the Hyper client builder
+    pub fn client_builder(mut self, builder: Option<hyper_util::client::legacy::Builder>) -> Self {
+        self.client_builder = builder;
+        self
+    }
+}
+
 impl Builder<TlsUnset> {
     /// Creates a new builder.
     pub fn new() -> Self {
