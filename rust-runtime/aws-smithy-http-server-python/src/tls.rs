@@ -25,10 +25,7 @@ pub mod listener;
 /// :param cert_path pathlib.Path:
 /// :param reload_secs int:
 /// :rtype None:
-#[pyclass(
-    name = "TlsConfig",
-    text_signature = "($self, *, key_path, cert_path, reload_secs=86400)"
-)]
+#[pyclass(name = "TlsConfig")]
 #[derive(Clone)]
 pub struct PyTlsConfig {
     /// Absolute path of the RSA or PKCS private key.
@@ -105,6 +102,7 @@ impl PyTlsConfig {
 #[pymethods]
 impl PyTlsConfig {
     #[new]
+    #[pyo3(text_signature = "($self, *, key_path, cert_path, reload_secs=86400)")]
     #[pyo3(signature = (key_path, cert_path, reload_secs=86400))]
     fn py_new(key_path: PathBuf, cert_path: PathBuf, reload_secs: u64) -> Self {
         // TODO(BugOnUpstream): `reload: &PyDelta` segfaults, create an issue on PyO3
@@ -172,7 +170,11 @@ config = TlsConfig(key_path=TEST_KEY, cert_path=TEST_CERT, reload_secs=1000)
                 Some(globals),
                 Some(locals),
             )?;
-            locals.get_item("config").unwrap().extract::<PyTlsConfig>()
+            locals
+                .get_item("config")
+                .expect("Python exception occurred during dictionary lookup")
+                .unwrap()
+                .extract::<PyTlsConfig>()
         })?;
 
         assert_eq!(PathBuf::from_str(TEST_KEY).unwrap(), config.key_path);

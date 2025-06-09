@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyHttpClient
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyMocks
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
@@ -170,5 +171,6 @@ class S3TestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustom
             addDependency(TempFile)
             addDependency(TracingAppender)
             addDependency(TracingTest)
+            addDependency(smithyMocks(runtimeConfig))
         }
 }

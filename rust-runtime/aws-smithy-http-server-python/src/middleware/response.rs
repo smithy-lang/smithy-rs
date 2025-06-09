@@ -23,7 +23,6 @@ use super::{PyHeaderMap, PyMiddlewareError};
 /// :param body typing.Optional[bytes]:
 /// :rtype None:
 #[pyclass(name = "Response")]
-#[pyo3(text_signature = "($self, status, headers=None, body=None)")]
 pub struct PyResponse {
     parts: Option<Parts>,
     headers: PyHeaderMap,
@@ -61,6 +60,7 @@ impl PyResponse {
 #[pymethods]
 impl PyResponse {
     /// Python-compatible [Response] object from the Python side.
+    #[pyo3(text_signature = "($self, status, headers=None, body=None)")]
     #[new]
     fn newpy(
         status: u16,

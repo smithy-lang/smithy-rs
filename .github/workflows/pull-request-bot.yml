@@ -30,7 +30,7 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
   java_version: 17
   rust_toolchain_components: clippy,rustfmt
-  rust_nightly_version: nightly-2024-06-30
+  rust_nightly_version: nightly-2025-05-04
 
 jobs:
   generate-diff:
@@ -46,6 +46,7 @@ jobs:
     outputs:
       bot-message: ${{ steps.generate-diff.outputs.bot-message }}
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs
@@ -147,6 +148,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
       with:
         path: smithy-rs

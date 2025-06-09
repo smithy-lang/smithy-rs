@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -99,6 +100,7 @@ sealed class OperationSection(name: String) : Section(name) {
     data class AdditionalRuntimePlugins(
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
+        val authSchemeOptions: List<AuthSchemeOption> = emptyList(),
     ) : OperationSection("AdditionalRuntimePlugins") {
         fun addClientPlugin(
             writer: RustWriter,

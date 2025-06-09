@@ -11,13 +11,14 @@
 
 use crate::fs::Fs;
 use crate::package::discover_manifests;
-use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
-use smithy_rs_tool_common::{ci::running_in_ci, package::parse_version};
+use smithy_rs_tool_common::{
+    ci::{is_in_example_dir, is_preview_build, running_in_ci},
+    package::parse_version,
+};
 use std::collections::BTreeMap;
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
 use toml::Value;
@@ -64,6 +65,7 @@ pub async fn subcommand_fix_manifests(
     Ok(())
 }
 
+#[derive(Debug)]
 struct Manifest {
     path: PathBuf,
     metadata: toml::Value,
@@ -82,6 +84,7 @@ impl Manifest {
     }
 }
 
+#[derive(Debug)]
 struct Versions(BTreeMap<String, VersionWithMetadata>);
 #[derive(Copy, Clone)]
 enum FilterType {
@@ -110,6 +113,7 @@ impl Versions {
     }
 }
 
+#[derive(Debug)]
 struct VersionWithMetadata {
     version: Version,
     publish: bool,
@@ -205,32 +209,19 @@ fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<us
     Ok(changed)
 }
 
-fn is_example_manifest(manifest_path: impl AsRef<Path>) -> bool {
-    // Examine parent directories until either `examples/` or `aws-sdk-rust/` is found
-    let mut path = manifest_path.as_ref();
-    while let Some(parent) = path.parent() {
-        path = parent;
-        if path.file_name() == Some(OsStr::new("examples")) {
-            return true;
-        } else if path.file_name() == Some(OsStr::new(SDK_REPO_NAME)) {
-            break;
-        }
-    }
-    false
-}
-
 fn conditionally_disallow_publish(
     manifest_path: &Path,
     metadata: &mut toml::Value,
 ) -> Result<bool> {
-    let is_github_actions = running_in_ci();
-    let is_example = is_example_manifest(manifest_path);
+    let is_gh_action_or_smithy_rs_docker = running_in_ci();
+    let is_example = is_in_example_dir(manifest_path);
+    let is_preview_build = is_preview_build();
 
     // Safe-guard to prevent accidental publish to crates.io. Add some friction
     // to publishing from a local development machine by detecting that the tool
     // is not being run from CI, and disallow publish in that case. Also disallow
-    // publishing of examples.
-    if !is_github_actions || is_example {
+    // publishing of examples and Trebuchet preview builds.
+    if !is_gh_action_or_smithy_rs_docker || is_example || is_preview_build {
         if let Some(value) = set_publish_false(manifest_path, metadata, is_example) {
             return Ok(value);
         }
@@ -293,6 +284,13 @@ async fn fix_manifests(
 }
 
 fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
+    // In the case of a preview build we do not update the examples manifests
+    // since most SDKs will not be generated so the particular crate referred to
+    // by an example is unlikely to exist
+    if is_in_example_dir(&manifest.path) && is_preview_build() {
+        debug!(package = ?&manifest.path, "Skipping example package for preview build");
+        return Ok(0);
+    }
     let mut view = versions.published();
     if !manifest.publish()? {
         debug!(package = ?&manifest.path, "package has publishing disabled, allowing unpublished crates to be used");
@@ -427,22 +425,5 @@ mod tests {
             ",
             actual_build_deps.to_string()
         );
-    }
-
-    #[test]
-    fn test_is_example_manifest() {
-        assert!(!is_example_manifest("aws-sdk-rust/sdk/s3/Cargo.toml"));
-        assert!(!is_example_manifest(
-            "aws-sdk-rust/sdk/aws-config/Cargo.toml"
-        ));
-        assert!(!is_example_manifest(
-            "/path/to/aws-sdk-rust/sdk/aws-config/Cargo.toml"
-        ));
-        assert!(!is_example_manifest("sdk/aws-config/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/Cargo.toml"));
-        assert!(is_example_manifest("examples/foo/bar/Cargo.toml"));
-        assert!(is_example_manifest(
-            "aws-sdk-rust/examples/foo/bar/Cargo.toml"
-        ));
     }
 }

@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.AuthEndpointOrchestrationV2MarkerCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConnectionPoisoningRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdentityCacheConfigCustomization
@@ -136,5 +137,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations +
             ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
             RetryClassifierServiceRuntimePluginCustomization(codegenContext) +
-            RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext)
+            RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext) +
+            AuthEndpointOrchestrationV2MarkerCustomization(codegenContext)
 }

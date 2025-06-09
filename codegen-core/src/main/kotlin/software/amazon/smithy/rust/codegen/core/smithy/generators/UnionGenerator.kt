@@ -110,7 +110,8 @@ open class UnionGenerator(
     private fun renderImplBlock(unionSymbol: Symbol) {
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
-                val funcNamePart = member.memberName.toSnakeCase()
+                // We need to get the symbol first because the member can be renamed
+                val funcNamePart = symbolProvider.toSymbol(member).name.toSnakeCase()
                 val variantName = symbolProvider.toMemberName(member)
 
                 if (sortedMembers.size == 1) {
@@ -219,7 +220,10 @@ private fun RustWriter.renderAsVariant(
             targetSymbol,
         )
         rust("/// Returns `Err(&Self)` if it can't be converted.")
-        rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{Result}<&${memberSymbol.rustType().render()}, &Self>", *preludeScope) {
+        rustBlockTemplate(
+            "pub fn as_$funcNamePart(&self) -> #{Result}<&${memberSymbol.rustType().render()}, &Self>",
+            *preludeScope,
+        ) {
             rustTemplate(
                 "if let ${unionSymbol.name}::$variantName(val) = &self { #{Ok}(val) } else { #{Err}(self) }",
                 *preludeScope,

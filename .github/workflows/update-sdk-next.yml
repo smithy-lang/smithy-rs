@@ -22,6 +22,7 @@ jobs:
     name: Update `next`
     runs-on: ubuntu-latest
     steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Check out `smithy-rs`
       uses: actions/checkout@v4
       with:
@@ -45,7 +46,7 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.81.0
+        toolchain: 1.82.0
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK
