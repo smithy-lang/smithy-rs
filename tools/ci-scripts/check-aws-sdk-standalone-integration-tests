@@ -46,7 +46,7 @@ ls -a .
 ls ./.cargo/
 cat ./.cargo/config.toml
 cat Cargo.toml
-cargo check --tests --all-features --all-targets
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo check --tests --all-features --all-targets
 
 popd
 popd
