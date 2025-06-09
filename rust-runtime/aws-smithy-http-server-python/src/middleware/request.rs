@@ -122,7 +122,7 @@ impl PyRequest {
     ///
     /// :type typing.Awaitable[bytes]:
     #[getter]
-    fn body<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    fn body<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let body = self.body.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let body = {

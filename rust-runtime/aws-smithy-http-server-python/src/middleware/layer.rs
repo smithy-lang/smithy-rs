@@ -28,11 +28,22 @@ use crate::{util::error::rich_py_err, PyMiddlewareException};
 /// Tower [Layer] implementation of Python middleware handling.
 ///
 /// Middleware stored in the `handler` attribute will be executed inside an async Tower middleware.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PyMiddlewareLayer<P> {
     handler: PyMiddlewareHandler,
     locals: TaskLocals,
     _protocol: PhantomData<P>,
+}
+
+impl<P> Clone for PyMiddlewareLayer<P> {
+    fn clone(&self) -> Self {
+        let locals_clone = Python::with_gil(|py| self.locals.clone_ref(py));
+        Self {
+            handler: self.handler.clone(),
+            locals: locals_clone,
+            _protocol: self._protocol,
+        }
+    }
 }
 
 impl<P> PyMiddlewareLayer<P> {
@@ -52,22 +63,38 @@ where
     type Service = PyMiddlewareService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
+        let locals_clone = Python::with_gil(|py| self.locals.clone_ref(py));
         PyMiddlewareService::new(
             inner,
             self.handler.clone(),
-            self.locals.clone(),
+            locals_clone,
             PyMiddlewareException::into_response,
         )
     }
 }
 
 /// Tower [Service] wrapping the Python middleware [Layer].
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PyMiddlewareService<S> {
     inner: S,
     handler: PyMiddlewareHandler,
     locals: TaskLocals,
     into_response: fn(PyMiddlewareException) -> http::Response<BoxBody>,
+}
+
+impl<S> Clone for PyMiddlewareService<S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        let locals_clone = Python::with_gil(|py| self.locals.clone_ref(py));
+        Self {
+            inner: self.inner.clone(),
+            handler: self.handler.clone(),
+            locals: locals_clone,
+            into_response: self.into_response.clone(),
+        }
+    }
 }
 
 impl<S> PyMiddlewareService<S> {
@@ -114,7 +141,7 @@ where
         let handler = self.handler.clone();
         let handler_name = handler.name.clone();
         let next = BoxService::new(inner.map_err(|err| err.into()));
-        let locals = self.locals.clone();
+        let locals = Python::with_gil(|py| self.locals.clone_ref(py));
         let into_response = self.into_response;
 
         Box::pin(

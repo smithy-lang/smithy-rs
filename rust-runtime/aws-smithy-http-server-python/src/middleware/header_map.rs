@@ -113,7 +113,7 @@ mod tests {
 
         let header_map = Python::with_gil(|py| {
             let py_header_map = PyHeaderMap::new(header_map);
-            let headers = PyCell::new(py, py_header_map)?;
+            let headers = Bound::new(py, py_header_map)?;
             py_run!(
                 py,
                 headers,

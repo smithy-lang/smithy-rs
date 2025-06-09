@@ -19,24 +19,20 @@ use super::{PyMiddlewareError, PyRequest, PyResponse};
 // PyNextInner represents the inner service Tower layer applied to.
 type PyNextInner = BoxService<Request<Body>, Response<BoxBody>, BoxError>;
 
-trait CallBackTrait: Send {
-    fn call(&self, py: Python, request: Request<Body>) -> PyResult<PyObject>;
-}
-
 // PyNext wraps inner Tower service and makes it callable from Python.
 #[pyo3::pyclass]
 struct PyNext(Mutex<Option<PyNextInner>>);
 
 impl PyNext {
     fn new(inner: PyNextInner) -> Self {
-        Self(Some(inner))
+        Self(Mutex::new(Some(inner)))
     }
 
     // Consumes self by taking the inner Tower service.
     // This method would have been `into_inner(self) -> PyNextInner`
     // but we can't do that because we are crossing Python boundary.
     fn take_inner(&mut self) -> Option<PyNextInner> {
-        self.0.take()
+        self.0.lock().take()
     }
 }
 
@@ -50,7 +46,11 @@ impl PyNext {
     // but since we are crossing the Python boundary we can't express it in natural Rust terms.
     //
     // Naming the method `__call__` allows `next` to be called like `next(...)`.
-    fn __call__<'p>(&'p mut self, py: Python<'p>, py_req: Py<PyRequest>) -> PyResult<Bound<PyAny>> {
+    fn __call__<'p>(
+        &'p mut self,
+        py: Python<'p>,
+        py_req: Py<PyRequest>,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let req = py_req
             .borrow_mut(py)
             .take_inner()
@@ -63,7 +63,7 @@ impl PyNext {
                 .call(req)
                 .await
                 .map_err(|err| PyRuntimeError::new_err(err.to_string()))?;
-            Ok::<_, PyErr>(Python::with_gil(|py| PyResponse::new(res).into_py(py)))
+            Ok(PyResponse::new(res))
         })
     }
 }
@@ -72,16 +72,27 @@ impl PyNext {
 ///
 /// The Python business logic implementation needs to carry some information
 /// to be executed properly like if it is a coroutine.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PyMiddlewareHandler {
     pub name: String,
     pub func: PyObject,
     pub is_coroutine: bool,
 }
 
+impl Clone for PyMiddlewareHandler {
+    fn clone(&self) -> Self {
+        let func_clone = Python::with_gil(|py| self.func.clone_ref(py));
+        Self {
+            name: self.name.clone(),
+            func: func_clone,
+            is_coroutine: self.is_coroutine,
+        }
+    }
+}
+
 impl PyMiddlewareHandler {
     pub fn new(py: Python, func: PyObject) -> PyResult<Self> {
-        let func_metadata = func_metadata(py, &func)?;
+        let func_metadata = func_metadata(&func.bind(py))?;
         Ok(Self {
             name: func_metadata.name,
             func,

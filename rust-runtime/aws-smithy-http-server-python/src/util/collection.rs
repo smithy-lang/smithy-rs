@@ -269,7 +269,7 @@ mod tests {
         });
 
         Python::with_gil(|py| {
-            let map = PyCell::new(py, map)?;
+            let map = Bound::new(py, map)?;
             py_run!(
                 py,
                 map,

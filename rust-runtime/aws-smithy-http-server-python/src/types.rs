@@ -26,8 +26,10 @@ use std::{
 
 use bytes::Bytes;
 use pyo3::{
-    exceptions::{PyRuntimeError, PyStopAsyncIteration, PyTypeError},
+    exceptions::{PyRuntimeError, PyTypeError},
     prelude::*,
+    types::IntoPyDict,
+    IntoPyObjectExt,
 };
 use tokio::{runtime::Handle, sync::Mutex};
 
@@ -405,14 +407,14 @@ impl ByteStream {
     /// :param path str:
     /// :rtype ByteStream:
     #[staticmethod]
-    pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
+    pub fn from_path_blocking(py: Python, path: String) -> PyResult<PyObject> {
         let byte_stream = Handle::current().block_on(async {
             aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))
         })?;
         let result = Self(Arc::new(Mutex::new(byte_stream)));
-        Ok(result.into_py(py))
+        result.into_py_any(py)
     }
 
     /// Create a new [ByteStream](aws_smithy_types::byte_stream::ByteStream) from a path, forcing
@@ -421,7 +423,7 @@ impl ByteStream {
     /// :param path str:
     /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
-    pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
+    pub fn from_path(py: Python, path: String) -> PyResult<Bound<'_, PyAny>> {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
@@ -444,11 +446,14 @@ impl ByteStream {
     /// inside a call blocking the Tokio runtime.
     ///
     /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__next__.>`
-    pub fn __next__(slf: PyRefMut<Self>) -> PyResult<Option<Py<PyAny>>> {
+    pub fn __next__(slf: PyRefMut<Self>) -> PyResult<Option<PyObject>> {
         let body = slf.0.clone();
         let data_chunk = futures::executor::block_on(yield_data_chunk(body));
         match data_chunk {
-            Ok(Some(data_chunk)) => Ok(Some(data_chunk.into_py(slf.py()))),
+            Ok(Some(data_chunk)) => {
+                let object = data_chunk.into_pyobject(slf.py())?.unbind();
+                Ok(Some(object))
+            }
             Ok(None) => Ok(None),
             Err(e) => Err(e),
         }
@@ -481,8 +486,11 @@ impl ByteStream {
         let fut = pyo3_async_runtimes::tokio::future_into_py(slf.py(), async move {
             let data = yield_data_chunk(body).await?;
             match data {
-                Some(data) => Ok(Python::with_gil(|py| data.into_py(py))),
-                None => Err(PyStopAsyncIteration::new_err("stream exhausted")),
+                Some(data) => Python::with_gil(|py| {
+                    let py_obj = data.into_pyobject(py)?;
+                    Ok(Some(py_obj.unbind()))
+                }),
+                None => Ok(None),
             }
         })?;
         Ok(Some(fut.into()))
@@ -502,22 +510,27 @@ impl<'py> IntoPyObject<'py> for Document {
         use aws_smithy_types::{Document as D, Number};
 
         match self.0 {
-            D::Object(obj) => obj
-                .into_iter()
-                .map(|(k, v)| (k, Document(v).into_py(py)))
-                .collect::<HashMap<_, _>>()
-                .into_py(py),
-            D::Array(vec) => vec
-                .into_iter()
-                .map(|d| Document(d).into_py(py))
-                .collect::<Vec<_>>()
-                .into_py(py),
-            D::Number(Number::Float(f)) => f.into_py(py),
-            D::Number(Number::PosInt(pi)) => pi.into_py(py),
-            D::Number(Number::NegInt(ni)) => ni.into_py(py),
-            D::String(str) => str.into_py(py),
-            D::Bool(bool) => bool.into_py(py),
-            D::Null => py.None(),
+            D::Object(obj) => {
+                let dict: HashMap<_, _> = obj
+                    .into_iter()
+                    .map(|(k, v)| Document(v).into_py_any(py).map(|py_obj| (k, py_obj)))
+                    .collect::<Result<HashMap<_, _>, _>>()?;
+                dict.into_py_dict(py).map(|d| d.into_any())
+            }
+
+            D::Array(vec) => {
+                let py_vec: Vec<_> = vec
+                    .into_iter()
+                    .map(|d| Document(d).into_pyobject(py))
+                    .collect::<Result<Vec<_>, _>>()?;
+                py_vec.into_pyobject(py)
+            }
+            D::Number(Number::Float(f)) => Ok(f.into_pyobject(py)?.into_any()),
+            D::Number(Number::PosInt(pi)) => Ok(pi.into_pyobject(py)?.into_any()),
+            D::Number(Number::NegInt(ni)) => Ok(ni.into_pyobject(py)?.into_any()),
+            D::String(str) => Ok(str.into_pyobject(py)?.into_any()),
+            D::Bool(bool) => Ok(bool.into_pyobject(py)?.to_owned().into_any()),
+            D::Null => Ok(py.None().into_pyobject(py)?.into_any()),
         }
     }
 }
@@ -579,7 +592,7 @@ mod tests {
         crate::tests::initialize();
         Python::with_gil(|py| {
             let blob = Blob::new("some data".as_bytes().to_vec());
-            let blob = PyCell::new(py, blob).unwrap();
+            let blob = Bound::new(py, blob).unwrap();
             py_run!(
                 py,
                 blob,
@@ -620,7 +633,7 @@ mod tests {
         crate::tests::initialize();
         Python::with_gil(|py| {
             let datetime = DateTime::from_secs(100);
-            let datetime = PyCell::new(py, datetime).unwrap();
+            let datetime = Bound::new(py, datetime).unwrap();
             py_run!(py, datetime, "assert datetime.secs() == 100");
         })
     }
@@ -646,7 +659,7 @@ mod tests {
         Python::with_gil(|py| {
             let bytes = "repeat\n".repeat(100000);
             let bytestream = ByteStream::newpy(bytes.as_bytes());
-            let bytestream = PyCell::new(py, bytestream).unwrap();
+            let bytestream = Bound::new(py, bytestream).unwrap();
             py_run!(
                 py,
                 bytestream,
@@ -666,13 +679,13 @@ mod tests {
         crate::tests::initialize();
 
         let cases = [
-            (D::Null, "None"),
-            (D::Bool(true), "True"),
-            (D::Bool(false), "False"),
-            (D::String("foobar".to_string()), "'foobar'"),
-            (D::Number(Number::Float(42.0)), "42.0"),
-            (D::Number(Number::PosInt(142)), "142"),
-            (D::Number(Number::NegInt(-152)), "-152"),
+            (D::Null, c"None"),
+            (D::Bool(true), c"True"),
+            (D::Bool(false), c"False"),
+            (D::String("foobar".to_string()), c"'foobar'"),
+            (D::Number(Number::Float(42.0)), c"42.0"),
+            (D::Number(Number::PosInt(142)), c"142"),
+            (D::Number(Number::NegInt(-152)), c"-152"),
             (
                 D::Array(vec![
                     D::Bool(false),
@@ -680,7 +693,7 @@ mod tests {
                     D::Number(Number::Float(1.0)),
                     D::Array(vec![D::String("inner".to_string()), D::Bool(true)]),
                 ]),
-                "[False, 'qux', 1.0, ['inner', True]]",
+                c"[False, 'qux', 1.0, ['inner', True]]",
             ),
             (
                 D::Object(
@@ -709,7 +722,7 @@ mod tests {
                     ]
                     .into(),
                 ),
-                "{
+                c"{
                     't': True,
                     'foo': 'foo',
                     'f42': 42.0,
@@ -726,8 +739,14 @@ mod tests {
         for (rust_ty, python_repr) in cases {
             // Rust -> Python
             Python::with_gil(|py| {
-                let value = Document(rust_ty.clone()).into_py(py);
-                py_run!(py, value, &format!("assert value == {python_repr}"));
+                let value = Document(rust_ty.clone())
+                    .into_pyobject(py)
+                    .expect("conversion failed");
+                let python_code = format!(
+                    "assert value == {}",
+                    python_repr.to_str().expect("invalid UTF-8 in CStr")
+                );
+                py_run!(py, value, &python_code);
             });
 
             // Python -> Rust
@@ -740,7 +759,12 @@ mod tests {
             // Rust -> Python -> Rust
             Python::with_gil(|py| {
                 let doc = Document(rust_ty);
-                let doc2 = doc.clone().into_py(py).extract(py).unwrap();
+                let doc2 = doc
+                    .clone()
+                    .into_pyobject(py)
+                    .expect("conversion failed")
+                    .extract()
+                    .unwrap();
                 assert_eq!(doc, doc2);
             });
         }

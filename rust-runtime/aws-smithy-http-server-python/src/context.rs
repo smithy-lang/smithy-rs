@@ -6,7 +6,7 @@
 //! Python context definition.
 
 use http::Extensions;
-use pyo3::{Bound, BoundObject, IntoPyObject, PyAny, PyErr, PyObject, PyResult, Python};
+use pyo3::{Bound, IntoPyObject, PyAny, PyErr, PyObject, PyResult, Python};
 
 mod lambda;
 pub mod layer;
@@ -24,7 +24,6 @@ mod testing;
 ///
 /// And finally PyContext implements [ToPyObject] (so it can by passed to Python handlers)
 /// that provides [PyObject] provided by the user with the additional values injected by the framework.
-#[derive(Clone)]
 pub struct PyContext {
     inner: PyObject,
     // TODO(Refactor): We should ideally keep record of injectable fields in a hashmap like:
@@ -36,21 +35,41 @@ pub struct PyContext {
     lambda_ctx: lambda::PyContextLambda,
 }
 
+impl Clone for PyContext {
+    fn clone(&self) -> Self {
+        Python::with_gil(|py| Self {
+            inner: self.inner.clone_ref(py),
+            lambda_ctx: self.lambda_ctx.clone(),
+        })
+    }
+}
+
 impl PyContext {
     pub fn new(inner: PyObject) -> PyResult<Self> {
+        let inner_clone = Python::with_gil(|py| inner.clone_ref(py));
         Ok(Self {
-            lambda_ctx: lambda::PyContextLambda::new(inner.clone())?,
+            lambda_ctx: lambda::PyContextLambda::new(inner_clone)?,
             inner,
         })
     }
 
     pub fn populate_from_extensions(&self, _ext: &Extensions) {
-        self.lambda_ctx
-            .populate_from_extensions(self.inner.clone(), _ext);
+        let inner_clone = Python::with_gil(|py| self.inner.clone_ref(py));
+        self.lambda_ctx.populate_from_extensions(inner_clone, _ext);
     }
 }
 
 impl<'py> IntoPyObject<'py> for PyContext {
+    type Target = PyAny;
+    type Error = PyErr;
+    type Output = Bound<'py, Self::Target>;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(self.inner.bind(py).clone())
+    }
+}
+
+impl<'py> IntoPyObject<'py> for &PyContext {
     type Target = PyAny;
     type Error = PyErr;
     type Output = Bound<'py, Self::Target>;

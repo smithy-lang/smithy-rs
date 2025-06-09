@@ -45,7 +45,7 @@ pub use util::error::{rich_py_err, RichPyErr};
 mod tests {
     use std::sync::Once;
 
-    use pyo3::{PyErr, Python};
+    use pyo3::{types::PyAnyMethods, PyErr, Python};
     use pyo3_async_runtimes::TaskLocals;
 
     static INIT: Once = Once::new();
@@ -58,7 +58,7 @@ mod tests {
         Python::with_gil(|py| {
             let asyncio = py.import("asyncio")?;
             let event_loop = asyncio.call_method0("new_event_loop")?;
-            asyncio.call_method1("set_event_loop", (event_loop,))?;
+            asyncio.call_method1("set_event_loop", (&event_loop,))?;
             Ok::<TaskLocals, PyErr>(TaskLocals::new(event_loop))
         })
         .unwrap()

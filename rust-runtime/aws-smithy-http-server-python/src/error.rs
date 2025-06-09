@@ -71,7 +71,8 @@ impl PyMiddlewareException {
 impl From<PyErr> for PyMiddlewareException {
     fn from(other: PyErr) -> Self {
         // Try to extract `PyMiddlewareException` from `PyErr` and use that if succeed
-        let middleware_err = Python::with_gil(|py| other.to_object(py).extract::<Self>(py));
+        let middleware_err =
+            Python::with_gil(|py| (&other).into_pyobject(py).unwrap().extract::<Self>());
         match middleware_err {
             Ok(err) => err,
             Err(_) => Self::newpy(other.to_string(), None),

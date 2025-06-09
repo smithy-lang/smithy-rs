@@ -7,7 +7,7 @@
 
 use std::fmt;
 
-use pyo3::{PyErr, Python};
+use pyo3::{types::PyTracebackMethods, PyErr, Python};
 
 /// Wraps [PyErr] with a richer debug output that includes traceback and cause.
 pub struct RichPyErr(PyErr);
@@ -17,7 +17,7 @@ impl fmt::Debug for RichPyErr {
         Python::with_gil(|py| {
             let mut debug_struct = f.debug_struct("RichPyErr");
             debug_struct
-                .field("type", self.0.get_type(py))
+                .field("type", self.0.get_type(py).as_any())
                 .field("value", self.0.value(py));
 
             if let Some(traceback) = self.0.traceback(py) {
@@ -52,7 +52,7 @@ mod tests {
 
         let py_err = Python::with_gil(|py| {
             py.run(
-                r#"
+                cr#"
 def foo():
     base_err = ValueError("base error")
     raise ValueError("some python error") from base_err

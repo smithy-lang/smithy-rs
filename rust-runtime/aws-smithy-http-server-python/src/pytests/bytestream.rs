@@ -17,7 +17,7 @@ use aws_smithy_types::body::SdkBody;
 fn consuming_stream_on_python_synchronously() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
-        let bytestream = bytestream.into_py(py);
+        let bytestream = bytestream.into_pyobject(py)?;
         py_run!(
             py,
             bytestream,
@@ -41,7 +41,7 @@ except StopIteration:
 fn consuming_stream_on_python_synchronously_with_loop() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
-        let bytestream = bytestream.into_py(py);
+        let bytestream = bytestream.into_pyobject(py)?;
         py_run!(
             py,
             bytestream,
@@ -61,7 +61,7 @@ assert total == [b"hello", b" ", b"world"]
 fn consuming_stream_on_python_asynchronously() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
-        let bytestream = bytestream.into_py(py);
+        let bytestream = bytestream.into_pyobject(py)?;
         py_run!(
             py,
             bytestream,
@@ -90,7 +90,7 @@ asyncio.run(main(bytestream))
 fn consuming_stream_on_python_asynchronously_with_loop() -> PyResult<()> {
     let bytestream = streaming_bytestream_from_vec(vec!["hello", " ", "world"]);
     Python::with_gil(|py| {
-        let bytestream = bytestream.into_py(py);
+        let bytestream = bytestream.into_pyobject(py)?;
         py_run!(
             py,
             bytestream,
@@ -116,14 +116,14 @@ async fn streaming_back_to_rust_from_python() -> PyResult<()> {
     let py_stream = Python::with_gil(|py| {
         let module = PyModule::from_code(
             py,
-            r#"
+            cr#"
 async def handler(bytestream):
     async for chunk in bytestream:
         yield "🐍 " + chunk.decode("utf-8")
     yield "Hello from Python!"
 "#,
-            "",
-            "",
+            c"",
+            c"",
         )?;
         let handler = module.getattr("handler")?;
         let output = handler.call1((bytestream,))?;

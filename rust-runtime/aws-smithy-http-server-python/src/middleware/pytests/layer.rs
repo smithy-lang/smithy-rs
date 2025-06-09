@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
+use std::{convert::Infallible, ffi::CString};
 
 use aws_smithy_http_server::{
     body::{to_boxed, Body, BoxBody},
@@ -320,7 +320,8 @@ fn py_handler(code: &str) -> PyMiddlewareHandler {
         )?;
         globals.set_item("Response", py.get_type::<PyResponse>())?;
         let locals = PyDict::new(py);
-        py.run(code, Some(globals), Some(locals))?;
+        let c_string = CString::new(code).expect("`code` cannot be converted to CString");
+        py.run(c_string.as_c_str(), Some(&globals), Some(&locals))?;
         let handler = locals
             .get_item("middleware")
             .expect("Python exception occurred during dictionary lookup")

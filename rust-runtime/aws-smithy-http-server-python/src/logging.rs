@@ -151,14 +151,14 @@ impl PyTracingHandler {
     }
 
     /// :rtype typing.Any:
-    fn handler(&self, py: Python) -> PyResult<Py<PyAny>> {
+    fn handler(&self, py: Python) -> PyResult<PyObject> {
         let logging = py.import("logging")?;
         logging.setattr(
             "py_tracing_event",
-            wrap_pyfunction!(py_tracing_event, logging)?,
+            wrap_pyfunction!(py_tracing_event, &logging)?,
         )?;
 
-        let pycode = r#"
+        let pycode = cr#"
 class TracingHandler(Handler):
     """ Python logging to Rust tracing handler. """
     def emit(self, record):
@@ -167,11 +167,12 @@ class TracingHandler(Handler):
             record.filename, record.lineno, record.process
         )
 "#;
-        py.run(pycode, Some(logging.dict()), None)?;
+        py.run(pycode, Some(&logging.dict()), None)?;
         let all = logging.index()?;
         all.append("TracingHandler")?;
         let handler = logging.getattr("TracingHandler")?;
-        Ok(handler.call0()?.into_py(py))
+        let result = handler.call0()?.into_pyobject(py).expect("infallible");
+        Ok(result.unbind())
     }
 }
 
@@ -238,7 +239,7 @@ mod tests {
                 .unwrap();
             let logging = py.import("logging").unwrap();
             let basic_config = logging.getattr("basicConfig").unwrap();
-            basic_config.call((), Some(kwargs)).unwrap();
+            basic_config.call((), Some(&kwargs)).unwrap();
             logging.call_method1("info", ("a message",)).unwrap();
         });
     }

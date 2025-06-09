@@ -138,6 +138,7 @@ mod tests {
     use pyo3::{
         prelude::*,
         types::{IntoPyDict, PyDict},
+        IntoPyObjectExt,
     };
 
     use super::*;
@@ -157,18 +158,22 @@ mod tests {
 
         let config = Python::with_gil(|py| {
             let globals = [
-                ("TEST_CERT", TEST_CERT.to_object(py)),
-                ("TEST_KEY", TEST_KEY.to_object(py)),
-                ("TlsConfig", py.get_type::<PyTlsConfig>().to_object(py)),
+                ("TEST_CERT", TEST_CERT.into_py_any(py).unwrap()),
+                ("TEST_KEY", TEST_KEY.into_py_any(py).unwrap()),
+                (
+                    "TlsConfig",
+                    py.get_type::<PyTlsConfig>().into_py_any(py).unwrap(),
+                ),
             ]
-            .into_py_dict(py);
+            .into_py_dict(py)
+            .unwrap();
             let locals = PyDict::new(py);
             py.run(
-                r#"
+                cr#"
 config = TlsConfig(key_path=TEST_KEY, cert_path=TEST_CERT, reload_secs=1000)
 "#,
-                Some(globals),
-                Some(locals),
+                Some(&globals),
+                Some(&locals),
             )?;
             locals
                 .get_item("config")

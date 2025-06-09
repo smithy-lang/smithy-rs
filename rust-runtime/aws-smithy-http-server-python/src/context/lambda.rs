@@ -9,7 +9,10 @@ use std::collections::HashSet;
 
 use http::Extensions;
 use lambda_http::Context as LambdaContext;
-use pyo3::{types::PyDict, PyObject, PyResult, Python};
+use pyo3::{
+    types::{PyAnyMethods, PyDict},
+    PyObject, PyResult, Python,
+};
 
 use crate::{lambda::PyLambdaContext, rich_py_err, util::is_optional_of};
 
@@ -48,10 +51,8 @@ impl PyContextLambda {
 // Inspects the given `PyObject` to detect fields that type-hinted `PyLambdaContext`.
 fn get_lambda_ctx_fields(py: Python, ctx: &PyObject) -> PyResult<HashSet<String>> {
     let typing = py.import("typing")?;
-    let hints = match typing
-        .call_method1("get_type_hints", (ctx,))
-        .and_then(|res| res.extract::<&PyDict>())
-    {
+    let results = typing.call_method1("get_type_hints", (ctx,))?;
+    let hints = match results.downcast::<PyDict>() {
         Ok(hints) => hints,
         Err(_) => {
             // `get_type_hints` could fail if `ctx` is `None`, which is the default value
@@ -63,7 +64,7 @@ fn get_lambda_ctx_fields(py: Python, ctx: &PyObject) -> PyResult<HashSet<String>
 
     let mut fields = HashSet::new();
     for (key, value) in hints {
-        if is_optional_of::<PyLambdaContext>(py, value)? {
+        if is_optional_of::<PyLambdaContext>(value.as_any())? {
             fields.insert(key.to_string());
         }
     }

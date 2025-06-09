@@ -94,15 +94,17 @@ ctx = Context()
             .service(service_fn(|req: Request<Body>| async move {
                 let ctx = req.extensions().get::<PyContext>().unwrap();
                 let (req_id, counter) = Python::with_gil(|py| {
-                    let locals = [("ctx", ctx)].into_py_dict(py);
+                    let locals = [("ctx", ctx)]
+                        .into_py_dict(py)
+                        .expect("could not convert context to dictionary");
                     py.run(
-                        r#"
+                        cr#"
 req_id = ctx.lambda_ctx.request_id
 ctx.counter += 1
 counter = ctx.counter
     "#,
                         None,
-                        Some(locals),
+                        Some(&locals),
                     )
                     .unwrap();
 

@@ -287,7 +287,7 @@ mod tests {
         });
 
         Python::with_gil(|py| {
-            let ctx = PyCell::new(py, PyLambdaContext::new(lambda_context))?;
+            let ctx = Bound::new(py, PyLambdaContext::new(lambda_context))?;
             py_run!(
                 py,
                 ctx,

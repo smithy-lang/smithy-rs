@@ -15,15 +15,17 @@ use pyo3::{
 #[pyo3_async_runtimes::tokio::test]
 async fn building_response_in_python() -> PyResult<()> {
     let response = Python::with_gil(|py| {
-        let globals = [("Response", py.get_type::<PyResponse>())].into_py_dict(py);
+        let globals = [("Response", py.get_type::<PyResponse>())]
+            .into_py_dict(py)
+            .expect("failed to get type information for `PyResponse`");
         let locals = PyDict::new(py);
 
         py.run(
-            r#"
+            cr#"
 response = Response(200, {"Content-Type": "application/json"}, b"hello world")
 "#,
-            Some(globals),
-            Some(locals),
+            Some(&globals),
+            Some(&locals),
         )
         .unwrap();
 
@@ -62,7 +64,7 @@ async fn accessing_response_properties() -> PyResult<()> {
     let py_response = PyResponse::new(response);
 
     Python::with_gil(|py| {
-        let res = PyCell::new(py, py_response)?;
+        let res = Bound::new(py, py_response)?;
         py_run!(
             py,
             res,
@@ -90,15 +92,15 @@ async fn accessing_and_changing_response_body() -> PyResult<()> {
     Python::with_gil(|py| {
         let module = PyModule::from_code(
             py,
-            r#"
+            cr#"
 async def handler(res):
     assert bytes(await res.body) == b"hello world"
 
     res.body = b"hello world from middleware"
     assert bytes(await res.body) == b"hello world from middleware"
 "#,
-            "",
-            "",
+            c"",
+            c"",
         )?;
         let handler = module.getattr("handler")?;
 

@@ -5,10 +5,12 @@
 
 //! Testing utilities for [PyContext].
 
+use std::ffi::CString;
+
 use http::{header::HeaderName, HeaderMap, HeaderValue};
 use pyo3::{
-    types::{PyDict, PyModule},
-    IntoPy, PyErr, Python,
+    types::{PyAnyMethods, PyDict, PyModule, PyModuleMethods},
+    PyErr, Python,
 };
 
 use super::PyContext;
@@ -22,12 +24,12 @@ pub fn get_context(code: &str) -> PyContext {
             py.get_type::<crate::lambda::PyLambdaContext>(),
         )?;
         let locals = PyDict::new(py);
-        py.run(code, Some(globals), Some(locals))?;
+        let c_string = CString::new(code).expect("`code` cannot be converted to CString");
+        py.run(c_string.as_c_str(), Some(&globals), Some(&locals))?;
         let context = locals
             .get_item("ctx")
             .expect("Python exception occurred during dictionary lookup")
-            .expect("you should assing your context class to `ctx` variable")
-            .into_py(py);
+            .unbind();
         Ok::<_, PyErr>(context)
     })
     .unwrap();

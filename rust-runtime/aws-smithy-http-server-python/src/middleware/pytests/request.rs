@@ -21,7 +21,7 @@ async fn accessing_request_properties() -> PyResult<()> {
     let py_request = PyRequest::new(request);
 
     Python::with_gil(|py| {
-        let req = PyCell::new(py, py_request)?;
+        let req = Bound::new(py, py_request)?;
         py_run!(
             py,
             req,
@@ -51,7 +51,7 @@ async fn accessing_and_changing_request_body() -> PyResult<()> {
     Python::with_gil(|py| {
         let module = PyModule::from_code(
             py,
-            r#"
+            cr#"
 async def handler(req):
     # TODO(Ergonomics): why we need to wrap with `bytes`?
     assert bytes(await req.body) == b"hello world"
@@ -59,8 +59,8 @@ async def handler(req):
     req.body = b"hello world from middleware"
     assert bytes(await req.body) == b"hello world from middleware"
 "#,
-            "",
-            "",
+            c"",
+            c"",
         )?;
         let handler = module.getattr("handler")?;
 
@@ -84,7 +84,7 @@ async fn accessing_and_changing_request_uri() -> PyResult<()> {
     let modified_req = Python::with_gil(|py| {
         let module = PyModule::from_code(
             py,
-            r#"
+            cr#"
 async def handler(req):
     assert req.uri == "/op1"
     # add a trailing slash to the uri
@@ -92,11 +92,11 @@ async def handler(req):
     assert req.uri == "/op1/"
     return req
 "#,
-            "",
-            "",
+            c"",
+            c"",
         )?;
 
-        let req_ref = PyCell::new(py, py_request)?;
+        let req_ref = Bound::new(py, py_request)?;
         let handler = module.getattr("handler")?;
         let output = handler.call1((req_ref,))?;
 
@@ -107,7 +107,7 @@ async def handler(req):
     // Confirm that the URI has been changed when the modified PyRequest instance
     // from Python is converted into a http::Request<> instance.
     Python::with_gil(|py| {
-        let request_cell: &PyCell<PyRequest> = modified_req.downcast(py)?;
+        let request_cell: &Bound<'_, PyRequest> = modified_req.bind(py).downcast()?;
         let mut request = request_cell.borrow_mut();
         let http_request = request
             .take_inner()
