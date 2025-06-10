@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
@@ -24,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.defaultAuthPlugin
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
@@ -59,7 +57,6 @@ open class OperationGenerator(
         renderOperationStruct(
             operationWriter,
             operationShape,
-            codegenDecorator.authOptions(codegenContext, operationShape, emptyList()),
             operationCustomizations,
         )
     }
@@ -67,7 +64,6 @@ open class OperationGenerator(
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        authSchemeOptions: List<AuthSchemeOption>,
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -110,23 +106,8 @@ open class OperationGenerator(
                 writable {
                     writeCustomizations(
                         operationCustomizations,
-                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape, authSchemeOptions),
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
                     )
-                    // If all auth scheme options can be handled statically, then we register the default auth plugin.
-                    if (authSchemeOptions.all {
-                            it is AuthSchemeOption.StaticAuthSchemeOption
-                        }
-                    ) {
-                        rustTemplate(
-                            ".with_client_plugin(#{auth_plugin})",
-                            "auth_plugin" to
-                                AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                    defaultAuthPlugin(codegenContext.runtimeConfig),
-                                    operationShape,
-                                    authSchemeOptions,
-                                ),
-                        )
-                    }
                 }
             val additionalSpanFields =
                 writable {

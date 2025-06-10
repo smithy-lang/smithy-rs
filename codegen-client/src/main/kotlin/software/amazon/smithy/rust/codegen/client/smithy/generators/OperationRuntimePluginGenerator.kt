@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeParamsGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -37,11 +38,10 @@ class OperationRuntimePluginGenerator(
                 "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
                 "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+                "ServiceSpecificAuthSchemeParams" to AuthSchemeParamsGenerator(codegenContext).paramsStruct(),
                 "SharedAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::SharedAuthSchemeOptionResolver"),
                 "SharedRequestSerializer" to runtimeApi.resolve("client::ser_de::SharedRequestSerializer"),
                 "SharedResponseDeserializer" to runtimeApi.resolve("client::ser_de::SharedResponseDeserializer"),
-                "StaticAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolver"),
-                "StaticAuthSchemeOptionResolverParams" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolverParams"),
             )
         }
 
@@ -61,8 +61,12 @@ class OperationRuntimePluginGenerator(
                     cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.store_put(#{SharedResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 
-                    ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
-                    cfg.store_put(#{AuthSchemeOptionResolverParams}::new(#{StaticAuthSchemeOptionResolverParams}::new()));
+                    cfg.store_put(#{AuthSchemeOptionResolverParams}::new(
+                        #{ServiceSpecificAuthSchemeParams}::builder()
+                            .operation_name(${operationShape.id.name.dq()})
+                            .build()
+                            .expect("required fields set")
+                    ));
 
                     #{additional_config}
 

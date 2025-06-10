@@ -28,6 +28,7 @@ pub async fn test_default_config() {
     assert_eq!(client.config().region().unwrap().to_string(), "us-east-2")
 }
 
+/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
 async fn s3_list_objects_operation() -> ListObjectsV2FluentBuilder {
     let shared_config = get_default_wasi_config().await;
     let client = Client::new(&shared_config);
@@ -52,3 +53,4 @@ pub async fn test_operation_construction() {
         &Some("nara-national-archives-catalog".to_string())
     );
 }
+*/

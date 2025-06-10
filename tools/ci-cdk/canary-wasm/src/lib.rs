@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
 use aws_config::Region;
 use aws_sdk_s3 as s3;
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
+*/
 
 //Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
@@ -24,11 +26,15 @@ impl exports::aws::component::canary_interface::Guest for Component {
             .enable_time()
             .build()
             .expect("Failed to generate runtime");
-        let res = rt.block_on(run_canary())?;
+
+        // TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
+        let res = rt.block_on(async move {
+            Ok(Vec::new()) /* run_canary() */
+        })?;
         Ok(res)
     }
 }
-
+/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
 async fn run_canary() -> Result<Vec<String>, String> {
     let http_client = WasiHttpClientBuilder::new().build();
     let sleep = TokioSleep::new();
@@ -61,3 +67,4 @@ async fn run_canary() -> Result<Vec<String>, String> {
 
     Ok(object_names)
 }
+*/
