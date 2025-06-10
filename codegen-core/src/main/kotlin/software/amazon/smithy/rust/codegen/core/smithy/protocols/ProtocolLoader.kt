@@ -18,11 +18,13 @@ open class ProtocolLoader<T, C : CodegenContext>(private val supportedProtocols:
         model: Model,
         serviceShape: ServiceShape,
     ): Pair<ShapeId, ProtocolGeneratorFactory<T, C>> {
-        val protocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
+        val serviceProtocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
         val matchingProtocols =
-            protocols.keys.mapNotNull { protocolId -> supportedProtocols[protocolId]?.let { protocolId to it } }
+            supportedProtocols.mapNotNull { (protocolId, factory) ->
+                serviceProtocols[protocolId]?.let { protocolId to factory }
+            }
         if (matchingProtocols.isEmpty()) {
-            throw CodegenException("No matching protocol — service offers: ${protocols.keys}. We offer: ${supportedProtocols.keys}")
+            throw CodegenException("No matching protocol — service offers: ${serviceProtocols.keys}. We offer: ${supportedProtocols.keys}")
         }
         return matchingProtocols.first()
     }
