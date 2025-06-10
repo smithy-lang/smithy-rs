@@ -204,8 +204,8 @@ ENV PATH=/opt/cargo/bin:$PATH \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
-    # TODO(MSRV1.82 follow-up): Restore them once lints are fixed in the server runtime crates
     RUSTDOCFLAGS="-D warnings" \
+    # TODO(MSRV1.85 follow-up): Remove the allowed lints once fixed
     RUSTFLAGS="-D warnings -A clippy::redundant_closure -A non_local_definitions" \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
