@@ -66,6 +66,9 @@ object ClientRustModule {
         /** crate::client */
         val self = RustModule.public("config")
 
+        /** crate::config::auth */
+        val auth = RustModule.public("auth", parent = self)
+
         /** crate::config::endpoint */
         val endpoint = RustModule.public("endpoint", parent = self)
 
@@ -123,6 +126,7 @@ class ClientModuleDocProvider(
             ClientRustModule.client -> clientModuleDoc()
             ClientRustModule.Client.customize -> customizeModuleDoc()
             ClientRustModule.config -> strDoc("Configuration for $serviceName.")
+            ClientRustModule.Config.auth -> strDoc("Types needed to configure auth scheme resolution.")
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
             ClientRustModule.Config.retry -> strDoc("Retry configuration.")
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")

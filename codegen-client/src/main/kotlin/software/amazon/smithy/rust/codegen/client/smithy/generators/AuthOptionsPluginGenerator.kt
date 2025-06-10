@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// TODO(AuthAlignment): Remove this file once the codegen is switched to use `AuthDecorator`
+
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -76,7 +78,11 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
                 )
             }
         }
-        if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
+        if (operationShape.hasTrait<OptionalAuthTrait>() ||
+            // the file will be removed anyway but this is a workaround for CI to pass S3 tests
+            codegenContext.serviceShape.hasTrait<OptionalAuthTrait>() ||
+            noSupportedAuthSchemes
+        ) {
             val authOption =
                 authSchemeOptions.find {
                     it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
