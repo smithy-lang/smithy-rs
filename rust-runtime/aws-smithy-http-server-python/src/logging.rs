@@ -5,6 +5,8 @@
 
 //! Rust `tracing` and Python `logging` setup and utilities.
 
+#![allow(non_local_definitions)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use pyo3::prelude::*;
