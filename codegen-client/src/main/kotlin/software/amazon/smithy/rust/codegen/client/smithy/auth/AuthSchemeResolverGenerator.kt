@@ -79,6 +79,10 @@ class AuthSchemeResolverGenerator(
                     operation_overrides: #{HashMap}<&'static str, Vec<#{AuthSchemeOption}>>,
                 }
 
+                // When generating code for tests (e.g., `codegen-client-test`), this manual implementation
+                // of the `Default` trait may appear as if it could be derived automatically.
+                // However, that is not the case in production.
+                ##[allow(clippy::derivable_impls)]
                 impl Default for DefaultAuthSchemeResolver {
                     fn default() -> Self {
                         Self {
