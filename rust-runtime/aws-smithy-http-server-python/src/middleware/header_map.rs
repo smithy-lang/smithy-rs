@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(non_local_definitions)]
+
 use std::{mem, str::FromStr, sync::Arc};
 
 use http::{header::HeaderName, HeaderMap, HeaderValue};

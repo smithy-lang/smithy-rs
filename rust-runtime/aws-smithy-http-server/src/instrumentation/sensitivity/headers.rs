@@ -61,7 +61,7 @@ impl<'a, F> SensitiveHeaders<'a, F> {
 /// Concatenates the [`Debug`] of [`&str`](str) and ['Sensitive<&str>`](Sensitive).
 struct ThenDebug<'a>(&'a str, Sensitive<&'a str>);
 
-impl<'a> Debug for ThenDebug<'a> {
+impl Debug for ThenDebug<'_> {
     #[inline]
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "\"{}{}\"", self.0, self.1)

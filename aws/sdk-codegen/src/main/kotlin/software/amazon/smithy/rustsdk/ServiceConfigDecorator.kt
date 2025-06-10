@@ -28,8 +28,7 @@ class SharedConfigDocsCustomization : ConfigCustomization() {
         return if (section is ServiceConfig.ConfigStructAdditionalDocs) {
             writable {
                 docs(
-                    """
-                    Service configuration allows for customization of endpoints, region, credentials providers,
+                    """Service configuration allows for customization of endpoints, region, credentials providers,
                     and retry configuration. Generally, it is constructed automatically for you from a shared
                     configuration loaded by the `aws-config` crate. For example:
 

@@ -33,7 +33,7 @@ do
 
     # TODO(MSRV1.82 follow-up): Restore `-Dwarnings` once lints are fixed in aws-smithy-http-server-python:
     # "error: unexpected `cfg` condition name: `addr_of`"
-    RUSTDOCFLAGS="--cfg docsrs" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --document-private-items --all-features
+    RUSTDOCFLAGS="--cfg docsrs -Dwarnings" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --document-private-items --all-features
 
     echo -e "## ${C_YELLOW}Running 'cargo minimal-versions check' on ${runtime_path}...${C_RESET}"
     # Print out the cargo tree with minimal versions for easier debugging

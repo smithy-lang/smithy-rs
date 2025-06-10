@@ -5,6 +5,8 @@
 
 //! Python error definition.
 
+#![allow(non_local_definitions)]
+
 use aws_smithy_http_server::{
     body::{to_boxed, BoxBody},
     protocol::{
