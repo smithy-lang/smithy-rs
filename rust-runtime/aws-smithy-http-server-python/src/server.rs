@@ -391,13 +391,13 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///         pub fn start_worker(
     ///             &mut self,
     ///             py: pyo3::Python,
-    ///             socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
+    ///             socket: &pyo3::Bound<'_, aws_smithy_http_server_python::PySocket>,
     ///             worker_number: isize,
     ///             tls: Option<aws_smithy_http_server_python::tls::PyTlsConfig>,
     ///         ) -> pyo3::PyResult<()> {
     ///             let event_loop = self.configure_python_event_loop(py)?;
     ///             let service = self.build_service(event_loop)?;
-    ///             self.start_hyper_worker(py, socket, event_loop, service, worker_number, tls)
+    ///             self.start_hyper_worker(socket, event_loop, service, worker_number, tls)
     ///         }
     ///     }
     /// ```

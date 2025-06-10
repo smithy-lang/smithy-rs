@@ -490,7 +490,9 @@ impl ByteStream {
                     let py_obj = data.into_pyobject(py)?;
                     Ok(Some(py_obj.unbind()))
                 }),
-                None => Ok(None),
+                None => Err(pyo3::exceptions::PyStopAsyncIteration::new_err(
+                    "stream exhausted",
+                )),
             }
         })?;
         Ok(Some(fut.into()))

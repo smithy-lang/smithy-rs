@@ -50,6 +50,10 @@ impl PyContextLambda {
 
 // Inspects the given `PyObject` to detect fields that type-hinted `PyLambdaContext`.
 fn get_lambda_ctx_fields(py: Python, ctx: &PyObject) -> PyResult<HashSet<String>> {
+    if ctx.bind(py).is_none() {
+        return Ok(HashSet::new());
+    }
+
     let typing = py.import("typing")?;
     let results = typing.call_method1("get_type_hints", (ctx,))?;
     let hints = match results.downcast::<PyDict>() {

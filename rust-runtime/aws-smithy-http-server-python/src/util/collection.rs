@@ -94,6 +94,7 @@ macro_rules! mutable_mapping_pymethods {
                 <$ty as PyMutableMapping>::get(&self, key)
             }
 
+            #[pyo3(signature = (key, default=None))]
             fn get(
                 &self,
                 key: <$ty as PyMutableMapping>::Key,
@@ -145,6 +146,7 @@ macro_rules! mutable_mapping_pymethods {
                 self.del(key)
             }
 
+            #[pyo3(signature = (key, default=None))]
             fn pop(
                 &mut self,
                 key: <$ty as PyMutableMapping>::Key,
@@ -190,6 +192,7 @@ macro_rules! mutable_mapping_pymethods {
                 }
             }
 
+            #[pyo3(signature = (key, default=None))]
             fn setdefault(
                 &mut self,
                 key: <$ty as PyMutableMapping>::Key,
