@@ -78,7 +78,7 @@ pub trait MakeFmt<T> {
     fn make(&self, source: T) -> Self::Target;
 }
 
-impl<'a, T, U> MakeFmt<T> for &'a U
+impl<T, U> MakeFmt<T> for &U
 where
     U: MakeFmt<T>,
 {
