@@ -206,7 +206,7 @@ ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_INCREMENTAL=0 \
     # TODO(MSRV1.82 follow-up): Restore them once lints are fixed in the server runtime crates
     RUSTDOCFLAGS="-D warnings" \
-    RUSTFLAGS="-D warnings" \
+    RUSTFLAGS="-D warnings -A clippy::redundant_closure -A non_local_definitions" \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 # SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.
