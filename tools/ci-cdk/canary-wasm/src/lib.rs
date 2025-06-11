@@ -27,10 +27,8 @@ impl exports::aws::component::canary_interface::Guest for Component {
             .build()
             .expect("Failed to generate runtime");
 
-        // TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
-        let res = rt.block_on(async move {
-            Ok(Vec::new()) /* run_canary() */
-        })?;
+        // TODO(AuthAlignment): Pass `run_canary()` to `block_on` once the `no_credentials` functionality is restored
+        let res = rt.block_on(async move { Ok::<Vec<String>, String>(Vec::new()) })?;
         Ok(res)
     }
 }
