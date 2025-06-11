@@ -5,6 +5,8 @@
 
 //! Python-compatible middleware [http::Response] implementation.
 
+#![allow(non_local_definitions)]
+
 use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
@@ -23,7 +25,6 @@ use super::{PyHeaderMap, PyMiddlewareError};
 /// :param body typing.Optional[bytes]:
 /// :rtype None:
 #[pyclass(name = "Response")]
-#[pyo3(text_signature = "($self, status, headers=None, body=None)")]
 pub struct PyResponse {
     parts: Option<Parts>,
     headers: PyHeaderMap,
@@ -52,7 +53,7 @@ impl PyResponse {
         let body = {
             let body = mem::take(&mut self.body);
             let body = Arc::try_unwrap(body).ok()?;
-            body.into_inner().take()?
+            body.into_inner()?
         };
         Some(Response::from_parts(parts, body))
     }
@@ -61,6 +62,7 @@ impl PyResponse {
 #[pymethods]
 impl PyResponse {
     /// Python-compatible [Response] object from the Python side.
+    #[pyo3(text_signature = "($self, status, headers=None, body=None)")]
     #[new]
     fn newpy(
         status: u16,

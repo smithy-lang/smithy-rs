@@ -6,8 +6,8 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.81.0
-ARG rust_nightly_version=nightly-2024-06-30
+ARG rust_stable_version=1.85.0
+ARG rust_nightly_version=nightly-2025-05-04
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -68,8 +68,6 @@ RUN set -eux; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
-    # NOTE: wasm32-wasi target is still valid in MSRV 1.81, when we update to 1.84 or above we _should_ be able to remove this target in favor of just wasip1
-    rustup target add wasm32-wasi; \
     rustup target add wasm32-wasip1; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
@@ -105,7 +103,7 @@ ARG cargo_deny_version=0.16.4
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.52
+ARG cargo_udeps_version=0.1.56
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
@@ -118,7 +116,7 @@ ARG cargo_minimal_versions_version=0.1.27
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.13
+ARG cargo_check_external_types_version=0.2.0
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
@@ -140,7 +138,7 @@ ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.36.0
+ARG cargo_semver_checks_version=0.41.0
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
@@ -207,7 +205,8 @@ ENV PATH=/opt/cargo/bin:$PATH \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
-    RUSTFLAGS="-D warnings" \
+    # TODO(MSRV1.85 follow-up): Remove the allowed lints once fixed
+    RUSTFLAGS="-D warnings -A clippy::redundant_closure -A non_local_definitions" \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 # SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.

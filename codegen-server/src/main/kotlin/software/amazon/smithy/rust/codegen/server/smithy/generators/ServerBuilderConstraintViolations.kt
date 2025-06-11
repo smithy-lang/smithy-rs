@@ -73,8 +73,7 @@ class ServerBuilderConstraintViolations(
         if (nonExhaustive) Attribute.NonExhaustive.render(writer)
         val constraintViolationSymbolName = constraintViolationSymbolProvider.toSymbol(shape).name
         writer.rustBlock(
-            """
-            ##[allow(clippy::enum_variant_names)]
+            """##[allow(clippy::enum_variant_names)]
             pub${if (visibility == Visibility.PUBCRATE) " (crate) " else ""} enum $constraintViolationSymbolName""",
         ) {
             renderConstraintViolations(writer)
@@ -136,9 +135,11 @@ class ServerBuilderConstraintViolations(
             when (constraintViolation.kind) {
                 ConstraintViolationKind.MISSING_MEMBER -> {
                     writer.docs(
-                        "${constraintViolation.message(symbolProvider, model).replaceFirstChar {
-                            it.uppercaseChar()
-                        }}.",
+                        "${
+                            constraintViolation.message(symbolProvider, model).replaceFirstChar {
+                                it.uppercaseChar()
+                            }
+                        }.",
                     )
                     writer.rust("${constraintViolation.name()},")
                 }

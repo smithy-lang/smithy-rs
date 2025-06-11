@@ -101,6 +101,13 @@ impl<'a> SignatureValues<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
+    /*
+       QueryParams(QueryParamValues<'a>),
+       --------------------------------- the largest variant contains at least 192 bytes
+
+       Suppressing the Clippy warning, as the variant above is always returned wrapped in `Ok`.
+    */
     pub(crate) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
         match self {
             SignatureValues::QueryParams(values) => Ok(values),
@@ -118,7 +125,7 @@ pub(crate) struct CanonicalRequest<'a> {
     pub(crate) values: SignatureValues<'a>,
 }
 
-impl<'a> CanonicalRequest<'a> {
+impl CanonicalRequest<'_> {
     /// Construct a CanonicalRequest from a [`SignableRequest`] and [`SigningParams`].
     ///
     /// The returned canonical request includes information required for signing as well
@@ -443,7 +450,7 @@ impl<'a> CanonicalRequest<'a> {
     }
 }
 
-impl<'a> fmt::Display for CanonicalRequest<'a> {
+impl fmt::Display for CanonicalRequest<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}", self.method)?;
         writeln!(f, "{}", self.path)?;
@@ -561,13 +568,13 @@ pub(crate) struct SigningScope<'a> {
     pub(crate) service: &'a str,
 }
 
-impl<'a> SigningScope<'a> {
+impl SigningScope<'_> {
     pub(crate) fn v4a_display(&self) -> String {
         format!("{}/{}/aws4_request", format_date(self.time), self.service)
     }
 }
 
-impl<'a> fmt::Display for SigningScope<'a> {
+impl fmt::Display for SigningScope<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -639,7 +646,7 @@ impl<'a> StringToSign<'a> {
     }
 }
 
-impl<'a> fmt::Display for StringToSign<'a> {
+impl fmt::Display for StringToSign<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,

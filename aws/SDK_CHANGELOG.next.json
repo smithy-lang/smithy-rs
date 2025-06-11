@@ -6,66 +6,50 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Adds support for event stream operations with non-REST protocols such as AWS JSON. This update enables operations, including `SubscribeToShard` in Kinesis and `StartLiveTail` in CloudWatchLogs in the Rust SDK.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "ysaito1001",
-      "references": [
-        "aws-sdk-rust#213",
-        "aws-sdk-rust#1188"
-      ],
-      "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
-      "age": 5
-    },
-    {
-      "message": "Add missing `request_checksum_calculation` and `response_checksum_validation` setters to the `ConfigLoader`\n",
+      "message": "Fix a bug where fields that were initially annotated with the `required` trait and later updated to use the `addedDefault` trait were not serialized when their values matched the default, even when the values were explicitly set. With this fix, fields with `addedDefault` are now always serialized.\n",
       "meta": {
         "bug": true,
         "breaking": false,
         "tada": false
       },
-      "author": "landonxjames",
+      "author": "ysaito1001",
       "references": [
-        "smithy-rs#920"
+        "smithy-rs#4117"
       ],
-      "since-commit": "64144f4024f71b092facd40d4635d4011ea0b7e5",
-      "age": 5
-    },
-    {
-      "message": "Updates the default HTTP client to be based on the 1.x version of hyper and updates the default TLS provider to [rustls](https://github.com/rustls/rustls) with [aws-lc](https://github.com/aws/aws-lc-rs). For more information see the GitHub [discussion](https://github.com/awslabs/aws-sdk-rust/discussions/1257).\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [
-        "aws-sdk-rust#977",
-        "smithy-rs#1925",
-        "smithy-rs#3710"
-      ],
-      "since-commit": "bdec1a232a5dfdba16bafd1f637c99a920a30734",
+      "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
       "age": 4
     },
     {
-      "message": "Update spans to better align with spec.\n",
+      "message": "Promote `aws-smithy-mocks-experimental` to `aws-smithy-mocks`. This crate is now a recommended tool for testing\ngenerated SDK clients. This release includes several fixes as well as a new sequence builder API that can be\nused to test more complex scenarios such as retries.\n\n```rust\nuse aws_sdk_s3::operation::get_object::GetObjectOutput;\nuse aws_sdk_s3::config::retry::RetryConfig;\nuse aws_smithy_types::byte_stream::ByteStream;\nuse aws_smithy_mocks::{mock, mock_client, RuleMode};\n\n#[tokio::test]\nasync fn test_retry_behavior() {\n    // Create a rule that returns 503 twice, then succeeds\n    let retry_rule = mock!(aws_sdk_s3::Client::get_object)\n        .sequence()\n        .http_status(503, None)\n        .times(2)                                            // Return 503 HTTP status twice\n        .output(|| GetObjectOutput::builder()                // Finally return a successful output\n            .body(ByteStream::from_static(b\"success\"))\n            .build())\n        .build();\n\n    // Create a mocked client with the rule\n    let s3 = mock_client!(\n        aws_sdk_s3,\n        RuleMode::Sequential,\n        [&retry_rule],\n        |client_builder| {\n            client_builder.retry_config(RetryConfig::standard().with_max_attempts(3))\n        }\n    );\n\n    // This should succeed after two retries\n    let result = s3\n        .get_object()\n        .bucket(\"test-bucket\")\n        .key(\"test-key\")\n        .send()\n        .await\n        .expect(\"success after retries\");\n\n    // Verify the response\n    let data = result.body.collect().await.expect(\"successful read\").to_vec();\n    assert_eq!(data, b\"success\");\n\n    // Verify all responses were used\n    assert_eq!(retry_rule.num_calls(), 3);\n}\n```\n",
       "meta": {
-        "bug": false,
+        "bug": true,
         "breaking": false,
-        "tada": false
+        "tada": true
       },
-      "author": "landonxjames",
+      "author": "aajtodd",
       "references": [
-        "smithy-rs#4052"
+        "smithy-rs#4074",
+        "smithy-rs#3926"
       ],
-      "since-commit": "7558d31f17b69bce8785ffa833c575d0b172209c",
-      "age": 3
+      "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
+      "age": 4
     },
     {
-      "message": "Replace the `once_cell` crate with the `std` counterpart in AWS runtime crates.\n",
+      "message": "Update MSRV to 1.82.0\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#4120"
+      ],
+      "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
+      "age": 4
+    },
+    {
+      "message": "Replace once_cell with std equivalents\n",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -73,41 +57,27 @@
       },
       "author": "FalkWoldmann",
       "references": [
-        "smithy-rs#4050"
+        "smithy-rs#4105"
       ],
-      "since-commit": "f0c92d92b680771787af8ab60995d0e1fae02611",
-      "age": 1
+      "since-commit": "f3aebe7b53d7e1be4bd922e13d459f8ef72104fa",
+      "age": 3
     },
     {
-      "message": "Fix an issue where a custom `Content-Encoding` header was incorrectly overwritten by the `aws-chunked` header value.\n",
+      "message": "Removing the `optimize_crc32_auto` feature flag from the `crc-fast` dependency of the `aws-smithy-checksums` crate since it was causing build issues for some customers.\n",
       "meta": {
         "bug": true,
         "breaking": false,
         "tada": false
       },
-      "author": "ysaito1001",
+      "author": "landonxjames",
       "references": [
-        "aws-sdk-rust#1281"
+        "aws-sdk-rust#1291"
       ],
-      "since-commit": "f0c92d92b680771787af8ab60995d0e1fae02611",
-      "age": 1
+      "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
+      "age": 2
     },
     {
-      "message": "Add support for the account-based endpoints in AWS SDKs. For more details, please refer to the [AWS SDKs and Tools Reference Guide on Account-Based Endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html).\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3776"
-      ],
-      "since-commit": "f0c92d92b680771787af8ab60995d0e1fae02611",
-      "age": 1
-    },
-    {
-      "message": "Fix service specific endpoint url keys\n",
+      "message": "fix simple rules behavior with `RuleMode::MatchAny`\n",
       "meta": {
         "bug": true,
         "breaking": false,
@@ -115,9 +85,37 @@
       },
       "author": "aajtodd",
       "references": [
-        "aws-sdk-rust#1252"
+        "smithy-rs#4135"
       ],
-      "since-commit": "f0c92d92b680771787af8ab60995d0e1fae02611",
+      "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
+      "age": 2
+    },
+    {
+      "message": "Introduce a new `repeatedly()` function to `aws-smithy-mocks` sequence builder to build mock rules that behave as an\ninfinite sequence.\n\n```rust\nlet rule = mock!(aws_sdk_s3::Client::get_object)\n    .sequence()\n    .http_status(503, None)\n    .times(2)        // repeat the last output twice before moving onto the next response in the sequence\n    .output(|| GetObjectOutput::builder()\n        .body(ByteStream::from_static(b\"success\"))\n        .build()\n    )\n    .repeatedly()    // repeat the last output forever\n    .build();\n```\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "aajtodd",
+      "references": [
+        "smithy-rs#4135"
+      ],
+      "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
+      "age": 2
+    },
+    {
+      "message": "Fix h2 GoAway errors not being retried by hyper legacy client\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [
+        "aws-sdk-rust#1272"
+      ],
+      "since-commit": "7d64b2f9e8fc89159d7fb1ff1309d6d6b8b53189",
       "age": 1
     }
   ],

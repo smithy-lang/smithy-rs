@@ -208,8 +208,8 @@ private val endpointUrlDocs =
     writable {
         rust(
             """
-            /// Sets the endpoint URL used to communicate with this service
-
+            /// Sets the endpoint URL used to communicate with this service.
+            ///
             /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
             /// will be prefixed onto this URL. To fully override the endpoint resolver, use
             /// [`Builder::endpoint_resolver`].

@@ -5,6 +5,8 @@
 
 //! Rust `tracing` and Python `logging` setup and utilities.
 
+#![allow(non_local_definitions)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use pyo3::prelude::*;
@@ -127,7 +129,6 @@ fn setup_tracing_subscriber(
 /// :param format typing.Optional\[typing.Literal\['compact', 'pretty', 'json'\]\]:
 /// :rtype None:
 #[pyclass(name = "TracingHandler")]
-#[pyo3(text_signature = "($self, level=None, logfile=None, format=None)")]
 #[derive(Debug)]
 pub struct PyTracingHandler {
     _guard: Option<WorkerGuard>,
@@ -135,6 +136,7 @@ pub struct PyTracingHandler {
 
 #[pymethods]
 impl PyTracingHandler {
+    #[pyo3(text_signature = "($self, level=None, logfile=None, format=None)")]
     #[new]
     fn newpy(
         py: Python,

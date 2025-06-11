@@ -51,14 +51,23 @@ object EndpointsLib {
         endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
             .resolve("PartitionResolver")
 
-    val substring = endpointsLib("substring", CargoDependency.Proptest).toType().resolve("substring")
-    val isValidHostLabel = endpointsLib("host", CargoDependency.Proptest).toType().resolve("is_valid_host_label")
-    val parseUrl = endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().resolve("parse_url")
-    val uriEncode = endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().resolve("uri_encode")
+    val substring =
+        endpointsLib("substring", CargoDependency.Proptest).toType().resolve("substring")
+    val isValidHostLabel =
+        endpointsLib("host", CargoDependency.Proptest).toType().resolve("is_valid_host_label")
+    val parseUrl =
+        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
+            .toType()
+            .resolve("parse_url")
+    val uriEncode =
+        endpointsLib("uri_encode", CargoDependency.PercentEncoding)
+            .toType()
+            .resolve("uri_encode")
 
     val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
     val awsIsVirtualHostableS3Bucket =
-        endpointsLib("s3", endpointsLib("host"), CargoDependency.OnceCell, CargoDependency.RegexLite).toType()
+        endpointsLib("s3", endpointsLib("host"), CargoDependency.RegexLite)
+            .toType()
             .resolve("is_virtual_hostable_s3_bucket")
 
     private fun endpointsLib(
@@ -75,11 +84,15 @@ object EndpointsLib {
 }
 
 class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
+    private val smithyTypesEndpointModule =
+        RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
     val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
     val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
-    val endpointFuture = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint::EndpointFuture")
-    private val endpointRtApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
+    val endpointFuture =
+        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+            .resolve("client::endpoint::EndpointFuture")
+    private val endpointRtApi =
+        RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
 
     fun toArray() =
@@ -127,13 +140,20 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
     }
 
     override fun visitEndpointRule(endpoint: Endpoint): Set<String> {
-        return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf()))
+        return endpoint.properties
+            .getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf()))
             .asTupleLiteral()
-            .orNull()?.let {
+            .orNull()
+            ?.let {
                 it.map { authScheme ->
-                    authScheme.asRecordLiteral().get()[Identifier.of("name")]!!.asStringLiteral().get().expectLiteral()
+                    authScheme.asRecordLiteral().get()[Identifier.of("name")]!!
+                        .asStringLiteral()
+                        .get()
+                        .expectLiteral()
                 }
-            }?.toHashSet() ?: hashSetOf()
+            }
+            ?.toHashSet()
+            ?: hashSetOf()
     }
 
     override fun visitTreeRule(rules: MutableList<Rule>): Set<String> {
