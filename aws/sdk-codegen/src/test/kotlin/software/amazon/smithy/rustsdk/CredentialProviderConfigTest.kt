@@ -119,7 +119,7 @@ internal class CredentialProviderConfigTest {
                         let client = $moduleName::Client::from_conf(conf);
 
                         let _ = client
-                            .some_operation()
+                            .neat_operation()
                             .send()
                             .await
                             .expect("success");
