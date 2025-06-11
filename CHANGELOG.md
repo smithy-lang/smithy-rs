@@ -1,4 +1,13 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 11th, 2025
+===============
+**Breaking Changes:**
+- :bug::warning: (server) Fixed SmithyRpcV2CBOR Router to properly respect case in service names, preventing routing failures for services with mixed-case service shape ID.
+
+**New this release:**
+- :bug: (client, [smithy-rs#4165](https://github.com/smithy-lang/smithy-rs/issues/4165)) Fix default supported protocols incorrectly ordered in `ClientProtocolLoader`.
+
+
 June 3rd, 2025
 ==============
 **New this release:**
