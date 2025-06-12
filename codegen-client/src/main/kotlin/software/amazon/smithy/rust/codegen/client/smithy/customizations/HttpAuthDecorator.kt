@@ -13,9 +13,8 @@ import software.amazon.smithy.model.traits.HttpBasicAuthTrait
 import software.amazon.smithy.model.traits.HttpBearerAuthTrait
 import software.amazon.smithy.model.traits.HttpDigestAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption.StaticAuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
@@ -30,7 +29,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
@@ -92,18 +90,18 @@ class HttpAuthDecorator : ClientCodegenDecorator {
 
     override fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
-    ): List<AuthSchemeOptionV2> {
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> {
         val serviceIndex = ServiceIndex.of(codegenContext.model)
         val authSchemes = serviceIndex.getAuthSchemes(codegenContext.serviceShape)
-        val options = ArrayList<AuthSchemeOptionV2>()
+        val options = ArrayList<AuthSchemeOption>()
         for (authScheme in authSchemes.keys) {
             fun addOption(
                 schemeShapeId: ShapeId,
                 name: String,
             ) {
                 options.add(
-                    object : AuthSchemeOptionV2 {
+                    object : AuthSchemeOption {
                         override val authSchemeId = schemeShapeId
 
                         override fun render(
@@ -121,42 +119,6 @@ class HttpAuthDecorator : ClientCodegenDecorator {
                             )
                         }
                     },
-                )
-            }
-            when (authScheme) {
-                HttpApiKeyAuthTrait.ID -> addOption(authScheme, "#{HTTP_API_KEY_AUTH_SCHEME_ID}")
-                HttpBasicAuthTrait.ID -> addOption(authScheme, "#{HTTP_BASIC_AUTH_SCHEME_ID}")
-                HttpBearerAuthTrait.ID -> addOption(authScheme, "#{HTTP_BEARER_AUTH_SCHEME_ID}")
-                HttpDigestAuthTrait.ID -> addOption(authScheme, "#{HTTP_DIGEST_AUTH_SCHEME_ID}")
-                else -> {}
-            }
-        }
-        return baseAuthSchemeOptions + options
-    }
-
-    override fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
-        baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> {
-        val serviceIndex = ServiceIndex.of(codegenContext.model)
-        val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
-        val codegenScope = codegenScope(codegenContext.runtimeConfig)
-        val options = ArrayList<AuthSchemeOption>()
-        for (authScheme in authSchemes.keys) {
-            fun addOption(
-                schemeShapeId: ShapeId,
-                name: String,
-            ) {
-                options.add(
-                    StaticAuthSchemeOption(
-                        schemeShapeId,
-                        listOf(
-                            writable {
-                                rustTemplate(name, *codegenScope)
-                            },
-                        ),
-                    ),
                 )
             }
             when (authScheme) {

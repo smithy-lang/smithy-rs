@@ -15,7 +15,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
@@ -40,8 +40,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
-import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
-import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 internal fun ClientCodegenContext.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
@@ -66,44 +64,14 @@ class SigV4AuthDecorator : ConditionalDecorator(
             override val name: String get() = "SigV4AuthDecorator"
             override val order: Byte = ORDER
 
-            private val sigv4a = "sigv4a"
-
-            private fun sigv4(runtimeConfig: RuntimeConfig) =
-                writable {
-                    val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-                    rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
-                }
-
-            private fun sigv4a(runtimeConfig: RuntimeConfig) =
-                writable {
-                    val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-                    featureGateBlock(sigv4a) {
-                        rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
-                    }
-                }
-
             override fun authSchemeOptions(
                 codegenContext: ClientCodegenContext,
-                baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
-            ): List<AuthSchemeOptionV2> =
+                baseAuthSchemeOptions: List<AuthSchemeOption>,
+            ): List<AuthSchemeOption> =
                 (baseAuthSchemeOptions + Sigv4AuthSchemeOption())
                     .letIf(codegenContext.usesSigV4a()) {
                         it + Sigv4aAuthSchemeOption()
                     }
-
-            override fun authOptions(
-                codegenContext: ClientCodegenContext,
-                operationShape: OperationShape,
-                baseAuthSchemeOptions: List<AuthSchemeOption>,
-            ): List<AuthSchemeOption> {
-                val supportsSigV4a =
-                    codegenContext.usesSigV4a().thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
-                return baseAuthSchemeOptions +
-                    AuthSchemeOption.StaticAuthSchemeOption(
-                        SigV4Trait.ID,
-                        listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
-                    )
-            }
 
             override fun serviceRuntimePluginCustomizations(
                 codegenContext: ClientCodegenContext,
@@ -139,7 +107,7 @@ class SigV4AuthDecorator : ConditionalDecorator(
     }
 }
 
-private class Sigv4AuthSchemeOption : AuthSchemeOptionV2 {
+private class Sigv4AuthSchemeOption : AuthSchemeOption {
     override val authSchemeId = SigV4Trait.ID
 
     override fun render(
@@ -153,7 +121,7 @@ private class Sigv4AuthSchemeOption : AuthSchemeOptionV2 {
     )
 }
 
-private class Sigv4aAuthSchemeOption : AuthSchemeOptionV2 {
+private class Sigv4aAuthSchemeOption : AuthSchemeOption {
     override val authSchemeId = SigV4ATrait.ID
 
     override fun render(
