@@ -4,8 +4,10 @@
  */
 
 use aws_config::retry::RetryConfig;
+/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
 use aws_sdk_s3::operation::list_objects_v2::builders::ListObjectsV2FluentBuilder;
 use aws_sdk_s3::Client;
+*/
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
 
