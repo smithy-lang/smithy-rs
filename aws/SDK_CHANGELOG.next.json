@@ -17,7 +17,7 @@
         "smithy-rs#4117"
       ],
       "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Promote `aws-smithy-mocks-experimental` to `aws-smithy-mocks`. This crate is now a recommended tool for testing\ngenerated SDK clients. This release includes several fixes as well as a new sequence builder API that can be\nused to test more complex scenarios such as retries.\n\n```rust\nuse aws_sdk_s3::operation::get_object::GetObjectOutput;\nuse aws_sdk_s3::config::retry::RetryConfig;\nuse aws_smithy_types::byte_stream::ByteStream;\nuse aws_smithy_mocks::{mock, mock_client, RuleMode};\n\n#[tokio::test]\nasync fn test_retry_behavior() {\n    // Create a rule that returns 503 twice, then succeeds\n    let retry_rule = mock!(aws_sdk_s3::Client::get_object)\n        .sequence()\n        .http_status(503, None)\n        .times(2)                                            // Return 503 HTTP status twice\n        .output(|| GetObjectOutput::builder()                // Finally return a successful output\n            .body(ByteStream::from_static(b\"success\"))\n            .build())\n        .build();\n\n    // Create a mocked client with the rule\n    let s3 = mock_client!(\n        aws_sdk_s3,\n        RuleMode::Sequential,\n        [&retry_rule],\n        |client_builder| {\n            client_builder.retry_config(RetryConfig::standard().with_max_attempts(3))\n        }\n    );\n\n    // This should succeed after two retries\n    let result = s3\n        .get_object()\n        .bucket(\"test-bucket\")\n        .key(\"test-key\")\n        .send()\n        .await\n        .expect(\"success after retries\");\n\n    // Verify the response\n    let data = result.body.collect().await.expect(\"successful read\").to_vec();\n    assert_eq!(data, b\"success\");\n\n    // Verify all responses were used\n    assert_eq!(retry_rule.num_calls(), 3);\n}\n```\n",
@@ -32,7 +32,7 @@
         "smithy-rs#3926"
       ],
       "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Update MSRV to 1.82.0\n",
@@ -46,7 +46,7 @@
         "smithy-rs#4120"
       ],
       "since-commit": "84f5464aacf3544f706d75af0aaddfea42c20e9f",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Replace once_cell with std equivalents\n",
@@ -60,7 +60,7 @@
         "smithy-rs#4105"
       ],
       "since-commit": "f3aebe7b53d7e1be4bd922e13d459f8ef72104fa",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Removing the `optimize_crc32_auto` feature flag from the `crc-fast` dependency of the `aws-smithy-checksums` crate since it was causing build issues for some customers.\n",
@@ -74,7 +74,7 @@
         "aws-sdk-rust#1291"
       ],
       "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
-      "age": 2
+      "age": 3
     },
     {
       "message": "fix simple rules behavior with `RuleMode::MatchAny`\n",
@@ -88,7 +88,7 @@
         "smithy-rs#4135"
       ],
       "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Introduce a new `repeatedly()` function to `aws-smithy-mocks` sequence builder to build mock rules that behave as an\ninfinite sequence.\n\n```rust\nlet rule = mock!(aws_sdk_s3::Client::get_object)\n    .sequence()\n    .http_status(503, None)\n    .times(2)        // repeat the last output twice before moving onto the next response in the sequence\n    .output(|| GetObjectOutput::builder()\n        .body(ByteStream::from_static(b\"success\"))\n        .build()\n    )\n    .repeatedly()    // repeat the last output forever\n    .build();\n```\n",
@@ -102,7 +102,7 @@
         "smithy-rs#4135"
       ],
       "since-commit": "4e4a0ee2d663a1212927a8a70ca97eac567d54b6",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix h2 GoAway errors not being retried by hyper legacy client\n",
@@ -116,6 +116,34 @@
         "aws-sdk-rust#1272"
       ],
       "since-commit": "7d64b2f9e8fc89159d7fb1ff1309d6d6b8b53189",
+      "age": 2
+    },
+    {
+      "message": "Fix default supported protocols incorrectly ordered in `ClientProtocolLoader`.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#4165"
+      ],
+      "since-commit": "c624a84d9ecc451854521e363e34cf6f1c10e009",
+      "age": 1
+    },
+    {
+      "message": "Add support for fetching account ID from IMDS credentials on EC2.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#4109"
+      ],
+      "since-commit": "c624a84d9ecc451854521e363e34cf6f1c10e009",
       "age": 1
     }
   ],
