@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
@@ -37,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.getBuiltIn
@@ -99,8 +97,6 @@ class S3Decorator : ClientCodegenDecorator {
                     },
                 )::transform,
             )
-            // enable optional auth for operations commonly used with public buckets
-            .let(AddOptionalAuth()::transform)
             .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
@@ -205,21 +201,6 @@ class FilterEndpointTests(
                         .version(trait.version).build()
 
                 else -> trait
-            }
-        }
-}
-
-// TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
-private class AddOptionalAuth {
-    fun transform(model: Model): Model =
-        ModelTransformer.create().mapShapes(model) { shape ->
-            // Add @optionalAuth to the service so all operations inherit it
-            if (shape is ServiceShape && !shape.hasTrait<OptionalAuthTrait>()) {
-                shape.toBuilder()
-                    .addTrait(OptionalAuthTrait())
-                    .build()
-            } else {
-                shape
             }
         }
 }

@@ -31,13 +31,19 @@ class SdkCodegenIntegrationTest {
             })
             service TestService {
                 version: "2023-01-01",
-                operations: [SomeOperation]
+                operations: [
+                    NeatOperation,
+                    SomeOperation
+                ]
             }
 
             structure SomeOutput {
                 someAttribute: Long,
                 someVal: String
             }
+
+            @http(uri: "/NeatOperation", method: "GET")
+            operation NeatOperation {}
 
             @http(uri: "/SomeOperation", method: "GET")
             @optionalAuth
