@@ -154,7 +154,7 @@ fn tls_context_from_pem(filename: &str) -> TlsContext {
 #[tokio::test]
 async fn test_rustls_aws_lc_native_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .build_https();
@@ -166,7 +166,7 @@ async fn test_rustls_aws_lc_native_ca() {
 #[tokio::test]
 async fn test_rustls_aws_lc_custom_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))
@@ -180,7 +180,7 @@ async fn test_rustls_aws_lc_custom_ca() {
 #[tokio::test]
 async fn test_rustls_aws_lc_fips_native_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .build_https();
@@ -192,7 +192,7 @@ async fn test_rustls_aws_lc_fips_native_ca() {
 #[tokio::test]
 async fn test_rustls_aws_lc_fips_custom_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))
@@ -206,7 +206,7 @@ async fn test_rustls_aws_lc_fips_custom_ca() {
 #[tokio::test]
 async fn test_rustls_ring_native_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .build_https();
@@ -218,7 +218,7 @@ async fn test_rustls_ring_native_ca() {
 #[tokio::test]
 async fn test_rustls_ring_custom_ca() {
     let client = aws_smithy_http_client::Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))

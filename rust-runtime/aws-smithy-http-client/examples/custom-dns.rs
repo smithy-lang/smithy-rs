@@ -21,6 +21,6 @@ impl ResolveDns for StaticResolver {
 
 fn main() {
     let _client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(CryptoMode::Ring))
+        .tls_provider(tls::Provider::rustls(CryptoMode::Ring))
         .build_with_resolver(StaticResolver);
 }

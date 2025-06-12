@@ -10,6 +10,6 @@ use aws_smithy_http_client::{
 
 fn main() {
     let _client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(CryptoMode::Ring))
+        .tls_provider(tls::Provider::rustls(CryptoMode::Ring))
         .build_https();
 }
