@@ -94,7 +94,7 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
     let (bindings, _) = CanaryWorld::instantiate_async(&mut store, &component, &linker).await?;
 
     let canary_interface = bindings.aws_component_canary_interface();
-    let api_result = canary_interface
+    let _api_result = canary_interface
         .call_run_canary(store)
         .await?
         .map_err(anyhow::Error::msg)?;
