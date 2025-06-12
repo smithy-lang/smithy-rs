@@ -67,7 +67,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             HttpRequestCompressionDecorator(),
             DisablePayloadSigningDecorator(),
             AwsDisableStalledStreamProtection(),
-            EndpointBasedAuthSchemeResolverDecorator(),
+            EndpointBasedAuthSchemeDecorator(),
             SpanDecorator(),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
