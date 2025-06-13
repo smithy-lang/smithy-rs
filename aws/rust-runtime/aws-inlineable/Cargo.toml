@@ -16,7 +16,7 @@ http-1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
+aws-runtime = { path = "../aws-runtime", features = ["http-1x"] }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-types = { path = "../aws-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
