@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.63.3"
+version = "0.63.4"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -20,6 +20,8 @@ crc-fast = { version = "1.2.1" }
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
+http-1x = {package = "http", version = "1"}
+http-body-1x = {package = "http-body", version = "1"}
 md-5 = "0.10"
 pin-project-lite = "0.2.14"
 sha1 = "0.10"

@@ -7,7 +7,7 @@
 
 use crate::http::HttpChecksum;
 
-use aws_smithy_http::header::append_merge_header_maps;
+use aws_smithy_http::header::{append_merge_header_maps, append_merge_header_maps_http_1x};
 use aws_smithy_types::body::SdkBody;
 
 use http::HeaderMap;
@@ -92,6 +92,43 @@ impl http_body::Body for ChecksumBody<SdkBody> {
 
     fn size_hint(&self) -> SizeHint {
         self.body.size_hint()
+    }
+}
+
+impl http_body_1x::Body for ChecksumBody<SdkBody> {
+    type Data = bytes::Bytes;
+    type Error = aws_smithy_types::body::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
+        let this = self.project();
+        let poll_res = this.body.poll_frame(cx);
+
+        if let Poll::Ready(Some(Ok(frame))) = &poll_res {
+            // Data frames
+            if frame.is_data() {
+                if let Some(checksum) = this.checksum {
+                    checksum.update(frame.data_ref().expect("Data frame has data"));
+                }
+            } else {
+                let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                    checksum.headers_http_1x()
+                } else {
+                    return Poll::Ready(None);
+                };
+                let trailers = frame
+                    .trailers_ref()
+                    .expect("Trailers frame has trailers")
+                    .clone();
+                return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
+                    append_merge_header_maps_http_1x(trailers, checksum_headers),
+                ))));
+            }
+        }
+
+        poll_res
     }
 }
 

@@ -8,8 +8,8 @@
 //! Interceptor for handling Smithy `@httpChecksum` request checksumming with AWS SigV4
 
 use aws_runtime::auth::PayloadSigningOverride;
-use aws_runtime::content_encoding::header_value::AWS_CHUNKED;
-use aws_runtime::content_encoding::{AwsChunkedBody, AwsChunkedBodyOptions};
+use aws_runtime::content_encoding_http_1x::header_value::AWS_CHUNKED;
+use aws_runtime::content_encoding_http_1x::{AwsChunkedBody, AwsChunkedBodyOptions};
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_checksums::{body::calculate, http::HttpChecksum};
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
@@ -25,8 +25,8 @@ use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::RequestChecksumCalculation;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::error::operation::BuildError;
-use http::HeaderValue;
-use http_body::Body;
+use http_1x::HeaderValue;
+use http_body_1x::Body;
 use std::str::FromStr;
 use std::{fmt, mem};
 
@@ -353,7 +353,7 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
 
             let body = AwsChunkedBody::new(body, aws_chunked_body_options);
 
-            SdkBody::from_body_0_4(body)
+            SdkBody::from_body_1_x(body)
         })
     };
 

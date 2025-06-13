@@ -402,7 +402,7 @@ data class CargoDependency(
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
 
         fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).withFeature("client").withFeature("http-02x")
+            smithyRuntimeApi(runtimeConfig).withFeature("client").withFeature("http-1x")
 
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
