@@ -19,9 +19,8 @@ permissions:
   pull-requests: read
 
 jobs:
-  # This job detects if the PR made changes to build tools. If it did, then it builds a new
-  # build Docker image. Otherwise, it downloads a build image from Public ECR. In both cases,
-  # it uploads the image as a build artifact for other jobs to download and use.
+  # Forks do not have access to private ECR repository. Image is built locally
+  # and uploaded as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
@@ -47,10 +46,56 @@ jobs:
         path: smithy-rs-base-image
         retention-days: 1
 
-  # Run shared CI after the Docker build image has either been rebuilt or found in ECR
+  # Run shared CI after the Docker build image has been built locally
   ci:
     needs: acquire-base-image
     if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_canary: false
+
+  semver-checks:
+    name: Check PR semver compliance
+    permissions:
+      pull-requests: read
+    runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 30
+    needs:
+    - acquire-base-image
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Get PR info
+      id: check-breaking-label
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const response = await github.rest.pulls.get({
+            pull_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+          });
+          const labels = response.data.labels.map(l => l.name);
+          const isBreaking = labels.includes("breaking-change");
+          const data = {
+            labels,
+            isBreaking
+          };
+          console.log("data:", data);
+          return data;
+    - name: Run semver check
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver
+        action-arguments: ${{ github.event.pull_request.base.sha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
+    - name: Print help message
+      if: failure()
+      run: echo "::error::This pull request either contains breaking changes, or has cross-crate changes that may be backwards compatible, but that cargo-semver-checks cannot verify. Please scrutinize the change for backwards compatibility."
