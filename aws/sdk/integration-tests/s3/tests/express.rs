@@ -454,7 +454,6 @@ async fn s3_express_auth_flow_should_not_be_reached_with_no_auth_schemes() {
     let _ = request.expect_request();
 }
 
-/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
 #[tracing_test::traced_test]
 #[tokio::test]
 async fn no_auth_should_be_selected_when_no_credentials_is_configured() {
@@ -479,4 +478,3 @@ async fn no_auth_should_be_selected_when_no_credentials_is_configured() {
         "resolving identity scheme_id=AuthSchemeId { scheme_id: \"no_auth\" }"
     ));
 }
-*/

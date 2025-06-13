@@ -11,9 +11,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
@@ -54,6 +58,11 @@ class AuthDecorator : ClientCodegenDecorator {
     override val name: String = "Auth"
     override val order: Byte = 0
 
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> = baseCustomizations + AuthDecoratorConfigCustomizations(codegenContext)
+
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
@@ -87,4 +96,47 @@ private fun defaultAuthSchemeResolver(codegenContext: ClientCodegenContext): Wri
             "ServiceSpecificResolver" to generator.serviceSpecificResolveAuthSchemeTrait(),
         )
     }
+}
+
+private class AuthDecoratorConfigCustomizations(private val codegenContext: ClientCodegenContext) :
+    ConfigCustomization() {
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                is ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Set the auth scheme option resolver for the builder
+                        pub fn auth_scheme_option_resolver(mut self, auth_scheme_option_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> Self {
+                            self.set_auth_scheme_option_resolver(auth_scheme_option_resolver);
+                            self
+                        }
+
+                        /// Set the auth scheme option resolver for the builder
+                        pub fn set_auth_scheme_option_resolver(&mut self, auth_scheme_option_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> &mut Self {
+                            self.runtime_components.set_auth_scheme_option_resolver(#{Some}(auth_scheme_option_resolver.into_shared_resolver()));
+                            self
+                        }
+                        """,
+                        *preludeScope,
+                        "ResolveAuthSchemeOptions" to AuthTypesGenerator(codegenContext).serviceSpecificResolveAuthSchemeTrait(),
+                    )
+                }
+
+                is ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// Return the auth scheme option resolver configured on this service config
+                        pub fn auth_scheme_option_resolver(&self) -> #{Option}<#{SharedAuthSchemeOptionResolver}> {
+                            self.runtime_components.auth_scheme_option_resolver()
+                        }
+                        """,
+                        *preludeScope,
+                        "SharedAuthSchemeOptionResolver" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::auth::SharedAuthSchemeOptionResolver"),
+                    )
+                }
+
+                else -> emptySection
+            }
+        }
 }

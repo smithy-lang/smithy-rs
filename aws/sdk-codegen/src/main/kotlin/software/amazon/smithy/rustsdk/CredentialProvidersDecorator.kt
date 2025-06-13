@@ -39,6 +39,16 @@ class CredentialsProviderDecorator : ConditionalDecorator(
                 listOf(
                     adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                         rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+                        rustTemplate(
+                            """
+                            if ${section.sdkConfig}.credentials_provider().is_none() {
+                                ${section.serviceConfigBuilder}.set_auth_scheme_option_resolver(#{no_auth_scheme_option_resolver}());
+                            }
+                            """,
+                            "no_auth_scheme_option_resolver" to
+                                ClientRustModule.Config.auth.toType()
+                                    .resolve("no_auth_scheme_option_resolver"),
+                        )
                     },
                 )
 
