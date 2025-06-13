@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 13th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4165](https://github.com/smithy-lang/smithy-rs/issues/4165)) Fix default supported protocols incorrectly ordered in `ClientProtocolLoader`.
+
+
 June 11th, 2025
 ===============
 **Breaking Changes:**
