@@ -50,7 +50,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.6.4"
+version = "1.8.0"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
