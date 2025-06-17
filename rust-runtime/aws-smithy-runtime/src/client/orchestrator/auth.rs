@@ -135,7 +135,7 @@ pub(super) async fn resolve_identity(
     let mut explored = ExploredList::default();
 
     // Iterate over IDs of possibly-supported auth schemes
-    for (i, auth_scheme_option) in options.iter().enumerate() {
+    for auth_scheme_option in &options {
         let scheme_id = auth_scheme_option.scheme_id();
         // For each ID, try to resolve the corresponding auth scheme.
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
@@ -152,7 +152,7 @@ pub(super) async fn resolve_identity(
                             IdentityCache::no_cache()
                         };
                         // Apply properties from the selected auth scheme option
-                        if let Some(properties) = options[i].properties() {
+                        if let Some(properties) = auth_scheme_option.properties() {
                             cfg.push_shared_layer(properties);
                         }
                         let identity = identity_cache
