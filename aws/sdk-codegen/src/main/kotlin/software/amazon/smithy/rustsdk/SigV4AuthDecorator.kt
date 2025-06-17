@@ -46,8 +46,6 @@ internal fun ClientCodegenContext.usesSigAuth(): Boolean =
         usesSigV4a()
 
 /**
- * SigV4a doesn't have a Smithy auth trait yet, so this is a hack to determine if a service supports it.
- *
  * TODO(https://github.com/smithy-lang/smithy-rs/issues/4076): Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
  */
 internal fun ClientCodegenContext.usesSigV4a(): Boolean {
