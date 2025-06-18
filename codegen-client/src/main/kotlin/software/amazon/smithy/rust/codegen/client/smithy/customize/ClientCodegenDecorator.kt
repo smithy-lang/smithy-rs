@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
@@ -23,22 +24,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDeco
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger
-import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption as AuthSchemeOptionV2
 
 typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenContext>
-
-// TODO(AuthAlignment): Remove this once the codebase has switched over to
-//  software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
-sealed interface AuthSchemeOption {
-    /** Auth scheme for the `StaticAuthSchemeOptionResolver` */
-    data class StaticAuthSchemeOption(
-        val schemeShapeId: ShapeId,
-        val constructor: List<Writable>,
-    ) : AuthSchemeOption
-
-    /** Auth scheme for the `EndpointBasedAuthSchemeOptionResolver` */
-    data object EndpointBasedAuthSchemeOption : AuthSchemeOption
-}
 
 /**
  * [ClientCodegenDecorator] allows downstream users to customize code generation.
@@ -48,17 +35,8 @@ sealed interface AuthSchemeOption {
  * attributes to the generated classes.
  */
 interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, ClientRustSettings> {
-    // TODO(AuthAlignment): Rename `AuthSchemeOptionV2` to `AuthSchemeOption` once the existing
-    //  `AuthSchemeOption` has been removed from the codebase
     fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
-    ): List<AuthSchemeOptionV2> = baseAuthSchemeOptions
-
-    // TODO(AuthAlignment): Remove this (and any overrides) once the codebase has switched over to `authSchemeOptions`
-    fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> = baseAuthSchemeOptions
 
@@ -124,19 +102,10 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
 
     override fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        baseAuthSchemeOptions: List<AuthSchemeOptionV2>,
-    ): List<AuthSchemeOptionV2> =
-        combineCustomizations(baseAuthSchemeOptions) { decorator, authOptions ->
-            decorator.authSchemeOptions(codegenContext, authOptions)
-        }
-
-    override fun authOptions(
-        codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> =
         combineCustomizations(baseAuthSchemeOptions) { decorator, authOptions ->
-            decorator.authOptions(codegenContext, operationShape, authOptions)
+            decorator.authSchemeOptions(codegenContext, authOptions)
         }
 
     override fun configCustomizations(
