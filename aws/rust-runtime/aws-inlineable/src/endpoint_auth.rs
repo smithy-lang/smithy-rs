@@ -34,7 +34,7 @@ pub(crate) async fn resolve_endpoint_based_auth_scheme_options<'a>(
     let mut endpoint_auth_scheme_ids = Vec::new();
 
     // Note that we're not constructing the `properties` for `endpoint_auth_schemes` here—only collecting
-    // auth scheme IDs. This is because, at this stage, we're only determining which auth scheme to use.
+    // auth scheme IDs but not properties. This is because, at this stage, we're only determining which auth scheme to use.
     // Any `authSchemes` list properties that influence the signing context will be extracted later
     // in `AuthSchemeEndpointConfig`, and passed by the orchestrator to the signer's `sign_http_request` method.
     if let Some(aws_smithy_types::Document::Array(endpoint_auth_schemes)) =
@@ -60,6 +60,9 @@ pub(crate) async fn resolve_endpoint_based_auth_scheme_options<'a>(
 
 // Returns a list of merged auth scheme options from `modeled_auth_scheme_options` and `endpoint_auth_scheme_ids`,
 // copying properties from the modeled auth scheme options into the endpoint auth scheme options as they are built.
+//
+// Note: We only extract properties from the modeled auth schemes. Pulling properties from the endpoint auth schemes
+// would result in duplication; they would be added here and again in the `extract_operation_config` function during signing.
 fn merge_auth_scheme_options(
     modeled_auth_scheme_options: &[AuthSchemeOption],
     endpoint_auth_scheme_ids: Vec<AuthSchemeId>,

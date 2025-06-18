@@ -143,6 +143,8 @@ pub struct SigV4OperationSigningConfig {
     pub signing_options: SigningOptions,
 }
 
+// TODO(AuthRefactoring): Consider implementing a dedicated struct, similar to `MergeTimeoutConfig`, that allows
+// us to implement a custom merge logic for `impl Store`, enabling fold-style merging of `SigV4OperationSigningConfig`.
 impl Storable for SigV4OperationSigningConfig {
     type Storer = StoreReplace<Self>;
 }
