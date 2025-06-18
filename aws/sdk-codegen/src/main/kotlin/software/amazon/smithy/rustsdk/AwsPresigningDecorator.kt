@@ -170,7 +170,7 @@ class AwsPresigningDecorator internal constructor(
             rustCrate.mergeFeature(
                 Feature(
                     "http-1x",
-                    default = false,
+                    default = true,
                     listOf("dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
                 ),
             )
