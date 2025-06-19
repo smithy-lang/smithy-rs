@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/* TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
-
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::dvr::ReplayingClient;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
@@ -133,4 +131,3 @@ async fn get_object() {
         .await
         .unwrap();
 }
-*/
