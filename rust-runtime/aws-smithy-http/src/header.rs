@@ -302,12 +302,39 @@ pub fn quote_header_value<'a>(value: impl Into<Cow<'a, str>>) -> Cow<'a, str> {
     }
 }
 
-/// Given two [`HeaderMap`]s, merge them together and return the merged `HeaderMap`. If the
+/// Given two http-02x [`HeaderMap`]s, merge them together and return the merged `HeaderMap`. If the
 /// two `HeaderMap`s share any keys, values from the right `HeaderMap` be appended to the left `HeaderMap`.
 pub fn append_merge_header_maps(
     mut lhs: HeaderMap<HeaderValue>,
     rhs: HeaderMap<HeaderValue>,
 ) -> HeaderMap<HeaderValue> {
+    let mut last_header_name_seen = None;
+    for (header_name, header_value) in rhs.into_iter() {
+        // For each yielded item that has None provided for the `HeaderName`,
+        // then the associated header name is the same as that of the previously
+        // yielded item. The first yielded item will have `HeaderName` set.
+        // https://docs.rs/http/latest/http/header/struct.HeaderMap.html#method.into_iter-2
+        match (&mut last_header_name_seen, header_name) {
+            (_, Some(header_name)) => {
+                lhs.append(header_name.clone(), header_value);
+                last_header_name_seen = Some(header_name);
+            }
+            (Some(header_name), None) => {
+                lhs.append(header_name.clone(), header_value);
+            }
+            (None, None) => unreachable!(),
+        };
+    }
+
+    lhs
+}
+
+/// Given two http-1x [`HeaderMap`]s, merge them together and return the merged `HeaderMap`. If the
+/// two `HeaderMap`s share any keys, values from the right `HeaderMap` be appended to the left `HeaderMap`.
+pub fn append_merge_header_maps_http_1x(
+    mut lhs: http_1x::HeaderMap<http_1x::HeaderValue>,
+    rhs: http_1x::HeaderMap<http_1x::HeaderValue>,
+) -> http_1x::HeaderMap<http_1x::HeaderValue> {
     let mut last_header_name_seen = None;
     for (header_name, header_value) in rhs.into_iter() {
         // For each yielded item that has None provided for the `HeaderName`,

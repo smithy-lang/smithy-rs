@@ -241,13 +241,11 @@ impl PresignedRequest {
             .map(|_req| body)
     }
 
-    #[cfg(feature = "http-1x")]
     /// Given a body, produce an `http_1x::Request` from this `PresignedRequest`
     pub fn make_http_1x_request<B>(&self, body: B) -> http_1x::Request<B> {
         self.clone().into_http_1x_request(body)
     }
 
-    #[cfg(feature = "http-1x")]
     /// Converts this `PresignedRequest` directly into an `http_1x` request.
     pub fn into_http_1x_request<B>(self, body: B) -> http_1x::Request<B> {
         self.http_request

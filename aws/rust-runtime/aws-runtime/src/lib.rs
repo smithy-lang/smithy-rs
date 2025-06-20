@@ -19,10 +19,13 @@
 /// Supporting code for authentication in the AWS SDK.
 pub mod auth;
 
-/// AWS-specific content-encoding tools
+/// AWS-specific content-encoding tools for http-02x
 #[cfg(feature = "http-02x")]
 pub mod content_encoding;
 
+/// AWS-specific content-encoding tools for http-1x
+#[cfg(feature = "http-1x")]
+pub mod content_encoding_http_1x;
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;
 
