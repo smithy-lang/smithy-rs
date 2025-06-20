@@ -80,6 +80,7 @@ class AuthSchemeResolverGenerator(
                     operation_overrides: #{HashMap}<&'static str, Vec<#{AuthSchemeOption}>>,
                 }
 
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Remove `allow(...)` once the issue is addressed.
                 // When generating code for tests (e.g., `codegen-client-test`), this manual implementation
                 // of the `Default` trait may appear as if it could be derived automatically.
                 // However, that is not the case in production.
