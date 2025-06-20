@@ -9,11 +9,7 @@ use crate::http::HttpChecksum;
 
 use aws_smithy_http::header::{append_merge_header_maps, append_merge_header_maps_http_1x};
 use aws_smithy_types::body::SdkBody;
-
-use http::HeaderMap;
-use http_body::SizeHint;
 use pin_project_lite::pin_project;
-
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -23,6 +19,7 @@ pin_project! {
             #[pin]
             body: InnerBody,
             checksum: Option<Box<dyn HttpChecksum>>,
+            written_trailers: bool,
     }
 }
 
@@ -32,6 +29,7 @@ impl ChecksumBody<SdkBody> {
         Self {
             body,
             checksum: Some(checksum),
+            written_trailers: false,
         }
     }
 }
@@ -61,7 +59,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
     fn poll_trailers(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
+    ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
         let this = self.project();
         let poll_res = this.body.poll_trailers(cx);
 
@@ -90,7 +88,7 @@ impl http_body::Body for ChecksumBody<SdkBody> {
         self.body.is_end_stream() && self.checksum.is_none()
     }
 
-    fn size_hint(&self) -> SizeHint {
+    fn size_hint(&self) -> http_body::SizeHint {
         self.body.size_hint()
     }
 }
@@ -103,30 +101,52 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
+        println!("LNJ http_1x ChecksumBody");
         let this = self.project();
         let poll_res = this.body.poll_frame(cx);
+        println!("POLL_RES: {poll_res:#?}");
 
-        if let Poll::Ready(Some(Ok(frame))) = &poll_res {
-            // Data frames
-            if frame.is_data() {
-                if let Some(checksum) = this.checksum {
-                    checksum.update(frame.data_ref().expect("Data frame has data"));
-                }
-            } else {
-                let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                    checksum.headers_http_1x()
+        match &poll_res {
+            Poll::Ready(Some(Ok(frame))) => {
+                // Update checksum for data frames
+                if frame.is_data() {
+                    if let Some(checksum) = this.checksum {
+                        checksum.update(frame.data_ref().expect("Data frame has data"));
+                    }
                 } else {
-                    return Poll::Ready(None);
-                };
-                let trailers = frame
-                    .trailers_ref()
-                    .expect("Trailers frame has trailers")
-                    .clone();
-                return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
-                    append_merge_header_maps_http_1x(trailers, checksum_headers),
-                ))));
+                    // Add checksum trailer to other trailers if necessary
+                    let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                        checksum.headers_http_1x()
+                    } else {
+                        return Poll::Ready(None);
+                    };
+                    let trailers = frame
+                        .trailers_ref()
+                        .expect("Trailers frame has trailers")
+                        .clone();
+                    *this.written_trailers = true;
+                    return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
+                        append_merge_header_maps_http_1x(trailers, checksum_headers),
+                    ))));
+                }
             }
-        }
+            Poll::Ready(None) => {
+                // If the trailers have not already been written (because there were no existing
+                // trailers on the body) we write them here
+                if !*this.written_trailers {
+                    let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                        checksum.headers_http_1x()
+                    } else {
+                        return Poll::Ready(None);
+                    };
+                    let trailers = http_1x::HeaderMap::new();
+                    return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
+                        append_merge_header_maps_http_1x(trailers, checksum_headers),
+                    ))));
+                }
+            }
+            _ => {}
+        };
 
         poll_res
     }

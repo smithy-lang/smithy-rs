@@ -14,7 +14,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"]}
 bytes = "1.10.0"
 crc-fast = { version = "1.2.1" }
 hex = "0.4.3"

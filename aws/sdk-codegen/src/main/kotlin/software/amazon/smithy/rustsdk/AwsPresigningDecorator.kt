@@ -171,7 +171,7 @@ class AwsPresigningDecorator internal constructor(
                 Feature(
                     "http-1x",
                     default = true,
-                    listOf("dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
+                    listOf("aws-smithy-runtime-api/http-1x"),
                 ),
             )
         }

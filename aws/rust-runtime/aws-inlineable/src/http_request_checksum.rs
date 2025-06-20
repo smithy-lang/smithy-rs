@@ -380,7 +380,7 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
     // The target service does not depend on where `aws-chunked` appears in the `Content-Encoding` header,
     // as it will ultimately be stripped.
     headers.append(
-        http::header::CONTENT_ENCODING,
+        http_1x::header::CONTENT_ENCODING,
         HeaderValue::from_str(AWS_CHUNKED)
             .map_err(BuildError::other)
             .expect("\"aws-chunked\" will always be a valid HeaderValue"),
@@ -400,11 +400,16 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::BytesMut;
-    use http_body::Body;
+    use http_body_1x::Body;
+    use http_body_util::BodyExt;
     use tempfile::NamedTempFile;
 
+    use tracing_test::traced_test;
+
+    #[traced_test]
     #[tokio::test]
     async fn test_checksum_body_is_retryable() {
+        // tracing_subscriber::fmt::init();
         let input_text = "Hello world";
         let chunk_len_hex = format!("{:X}", input_text.len());
         let mut request: HttpRequest = http::Request::builder()
@@ -424,9 +429,15 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        while let Some(data) = body.data().await {
-            body_data.extend_from_slice(&data.unwrap())
+        while let Some(Ok(frame)) = body.frame().await {
+            println!("FRAME: {frame:#?}");
+            if frame.is_data() {
+                let data = frame.into_data();
+                body_data.extend_from_slice(&data.unwrap());
+            }
         }
+        let maybe_trailers = body.frame().await;
+        println!("LNJ MAYBE TRAILERS: {maybe_trailers:?}");
         let body = std::str::from_utf8(&body_data).unwrap();
         assert_eq!(
             format!(
@@ -470,7 +481,8 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        while let Some(data) = body.data().await {
+        while let Some(Ok(frame)) = body.frame().await {
+            let data = frame.into_data();
             body_data.extend_from_slice(&data.unwrap())
         }
         let body = std::str::from_utf8(&body_data).unwrap();

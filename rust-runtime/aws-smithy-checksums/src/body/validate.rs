@@ -98,6 +98,61 @@ impl ChecksumBody<SdkBody> {
             Poll::Pending => Poll::Pending,
         }
     }
+
+    fn poll_inner_http_1x(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body_1x::Frame<Bytes>, aws_smithy_types::body::Error>>> {
+        use http_body_1x::Body;
+
+        let this = self.project();
+        let checksum = this.checksum;
+
+        match this.inner.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                let data = frame.data_ref().expect("Data frame should have data");
+                tracing::trace!(
+                    "reading {} bytes from the body and updating the checksum calculation",
+                    data.len()
+                );
+                let checksum = match checksum.as_mut() {
+                    Some(checksum) => checksum,
+                    None => {
+                        unreachable!("The checksum must exist because it's only taken out once the inner body has been completely polled.");
+                    }
+                };
+
+                checksum.update(&data);
+                Poll::Ready(Some(Ok(frame)))
+            }
+            // Once the inner body has stopped returning data, check the checksum
+            // and return an error if it doesn't match.
+            Poll::Ready(None) => {
+                tracing::trace!("finished reading from body, calculating final checksum");
+                let checksum = match checksum.take() {
+                    Some(checksum) => checksum,
+                    None => {
+                        // If the checksum was already taken and this was polled again anyways,
+                        // then return nothing
+                        return Poll::Ready(None);
+                    }
+                };
+
+                let actual_checksum = checksum.finalize();
+                if *this.precalculated_checksum == actual_checksum {
+                    Poll::Ready(None)
+                } else {
+                    // So many parens it's starting to look like LISP
+                    Poll::Ready(Some(Err(Box::new(Error::ChecksumMismatch {
+                        expected: this.precalculated_checksum.clone(),
+                        actual: actual_checksum,
+                    }))))
+                }
+            }
+            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
 /// Errors related to checksum calculation and validation
@@ -148,6 +203,18 @@ impl http_body::Body for ChecksumBody<SdkBody> {
 
     fn size_hint(&self) -> SizeHint {
         self.inner.size_hint()
+    }
+}
+
+impl http_body_1x::Body for ChecksumBody<SdkBody> {
+    type Data = Bytes;
+    type Error = aws_smithy_types::body::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
+        self.poll_inner_http_1x(cx)
     }
 }
 
