@@ -101,10 +101,8 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
-        println!("LNJ http_1x ChecksumBody");
         let this = self.project();
         let poll_res = this.body.poll_frame(cx);
-        println!("POLL_RES: {poll_res:#?}");
 
         match &poll_res {
             Poll::Ready(Some(Ok(frame))) => {

@@ -400,13 +400,9 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::BytesMut;
-    use http_body_1x::Body;
     use http_body_util::BodyExt;
     use tempfile::NamedTempFile;
 
-    use tracing_test::traced_test;
-
-    #[traced_test]
     #[tokio::test]
     async fn test_checksum_body_is_retryable() {
         // tracing_subscriber::fmt::init();
@@ -430,14 +426,11 @@ mod tests {
 
         let mut body_data = BytesMut::new();
         while let Some(Ok(frame)) = body.frame().await {
-            println!("FRAME: {frame:#?}");
             if frame.is_data() {
                 let data = frame.into_data();
                 body_data.extend_from_slice(&data.unwrap());
             }
         }
-        let maybe_trailers = body.frame().await;
-        println!("LNJ MAYBE TRAILERS: {maybe_trailers:?}");
         let body = std::str::from_utf8(&body_data).unwrap();
         assert_eq!(
             format!(
