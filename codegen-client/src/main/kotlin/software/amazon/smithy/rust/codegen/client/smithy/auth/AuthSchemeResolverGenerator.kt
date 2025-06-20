@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.auth
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -79,6 +80,7 @@ class AuthSchemeResolverGenerator(
                     operation_overrides: #{HashMap}<&'static str, Vec<#{AuthSchemeOption}>>,
                 }
 
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Remove `allow(...)` once the issue is addressed.
                 // When generating code for tests (e.g., `codegen-client-test`), this manual implementation
                 // of the `Default` trait may appear as if it could be derived automatically.
                 // However, that is not the case in production.
@@ -113,6 +115,8 @@ class AuthSchemeResolverGenerator(
                         _fut
                     }
                 }
+
+                #{NoAuthSchemeOptionResolver:W}
                 """,
                 *codegenScope,
                 "service_defaults" to
@@ -127,6 +131,7 @@ class AuthSchemeResolverGenerator(
                             AuthSection.DefaultResolverAdditionalImpl,
                         )
                     },
+                "NoAuthSchemeOptionResolver" to noAuthSchemeOptionResolver(),
             )
         }
     }
@@ -206,4 +211,31 @@ class AuthSchemeResolverGenerator(
             )
         }
     }
+
+    private fun noAuthSchemeOptionResolver() =
+        writable {
+            rustTemplate(
+                """
+                ##[derive(Debug)]
+                struct NoAuthSchemeOptionResolver;
+                impl ResolveAuthScheme for NoAuthSchemeOptionResolver {
+                    fn resolve_auth_scheme<'a>(
+                        &'a self,
+                        _params: &'a #{Params},
+                        _cfg: &'a #{ConfigBag},
+                        _runtime_components: &'a #{RuntimeComponents},
+                    ) -> #{AuthSchemeOptionsFuture}<'a> {
+                        #{AuthSchemeOptionsFuture}::ready(#{Ok}(vec![#{NoAuthSchemeOption:W}]))
+                    }
+                }
+
+                /// Return an auth scheme option resolver that favors `noAuth`
+                pub fn no_auth_scheme_option_resolver() -> impl ResolveAuthScheme {
+                   NoAuthSchemeOptionResolver
+                }
+                """,
+                *codegenScope,
+                "NoAuthSchemeOption" to NoAuthSchemeOption().render(codegenContext),
+            )
+        }
 }

@@ -112,9 +112,6 @@ class InlineDependency(
                 CargoDependency.smithyTypes(runtimeConfig),
             )
 
-        fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) =
-            forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApiClient(runtimeConfig))
-
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "json_errors",

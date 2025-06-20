@@ -39,10 +39,7 @@ class NoAuthSchemeOption : AuthSchemeOption {
     ) = writable {
         rustTemplate(
             """
-            #{AuthSchemeOption}::builder()
-                .scheme_id(#{NO_AUTH_SCHEME_ID})
-                .build()
-                .expect("required fields set")
+            #{AuthSchemeOption}::from(#{NO_AUTH_SCHEME_ID})
             """,
             "AuthSchemeOption" to
                 RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)

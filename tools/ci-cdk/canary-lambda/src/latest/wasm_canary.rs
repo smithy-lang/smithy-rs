@@ -94,15 +94,12 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
     let (bindings, _) = CanaryWorld::instantiate_async(&mut store, &component, &linker).await?;
 
     let canary_interface = bindings.aws_component_canary_interface();
-    // TODO(AuthAlignment): Remove a leading `_` once the `no_credentials` functionality is restored
-    let _api_result = canary_interface
+    let api_result = canary_interface
         .call_run_canary(store)
         .await?
         .map_err(anyhow::Error::msg)?;
 
-    // Asserting on the post FFI result to confirm everything in the wasm module worked
-    // TODO(AuthAlignment): Comment in once the `no_credentials` functionality is restored
-    // assert!(!api_result.is_empty());
+    assert!(!api_result.is_empty());
 
     Ok(())
 }
