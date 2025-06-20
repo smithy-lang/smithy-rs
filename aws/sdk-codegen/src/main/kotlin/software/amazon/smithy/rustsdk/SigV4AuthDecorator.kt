@@ -12,13 +12,10 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rulesengine.language.EndpointRuleSet
-import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.AuthSchemeLister
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -45,15 +42,8 @@ internal fun ClientCodegenContext.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
         usesSigV4a()
 
-/**
- * TODO(https://github.com/smithy-lang/smithy-rs/issues/4076): Smithy's `ServiceIndex.getEffectiveAuthSchemes` should be used instead.
- */
-internal fun ClientCodegenContext.usesSigV4a(): Boolean {
-    val endpointAuthSchemes =
-        serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
-            ?.also { it.typeCheck() }?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()
-    return endpointAuthSchemes.contains("sigv4a")
-}
+internal fun ClientCodegenContext.usesSigV4a(): Boolean =
+    ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4ATrait.ID)
 
 class SigV4AuthDecorator : ConditionalDecorator(
     predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
@@ -125,12 +115,19 @@ private class Sigv4aAuthSchemeOption : AuthSchemeOption {
     override fun render(
         codegenContext: ClientCodegenContext,
         operation: OperationShape?,
-    ) = renderImpl(
-        codegenContext.runtimeConfig,
-        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-            .resolve("auth::sigv4a::SCHEME_ID"),
-        operation,
-    )
+    ) = writable {
+        featureGateBlock("sigv4a") {
+            rust(
+                "#T",
+                renderImpl(
+                    codegenContext.runtimeConfig,
+                    AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                        .resolve("auth::sigv4a::SCHEME_ID"),
+                    operation,
+                ),
+            )
+        }
+    }
 }
 
 private fun renderImpl(

@@ -13,6 +13,7 @@ import software.amazon.smithy.rustsdk.customize.AwsDisableStalledStreamProtectio
 import software.amazon.smithy.rustsdk.customize.DisabledAuthDecorator
 import software.amazon.smithy.rustsdk.customize.IsTruncatedPaginatorDecorator
 import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
+import software.amazon.smithy.rustsdk.customize.Sigv4aAuthTraitBackfillDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
 import software.amazon.smithy.rustsdk.customize.applyExceptFor
@@ -67,6 +68,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             HttpRequestCompressionDecorator(),
             DisablePayloadSigningDecorator(),
             AwsDisableStalledStreamProtection(),
+            Sigv4aAuthTraitBackfillDecorator(),
             EndpointBasedAuthSchemeDecorator(),
             SpanDecorator(),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
