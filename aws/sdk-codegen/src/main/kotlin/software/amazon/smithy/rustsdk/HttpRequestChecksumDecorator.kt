@@ -45,6 +45,7 @@ internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
             CargoDependency.HttpBody,
             CargoDependency.Http1x,
             CargoDependency.HttpBody1x,
+            CargoDependency.HttpBodyUtil01x.toDevDependency(),
             CargoDependency.Tracing,
             AwsCargoDependency.awsRuntime(this).withFeature("http-1x"),
             CargoDependency.smithyChecksums(this),

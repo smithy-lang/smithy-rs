@@ -368,6 +368,8 @@ data class CargoDependency(
         val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")
         val HttpBody1x: CargoDependency =
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body")
+        val HttpBodyUtil01x: CargoDependency =
+            CargoDependency("http-body-util", CratesIo("0.1.3"))
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 

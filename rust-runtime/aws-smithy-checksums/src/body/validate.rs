@@ -122,7 +122,7 @@ impl ChecksumBody<SdkBody> {
                     }
                 };
 
-                checksum.update(&data);
+                checksum.update(data);
                 Poll::Ready(Some(Ok(frame)))
             }
             // Once the inner body has stopped returning data, check the checksum
