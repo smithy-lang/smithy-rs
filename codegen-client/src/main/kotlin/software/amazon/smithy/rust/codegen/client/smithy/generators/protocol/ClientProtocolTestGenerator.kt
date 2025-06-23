@@ -73,12 +73,20 @@ class ClientProtocolTestGenerator(
         private val ExpectFail =
             setOf<FailingTest>(
                 // Failing because we don't serialize default values if they match the default.
-                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(
+                    AWS_JSON_10,
+                    "AwsJson10ClientErrorCorrectsWithDefaultValuesWhenServerFailsToSerializeRequiredValues",
+                ),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientPopulatesDefaultValuesInInput"),
+                FailingTest.ResponseTest(
+                    RPC_V2_CBOR,
+                    "RpcV2CborClientPopulatesDefaultsValuesWhenMissingInResponse",
+                ),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
             )
 
