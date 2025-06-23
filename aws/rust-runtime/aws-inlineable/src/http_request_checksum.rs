@@ -406,7 +406,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_checksum_body_is_retryable() {
-        // tracing_subscriber::fmt::init();
         let input_text = "Hello world";
         let chunk_len_hex = format!("{:X}", input_text.len());
         let mut request: HttpRequest = http::Request::builder()

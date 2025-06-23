@@ -11,9 +11,6 @@ license = "Apache-2.0"
 publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
 
-[features]
-# http-1x = ["dep:http-1x", "dep:http-body-1x", "aws-smithy-runtime-api/http-1x"]
-
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-runtime = { path = "../aws-runtime", features = ["http-1x"] }
