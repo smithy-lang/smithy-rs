@@ -36,11 +36,8 @@ pub struct AwsChunkedBodyOptions {
 
 impl AwsChunkedBodyOptions {
     /// Create a new [`AwsChunkedBodyOptions`].
-    pub fn new(stream_length: u64, trailer_lengths: Vec<u64>) -> Self {
-        Self {
-            stream_length,
-            trailer_lengths,
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     fn total_trailer_length(&self) -> u64 {
@@ -49,9 +46,22 @@ impl AwsChunkedBodyOptions {
             + (self.trailer_lengths.len() * CRLF.len()) as u64
     }
 
-    /// Set a trailer len
-    pub fn with_trailer_len(mut self, trailer_len: u64) -> Self {
+    /// Add the length of a single trailer
+    pub fn with_trailer_length(mut self, trailer_len: u64) -> Self {
         self.trailer_lengths.push(trailer_len);
+        self
+    }
+
+    /// Set all of the trailer lengths. Note this will overwrite any
+    /// trailer length data already set.
+    pub fn set_trailer_lengths(mut self, trailer_lengths: Vec<u64>) -> Self {
+        self.trailer_lengths = trailer_lengths;
+        self
+    }
+
+    /// Set a stream length
+    pub fn with_stream_length(mut self, stream_length: u64) -> Self {
+        self.stream_length = stream_length;
         self
     }
 }
@@ -481,7 +491,7 @@ mod tests {
     async fn test_aws_chunked_encoding() {
         let test_fut = async {
             let input_str = "Hello world";
-            let opts = AwsChunkedBodyOptions::new(input_str.len() as u64, Vec::new());
+            let opts = AwsChunkedBodyOptions::new().with_stream_length(input_str.len() as u64);
             let mut body = AwsChunkedBody::new(SdkBody::from(input_str), opts);
 
             let mut output = SegmentedBuf::new();
@@ -529,7 +539,7 @@ mod tests {
                 cursor: 0,
                 delay_in_millis: 500,
             };
-            let opts = AwsChunkedBodyOptions::new(input.len() as u64, Vec::new());
+            let opts = AwsChunkedBodyOptions::new().with_stream_length(input.len() as u64);
             let mut body = AwsChunkedBody::new(input, opts);
 
             let mut output = SegmentedBuf::new();
@@ -567,7 +577,9 @@ mod tests {
         // When the panic occurs, it will actually expect a length of 44. This is because, when using
         // aws-chunked encoding, each trailer will end with a CRLF which is 2 bytes long.
         let wrong_trailer_len = 42;
-        let opts = AwsChunkedBodyOptions::new(input_str.len() as u64, vec![wrong_trailer_len]);
+        let opts = AwsChunkedBodyOptions::new()
+            .with_stream_length(input_str.len() as u64)
+            .with_trailer_length(wrong_trailer_len);
         let mut body = AwsChunkedBody::new(SdkBody::from(input_str), opts);
 
         // We don't care about the body contents but we have to read it all before checking for trailers
@@ -579,7 +591,7 @@ mod tests {
     #[tokio::test]
     async fn test_aws_chunked_encoding_empty_body() {
         let input_str = "";
-        let opts = AwsChunkedBodyOptions::new(input_str.len() as u64, Vec::new());
+        let opts = AwsChunkedBodyOptions::new().with_stream_length(input_str.len() as u64);
         let mut body = AwsChunkedBody::new(SdkBody::from(input_str), opts);
 
         let mut output = SegmentedBuf::new();

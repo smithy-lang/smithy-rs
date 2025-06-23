@@ -348,8 +348,9 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
             let checksum = checksum_algorithm.into_impl();
             let trailer_len = HttpChecksum::size(checksum.as_ref());
             let body = calculate::ChecksumBody::new(body, checksum);
-            let aws_chunked_body_options =
-                AwsChunkedBodyOptions::new(original_body_size, vec![trailer_len]);
+            let aws_chunked_body_options = AwsChunkedBodyOptions::new()
+                .with_stream_length(original_body_size)
+                .with_trailer_length(trailer_len);
 
             let body = AwsChunkedBody::new(body, aws_chunked_body_options);
 
