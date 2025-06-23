@@ -149,18 +149,10 @@ fn get_unsigned_chunk_bytes_length(payload_length: u64) -> u64 {
 ///   appearing on each line.
 fn trailers_as_aws_chunked_bytes(
     trailer_map: Option<&HeaderMap>,
-    estimated_length: u64,
+    mut buffer: BytesMut,
 ) -> BytesMut {
     if let Some(trailer_map) = trailer_map {
-        let body_ender = [CRLF, CHUNK_TERMINATOR].concat();
         let mut current_header_name: Option<HeaderName> = None;
-        let estimated_length: usize = estimated_length.try_into().unwrap_or_default();
-
-        // Pad buffer size with 7, (2 + 3) for the CRLF + CHUNK_TERMINATOR that end the body and 2
-        // for the CRLF that ends the trailers
-        let padded_length = estimated_length + 7;
-        let mut trailers = BytesMut::with_capacity(padded_length);
-        trailers.extend_from_slice(&body_ender);
 
         for (header_name, header_value) in trailer_map.clone().into_iter() {
             // When a header has multiple values, the name only comes up in iteration the first time
@@ -170,16 +162,16 @@ fn trailers_as_aws_chunked_bytes(
 
             // In practice, this will always exist, but `if let` is nicer than unwrap
             if let Some(header_name) = current_header_name.as_ref() {
-                trailers.extend_from_slice(header_name.as_ref());
-                trailers.extend_from_slice(TRAILER_SEPARATOR);
-                trailers.extend_from_slice(header_value.as_bytes());
-                trailers.extend_from_slice(CRLF);
+                buffer.extend_from_slice(header_name.as_ref());
+                buffer.extend_from_slice(TRAILER_SEPARATOR);
+                buffer.extend_from_slice(header_value.as_bytes());
+                buffer.extend_from_slice(CRLF);
             }
         }
 
-        trailers
+        buffer
     } else {
-        BytesMut::new()
+        buffer
     }
 }
 
@@ -259,28 +251,36 @@ where
 
         // For all other states we must poll the inner body
         let maybe_frame = this.inner.poll_frame(cx);
-        tracing::trace!(poll_state = ?maybe_frame, "polling InnerBody");
+        tracing::trace!(poll_state = ?maybe_frame, "Polling InnerBody");
 
         match maybe_frame {
             Poll::Ready(Some(Ok(frame))) => match *this.state {
                 // Both data chunks and trailers are written as Frame::data so we treat these states similarly
                 // Importantly we cannot know that the body data of the InnerBody is exhausted until we see a
                 // trailer frame or a Poll::Ready(None)
-                AwsChunkedBodyState::WritingChunk | AwsChunkedBodyState::WritingTrailers => {
+                AwsChunkedBodyState::WritingChunk => {
                     if frame.is_data() {
                         let data = frame.data_ref().expect("Data frame has data");
-                        tracing::trace!(len = data.len(), "writing chunk data");
+                        tracing::trace!(len = data.len(), "Writing chunk data");
                         *this.inner_body_bytes_read_so_far += data.len();
                         Poll::Ready(Some(Ok(frame)))
                     } else {
                         tracing::trace!(
-                            "no more chunk data, writing CRLF, CHUNK_TERMINATOR, and trailers"
+                            "No more chunk data, writing CRLF + CHUNK_TERMINATOR to end the data, and the first trailer frame"
                         );
                         *this.state = AwsChunkedBodyState::WritingTrailers;
                         let trailers = frame.trailers_ref();
-                        let expected_length = total_rendered_length_of_trailers(trailers);
-                        let actual_length = this.options.total_trailer_length();
 
+                        // NOTE: there is a subtle logic bug here (which is present in the http-02x implementation as well)
+                        // The check for this error assumes that all trailers will come in a single trailer frame. Currently
+                        // I believe this will always be the case since the only thing we send trailers for in AwsChunked is
+                        // streaming checksums and that is a single trailer value. But it might not always be true. We should
+                        // fix this bug when we update the behavior here to match the actual spec.
+                        // The fix probably looks like returning Poll::Pending while we buffer all of the trailers and then
+                        // comparing the actual length to the expected length before returning a final frame containing all
+                        // of the trailers.
+                        let actual_length: u64 = total_rendered_length_of_trailers(trailers);
+                        let expected_length = this.options.total_trailer_length();
                         if expected_length != actual_length {
                             let err =
                                 Box::new(AwsChunkedBodyError::ReportedTrailerLengthMismatch {
@@ -290,12 +290,27 @@ where
                             return Poll::Ready(Some(Err(err)));
                         }
 
+                        // Capacity = actual_length (in case all of the trailers specified in  come in AwsChunkedBodyOptions
+                        // come in the first trailer frame which is going to be the case most of the time in practice) + 7
+                        // (2 + 3) for the initial CRLF + CHUNK_TERMINATOR to end the chunked data + 2 for the final CRLF
+                        // ending the trailers section.
+                        let mut buf = BytesMut::with_capacity(actual_length as usize + 7);
+                        // End the final data chunk
+                        buf.extend_from_slice(&[CRLF, CHUNK_TERMINATOR].concat());
+
                         // We transform the trailers into raw bytes. We can't write them with Frame::trailers
                         // since we must include the CRLF + CHUNK_TERMINATOR that end the body and the CRLFs
                         // after each trailer, so we write them as Frame::data
-                        let trailers = trailers_as_aws_chunked_bytes(trailers, actual_length);
+                        let trailers = trailers_as_aws_chunked_bytes(trailers, buf);
                         Poll::Ready(Some(Ok(http_body_1x::Frame::data(trailers.into()))))
                     }
+                }
+                AwsChunkedBodyState::WritingTrailers => {
+                    let trailers = frame.trailers_ref();
+                    let actual_length: u64 = total_rendered_length_of_trailers(trailers);
+                    let buf = BytesMut::with_capacity(actual_length as usize + 7);
+                    let trailers = trailers_as_aws_chunked_bytes(trailers, buf);
+                    Poll::Ready(Some(Ok(http_body_1x::Frame::data(trailers.into()))))
                 }
                 AwsChunkedBodyState::Closed | AwsChunkedBodyState::WritingChunkSize => {
                     unreachable!("{}", UNREACHABLE_STATES)
@@ -393,7 +408,7 @@ mod tests {
     };
 
     use aws_smithy_types::body::SdkBody;
-    use bytes::{Buf, Bytes};
+    use bytes::{Buf, Bytes, BytesMut};
     use bytes_utils::SegmentedBuf;
     use http_1x::{HeaderMap, HeaderValue};
     use http_body_1x::{Body, Frame, SizeHint};
@@ -602,10 +617,8 @@ mod tests {
 
         let trailers = Some(&trailers);
         let actual_length = total_rendered_length_of_trailers(trailers);
-        // The trailers_as_aws_chunked_bytes function inserts CRLF and CHUNK_TERMINATOR at the beginning of the
-        // trailer data frame, adding 5 bytes to the length that aren't actually part of the trailers
-        let expected_length =
-            (trailers_as_aws_chunked_bytes(trailers, actual_length).len()) as u64 - 5;
+        let buf = BytesMut::with_capacity(actual_length as usize);
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers, buf).len()) as u64;
 
         assert_eq!(expected_length, actual_length);
     }
@@ -615,10 +628,8 @@ mod tests {
         let header_map = HeaderMap::new();
         let trailers = Some(&header_map);
         let actual_length = total_rendered_length_of_trailers(trailers);
-        // The trailers_as_aws_chunked_bytes function inserts CRLF and CHUNK_TERMINATOR at the beginning of the
-        // trailer data frame, adding 5 bytes to the length that aren't actually part of the trailers
-        let expected_length =
-            (trailers_as_aws_chunked_bytes(trailers, actual_length).len()) as u64 - 5;
+        let buf = BytesMut::with_capacity(actual_length as usize);
+        let expected_length = (trailers_as_aws_chunked_bytes(trailers, buf).len()) as u64;
 
         assert_eq!(expected_length, actual_length);
     }
