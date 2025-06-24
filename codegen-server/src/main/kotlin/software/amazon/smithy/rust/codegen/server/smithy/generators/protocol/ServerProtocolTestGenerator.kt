@@ -70,6 +70,8 @@ class ServerProtocolTestGenerator(
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTrait"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonNullAndEmptyHeaders"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonHttpPayloadWithStructureAndEmptyResponseBody"),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0"),
@@ -137,9 +139,14 @@ class ServerProtocolTestGenerator(
                 // TODO(https://github.com/awslabs/smithy/issues/1737): Specs on @internal, @tags, and enum values need to be clarified
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumTraitString_case0"),
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedEnumTraitString_case1"),
+                FailingTest.MalformedRequestTest(
+                    REST_JSON,
+                    "RestJsonWithoutBodyEmptyInputExpectsEmptyContentType",
+                ),
                 // These tests are broken because they are missing a target header.
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody"),
+                FailingTest.ResponseTest(AWS_JSON_11, "AwsJson11IntEnums"),
                 // For the following 4 tests, response defaults are not set when builders are not used
                 // https://github.com/smithy-lang/smithy-rs/issues/3339
                 FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams"),
@@ -152,12 +159,17 @@ class ServerProtocolTestGenerator(
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3339)
                 FailingTest.ResponseTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams"),
-                FailingTest.ResponseTest(REST_JSON, "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams"),
+                FailingTest.ResponseTest(
+                    REST_JSON,
+                    "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
+                ),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3743): We need to be able to configure
                 //  instantiator so that it uses default _modeled_ values; `""` is not a valid enum value for `defaultEnum`.
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody"),
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/3735): Null `Document` may come through a request even though its shape is `@required`
                 FailingTest.RequestTest(REST_JSON, "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody"),
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4184): Issue in both Client and Server with httpPrefixHeaders
+                FailingTest.ResponseTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersResponseServer"),
             )
 
         private val BrokenTests:
@@ -444,8 +456,7 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                    val encodedBody =
-                        """
+                    val encodedBody = """
                         #{Bytes}::copy_from_slice(
                             &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
                         )
@@ -456,7 +467,7 @@ class ServerProtocolTestGenerator(
                     "#{SmithyHttpServer}::body::Body::empty()"
                 }
             }).unwrap();
-            """,
+                        """,
             *codegenScope,
         )
         if (queryParams.isNotEmpty()) {
