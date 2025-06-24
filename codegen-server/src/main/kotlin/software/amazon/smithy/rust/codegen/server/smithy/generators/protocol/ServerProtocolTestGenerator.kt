@@ -455,18 +455,17 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
-                    val encodedBody =
-            """
+                    val encodedBody = """
                         #{Bytes}::copy_from_slice(
                             &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
                         )
                         """
 
-                        "#{SmithyHttpServer}::body::Body::from($encodedBody)"
-                        } else {
-                        "#{SmithyHttpServer}::body::Body::empty()"
-                        }
-                        }).unwrap();
+                    "#{SmithyHttpServer}::body::Body::from($encodedBody)"
+                } else {
+                    "#{SmithyHttpServer}::body::Body::empty()"
+                }
+            }).unwrap();
                         """,
             *codegenScope,
         )
