@@ -168,7 +168,6 @@ class AwsQueryCompatibleTest {
                         assert_eq!(#{Some}("Sender"), error.meta().extra("type"));
                         """,
                         *RuntimeType.preludeScope,
-                        "Bytes" to RuntimeType.Bytes,
                         "payload" to testInput.payload,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
                         "infallible_client_fn" to
@@ -214,7 +213,6 @@ class AwsQueryCompatibleTest {
                         assert_eq!(#{None}, error.meta().extra("type"));
                         """,
                         *RuntimeType.preludeScope,
-                        "Bytes" to RuntimeType.Bytes,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
                         "payload" to testInput.payload,
                         "infallible_client_fn" to
