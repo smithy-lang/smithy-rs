@@ -56,6 +56,7 @@ use smithy.rules#endpointTests
         {
             "params": {
                 "bar": "a b",
+                "endpoint": "asdf",
             }
             "operationInputs": [{
                 "operationName": "GetThing",
