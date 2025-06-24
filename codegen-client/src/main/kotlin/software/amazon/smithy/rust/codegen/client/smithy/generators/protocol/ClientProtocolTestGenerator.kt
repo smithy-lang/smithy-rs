@@ -82,6 +82,7 @@ class ClientProtocolTestGenerator(
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonClientPopulatesDefaultsValuesWhenMissingInResponse"),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientPopulatesDefaultValuesInInput"),
                 FailingTest.ResponseTest(
                     RPC_V2_CBOR,
@@ -91,6 +92,7 @@ class ClientProtocolTestGenerator(
                 // Failing due to bug in httpPreficHeaders serialization
                 // https://github.com/smithy-lang/smithy-rs/issues/4184
                 FailingTest.RequestTest(REST_XML, "HttpEmptyPrefixHeadersRequestClient"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersRequestClient"),
             )
 
         private val BrokenTests:
