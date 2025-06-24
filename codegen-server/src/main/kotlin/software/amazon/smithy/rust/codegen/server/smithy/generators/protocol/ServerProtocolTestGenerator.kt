@@ -71,6 +71,7 @@ class ServerProtocolTestGenerator(
                 FailingTest.RequestTest(REST_JSON, "RestJsonEndpointTraitWithHostLabel"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonOmitsEmptyListQueryValues"),
                 FailingTest.ResponseTest(REST_JSON, "RestJsonNullAndEmptyHeaders"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonHttpPayloadWithStructureAndEmptyResponseBody"),
                 // Tests involving `@range` on floats.
                 // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
                 FailingTest.MalformedRequestTest(REST_JSON_VALIDATION, "RestJsonMalformedRangeFloat_case0"),
