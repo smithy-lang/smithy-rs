@@ -10,51 +10,56 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 
 class AwsQueryCompatibleHttpBindingResolver(
     private val awsQueryBindingResolver: AwsQueryBindingResolver,
-    private val awsJsonHttpBindingResolver: AwsJsonHttpBindingResolver,
+    private val targetProtocolHttpBinding: HttpBindingResolver,
 ) : HttpBindingResolver {
     override fun httpTrait(operationShape: OperationShape): HttpTrait =
-        awsJsonHttpBindingResolver.httpTrait(operationShape)
+        targetProtocolHttpBinding.httpTrait(operationShape)
 
     override fun requestBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        awsJsonHttpBindingResolver.requestBindings(operationShape)
+        targetProtocolHttpBinding.requestBindings(operationShape)
 
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
-        awsJsonHttpBindingResolver.responseBindings(operationShape)
+        targetProtocolHttpBinding.responseBindings(operationShape)
 
     override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        awsJsonHttpBindingResolver.errorResponseBindings(errorShape)
+        targetProtocolHttpBinding.errorResponseBindings(errorShape)
 
     override fun errorCode(errorShape: ToShapeId): String = awsQueryBindingResolver.errorCode(errorShape)
 
-    override fun requestContentType(operationShape: OperationShape): String =
-        awsJsonHttpBindingResolver.requestContentType(operationShape)
+    override fun requestContentType(operationShape: OperationShape): String? =
+        targetProtocolHttpBinding.requestContentType(operationShape)
 
-    override fun responseContentType(operationShape: OperationShape): String =
-        awsJsonHttpBindingResolver.requestContentType(operationShape)
+    override fun responseContentType(operationShape: OperationShape): String? =
+        targetProtocolHttpBinding.requestContentType(operationShape)
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
-        awsJsonHttpBindingResolver.eventStreamMessageContentType(memberShape)
+        targetProtocolHttpBinding.eventStreamMessageContentType(memberShape)
 
     override fun handlesEventStreamInitialRequest(shape: Shape): Boolean =
-        awsJsonHttpBindingResolver.handlesEventStreamInitialRequest(shape)
+        targetProtocolHttpBinding.handlesEventStreamInitialRequest(shape)
 
     override fun handlesEventStreamInitialResponse(shape: Shape): Boolean =
-        awsJsonHttpBindingResolver.handlesEventStreamInitialResponse(shape)
+        targetProtocolHttpBinding.handlesEventStreamInitialResponse(shape)
 }
+
+data class ParseErrorMetadataParams(
+    val deserializeErrorType: RuntimeType,
+    val innerParseErrorMetadata: Writable,
+)
 
 class AwsQueryCompatible(
     val codegenContext: CodegenContext,
-    private val awsJson: AwsJson,
+    private val targetProtocol: Protocol,
+    private val params: ParseErrorMetadataParams,
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope =
@@ -62,33 +67,29 @@ class AwsQueryCompatible(
             "Bytes" to RuntimeType.Bytes,
             "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
             "Headers" to RuntimeType.headers(runtimeConfig),
-            "JsonError" to
-                CargoDependency.smithyJson(runtimeConfig).toType()
-                    .resolve("deserialize::error::DeserializeError"),
             "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
-            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
             *RuntimeType.preludeScope,
         )
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsQueryCompatibleHttpBindingResolver(
             AwsQueryBindingResolver(codegenContext.model),
-            AwsJsonHttpBindingResolver(codegenContext.model, awsJson.version, codegenContext.target == CodegenTarget.SERVER),
+            targetProtocol.httpBindingResolver,
         )
 
-    override val defaultTimestampFormat = awsJson.defaultTimestampFormat
+    override val defaultTimestampFormat = targetProtocol.defaultTimestampFormat
 
-    override fun structuredDataParser(): StructuredDataParserGenerator = awsJson.structuredDataParser()
+    override fun structuredDataParser(): StructuredDataParserGenerator = targetProtocol.structuredDataParser()
 
-    override fun structuredDataSerializer(): StructuredDataSerializerGenerator = awsJson.structuredDataSerializer()
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        targetProtocol.structuredDataSerializer()
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
-                    let mut builder =
-                        #{json_errors}::parse_error_metadata(response_body, response_headers)?;
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{DeserializeError}> {
+                    let mut builder = #{parse_error_metadata};
                     if let Some((error_code, error_type)) =
                         #{aws_query_compatible_errors}::parse_aws_query_compatible_error(response_headers)
                     {
@@ -99,15 +100,17 @@ class AwsQueryCompatible(
                 }
                 """,
                 *errorScope,
+                "DeserializeError" to params.deserializeErrorType,
+                "parse_error_metadata" to params.innerParseErrorMetadata,
             )
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        awsJson.parseEventStreamErrorMetadata(operationShape)
+        targetProtocol.parseEventStreamErrorMetadata(operationShape)
 
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf(
-            "x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}",
-            "x-amzn-query-mode" to "true",
-        )
+        targetProtocol.additionalRequestHeaders(operationShape) +
+            listOf(
+                "x-amzn-query-mode" to "true",
+            )
 }
