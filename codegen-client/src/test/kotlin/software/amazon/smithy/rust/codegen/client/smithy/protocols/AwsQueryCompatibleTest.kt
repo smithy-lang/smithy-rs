@@ -5,26 +5,91 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
-import org.junit.jupiter.api.Test
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.cbor.CBORFactory
+import org.junit.jupiter.api.extension.ExtensionContext
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.ArgumentsProvider
+import org.junit.jupiter.params.provider.ArgumentsSource
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import java.util.stream.Stream
+
+data class AwsQueryCompatibleTestInput(
+    val protocolAnnotation: String,
+    val payload: Writable,
+)
+
+class AwsQueryCompatibleTestInputProvider : ArgumentsProvider {
+    private fun jsonStringToBytesArrayString(jsonString: String): String {
+        val jsonMapper = ObjectMapper()
+        val cborMapper = ObjectMapper(CBORFactory())
+        // Parse JSON string to a generic type.
+        val jsonData = jsonMapper.readValue(jsonString, Any::class.java)
+        // Convert the parsed data to CBOR.
+        val bytes = cborMapper.writeValueAsBytes(jsonData)
+        return bytes
+            .joinToString(
+                prefix = "&[",
+                postfix = "]",
+                transform = { "0x${it.toUByte().toString(16).padStart(2, '0')}u8" },
+            )
+    }
+
+    override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
+        listOf(
+            AwsQueryCompatibleTestInput(
+                "@awsJson1_0",
+                writable {
+                    rust(
+                        """
+                        r##"{
+                            "__type": "com.amazonaws.sqs##QueueDoesNotExist",
+                            "message": "Some user-visible message"
+                        }"##
+                        """,
+                    )
+                },
+            ),
+            /* TODO(Smithy-1.58): Comment in the test input once `@awsQueryCompatible` can be applied to `rpcv2Cbor`
+            AwsQueryCompatibleTestInput(
+                "@rpcv2Cbor",
+                writable {
+                    val bytesArray =
+                        jsonStringToBytesArrayString(
+                            """
+                            {
+                                "__type": "com.amazonaws.sqs#QueueDoesNotExist",
+                                "message": "Some user-visible message"
+                            }
+                            """,
+                        )
+                    rust("#T::from_static($bytesArray)", RuntimeType.Bytes)
+                },
+            ),
+             */
+        ).map { Arguments.of(it) }.stream()
+}
 
 class AwsQueryCompatibleTest {
     companion object {
         const val prologue = """
             namespace test
+            use smithy.protocols#rpcv2Cbor
             use aws.protocols#awsJson1_0
             use aws.protocols#awsQueryCompatible
             use aws.protocols#awsQueryError
         """
-
-        const val awsjson10Trait = "@awsJson1_0"
         const val awsQueryCompatibleTrait = "@awsQueryCompatible"
 
         fun testService(withAwsQueryError: Boolean = true) =
@@ -63,10 +128,13 @@ class AwsQueryCompatibleTest {
             }
     }
 
-    @Test
-    fun `aws-query-compatible json with aws query error should allow for retrieving error code and type from custom header`() {
+    @ParameterizedTest
+    @ArgumentsSource(AwsQueryCompatibleTestInputProvider::class)
+    fun `aws-query-compatible json with aws query error should allow for retrieving error code and type from custom header`(
+        testInput: AwsQueryCompatibleTestInput,
+    ) {
         val model =
-            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService()).asSmithyModel(
+            (prologue + awsQueryCompatibleTrait + testInput.protocolAnnotation + testService()).asSmithyModel(
                 smithyVersion = "2",
             )
         clientIntegrationTest(model) { context, rustCrate ->
@@ -82,12 +150,7 @@ class AwsQueryCompatibleTest {
                                 )
                                 .status(400)
                                 .body(
-                                    #{SdkBody}::from(
-                                        r##"{
-                                            "__type": "com.amazonaws.sqs##QueueDoesNotExist",
-                                            "message": "Some user-visible message"
-                                        }"##
-                                    )
+                                    #{SdkBody}::from(#{payload:W})
                                 )
                                 .unwrap()
                         };
@@ -105,6 +168,8 @@ class AwsQueryCompatibleTest {
                         assert_eq!(#{Some}("Sender"), error.meta().extra("type"));
                         """,
                         *RuntimeType.preludeScope,
+                        "Bytes" to RuntimeType.Bytes,
+                        "payload" to testInput.payload,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
                         "infallible_client_fn" to
                             CargoDependency.smithyHttpClientTestUtil(context.runtimeConfig)
@@ -116,10 +181,13 @@ class AwsQueryCompatibleTest {
         }
     }
 
-    @Test
-    fun `aws-query-compatible json without aws query error should allow for retrieving error code from payload`() {
+    @ParameterizedTest
+    @ArgumentsSource(AwsQueryCompatibleTestInputProvider::class)
+    fun `aws-query-compatible json without aws query error should allow for retrieving error code from payload`(
+        testInput: AwsQueryCompatibleTestInput,
+    ) {
         val model =
-            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService(withAwsQueryError = false)).asSmithyModel(
+            (prologue + awsQueryCompatibleTrait + testInput.protocolAnnotation + testService(withAwsQueryError = false)).asSmithyModel(
                 smithyVersion = "2",
             )
         clientIntegrationTest(model) { context, rustCrate ->
@@ -131,12 +199,7 @@ class AwsQueryCompatibleTest {
                             #{http_1x}::Response::builder()
                                 .status(400)
                                 .body(
-                                    #{SdkBody}::from(
-                                        r##"{
-                                            "__type": "com.amazonaws.sqs##QueueDoesNotExist",
-                                            "message": "Some user-visible message"
-                                        }"##,
-                                    )
+                                    #{SdkBody}::from(#{payload:W})
                                 )
                                 .unwrap()
                         };
@@ -151,7 +214,9 @@ class AwsQueryCompatibleTest {
                         assert_eq!(#{None}, error.meta().extra("type"));
                         """,
                         *RuntimeType.preludeScope,
+                        "Bytes" to RuntimeType.Bytes,
                         "SdkBody" to RuntimeType.sdkBody(context.runtimeConfig),
+                        "payload" to testInput.payload,
                         "infallible_client_fn" to
                             CargoDependency.smithyHttpClientTestUtil(context.runtimeConfig)
                                 .toType().resolve("test_util::infallible_client_fn"),
@@ -162,10 +227,13 @@ class AwsQueryCompatibleTest {
         }
     }
 
-    @Test
-    fun `request header should include x-amzn-query-mode when the service has the awsQueryCompatible trait`() {
+    @ParameterizedTest
+    @ArgumentsSource(AwsQueryCompatibleTestInputProvider::class)
+    fun `request header should include x-amzn-query-mode when the service has the awsQueryCompatible trait`(
+        testInput: AwsQueryCompatibleTestInput,
+    ) {
         val model =
-            (prologue + awsQueryCompatibleTrait + awsjson10Trait + testService()).asSmithyModel(
+            (prologue + awsQueryCompatibleTrait + testInput.protocolAnnotation + testService()).asSmithyModel(
                 smithyVersion = "2",
             )
         clientIntegrationTest(model) { context, rustCrate ->
