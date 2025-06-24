@@ -27,9 +27,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Broke
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_XML
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -73,64 +73,30 @@ class ClientProtocolTestGenerator(
         private val ExpectFail =
             setOf<FailingTest>(
                 // Failing because we don't serialize default values if they match the default.
-                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(
+                    AWS_JSON_10,
+                    "AwsJson10ClientErrorCorrectsWithDefaultValuesWhenServerFailsToSerializeRequiredValues",
+                ),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonClientPopulatesDefaultsValuesWhenMissingInResponse"),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientPopulatesDefaultValuesInInput"),
+                FailingTest.ResponseTest(
+                    RPC_V2_CBOR,
+                    "RpcV2CborClientPopulatesDefaultsValuesWhenMissingInResponse",
+                ),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                // Failing due to bug in httpPreficHeaders serialization
+                // https://github.com/smithy-lang/smithy-rs/issues/4184
+                FailingTest.RequestTest(REST_XML, "HttpEmptyPrefixHeadersRequestClient"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersRequestClient"),
             )
 
         private val BrokenTests:
-            Set<BrokenTest> =
-            // The two tests below were fixed in "https://github.com/smithy-lang/smithy/pull/2423", but the fixes didn't make
-            // it into the build artifact for 1.52
-            setOf(
-                BrokenTest.ResponseTest(
-                    ServiceShapeId.REST_XML,
-                    "NestedXmlMapWithXmlNameDeserializes",
-                    howToFixItFn = ::fixRestXMLInvalidRootNodeResponse,
-                    inAtLeast = setOf("1.52.0"),
-                    trackedIn =
-                        setOf(
-                            "https://github.com/smithy-lang/smithy/pull/2423",
-                        ),
-                ),
-                BrokenTest.RequestTest(
-                    ServiceShapeId.REST_XML,
-                    "NestedXmlMapWithXmlNameSerializes",
-                    howToFixItFn = ::fixRestXMLInvalidRootNodeRequest,
-                    inAtLeast = setOf("1.52.0"),
-                    trackedIn =
-                        setOf(
-                            "https://github.com/smithy-lang/smithy/pull/2423",
-                        ),
-                ),
-            )
-
-        private fun fixRestXMLInvalidRootNodeResponse(testCase: TestCase.ResponseTest): TestCase.ResponseTest {
-            val fixedBody =
-                testCase.testCase.body.get()
-                    .replace("NestedXmlMapWithXmlNameResponse", "NestedXmlMapWithXmlNameInputOutput")
-            return TestCase.ResponseTest(
-                testCase.testCase.toBuilder()
-                    .body(fixedBody)
-                    .build(),
-                testCase.targetShape,
-            )
-        }
-
-        private fun fixRestXMLInvalidRootNodeRequest(testCase: TestCase.RequestTest): TestCase.RequestTest {
-            val fixedBody =
-                testCase.testCase.body.get()
-                    .replace("NestedXmlMapWithXmlNameRequest", "NestedXmlMapWithXmlNameInputOutput")
-            return TestCase.RequestTest(
-                testCase.testCase.toBuilder()
-                    .body(fixedBody)
-                    .build(),
-            )
-        }
+            Set<BrokenTest> = setOf()
     }
 
     override val appliesTo: AppliesTo
