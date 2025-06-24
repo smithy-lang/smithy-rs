@@ -61,7 +61,6 @@ class AwsQueryCompatibleTestInputProvider : ArgumentsProvider {
                     )
                 },
             ),
-            /* TODO(Smithy-1.58): Comment in the test input once `@awsQueryCompatible` can be applied to `rpcv2Cbor`
             AwsQueryCompatibleTestInput(
                 "@rpcv2Cbor",
                 writable {
@@ -77,7 +76,6 @@ class AwsQueryCompatibleTestInputProvider : ArgumentsProvider {
                     rust("#T::from_static($bytesArray)", RuntimeType.Bytes)
                 },
             ),
-             */
         ).map { Arguments.of(it) }.stream()
 }
 
