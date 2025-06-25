@@ -6,7 +6,6 @@
 //! Checksum support for HTTP requests and responses.
 
 use aws_smithy_types::base64;
-use http::header::{HeaderMap, HeaderValue};
 
 use crate::Crc64Nvme;
 use crate::{
@@ -40,18 +39,9 @@ pub const CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER: [&str; 5] = [
 pub trait HttpChecksum: Checksum + Send + Sync {
     /// Either return this checksum as a http-02x `HeaderMap` containing one HTTP header, or return an error
     /// describing why checksum calculation failed.
-    fn headers(self: Box<Self>) -> HeaderMap<HeaderValue> {
-        let mut header_map = HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value());
-
-        header_map
-    }
-
-    /// Either return this checksum as a http-1x `HeaderMap` containing one HTTP header, or return an error
-    /// describing why checksum calculation failed.
-    fn headers_http_1x(self: Box<Self>) -> http_1x::HeaderMap<http_1x::HeaderValue> {
+    fn headers(self: Box<Self>) -> http_1x::HeaderMap<http_1x::HeaderValue> {
         let mut header_map = http_1x::HeaderMap::new();
-        header_map.insert(self.header_name(), self.header_value_http_1x());
+        header_map.insert(self.header_name(), self.header_value());
 
         header_map
     }
@@ -60,14 +50,7 @@ pub trait HttpChecksum: Checksum + Send + Sync {
     fn header_name(&self) -> &'static str;
 
     /// Return the calculated checksum as a base64-encoded http-02x `HeaderValue`
-    fn header_value(self: Box<Self>) -> HeaderValue {
-        let hash = self.finalize();
-        HeaderValue::from_str(&base64::encode(&hash[..]))
-            .expect("base64 encoded bytes are always valid header values")
-    }
-
-    /// Return the calculated checksum as a base64-encoded http-1x `HeaderValue`
-    fn header_value_http_1x(self: Box<Self>) -> http_1x::HeaderValue {
+    fn header_value(self: Box<Self>) -> http_1x::HeaderValue {
         let hash = self.finalize();
         http_1x::HeaderValue::from_str(&base64::encode(&hash[..]))
             .expect("base64 encoded bytes are always valid header values")

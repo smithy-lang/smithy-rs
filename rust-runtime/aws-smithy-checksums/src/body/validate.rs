@@ -11,8 +11,6 @@ use crate::http::HttpChecksum;
 use aws_smithy_types::body::SdkBody;
 
 use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
-use http_body::SizeHint;
 use pin_project_lite::pin_project;
 
 use std::fmt::Display;
@@ -46,60 +44,6 @@ impl ChecksumBody<SdkBody> {
     }
 
     fn poll_inner(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Bytes, aws_smithy_types::body::Error>>> {
-        use http_body::Body;
-
-        let this = self.project();
-        let checksum = this.checksum;
-
-        match this.inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(data))) => {
-                tracing::trace!(
-                    "reading {} bytes from the body and updating the checksum calculation",
-                    data.len()
-                );
-                let checksum = match checksum.as_mut() {
-                    Some(checksum) => checksum,
-                    None => {
-                        unreachable!("The checksum must exist because it's only taken out once the inner body has been completely polled.");
-                    }
-                };
-
-                checksum.update(&data);
-                Poll::Ready(Some(Ok(data)))
-            }
-            // Once the inner body has stopped returning data, check the checksum
-            // and return an error if it doesn't match.
-            Poll::Ready(None) => {
-                tracing::trace!("finished reading from body, calculating final checksum");
-                let checksum = match checksum.take() {
-                    Some(checksum) => checksum,
-                    None => {
-                        // If the checksum was already taken and this was polled again anyways,
-                        // then return nothing
-                        return Poll::Ready(None);
-                    }
-                };
-
-                let actual_checksum = checksum.finalize();
-                if *this.precalculated_checksum == actual_checksum {
-                    Poll::Ready(None)
-                } else {
-                    // So many parens it's starting to look like LISP
-                    Poll::Ready(Some(Err(Box::new(Error::ChecksumMismatch {
-                        expected: this.precalculated_checksum.clone(),
-                        actual: actual_checksum,
-                    }))))
-                }
-            }
-            Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-            Poll::Pending => Poll::Pending,
-        }
-    }
-
-    fn poll_inner_http_1x(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Bytes>, aws_smithy_types::body::Error>>> {
@@ -179,33 +123,6 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-impl http_body::Body for ChecksumBody<SdkBody> {
-    type Data = Bytes;
-    type Error = aws_smithy_types::body::Error;
-
-    fn poll_data(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner(cx)
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        self.project().inner.poll_trailers(cx)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.checksum.is_none()
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        self.inner.size_hint()
-    }
-}
-
 impl http_body_1x::Body for ChecksumBody<SdkBody> {
     type Data = Bytes;
     type Error = aws_smithy_types::body::Error;
@@ -214,7 +131,7 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
-        self.poll_inner_http_1x(cx)
+        self.poll_inner(cx)
     }
 }
 
@@ -225,7 +142,7 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use bytes::{Buf, Bytes};
     use bytes_utils::SegmentedBuf;
-    use http_body::Body;
+    use http_body_util::BodyExt;
     use std::io::Read;
 
     fn calculate_crc32_checksum(input: &str) -> Bytes {
@@ -247,7 +164,7 @@ mod tests {
             non_matching_checksum.clone(),
         );
 
-        while let Some(data) = body.data().await {
+        while let Some(data) = body.frame().await {
             match data {
                 Ok(_) => { /* Do nothing */ }
                 Err(e) => {
@@ -275,8 +192,9 @@ mod tests {
         let mut body = ChecksumBody::new(body, http_checksum, actual_checksum);
 
         let mut output = SegmentedBuf::new();
-        while let Some(buf) = body.data().await {
-            output.push(buf.unwrap());
+        while let Some(buf) = body.frame().await {
+            let data = buf.unwrap().into_data().unwrap();
+            output.push(data);
         }
 
         let mut output_text = String::new();
