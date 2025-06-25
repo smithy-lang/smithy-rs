@@ -39,11 +39,11 @@ import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 internal fun ClientCodegenContext.usesSigAuth(): Boolean =
-    ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
+    ServiceIndex.of(model).getAuthSchemes(serviceShape).containsKey(SigV4Trait.ID) ||
         usesSigV4a()
 
 internal fun ClientCodegenContext.usesSigV4a(): Boolean =
-    ServiceIndex.of(model).getEffectiveAuthSchemes(serviceShape).containsKey(SigV4ATrait.ID)
+    ServiceIndex.of(model).getAuthSchemes(serviceShape).containsKey(SigV4ATrait.ID)
 
 class SigV4AuthDecorator : ConditionalDecorator(
     predicate = { codegenContext, _ -> codegenContext?.usesSigAuth() ?: false },
