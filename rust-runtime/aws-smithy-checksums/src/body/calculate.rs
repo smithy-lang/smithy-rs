@@ -7,13 +7,9 @@
 
 use crate::http::HttpChecksum;
 
-use aws_smithy_http::header::append_merge_header_maps;
+use aws_smithy_http::header::append_merge_header_maps_http_1x;
 use aws_smithy_types::body::SdkBody;
-
-use http::HeaderMap;
-use http_body::SizeHint;
 use pin_project_lite::pin_project;
-
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -23,6 +19,7 @@ pin_project! {
             #[pin]
             body: InnerBody,
             checksum: Option<Box<dyn HttpChecksum>>,
+            written_trailers: bool,
     }
 }
 
@@ -32,66 +29,65 @@ impl ChecksumBody<SdkBody> {
         Self {
             body,
             checksum: Some(checksum),
+            written_trailers: false,
         }
     }
 }
 
-impl http_body::Body for ChecksumBody<SdkBody> {
+impl http_body_1x::Body for ChecksumBody<SdkBody> {
     type Data = bytes::Bytes;
     type Error = aws_smithy_types::body::Error;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
         let this = self.project();
-        match this.checksum {
-            Some(checksum) => {
-                let poll_res = this.body.poll_data(cx);
-                if let Poll::Ready(Some(Ok(data))) = &poll_res {
-                    checksum.update(data);
+        let poll_res = this.body.poll_frame(cx);
+
+        match &poll_res {
+            Poll::Ready(Some(Ok(frame))) => {
+                // Update checksum for data frames
+                if frame.is_data() {
+                    if let Some(checksum) = this.checksum {
+                        checksum.update(frame.data_ref().expect("Data frame has data"));
+                    }
+                } else {
+                    // Add checksum trailer to other trailers if necessary
+                    let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                        checksum.headers()
+                    } else {
+                        return Poll::Ready(None);
+                    };
+                    let trailers = frame
+                        .trailers_ref()
+                        .expect("Trailers frame has trailers")
+                        .clone();
+                    *this.written_trailers = true;
+                    return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
+                        append_merge_header_maps_http_1x(trailers, checksum_headers),
+                    ))));
                 }
-
-                poll_res
             }
-            None => unreachable!("This can only fail if poll_data is called again after poll_trailers, which is invalid"),
-        }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        let this = self.project();
-        let poll_res = this.body.poll_trailers(cx);
-
-        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
-            let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                checksum.headers()
-            } else {
-                return Poll::Ready(Ok(None));
-            };
-
-            return match maybe_inner_trailers {
-                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
-                    inner_trailers,
-                    checksum_headers,
-                )))),
-                None => Poll::Ready(Ok(Some(checksum_headers))),
-            };
-        }
+            Poll::Ready(None) => {
+                // If the trailers have not already been written (because there were no existing
+                // trailers on the body) we write them here
+                if !*this.written_trailers {
+                    let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                        checksum.headers()
+                    } else {
+                        return Poll::Ready(None);
+                    };
+                    let trailers = http_1x::HeaderMap::new();
+                    return Poll::Ready(Some(Ok(http_body_1x::Frame::trailers(
+                        append_merge_header_maps_http_1x(trailers, checksum_headers),
+                    ))));
+                }
+            }
+            _ => {}
+        };
 
         poll_res
-    }
-
-    fn is_end_stream(&self) -> bool {
-        // If inner body is finished and we've already consumed the checksum then we must be
-        // at the end of the stream.
-        self.body.is_end_stream() && self.checksum.is_none()
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        self.body.size_hint()
     }
 }
 
@@ -103,11 +99,12 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use bytes::Buf;
     use bytes_utils::SegmentedBuf;
-    use http_body::Body;
+    use http_1x::HeaderMap;
+    use http_body_util::BodyExt;
     use std::fmt::Write;
     use std::io::Read;
 
-    fn header_value_as_checksum_string(header_value: &http::HeaderValue) -> String {
+    fn header_value_as_checksum_string(header_value: &http_1x::HeaderValue) -> String {
         let decoded_checksum = base64::decode(header_value.to_str().unwrap()).unwrap();
         let decoded_checksum = decoded_checksum
             .into_iter()
@@ -129,24 +126,28 @@ mod tests {
             .into_impl();
         let mut body = ChecksumBody::new(body, checksum);
 
-        let mut output = SegmentedBuf::new();
-        while let Some(buf) = body.data().await {
-            output.push(buf.unwrap());
+        let mut output_data = SegmentedBuf::new();
+        let mut trailers = HeaderMap::new();
+        while let Some(buf) = body.frame().await {
+            let buf = buf.unwrap();
+            if buf.is_data() {
+                output_data.push(buf.into_data().unwrap());
+            } else if buf.is_trailers() {
+                let map = buf.into_trailers().unwrap();
+                map.into_iter().for_each(|(k, v)| {
+                    trailers.insert(k.unwrap(), v);
+                });
+            }
         }
 
         let mut output_text = String::new();
-        output
+        output_data
             .reader()
             .read_to_string(&mut output_text)
             .expect("Doesn't cause IO errors");
         // Verify data is complete and unaltered
         assert_eq!(input_text, output_text);
 
-        let trailers = body
-            .trailers()
-            .await
-            .expect("checksum generation was without error")
-            .expect("trailers were set");
         let checksum_trailer = trailers
             .get(CRC_32_HEADER_NAME)
             .expect("trailers contain crc32 checksum");

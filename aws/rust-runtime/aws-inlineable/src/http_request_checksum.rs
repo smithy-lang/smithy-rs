@@ -25,8 +25,8 @@ use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::RequestChecksumCalculation;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use aws_smithy_types::error::operation::BuildError;
-use http::HeaderValue;
-use http_body::Body;
+use http_1x::HeaderValue;
+use http_body_1x::Body;
 use std::str::FromStr;
 use std::{fmt, mem};
 
@@ -350,10 +350,9 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
             let body = calculate::ChecksumBody::new(body, checksum);
             let aws_chunked_body_options =
                 AwsChunkedBodyOptions::new(original_body_size, vec![trailer_len]);
-
             let body = AwsChunkedBody::new(body, aws_chunked_body_options);
 
-            SdkBody::from_body_0_4(body)
+            SdkBody::from_body_1_x(body)
         })
     };
 
@@ -380,7 +379,7 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
     // The target service does not depend on where `aws-chunked` appears in the `Content-Encoding` header,
     // as it will ultimately be stripped.
     headers.append(
-        http::header::CONTENT_ENCODING,
+        http_1x::header::CONTENT_ENCODING,
         HeaderValue::from_str(AWS_CHUNKED)
             .map_err(BuildError::other)
             .expect("\"aws-chunked\" will always be a valid HeaderValue"),
@@ -400,7 +399,7 @@ mod tests {
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::BytesMut;
-    use http_body::Body;
+    use http_body_util::BodyExt;
     use tempfile::NamedTempFile;
 
     #[tokio::test]
@@ -424,8 +423,11 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        while let Some(data) = body.data().await {
-            body_data.extend_from_slice(&data.unwrap())
+        while let Some(Ok(frame)) = body.frame().await {
+            if frame.is_data() {
+                let data = frame.into_data();
+                body_data.extend_from_slice(&data.unwrap());
+            }
         }
         let body = std::str::from_utf8(&body_data).unwrap();
         assert_eq!(
@@ -470,7 +472,8 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        while let Some(data) = body.data().await {
+        while let Some(Ok(frame)) = body.frame().await {
+            let data = frame.into_data();
             body_data.extend_from_slice(&data.unwrap())
         }
         let body = std::str::from_utf8(&body_data).unwrap();

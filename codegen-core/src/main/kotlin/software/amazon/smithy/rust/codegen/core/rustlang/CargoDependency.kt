@@ -367,7 +367,9 @@ data class CargoDependency(
         // Hyper 1.x types
         val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")
         val HttpBody1x: CargoDependency =
-            CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body", optional = true)
+            CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body")
+        val HttpBodyUtil01x: CargoDependency =
+            CargoDependency("http-body-util", CratesIo("0.1.3"))
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 
@@ -402,7 +404,7 @@ data class CargoDependency(
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
 
         fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).withFeature("client").withFeature("http-02x")
+            smithyRuntimeApi(runtimeConfig).withFeature("client").withFeature("http-1x")
 
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
