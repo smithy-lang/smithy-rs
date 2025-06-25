@@ -61,7 +61,7 @@ pub fn default_connector(
         }
 
         let conn = conn_builder
-            .tls_provider(tls::Provider::Rustls(
+            .tls_provider(tls::Provider::rustls(
                 tls::rustls_provider::CryptoMode::AwsLc,
             ))
             .build();
@@ -603,11 +603,13 @@ cfg_tls! {
                     feature = "rustls-aws-lc-fips",
                     feature = "rustls-ring"
                 ))]
-                tls::Provider::Rustls(crypto_mode) => {
+                tls::Provider::Rustls { crypto_mode, cert_verifier } => {
                     let https_connector = tls::rustls_provider::build_connector::wrap_connector(
                         http_connector,
                         crypto_mode.clone(),
+                        cert_verifier.clone(),
                         &self.tls.context,
+
                     );
                     self.wrap_connector(https_connector)
                 },
