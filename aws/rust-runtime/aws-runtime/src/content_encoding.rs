@@ -311,7 +311,7 @@ mod http_02x_utils {
 
 const UNREACHABLE_STATES: &str = "These states already short circuited";
 
-///
+/// Implementing the [http_body_1x::Body] trait
 impl<Inner> http_body_1x::Body for AwsChunkedBody<Inner>
 where
     Inner: http_body_1x::Body<Data = Bytes, Error = aws_smithy_types::body::Error>,
