@@ -984,6 +984,7 @@ mod test {
         }
     }
 
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn connection_refused_works() {
         let connector_settings = HttpConnectorSettings::builder()
