@@ -768,7 +768,6 @@ mod test {
     use std::sync::Arc;
     use std::task::{Context, Poll};
 
-    use crate::client::dns::HyperUtilResolver;
     use crate::client::timeout::test::NeverConnects;
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::rt::sleep::TokioSleep;
@@ -975,18 +974,20 @@ mod test {
         assert_elapsed!(now, Duration::from_secs(2));
     }
 
-    #[derive(Debug, Clone, Default)]
-    struct TestResolver;
-    impl ResolveDns for TestResolver {
-        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
-            let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-            DnsFuture::ready(Ok(vec![localhost_v4]))
-        }
-    }
-
     #[cfg(not(windows))]
     #[tokio::test]
     async fn connection_refused_works() {
+        use crate::client::dns::HyperUtilResolver;
+
+        #[derive(Debug, Clone, Default)]
+        struct TestResolver;
+        impl ResolveDns for TestResolver {
+            fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
+                let localhost_v4 = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+                DnsFuture::ready(Ok(vec![localhost_v4]))
+            }
+        }
+
         let connector_settings = HttpConnectorSettings::builder()
             .connect_timeout(Duration::from_secs(20))
             .build();
