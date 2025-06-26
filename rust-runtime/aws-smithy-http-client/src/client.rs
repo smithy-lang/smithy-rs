@@ -1002,7 +1002,7 @@ mod test {
             .adapter;
 
         let resp = hyper
-            .call(HttpRequest::get("http://static-uri:20227.com").unwrap())
+            .call(HttpRequest::get("http://static-uri:50227.com").unwrap())
             .await
             .unwrap_err();
         assert!(
