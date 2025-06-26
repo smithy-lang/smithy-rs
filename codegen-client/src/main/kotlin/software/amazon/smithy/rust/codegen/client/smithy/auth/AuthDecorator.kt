@@ -230,44 +230,6 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                             self
                         }
 
-                        /// Append all the given auth schemes to those already configured for the builder
-                        ///
-                        /// If `auth_schemes` contains an existing [AuthSchemeId](aws_smithy_runtime_api::client::auth::AuthSchemeId) in the runtime, the current identity
-                        /// resolver and signer for that scheme will be replaced by those from `auth_schemes`.
-                        ///
-                        /// _Important:_ When introducing a custom auth scheme, ensure you override either
-                        /// [`Self::auth_scheme_option_resolver`] or [`Self::set_auth_scheme_option_resolver`]
-                        /// so that the custom auth scheme is included in the list of resolved auth scheme options.
-                        /// [The default auth scheme resolver](crate::config::auth::DefaultAuthSchemeResolver) will not recognize your custom auth scheme. Refer to an
-                        /// example for [`Self::push_auth_scheme`].
-                        pub fn extend_auth_schemes(
-                            &mut self,
-                            auth_schemes: impl Iterator<Item = #{SharedAuthScheme}>,
-                        ) -> &mut Self {
-                            for auth_scheme in auth_schemes {
-                                self.runtime_components.push_auth_scheme(auth_scheme);
-                            }
-                            self
-                        }
-
-                        /// Replace currently configured auth schemes with the given `auth_schemes`
-                        ///
-                        /// If `auth_schemes` contains an existing [AuthSchemeId](aws_smithy_runtime_api::client::auth::AuthSchemeId) in the runtime, the current identity
-                        /// resolver and signer for that scheme will be replaced by those from `auth_schemes`.
-                        ///
-                        /// _Important:_ When introducing a custom auth scheme, ensure you override either
-                        /// [`Self::auth_scheme_option_resolver`] or [`Self::set_auth_scheme_option_resolver`]
-                        /// so that the custom auth scheme is included in the list of resolved auth scheme options.
-                        /// [The default auth scheme resolver](crate::config::auth::DefaultAuthSchemeResolver) will not recognize your custom auth scheme. Refer to an
-                        /// example for [`Self::push_auth_scheme`].
-                        pub fn set_auth_schemes(
-                            &mut self,
-                            auth_schemes: impl Iterator<Item = #{SharedAuthScheme}>,
-                        ) -> &mut Self {
-                            self.runtime_components.set_auth_schemes(auth_schemes);
-                            self
-                        }
-
                         /// Set the auth scheme option resolver for the builder
                         ///
                         /// ## Examples
