@@ -162,7 +162,7 @@ class AuthIndexTest {
                 "com.test#GetFooServiceDefault" to listOf(HttpApiKeyAuthTrait.ID),
                 "com.test#GetFooOpOverride" to listOf(HttpBasicAuthTrait.ID, HttpBearerAuthTrait.ID),
                 "com.test#GetFooAnonymous" to listOf(NoAuthSchemeOption().authSchemeId),
-                "com.test#GetFooOptionalAuth" to listOf(NoAuthSchemeOption().authSchemeId),
+                "com.test#GetFooOptionalAuth" to listOf(HttpApiKeyAuthTrait.ID, NoAuthSchemeOption().authSchemeId),
             )
         val sut = AuthIndex(testCodegenContext)
         testCases.forEach { (opShapeId, expectedSchemes) ->

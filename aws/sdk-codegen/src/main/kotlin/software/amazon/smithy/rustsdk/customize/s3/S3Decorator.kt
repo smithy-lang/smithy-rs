@@ -19,6 +19,7 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SyntheticNoAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -97,6 +98,8 @@ class S3Decorator : ClientCodegenDecorator {
                     },
                 )::transform,
             )
+            // enable no auth for the service to support operations commonly used with public buckets
+            .let(AddSyntheticNoAuth()::transform)
             .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
@@ -201,6 +204,21 @@ class FilterEndpointTests(
                         .version(trait.version).build()
 
                 else -> trait
+            }
+        }
+}
+
+// TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
+// See the comment in the `SyntheticNoAuthTrait` class for why we use a synthetic trait instead of `optionalAuth`.
+private class AddSyntheticNoAuth {
+    fun transform(model: Model): Model =
+        ModelTransformer.create().mapShapes(model) { shape ->
+            if (shape is ServiceShape) {
+                shape.toBuilder()
+                    .addTrait(SyntheticNoAuthTrait())
+                    .build()
+            } else {
+                shape
             }
         }
 }
