@@ -42,12 +42,12 @@ class CredentialsProviderDecorator : ConditionalDecorator(
                         rustTemplate(
                             """
                             if ${section.sdkConfig}.credentials_provider().is_none() {
-                                ${section.serviceConfigBuilder}.set_auth_scheme_option_resolver(#{no_auth_scheme_option_resolver}());
+                                ${section.serviceConfigBuilder}.set_auth_scheme_resolver(#{no_auth_scheme_resolver}());
                             }
                             """,
-                            "no_auth_scheme_option_resolver" to
+                            "no_auth_scheme_resolver" to
                                 ClientRustModule.Config.auth.toType()
-                                    .resolve("no_auth_scheme_option_resolver"),
+                                    .resolve("no_auth_scheme_resolver"),
                         )
                     },
                 )

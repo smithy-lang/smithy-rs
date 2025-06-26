@@ -214,11 +214,13 @@ class AuthSchemeResolverGenerator(
 
     private fun noAuthSchemeOptionResolver() =
         writable {
+            // For encapsulation, we do not expose `NoAuthSchemeResolver`, instead expose a creation function
+            // that returns an opaque type.
             rustTemplate(
                 """
                 ##[derive(Debug)]
-                struct NoAuthSchemeOptionResolver;
-                impl ResolveAuthScheme for NoAuthSchemeOptionResolver {
+                struct NoAuthSchemeResolver;
+                impl ResolveAuthScheme for NoAuthSchemeResolver {
                     fn resolve_auth_scheme<'a>(
                         &'a self,
                         _params: &'a #{Params},
@@ -229,9 +231,9 @@ class AuthSchemeResolverGenerator(
                     }
                 }
 
-                /// Return an auth scheme option resolver that favors `noAuth`
-                pub fn no_auth_scheme_option_resolver() -> impl ResolveAuthScheme {
-                   NoAuthSchemeOptionResolver
+                /// Return an auth scheme resolver that favors `noAuth`
+                pub fn no_auth_scheme_resolver() -> impl ResolveAuthScheme {
+                   NoAuthSchemeResolver
                 }
                 """,
                 *codegenScope,

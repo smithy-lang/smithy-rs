@@ -286,7 +286,7 @@ class AuthDecoratorTest {
                         let config = $moduleName::Config::builder()
                             .endpoint_url("http://localhost:1234")
                             .push_auth_scheme(CustomAuthScheme::default())
-                            .auth_scheme_option_resolver(CustomAuthSchemeResolver)
+                            .auth_scheme_resolver(CustomAuthSchemeResolver)
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -323,7 +323,7 @@ class AuthDecoratorTest {
                             .config_override(
                                 $moduleName::Config::builder()
                                     .push_auth_scheme(CustomAuthScheme::default())
-                                    .auth_scheme_option_resolver(CustomAuthSchemeResolver)
+                                    .auth_scheme_resolver(CustomAuthSchemeResolver)
                             )
                             .send()
                             .await

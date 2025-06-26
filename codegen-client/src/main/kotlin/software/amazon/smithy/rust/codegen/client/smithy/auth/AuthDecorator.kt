@@ -52,8 +52,8 @@ typealias AuthCustomization = NamedCustomization<AuthSection>
 /**
  * Codegen decorator that:
  * * Injects service-specific default auth scheme resolver
- * * Adds setters to the service config builder for configuring the auth scheme and auth scheme option resolver
- * * Adds getters to the service config for retrieving the currently configured auth scheme and auth scheme option resolver
+ * * Adds setters to the service config builder for configuring the auth scheme and auth scheme resolver
+ * * Adds getters to the service config for retrieving the currently configured auth scheme and auth scheme resolver
  */
 class AuthDecorator : ClientCodegenDecorator {
     override val name: String = "Auth"
@@ -123,7 +123,7 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         /// resolver and signer for that scheme will be replaced by those from `auth_scheme`.
                         ///
                         /// _Important:_ When introducing a custom auth scheme, ensure you override either
-                        /// [`Self::auth_scheme_option_resolver`] or [`Self::set_auth_scheme_option_resolver`]
+                        /// [`Self::auth_scheme_resolver`] or [`Self::set_auth_scheme_resolver`]
                         /// so that the custom auth scheme is included in the list of resolved auth scheme options.
                         /// [The default auth scheme resolver](crate::config::auth::DefaultAuthSchemeResolver) will not recognize your custom auth scheme.
                         ///
@@ -203,7 +203,7 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         ///     }
                         /// }
                         ///
-                        /// // Auth scheme option resolver that favors `CustomAuthScheme`
+                        /// // Auth scheme resolver that favors `CustomAuthScheme`
                         /// ##[derive(Debug)]
                         /// struct CustomAuthSchemeResolver;
                         /// impl $moduleUseName::config::auth::ResolveAuthScheme for CustomAuthSchemeResolver {
@@ -221,7 +221,7 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         ///
                         /// let config = $moduleUseName::Config::builder()
                         ///     .push_auth_scheme(CustomAuthScheme::default())
-                        ///     .auth_scheme_option_resolver(CustomAuthSchemeResolver)
+                        ///     .auth_scheme_resolver(CustomAuthSchemeResolver)
                         ///     // other configurations
                         ///     .build();
                         /// ```
@@ -230,7 +230,7 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                             self
                         }
 
-                        /// Set the auth scheme option resolver for the builder
+                        /// Set the auth scheme resolver for the builder
                         ///
                         /// ## Examples
                         /// ```no_run
@@ -256,21 +256,21 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         /// }
                         ///
                         /// let config = $moduleUseName::Config::builder()
-                        ///     .auth_scheme_option_resolver(CustomAuthSchemeResolver)
+                        ///     .auth_scheme_resolver(CustomAuthSchemeResolver)
                         ///     // other configurations
                         ///     .build();
                         /// ```
-                        pub fn auth_scheme_option_resolver(mut self, auth_scheme_option_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> Self {
-                            self.set_auth_scheme_option_resolver(auth_scheme_option_resolver);
+                        pub fn auth_scheme_resolver(mut self, auth_scheme_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> Self {
+                            self.set_auth_scheme_resolver(auth_scheme_resolver);
                             self
                         }
 
-                        /// Set the auth scheme option resolver for the builder
+                        /// Set the auth scheme resolver for the builder
                         ///
                         /// ## Examples
-                        /// See an example for [`Self::auth_scheme_option_resolver`].
-                        pub fn set_auth_scheme_option_resolver(&mut self, auth_scheme_option_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> &mut Self {
-                            self.runtime_components.set_auth_scheme_option_resolver(#{Some}(auth_scheme_option_resolver.into_shared_resolver()));
+                        /// See an example for [`Self::auth_scheme_resolver`].
+                        pub fn set_auth_scheme_resolver(&mut self, auth_scheme_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> &mut Self {
+                            self.runtime_components.set_auth_scheme_option_resolver(#{Some}(auth_scheme_resolver.into_shared_resolver()));
                             self
                         }
                         """,
@@ -286,8 +286,8 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                             self.runtime_components.auth_schemes()
                         }
 
-                        /// Return the auth scheme option resolver configured on this service config
-                        pub fn auth_scheme_option_resolver(&self) -> #{Option}<#{SharedAuthSchemeOptionResolver}> {
+                        /// Return the auth scheme resolver configured on this service config
+                        pub fn auth_scheme_resolver(&self) -> #{Option}<#{SharedAuthSchemeOptionResolver}> {
                             self.runtime_components.auth_scheme_option_resolver()
                         }
                         """,

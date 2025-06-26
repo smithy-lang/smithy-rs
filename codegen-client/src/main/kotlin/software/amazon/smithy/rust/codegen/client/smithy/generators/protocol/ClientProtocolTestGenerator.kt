@@ -158,7 +158,7 @@ class ClientProtocolTestGenerator(
             } ?: writable { }
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177):
         //  Until the incorrect separation is addressed, we need to rely on this workaround.
-        val noAuthSchemeOptionResolver =
+        val noAuthSchemeResolver =
             codegenContext.rootDecorator.authSchemeOptions(codegenContext, emptyList()).find {
                 it.authSchemeId == SigV4Trait.ID
             }?.let { writable {} } ?: writable {
@@ -166,9 +166,9 @@ class ClientProtocolTestGenerator(
                 // during protocol tests. This ensures compatibility when a test model references Sigv4,
                 // but the codegen, built with the generic client plugin, does not include the decorator.
                 rust(
-                    ".auth_scheme_option_resolver(#T())",
+                    ".auth_scheme_resolver(#T())",
                     ClientRustModule.Config.auth.toType()
-                        .resolve("no_auth_scheme_option_resolver"),
+                        .resolve("no_auth_scheme_resolver"),
                 )
             }
         // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
@@ -178,7 +178,7 @@ class ClientProtocolTestGenerator(
             let (http_client, request_receiver) = #{capture_request}(None);
             let config_builder = #{config}::Config::builder()
                 .with_test_defaults()
-                #{no_auth_scheme_option_resolver}
+                #{no_auth_scheme_resolver}
                 .endpoint_url($host);
             #{customParams}
 
@@ -188,7 +188,7 @@ class ClientProtocolTestGenerator(
                     .resolve("test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
-            "no_auth_scheme_option_resolver" to noAuthSchemeOptionResolver,
+            "no_auth_scheme_resolver" to noAuthSchemeResolver,
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "http_client", "config_builder", "client"))
 
