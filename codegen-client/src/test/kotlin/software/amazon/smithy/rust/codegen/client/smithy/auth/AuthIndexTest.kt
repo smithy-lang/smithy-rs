@@ -182,7 +182,6 @@ class AuthIndexTest {
                 model.expectShape(ShapeId.from("com.test#GetFooOpOverride"), OperationShape::class.java),
                 model.expectShape(ShapeId.from("com.test#GetFooAnonymous"), OperationShape::class.java),
                 model.expectShape(ShapeId.from("com.test#GetFooOptionalAuth"), OperationShape::class.java),
-                model.expectShape(ShapeId.from("com.test#GetFooUnsigned"), OperationShape::class.java),
             )
         assertEquals(expected, actual)
     }
