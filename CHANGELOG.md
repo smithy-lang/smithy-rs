@@ -1,4 +1,11 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 27th, 2025
+===============
+**New this release:**
+- :bug: (client) Fix hyper 1.x connection refused errors not marked as retryable
+- (client, [smithy-rs#4186](https://github.com/smithy-lang/smithy-rs/issues/4186)) Make Rpc V2 CBOR a compatible protocol for `awsQuery` using `awsQueryCompatible` trait
+
+
 June 11th, 2025
 ===============
 **Breaking Changes:**
