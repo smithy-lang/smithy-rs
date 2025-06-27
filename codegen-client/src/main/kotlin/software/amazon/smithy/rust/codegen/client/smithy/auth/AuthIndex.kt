@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.auth
 
-import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
@@ -14,7 +13,9 @@ import software.amazon.smithy.model.traits.AuthTrait
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthSchemeOption
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SyntheticNoAuthTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * Knowledge index for dealing with authentication traits and AuthSchemeOptions
@@ -35,20 +36,21 @@ class AuthIndex(private val ctx: ClientCodegenContext) {
             }
 
     /**
-     * Get the prioritized list of effective [AuthSchemeOption] for a service (auth options reconciled with the
-     * `auth([]` trait).
+     * Get the prioritized list of effective [AuthSchemeOption] for a service.
      */
     fun effectiveAuthOptionsForService(): List<AuthSchemeOption> {
         val serviceIndex = ServiceIndex.of(ctx.model)
         val allAuthOptions = authOptions()
 
-        val effectiveAuthSchemes =
-            serviceIndex.getEffectiveAuthSchemes(ctx.serviceShape)
-                .takeIf { it.isNotEmpty() } ?: listOf(NoAuthSchemeOption()).associateBy(NoAuthSchemeOption::authSchemeId)
-
-        return effectiveAuthSchemes.mapNotNull {
-            allAuthOptions[it.key]
-        }
+        val effectiveAuthScheme = serviceIndex.getEffectiveAuthSchemes(ctx.serviceShape, ServiceIndex.AuthSchemeMode.NO_AUTH_AWARE)
+        return effectiveAuthScheme
+            .mapNotNull {
+                allAuthOptions[it.key]
+            }.letIf(ctx.serviceShape.hasTrait<SyntheticNoAuthTrait>()) {
+                // Supports a workaround `AddSyntheticNoAuth` in S3's model transformer.
+                // See the comment in the `SyntheticNoAuthTrait` class for more context.
+                it + listOf(NoAuthSchemeOption())
+            }
     }
 
     /**
@@ -58,16 +60,10 @@ class AuthIndex(private val ctx: ClientCodegenContext) {
         val serviceIndex = ServiceIndex.of(ctx.model)
         val allAuthOptions = authOptions()
 
-        // anonymous auth (optionalAuth trait) is handled as an annotation trait...
-        val opEffectiveAuthSchemes = serviceIndex.getEffectiveAuthSchemes(ctx.serviceShape, op)
-        return if (op.hasTrait<OptionalAuthTrait>() || opEffectiveAuthSchemes.isEmpty()) {
-            listOf(NoAuthSchemeOption())
-        } else {
-            // return auth schemes in same order as the priority list dictated by `auth([])` trait
-            opEffectiveAuthSchemes.mapNotNull {
+        return serviceIndex.getEffectiveAuthSchemes(ctx.serviceShape, op, ServiceIndex.AuthSchemeMode.NO_AUTH_AWARE)
+            .mapNotNull {
                 allAuthOptions[it.key]
             }
-        }
     }
 
     /**
@@ -77,6 +73,6 @@ class AuthIndex(private val ctx: ClientCodegenContext) {
         TopDownIndex.of(ctx.model)
             .getContainedOperations(ctx.serviceShape)
             .filter { op ->
-                op.hasTrait<AuthTrait>() || op.hasTrait<UnsignedPayloadTrait>() || op.hasTrait<OptionalAuthTrait>()
+                op.hasTrait<AuthTrait>() || op.hasTrait<OptionalAuthTrait>()
             }.toSet()
 }

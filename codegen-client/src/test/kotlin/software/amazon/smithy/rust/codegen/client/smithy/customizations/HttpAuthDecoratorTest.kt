@@ -467,7 +467,7 @@ class HttpAuthDecoratorTest {
     }
 }
 
-private object TestModels {
+internal object TestModels {
     val allSchemes =
         """
         namespace test
