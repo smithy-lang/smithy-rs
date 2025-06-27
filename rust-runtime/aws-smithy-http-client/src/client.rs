@@ -762,7 +762,6 @@ fn new_conn_builder(
 #[cfg(test)]
 mod test {
     use std::io::{Error, ErrorKind};
-    use std::net::{IpAddr, Ipv4Addr};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
@@ -772,7 +771,6 @@ mod test {
     use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::time::SystemTimeSource;
-    use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http_1x::Uri;
     use hyper::rt::ReadBufCursor;
@@ -978,6 +976,8 @@ mod test {
     #[tokio::test]
     async fn connection_refused_works() {
         use crate::client::dns::HyperUtilResolver;
+        use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
+        use std::net::{IpAddr, Ipv4Addr};
 
         #[derive(Debug, Clone, Default)]
         struct TestResolver;
