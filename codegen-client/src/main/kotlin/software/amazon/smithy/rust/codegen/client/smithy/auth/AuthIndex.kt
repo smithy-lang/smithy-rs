@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.auth
 
-import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.OperationShape
@@ -74,6 +73,6 @@ class AuthIndex(private val ctx: ClientCodegenContext) {
         TopDownIndex.of(ctx.model)
             .getContainedOperations(ctx.serviceShape)
             .filter { op ->
-                op.hasTrait<AuthTrait>() || op.hasTrait<UnsignedPayloadTrait>() || op.hasTrait<OptionalAuthTrait>()
+                op.hasTrait<AuthTrait>() || op.hasTrait<OptionalAuthTrait>()
             }.toSet()
 }
