@@ -115,8 +115,6 @@ class AuthSchemeResolverGenerator(
                         _fut
                     }
                 }
-
-                #{NoAuthSchemeOptionResolver:W}
                 """,
                 *codegenScope,
                 "service_defaults" to
@@ -131,7 +129,6 @@ class AuthSchemeResolverGenerator(
                             AuthSection.DefaultResolverAdditionalImpl,
                         )
                     },
-                "NoAuthSchemeOptionResolver" to noAuthSchemeOptionResolver(),
             )
         }
     }
@@ -212,14 +209,15 @@ class AuthSchemeResolverGenerator(
         }
     }
 
-    private fun noAuthSchemeOptionResolver() =
-        writable {
-            // For encapsulation, we do not expose `NoAuthSchemeResolver`, instead expose a creation function
-            // that returns an opaque type.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Only used in protocol tests.
+    //  Remove this once the issue has been addressed.
+    internal fun noAuthSchemeResolver(): RuntimeType {
+        return RuntimeType.forInlineFun("NoAuthSchemeResolver", ClientRustModule.Config.auth) {
             rustTemplate(
                 """
+                ##[allow(dead_code)] // since usage is behind `cfg(test)`
                 ##[derive(Debug)]
-                struct NoAuthSchemeResolver;
+                pub(crate) struct NoAuthSchemeResolver;
                 impl ResolveAuthScheme for NoAuthSchemeResolver {
                     fn resolve_auth_scheme<'a>(
                         &'a self,
@@ -230,14 +228,10 @@ class AuthSchemeResolverGenerator(
                         #{AuthSchemeOptionsFuture}::ready(#{Ok}(vec![#{NoAuthSchemeOption:W}]))
                     }
                 }
-
-                /// Return an auth scheme resolver that favors `noAuth`
-                pub fn no_auth_scheme_resolver() -> impl ResolveAuthScheme {
-                   NoAuthSchemeResolver
-                }
                 """,
                 *codegenScope,
                 "NoAuthSchemeOption" to NoAuthSchemeOption().render(codegenContext),
             )
         }
+    }
 }

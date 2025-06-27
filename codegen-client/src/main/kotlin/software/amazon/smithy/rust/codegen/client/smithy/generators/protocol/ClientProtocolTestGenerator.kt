@@ -16,6 +16,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -166,9 +167,11 @@ class ClientProtocolTestGenerator(
                 // during protocol tests. This ensures compatibility when a test model references Sigv4,
                 // but the codegen, built with the generic client plugin, does not include the decorator.
                 rust(
-                    ".auth_scheme_resolver(#T())",
-                    ClientRustModule.Config.auth.toType()
-                        .resolve("no_auth_scheme_resolver"),
+                    ".auth_scheme_resolver(#T)",
+                    AuthSchemeResolverGenerator(
+                        codegenContext,
+                        emptyList(),
+                    ).noAuthSchemeResolver(),
                 )
             }
         // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
@@ -178,7 +181,7 @@ class ClientProtocolTestGenerator(
             let (http_client, request_receiver) = #{capture_request}(None);
             let config_builder = #{config}::Config::builder()
                 .with_test_defaults()
-                #{no_auth_scheme_resolver}
+                #{no_auth_scheme_resolver:W}
                 .endpoint_url($host);
             #{customParams}
 
