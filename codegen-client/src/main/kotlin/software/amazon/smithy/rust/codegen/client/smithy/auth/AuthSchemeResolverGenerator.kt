@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.auth
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -79,6 +80,7 @@ class AuthSchemeResolverGenerator(
                     operation_overrides: #{HashMap}<&'static str, Vec<#{AuthSchemeOption}>>,
                 }
 
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Remove `allow(...)` once the issue is addressed.
                 // When generating code for tests (e.g., `codegen-client-test`), this manual implementation
                 // of the `Default` trait may appear as if it could be derived automatically.
                 // However, that is not the case in production.
@@ -203,6 +205,32 @@ class AuthSchemeResolverGenerator(
                 }
                 """,
                 *codegenScope,
+            )
+        }
+    }
+
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Only used in protocol tests.
+    //  Remove this once the issue has been addressed.
+    internal fun noAuthSchemeResolver(): RuntimeType {
+        return RuntimeType.forInlineFun("NoAuthSchemeResolver", ClientRustModule.Config.auth) {
+            rustTemplate(
+                """
+                ##[allow(dead_code)] // since usage is behind `cfg(test)`
+                ##[derive(Debug)]
+                pub(crate) struct NoAuthSchemeResolver;
+                impl ResolveAuthScheme for NoAuthSchemeResolver {
+                    fn resolve_auth_scheme<'a>(
+                        &'a self,
+                        _params: &'a #{Params},
+                        _cfg: &'a #{ConfigBag},
+                        _runtime_components: &'a #{RuntimeComponents},
+                    ) -> #{AuthSchemeOptionsFuture}<'a> {
+                        #{AuthSchemeOptionsFuture}::ready(#{Ok}(vec![#{NoAuthSchemeOption:W}]))
+                    }
+                }
+                """,
+                *codegenScope,
+                "NoAuthSchemeOption" to NoAuthSchemeOption().render(codegenContext),
             )
         }
     }

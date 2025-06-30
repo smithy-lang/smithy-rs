@@ -61,37 +61,31 @@ data class ClientTest(
 
 val allCodegenTests = listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
-    /*  TODO(AuthAlignment): Comment in once the no auth scheme resolver can be injected via client config
     ClientTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     ClientTest("com.amazonaws.ebs#Ebs", "ebs", dependsOn = listOf("ebs.json")),
     ClientTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
     ClientTest("aws.protocoltests.json#JsonProtocol", "json_rpc11"),
     ClientTest("aws.protocoltests.restjson#RestJson", "rest_json"),
-     */
     ClientTest(
         "aws.protocoltests.restjson#RestJsonExtras",
         "rest_json_extras",
         dependsOn = listOf("rest-json-extras.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#MiscService", "misc", dependsOn = listOf("misc.smithy")),
-    /*  TODO(AuthAlignment): Comment in once the no auth scheme resolver can be injected via client config
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
     ClientTest("aws.protocoltests.query#AwsQuery", "aws_query", addMessageToErrors = false),
     ClientTest("aws.protocoltests.ec2#AwsEc2", "ec2_query", addMessageToErrors = false),
-     */
     ClientTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
     ClientTest(
         "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
         "rpcv2Cbor_extras",
         dependsOn = listOf("rpcv2Cbor-extras.smithy")
     ),
-    /*  TODO(AuthAlignment): Comment in once the no auth scheme resolver can be injected via client config
     ClientTest(
         "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
         "rest_xml_namespace",
         addMessageToErrors = false,
     ),
-     */
     ClientTest("aws.protocoltests.restxml#RestXmlExtras", "rest_xml_extras", addMessageToErrors = false),
     ClientTest(
         "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
