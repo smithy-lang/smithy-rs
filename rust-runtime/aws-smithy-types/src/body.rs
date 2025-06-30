@@ -5,7 +5,7 @@
 
 //! Types for representing the body of an HTTP request or response
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
@@ -64,6 +64,9 @@ enum BoxBody {
     ))]
     // will be dead code with `--no-default-features --features rt-tokio`
     HttpBody04(#[allow(dead_code)] http_body_0_4::combinators::BoxBody<Bytes, Error>),
+
+    #[cfg(feature = "http-body-1-x")]
+    HttpBody1(#[allow(dead_code)] http_body_util::combinators::BoxBody<Bytes, Error>),
 }
 
 pin_project! {
@@ -158,6 +161,41 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_data(cx)
                 }
+                // The handling of this case might not be ideal, but I don't see a better way to do it.
+                // http-1x bodies do not allow polling for trailers independently. This means that the
+                // only way to know you have entered the trailer section of the body is to call `poll_frame`
+                // and get a trailer frame. At that point you have already taken ownership of the first
+                // trailers and need to pass them along. To accomodate that we transform the trailers to
+                // [Bytes] via [http_body_1_x::trailers_as_bytes].
+                //
+                // If we deem this too messy SdkBody could start keeping track of state similar to what
+                // we do for AwsChunked bodies so the body can be aware of what section is currently being
+                // read from the [Inner] body.
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
+                    let maybe_data = Pin::new(box_body).poll_frame(cx);
+                    match maybe_data {
+                        Poll::Ready(Some(Ok(frame))) => {
+                            if frame.is_data() {
+                                Poll::Ready(Some(Ok(frame
+                                    .into_data()
+                                    .expect("Confirmed data frame"))))
+                            } else if frame.is_trailers() {
+                                let trailers =
+                                    frame.into_trailers().expect("Confirmed trailer frame");
+                                let trailer_bytes =
+                                    http_body_1_x::trailers_as_bytes(trailers, BytesMut::new());
+                                Poll::Ready(Some(Ok(trailer_bytes.into())))
+                            } else {
+                                unreachable!("Frame must be either data or trailers");
+                            }
+                        }
+                        Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(err))),
+                        Poll::Ready(None) => Poll::Ready(None),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
                     "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
@@ -190,6 +228,24 @@ impl SdkBody {
         }
     }
 
+    #[cfg(any(feature = "http-body-1-x", feature = "rt-tokio"))]
+    pub(crate) fn from_body_1_x_internal<T, E>(body: T) -> Self
+    where
+        T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<Error> + 'static,
+    {
+        use http_body_util::BodyExt;
+        Self {
+            inner: Inner::Dyn {
+                inner: BoxBody::HttpBody1(http_body_util::combinators::BoxBody::new(
+                    body.map_err(Into::into),
+                )),
+            },
+            rebuild: None,
+            bytes_contents: None,
+        }
+    }
+
     #[cfg(any(feature = "http-body-0-4-x", feature = "http-body-1-x",))]
     pub(crate) fn poll_next_trailers(
         self: Pin<&mut Self>,
@@ -202,6 +258,12 @@ impl SdkBody {
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_trailers(cx)
+                }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(_) => {
+                    // http-1x bodies cannot be polled for trailers, so those are always handled by
+                    // the poll_next method and will not be present here
+                    Poll::Ready(Ok(None))
                 }
             },
             InnerProj::Taken => Poll::Ready(Err(
@@ -259,6 +321,11 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     box_body.is_end_stream()
                 }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
+                    box_body.is_end_stream()
+                }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
                     "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
@@ -279,6 +346,12 @@ impl SdkBody {
                 #[cfg(feature = "http-body-0-4-x")]
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
+                    let hint = box_body.size_hint();
+                    (hint.lower(), hint.upper())
+                }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
                     let hint = box_body.size_hint();
                     (hint.lower(), hint.upper())
                 }
