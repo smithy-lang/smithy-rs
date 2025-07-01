@@ -124,6 +124,7 @@ class ClientProtocolTestGenerator(
     private val codegenScope =
         arrayOf(
             "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
+            "Bytes" to RT.Bytes,
             "Uri" to RT.Http.resolve("Uri"),
         )
 
@@ -377,7 +378,7 @@ class ClientProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body.
-                #{AssertEq}(&body, &bytes::Bytes::new());
+                #{AssertEq}(&body, &#{Bytes}::new());
                 """,
                 *codegenScope,
             )
