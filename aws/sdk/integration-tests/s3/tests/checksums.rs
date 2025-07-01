@@ -8,14 +8,31 @@
 use aws_config::SdkConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region, StalledStreamProtectionConfig};
+use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::ChecksumMode;
 use aws_sdk_s3::{operation::get_object::GetObjectOutput, types::ChecksumAlgorithm};
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
+use aws_smithy_mocks::RuleMode;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
+    SharedHttpConnector,
+};
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::retry::RetryConfig;
 use http_1x::header::AUTHORIZATION;
 use http_1x::{HeaderValue, Uri};
+use std::fs::File;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 use tracing_test::traced_test;
 
@@ -427,4 +444,207 @@ async fn test_response_checksum_ignores_invalid_base64() {
             None => Err("Checksum error was not issued".to_string()),
         }
     });
+}
+
+#[derive(Debug, Clone)]
+struct CaptureHttpClient {
+    inner: SharedHttpClient,
+    captured_headers: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Headers>>>,
+}
+
+impl CaptureHttpClient {
+    fn new() -> Self {
+        Self {
+            inner: aws_smithy_mocks::create_mock_http_client(),
+            captured_headers: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn captured_headers(&self) -> Vec<aws_smithy_runtime_api::http::Headers> {
+        self.captured_headers.lock().unwrap().clone()
+    }
+
+    fn attempt(&self) -> usize {
+        self.captured_headers().len() + 1
+    }
+}
+
+#[derive(Debug)]
+struct CaptureConnector {
+    inner: SharedHttpConnector,
+    captured_headers: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Headers>>>,
+}
+
+impl HttpConnector for CaptureConnector {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let mut captured_headers = self.captured_headers.lock().unwrap();
+        captured_headers.push(request.headers().clone());
+        // FIXME - for streaming we need to capture the bodies too...
+        self.inner.call(request)
+    }
+}
+
+impl HttpClient for CaptureHttpClient {
+    fn http_connector(
+        &self,
+        settings: &HttpConnectorSettings,
+        components: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        let inner = self.inner.http_connector(settings, components);
+        let connector = CaptureConnector {
+            inner,
+            captured_headers: self.captured_headers.clone(),
+        };
+        connector.into_shared()
+    }
+}
+
+#[tokio::test]
+#[traced_test]
+async fn test_checksum_reuse_on_retry() {
+    let retry_rule = aws_smithy_mocks::mock!(aws_sdk_s3::Client::put_object)
+        .sequence()
+        .http_status(503, None)
+        .output(|| PutObjectOutput::builder().build())
+        .build();
+
+    let http_client = CaptureHttpClient::new();
+    let client = aws_smithy_mocks::mock_client!(
+        aws_sdk_s3,
+        RuleMode::Sequential,
+        &[retry_rule],
+        |client_builder| {
+            client_builder
+                .http_client(http_client.clone())
+                .retry_config(RetryConfig::standard().with_max_attempts(3))
+        }
+    );
+
+    let initial_content = "initial content";
+    let retry_content = "retry content";
+
+    let http_client_clone = http_client.clone();
+    let change_body = SdkBody::retryable(move || {
+        let current_attempt = http_client_clone.attempt();
+        tracing::info!("test body current attempt: {}", current_attempt);
+        match current_attempt {
+            1 => SdkBody::from(initial_content),
+            _ => SdkBody::from(retry_content),
+        }
+    });
+
+    let body = ByteStream::new(change_body);
+
+    let _res = client
+        .put_object()
+        .body(body)
+        .checksum_algorithm(ChecksumAlgorithm::Sha256)
+        .bucket("test-bucket")
+        .key("test.txt")
+        .send()
+        .await
+        .expect("request should succeed, despite the non-base64-decodable checksum");
+
+    let headers = http_client.captured_headers();
+    assert_eq!(2, headers.len());
+    let first_checksum = headers[0]
+        .get("x-amz-checksum-sha256")
+        .expect("x-amz-checksum-sha256 header exists");
+
+    let second_checksum = headers[1]
+        .get("x-amz-checksum-sha256")
+        .expect("x-amz-checksum-sha256 header exists");
+
+    let initial_content_checksum = "kWo/C8OkKOGhaPRAjfgs1bu4sIxtesVe/53/KYJRNN8=";
+    assert_eq!(initial_content_checksum, first_checksum);
+    assert_eq!(initial_content_checksum, second_checksum);
+}
+
+#[tokio::test]
+#[traced_test]
+async fn test_checksum_reuse_on_retry_streaming() {
+    #[derive(Debug)]
+    struct ChangeBodyInterceptor {
+        http_client: CaptureHttpClient,
+        content_path: PathBuf,
+    }
+
+    impl Intercept for ChangeBodyInterceptor {
+        fn name(&self) -> &'static str {
+            "ChangeBodyInterceptor"
+        }
+
+        fn read_before_attempt(
+            &self,
+            _context: &BeforeTransmitInterceptorContextRef<'_>,
+            _runtime_components: &RuntimeComponents,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            if self.http_client.attempt() > 1 {
+                std::fs::write(self.content_path.as_path(), "retry content".as_bytes())
+                    .expect("replace contents successful");
+            }
+            Ok(())
+        }
+    }
+
+    let retry_rule = aws_smithy_mocks::mock!(aws_sdk_s3::Client::put_object)
+        .sequence()
+        .http_status(503, None)
+        .output(|| PutObjectOutput::builder().build())
+        .build();
+
+    let initial_content = "initial content";
+    let mut file = tempfile::NamedTempFile::new().unwrap();
+    let content_path = file.path().to_path_buf();
+    use std::io::Write;
+    file.write_all(initial_content.as_bytes()).unwrap();
+
+    let http_client = CaptureHttpClient::new();
+    let client = aws_smithy_mocks::mock_client!(
+        aws_sdk_s3,
+        RuleMode::Sequential,
+        &[retry_rule],
+        |client_builder| {
+            let change_body_interceptor = ChangeBodyInterceptor {
+                http_client: http_client.clone(),
+                content_path: content_path.clone(),
+            };
+            client_builder
+                .http_client(http_client.clone())
+                .retry_config(RetryConfig::standard().with_max_attempts(3))
+                .interceptor(change_body_interceptor)
+        }
+    );
+
+    let body = aws_sdk_s3::primitives::ByteStream::read_from()
+        .path(file.path())
+        .buffer_size(1024)
+        .build()
+        .await
+        .unwrap();
+
+    let _res = client
+        .put_object()
+        .body(body)
+        .checksum_algorithm(ChecksumAlgorithm::Sha256)
+        .bucket("test-bucket")
+        .key("test.txt")
+        .send()
+        .await
+        .expect("request should succeed, despite the non-base64-decodable checksum");
+
+    let headers = http_client.captured_headers();
+    assert_eq!(2, headers.len());
+    let first_checksum = headers[0]
+        .get("x-amz-checksum-sha256")
+        .expect("x-amz-checksum-sha256 header exists");
+
+    let second_checksum = headers[1]
+        .get("x-amz-checksum-sha256")
+        .expect("x-amz-checksum-sha256 header exists");
+
+    let initial_content_checksum = "Io8aOAjSFjel+3XQJNsqdkpJgpL52h7/lGVow3TQnZs=";
+    assert_eq!(initial_content_checksum, first_checksum);
+    assert_eq!(initial_content_checksum, second_checksum);
 }
