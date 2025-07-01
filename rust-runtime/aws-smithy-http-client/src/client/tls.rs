@@ -6,7 +6,7 @@ use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 use crate::HttpClientError;
 
 /// Choice of underlying cryptography library
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum Provider {
     #[cfg(any(
@@ -15,7 +15,12 @@ pub enum Provider {
         feature = "rustls-ring"
     ))]
     /// TLS provider based on [rustls](https://github.com/rustls/rustls)
-    Rustls(rustls_provider::CryptoMode),
+    Rustls {
+        /// The [`CryptoMode`] to use with Rustls
+        crypto_mode: rustls_provider::CryptoMode,
+        /// A custom certificate verifier. If not provided, the default WebPKI verifier is used.
+        cert_verifier: Option<std::sync::Arc<dyn rustls::client::danger::ServerCertVerifier>>,
+    },
     /// TLS provider based on [s2n-tls](https://github.com/aws/s2n-tls)
     #[cfg(feature = "s2n-tls")]
     S2nTls,
@@ -26,6 +31,7 @@ pub enum Provider {
 pub struct TlsContext {
     #[allow(unused)]
     trust_store: TrustStore,
+    allow_http: bool,
 }
 
 impl TlsContext {
@@ -45,12 +51,14 @@ impl Default for TlsContext {
 #[derive(Debug)]
 pub struct TlsContextBuilder {
     trust_store: TrustStore,
+    allow_http: bool,
 }
 
 impl TlsContextBuilder {
     fn new() -> Self {
         TlsContextBuilder {
             trust_store: TrustStore::default(),
+            allow_http: true,
         }
     }
 
@@ -60,10 +68,17 @@ impl TlsContextBuilder {
         self
     }
 
+    /// Configure if plaintext HTTP is allowed
+    pub fn with_allow_http(mut self, allow_http: bool) -> Self {
+        self.allow_http = allow_http;
+        self
+    }
+
     /// Build a new [TlsContext]
     pub fn build(self) -> Result<TlsContext, HttpClientError> {
         Ok(TlsContext {
             trust_store: self.trust_store,
+            allow_http: self.allow_http,
         })
     }
 }
@@ -185,7 +200,19 @@ cfg_rustls! {
             /// Create a TLS provider based on [rustls](https://github.com/rustls/rustls)
             /// and the given [`CryptoMode`]
             pub fn rustls(mode: CryptoMode) -> Provider {
-                Provider::Rustls(mode)
+                Provider::Rustls {
+                    crypto_mode: mode,
+                    cert_verifier: None
+                }
+            }
+
+            /// Create a TLS provider based on [rustls](https://github.com/rustls/rustls),
+            /// the given [`CryptoMode`], and a custom rustls certificate verifier.
+            pub fn rustls_danger_custom_cert_verifier(mode: CryptoMode, verifier: std::sync::Arc<dyn rustls::client::danger::ServerCertVerifier>) -> Provider {
+                Provider::Rustls {
+                    crypto_mode: mode,
+                    cert_verifier: Some(verifier)
+                }
             }
         }
 
@@ -271,19 +298,32 @@ cfg_rustls! {
             pub(crate) fn wrap_connector<R>(
                 mut conn: HttpConnector<R>,
                 crypto_mode: CryptoMode,
+                cert_verifier: Option<Arc<dyn rustls::client::danger::ServerCertVerifier>>,
                 tls_context: &TlsContext,
             ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
-                let root_certs = tls_context.rustls_root_certs();
                 conn.enforce_http(false);
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_tls_config(
-                        rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_mode.provider())))
-                            .with_safe_default_protocol_versions()
-                            .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                            .with_root_certificates(root_certs)
-                            .with_no_client_auth()
-                    )
-                    .https_or_http()
+
+                let client_config_builder = rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_mode.provider())))
+                    .with_safe_default_protocol_versions()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.");
+
+                let client_config_builder = if let Some(verifier) = cert_verifier {
+                    client_config_builder.dangerous().with_custom_certificate_verifier(verifier)
+                } else {
+                    let root_certs = tls_context.rustls_root_certs();
+                    client_config_builder.with_root_certificates(root_certs)
+                };
+
+                let connector_builder = hyper_rustls::HttpsConnectorBuilder::new()
+                    .with_tls_config(client_config_builder.with_no_client_auth());
+
+                let connector_builder = if tls_context.allow_http {
+                    connector_builder.https_or_http()
+                } else {
+                    connector_builder.https_only()
+                };
+
+                connector_builder
                     .enable_http1()
                     .enable_http2()
                     .wrap_connector(conn)
@@ -346,7 +386,9 @@ cfg_s2n_tls! {
                 let config = tls_context.s2n_config();
                 http_connector.enforce_http(false);
                 let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config);
-                builder.with_plaintext_http(true);
+                if tls_context.allow_http {
+                    builder.with_plaintext_http(true);
+                }
                 builder.build()
             }
         }

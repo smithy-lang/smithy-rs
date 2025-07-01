@@ -26,7 +26,7 @@ use tower::Service;
 #[tokio::test]
 async fn ring_client() {
     let client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .build_https();
@@ -37,7 +37,7 @@ async fn ring_client() {
 #[tokio::test]
 async fn aws_lc_fips_client() {
     let client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .build_https();
@@ -48,7 +48,7 @@ async fn aws_lc_fips_client() {
 #[tokio::test]
 async fn aws_lc_client() {
     let client = Builder::new()
-        .tls_provider(tls::Provider::Rustls(
+        .tls_provider(tls::Provider::rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .build_https();
@@ -88,7 +88,7 @@ async fn custom_dns_client() {
 
     let providers = [
         #[cfg(feature = "rustls-ring")]
-        tls::Provider::Rustls(tls::rustls_provider::CryptoMode::Ring),
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
         #[cfg(feature = "s2n-tls")]
         tls::Provider::S2nTls,
     ];
