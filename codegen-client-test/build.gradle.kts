@@ -75,6 +75,8 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
     ClientTest("aws.protocoltests.query#AwsQuery", "aws_query", addMessageToErrors = false),
     ClientTest("aws.protocoltests.ec2#AwsEc2", "ec2_query", addMessageToErrors = false),
+    ClientTest("aws.protocoltests.rpcv2cbor#QueryCompatibleRpcV2Protocol", "rpcv2cbor_query_compatible"),
+    ClientTest("aws.protocoltests.rpcv2cbor#NonQueryCompatibleRpcV2Protocol", "rpcv2cbor_non_query_compatible"),
     ClientTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
     ClientTest(
         "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
