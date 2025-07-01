@@ -449,37 +449,46 @@ async fn test_response_checksum_ignores_invalid_base64() {
 #[derive(Debug, Clone)]
 struct CaptureHttpClient {
     inner: SharedHttpClient,
-    captured_headers: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Headers>>>,
+    captured_requests: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Request<SdkBody>>>>,
 }
 
 impl CaptureHttpClient {
     fn new() -> Self {
         Self {
             inner: aws_smithy_mocks::create_mock_http_client(),
-            captured_headers: Arc::new(Mutex::new(Vec::new())),
+            captured_requests: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    fn captured_headers(&self) -> Vec<aws_smithy_runtime_api::http::Headers> {
-        self.captured_headers.lock().unwrap().clone()
+    fn take_captured_requests(&self) -> Vec<aws_smithy_runtime_api::http::Request<SdkBody>> {
+        let mut captured = self.captured_requests.lock().unwrap();
+        std::mem::take(&mut *captured)
     }
 
     fn attempt(&self) -> usize {
-        self.captured_headers().len() + 1
+        self.captured_requests.lock().unwrap().len() + 1
     }
 }
 
 #[derive(Debug)]
 struct CaptureConnector {
     inner: SharedHttpConnector,
-    captured_headers: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Headers>>>,
+    captured_requests: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Request<SdkBody>>>>,
 }
 
 impl HttpConnector for CaptureConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let mut captured_headers = self.captured_headers.lock().unwrap();
-        captured_headers.push(request.headers().clone());
-        // FIXME - for streaming we need to capture the bodies too...
+        let mut captured_requests = self.captured_requests.lock().unwrap();
+        let mut request = request;
+        // the body isn't read by the inner connector so it's safe to take it here
+        let body = request.take_body();
+        let mut captured = aws_smithy_runtime_api::http::Request::new(body);
+
+        request.headers().iter().for_each(|(k, v)| {
+            captured.headers_mut().append(k.to_string(), v.to_string());
+        });
+
+        captured_requests.push(captured);
         self.inner.call(request)
     }
 }
@@ -493,7 +502,7 @@ impl HttpClient for CaptureHttpClient {
         let inner = self.inner.http_connector(settings, components);
         let connector = CaptureConnector {
             inner,
-            captured_headers: self.captured_headers.clone(),
+            captured_requests: self.captured_requests.clone(),
         };
         connector.into_shared()
     }
@@ -545,13 +554,15 @@ async fn test_checksum_reuse_on_retry() {
         .await
         .expect("request should succeed, despite the non-base64-decodable checksum");
 
-    let headers = http_client.captured_headers();
-    assert_eq!(2, headers.len());
-    let first_checksum = headers[0]
+    let requests = http_client.take_captured_requests();
+    assert_eq!(2, requests.len());
+    let first_checksum = requests[0]
+        .headers()
         .get("x-amz-checksum-sha256")
         .expect("x-amz-checksum-sha256 header exists");
 
-    let second_checksum = headers[1]
+    let second_checksum = requests[1]
+        .headers()
         .get("x-amz-checksum-sha256")
         .expect("x-amz-checksum-sha256 header exists");
 
@@ -634,13 +645,16 @@ async fn test_checksum_reuse_on_retry_streaming() {
         .await
         .expect("request should succeed, despite the non-base64-decodable checksum");
 
-    let headers = http_client.captured_headers();
-    assert_eq!(2, headers.len());
-    let first_checksum = headers[0]
+    let requests = http_client.take_captured_requests();
+    assert_eq!(2, requests.len());
+    // FIXME - leftoff here - need to update this to read the body and find the trailer checksum
+    let first_checksum = requests[0]
+        .headers()
         .get("x-amz-checksum-sha256")
         .expect("x-amz-checksum-sha256 header exists");
 
-    let second_checksum = headers[1]
+    let second_checksum = requests[1]
+        .headers()
         .get("x-amz-checksum-sha256")
         .expect("x-amz-checksum-sha256 header exists");
 
