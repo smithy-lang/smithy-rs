@@ -53,7 +53,7 @@ internal class ClientInstantiatorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
         project.moduleFor(shape) {
-            ClientEnumGenerator(codegenContext, shape).render(this)
+            ClientEnumGenerator(codegenContext, shape, emptyList()).render(this)
             unitTest("generate_named_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
@@ -74,7 +74,7 @@ internal class ClientInstantiatorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
         project.moduleFor(shape) {
-            ClientEnumGenerator(codegenContext, shape).render(this)
+            ClientEnumGenerator(codegenContext, shape, emptyList()).render(this)
             unitTest("generate_unnamed_enums") {
                 withBlock("let result = ", ";") {
                     sut.render(this, shape, data)
