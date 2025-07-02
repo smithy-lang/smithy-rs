@@ -30,6 +30,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::retry::RetryConfig;
 use http_1x::header::AUTHORIZATION;
 use http_1x::{HeaderValue, Uri};
+use hyper::body::HttpBody;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -449,7 +450,7 @@ async fn test_response_checksum_ignores_invalid_base64() {
 #[derive(Debug, Clone)]
 struct CaptureHttpClient {
     inner: SharedHttpClient,
-    captured_requests: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Request<SdkBody>>>>,
+    captured_requests: Arc<Mutex<Vec<CapturedRequest>>>,
 }
 
 impl CaptureHttpClient {
@@ -460,7 +461,7 @@ impl CaptureHttpClient {
         }
     }
 
-    fn take_captured_requests(&self) -> Vec<aws_smithy_runtime_api::http::Request<SdkBody>> {
+    fn take_captured_requests(&self) -> Vec<CapturedRequest> {
         let mut captured = self.captured_requests.lock().unwrap();
         std::mem::take(&mut *captured)
     }
@@ -473,23 +474,48 @@ impl CaptureHttpClient {
 #[derive(Debug)]
 struct CaptureConnector {
     inner: SharedHttpConnector,
-    captured_requests: Arc<Mutex<Vec<aws_smithy_runtime_api::http::Request<SdkBody>>>>,
+    captured_requests: Arc<Mutex<Vec<CapturedRequest>>>,
+}
+
+#[derive(Debug)]
+struct CapturedRequest {
+    headers: aws_smithy_runtime_api::http::Headers,
+    body: Result<http_body_util::Collected<bytes::Bytes>, BoxError>,
+}
+
+impl CapturedRequest {
+    fn headers(&self) -> &aws_smithy_runtime_api::http::Headers {
+        &self.headers
+    }
 }
 
 impl HttpConnector for CaptureConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let mut captured_requests = self.captured_requests.lock().unwrap();
-        let mut request = request;
-        // the body isn't read by the inner connector so it's safe to take it here
-        let body = request.take_body();
-        let mut captured = aws_smithy_runtime_api::http::Request::new(body);
+        // let handle = tokio::runtime::Handle::current();
+        let captured_requests = self.captured_requests.clone();
+        let inner = self.inner.clone();
+        HttpConnectorFuture::new(async move {
+            let mut request = request;
+            // the body isn't read by the inner connector so it's safe to take it here
+            // we need to read it as if we were the actual server here and consume it to be able to
+            // test retry behavior of streaming bodies which must be read for checksums to be triggered
+            let body = request.take_body();
 
-        request.headers().iter().for_each(|(k, v)| {
-            captured.headers_mut().append(k.to_string(), v.to_string());
-        });
+            let output = http_body_util::BodyExt::collect(body)
+                .await
+                .map_err(|e| BoxError::from(e));
+            let captured = CapturedRequest {
+                headers: request.headers().clone(),
+                body: output,
+            };
 
-        captured_requests.push(captured);
-        self.inner.call(request)
+            {
+                let mut captured_requests = captured_requests.lock().unwrap();
+                captured_requests.push(captured);
+            }
+
+            inner.call(request).await
+        })
     }
 }
 
@@ -529,16 +555,13 @@ async fn test_checksum_reuse_on_retry() {
         }
     );
 
-    let initial_content = "initial content";
-    let retry_content = "retry content";
-
     let http_client_clone = http_client.clone();
     let change_body = SdkBody::retryable(move || {
         let current_attempt = http_client_clone.attempt();
         tracing::info!("test body current attempt: {}", current_attempt);
         match current_attempt {
-            1 => SdkBody::from(initial_content),
-            _ => SdkBody::from(retry_content),
+            1 => SdkBody::from("initial content"),
+            _ => SdkBody::from("retry content"),
         }
     });
 
@@ -571,41 +594,44 @@ async fn test_checksum_reuse_on_retry() {
     assert_eq!(initial_content_checksum, second_checksum);
 }
 
-#[tokio::test]
-#[traced_test]
-async fn test_checksum_reuse_on_retry_streaming() {
-    #[derive(Debug)]
-    struct ChangeBodyInterceptor {
-        http_client: CaptureHttpClient,
-        content_path: PathBuf,
+/// Swaps the file content on subsequent attempts
+#[derive(Debug)]
+struct ChangeBodyInterceptor {
+    http_client: CaptureHttpClient,
+    content_path: PathBuf,
+    retry_content: &'static str,
+}
+
+impl Intercept for ChangeBodyInterceptor {
+    fn name(&self) -> &'static str {
+        "ChangeBodyInterceptor"
     }
 
-    impl Intercept for ChangeBodyInterceptor {
-        fn name(&self) -> &'static str {
-            "ChangeBodyInterceptor"
+    fn read_before_attempt(
+        &self,
+        _context: &BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        if self.http_client.attempt() > 1 {
+            std::fs::write(self.content_path.as_path(), self.retry_content.as_bytes())
+                .expect("replace contents successful");
         }
-
-        fn read_before_attempt(
-            &self,
-            _context: &BeforeTransmitInterceptorContextRef<'_>,
-            _runtime_components: &RuntimeComponents,
-            _cfg: &mut ConfigBag,
-        ) -> Result<(), BoxError> {
-            if self.http_client.attempt() > 1 {
-                std::fs::write(self.content_path.as_path(), "retry content".as_bytes())
-                    .expect("replace contents successful");
-            }
-            Ok(())
-        }
+        Ok(())
     }
+}
 
+async fn run_checksum_reuse_streaming_request_test(
+    initial_content: &'static str,
+    retry_content: &'static str,
+    expected_checksum: &'static str,
+) {
     let retry_rule = aws_smithy_mocks::mock!(aws_sdk_s3::Client::put_object)
         .sequence()
         .http_status(503, None)
         .output(|| PutObjectOutput::builder().build())
         .build();
 
-    let initial_content = "initial content";
     let mut file = tempfile::NamedTempFile::new().unwrap();
     let content_path = file.path().to_path_buf();
     use std::io::Write;
@@ -620,6 +646,7 @@ async fn test_checksum_reuse_on_retry_streaming() {
             let change_body_interceptor = ChangeBodyInterceptor {
                 http_client: http_client.clone(),
                 content_path: content_path.clone(),
+                retry_content,
             };
             client_builder
                 .http_client(http_client.clone())
@@ -645,20 +672,107 @@ async fn test_checksum_reuse_on_retry_streaming() {
         .await
         .expect("request should succeed, despite the non-base64-decodable checksum");
 
-    let requests = http_client.take_captured_requests();
+    let mut requests = http_client.take_captured_requests();
     assert_eq!(2, requests.len());
-    // FIXME - leftoff here - need to update this to read the body and find the trailer checksum
-    let first_checksum = requests[0]
-        .headers()
-        .get("x-amz-checksum-sha256")
-        .expect("x-amz-checksum-sha256 header exists");
 
-    let second_checksum = requests[1]
-        .headers()
-        .get("x-amz-checksum-sha256")
-        .expect("x-amz-checksum-sha256 header exists");
+    assert_streaming_request_checksum(
+        requests.remove(0),
+        "x-amz-checksum-sha256",
+        expected_checksum,
+    )
+    .await;
+    assert_streaming_request_checksum(
+        requests.remove(0),
+        "x-amz-checksum-sha256",
+        expected_checksum,
+    )
+    .await;
+}
 
-    let initial_content_checksum = "Io8aOAjSFjel+3XQJNsqdkpJgpL52h7/lGVow3TQnZs=";
-    assert_eq!(initial_content_checksum, first_checksum);
-    assert_eq!(initial_content_checksum, second_checksum);
+async fn assert_streaming_request_checksum(
+    mut request: CapturedRequest,
+    checksum_header_name: &'static str,
+    expected_checksum: &'static str,
+) {
+    let headers = request.headers();
+    let x_amz_content_sha256 = headers
+        .get("x-amz-content-sha256")
+        .expect("x-amz-content-sha256 header exists");
+    let x_amz_trailer = headers
+        .get("x-amz-trailer")
+        .expect("x-amz-trailer header exists");
+    let content_encoding = headers.get_all("Content-Encoding").collect::<Vec<_>>();
+
+    assert_eq!(
+        HeaderValue::from_static("STREAMING-UNSIGNED-PAYLOAD-TRAILER"),
+        x_amz_content_sha256,
+        "signing header is incorrect"
+    );
+    assert_eq!(
+        HeaderValue::from_static(checksum_header_name),
+        x_amz_trailer,
+        "x-amz-trailer is incorrect"
+    );
+
+    assert!(content_encoding.contains(&"aws-chunked"));
+    // let body = collect_body_into_string(request.take_body()).await;
+    let body = request.body.expect("body collected").to_bytes();
+    let body_str = bytes_utils::Str::try_from(body)
+        .expect("body is utf-8")
+        .to_string();
+    let actual_checksum =
+        extract_checksum_value(&body_str, checksum_header_name).expect("trailing checksum exists");
+    assert_eq!(actual_checksum, expected_checksum);
+}
+
+fn extract_checksum_value<'a, 'b>(input: &'a str, checksum_name: &'b str) -> Option<&'a str> {
+    input
+        .find(&format!("{}:", checksum_name))
+        .and_then(|start| {
+            let value_start = start + checksum_name.len() + 1;
+            input[value_start..]
+                .find("\r\n\r\n")
+                .map(|end| &input[value_start..value_start + end])
+        })
+}
+
+/// Test checksum is re-used for aws-chunked/streaming content when the content changes
+/// between retries but the content length differs
+///
+/// NOTE: Because we set the overall body size hint only once when the stream is constructed
+///       we end up throwing an error :696
+#[tokio::test]
+#[traced_test]
+#[should_panic(expected = "StreamLengthMismatch { actual: 13, expected: 15 }")]
+async fn test_checksum_reuse_on_retry_streaming_content_len_differs() {
+    run_checksum_reuse_streaming_request_test(
+        "initial content",
+        "retry content",
+        "kWo/C8OkKOGhaPRAjfgs1bu4sIxtesVe/53/KYJRNN8=",
+    )
+    .await;
+}
+
+/// Test checksum is re-used for aws-chunked/streaming content when the content changes
+/// between retries but the content length is the same
+#[tokio::test]
+#[traced_test]
+async fn test_checksum_reuse_on_retry_streaming_content_len_same() {
+    run_checksum_reuse_streaming_request_test(
+        "initial content",
+        "in1t1al content",
+        "kWo/C8OkKOGhaPRAjfgs1bu4sIxtesVe/53/KYJRNN8=",
+    )
+    .await;
+
+    logs_assert(|lines: &[&str]| {
+        let checksum_warning = lines.iter().find(|&&line| {
+            line.contains( r#"calculated checksum differs from cached checksum! cached={"x-amz-checksum-sha256": "kWo/C8OkKOGhaPRAjfgs1bu4sIxtesVe/53/KYJRNN8="} calculated={"x-amz-checksum-sha256": "pPv/1lYp3XTWCZXJWT1heRy9+ZQyPn99ZqMQn1MK3Bw="}"#)
+        });
+
+        match checksum_warning {
+            Some(_) => Ok(()),
+            None => Err("Checksum mismatch warning was not issued".to_string()),
+        }
+    });
 }
