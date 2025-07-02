@@ -200,7 +200,7 @@ impl<B> Request<B> {
     ///
     /// Depending on the internal storage type, this operation may be free or it may have an internal
     /// cost.
-    #[cfg(feature = "http-02x")]
+    // #[cfg(feature = "http-02x")]
     pub fn try_into_http02x(self) -> Result<http_02x::Request<B>, HttpError> {
         let mut req = http_02x::Request::builder()
             .uri(self.uri.into_h0())

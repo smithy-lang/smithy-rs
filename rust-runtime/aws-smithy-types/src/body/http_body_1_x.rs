@@ -8,7 +8,7 @@
 use std::pin::Pin;
 use std::task::{ready, Context, Poll};
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 
@@ -31,9 +31,9 @@ impl SdkBody {
         match ready!(self.as_mut().poll_next(cx)) {
             // if there's no more data, try to return trailers
             None => match ready!(self.poll_next_trailers(cx)) {
-                Ok(Some(trailers)) => Poll::Ready(Some(Ok(http_body_1_0::Frame::trailers(
-                    convert_headers_0x_1x(trailers),
-                )))),
+                Ok(Some(trailers)) => {
+                    Poll::Ready(Some(Ok(http_body_1_0::Frame::trailers(trailers))))
+                }
                 Ok(None) => Poll::Ready(None),
                 Err(e) => Poll::Ready(Some(Err(e))),
             },
@@ -183,51 +183,20 @@ pub(crate) fn convert_headers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMa
     map
 }
 
-/// Writes trailers out into a `String` and then converts that `String` to a `Bytes` before
-/// returning. This is usefule since the SdkBody's `poll_next()` method expects Bytes as outputs
-/// and http-1x bodies cannot be polled independently for trailers. So we have to encode them.
-///
-/// - Trailer names are separated from values by a single colon, no space.
-/// - Trailer names with multiple values will be written out one line per value, with the name
-///   appearing on each line.
-pub(crate) fn trailers_as_bytes(trailer_map: http_1x::HeaderMap, mut buffer: BytesMut) -> BytesMut {
-    const TRAILER_SEPARATOR: &[u8] = b":";
-    const CRLF_RAW: &[u8] = b"\r\n";
-
-    let mut current_header_name: Option<http_1x::HeaderName> = None;
-
-    for (header_name, header_value) in trailer_map.into_iter() {
-        // When a header has multiple values, the name only comes up in iteration the first time
-        // we see it. Therefore, we need to keep track of the last name we saw and fall back to
-        // it when `header_name == None`.
-        current_header_name = header_name.or(current_header_name);
-
-        // In practice, this will always exist, but `if let` is nicer than unwrap
-        if let Some(header_name) = current_header_name.as_ref() {
-            buffer.extend_from_slice(header_name.as_ref());
-            buffer.extend_from_slice(TRAILER_SEPARATOR);
-            buffer.extend_from_slice(header_value.as_bytes());
-            buffer.extend_from_slice(CRLF_RAW);
-        }
-    }
-
-    buffer
-}
-
 #[cfg(test)]
 mod test {
     use std::collections::VecDeque;
     use std::pin::Pin;
     use std::task::{Context, Poll};
 
-    use bytes::{Bytes, BytesMut};
+    use bytes::Bytes;
     use http::header::{CONTENT_LENGTH as CL0, CONTENT_TYPE as CT0};
     use http_1x::header::{CONTENT_LENGTH as CL1, CONTENT_TYPE as CT1};
     use http_1x::{HeaderMap, HeaderName, HeaderValue};
     use http_body_1_0::Frame;
     use http_body_util::BodyExt;
 
-    use crate::body::http_body_1_x::{convert_headers_1x_0x, trailers_as_bytes, Http1toHttp04};
+    use crate::body::http_body_1_x::{convert_headers_1x_0x, Http1toHttp04};
     use crate::body::{Error, SdkBody};
     use crate::byte_stream::ByteStream;
 
@@ -291,10 +260,7 @@ mod test {
         };
         let body = SdkBody::from_body_1_x(body);
         let data = ByteStream::new(body);
-        assert_eq!(
-            data.collect().await.unwrap().to_vec(),
-            b"123456789x-test:x-test-value\r\nx-test:x-test-value-2\r\ny-test:y-test-value-2\r\n"
-        );
+        assert_eq!(data.collect().await.unwrap().to_vec(), b"123456789");
     }
 
     #[tokio::test]
@@ -308,36 +274,11 @@ mod test {
             ]
             .into(),
         };
-        let mut body = SdkBody::from_body_1_x(body);
-
-        let mut data: Vec<Bytes> = Vec::new();
-        while let Some(Ok(frame)) = body.frame().await {
-            data.push(frame.into_data().unwrap());
-        }
-
-        let expected_trailer_bytes = trailers_as_bytes(trailers(), BytesMut::new());
-
-        assert_eq!(data.pop().unwrap(), expected_trailer_bytes);
-    }
-
-    #[tokio::test]
-    async fn test_read_trailers_as_1x() {
-        let body = TestBody {
-            chunks: vec![
-                Chunk::Data("123"),
-                Chunk::Data("456"),
-                Chunk::Data("789"),
-                Chunk::Trailers(trailers()),
-            ]
-            .into(),
-        };
         let body = SdkBody::from_body_1_x(body);
+        let collected = body.collect().await.unwrap();
+        let collected_trailers = collected.trailers();
 
-        let collected = BodyExt::collect(body).await.expect("should succeed");
-        assert_eq!(
-            collected.to_bytes().as_ref(),
-            b"123456789x-test:x-test-value\r\nx-test:x-test-value-2\r\ny-test:y-test-value-2\r\n"
-        );
+        assert_eq!(collected_trailers, Some(&trailers()));
     }
 
     #[tokio::test]

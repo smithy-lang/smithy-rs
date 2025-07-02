@@ -5,7 +5,7 @@
 
 //! Types for representing the body of an HTTP request or response
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
@@ -40,7 +40,8 @@ pin_project! {
         // In the event of retry, this function will be called to generate a new body. See
         // [`try_clone()`](SdkBody::try_clone)
         rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
-        bytes_contents: Option<Bytes>
+        bytes_contents: Option<Bytes>,
+        trailers: Option<http_1x::HeaderMap>,
     }
 }
 
@@ -114,6 +115,7 @@ impl SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
             bytes_contents: initial.bytes_contents,
+            trailers: None,
         }
     }
 
@@ -124,6 +126,7 @@ impl SdkBody {
             inner: Inner::Taken,
             rebuild: None,
             bytes_contents: None,
+            trailers: None,
         }
     }
 
@@ -133,6 +136,7 @@ impl SdkBody {
             inner: Inner::Once { inner: None },
             rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
             bytes_contents: Some(Bytes::new()),
+            trailers: None,
         }
     }
 
@@ -161,18 +165,12 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_data(cx)
                 }
-                // The handling of this case might not be ideal, but I don't see a better way to do it.
-                // http-1x bodies do not allow polling for trailers independently. This means that the
-                // only way to know you have entered the trailer section of the body is to call `poll_frame`
-                // and get a trailer frame. At that point you have already taken ownership of the first
-                // trailers and need to pass them along. To accomodate that we transform the trailers to
-                // [Bytes] via [http_body_1_x::trailers_as_bytes].
-                //
-                // If we deem this too messy SdkBody could start keeping track of state similar to what
-                // we do for AwsChunked bodies so the body can be aware of what section is currently being
-                // read from the [Inner] body.
                 #[cfg(feature = "http-body-1-x")]
                 BoxBody::HttpBody1(box_body) => {
+                    // If this is polled after the trailers have been cached end early
+                    if this.trailers.is_some() {
+                        return Poll::Ready(None);
+                    }
                     use http_body_1_0::Body;
                     let maybe_data = Pin::new(box_body).poll_frame(cx);
                     match maybe_data {
@@ -184,9 +182,9 @@ impl SdkBody {
                             } else if frame.is_trailers() {
                                 let trailers =
                                     frame.into_trailers().expect("Confirmed trailer frame");
-                                let trailer_bytes =
-                                    http_body_1_x::trailers_as_bytes(trailers, BytesMut::new());
-                                Poll::Ready(Some(Ok(trailer_bytes.into())))
+                                // Buffer the trailers for the trailer poll
+                                *this.trailers = Some(trailers);
+                                Poll::Ready(None)
                             } else {
                                 unreachable!("Frame must be either data or trailers");
                             }
@@ -225,6 +223,7 @@ impl SdkBody {
             },
             rebuild: None,
             bytes_contents: None,
+            trailers: None,
         }
     }
 
@@ -243,6 +242,7 @@ impl SdkBody {
             },
             rebuild: None,
             bytes_contents: None,
+            trailers: None,
         }
     }
 
@@ -250,20 +250,50 @@ impl SdkBody {
     pub(crate) fn poll_next_trailers(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
+    ) -> Poll<Result<Option<http_1x::HeaderMap<http_1x::HeaderValue>>, Error>> {
+        use crate::body::http_body_1_x::convert_headers_0x_1x;
+
         let this = self.project();
         match this.inner.project() {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
-                    Pin::new(box_body).poll_trailers(cx)
+                    let polled = Pin::new(box_body).poll_trailers(cx);
+
+                    match polled {
+                        Poll::Ready(Ok(maybe_trailers)) => {
+                            let http_1x_trailers = maybe_trailers.map(convert_headers_0x_1x);
+                            Poll::Ready(Ok(http_1x_trailers))
+                        }
+                        Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+                        Poll::Pending => Poll::Pending,
+                    }
                 }
                 #[cfg(feature = "http-body-1-x")]
-                BoxBody::HttpBody1(_) => {
-                    // http-1x bodies cannot be polled for trailers, so those are always handled by
-                    // the poll_next method and will not be present here
-                    Poll::Ready(Ok(None))
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
+                    // Return the cached trailers without polling
+                    if let Some(trailers) = this.trailers.take() {
+                        return Poll::Ready(Ok(Some(trailers)));
+                    }
+
+                    let polled = Pin::new(box_body).poll_frame(cx);
+                    match polled {
+                        Poll::Ready(Some(Ok(maybe_trailers))) => {
+                            if maybe_trailers.is_data() {
+                                Poll::Ready(Err("Trailers polled while body still has data".into()))
+                            } else {
+                                let trailers = maybe_trailers
+                                    .into_trailers()
+                                    .expect("Frame must be trailers because it is not data");
+                                Poll::Ready(Ok(Some(trailers)))
+                            }
+                        }
+                        Poll::Ready(None) => Poll::Ready(Ok(None)),
+                        Poll::Ready(Some(Err(err))) => Poll::Ready(Err(err)),
+                        Poll::Pending => Poll::Pending,
+                    }
                 }
             },
             InnerProj::Taken => Poll::Ready(Err(
@@ -292,6 +322,7 @@ impl SdkBody {
                 inner: next,
                 rebuild: self.rebuild.clone(),
                 bytes_contents: self.bytes_contents.clone(),
+                trailers: self.trailers.clone(),
             }
         })
     }
@@ -411,6 +442,7 @@ impl From<Bytes> for SdkBody {
                 inner: Some(bytes.clone()),
             })),
             bytes_contents: Some(b),
+            trailers: None,
         }
     }
 }

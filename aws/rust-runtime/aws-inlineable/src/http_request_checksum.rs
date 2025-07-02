@@ -406,11 +406,12 @@ mod tests {
     async fn test_checksum_body_is_retryable() {
         let input_text = "Hello world";
         let chunk_len_hex = format!("{:X}", input_text.len());
-        let mut request: HttpRequest = http::Request::builder()
-            .body(SdkBody::retryable(move || SdkBody::from(input_text)))
-            .unwrap()
-            .try_into()
-            .unwrap();
+        let mut request: HttpRequest = HttpRequest::try_from(
+            http_1x::Request::builder()
+                .body(SdkBody::retryable(move || SdkBody::from(input_text)))
+                .unwrap(),
+        )
+        .unwrap();
 
         // ensure original SdkBody is retryable
         assert!(request.body().try_clone().is_some());

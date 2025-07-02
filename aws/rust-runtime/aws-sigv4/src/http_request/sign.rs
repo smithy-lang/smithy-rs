@@ -14,7 +14,7 @@ use crate::sign::v4;
 #[cfg(feature = "sigv4a")]
 use crate::sign::v4a;
 use crate::{SignatureVersion, SigningOutput};
-use http0::Uri;
+use http::Uri;
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::str;
@@ -204,11 +204,16 @@ impl SigningInstructions {
         }
 
         if !new_query.is_empty() {
-            let mut query = aws_smithy_http::query_writer::QueryWriter::new(request.uri());
+            let mut query = aws_smithy_http::query_writer::QueryWriter::new_from_string(
+                &request.uri().to_string(),
+            )
+            .expect("unreachable: URI is valid");
             for (name, value) in new_query {
                 query.insert(name, &value);
             }
-            *request.uri_mut() = query.build_uri();
+            let query_uri = query.build_uri().to_string();
+            let query_http0 = query_uri.parse::<http0::Uri>().expect("URI is valid");
+            *request.uri_mut() = query_http0;
         }
     }
 

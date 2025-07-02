@@ -204,7 +204,7 @@ impl PresignedRequest {
         let _ = http_request
             .try_clone()
             .expect("must be cloneable, body is empty")
-            .try_into_http02x()?;
+            .try_into_http1x()?;
         Ok(Self { http_request })
     }
 

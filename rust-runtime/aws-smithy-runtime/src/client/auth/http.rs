@@ -105,7 +105,7 @@ impl Sign for ApiKeySigner {
                 let mut query = QueryWriter::new_from_string(request.uri())?;
                 query.insert(&self.name, api_key.token());
                 request
-                    .set_uri(query.build_uri())
+                    .set_uri(query.build_uri().to_string())
                     .expect("query writer returns a valid URI")
             }
         }

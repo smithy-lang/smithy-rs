@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.3"
+version = "1.8.4"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -642,7 +642,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.1"
+version = "1.8.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -1956,7 +1956,9 @@ dependencies = [
  "fastrand",
  "futures-util",
  "http 0.2.12",
+ "http 1.3.1",
  "http-body 0.4.6",
+ "http-body 1.0.1",
  "md-5",
  "percent-encoding",
  "pin-project-lite",
