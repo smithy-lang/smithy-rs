@@ -1,0 +1,2 @@
+[workspace]
+members = ["rust-server-codegen", "service", "aws-smithy-http-server"]
