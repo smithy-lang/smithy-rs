@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 h2 = "0.3"
 http = "0.2"
-#hyper = { version = "0.14.26", features = ["server"] }
 server_sdk = { path = "../rust-server-codegen" }
 tokio = { version = "1.45.1", features = ["full"] }
 tower = "0.4"
