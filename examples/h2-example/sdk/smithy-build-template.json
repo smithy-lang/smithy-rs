@@ -1,0 +1,42 @@
+{
+    "version": "1.0",
+    "maven": {
+        "dependencies": [
+            "software.amazon.smithy.rust.codegen:codegen-client:0.1.0",
+            "software.amazon.smithy.rust.codegen.server.smithy:codegen-server:0.1.0",
+            "software.amazon.smithy:smithy-validation-model:1.59.0"
+        ],
+        "repositories": [
+            {
+                "url": "https://repo1.maven.org/maven2"
+            }
+        ]
+    },
+    "projections": {
+        "server-client": {
+            "imports": [
+                "main.smithy"
+            ],
+            "plugins": {
+                "rust-server-codegen": {
+                    "service": "com.test#SampleService",
+                    "module": "your-service-server",
+                    "moduleVersion": "0.0.1",
+                    "moduleDescription": "Sample service",
+                    "moduleAuthors": [
+                        "your@email.com"
+                    ]
+                },
+                "rust-client-codegen": {
+                    "service": "com.test#SampleService",
+                    "module": "your-service-client",
+                    "moduleVersion": "0.0.1",
+                    "moduleDescription": "Sample service",
+                    "moduleAuthors": [
+                        "your@email.com"
+                    ]
+                }
+            }
+        }
+    }
+}
