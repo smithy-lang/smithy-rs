@@ -34,7 +34,7 @@ pub(crate) async fn resolve_endpoint_based_auth_scheme_options<'a>(
     let mut endpoint_auth_scheme_ids = Vec::new();
 
     // Note that we're not constructing the `properties` for `endpoint_auth_schemes` here—only collecting
-    // auth scheme IDs but not properties. This is because, at this stage, we're only determining which auth scheme to use.
+    // auth scheme IDs but not properties. This is because, at this stage, we're only determining which auth schemes will be candidates.
     // Any `authSchemes` list properties that influence the signing context will be extracted later
     // in `AuthSchemeEndpointConfig`, and passed by the orchestrator to the signer's `sign_http_request` method.
     if let Some(aws_smithy_types::Document::Array(endpoint_auth_schemes)) =
