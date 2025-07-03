@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.85.0
+ARG rust_stable_version=1.86.0
 ARG rust_nightly_version=nightly-2025-05-04
 
 FROM ${base_image} AS bare_base_image
@@ -128,7 +128,7 @@ ARG wasm_pack_version=0.13.1
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-ARG cargo_wasmtime_version=28.0.0
+ARG cargo_wasmtime_version=34.0.1
 ARG rust_nightly_version
 RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
