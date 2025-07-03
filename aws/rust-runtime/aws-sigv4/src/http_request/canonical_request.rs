@@ -15,9 +15,9 @@ use crate::http_request::{PercentEncodingMode, SigningSettings};
 use crate::sign::v4::sha256_hex_string;
 use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
-use http0::header::{AsHeaderName, HeaderName, HOST};
-use http0::uri::{Port, Scheme};
-use http0::{HeaderMap, HeaderValue, Uri};
+use http::header::{AsHeaderName, HeaderName, HOST};
+use http::uri::{Port, Scheme};
+use http::{HeaderMap, HeaderValue, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
@@ -678,7 +678,7 @@ mod tests {
     use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
     use aws_smithy_runtime_api::client::identity::Identity;
-    use http0::{HeaderValue, Uri};
+    use http::{HeaderValue, Uri};
     use pretty_assertions::assert_eq;
     use proptest::{prelude::*, proptest};
     use std::borrow::Cow;
@@ -902,7 +902,7 @@ mod tests {
         query_writer.insert("prefix", &all_printable_ascii_chars);
 
         let req = http0::Request::builder()
-            .uri(query_writer.build_uri())
+            .uri(query_writer.build_uri().to_string())
             .body("")
             .unwrap()
             .into();

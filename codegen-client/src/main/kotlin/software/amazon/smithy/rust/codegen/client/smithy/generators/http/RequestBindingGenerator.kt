@@ -81,7 +81,7 @@ class RequestBindingGenerator(
         arrayOf(
             *preludeScope,
             "BuildError" to runtimeConfig.operationBuildError(),
-            "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+            "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder1x,
             "Input" to symbolProvider.toSymbol(inputShape),
         )
 

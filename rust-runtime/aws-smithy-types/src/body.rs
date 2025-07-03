@@ -7,6 +7,7 @@
 
 use bytes::Bytes;
 use pin_project_lite::pin_project;
+use std::collections::VecDeque;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::future::poll_fn;
@@ -40,7 +41,11 @@ pin_project! {
         // In the event of retry, this function will be called to generate a new body. See
         // [`try_clone()`](SdkBody::try_clone)
         rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
-        bytes_contents: Option<Bytes>
+        bytes_contents: Option<Bytes>,
+        // Here the optionality indicates whether we have started streaming trailers, and the
+        // VecDeque serves as a buffer for trailer frames that are polled by poll_next instead
+        // of poll_next_trailers
+        trailers: Option<VecDeque<http_1x::HeaderMap>>,
     }
 }
 
@@ -64,6 +69,9 @@ enum BoxBody {
     ))]
     // will be dead code with `--no-default-features --features rt-tokio`
     HttpBody04(#[allow(dead_code)] http_body_0_4::combinators::BoxBody<Bytes, Error>),
+
+    #[cfg(feature = "http-body-1-x")]
+    HttpBody1(#[allow(dead_code)] http_body_util::combinators::BoxBody<Bytes, Error>),
 }
 
 pin_project! {
@@ -111,6 +119,7 @@ impl SdkBody {
             inner: initial.inner,
             rebuild: Some(Arc::new(move || f().inner)),
             bytes_contents: initial.bytes_contents,
+            trailers: None,
         }
     }
 
@@ -121,6 +130,7 @@ impl SdkBody {
             inner: Inner::Taken,
             rebuild: None,
             bytes_contents: None,
+            trailers: None,
         }
     }
 
@@ -130,6 +140,7 @@ impl SdkBody {
             inner: Inner::Once { inner: None },
             rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
             bytes_contents: Some(Bytes::new()),
+            trailers: None,
         }
     }
 
@@ -157,6 +168,40 @@ impl SdkBody {
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_data(cx)
+                }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    // If this is polled after the trailers have been cached end early
+                    if this.trailers.is_some() {
+                        return Poll::Ready(None);
+                    }
+                    use http_body_1_0::Body;
+                    let maybe_data = Pin::new(box_body).poll_frame(cx);
+                    match maybe_data {
+                        Poll::Ready(Some(Ok(frame))) => {
+                            if frame.is_data() {
+                                Poll::Ready(Some(Ok(frame
+                                    .into_data()
+                                    .expect("Confirmed data frame"))))
+                            } else if frame.is_trailers() {
+                                let trailers =
+                                    frame.into_trailers().expect("Confirmed trailer frame");
+                                // Buffer the trailers for the trailer poll
+                                if let Some(trailer_buf) = this.trailers {
+                                    trailer_buf.push_back(trailers);
+                                } else {
+                                    *this.trailers = Some(VecDeque::from([trailers]));
+                                }
+
+                                Poll::Ready(None)
+                            } else {
+                                unreachable!("Frame must be either data or trailers");
+                            }
+                        }
+                        Poll::Ready(Some(Err(err))) => Poll::Ready(Some(Err(err))),
+                        Poll::Ready(None) => Poll::Ready(None),
+                        Poll::Pending => Poll::Pending,
+                    }
                 }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
@@ -187,6 +232,26 @@ impl SdkBody {
             },
             rebuild: None,
             bytes_contents: None,
+            trailers: None,
+        }
+    }
+
+    #[cfg(any(feature = "http-body-1-x", feature = "rt-tokio"))]
+    pub(crate) fn from_body_1_x_internal<T, E>(body: T) -> Self
+    where
+        T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<Error> + 'static,
+    {
+        use http_body_util::BodyExt;
+        Self {
+            inner: Inner::Dyn {
+                inner: BoxBody::HttpBody1(http_body_util::combinators::BoxBody::new(
+                    body.map_err(Into::into),
+                )),
+            },
+            rebuild: None,
+            bytes_contents: None,
+            trailers: None,
         }
     }
 
@@ -194,14 +259,52 @@ impl SdkBody {
     pub(crate) fn poll_next_trailers(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
+    ) -> Poll<Result<Option<http_1x::HeaderMap<http_1x::HeaderValue>>, Error>> {
+        use crate::body::http_body_1_x::convert_headers_0x_1x;
+
         let this = self.project();
         match this.inner.project() {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
-                    Pin::new(box_body).poll_trailers(cx)
+                    let polled = Pin::new(box_body).poll_trailers(cx);
+
+                    match polled {
+                        Poll::Ready(Ok(maybe_trailers)) => {
+                            let http_1x_trailers = maybe_trailers.map(convert_headers_0x_1x);
+                            Poll::Ready(Ok(http_1x_trailers))
+                        }
+                        Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+                        Poll::Pending => Poll::Pending,
+                    }
+                }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
+                    // Return the cached trailers without polling
+                    if let Some(trailer_buf) = this.trailers {
+                        if let Some(next_trailer) = trailer_buf.pop_front() {
+                            return Poll::Ready(Ok(Some(next_trailer)));
+                        }
+                    }
+
+                    let polled = Pin::new(box_body).poll_frame(cx);
+                    match polled {
+                        Poll::Ready(Some(Ok(maybe_trailers))) => {
+                            if maybe_trailers.is_data() {
+                                Poll::Ready(Err("Trailers polled while body still has data".into()))
+                            } else {
+                                let trailers = maybe_trailers
+                                    .into_trailers()
+                                    .expect("Frame must be trailers because it is not data");
+                                Poll::Ready(Ok(Some(trailers)))
+                            }
+                        }
+                        Poll::Ready(None) => Poll::Ready(Ok(None)),
+                        Poll::Ready(Some(Err(err))) => Poll::Ready(Err(err)),
+                        Poll::Pending => Poll::Pending,
+                    }
                 }
             },
             InnerProj::Taken => Poll::Ready(Err(
@@ -230,6 +333,7 @@ impl SdkBody {
                 inner: next,
                 rebuild: self.rebuild.clone(),
                 bytes_contents: self.bytes_contents.clone(),
+                trailers: self.trailers.clone(),
             }
         })
     }
@@ -259,6 +363,11 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     box_body.is_end_stream()
                 }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
+                    box_body.is_end_stream()
+                }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
                     "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
@@ -279,6 +388,12 @@ impl SdkBody {
                 #[cfg(feature = "http-body-0-4-x")]
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
+                    let hint = box_body.size_hint();
+                    (hint.lower(), hint.upper())
+                }
+                #[cfg(feature = "http-body-1-x")]
+                BoxBody::HttpBody1(box_body) => {
+                    use http_body_1_0::Body;
                     let hint = box_body.size_hint();
                     (hint.lower(), hint.upper())
                 }
@@ -338,6 +453,7 @@ impl From<Bytes> for SdkBody {
                 inner: Some(bytes.clone()),
             })),
             bytes_contents: Some(b),
+            trailers: None,
         }
     }
 }

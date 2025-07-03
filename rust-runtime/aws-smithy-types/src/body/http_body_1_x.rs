@@ -21,7 +21,7 @@ impl SdkBody {
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
         E: Into<Error> + 'static,
     {
-        SdkBody::from_body_0_4_internal(Http1toHttp04::new(body.map_err(Into::into)))
+        SdkBody::from_body_1_x_internal(body.map_err(Into::into))
     }
 
     pub(crate) fn poll_data_frame(
@@ -31,9 +31,9 @@ impl SdkBody {
         match ready!(self.as_mut().poll_next(cx)) {
             // if there's no more data, try to return trailers
             None => match ready!(self.poll_next_trailers(cx)) {
-                Ok(Some(trailers)) => Poll::Ready(Some(Ok(http_body_1_0::Frame::trailers(
-                    convert_headers_0x_1x(trailers),
-                )))),
+                Ok(Some(trailers)) => {
+                    Poll::Ready(Some(Ok(http_body_1_0::Frame::trailers(trailers))))
+                }
                 Ok(None) => Poll::Ready(None),
                 Err(e) => Poll::Ready(Some(Err(e))),
             },
@@ -81,6 +81,7 @@ pin_project! {
 }
 
 impl<B> Http1toHttp04<B> {
+    #[allow(dead_code)]
     fn new(inner: B) -> Self {
         Self {
             inner,
@@ -154,7 +155,7 @@ where
     }
 }
 
-fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
+pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
     let mut map = http::HeaderMap::with_capacity(input.capacity());
     let mut mem: Option<http_1x::HeaderName> = None;
     for (k, v) in input.into_iter() {
@@ -168,7 +169,7 @@ fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMap {
     map
 }
 
-fn convert_headers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
+pub(crate) fn convert_headers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
     let mut map = http_1x::HeaderMap::with_capacity(input.capacity());
     let mut mem: Option<http::HeaderName> = None;
     for (k, v) in input.into_iter() {
@@ -273,30 +274,11 @@ mod test {
             ]
             .into(),
         };
-        let mut body = SdkBody::from_body_1_x(body);
-        while let Some(_data) = http_body_0_4::Body::data(&mut body).await {}
-        assert_eq!(
-            http_body_0_4::Body::trailers(&mut body).await.unwrap(),
-            Some(convert_headers_1x_0x(trailers()))
-        );
-    }
-
-    #[tokio::test]
-    async fn test_read_trailers_as_1x() {
-        let body = TestBody {
-            chunks: vec![
-                Chunk::Data("123"),
-                Chunk::Data("456"),
-                Chunk::Data("789"),
-                Chunk::Trailers(trailers()),
-            ]
-            .into(),
-        };
         let body = SdkBody::from_body_1_x(body);
+        let collected = body.collect().await.unwrap();
+        let collected_trailers = collected.trailers();
 
-        let collected = BodyExt::collect(body).await.expect("should succeed");
-        assert_eq!(collected.trailers(), Some(&trailers()));
-        assert_eq!(collected.to_bytes().as_ref(), b"123456789");
+        assert_eq!(collected_trailers, Some(&trailers()));
     }
 
     #[tokio::test]

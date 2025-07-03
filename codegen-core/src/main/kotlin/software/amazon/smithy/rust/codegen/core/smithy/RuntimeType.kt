@@ -278,15 +278,25 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         // primitive types
         val StaticStr = RuntimeType("&'static str")
 
-        // external cargo dependency types
-        val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
-        val FastRand = CargoDependency.FastRand.toType()
+        // Http0x types
         val Http = CargoDependency.Http.toType()
         val HttpBody = CargoDependency.HttpBody.toType()
         val HttpRequest = Http.resolve("Request")
         val HttpRequestBuilder = Http.resolve("request::Builder")
         val HttpResponse = Http.resolve("Response")
         val HttpResponseBuilder = Http.resolve("response::Builder")
+
+        // Http1x types
+        val Http1x = CargoDependency.Http1x.toType()
+        val HttpBody1x = CargoDependency.HttpBody1x.toType()
+        val HttpRequest1x = Http1x.resolve("Request")
+        val HttpRequestBuilder1x = Http1x.resolve("request::Builder")
+        val HttpResponse1x = Http1x.resolve("Response")
+        val HttpResponseBuilder1x = Http1x.resolve("response::Builder")
+
+        // external cargo dependency types
+        val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
+        val FastRand = CargoDependency.FastRand.toType()
         val Hyper = CargoDependency.Hyper.toType()
         val LazyStatic = CargoDependency.LazyStatic.toType()
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
@@ -492,6 +502,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
                     // clients allow offsets, servers do nt
                     TimestampFormatTrait.Format.DATE_TIME ->
                         codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+
                     TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                     TimestampFormatTrait.Format.UNKNOWN -> TODO()
                 }
