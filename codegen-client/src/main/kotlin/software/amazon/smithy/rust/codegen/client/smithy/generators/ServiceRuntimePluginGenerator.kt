@@ -58,11 +58,18 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
+        fun registerAuthSchemeOptionResolver(
+            writer: RustWriter,
+            resolver: Writable,
+        ) {
+            writer.rustTemplate("runtime_components.set_auth_scheme_option_resolver(#{Some}(#{resolver}));", *preludeScope, "resolver" to resolver)
+        }
+
         fun registerEndpointResolver(
             writer: RustWriter,
             resolver: Writable,
         ) {
-            writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
+            writer.rustTemplate("runtime_components.set_endpoint_resolver(#{Some}(#{resolver}));", *preludeScope, "resolver" to resolver)
         }
 
         fun registerRetryClassifier(

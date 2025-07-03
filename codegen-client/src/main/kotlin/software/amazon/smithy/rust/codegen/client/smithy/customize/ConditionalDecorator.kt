@@ -12,6 +12,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -51,13 +53,12 @@ open class ConditionalDecorator(
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
 
-    final override fun authOptions(
+    final override fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> =
         baseAuthSchemeOptions.maybeApply(codegenContext) {
-            delegateTo.authOptions(codegenContext, operationShape, baseAuthSchemeOptions)
+            delegateTo.authSchemeOptions(codegenContext, baseAuthSchemeOptions)
         }
 
     final override fun builderCustomizations(
@@ -79,6 +80,14 @@ open class ConditionalDecorator(
     final override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         emptyMap<String, Any?>().maybeApply(codegenContext) {
             delegateTo.crateManifestCustomizations(codegenContext)
+        }
+
+    final override fun authCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AuthCustomization>,
+    ): List<AuthCustomization> =
+        baseCustomizations.maybeApply(codegenContext) {
+            delegateTo.authCustomizations(codegenContext, baseCustomizations)
         }
 
     final override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =

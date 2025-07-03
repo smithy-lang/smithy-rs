@@ -99,7 +99,6 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
         .await?
         .map_err(anyhow::Error::msg)?;
 
-    // Asserting on the post FFI result to confirm everything in the wasm module worked
     assert!(!api_result.is_empty());
 
     Ok(())
