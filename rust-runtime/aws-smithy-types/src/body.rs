@@ -7,6 +7,7 @@
 
 use bytes::Bytes;
 use pin_project_lite::pin_project;
+use std::collections::VecDeque;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::future::poll_fn;
@@ -41,7 +42,10 @@ pin_project! {
         // [`try_clone()`](SdkBody::try_clone)
         rebuild: Option<Arc<dyn (Fn() -> Inner) + Send + Sync>>,
         bytes_contents: Option<Bytes>,
-        trailers: Option<http_1x::HeaderMap>,
+        // Here the optionality indicates whether we have started streaming trailers, and the
+        // VecDeque serves as a buffer for trailer frames that are polled by poll_next instead
+        // of poll_next_trailers
+        trailers: Option<VecDeque<http_1x::HeaderMap>>,
     }
 }
 
@@ -183,7 +187,12 @@ impl SdkBody {
                                 let trailers =
                                     frame.into_trailers().expect("Confirmed trailer frame");
                                 // Buffer the trailers for the trailer poll
-                                *this.trailers = Some(trailers);
+                                if let Some(trailer_buf) = this.trailers {
+                                    trailer_buf.push_back(trailers);
+                                } else {
+                                    *this.trailers = Some(VecDeque::from([trailers]));
+                                }
+
                                 Poll::Ready(None)
                             } else {
                                 unreachable!("Frame must be either data or trailers");
@@ -274,8 +283,10 @@ impl SdkBody {
                 BoxBody::HttpBody1(box_body) => {
                     use http_body_1_0::Body;
                     // Return the cached trailers without polling
-                    if let Some(trailers) = this.trailers.take() {
-                        return Poll::Ready(Ok(Some(trailers)));
+                    if let Some(trailer_buf) = this.trailers {
+                        if let Some(next_trailer) = trailer_buf.pop_front() {
+                            return Poll::Ready(Ok(Some(next_trailer)));
+                        }
                     }
 
                     let polled = Pin::new(box_body).poll_frame(cx);
