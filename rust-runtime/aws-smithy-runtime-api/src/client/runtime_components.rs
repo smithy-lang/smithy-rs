@@ -615,20 +615,6 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Directly sets the auth schemes and clears out any that were previously pushed.
-    pub fn set_auth_schemes(
-        &mut self,
-        auth_schemes: impl Iterator<Item = SharedAuthScheme>,
-    ) -> &mut Self {
-        if let Some(s) = self.auth_schemes.as_mut() {
-            s.clear()
-        }
-        for auth_scheme in auth_schemes {
-            self.push_auth_scheme(auth_scheme);
-        }
-        self
-    }
-
     /// Returns the identity cache.
     pub fn identity_cache(&self) -> Option<SharedIdentityCache> {
         self.identity_cache.as_ref().map(|s| s.value.clone())
