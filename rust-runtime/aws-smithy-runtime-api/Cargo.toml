@@ -19,7 +19,7 @@ http-1x = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 bytes = "1.10.0"
 http-02x = { package = "http", version = "0.2.9" }
 http-1x = { package = "http", version = "1" }

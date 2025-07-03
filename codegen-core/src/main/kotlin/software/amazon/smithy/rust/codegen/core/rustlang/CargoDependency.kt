@@ -171,7 +171,7 @@ class InlineDependency(
         fun serializationSettings(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile(
                 "serialization_settings",
-                CargoDependency.Http,
+                CargoDependency.Http1x,
                 CargoDependency.smithyHttp(runtimeConfig),
                 CargoDependency.smithyTypes(runtimeConfig),
             )
@@ -409,7 +409,8 @@ data class CargoDependency(
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
 
-        fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
+        fun smithyTypes(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-types").withFeature("http-body-1-x")
 
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 
