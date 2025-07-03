@@ -215,9 +215,11 @@ class AuthSchemeResolverGenerator(
         return RuntimeType.forInlineFun("NoAuthSchemeResolver", ClientRustModule.Config.auth) {
             rustTemplate(
                 """
-                ##[allow(dead_code)] // since usage is behind `cfg(test)`
+                ##[cfg(test)]
                 ##[derive(Debug)]
                 pub(crate) struct NoAuthSchemeResolver;
+
+                ##[cfg(test)]
                 impl ResolveAuthScheme for NoAuthSchemeResolver {
                     fn resolve_auth_scheme<'a>(
                         &'a self,
