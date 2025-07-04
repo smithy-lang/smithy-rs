@@ -225,6 +225,24 @@ new_type_future! {
     pub struct AuthSchemeOptionsFuture<'a, Vec<AuthSchemeOption>, BoxError>;
 }
 
+impl<'a> AuthSchemeOptionsFuture<'a> {
+    /// Transforms the success value inside this `AuthSchemeOptionsFuture` by applying the provided function.
+    ///
+    /// This method maps over the `Ok` variant of the `Result` wrapped by the future,
+    /// applying `map_fn` to the contained `Vec<AuthSchemeOption>`.
+    ///
+    /// The transformation is applied regardless of whether the future's value is already
+    /// available (`Now`) or will be computed asynchronously (`Later`).
+    ///
+    pub fn map_ok<F>(self, f: F) -> AuthSchemeOptionsFuture<'a>
+    where
+        F: FnOnce(Vec<AuthSchemeOption>) -> Vec<AuthSchemeOption> + Send + 'a,
+    {
+        let inner = self.inner.map_boxed(|result| result.map(f));
+        Self { inner }
+    }
+}
+
 /// Resolver for auth scheme options.
 ///
 /// The orchestrator needs to select an auth scheme to sign requests with, and potentially
@@ -418,5 +436,43 @@ impl<'a> From<Option<&'a Document>> for AuthSchemeEndpointConfig<'a> {
 impl<'a> From<&'a Document> for AuthSchemeEndpointConfig<'a> {
     fn from(value: &'a Document) -> Self {
         Self(Some(value))
+    }
+}
+
+/// An ordered list of [AuthSchemeId]s
+#[derive(Clone, Debug, Default)]
+pub struct AuthSchemePreference {
+    preference_list: Vec<AuthSchemeId>,
+}
+
+impl Storable for AuthSchemePreference {
+    type Storer = StoreReplace<Self>;
+}
+
+impl IntoIterator for AuthSchemePreference {
+    type Item = AuthSchemeId;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.preference_list.into_iter()
+    }
+}
+
+impl FromIterator<AuthSchemeId> for AuthSchemePreference {
+    fn from_iter<I: IntoIterator<Item = AuthSchemeId>>(iter: I) -> Self {
+        AuthSchemePreference {
+            preference_list: iter.into_iter().collect(),
+        }
+    }
+}
+
+impl<T> From<T> for AuthSchemePreference
+where
+    T: AsRef<[AuthSchemeId]>,
+{
+    fn from(slice: T) -> Self {
+        AuthSchemePreference {
+            preference_list: slice.as_ref().to_vec(),
+        }
     }
 }

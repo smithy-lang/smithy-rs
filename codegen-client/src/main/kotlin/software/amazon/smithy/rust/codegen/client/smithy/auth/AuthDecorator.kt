@@ -62,7 +62,8 @@ class AuthDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations + AuthDecoratorConfigCustomizations(codegenContext)
+    ): List<ConfigCustomization> =
+        baseCustomizations + AuthDecoratorConfigCustomizations(codegenContext) + AuthSchemePreferenceConfigCustomization(codegenContext)
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
@@ -74,7 +75,10 @@ class AuthDecorator : ClientCodegenDecorator {
                     return when (section) {
                         is ServiceRuntimePluginSection.RegisterRuntimeComponents ->
                             writable {
-                                section.registerAuthSchemeOptionResolver(this, defaultAuthSchemeResolver(codegenContext))
+                                section.registerAuthSchemeOptionResolver(
+                                    this,
+                                    defaultAuthSchemeResolver(codegenContext, section.serviceConfigName),
+                                )
                             }
 
                         else -> emptySection
@@ -85,14 +89,24 @@ class AuthDecorator : ClientCodegenDecorator {
 }
 
 // Returns default auth scheme resolver for this service
-private fun defaultAuthSchemeResolver(codegenContext: ClientCodegenContext): Writable {
+private fun defaultAuthSchemeResolver(
+    codegenContext: ClientCodegenContext,
+    serviceConfigName: String,
+): Writable {
     val generator = AuthTypesGenerator(codegenContext)
     return writable {
         rustTemplate(
             """{
             use #{ServiceSpecificResolver};
-            #{DefaultResolver}::default().into_shared_resolver()
+            if let Some(preference) = $serviceConfigName.config.load::<#{AuthSchemePreference}>().cloned() {
+                #{DefaultResolver}::default().with_auth_scheme_preference(preference).into_shared_resolver()
+            } else {
+                #{DefaultResolver}::default().into_shared_resolver()
+            }
             }""",
+            "AuthSchemePreference" to
+                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                    .resolve("client::auth::AuthSchemePreference"),
             "DefaultResolver" to generator.defaultAuthSchemeResolver(),
             "ServiceSpecificResolver" to generator.serviceSpecificResolveAuthSchemeTrait(),
         )
@@ -289,6 +303,59 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         /// Return the auth scheme resolver configured on this service config
                         pub fn auth_scheme_resolver(&self) -> #{Option}<#{SharedAuthSchemeOptionResolver}> {
                             self.runtime_components.auth_scheme_option_resolver()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> emptySection
+            }
+        }
+}
+
+private class AuthSchemePreferenceConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+    val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "AuthSchemePreference" to
+                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                    .resolve("client::auth::AuthSchemePreference"),
+        )
+
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                is ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// Returns the configured auth scheme preference
+                        pub fn auth_scheme_preference(&self) -> #{Option}<&#{AuthSchemePreference}> {
+                            self.config.load::<#{AuthSchemePreference}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Set auth scheme preference
+                        pub fn auth_scheme_preference(mut self, preference: impl #{Into}<#{AuthSchemePreference}>) -> Self {
+                            self.set_auth_scheme_preference(#{Some}(preference.into()));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    rustTemplate(
+                        """
+                        /// Set auth scheme preference
+                        pub fn set_auth_scheme_preference(&mut self, preference: #{Option}<#{AuthSchemePreference}>) -> &mut Self {
+                            self.config.store_or_unset(preference);
+                            self
                         }
                         """,
                         *codegenScope,

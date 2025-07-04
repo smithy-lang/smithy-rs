@@ -125,6 +125,44 @@ impl<T, F> NowOrLater<T, F> {
     }
 }
 
+impl<'a, T, F> NowOrLater<T, F>
+where
+    F: Future<Output = T> + Send + 'a,
+    T: Send + 'a,
+{
+    /// Maps the value inside `NowOrLater` and returns a boxed future with lifetime `'a`.
+    pub fn map_boxed<U, M>(
+        self,
+        map_fn: M,
+    ) -> NowOrLater<U, Pin<Box<dyn Future<Output = U> + Send + 'a>>>
+    where
+        M: FnOnce(T) -> U + Send + 'a,
+        U: Send + 'a,
+    {
+        match self.inner {
+            Inner::Now { value } => {
+                let mapped = map_fn(value.expect("Now must contain Some"));
+                NowOrLater {
+                    inner: Inner::Now {
+                        value: Some(mapped),
+                    },
+                }
+            }
+            Inner::Later { future } => {
+                let fut = async move {
+                    let val = future.await;
+                    map_fn(val)
+                };
+                NowOrLater {
+                    inner: Inner::Later {
+                        future: Box::pin(fut),
+                    },
+                }
+            }
+        }
+    }
+}
+
 impl<T, F> Future for NowOrLater<T, F>
 where
     F: Future<Output = T>,
