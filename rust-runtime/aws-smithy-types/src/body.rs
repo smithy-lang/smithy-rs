@@ -59,6 +59,7 @@ impl Debug for SdkBody {
 }
 
 /// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`].
+#[allow(dead_code)]
 enum BoxBody {
     // This is enabled by the **dependency**, not the feature. This allows us to construct it
     // whenever we have the dependency and keep the APIs private
