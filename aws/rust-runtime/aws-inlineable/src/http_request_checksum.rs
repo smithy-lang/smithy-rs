@@ -30,6 +30,9 @@ use aws_smithy_types::error::operation::BuildError;
 use http::HeaderValue;
 use http_body::Body;
 use std::str::FromStr;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::{fmt, mem};
 
 /// Errors related to constructing checksum-validated HTTP requests
@@ -64,6 +67,7 @@ struct RequestChecksumInterceptorState {
     checksum_algorithm: Option<String>,
     /// This value is set in the model on the `httpChecksum` trait
     request_checksum_required: bool,
+    calculate_checksum: Arc<AtomicBool>,
     checksum_cache: ChecksumCache,
 }
 impl Storable for RequestChecksumInterceptorState {
@@ -152,16 +156,15 @@ where
             checksum_algorithm,
             request_checksum_required,
             checksum_cache: ChecksumCache::new(),
+            calculate_checksum: Arc::new(AtomicBool::new(false)),
         });
         cfg.push_layer(layer);
 
         Ok(())
     }
 
-    /// Calculate a checksum and modify the request to include the checksum as a header
-    /// (for in-memory request bodies) or a trailer (for streaming request bodies).
-    /// Streaming bodies must be sized or this will return an error.
-    fn modify_before_signing(
+    /// Setup state for calculating checksum and setting UA features
+    fn modify_before_retry_loop(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
         _runtime_components: &RuntimeComponents,
@@ -170,7 +173,6 @@ where
         let state = cfg
             .load::<RequestChecksumInterceptorState>()
             .expect("set in `read_before_serialization`");
-        let checksum_cache = state.checksum_cache.clone();
 
         let user_set_checksum_value = (self.checksum_mutator)(context.request_mut(), cfg)
             .expect("Checksum header mutation should not fail");
@@ -210,14 +212,17 @@ where
             _ => true,
         };
 
-        // Calculate the checksum if necessary
+        // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
+        // If we have made it this far without a checksum being set we set the default (currently Crc32)
+        let checksum_algorithm =
+            incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
+
         if calculate_checksum {
-            // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
-            // If we have made it this far without a checksum being set we set the default (currently Crc32)
-            let checksum_algorithm =
-                incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
+            state.calculate_checksum.store(true, Ordering::Release);
 
             // Set the user-agent metric for the selected checksum algorithm
+            // NOTE: We have to do this in modify_before_retry_loop since UA interceptor also runs
+            // in modify_before_signing but is registered before this interceptor (client level vs operation level).
             match checksum_algorithm {
                 ChecksumAlgorithm::Crc32 => {
                     cfg.interceptor_state()
@@ -244,9 +249,43 @@ where
                         .store_append(SmithySdkFeature::FlexibleChecksumsReqSha256);
                 }
                 unsupported => tracing::warn!(
-                    more_info = "Unsupported value of ChecksumAlgorithm detected when setting user-agent metrics",
-                    unsupported = ?unsupported),
+                        more_info = "Unsupported value of ChecksumAlgorithm detected when setting user-agent metrics",
+                        unsupported = ?unsupported),
             }
+        }
+
+        Ok(())
+    }
+
+    /// Calculate a checksum and modify the request to include the checksum as a header
+    /// (for in-memory request bodies) or a trailer (for streaming request bodies).
+    /// Streaming bodies must be sized or this will return an error.
+    fn modify_before_signing(
+        &self,
+        context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        let state = cfg
+            .load::<RequestChecksumInterceptorState>()
+            .expect("set in `read_before_serialization`");
+
+        let checksum_cache = state.checksum_cache.clone();
+
+        let checksum_algorithm = state
+            .checksum_algorithm
+            .clone()
+            .map(|s| ChecksumAlgorithm::from_str(s.as_str()))
+            .transpose()?;
+
+        let calculate_checksum = state.calculate_checksum.load(Ordering::SeqCst);
+
+        // Calculate the checksum if necessary
+        if calculate_checksum {
+            // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
+            // If we have made it this far without a checksum being set we set the default (currently Crc32)
+            let checksum_algorithm =
+                incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
 
             let request = context.request_mut();
             add_checksum_for_request_body(request, checksum_algorithm, checksum_cache, cfg)?;
