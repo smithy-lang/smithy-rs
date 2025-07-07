@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.61.1"
+version = "0.61.2"
 dependencies = [
  "aws-smithy-types",
  "criterion",
@@ -380,7 +380,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.9"
+version = "0.60.10"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -535,7 +535,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.4"
+version = "0.61.5"
 dependencies = [
  "aws-smithy-types",
  "proptest",
@@ -606,7 +606,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.60.7"
+version = "0.60.8"
 dependencies = [
  "aws-smithy-types",
  "urlencoding",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types-convert"
-version = "0.60.9"
+version = "0.60.10"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
