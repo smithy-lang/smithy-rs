@@ -61,7 +61,6 @@ impl Headers {
         headers
     }
 
-    // #[cfg(feature = "http-02x")]
     pub(crate) fn http0_headermap(self) -> http_02x::HeaderMap {
         let mut headers = http_02x::HeaderMap::new();
         headers.reserve(self.headers.len());

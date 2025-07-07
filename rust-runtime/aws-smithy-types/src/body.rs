@@ -206,7 +206,7 @@ impl SdkBody {
                 }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
-                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                    "enabling `http-body-0-4-x` or `http-body-1-x` is the only way to create the `Dyn` variant"
                 ),
             },
             InnerProj::Taken => {
@@ -380,7 +380,7 @@ impl SdkBody {
                 }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
-                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                    "enabling `http-body-0-4-x` or `http-body-1-x` is the only way to create the `Dyn` variant"
                 ),
             },
             Inner::Taken => true,
@@ -409,7 +409,7 @@ impl SdkBody {
                 }
                 #[allow(unreachable_patterns)]
                 _ => unreachable!(
-                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                    "enabling `http-body-0-4-x` or `http-body-1-x` is the only way to create the `Dyn` variant"
                 ),
             },
             Inner::Taken => (0, Some(0)),
