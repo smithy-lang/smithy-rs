@@ -238,7 +238,7 @@ impl SdkBody {
         }
     }
 
-    #[cfg(any(feature = "http-body-1-x", feature = "rt-tokio"))]
+    #[cfg(feature = "http-body-1-x")]
     pub(crate) fn from_body_1_x_internal<T, E>(body: T) -> Self
     where
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
@@ -262,6 +262,14 @@ impl SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http_1x::HeaderMap<http_1x::HeaderValue>>, Error>> {
+        // Three cases that matter here:
+        // 1) Both http-body features disabled, doesn't matter because this func won't compile
+        // 2) http-body-0-4-x enabled but 1-x disabled, we use the http_body_0_4_x conversion
+        // 3) http-body-1-x enabled (and 0-4-x is enabled or disabled), we use the 1-x conversion
+        // as our default whenever it is available
+        #[cfg(all(feature = "http-body-0-4-x", not(feature = "http-body-1-x")))]
+        use crate::body::http_body_0_4_x::convert_headers_0x_1x;
+        #[cfg(feature = "http-body-1-x")]
         use crate::body::http_body_1_x::convert_headers_0x_1x;
 
         let this = self.project();

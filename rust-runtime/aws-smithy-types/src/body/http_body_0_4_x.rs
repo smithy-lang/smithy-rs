@@ -83,6 +83,21 @@ pub(crate) fn convert_headers_1x_0x(input: http_1x::HeaderMap) -> http::HeaderMa
     map
 }
 
+#[allow(dead_code)]
+pub(crate) fn convert_headers_0x_1x(input: http::HeaderMap) -> http_1x::HeaderMap {
+    let mut map = http_1x::HeaderMap::with_capacity(input.capacity());
+    let mut mem: Option<http::HeaderName> = None;
+    for (k, v) in input.into_iter() {
+        let name = k.or_else(|| mem.clone()).unwrap();
+        map.append(
+            http_1x::HeaderName::from_bytes(name.as_str().as_bytes()).expect("already validated"),
+            http_1x::HeaderValue::from_bytes(v.as_bytes()).expect("already validated"),
+        );
+        mem = Some(name);
+    }
+    map
+}
+
 #[cfg(test)]
 mod tests {
     use crate::body::SdkBody;
