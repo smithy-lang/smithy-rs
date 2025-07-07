@@ -215,6 +215,7 @@ impl SdkBody {
         }
     }
 
+    #[allow(dead_code)]
     #[cfg(any(
         feature = "http-body-0-4-x",
         feature = "http-body-1-x",

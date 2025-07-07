@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.65.5"
+version = "0.65.6"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -492,7 +492,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.66.1"
+version = "0.66.2"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http-client",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.4"
+version = "0.63.5"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-wasm"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-runtime-api",

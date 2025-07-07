@@ -54,10 +54,10 @@ bytes = "1.10.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.3.0"
-http-02x = { package = "http", version = "0.2.9" }
-http-1x = { package = "http", version = "1" }
-http-body-04x = { package = "http-body", version = "0.4.5" }
-http-body-1x = { package = "http-body", version = "1" }
+http-02x = { package = "http", version = "0.2.12" }
+http-1x = { package = "http", version = "1.3.1" }
+http-body-04x = { package = "http-body", version = "0.4.6" }
+http-body-1x = { package = "http-body", version = "1.0.1" }
 # This avoids bringing `httparse` 1.9.0 and 1.9.1 through `hyper-0-14` that break unit tests of runtime crates
 #httparse = "1.8.0"
 pin-project-lite = "0.2.14"
