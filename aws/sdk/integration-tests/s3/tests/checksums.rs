@@ -30,8 +30,6 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::retry::RetryConfig;
 use http_1x::header::AUTHORIZATION;
 use http_1x::{HeaderValue, Uri};
-use hyper::body::HttpBody;
-use std::fs::File;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
