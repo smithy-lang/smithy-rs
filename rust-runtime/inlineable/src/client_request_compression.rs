@@ -235,7 +235,6 @@ mod tests {
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use http_body_1x::Body;
     use http_body_util::BodyExt;
 
     const UNCOMPRESSED_INPUT: &[u8] = b"hello world";

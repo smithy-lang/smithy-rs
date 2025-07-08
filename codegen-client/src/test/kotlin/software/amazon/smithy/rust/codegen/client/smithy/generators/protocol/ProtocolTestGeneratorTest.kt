@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSec
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -53,7 +54,7 @@ private class TestServiceRuntimePluginCustomization(
                                     _cfg: &mut #{ConfigBag},
                                 ) -> #{Result}<(), #{BoxError}> {
                                     // Replace the serialized request
-                                    let mut fake_req = ::http::Request::builder()
+                                    let mut fake_req = #{Http}::Request::builder()
                                         $fakeRequestBuilder
                                         .body(#{SdkBody}::from($fakeRequestBody))
                                         .expect("valid request").try_into().unwrap();
@@ -75,6 +76,7 @@ private class TestServiceRuntimePluginCustomization(
                         "Intercept" to RT.intercept(rc),
                         "RuntimeComponents" to RT.runtimeComponents(rc),
                         "SdkBody" to RT.sdkBody(rc),
+                        "Http" to CargoDependency.Http1x.toType(),
                     )
                 }
             }
@@ -111,7 +113,9 @@ private class TestOperationCustomization(
                     cfg.store_put(#{SharedResponseDeserializer}::new(TestDeser));
                     """,
                     *preludeScope,
-                    "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+                    "SharedResponseDeserializer" to
+                        RT.smithyRuntimeApi(rc)
+                            .resolve("client::ser_de::SharedResponseDeserializer"),
                     "Error" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Error"),
                     "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                     "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
