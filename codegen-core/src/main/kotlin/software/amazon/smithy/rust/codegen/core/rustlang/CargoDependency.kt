@@ -120,28 +120,32 @@ class InlineDependency(
                 "json_errors",
                 CargoDependency.smithyJson(runtimeConfig),
                 CargoDependency.Bytes,
-                CargoDependency.Http,
+                CargoDependency.Http1x,
             )
 
         fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "aws_query_compatible_errors",
                 CargoDependency.smithyJson(runtimeConfig),
-                CargoDependency.Http,
+                CargoDependency.Http1x,
             )
 
         fun clientRequestCompression(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "client_request_compression",
-                CargoDependency.Http,
-                CargoDependency.HttpBody,
+                CargoDependency.Http1x,
+                CargoDependency.HttpBody1x,
+                CargoDependency.HttpBodyUtil01x,
                 CargoDependency.Tracing,
                 CargoDependency.Flate2,
                 CargoDependency.Tokio.toDevDependency(),
                 CargoDependency.smithyCompression(runtimeConfig)
-                    .withFeature("http-body-0-4-x"),
+                    .withFeature("http-body-0-4-x")
+                    .withFeature("http-body-1-x"),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
-                CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
+                CargoDependency.smithyTypes(runtimeConfig)
+                    .withFeature("http-body-0-4-x")
+                    .withFeature("http-body-1-x"),
             )
 
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =

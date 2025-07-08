@@ -111,6 +111,7 @@ pub mod compress {
     pub mod http_body_1_x {
         use crate::body::compress::CompressedBody;
         use crate::http::http_body_1_x::CompressRequest;
+        use aws_smithy_runtime_api::box_error::BoxError;
         use aws_smithy_types::body::SdkBody;
         use http_body_1_0::{Body, Frame, SizeHint};
         use std::pin::Pin;
@@ -155,6 +156,20 @@ pub mod compress {
                 // We can't return a hint because we don't know exactly how
                 // compression will affect the content length
                 SizeHint::default()
+            }
+        }
+        impl CompressedBody<SdkBody, Box<dyn CompressRequest>> {
+            /// Consumes this `CompressedBody` and returns an [`SdkBody`] containing the compressed data.
+            ///
+            /// This *requires* that the inner `SdkBody` is in-memory (i.e. not streaming). Otherwise, an error is returned.
+            /// If compression fails, an error is returned.
+            pub fn into_compressed_sdk_body(mut self) -> Result<SdkBody, BoxError> {
+                let mut compressed_body = Vec::new();
+                let bytes = self.body.bytes().ok_or_else(|| "`into_compressed_sdk_body` requires that the inner body is 'in-memory', but it was streaming".to_string())?;
+
+                self.compress_request
+                    .compress_bytes(bytes, &mut compressed_body)?;
+                Ok(SdkBody::from(compressed_body))
             }
         }
     }
