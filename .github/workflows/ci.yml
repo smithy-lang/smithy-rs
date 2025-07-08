@@ -97,7 +97,7 @@ jobs:
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-core-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
