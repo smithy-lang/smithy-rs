@@ -4,7 +4,7 @@
  */
 
 use aws_smithy_compression::body::compress::CompressedBody;
-use aws_smithy_compression::http::http_body_1_x::CompressRequest;
+use aws_smithy_compression::http::CompressRequest;
 use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;

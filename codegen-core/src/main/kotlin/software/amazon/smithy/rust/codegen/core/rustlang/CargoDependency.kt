@@ -139,9 +139,7 @@ class InlineDependency(
                 CargoDependency.Tracing,
                 CargoDependency.Flate2,
                 CargoDependency.Tokio.toDevDependency(),
-                CargoDependency.smithyCompression(runtimeConfig)
-                    .withFeature("http-body-0-4-x")
-                    .withFeature("http-body-1-x"),
+                CargoDependency.smithyCompression(runtimeConfig),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
                 CargoDependency.smithyTypes(runtimeConfig)
                     .withFeature("http-body-0-4-x")

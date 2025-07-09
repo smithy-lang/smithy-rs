@@ -357,12 +357,9 @@ mod tests {
             map_to_frame(vec![Ok(encode_message("one")), Ok(encode_message("two"))]);
         let chunk_stream = futures_util::stream::iter(chunks);
         let stream_body = http_body_util::StreamBody::new(chunk_stream);
-        println!("LNJ 1");
         let body = SdkBody::from_body_1_x(stream_body);
-        println!("LNJ 2");
 
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
-        println!("LNJ 3");
 
         assert_eq!(
             TestMessage("one".into()),

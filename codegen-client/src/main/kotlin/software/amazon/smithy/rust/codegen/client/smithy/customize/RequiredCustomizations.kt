@@ -85,7 +85,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
             Feature(
                 "rt-tokio",
                 true,
-                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-1-x"),
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio"),
             ),
         )
 
