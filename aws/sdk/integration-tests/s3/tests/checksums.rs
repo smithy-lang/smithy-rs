@@ -688,7 +688,7 @@ async fn run_checksum_reuse_streaming_request_test(
 }
 
 async fn assert_streaming_request_checksum(
-    mut request: CapturedRequest,
+    request: CapturedRequest,
     checksum_header_name: &'static str,
     expected_checksum: &'static str,
 ) {
