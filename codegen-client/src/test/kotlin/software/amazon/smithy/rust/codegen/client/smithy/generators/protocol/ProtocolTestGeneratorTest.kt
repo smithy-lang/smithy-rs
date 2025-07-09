@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSec
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -76,7 +75,7 @@ private class TestServiceRuntimePluginCustomization(
                         "Intercept" to RT.intercept(rc),
                         "RuntimeComponents" to RT.runtimeComponents(rc),
                         "SdkBody" to RT.sdkBody(rc),
-                        "Http" to CargoDependency.Http1x.toType(),
+                        "Http" to RT.Http1x,
                     )
                 }
             }

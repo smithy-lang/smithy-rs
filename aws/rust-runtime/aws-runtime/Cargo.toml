@@ -42,7 +42,7 @@ arbitrary = "1.3"
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util", "http-1x"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["test-util"] }
 bytes-utils = "0.1.2"
 convert_case = "0.6.0"

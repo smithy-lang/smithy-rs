@@ -262,7 +262,7 @@ fn apply_signing_instructions(
         for (name, value) in new_query {
             query.insert(name, &value);
         }
-        request.set_uri(query.build_uri().to_string())?;
+        request.set_uri(query.build_uri())?;
     }
     Ok(())
 }
