@@ -9,9 +9,8 @@ buildscript {
         google()
     }
 
-    val kotlinVersion: String by project
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath(libs.kotlin.gradle.plugin)
     }
 }
 
@@ -30,10 +29,9 @@ allprojects {
 
 
 val ktlint by configurations.creating
-val ktlintVersion: String by project
 
 dependencies {
-    ktlint("com.pinterest.ktlint:ktlint-cli:$ktlintVersion") {
+    ktlint(libs.ktlint.cli) {
         attributes {
             attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
         }
