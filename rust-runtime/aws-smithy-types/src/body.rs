@@ -188,11 +188,7 @@ impl SdkBody {
                                 let trailers =
                                     frame.into_trailers().expect("Confirmed trailer frame");
                                 // Buffer the trailers for the trailer poll
-                                if let Some(trailer_buf) = this.trailers {
-                                    trailer_buf.push_back(trailers);
-                                } else {
-                                    *this.trailers = Some(VecDeque::from([trailers]));
-                                }
+                                this.trailers.get_or_insert_with(VecDeque::new).push_back(trailers);
 
                                 Poll::Ready(None)
                             } else {
