@@ -21,11 +21,3 @@ include(":aws:sdk")
 include(":aws:sdk-adhoc-test")
 include(":aws:sdk-codegen")
 include(":fuzzgen")
-
-pluginManagement {
-    val smithyGradlePluginVersion: String by settings
-    plugins {
-        id("software.amazon.smithy.gradle.smithy-base") version smithyGradlePluginVersion
-        id("software.amazon.smithy.gradle.smithy-jar") version smithyGradlePluginVersion
-    }
-}

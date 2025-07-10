@@ -11,8 +11,8 @@ tasks["jar"].enabled = false
 
 plugins {
     java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
 }
 
 val properties = PropertyRetriever(rootProject, project)
