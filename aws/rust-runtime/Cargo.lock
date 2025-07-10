@@ -222,7 +222,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.5"
+version = "1.3.0"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.4"
+version = "1.8.5"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.2"
+version = "1.8.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -380,7 +380,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.3.7"
+version = "1.3.8"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
