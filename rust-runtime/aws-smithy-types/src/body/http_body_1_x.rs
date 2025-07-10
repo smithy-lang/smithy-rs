@@ -111,7 +111,11 @@ where
                     };
                     // when we get a trailers frame, store the trailers for the next poll
                     if let Ok(trailers) = frame.into_trailers() {
-                        this.trailers.replace(trailers);
+                        if let Some(trailer_map) = this.trailers {
+                            trailer_map.extend(trailers);
+                        } else {
+                            this.trailers.replace(trailers);
+                        }
                         return Poll::Ready(None);
                     };
                     // if the frame type was unknown, discard it. the next one might be something
@@ -282,6 +286,35 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_read_multiple_trailers() {
+        let mut second_trailers = HeaderMap::new();
+        second_trailers.insert(
+            HeaderName::from_static("second-trailer"),
+            HeaderValue::from_static("second"),
+        );
+
+        let mut merged_trailers = HeaderMap::new();
+        merged_trailers.extend(second_trailers.clone());
+        merged_trailers.extend(trailers());
+
+        let body = TestBody {
+            chunks: vec![
+                Chunk::Data("123"),
+                Chunk::Data("456"),
+                Chunk::Data("789"),
+                Chunk::Trailers(trailers()),
+                Chunk::Trailers(second_trailers),
+            ]
+            .into(),
+        };
+        let body = SdkBody::from_body_1_x(body);
+        let collected = body.collect().await.unwrap();
+        let collected_trailers = collected.trailers().unwrap();
+
+        assert_eq!(collected_trailers, &merged_trailers);
+    }
+
+    #[tokio::test]
     async fn test_trailers_04x_to_1x() {
         let body = TestBody {
             chunks: vec![
@@ -296,6 +329,35 @@ mod test {
 
         let collected = BodyExt::collect(body).await.expect("should succeed");
         assert_eq!(collected.trailers(), Some(&trailers()));
+        assert_eq!(collected.to_bytes().as_ref(), b"123456789");
+    }
+
+    #[tokio::test]
+    async fn test_multiple_trailers_04x_to_1x() {
+        let mut second_trailers = HeaderMap::new();
+        second_trailers.insert(
+            HeaderName::from_static("second-trailer"),
+            HeaderValue::from_static("second"),
+        );
+
+        let mut merged_trailers = HeaderMap::new();
+        merged_trailers.extend(second_trailers.clone());
+        merged_trailers.extend(trailers());
+
+        let body = TestBody {
+            chunks: vec![
+                Chunk::Data("123"),
+                Chunk::Data("456"),
+                Chunk::Data("789"),
+                Chunk::Trailers(trailers()),
+                Chunk::Trailers(second_trailers),
+            ]
+            .into(),
+        };
+        let body = SdkBody::from_body_0_4(Http1toHttp04::new(body));
+
+        let collected = BodyExt::collect(body).await.expect("should succeed");
+        assert_eq!(collected.trailers().unwrap(), &merged_trailers);
         assert_eq!(collected.to_bytes().as_ref(), b"123456789");
     }
 
@@ -323,8 +385,9 @@ mod test {
         };
 
         let body = SdkBody::from_body_1_x(body);
-        let body = ByteStream::new(body);
-        assert_eq!(body.collect().await.unwrap().to_vec(), b"123456789");
+        let collected = BodyExt::collect(body).await.expect("should succeed");
+        assert_eq!(collected.trailers(), None);
+        assert_eq!(collected.to_bytes().as_ref(), b"123456789");
     }
 
     #[test]
