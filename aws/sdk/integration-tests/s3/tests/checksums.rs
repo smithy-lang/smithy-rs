@@ -489,7 +489,6 @@ impl CapturedRequest {
 
 impl HttpConnector for CaptureConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        // let handle = tokio::runtime::Handle::current();
         let captured_requests = self.captured_requests.clone();
         let inner = self.inner.clone();
         HttpConnectorFuture::new(async move {
