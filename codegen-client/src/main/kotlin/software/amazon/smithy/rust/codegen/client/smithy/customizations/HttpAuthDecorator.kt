@@ -13,9 +13,8 @@ import software.amazon.smithy.model.traits.HttpBasicAuthTrait
 import software.amazon.smithy.model.traits.HttpBearerAuthTrait
 import software.amazon.smithy.model.traits.HttpDigestAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption.StaticAuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
@@ -38,6 +37,9 @@ private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>>
     val authHttp = smithyRuntime.resolve("client::auth::http")
     val authHttpApi = smithyRuntimeApi.resolve("client::auth::http")
     return arrayOf(
+        "AuthSchemeOption" to
+            RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                .resolve("client::auth::AuthSchemeOption"),
         "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Token" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Token")),
         "Login" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Login")),
@@ -86,14 +88,12 @@ class HttpAuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "HttpAuthDecorator"
     override val order: Byte = 0
 
-    override fun authOptions(
+    override fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> {
         val serviceIndex = ServiceIndex.of(codegenContext.model)
-        val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
-        val codegenScope = codegenScope(codegenContext.runtimeConfig)
+        val authSchemes = serviceIndex.getAuthSchemes(codegenContext.serviceShape)
         val options = ArrayList<AuthSchemeOption>()
         for (authScheme in authSchemes.keys) {
             fun addOption(
@@ -101,14 +101,24 @@ class HttpAuthDecorator : ClientCodegenDecorator {
                 name: String,
             ) {
                 options.add(
-                    StaticAuthSchemeOption(
-                        schemeShapeId,
-                        listOf(
-                            writable {
-                                rustTemplate(name, *codegenScope)
-                            },
-                        ),
-                    ),
+                    object : AuthSchemeOption {
+                        override val authSchemeId = schemeShapeId
+
+                        override fun render(
+                            codegenContext: ClientCodegenContext,
+                            operation: OperationShape?,
+                        ) = writable {
+                            rustTemplate(
+                                """
+                                #{AuthSchemeOption}::builder()
+                                    .scheme_id($name)
+                                    .build()
+                                    .expect("required fields set")
+                                """,
+                                *codegenScope(codegenContext.runtimeConfig),
+                            )
+                        }
+                    },
                 )
             }
             when (authScheme) {

@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.2"
+version = "1.8.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",

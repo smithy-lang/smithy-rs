@@ -112,9 +112,6 @@ class InlineDependency(
                 CargoDependency.smithyTypes(runtimeConfig),
             )
 
-        fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) =
-            forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApiClient(runtimeConfig))
-
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "json_errors",
@@ -372,6 +369,8 @@ data class CargoDependency(
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body")
         val HttpBodyUtil01x: CargoDependency =
             CargoDependency("http-body-util", CratesIo("0.1.3"))
+
+        val HttpBodyUtil: CargoDependency = CargoDependency("http-body-util", CratesIo("0.1.3"))
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 

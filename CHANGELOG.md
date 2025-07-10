@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 8th, 2025
+==============
+**New this release:**
+- (client, [smithy-rs#4076](https://github.com/smithy-lang/smithy-rs/issues/4076), [smithy-rs#4198](https://github.com/smithy-lang/smithy-rs/issues/4198)) Allows customers to configure the auth schemes and auth scheme resolver. For more information see the GitHub [discussion](https://github.com/smithy-lang/smithy-rs/discussions/4197).
+
+
 June 30th, 2025
 ===============
 

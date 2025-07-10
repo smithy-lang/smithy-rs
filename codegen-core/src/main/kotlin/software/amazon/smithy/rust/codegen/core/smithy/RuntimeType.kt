@@ -465,10 +465,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))
 
-        fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) =
-            forInlineDependency(InlineDependency.defaultAuthPlugin(runtimeConfig))
-                .resolve("DefaultAuthOptionsPlugin")
-
         fun labelFormat(
             runtimeConfig: RuntimeConfig,
             func: String,

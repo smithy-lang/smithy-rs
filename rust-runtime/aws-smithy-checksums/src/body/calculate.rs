@@ -5,6 +5,7 @@
 
 //! Functionality for calculating the checksum of an HTTP body and emitting it as trailers.
 
+use super::ChecksumCache;
 use crate::http::HttpChecksum;
 
 use aws_smithy_http::header::append_merge_header_maps_http_1x;
@@ -12,6 +13,7 @@ use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use tracing::warn;
 
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit it as a trailer.
@@ -20,6 +22,7 @@ pin_project! {
             body: InnerBody,
             checksum: Option<Box<dyn HttpChecksum>>,
             written_trailers: bool,
+            cache: Option<ChecksumCache>
     }
 }
 
@@ -30,6 +33,20 @@ impl ChecksumBody<SdkBody> {
             body,
             checksum: Some(checksum),
             written_trailers: false,
+            cache: None,
+        }
+    }
+
+    /// Configure a cache for this body.
+    ///
+    /// When used across multiple requests (e.g. retries) a cached checksum previously
+    /// calculated will be favored if available.
+    pub fn with_cache(self, cache: ChecksumCache) -> Self {
+        Self {
+            body: self.body,
+            checksum: self.checksum,
+            written_trailers: false,
+            cache: Some(cache),
         }
     }
 }
@@ -86,6 +103,45 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
             }
             _ => {}
         };
+        poll_res
+    }
+
+    fn poll_trailers(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
+        let this = self.project();
+        let poll_res = this.body.poll_trailers(cx);
+
+        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
+            let checksum_headers = if let Some(checksum) = this.checksum.take() {
+                let calculated_headers = checksum.headers();
+
+                if let Some(cache) = this.cache {
+                    if let Some(cached_headers) = cache.get() {
+                        if cached_headers != calculated_headers {
+                            warn!(cached = ?cached_headers, calculated = ?calculated_headers, "calculated checksum differs from cached checksum!");
+                        }
+                        cached_headers
+                    } else {
+                        cache.set(calculated_headers.clone());
+                        calculated_headers
+                    }
+                } else {
+                    calculated_headers
+                }
+            } else {
+                return Poll::Ready(Ok(None));
+            };
+
+            return match maybe_inner_trailers {
+                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
+                    inner_trailers,
+                    checksum_headers,
+                )))),
+                None => Poll::Ready(Ok(Some(checksum_headers))),
+            };
+        }
 
         poll_res
     }
