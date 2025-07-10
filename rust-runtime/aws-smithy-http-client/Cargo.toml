@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.0.6"
+version = "1.0.7"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -83,8 +83,8 @@ tracing = "0.1.40"
 # hyper 1.x stack
 hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
 hyper-util = { version = "0.1.10", features = ["http1", "http2"], optional = true }
-http-1x = { package = "http", version = "1" , optional = true }
-http-body-1x = { package = "http-body", version = "1", optional = true}
+http-1x = { package = "http", version = "1.3.1" , optional = true }
+http-body-1x = { package = "http-body", version = "1.0.1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23", default-features = false, optional = true }
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
@@ -96,8 +96,8 @@ rustls-native-certs = { version = "0.8.1", optional = true }
 # end hyper 1.x stack deps
 
 # legacy hyper-0.14.x stack the SDK/runtime GA'd with
-http-02x = { package = "http", version = "0.2.9", optional = true}
-http-body-04x = { package = "http-body", version = "0.4.5" , optional = true}
+http-02x = { package = "http", version = "0.2.12", optional = true}
+http-body-04x = { package = "http-body", version = "0.4.6" , optional = true}
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, features = ["client", "http1", "http2", "tcp", "stream"], optional = true }
 legacy-hyper-rustls = { package = "hyper-rustls", version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 legacy-rustls = { package = "rustls", version = "0.21.8", optional = true }

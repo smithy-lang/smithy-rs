@@ -364,16 +364,16 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
     let headers = request.headers_mut();
 
     headers.insert(
-        http::header::HeaderName::from_static("x-amz-trailer"),
+        http_1x::header::HeaderName::from_static("x-amz-trailer"),
         checksum.header_name(),
     );
 
     headers.insert(
-        http::header::CONTENT_LENGTH,
+        http_1x::header::CONTENT_LENGTH,
         HeaderValue::from(encoded_content_length),
     );
     headers.insert(
-        http::header::HeaderName::from_static("x-amz-decoded-content-length"),
+        http_1x::header::HeaderName::from_static("x-amz-decoded-content-length"),
         HeaderValue::from(original_body_size),
     );
     // The target service does not depend on where `aws-chunked` appears in the `Content-Encoding` header,
@@ -406,11 +406,12 @@ mod tests {
     async fn test_checksum_body_is_retryable() {
         let input_text = "Hello world";
         let chunk_len_hex = format!("{:X}", input_text.len());
-        let mut request: HttpRequest = http::Request::builder()
-            .body(SdkBody::retryable(move || SdkBody::from(input_text)))
-            .unwrap()
-            .try_into()
-            .unwrap();
+        let mut request: HttpRequest = HttpRequest::try_from(
+            http_1x::Request::builder()
+                .body(SdkBody::retryable(move || SdkBody::from(input_text)))
+                .unwrap(),
+        )
+        .unwrap();
 
         // ensure original SdkBody is retryable
         assert!(request.body().try_clone().is_some());

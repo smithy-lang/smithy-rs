@@ -80,7 +80,7 @@ fun pubUseSmithyPrimitives(
                 Feature(
                     "rt-tokio",
                     true,
-                    listOf("aws-smithy-types/rt-tokio"),
+                    listOf("aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-1-x"),
                 ),
             )
             rustTemplate(

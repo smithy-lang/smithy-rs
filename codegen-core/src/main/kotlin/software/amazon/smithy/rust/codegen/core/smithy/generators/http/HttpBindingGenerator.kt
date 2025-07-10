@@ -535,8 +535,8 @@ class HttpBindingGenerator(
             val codegenScope =
                 arrayOf(
                     "BuildError" to runtimeConfig.operationBuildError(),
-                    HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
-                    HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
+                    HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder1x,
+                    HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder1x,
                     "Shape" to shapeSymbol,
                 )
             rustBlockTemplate(
@@ -712,7 +712,7 @@ class HttpBindingGenerator(
                     builder = builder.header("$headerName", header_value);
 
                     """,
-                    "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                    "HeaderValue" to RuntimeType.Http1x.resolve("HeaderValue"),
                     "invalid_field_error" to renderErrorMessage("header_value"),
                 )
             }
@@ -748,7 +748,7 @@ class HttpBindingGenerator(
                 """
                 for (k, v) in ${local.asRef()} {
                     use std::str::FromStr;
-                    let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
+                    let header_name = #{HeaderName}::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{invalid_header_name:W}
                     })?;
                     let header_value = ${
@@ -767,7 +767,8 @@ class HttpBindingGenerator(
                 }
 
                 """,
-                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                "HeaderValue" to RuntimeType.Http1x.resolve("HeaderValue"),
+                "HeaderName" to RuntimeType.Http1x.resolve("HeaderName"),
                 "invalid_header_name" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
                         rust("""format!("`{k}` cannot be used as a header name: {err}")""")

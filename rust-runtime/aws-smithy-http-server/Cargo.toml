@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.65.5"
+version = "0.65.6"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -26,8 +26,8 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
-http = "0.2.9"
-http-body = "0.4.5"
+http = "0.2.12"
+http-body = "0.4.6"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
 lambda_http = { version = "0.8.3", optional = true }
 mime = "0.3.17"

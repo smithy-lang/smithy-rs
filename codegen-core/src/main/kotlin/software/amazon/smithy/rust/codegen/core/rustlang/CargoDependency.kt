@@ -120,28 +120,30 @@ class InlineDependency(
                 "json_errors",
                 CargoDependency.smithyJson(runtimeConfig),
                 CargoDependency.Bytes,
-                CargoDependency.Http,
+                CargoDependency.Http1x,
             )
 
         fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "aws_query_compatible_errors",
                 CargoDependency.smithyJson(runtimeConfig),
-                CargoDependency.Http,
+                CargoDependency.Http1x,
             )
 
         fun clientRequestCompression(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "client_request_compression",
-                CargoDependency.Http,
-                CargoDependency.HttpBody,
+                CargoDependency.Http1x,
+                CargoDependency.HttpBody1x,
+                CargoDependency.HttpBodyUtil01x,
                 CargoDependency.Tracing,
                 CargoDependency.Flate2,
                 CargoDependency.Tokio.toDevDependency(),
-                CargoDependency.smithyCompression(runtimeConfig)
-                    .withFeature("http-body-0-4-x"),
+                CargoDependency.smithyCompression(runtimeConfig),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
-                CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
+                CargoDependency.smithyTypes(runtimeConfig)
+                    .withFeature("http-body-0-4-x")
+                    .withFeature("http-body-1-x"),
             )
 
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =
@@ -171,7 +173,7 @@ class InlineDependency(
         fun serializationSettings(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile(
                 "serialization_settings",
-                CargoDependency.Http,
+                CargoDependency.Http1x,
                 CargoDependency.smithyHttp(runtimeConfig),
                 CargoDependency.smithyTypes(runtimeConfig),
             )
@@ -409,7 +411,8 @@ data class CargoDependency(
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
 
-        fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
+        fun smithyTypes(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-types").withFeature("http-body-1-x")
 
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 

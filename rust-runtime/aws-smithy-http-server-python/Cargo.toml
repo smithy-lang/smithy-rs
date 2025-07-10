@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-python"
-version = "0.66.1"
+version = "0.66.2"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.10.0"
 futures = "0.3"
-http = "0.2.9"
+http = "0.2.12"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"

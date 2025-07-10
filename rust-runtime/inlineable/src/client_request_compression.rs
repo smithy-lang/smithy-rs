@@ -4,7 +4,7 @@
  */
 
 use aws_smithy_compression::body::compress::CompressedBody;
-use aws_smithy_compression::http::http_body_0_4_x::CompressRequest;
+use aws_smithy_compression::http::CompressRequest;
 use aws_smithy_compression::{CompressionAlgorithm, CompressionOptions};
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -127,7 +127,7 @@ impl Intercept for RequestCompressionInterceptor {
         //
         // Because compressing small amounts of data can actually increase its size,
         // we check to see if the data is big enough to make compression worthwhile.
-        let size_hint = http_body::Body::size_hint(request.body()).exact();
+        let size_hint = http_body_1x::Body::size_hint(request.body()).exact();
         if let Some(known_size) = size_hint {
             if known_size < options.min_compression_size_bytes() as u64 {
                 tracing::trace!(
@@ -144,7 +144,7 @@ impl Intercept for RequestCompressionInterceptor {
 
         wrap_request_body_in_compressed_body(
             request,
-            CompressionAlgorithm::Gzip.into_impl_http_body_0_4_x(&options),
+            CompressionAlgorithm::Gzip.into_impl_http_body_1_x(&options),
         )?;
         cfg.interceptor_state()
             .store_append::<SmithySdkFeature>(SmithySdkFeature::GzipRequestCompression);
@@ -165,10 +165,12 @@ fn wrap_request_body_in_compressed_body(
         let body = mem::replace(request.body_mut(), SdkBody::taken());
 
         if body.is_streaming() {
-            request.headers_mut().remove(http::header::CONTENT_LENGTH);
+            request
+                .headers_mut()
+                .remove(http_1x::header::CONTENT_LENGTH);
             body.map(move |body| {
                 let body = CompressedBody::new(body, request_compress_impl.clone());
-                SdkBody::from_body_0_4(body)
+                SdkBody::from_body_1_x(body)
             })
         } else {
             let body = CompressedBody::new(body, request_compress_impl.clone());
@@ -177,7 +179,7 @@ fn wrap_request_body_in_compressed_body(
             let content_length = body.content_length().expect("this payload is in-memory");
             request
                 .headers_mut()
-                .insert(http::header::CONTENT_LENGTH, content_length.to_string());
+                .insert(http_1x::header::CONTENT_LENGTH, content_length.to_string());
 
             body
         }
@@ -233,7 +235,7 @@ mod tests {
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use http_body::Body;
+    use http_body_util::BodyExt;
 
     const UNCOMPRESSED_INPUT: &[u8] = b"hello world";
     const COMPRESSED_OUTPUT: &[u8] = &[
@@ -243,7 +245,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_compressed_body_is_retryable() {
-        let mut request: HttpRequest = http::Request::builder()
+        let mut request: HttpRequest = http_1x::Request::builder()
             .body(SdkBody::retryable(move || {
                 SdkBody::from(UNCOMPRESSED_INPUT)
             }))
@@ -254,8 +256,9 @@ mod tests {
         // ensure original SdkBody is retryable
         let mut body = request.body().try_clone().unwrap();
         let mut body_data = Vec::new();
-        while let Some(data) = body.data().await {
-            body_data.extend_from_slice(&data.unwrap())
+        while let Some(Ok(frame)) = body.frame().await {
+            let data = frame.into_data().expect("Data frame");
+            body_data.extend_from_slice(&data)
         }
         // Not yet wrapped, should still be the same as UNCOMPRESSED_INPUT.
         assert_eq!(UNCOMPRESSED_INPUT, body_data);
@@ -267,15 +270,16 @@ mod tests {
 
         wrap_request_body_in_compressed_body(
             &mut request,
-            compression_algorithm.into_impl_http_body_0_4_x(&compression_options),
+            compression_algorithm.into_impl_http_body_1_x(&compression_options),
         )
         .unwrap();
 
         // ensure again that wrapped SdkBody is retryable
         let mut body = request.body().try_clone().expect("body is retryable");
         let mut body_data = Vec::new();
-        while let Some(data) = body.data().await {
-            body_data.extend_from_slice(&data.unwrap())
+        while let Some(Ok(frame)) = body.frame().await {
+            let data = frame.into_data().expect("Data frame");
+            body_data.extend_from_slice(&data)
         }
 
         // Since this body was wrapped, the output should be compressed data
@@ -287,7 +291,7 @@ mod tests {
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(
-            http::Request::builder()
+            http_1x::Request::builder()
                 .body(SdkBody::from(UNCOMPRESSED_INPUT))
                 .unwrap()
                 .try_into()

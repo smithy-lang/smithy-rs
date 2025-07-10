@@ -7,21 +7,22 @@ use super::{BoxError, Error, MinimumThroughputDownloadBody};
 use crate::client::http::body::minimum_throughput::throughput::DownloadReport;
 use crate::client::http::body::minimum_throughput::ThroughputReadingBody;
 use aws_smithy_async::rt::sleep::AsyncSleep;
+use http_body_1x::Frame;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::task::{Context, Poll};
 
-impl<B> http_body_04x::Body for MinimumThroughputDownloadBody<B>
+impl<B> http_body_1x::Body for MinimumThroughputDownloadBody<B>
 where
-    B: http_body_04x::Body<Data = bytes::Bytes, Error = BoxError>,
+    B: http_body_1x::Body<Data = bytes::Bytes, Error = BoxError>,
 {
     type Data = bytes::Bytes;
     type Error = BoxError;
 
-    fn poll_data(
+    fn poll_frame(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
         #[allow(unused_imports)]
         use crate::client::http::body::minimum_throughput::throughput::ThroughputReport;
         // this code is called quite frequently in production—one every millisecond or so when downloading
@@ -30,12 +31,18 @@ where
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
         let mut this = self.as_mut().project();
-        let poll_res = match this.inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(bytes))) => {
-                tracing::trace!("received data: {}", bytes.len());
-                this.throughput_logs
-                    .push_bytes_transferred(now, bytes.len() as u64);
-                Poll::Ready(Some(Ok(bytes)))
+        let poll_res = match this.inner.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if frame.is_data() {
+                    let bytes = frame.into_data().expect("Is data frame");
+                    tracing::trace!("received data: {}", bytes.len());
+                    this.throughput_logs
+                        .push_bytes_transferred(now, bytes.len() as u64);
+                    Poll::Ready(Some(Ok(Frame::data(bytes))))
+                } else {
+                    tracing::trace!("received trailer");
+                    Poll::Ready(Some(Ok(frame)))
+                }
             }
             Poll::Pending => {
                 tracing::trace!("received poll pending");
@@ -95,58 +102,55 @@ where
         poll_res
     }
 
-    fn poll_trailers(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
-        let this = self.as_mut().project();
-        this.inner.poll_trailers(cx)
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
     }
 
-    fn size_hint(&self) -> http_body_04x::SizeHint {
+    fn size_hint(&self) -> http_body_1x::SizeHint {
         self.inner.size_hint()
     }
 }
 
-impl<B> http_body_04x::Body for ThroughputReadingBody<B>
+impl<B> http_body_1x::Body for ThroughputReadingBody<B>
 where
-    B: http_body_04x::Body<Data = bytes::Bytes, Error = BoxError>,
+    B: http_body_1x::Body<Data = bytes::Bytes, Error = BoxError>,
 {
     type Data = bytes::Bytes;
     type Error = BoxError;
 
-    fn poll_data(
+    fn poll_frame(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         // this code is called quite frequently in production—one every millisecond or so when downloading
         // a stream. However, SystemTime::now is on the order of nanoseconds
         let now = self.time_source.now();
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
         let this = self.as_mut().project();
-        match this.inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(bytes))) => {
-                tracing::trace!("received data: {}", bytes.len());
-                this.throughput
-                    .push_bytes_transferred(now, bytes.len() as u64);
+        match this.inner.poll_frame(cx) {
+            Poll::Ready(Some(Ok(frame))) => {
+                if frame.is_data() {
+                    let bytes = frame.into_data().expect("Is data frame");
+                    tracing::trace!("received data: {}", bytes.len());
+                    this.throughput
+                        .push_bytes_transferred(now, bytes.len() as u64);
 
-                // hyper will optimistically stop polling when end of stream is reported
-                // (e.g. when content-length amount of data has been consumed) which means
-                // we may never get to `Poll:Ready(None)`. Check for same condition and
-                // attempt to stop checking throughput violations _now_ as we may never
-                // get polled again. The caveat here is that it depends on `Body` implementations
-                // implementing `is_end_stream()` correctly. Users can also disable SSP as an
-                // alternative for such fringe use cases.
-                if self.is_end_stream() {
-                    tracing::trace!("stream reported end of stream before Poll::Ready(None) reached; marking stream complete");
-                    self.throughput.mark_complete();
+                    // hyper will optimistically stop polling when end of stream is reported
+                    // (e.g. when content-length amount of data has been consumed) which means
+                    // we may never get to `Poll:Ready(None)`. Check for same condition and
+                    // attempt to stop checking throughput violations _now_ as we may never
+                    // get polled again. The caveat here is that it depends on `Body` implementations
+                    // implementing `is_end_stream()` correctly. Users can also disable SSP as an
+                    // alternative for such fringe use cases.
+                    if self.is_end_stream() {
+                        tracing::trace!("stream reported end of stream before Poll::Ready(None) reached; marking stream complete");
+                        self.throughput.mark_complete();
+                    }
+                    Poll::Ready(Some(Ok(Frame::data(bytes))))
+                } else {
+                    Poll::Ready(Some(Ok(frame)))
                 }
-                Poll::Ready(Some(Ok(bytes)))
             }
             Poll::Pending => {
                 tracing::trace!("received poll pending");
@@ -163,19 +167,11 @@ where
         }
     }
 
-    fn poll_trailers(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http_02x::HeaderMap>, Self::Error>> {
-        let this = self.as_mut().project();
-        this.inner.poll_trailers(cx)
-    }
-
     fn is_end_stream(&self) -> bool {
         self.inner.is_end_stream()
     }
 
-    fn size_hint(&self) -> http_body_04x::SizeHint {
+    fn size_hint(&self) -> http_body_1x::SizeHint {
         self.inner.size_hint()
     }
 }
