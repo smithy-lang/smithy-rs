@@ -39,8 +39,11 @@ smithy-aws-smoke-test-model = { module = "software.amazon.smithy:smithy-aws-smok
 smithy-aws-iam-traits = { module = "software.amazon.smithy:smithy-aws-iam-traits", version.ref = "smithy-version" }
 smithy-aws-cloudformation-traits = { module = "software.amazon.smithy:smithy-aws-cloudformation-traits", version.ref = "smithy-version" }
 smithy-smoke-test-traits = { module = "software.amazon.smithy:smithy-smoke-test-traits", version.ref = "smithy-version" }
+smithy-utils = { module = "software.amazon.smithy:smithy-utils", version.ref = "smithy-version" }
 
 
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin-version" }
+smithy-gradle-base = { id = "software.amazon.smithy.gradle.smithy-base", version.ref = "smithy-gradle-plugin-version" }
+smithy-gradle-jar = { id = "software.amazon.smithy.gradle.smithy-jar", version.ref = "smithy-gradle-plugin-version" }
