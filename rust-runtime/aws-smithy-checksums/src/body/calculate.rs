@@ -49,6 +49,28 @@ impl ChecksumBody<SdkBody> {
             cache: Some(cache),
         }
     }
+
+    // It would be nicer if this could take &self, but I couldn't make that
+    // work out with the Pin/Projection types, so its a static method for now
+    fn extract_or_set_cached_headers(
+        maybe_cache: &Option<ChecksumCache>,
+        checksum: Box<dyn HttpChecksum>,
+    ) -> http_1x::HeaderMap {
+        let calculated_headers = checksum.headers();
+        if let Some(cache) = maybe_cache {
+            if let Some(cached_headers) = cache.get() {
+                if cached_headers != calculated_headers {
+                    warn!(cached = ?cached_headers, calculated = ?calculated_headers, "calculated checksum differs from cached checksum!");
+                }
+                cached_headers
+            } else {
+                cache.set(calculated_headers.clone());
+                calculated_headers
+            }
+        } else {
+            calculated_headers
+        }
+    }
 }
 
 impl http_body_1x::Body for ChecksumBody<SdkBody> {
@@ -72,7 +94,7 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
                 } else {
                     // Add checksum trailer to other trailers if necessary
                     let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                        checksum.headers()
+                        ChecksumBody::extract_or_set_cached_headers(this.cache, checksum)
                     } else {
                         return Poll::Ready(None);
                     };
@@ -91,7 +113,7 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
                 // trailers on the body) we write them here
                 if !*this.written_trailers {
                     let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                        checksum.headers()
+                        ChecksumBody::extract_or_set_cached_headers(this.cache, checksum)
                     } else {
                         return Poll::Ready(None);
                     };
@@ -103,46 +125,6 @@ impl http_body_1x::Body for ChecksumBody<SdkBody> {
             }
             _ => {}
         };
-        poll_res
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        let this = self.project();
-        let poll_res = this.body.poll_trailers(cx);
-
-        if let Poll::Ready(Ok(maybe_inner_trailers)) = poll_res {
-            let checksum_headers = if let Some(checksum) = this.checksum.take() {
-                let calculated_headers = checksum.headers();
-
-                if let Some(cache) = this.cache {
-                    if let Some(cached_headers) = cache.get() {
-                        if cached_headers != calculated_headers {
-                            warn!(cached = ?cached_headers, calculated = ?calculated_headers, "calculated checksum differs from cached checksum!");
-                        }
-                        cached_headers
-                    } else {
-                        cache.set(calculated_headers.clone());
-                        calculated_headers
-                    }
-                } else {
-                    calculated_headers
-                }
-            } else {
-                return Poll::Ready(Ok(None));
-            };
-
-            return match maybe_inner_trailers {
-                Some(inner_trailers) => Poll::Ready(Ok(Some(append_merge_header_maps(
-                    inner_trailers,
-                    checksum_headers,
-                )))),
-                None => Poll::Ready(Ok(Some(checksum_headers))),
-            };
-        }
-
         poll_res
     }
 }

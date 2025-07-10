@@ -382,6 +382,18 @@ where
                         tracing::trace!(
                             "No more chunk data, writing CRLF + CHUNK_TERMINATOR to end the data, and the first trailer frame"
                         );
+
+                        // We exhausted the body data, now check if the length is correct
+                        let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
+                        let expected_stream_length = this.options.stream_length;
+                        if actual_stream_length != expected_stream_length {
+                            let err = Box::new(AwsChunkedBodyError::StreamLengthMismatch {
+                                actual: actual_stream_length,
+                                expected: expected_stream_length,
+                            });
+                            return Poll::Ready(Some(Err(err)));
+                        };
+
                         *this.state = AwsChunkedBodyState::WritingTrailers;
                         let trailers = frame.trailers_ref();
 
@@ -436,6 +448,7 @@ where
             Poll::Ready(None) => {
                 let trailers = match *this.state {
                     AwsChunkedBodyState::WritingChunk => {
+                        // We exhausted the body data, now check if the length is correct
                         let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
                         let expected_stream_length = this.options.stream_length;
                         if actual_stream_length != expected_stream_length {
@@ -445,6 +458,10 @@ where
                             });
                             return Poll::Ready(Some(Err(err)));
                         };
+
+                        // Since we exhausted the body data, but are still in the WritingChunk state we did
+                        // not poll any trailer frames and we write the CRLF + Chunk terminator to begin the
+                        // trailer section plus a single final CRLF to end the (empty) trailer section
                         let mut trailers = BytesMut::with_capacity(7);
                         trailers.extend_from_slice(
                             &[CRLF_RAW, CHUNK_TERMINATOR_RAW, CRLF_RAW].concat(),
