@@ -17,23 +17,20 @@ extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
 group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
-val smithyVersion: String by project
-val smithyRsVersion: String by project
-
 dependencies {
     implementation(project(":codegen-core"))
     implementation(kotlin("stdlib-jdk8"))
-    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.13.0")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
+    api(libs.smithy.codegen.core)
+    implementation(libs.jackson.dataformat.cbor)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.waiters)
+    implementation(libs.smithy.rules.engine)
+    implementation(libs.smithy.protocol.traits)
 
     // `smithy.framework#ValidationException` is defined here, which is used in event stream
     // marshalling/unmarshalling tests.
-    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
+    testImplementation(libs.smithy.validation.model)
 }
 
 java {
@@ -69,12 +66,10 @@ val sourcesJar by tasks.creating(Jar::class) {
 
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
-
     dependencies {
         runtimeOnly(project(":rust-runtime"))
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+        testImplementation(libs.junit.jupiter)
+        testImplementation(libs.kotest.assertions.core.jvm)
     }
 
     tasks.compileTestKotlin {

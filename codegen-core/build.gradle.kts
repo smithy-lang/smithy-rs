@@ -19,18 +19,16 @@ extra["moduleName"] = "software.amazon.smithy.rust.codegen.core"
 group = "software.amazon.smithy.rust.codegen"
 version = "0.1.0"
 
-val smithyVersion: String by project
-
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.16.2")
-    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    api("com.moandjiezana.toml:toml4j:0.7.2")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.13.0")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
+    implementation(libs.jsoup)
+    api(libs.smithy.codegen.core)
+    api(libs.toml4j)
+    implementation(libs.jackson.dataformat.cbor)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.waiters)
+    implementation(libs.smithy.protocol.traits)
 }
 
 fun gitCommitHash(): String {
@@ -192,12 +190,10 @@ val sourcesJar by tasks.creating(Jar::class) {
 
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
-
     dependencies {
         runtimeOnly(project(":rust-runtime"))
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+        testImplementation(libs.junit.jupiter)
+        testImplementation(libs.kotest.assertions.core.jvm)
     }
 
     tasks.compileTestKotlin {

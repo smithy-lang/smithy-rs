@@ -17,8 +17,6 @@ extra["moduleName"] = "software.amazon.smithy.rust.codegen.client"
 group = "software.amazon.smithy.rust.codegen.serde"
 version = "0.1.0"
 
-val smithyVersion: String by project
-
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
@@ -58,14 +56,13 @@ val sourcesJar by tasks.creating(Jar::class) {
 
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
 
     dependencies {
         runtimeOnly(project(":rust-runtime"))
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
-        testImplementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+        testImplementation(libs.junit.jupiter)
+        testImplementation(libs.smithy.validation.model)
+        testImplementation(libs.smithy.aws.protocol.tests)
+        testImplementation(libs.kotest.assertions.core.jvm)
     }
 
     tasks.compileTestKotlin {

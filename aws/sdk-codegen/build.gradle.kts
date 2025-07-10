@@ -17,18 +17,16 @@ extra["moduleName"] = "software.amazon.smithy.rustsdk"
 group = "software.amazon.software.amazon.smithy.rust.codegen.smithy"
 version = "0.1.0"
 
-val smithyVersion: String by project
-
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
-    implementation("org.jsoup:jsoup:1.16.2")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-smoke-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-smoke-test-model:$smithyVersion")
+    implementation(libs.jsoup)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.rules.engine)
+    implementation(libs.smithy.aws.endpoints)
+    implementation(libs.smithy.smoke.test.traits)
+    implementation(libs.smithy.aws.smoke.test.model)
 }
 
 java {
@@ -64,12 +62,10 @@ val sourcesJar by tasks.creating(Jar::class) {
 
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
-
     dependencies {
         runtimeOnly(project(":aws:rust-runtime"))
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+        testImplementation(libs.junit.jupiter)
+        testImplementation(libs.kotest.assertions.core.jvm)
     }
 
     tasks.compileTestKotlin {

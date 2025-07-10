@@ -30,7 +30,6 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
     allowUnknownTraits = true
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
@@ -49,10 +48,10 @@ val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.aws.iam.traits)
+    implementation(libs.smithy.aws.cloudformation.traits)
 }
 
 // Class and functions for service and protocol membership for SDK generation
