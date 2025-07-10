@@ -50,7 +50,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "aws-config"
-version = "1.8.1"
+version = "1.8.2"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.6.0"
+version = "1.5.9"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.2"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.3"
+version = "1.8.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.1"
+version = "1.8.3"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
