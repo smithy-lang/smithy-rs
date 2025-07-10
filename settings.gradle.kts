@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-rootProject.name = "software.amazon.smithy.rust.codegen.smithy-rs"
+rootProject.name = "smithy-rs"
 
 include(":codegen-core")
 include(":codegen-client")

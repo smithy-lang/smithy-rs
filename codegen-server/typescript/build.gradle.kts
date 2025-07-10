@@ -20,13 +20,11 @@ group = "software.amazon.smithy.rust.codegen.server.typescript.smithy"
 
 version = "0.1.0"
 
-val smithyVersion: String by project
-
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-server"))
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.protocol.test.traits)
 }
 
 java {
@@ -58,11 +56,9 @@ val sourcesJar by tasks.creating(Jar::class) {
 
 val isTestingEnabled: String by project
 if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
-
     dependencies {
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
+        testImplementation(libs.junit.jupiter)
+        testImplementation(libs.kotest.assertions.core.jvm)
     }
 
     tasks.compileTestKotlin { kotlinOptions.jvmTarget = "11" }
