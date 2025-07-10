@@ -15,7 +15,6 @@ plugins {
     id("software.amazon.smithy.gradle.smithy-jar")
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 val buildDir = layout.buildDirectory.get().asFile
 
@@ -28,9 +27,9 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 
 dependencies {
     implementation(project(":codegen-server:python"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
 }
 
 val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
