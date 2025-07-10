@@ -885,4 +885,118 @@ mod tests {
             panic!("The error should indicate that the explored list was truncated.");
         }
     }
+
+    #[cfg(feature = "http-auth")]
+    #[tokio::test]
+    async fn test_resolve_identity() {
+        use crate::client::auth::http::{ApiKeyAuthScheme, ApiKeyLocation, BasicAuthScheme};
+        use aws_smithy_runtime_api::client::auth::http::{
+            HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID,
+        };
+        use aws_smithy_runtime_api::client::identity::http::Token;
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+
+        #[derive(Debug)]
+        struct Cache;
+        impl ResolveCachedIdentity for Cache {
+            fn resolve_cached_identity<'a>(
+                &'a self,
+                identity_resolver: SharedIdentityResolver,
+                rc: &'a RuntimeComponents,
+                cfg: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
+                IdentityFuture::new(
+                    async move { identity_resolver.resolve_identity(rc, cfg).await },
+                )
+            }
+        }
+
+        let mut layer = Layer::new("test");
+        layer.store_put(AuthSchemeAndEndpointOrchestrationV2);
+        layer.store_put(AuthSchemeOptionResolverParams::new("doesntmatter"));
+        let mut cfg = ConfigBag::of_layers(vec![layer]);
+
+        let runtime_components_builder = RuntimeComponentsBuilder::for_tests()
+            .with_auth_scheme(SharedAuthScheme::new(BasicAuthScheme::new()))
+            .with_auth_scheme(SharedAuthScheme::new(ApiKeyAuthScheme::new(
+                "result:",
+                ApiKeyLocation::Header,
+                "Authorization",
+            )))
+            .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
+                StaticAuthSchemeOptionResolver::new(vec![
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                ]),
+            )))
+            .with_identity_cache(Some(Cache));
+
+        struct TestCase {
+            builder_updater: Box<dyn Fn(RuntimeComponentsBuilder) -> RuntimeComponents>,
+            resolved_auth_scheme: AuthSchemeId,
+            should_error: bool,
+        }
+
+        for test_case in [
+            TestCase {
+                builder_updater: Box::new(|rcb: RuntimeComponentsBuilder| {
+                    rcb.with_identity_resolver(
+                        HTTP_BASIC_AUTH_SCHEME_ID,
+                        SharedIdentityResolver::new(Token::new("basic", None)),
+                    )
+                    .with_identity_resolver(
+                        HTTP_API_KEY_AUTH_SCHEME_ID,
+                        SharedIdentityResolver::new(Token::new("api-key", None)),
+                    )
+                    .build()
+                    .unwrap()
+                }),
+                resolved_auth_scheme: HTTP_BASIC_AUTH_SCHEME_ID,
+                should_error: false,
+            },
+            TestCase {
+                builder_updater: Box::new(|rcb: RuntimeComponentsBuilder| {
+                    rcb.with_identity_resolver(
+                        HTTP_BASIC_AUTH_SCHEME_ID,
+                        SharedIdentityResolver::new(Token::new("basic", None)),
+                    )
+                    .build()
+                    .unwrap()
+                }),
+                resolved_auth_scheme: HTTP_BASIC_AUTH_SCHEME_ID,
+                should_error: false,
+            },
+            TestCase {
+                builder_updater: Box::new(|rcb: RuntimeComponentsBuilder| {
+                    rcb.with_identity_resolver(
+                        HTTP_API_KEY_AUTH_SCHEME_ID,
+                        SharedIdentityResolver::new(Token::new("api-key", None)),
+                    )
+                    .build()
+                    .unwrap()
+                }),
+                resolved_auth_scheme: HTTP_API_KEY_AUTH_SCHEME_ID,
+                should_error: false,
+            },
+            TestCase {
+                builder_updater: Box::new(|rcb: RuntimeComponentsBuilder| rcb.build().unwrap()),
+                resolved_auth_scheme: HTTP_API_KEY_AUTH_SCHEME_ID,
+                should_error: true,
+            },
+        ]
+        .into_iter()
+        {
+            let runtime_components =
+                (test_case.builder_updater)(runtime_components_builder.clone());
+            match resolve_identity(&runtime_components, &mut cfg).await {
+                Ok(resolved) => assert_eq!(test_case.resolved_auth_scheme, resolved.0),
+                Err(e) if test_case.should_error => {
+                    assert!(e.downcast_ref::<NoMatchingAuthSchemeError>().is_some());
+                }
+                _ => {
+                    panic!("`resolve_identity` returned an `Err` when no error was expected in the test.");
+                }
+            }
+        }
+    }
 }
