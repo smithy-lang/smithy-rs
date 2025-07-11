@@ -54,7 +54,6 @@ class AuthSchemeResolverGenerator(
                     .resolve("client::auth::AuthSchemeOption"),
             "AuthSchemeOptionResolverParams" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::auth::AuthSchemeOptionResolverParams"),
             "AuthSchemeOptionsFuture" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::AuthSchemeOptionsFuture"),
-            "AuthSchemePreference" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::AuthSchemePreference"),
             "BoxError" to RuntimeType.boxError(runtimeConfig),
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Debug" to RuntimeType.Debug,
@@ -79,7 +78,6 @@ class AuthSchemeResolverGenerator(
                 pub struct DefaultAuthSchemeResolver {
                     service_defaults: Vec<#{AuthSchemeOption}>,
                     operation_overrides: #{HashMap}<&'static str, Vec<#{AuthSchemeOption}>>,
-                    preference: #{Option}<#{AuthSchemePreference}>,
                 }
 
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Remove `allow(...)` once the issue is addressed.
@@ -92,7 +90,6 @@ class AuthSchemeResolverGenerator(
                         Self {
                             service_defaults: vec![#{service_defaults:W}],
                             operation_overrides: #{operation_overrides:W},
-                            preference: #{None},
                         }
                     }
                 }
@@ -115,43 +112,7 @@ class AuthSchemeResolverGenerator(
 
                         #{additional_impl:W}
 
-                        match &self.preference {
-                            #{Some}(preference) => {
-                                _fut.map_ok({
-                                    // maps auth scheme ID to the index in the preference list
-                                    let preference_map: #{HashMap}<_, _> = preference
-                                        .clone()
-                                        .into_iter()
-                                        .enumerate()
-                                        .map(|(i, s)| (s, i))
-                                        .collect();
-                                    move |auth_scheme_options| {
-                                        let (mut preferred, non_preferred): (#{Vec}<_>, #{Vec}<_>) = auth_scheme_options
-                                            .into_iter()
-                                            .partition(|auth_scheme_option| {
-                                                preference_map.contains_key(auth_scheme_option.scheme_id())
-                                            });
-
-                                        preferred.sort_by_key(|opt| {
-                                            preference_map
-                                                .get(opt.scheme_id())
-                                                .expect("guaranteed by `partition`")
-                                        });
-                                        preferred.extend(non_preferred);
-                                        preferred
-                                    }
-                                })
-                            },
-                            #{None} => _fut,
-                        }
-                    }
-                }
-
-                impl DefaultAuthSchemeResolver {
-                    /// Set auth scheme preference to the default auth scheme resolver
-                    pub fn with_auth_scheme_preference(mut self, preference: impl #{Into}<#{AuthSchemePreference}>) -> Self {
-                        self.preference = #{Some}(preference.into());
-                        self
+                        _fut
                     }
                 }
                 """,

@@ -26,6 +26,7 @@ import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.JsonNameTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestsTrait
+import software.amazon.smithy.rust.codegen.core.generated.BuildEnvironment
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
@@ -34,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNor
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputsInAllowList
+import java.io.File
 import java.nio.file.Path
 import java.util.Base64
 import kotlin.streams.toList
@@ -91,6 +93,13 @@ data class FuzzSettings(
  * This is used by `aws-smithy-fuzz` which contains most of the usage docs
  */
 class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
+    // `aws-smithy-fuzz` is not part of the `rust-runtime` workspace,
+    // and its dependencies may not be included in the SDK lockfile.
+    // This plugin needs to use the lockfile from `aws-smithy-fuzz`.
+    private val cargoLock: File by lazy {
+        File(BuildEnvironment.PROJECT_DIR).resolve("rust-runtime/aws-smithy-fuzz/Cargo.lock")
+    }
+
     override fun getName(): String = "fuzz-harness"
 
     override fun execute(context: PluginContext) {
@@ -111,7 +120,15 @@ class FuzzHarnessBuildPlugin : SmithyBuildPlugin {
         createDriver(model, context.fileManifest, fuzzSettings)
 
         targets.forEach {
-            context.fileManifest.addAllFiles(it.finalize())
+            val manifest = it.finalize()
+            context.fileManifest.addAllFiles(manifest)
+            // A fuzz target crate exists in a nested structure like:
+            // smithy-test-workspace/smithy-test4510328876569901367/a
+            //
+            // Each fuzz target is its own workspace with `[workspace]\n_ignored _ignored`.
+            // As a result, placing the lockfile from `aws-smithy-fuzz` in `TestWorkspace`
+            // has no effect; it must be copied directly into the fuzz target.
+            cargoLock.copyTo(manifest.baseDir.resolve("Cargo.lock").toFile(), true)
         }
     }
 }

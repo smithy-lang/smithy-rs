@@ -27,7 +27,7 @@ const EXPIRATION_WARNING: &str = "Presigned request will expire before the given
         `expires_in` duration because the credentials used to sign it will expire first.";
 
 /// Auth scheme ID for SigV4a.
-pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4a");
+pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("aws.auth#sigv4a");
 
 /// SigV4a auth scheme.
 #[derive(Debug, Default)]

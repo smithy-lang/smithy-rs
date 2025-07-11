@@ -58,6 +58,16 @@ pub(crate) async fn resolve_endpoint_based_auth_scheme_options<'a>(
     ))
 }
 
+// For instance, extracts just `sigv4` from `AuthSchemeId("aws.auth#sigv4")`.
+// For `AuthSchemeId("sigv4")`, it just returns `sigv4` as-is.
+fn auth_scheme_name(auth_scheme_id: &AuthSchemeId) -> &str {
+    auth_scheme_id
+        .inner()
+        .split('#')
+        .next_back()
+        .unwrap_or(auth_scheme_id.inner())
+}
+
 // Returns a list of merged auth scheme options from `modeled_auth_scheme_options` and `endpoint_auth_scheme_ids`,
 // copying properties from the modeled auth scheme options into the endpoint auth scheme options as they are built.
 //
@@ -70,18 +80,26 @@ fn merge_auth_scheme_options(
     let (common_auth_scheme_options, model_only_auth_scheme_options): (Vec<_>, Vec<_>) =
         modeled_auth_scheme_options
             .iter()
-            .partition(|auth_scheme_option| {
-                endpoint_auth_scheme_ids.contains(auth_scheme_option.scheme_id())
+            .partition(|modeled_auth_scheme_option| {
+                endpoint_auth_scheme_ids.iter().any(|ep_auth_id| {
+                    ep_auth_id.inner() == auth_scheme_name(modeled_auth_scheme_option.scheme_id())
+                })
             });
 
     let mut endpoint_auth_scheme_options = endpoint_auth_scheme_ids
         .into_iter()
-        .map(|id| {
+        .map(|ep_auth_id| {
             let modelded = common_auth_scheme_options
                 .iter()
-                .find(|opt| opt.scheme_id() == &id)
+                .find(|common_auth_opt| {
+                    auth_scheme_name(common_auth_opt.scheme_id()) == ep_auth_id.inner()
+                })
                 .cloned();
-            let mut builder = AuthSchemeOption::builder().scheme_id(id);
+            let mut builder = AuthSchemeOption::builder().scheme_id(
+                modelded
+                    .map(|m| m.scheme_id().clone())
+                    .unwrap_or(ep_auth_id),
+            );
             builder.set_properties(modelded.and_then(|m| m.properties()));
             builder.build().unwrap()
         })
@@ -177,10 +195,20 @@ mod tests {
 
     #[test]
     fn merge_auth_scheme_options_should_also_include_those_only_in_endpoint_auth_scheme_options() {
-        let modeled_auth_scheme_ids =
-            into_auth_scheme_options(["schemeA", "schemeX", "schemeB", "schemeY"]);
+        let modeled_auth_scheme_ids = into_auth_scheme_options([
+            "namespace#schemeA",
+            "namespace#schemeX",
+            "namespace#schemeB",
+            "namespace#schemeY",
+        ]);
         let endpoint_auth_scheme_ids = into_auth_scheme_ids(["schemeY", "schemeZ"]);
-        let expected = ["schemeY", "schemeZ", "schemeA", "schemeX", "schemeB"];
+        let expected = [
+            "namespace#schemeY",
+            "schemeZ",
+            "namespace#schemeA",
+            "namespace#schemeX",
+            "namespace#schemeB",
+        ];
         let actual = merge_auth_scheme_options(&modeled_auth_scheme_ids, endpoint_auth_scheme_ids);
         assert_eq!(
             expected.to_vec(),

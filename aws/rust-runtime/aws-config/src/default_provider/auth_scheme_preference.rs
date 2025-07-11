@@ -52,30 +52,10 @@ fn parse_auth_scheme_names(csv: &str) -> Result<AuthSchemePreference, InvalidAut
                     value: format!("Empty name found in `{csv}`."),
                 });
             }
-            let scheme_name = trimmed.split('#').next_back().unwrap_or(&trimmed);
-            Ok(runtime_api_auth_scheme_id(scheme_name))
+            Ok(AuthSchemeId::from(Cow::Owned(trimmed.to_owned())))
         })
         .collect::<Result<Vec<_>, _>>()
         .map(AuthSchemePreference::from)
-}
-
-// This function is not automatically extensible. When a new scheme is introduced,
-// it must be manually updated for the scheme to be recognized in the environment configuration.
-//
-// Furthermore, this function does not return a predefined `AuthSchemeId` like `HTTP_BASIC_AUTH_SCHEME_ID`.
-// The predefined `SchemeId`s are gated behind the `http-auth` feature, but this function returns an `AuthSchemeId`
-// that wraps the parsed string regardless of feature flags. If the feature is disabled, the returned
-// auth scheme preference is simply ignored during auth scheme resolution.
-fn runtime_api_auth_scheme_id(auth_scheme_name: &str) -> AuthSchemeId {
-    let runtime_api_auth_scheme_str = match auth_scheme_name {
-        "httpBasicAuth" => "http-basic-auth",
-        "httpDigestAuth" => "http-digest-auth",
-        "httpBearerAuth" => "http-bearer-auth",
-        "httpApiKeyAuth" => "http-api-key-auth",
-        "noAuth" => "no_auth",
-        otherwise => otherwise,
-    };
-    AuthSchemeId::from(Cow::Owned(runtime_api_auth_scheme_str.to_owned()))
 }
 
 #[derive(Debug)]
@@ -127,7 +107,7 @@ mod test {
             default_provider::auth_scheme_preference::auth_scheme_preference_provider,
             provider_config::ProviderConfig,
         };
-        use aws_smithy_runtime_api::client::auth::AuthSchemePreference;
+        use aws_smithy_runtime_api::client::auth::{AuthSchemeId, AuthSchemePreference};
         use aws_types::os_shim_internal::{Env, Fs};
 
         #[tokio::test]
@@ -186,13 +166,17 @@ mod test {
                 "conf",
                 "[default]\nauth_scheme_preference = sigv4, httpBasicAuth, httpDigestAuth, \thttpBearerAuth \t, httpApiKeyAuth ",
             )]));
+            // Resulting `AuthSchemeId`s contain raw parsed strings without namespaces,
+            // whereas predefined ones like `HTTP_BASIC_AUTH_SCHEME_ID` include namespaces; this mismatch doesn't cause issues.
+            // When reordering auth schemes based on a preference list, the orchestrator matches only the substring
+            // after the `#` rather than relying on full `AuthSchemeId` equality.
             assert_eq!(
                 AuthSchemePreference::from([
-                    aws_runtime::auth::sigv4::SCHEME_ID,
-                    aws_smithy_runtime_api::client::auth::http::HTTP_BASIC_AUTH_SCHEME_ID,
-                    aws_smithy_runtime_api::client::auth::http::HTTP_DIGEST_AUTH_SCHEME_ID,
-                    aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID,
-                    aws_smithy_runtime_api::client::auth::http::HTTP_API_KEY_AUTH_SCHEME_ID,
+                    AuthSchemeId::from("sigv4"),
+                    AuthSchemeId::from("httpBasicAuth"),
+                    AuthSchemeId::from("httpDigestAuth"),
+                    AuthSchemeId::from("httpBearerAuth"),
+                    AuthSchemeId::from("httpApiKeyAuth"),
                 ]),
                 auth_scheme_preference_provider(&conf).await.unwrap()
             );

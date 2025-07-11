@@ -7,8 +7,8 @@ use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use crate::client::identity::IdentityCache;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
-    ResolveAuthSchemeOptions,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOption,
+    AuthSchemeOptionResolverParams, AuthSchemePreference, ResolveAuthSchemeOptions,
 };
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEndpoint};
 use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
@@ -19,6 +19,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt;
 use tracing::trace;
@@ -125,6 +126,8 @@ pub(super) async fn resolve_identity(
     let options = option_resolver
         .resolve_auth_scheme_options_v2(params, cfg, runtime_components)
         .await?;
+    let options =
+        reprioritize_with_auth_scheme_preference(options, cfg.load::<AuthSchemePreference>()).await;
 
     trace!(
         auth_scheme_option_resolver_params = ?params,
@@ -183,6 +186,50 @@ pub(super) async fn resolve_identity(
     }
 
     Err(NoMatchingAuthSchemeError(explored).into())
+}
+
+// Re-prioritize `supported_auth_scheme_options` based on `auth_scheme_preference`
+//
+// Schemes in `auth_scheme_preference` that are not present in `supported_auth_scheme_options` will be ignored.
+async fn reprioritize_with_auth_scheme_preference(
+    supported_auth_scheme_options: Vec<AuthSchemeOption>,
+    auth_scheme_preference: Option<&AuthSchemePreference>,
+) -> Vec<AuthSchemeOption> {
+    match auth_scheme_preference {
+        Some(preference) => {
+            // Maps the substring of each auth scheme ID after `#` to the index in the preference list.
+            let preference_map: HashMap<_, _> = preference
+                .clone()
+                .into_iter()
+                .enumerate()
+                .map(|(i, s)| (auth_scheme_name(&s).to_owned(), i))
+                .collect();
+            let (mut preferred, non_preferred): (Vec<_>, Vec<_>) = supported_auth_scheme_options
+                .into_iter()
+                .partition(|auth_scheme_option| {
+                    preference_map.contains_key(auth_scheme_name(auth_scheme_option.scheme_id()))
+                });
+
+            preferred.sort_by_key(|opt| {
+                preference_map
+                    .get(auth_scheme_name(opt.scheme_id()))
+                    .expect("guaranteed by `partition`")
+            });
+            preferred.extend(non_preferred);
+            preferred
+        }
+        None => supported_auth_scheme_options,
+    }
+}
+
+// Extracts the scheme name from `auth_scheme_id` by returning the substring after `#`, if present.
+// For example, given AuthSchemeId("smithy.api#httpBasicAuth"), this returns "httpBasicAuth".
+fn auth_scheme_name(auth_scheme_id: &AuthSchemeId) -> &str {
+    auth_scheme_id
+        .inner()
+        .split('#')
+        .next_back()
+        .unwrap_or(auth_scheme_id.inner())
 }
 
 pub(super) fn sign_request(
@@ -308,7 +355,7 @@ fn extract_endpoint_auth_scheme_config<'a>(
                 .as_object()
                 .and_then(|object| object.get("name"))
                 .and_then(Document::as_string);
-            config_scheme_id == Some(scheme_id.inner())
+            config_scheme_id == Some(auth_scheme_name(scheme_id))
         })
         .ok_or(AuthOrchestrationError::MissingEndpointConfig)?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
@@ -997,6 +1044,116 @@ mod tests {
                     panic!("`resolve_identity` returned an `Err` when no error was expected in the test.");
                 }
             }
+        }
+    }
+
+    #[cfg(feature = "http-auth")]
+    #[tokio::test]
+    async fn auth_scheme_preference() {
+        use aws_smithy_runtime_api::client::auth::http::{
+            HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID,
+        };
+
+        struct TestCase {
+            supported: Vec<AuthSchemeOption>,
+            preference: Option<AuthSchemePreference>,
+            expected_resolved_auths: Vec<AuthSchemeId>,
+        }
+
+        for test_case in [
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: None,
+                expected_resolved_auths: vec![
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some([].into()),
+                expected_resolved_auths: vec![
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some(["bogus"].map(AuthSchemeId::from).into()),
+                expected_resolved_auths: vec![
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some([HTTP_BASIC_AUTH_SCHEME_ID].into()),
+                expected_resolved_auths: vec![
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some([HTTP_BASIC_AUTH_SCHEME_ID, HTTP_API_KEY_AUTH_SCHEME_ID].into()),
+                expected_resolved_auths: vec![
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some(
+                    [
+                        HTTP_BASIC_AUTH_SCHEME_ID,
+                        HTTP_BEARER_AUTH_SCHEME_ID,
+                        HTTP_API_KEY_AUTH_SCHEME_ID,
+                    ]
+                    .into(),
+                ),
+                expected_resolved_auths: vec![
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                ],
+            },
+            TestCase {
+                supported: [HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID]
+                    .map(AuthSchemeOption::from)
+                    .to_vec(),
+                preference: Some(
+                    ["httpBasicAuth", "httpApiKeyAuth"]
+                        .map(AuthSchemeId::from)
+                        .into(),
+                ),
+                expected_resolved_auths: vec![
+                    HTTP_BASIC_AUTH_SCHEME_ID,
+                    HTTP_API_KEY_AUTH_SCHEME_ID,
+                ],
+            },
+        ] {
+            let actual = reprioritize_with_auth_scheme_preference(
+                test_case.supported,
+                test_case.preference.as_ref(),
+            )
+            .await;
+            let actual = actual
+                .iter()
+                .map(|opt| opt.scheme_id())
+                .cloned()
+                .collect::<Vec<_>>();
+            assert_eq!(test_case.expected_resolved_auths, actual);
         }
     }
 }

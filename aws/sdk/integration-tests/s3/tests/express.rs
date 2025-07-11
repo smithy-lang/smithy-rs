@@ -474,7 +474,8 @@ async fn no_auth_should_be_selected_when_no_credentials_is_configured() {
             .await
     );
 
-    assert!(logs_contain(
-        "resolving identity scheme_id=AuthSchemeId { scheme_id: \"no_auth\" }"
-    ));
+    assert!(logs_contain(&format!(
+        "resolving identity scheme_id=AuthSchemeId {{ scheme_id: \"{auth_scheme_id_str}\" }}",
+        auth_scheme_id_str = aws_smithy_runtime::client::auth::no_auth::NO_AUTH_SCHEME_ID.inner(),
+    )));
 }

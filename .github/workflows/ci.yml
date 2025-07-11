@@ -105,8 +105,8 @@ jobs:
           fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
           runner: ubuntu-latest
-        # - action: check-fuzzgen
-        #   runner: ubuntu-latest
+        - action: check-fuzzgen
+          runner: ubuntu-latest
         - action: check-server-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests-python
