@@ -15,7 +15,7 @@ use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Storable, StoreReplac
 use aws_smithy_types::type_erasure::TypeErasedBox;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
-use std::fmt::{self, Debug};
+use std::fmt;
 use std::sync::Arc;
 
 /// Auth schemes for the HTTP `Authorization` header.
@@ -225,25 +225,6 @@ new_type_future! {
     pub struct AuthSchemeOptionsFuture<'a, Vec<AuthSchemeOption>, BoxError>;
 }
 
-// Currently, we don't add `map_ok` to the `new_type_future` macro in general.
-// It's specifically used for `AuthSchemeOptionsFuture`, but we can expand it later if needed.
-impl<'a> AuthSchemeOptionsFuture<'a> {
-    /// Transforms the `Ok` variant inside this `AuthSchemeOptionsFuture` by applying the provided function.
-    ///
-    /// This method maps over the `Ok` variant of the `Result` wrapped by the future,
-    /// applying `map_fn` to the contained `Vec<AuthSchemeOption>`.
-    ///
-    /// The transformation is applied regardless of whether the future's value is already
-    /// available (`Now`) or will be computed asynchronously (`Later`).
-    pub fn map_ok<F>(self, f: F) -> AuthSchemeOptionsFuture<'a>
-    where
-        F: FnOnce(Vec<AuthSchemeOption>) -> Vec<AuthSchemeOption> + Send + 'a,
-    {
-        let inner = self.inner.map_boxed(|result| result.map(f));
-        Self { inner }
-    }
-}
-
 /// Resolver for auth scheme options.
 ///
 /// The orchestrator needs to select an auth scheme to sign requests with, and potentially
@@ -437,110 +418,5 @@ impl<'a> From<Option<&'a Document>> for AuthSchemeEndpointConfig<'a> {
 impl<'a> From<&'a Document> for AuthSchemeEndpointConfig<'a> {
     fn from(value: &'a Document) -> Self {
         Self(Some(value))
-    }
-}
-
-/// An ordered list of [AuthSchemeId]s
-///
-/// Can be used to reorder already-resolved auth schemes by an auth scheme resolver.
-/// This list is intended as a hint rather than a strict override;
-/// any schemes not present in the resolved auth schemes will be ignored.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct AuthSchemePreference {
-    preference_list: Vec<AuthSchemeId>,
-}
-
-impl Storable for AuthSchemePreference {
-    type Storer = StoreReplace<Self>;
-}
-
-impl IntoIterator for AuthSchemePreference {
-    type Item = AuthSchemeId;
-    type IntoIter = std::vec::IntoIter<Self::Item>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.preference_list.into_iter()
-    }
-}
-
-impl<T> From<T> for AuthSchemePreference
-where
-    T: AsRef<[AuthSchemeId]>,
-{
-    fn from(slice: T) -> Self {
-        AuthSchemePreference {
-            preference_list: slice.as_ref().to_vec(),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_map_ok_now_variant() {
-        let input = ["sigv4", "http"]
-            .map(|s| AuthSchemeOption::from(AuthSchemeId::from(s)))
-            .to_vec();
-        let fut = AuthSchemeOptionsFuture::ready(Ok(input));
-
-        let mapped = fut.map_ok(|opts| {
-            opts.into_iter()
-                .filter(|opt| opt.scheme_id().inner() != "http")
-                .collect()
-        });
-
-        let result = mapped.await;
-        assert!(result.is_ok());
-        let vec = result.unwrap();
-        assert_eq!(1, vec.len());
-        assert_eq!("sigv4", vec[0].scheme_id().inner());
-    }
-
-    #[tokio::test]
-    async fn test_map_ok_now_variant_error_no_op() {
-        let fut = AuthSchemeOptionsFuture::ready(Err(BoxError::from("oops")));
-
-        let mapped = fut.map_ok(|opts| opts); // no-op
-
-        let result = mapped.await;
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "oops");
-    }
-
-    #[tokio::test]
-    async fn test_map_ok_later_variant() {
-        let input = ["foo", "bar"]
-            .map(|s| AuthSchemeOption::from(AuthSchemeId::from(s)))
-            .to_vec();
-        let fut = AuthSchemeOptionsFuture::new(async move { Ok(input) });
-
-        let mapped = fut.map_ok(|opts| {
-            opts.into_iter()
-                .map(|mut opt| {
-                    opt.scheme_id =
-                        AuthSchemeId::from(Cow::Owned(opt.scheme_id().inner().to_uppercase()));
-                    opt
-                })
-                .collect()
-        });
-
-        let result = mapped.await;
-        assert!(result.is_ok());
-        let vec = result.unwrap();
-        assert_eq!(vec[0].scheme_id().inner(), "FOO");
-        assert_eq!(vec[1].scheme_id().inner(), "BAR");
-    }
-
-    #[tokio::test]
-    async fn test_map_ok_later_variant_error_no_op() {
-        let fut = AuthSchemeOptionsFuture::new(async move { Err(BoxError::from("later fail")) });
-
-        let mapped = fut.map_ok(|opts| opts); // no-op
-
-        let result = mapped.await;
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "later fail");
     }
 }

@@ -125,66 +125,6 @@ impl<T, F> NowOrLater<T, F> {
     }
 }
 
-impl<'a, T, F> NowOrLater<T, F>
-where
-    F: Future<Output = T> + Send + 'a,
-{
-    /// Maps the value inside `NowOrLater` and returns a boxed future with lifetime `'a`.
-    ///
-    /// Examples
-    ///
-    /// ```no_run
-    /// # use aws_smithy_async::future::now_or_later::{NowOrLater, BoxFuture};
-    /// # async fn map_boxed_later_variant() {
-    /// let later = NowOrLater::new(async { 10 });
-    /// let mapped = later.map_boxed(|x| x + 5);
-    /// assert_eq!(15, mapped.await);
-    /// # }
-    /// ```
-    pub fn map_boxed<U, M>(self, map_fn: M) -> NowOrLater<U, BoxFuture<'a, U>>
-    where
-        M: FnOnce(T) -> U + Send + 'a,
-    {
-        match self.inner {
-            Inner::Now { value } => {
-                let mapped = value.map(map_fn);
-                NowOrLater {
-                    inner: Inner::Now { value: mapped },
-                }
-            }
-            Inner::Later { future } => {
-                let fut = async move {
-                    let val = future.await;
-                    map_fn(val)
-                };
-                NowOrLater {
-                    inner: Inner::Later {
-                        future: Box::pin(fut),
-                    },
-                }
-            }
-        }
-    }
-}
-
-impl<T> NowOrLater<T, OnlyReady> {
-    /// Like [`NowOrLater::map_boxed`], but specialized for use with [`OnlyReady`]
-    pub fn map_boxed<U, M>(self, map_fn: M) -> NowOrLater<U, OnlyReady>
-    where
-        M: FnOnce(T) -> U,
-    {
-        match self.inner {
-            Inner::Now { value } => {
-                let mapped = value.map(map_fn);
-                NowOrLater {
-                    inner: Inner::Now { value: mapped },
-                }
-            }
-            Inner::Later { .. } => unreachable!(),
-        }
-    }
-}
-
 impl<T, F> Future for NowOrLater<T, F>
 where
     F: Future<Output = T>,
@@ -253,19 +193,5 @@ mod test {
     async fn async_fn_future() {
         let wrapped = NowOrLater::new(async { 5 });
         assert_eq!(wrapped.await, 5);
-    }
-
-    #[tokio::test]
-    async fn map_boxed_now_variant() {
-        let now: NowOrLater<i32, OnlyReady> = NowOrLater::ready(21);
-        let mapped = now.map_boxed(|x| x * 2);
-        assert_eq!(42, mapped.await);
-    }
-
-    #[tokio::test]
-    async fn map_boxed_later_variant() {
-        let later = NowOrLater::new(async { 10 });
-        let mapped = later.map_boxed(|x| x + 5);
-        assert_eq!(15, mapped.await);
     }
 }
