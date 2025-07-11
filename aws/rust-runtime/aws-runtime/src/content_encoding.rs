@@ -384,15 +384,14 @@ where
                         );
 
                         // We exhausted the body data, now check if the length is correct
-                        let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
-                        let expected_stream_length = this.options.stream_length;
-                        if actual_stream_length != expected_stream_length {
-                            let err = Box::new(AwsChunkedBodyError::StreamLengthMismatch {
-                                actual: actual_stream_length,
-                                expected: expected_stream_length,
-                            });
-                            return Poll::Ready(Some(Err(err)));
-                        };
+                        if let Err(poll_stream_len_err) =
+                            http_1x_utils::check_for_stream_length_mismatch(
+                                *this.inner_body_bytes_read_so_far as u64,
+                                this.options.stream_length,
+                            )
+                        {
+                            return poll_stream_len_err;
+                        }
 
                         *this.state = AwsChunkedBodyState::WritingTrailers;
                         let trailers = frame.trailers_ref();
@@ -449,15 +448,14 @@ where
                 let trailers = match *this.state {
                     AwsChunkedBodyState::WritingChunk => {
                         // We exhausted the body data, now check if the length is correct
-                        let actual_stream_length = *this.inner_body_bytes_read_so_far as u64;
-                        let expected_stream_length = this.options.stream_length;
-                        if actual_stream_length != expected_stream_length {
-                            let err = Box::new(AwsChunkedBodyError::StreamLengthMismatch {
-                                actual: actual_stream_length,
-                                expected: expected_stream_length,
-                            });
-                            return Poll::Ready(Some(Err(err)));
-                        };
+                        if let Err(poll_stream_len_err) =
+                            http_1x_utils::check_for_stream_length_mismatch(
+                                *this.inner_body_bytes_read_so_far as u64,
+                                this.options.stream_length,
+                            )
+                        {
+                            return poll_stream_len_err;
+                        }
 
                         // Since we exhausted the body data, but are still in the WritingChunk state we did
                         // not poll any trailer frames and we write the CRLF + Chunk terminator to begin the
@@ -490,8 +488,10 @@ where
 }
 /// Utility functions to help with the [http_body_1x::Body] trait implementation
 mod http_1x_utils {
+    use std::task::Poll;
+
     use super::{CRLF_RAW, TRAILER_SEPARATOR};
-    use bytes::BytesMut;
+    use bytes::{Bytes, BytesMut};
     use http_1x::{HeaderMap, HeaderName};
 
     /// Writes trailers out into a `string` and then converts that `String` to a `Bytes` before
@@ -547,6 +547,25 @@ mod http_1x_utils {
                 .sum::<usize>() as u64,
             None => 0,
         }
+    }
+
+    /// This is an ugly return type, but in practice it just returns `Ok(())` if the values match
+    /// and `Err(Poll::Ready(Some(Err(AwsChunkedBodyError::StreamLengthMismatch))))` if they don't
+    #[allow(clippy::type_complexity)]
+    pub(super) fn check_for_stream_length_mismatch(
+        actual_stream_length: u64,
+        expected_stream_length: u64,
+    ) -> Result<(), Poll<Option<Result<http_body_1x::Frame<Bytes>, aws_smithy_types::body::Error>>>>
+    {
+        if actual_stream_length != expected_stream_length {
+            let err = Box::new(super::AwsChunkedBodyError::StreamLengthMismatch {
+                actual: actual_stream_length,
+                expected: expected_stream_length,
+            });
+            return Err(Poll::Ready(Some(Err(err))));
+        };
+
+        Ok(())
     }
 }
 
