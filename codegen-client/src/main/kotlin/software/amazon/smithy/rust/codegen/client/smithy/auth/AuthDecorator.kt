@@ -77,7 +77,7 @@ class AuthDecorator : ClientCodegenDecorator {
                             writable {
                                 section.registerAuthSchemeOptionResolver(
                                     this,
-                                    defaultAuthSchemeResolver(codegenContext, section.serviceConfigName),
+                                    defaultAuthSchemeResolver(codegenContext),
                                 )
                             }
 
@@ -89,24 +89,14 @@ class AuthDecorator : ClientCodegenDecorator {
 }
 
 // Returns default auth scheme resolver for this service
-private fun defaultAuthSchemeResolver(
-    codegenContext: ClientCodegenContext,
-    serviceConfigName: String,
-): Writable {
+private fun defaultAuthSchemeResolver(codegenContext: ClientCodegenContext): Writable {
     val generator = AuthTypesGenerator(codegenContext)
     return writable {
         rustTemplate(
             """{
             use #{ServiceSpecificResolver};
-            if let Some(preference) = $serviceConfigName.config.load::<#{AuthSchemePreference}>().cloned() {
-                #{DefaultResolver}::default().with_auth_scheme_preference(preference).into_shared_resolver()
-            } else {
-                #{DefaultResolver}::default().into_shared_resolver()
-            }
+            #{DefaultResolver}::default().into_shared_resolver()
             }""",
-            "AuthSchemePreference" to
-                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
-                    .resolve("client::auth::AuthSchemePreference"),
             "DefaultResolver" to generator.defaultAuthSchemeResolver(),
             "ServiceSpecificResolver" to generator.serviceSpecificResolveAuthSchemeTrait(),
         )
