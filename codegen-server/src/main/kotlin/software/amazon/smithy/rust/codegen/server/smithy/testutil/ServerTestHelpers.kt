@@ -82,6 +82,7 @@ fun serverTestRustSettings(
     license: String? = null,
     examplesUri: String? = null,
     minimumSupportedRustVersion: String? = null,
+    hintMostlyUnused: Boolean = false,
     customizationConfig: ObjectNode? = null,
 ) = ServerRustSettings(
     service,
@@ -95,6 +96,7 @@ fun serverTestRustSettings(
     license,
     examplesUri,
     minimumSupportedRustVersion,
+    hintMostlyUnused,
     customizationConfig,
 )
 

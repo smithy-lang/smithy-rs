@@ -50,6 +50,7 @@ class CargoTomlGenerator(
     private val moduleLicense: String?,
     private val moduleRepository: String?,
     private val minimumSupportedRustVersion: String?,
+    private val hintMostlyUnused: Boolean,
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations = emptyMap(),
     private val dependencies: List<CargoDependency> = emptyList(),
@@ -69,6 +70,7 @@ class CargoTomlGenerator(
         settings.license,
         settings.moduleRepository,
         settings.minimumSupportedRustVersion,
+        settings.hintMostlyUnused,
         writer,
         manifestCustomizations,
         dependencies,
@@ -101,6 +103,7 @@ class CargoTomlGenerator(
                                     ).toMap(),
                             ).toMap(),
                     ).toMap(),
+                hintMostlyUnused.let { "hints" to listOfNotNull("mostly-unused" to true).toMap() },
                 "dependencies" to
                     dependencies.filter { it.scope == DependencyScope.Compile }
                         .associate { it.name to it.toMap() },

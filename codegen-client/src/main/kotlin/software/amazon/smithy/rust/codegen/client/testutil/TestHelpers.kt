@@ -37,6 +37,7 @@ fun testClientRustSettings(
     license: String? = null,
     examplesUri: String? = null,
     minimumSupportedRustVersion: String? = null,
+    hintMostlyUnused: Boolean = false,
     customizationConfig: ObjectNode? = null,
 ) = ClientRustSettings(
     service,
@@ -50,6 +51,7 @@ fun testClientRustSettings(
     license,
     examplesUri,
     minimumSupportedRustVersion,
+    hintMostlyUnused,
     customizationConfig,
 )
 
