@@ -6,16 +6,6 @@
 description = "Rust Runtime"
 plugins {
     kotlin("jvm")
-    `maven-publish`
-}
-
-group = "software.amazon.rustruntime"
-
-version = "0.0.3"
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
 }
 
 tasks.jar {
@@ -62,13 +52,4 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.asFile.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("default") {
-            from(components["java"])
-        }
-    }
-    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

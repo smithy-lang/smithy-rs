@@ -25,6 +25,9 @@ allprojects {
         google()
     }
 
+    group = "software.amazon.smithy.rust"
+    val codegenVersion: String by project
+    version = codegenVersion
 }
 
 

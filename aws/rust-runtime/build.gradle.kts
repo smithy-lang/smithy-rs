@@ -3,19 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-description = "Rust Runtime"
 plugins {
     kotlin("jvm")
 }
 
-group = "software.amazon.aws.rustruntime"
-
-version = "0.0.3"
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
+description = "AWS SDK Rust Runtime"
 
 tasks.jar {
     from("./") {
