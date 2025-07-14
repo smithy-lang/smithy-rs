@@ -23,7 +23,12 @@ dependencies {
     implementation(libs.smithy.aws.cloudformation.traits)
     implementation(gradleApi())
     implementation(libs.toml4j)
+    // required for convention plugins to use
+    implementation(libs.kotlin.gradle.plugin)
     testImplementation(libs.junit.jupiter)
+
+    // https://github.com/gradle/gradle/issues/15383
+    implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))
 
     constraints {
         implementation("com.google.code.gson:gson:2.8.9") {

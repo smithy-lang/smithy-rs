@@ -14,11 +14,6 @@ plugins {
     alias(libs.plugins.smithy.gradle.jar)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
-
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-client-codegen"
