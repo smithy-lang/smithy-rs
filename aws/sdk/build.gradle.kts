@@ -20,11 +20,6 @@ plugins {
     alias(libs.plugins.smithy.gradle.jar)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
-
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
