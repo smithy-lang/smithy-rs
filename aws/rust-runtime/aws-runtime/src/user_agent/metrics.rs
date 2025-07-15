@@ -136,7 +136,25 @@ iterable_enum!(
     FlexibleChecksumsReqWhenSupported,
     FlexibleChecksumsReqWhenRequired,
     FlexibleChecksumsResWhenSupported,
-    FlexibleChecksumsResWhenRequired
+    FlexibleChecksumsResWhenRequired,
+    CredentialsCode,
+    CredentialsEnvVars,
+    CredentialsEnvVarsStsWebIdToken,
+    CredentialsStsAssumeRole,
+    CredentialsStsAssumeRoleSaml,
+    CredentialsStsAssumeRoleWebId,
+    CredentialsStsFederationToken,
+    CredentialsStsSessionToken,
+    CredentialsProfile,
+    CredentialsProfileSourceProfile,
+    CredentialsProfileNamedProvider,
+    CredentialsProfileStsWebIdToken,
+    CredentialsProfileSso,
+    CredentialsSso,
+    CredentialsProfileProcess,
+    CredentialsProcess,
+    CredentialsHttp,
+    CredentialsImds
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -189,6 +207,32 @@ impl ProvideBusinessMetric for AwsSdkFeature {
         use AwsSdkFeature::*;
         match self {
             S3Transfer => Some(BusinessMetric::S3Transfer),
+            CredentialsCode => Some(BusinessMetric::CredentialsCode),
+            CredentialsEnvVars => Some(BusinessMetric::CredentialsEnvVars),
+            CredentialsEnvVarsStsWebIdToken => {
+                Some(BusinessMetric::CredentialsEnvVarsStsWebIdToken)
+            }
+            CredentialsStsAssumeRole => Some(BusinessMetric::CredentialsStsAssumeRole),
+            CredentialsStsAssumeRoleSaml => Some(BusinessMetric::CredentialsStsAssumeRoleSaml),
+            CredentialsStsAssumeRoleWebId => Some(BusinessMetric::CredentialsStsAssumeRoleWebId),
+            CredentialsStsFederationToken => Some(BusinessMetric::CredentialsStsFederationToken),
+            CredentialsStsSessionToken => Some(BusinessMetric::CredentialsStsSessionToken),
+            CredentialsProfile => Some(BusinessMetric::CredentialsProfile),
+            CredentialsProfileSourceProfile => {
+                Some(BusinessMetric::CredentialsProfileSourceProfile)
+            }
+            CredentialsProfileNamedProvider => {
+                Some(BusinessMetric::CredentialsProfileNamedProvider)
+            }
+            CredentialsProfileStsWebIdToken => {
+                Some(BusinessMetric::CredentialsProfileStsWebIdToken)
+            }
+            CredentialsProfileSso => Some(BusinessMetric::CredentialsProfileSso),
+            CredentialsSso => Some(BusinessMetric::CredentialsSso),
+            CredentialsProfileProcess => Some(BusinessMetric::CredentialsProfileProcess),
+            CredentialsProcess => Some(BusinessMetric::CredentialsProcess),
+            CredentialsHttp => Some(BusinessMetric::CredentialsHttp),
+            CredentialsImds => Some(BusinessMetric::CredentialsImds),
         }
     }
 }

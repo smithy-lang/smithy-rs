@@ -4,6 +4,9 @@
  */
 
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::type_erasure::TypeErasedBox;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -21,8 +24,30 @@ use crate::attributes::AccountId;
 ///
 /// When `Credentials` is dropped, its contents are zeroed in memory. Credentials uses an interior Arc to ensure
 /// that even when cloned, credentials don't exist in multiple memory locations.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Credentials(Arc<Inner>);
+pub struct Credentials(Arc<Inner>, HashMap<TypeId, TypeErasedBox>);
+
+impl Clone for Credentials {
+    fn clone(&self) -> Self {
+        let mut new_map = HashMap::new();
+        for (k, v) in &self.1 {
+            new_map.insert(
+                k.clone(),
+                v.try_clone()
+                    .expect("values are guaranteed to implement `Clone` via `set_property`"),
+            );
+        }
+        Self(self.0.clone(), new_map)
+    }
+}
+
+impl PartialEq for Credentials {
+    #[inline] // specified in the output of cargo expand of the original `#[derive(PartialEq)]`
+    fn eq(&self, other: &Credentials) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Credentials {}
 
 #[derive(Clone, Eq, PartialEq)]
 struct Inner {
@@ -93,14 +118,17 @@ impl Credentials {
         expires_after: Option<SystemTime>,
         provider_name: &'static str,
     ) -> Self {
-        Credentials(Arc::new(Inner {
-            access_key_id: Zeroizing::new(access_key_id.into()),
-            secret_access_key: Zeroizing::new(secret_access_key.into()),
-            session_token: Zeroizing::new(session_token),
-            expires_after,
-            account_id: None,
-            provider_name,
-        }))
+        Credentials(
+            Arc::new(Inner {
+                access_key_id: Zeroizing::new(access_key_id.into()),
+                secret_access_key: Zeroizing::new(secret_access_key.into()),
+                session_token: Zeroizing::new(session_token),
+                expires_after,
+                account_id: None,
+                provider_name,
+            }),
+            HashMap::new(),
+        )
     }
 
     /// Creates `Credentials` from hardcoded access key, secret key, and session token.
@@ -188,6 +216,38 @@ impl Credentials {
     pub fn session_token(&self) -> Option<&str> {
         self.0.session_token.as_deref()
     }
+
+    /// Set arbitrary property for `Credentials`
+    pub fn set_property<T: Any + Clone + Debug + Send + Sync + 'static>(&mut self, prop: T) {
+        self.1
+            .insert(TypeId::of::<T>(), TypeErasedBox::new_with_clone(prop));
+    }
+
+    /// Returns arbitrary property associated with this `Credentials`.
+    pub fn get_property<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
+        self.1
+            .get(&TypeId::of::<T>())
+            .and_then(|b| b.downcast_ref())
+    }
+
+    /// Attempts to retrieve a mutable reference to property of a given type `T`.
+    pub fn get_property_mut<T: Any + Debug + Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.1
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|b| b.downcast_mut())
+    }
+
+    /// Returns a mutable reference to `T` if it is stored in the property, otherwise returns the
+    /// [`Default`] implementation of `T`.
+    pub fn get_property_mut_or_default<T: Any + Clone + Debug + Default + Send + Sync + 'static>(
+        &mut self,
+    ) -> &mut T {
+        self.1
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| TypeErasedBox::new_with_clone(T::default()))
+            .downcast_mut()
+            .expect("typechecked")
+    }
 }
 
 /// Builder for [`Credentials`]
@@ -259,20 +319,23 @@ impl CredentialsBuilder {
 
     /// Build [`Credentials`] from the builder.
     pub fn build(self) -> Credentials {
-        Credentials(Arc::new(Inner {
-            access_key_id: self
-                .access_key_id
-                .expect("required field `access_key_id` missing"),
-            secret_access_key: self
-                .secret_access_key
-                .expect("required field `secret_access_key` missing"),
-            session_token: self.session_token,
-            expires_after: self.expires_after,
-            account_id: self.account_id,
-            provider_name: self
-                .provider_name
-                .expect("required field `provider_name` missing"),
-        }))
+        Credentials(
+            Arc::new(Inner {
+                access_key_id: self
+                    .access_key_id
+                    .expect("required field `access_key_id` missing"),
+                secret_access_key: self
+                    .secret_access_key
+                    .expect("required field `secret_access_key` missing"),
+                session_token: self.session_token,
+                expires_after: self.expires_after,
+                account_id: self.account_id,
+                provider_name: self
+                    .provider_name
+                    .expect("required field `provider_name` missing"),
+            }),
+            HashMap::new(),
+        )
     }
 }
 
@@ -321,7 +384,17 @@ impl From<Credentials> for Identity {
         } else {
             Identity::builder().data(val)
         };
+
         builder.set_expiration(expiry);
+
+        if let Some(features) = val.get_property::<Vec<AwsSdkFeature>>().cloned() {
+            let mut layer = Layer::new("IdentityResolutionFeatureIdTracking");
+            for feat in features {
+                layer.store_append(feat);
+            }
+            builder.set_property(layer.freeze());
+        }
+
         builder.build().expect("set required fields")
     }
 }

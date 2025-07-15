@@ -1,6 +1,6 @@
 [package]
 name = "aws-credential-types"
-version = "1.2.4"
+version = "1.2.5"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Types for AWS SDK credentials."
 edition = "2021"
