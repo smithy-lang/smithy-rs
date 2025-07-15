@@ -31,9 +31,10 @@ async fn auth_scheme_preference_at_client_level_should_take_the_highest_priority
         .send()
         .await;
 
-    assert!(logs_contain(
-        "resolving identity scheme_id=AuthSchemeId { scheme_id: \"sigv4\" }"
-    ));
+    assert!(logs_contain(&format!(
+        "resolving identity scheme_id=AuthSchemeId {{ scheme_id: \"{auth_scheme_id_str}\" }}",
+        auth_scheme_id_str = aws_runtime::auth::sigv4::SCHEME_ID.inner(),
+    )));
 }
 
 #[tracing_test::traced_test]
@@ -60,7 +61,8 @@ async fn auth_scheme_preference_at_operation_level_should_take_the_highest_prior
         .send()
         .await;
 
-    assert!(logs_contain(
-        "resolving identity scheme_id=AuthSchemeId { scheme_id: \"sigv4\" }"
-    ));
+    assert!(logs_contain(&format!(
+        "resolving identity scheme_id=AuthSchemeId {{ scheme_id: \"{auth_scheme_id_str}\" }}",
+        auth_scheme_id_str = aws_runtime::auth::sigv4::SCHEME_ID.inner(),
+    )));
 }

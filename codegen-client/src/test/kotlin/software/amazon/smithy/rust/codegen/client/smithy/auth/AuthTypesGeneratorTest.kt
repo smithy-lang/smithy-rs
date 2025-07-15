@@ -100,7 +100,7 @@ class AuthTypesGeneratorTest {
                         .iter()
                         .map(|opt| opt.scheme_id().inner())
                         .collect::<Vec<_>>();
-                    assert_eq!(vec!["http-api-key-auth", "http-basic-auth"], actual);
+                    assert_eq!(vec!["httpApiKeyAuth", "httpBasicAuth"], actual);
                     """,
                     *codegenScope,
                 )
@@ -127,7 +127,7 @@ class AuthTypesGeneratorTest {
                         .iter()
                         .map(|opt| opt.scheme_id().inner())
                         .collect::<Vec<_>>();
-                    assert_eq!(vec!["http-basic-auth", "http-bearer-auth"], actual);
+                    assert_eq!(vec!["httpBasicAuth", "httpBearerAuth"], actual);
                     """,
                     *codegenScope,
                 )
