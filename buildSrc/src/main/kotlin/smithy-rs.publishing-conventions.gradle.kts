@@ -2,15 +2,18 @@ plugins {
     `maven-publish`
     signing
 }
-
-fun Project.stagingDir(): Provider<Directory> {
-    return rootProject.layout.buildDirectory.dir("m2")
+// FIXME(publishing): create a real "javadoc" JAR from Dokka output
+val javadocJar = tasks.register<Jar>("emptyJar") {
+    archiveClassifier.set("javadoc")
+    destinationDirectory.set(layout.buildDirectory.dir("libs"))
+    from()
 }
 
 publishing {
     publications {
         create<MavenPublication>("codegen") {
             from(components["java"])
+            artifact(javadocJar)
 
             afterEvaluate {
                 pom {
@@ -59,8 +62,4 @@ publishing {
             sign(publishing.publications["codegen"])
         }
     }
-}
-
-tasks.named("clean").configure {
-    delete(stagingDir())
 }
