@@ -6,6 +6,10 @@ version: '3.9'
 services:
   smithy-rs-build:
     image: smithy-rs-build-image:latest
+    environment:
+      RUSTDOCFLAGS: -D warnings
+      # TODO(https://github.com/smithy-lang/smithy-rs/issues/4122): Remove the allowed lints once fixed in the server runtime crates
+      RUSTFLAGS: -D warnings -A clippy::redundant_closure -A non_local_definitions
     user: ${USER_ID}:build
     volumes:
     - type: bind
