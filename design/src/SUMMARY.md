@@ -68,5 +68,6 @@
   - [RFC-0043: Identity Cache Partitions](./rfcs/rfc0043_identity_cache_partitions.md)
   - [RFC-0044: Environment-defined service configuration](./rfcs/rfc0044_env_defined_service_config.md)
   - [RFC-0045: Configurable Serde](./rfcs/rfc0045_configurable_serde.md)
+  - [RFC-0046: Wire cached responses](./rfcs/rfc0046_wire_cached_responses.md)
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)
