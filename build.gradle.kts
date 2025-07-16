@@ -39,6 +39,10 @@ allprojects {
 // jreleaser requires a "clean" task to exist
 tasks.register("clean")
 
+// Register custom tasks for Maven Central publishing
+tasks.register<tasks.VerifyCodegenVersionBump>("verifyCodegenVersionBump")
+tasks.register<tasks.CheckMavenCentralPublishingNeeded>("checkMavenCentralPublishingNeeded")
+
 jreleaser {
     // Creates a generic release, which won't publish anything (we are only interested in publishing the jar)
     // https://jreleaser.org/guide/latest/reference/release/index.html
