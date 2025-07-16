@@ -58,7 +58,7 @@ jobs:
       run: ./.github/scripts/acquire-build-image
     - name: Tag and upload image
       run: |
-        IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
+        IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
         ./smithy-rs/.github/scripts/upload-build-image.sh $IMAGE_TAG
 
   # Run the shared CI after a Docker build image has been uploaded to ECR
