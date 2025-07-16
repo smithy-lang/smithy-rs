@@ -112,6 +112,7 @@ class ServerBuilderDefaultValuesTest {
                 BuilderGeneratorKind.SERVER_BUILDER_GENERATOR -> {
                     writeServerBuilderGenerator(project, this, model, symbolProvider)
                 }
+
                 BuilderGeneratorKind.SERVER_BUILDER_GENERATOR_WITHOUT_PUBLIC_CONSTRAINED_TYPES -> {
                     writeServerBuilderGeneratorWithoutPublicConstrainedTypes(project, this, model, symbolProvider)
                 }
@@ -211,6 +212,7 @@ class ServerBuilderDefaultValuesTest {
             codegenContext,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
+            emptyList(),
         ).render(writer)
         StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }
@@ -240,6 +242,7 @@ class ServerBuilderDefaultValuesTest {
             codegenContext,
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
+            emptyList(),
         ).render(writer)
         StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }

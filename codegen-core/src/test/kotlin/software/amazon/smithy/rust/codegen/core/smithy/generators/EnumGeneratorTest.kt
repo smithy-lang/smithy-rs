@@ -65,6 +65,7 @@ class EnumGeneratorTest {
                 testModel.lookup("test#EnumWithUnknown"),
                 enumTrait.values.first { it.name.orNull() == name },
                 symbolProvider,
+                emptyList(),
             )
 
         @Test
@@ -112,7 +113,7 @@ class EnumGeneratorTest {
             shape: StringShape,
             enumType: EnumType = TestEnumType,
         ) {
-            EnumGenerator(model, provider, shape, enumType).render(this)
+            EnumGenerator(model, provider, shape, enumType, emptyList()).render(this)
         }
 
         @Test
