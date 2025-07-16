@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -21,6 +22,8 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
         arrayOf(
             "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
             "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
+            // TODO(Http1x): Update this dependency to Http1x
+            "Http" to CargoDependency.Http.toType(),
         )
 
     override fun section(section: ServiceConfig) =
@@ -55,7 +58,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                         /// use aws_smithy_types::config_bag::ConfigBag;
                         /// use $moduleUseName::config::Config;
-                        /// use http::uri::Uri;
+                        /// use #{Http}::uri::Uri;
                         ///
                         /// fn base_url() -> String {
                         ///     // ...
