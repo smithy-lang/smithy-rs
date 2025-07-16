@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 16th, 2025
+===============
+**New this release:**
+- (client) re-use checksums on retry attempts for enhanced durability
+
+
 July 8th, 2025
 ==============
 **New this release:**
