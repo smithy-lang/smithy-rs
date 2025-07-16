@@ -116,7 +116,11 @@ async fn is_published(index: Arc<CratesIndex>, handle: &PackageHandle) -> Result
 
 /// Waits for the given package to show up on crates.io
 async fn wait_for_eventual_consistency(index: Arc<CratesIndex>, package: &Package) -> Result<()> {
-    let max_wait_time = 60usize;
+    // This timeout value is quite long (it started at 10 seconds), but is currently increased to handle
+    // recent slowdowns we have seen with crates.io populating the sparse index. You can find some discussion
+    // here: https://rust-lang.zulipchat.com/#narrow/channel/318791-t-crates-io/topic/sparse.20index.20updates.20sometimes.20being.20rate.20limited/with/529157932
+    // and a tracking issue at https://github.com/rust-lang/crates.io/issues/11588
+    let max_wait_time = 180usize;
     for _ in 0..max_wait_time {
         if !is_published(index.clone(), &package.handle).await? {
             tokio::time::sleep(Duration::from_secs(1)).await;
