@@ -85,9 +85,9 @@ RUN set -eux; \
         git clone https://github.com/smithy-lang/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
-        # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
-        ./gradlew; \
     fi; \
+    # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
+    ./gradlew; \
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
     cargo install --locked --path tools/ci-build/difftags; \
