@@ -6,20 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix h2 GoAway errors not being retried by hyper legacy client\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [
-        "aws-sdk-rust#1272"
-      ],
-      "since-commit": "7d64b2f9e8fc89159d7fb1ff1309d6d6b8b53189",
-      "age": 5
-    },
-    {
       "message": "Fix default supported protocols incorrectly ordered in `ClientProtocolLoader`.\n",
       "meta": {
         "bug": true,
@@ -31,7 +17,7 @@
         "smithy-rs#4165"
       ],
       "since-commit": "c624a84d9ecc451854521e363e34cf6f1c10e009",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add support for fetching account ID from IMDS credentials on EC2.\n",
@@ -45,7 +31,7 @@
         "smithy-rs#4109"
       ],
       "since-commit": "c624a84d9ecc451854521e363e34cf6f1c10e009",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Temporarily disable fetching account ID from IMDS credentials on EC2.\n",
@@ -59,7 +45,7 @@
         "smithy-rs#4187"
       ],
       "since-commit": "dd10f0602682dfabafc465dbcd9eb92d3d915c51",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix hyper 1.x connection refused errors not marked as retryable\n",
@@ -71,7 +57,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "dd10f0602682dfabafc465dbcd9eb92d3d915c51",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Make Rpc V2 CBOR a compatible protocol for `awsQuery` using `awsQueryCompatible` trait\n",
@@ -85,7 +71,7 @@
         "smithy-rs#4186"
       ],
       "since-commit": "dd10f0602682dfabafc465dbcd9eb92d3d915c51",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Allows customers to configure the auth schemes and auth scheme resolver. For more information see the GitHub [discussion](https://github.com/smithy-lang/smithy-rs/discussions/4197).\n",
@@ -100,6 +86,18 @@
         "smithy-rs#4198"
       ],
       "since-commit": "ccf374dddc0690ef8aca1ed006b9e9b21299558e",
+      "age": 2
+    },
+    {
+      "message": "re-use checksums on retry attempts for enhanced durability\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "1378695258e645d2c65a99cc0311b8c3d982e167",
       "age": 1
     }
   ],
