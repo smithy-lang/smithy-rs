@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 
-class AuthSchemeResolverGeneratorTest {
+class AuthTypesGeneratorTest {
     val model =
         """
         namespace com.test
@@ -29,12 +29,13 @@ class AuthSchemeResolverGeneratorTest {
         @httpBearerAuth
         @httpApiKeyAuth(name: "X-Api-Key", in: "header")
         @httpBasicAuth
-        @auth([httpApiKeyAuth])
+        @auth([httpApiKeyAuth, httpBasicAuth])
         service Test {
             version: "1.0.0",
             operations: [
                 GetFooServiceDefault,
                 GetFooOpOverride,
+                GetFooAnonymous,
             ]
         }
 
@@ -42,6 +43,9 @@ class AuthSchemeResolverGeneratorTest {
 
         @auth([httpBasicAuth, httpBearerAuth])
         operation GetFooOpOverride{}
+
+        @auth([])
+        operation GetFooAnonymous{}
         """.asSmithyModel(smithyVersion = "2.0")
 
     @Test
@@ -96,7 +100,7 @@ class AuthSchemeResolverGeneratorTest {
                         .iter()
                         .map(|opt| opt.scheme_id().inner())
                         .collect::<Vec<_>>();
-                    assert_eq!(vec!["http-api-key-auth"], actual);
+                    assert_eq!(vec!["httpApiKeyAuth", "httpBasicAuth"], actual);
                     """,
                     *codegenScope,
                 )
@@ -123,7 +127,7 @@ class AuthSchemeResolverGeneratorTest {
                         .iter()
                         .map(|opt| opt.scheme_id().inner())
                         .collect::<Vec<_>>();
-                    assert_eq!(vec!["http-basic-auth", "http-bearer-auth"], actual);
+                    assert_eq!(vec!["httpBasicAuth", "httpBearerAuth"], actual);
                     """,
                     *codegenScope,
                 )
