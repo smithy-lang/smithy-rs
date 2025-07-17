@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_features::sdk_feature::AwsSdkFeature;
+use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::type_erasure::TypeErasedBox;
 use std::any::{Any, TypeId};
@@ -31,7 +33,7 @@ impl Clone for Credentials {
         let mut new_map = HashMap::new();
         for (k, v) in &self.1 {
             new_map.insert(
-                k.clone(),
+                *k,
                 v.try_clone()
                     .expect("values are guaranteed to implement `Clone` via `set_property`"),
             );
@@ -218,12 +220,14 @@ impl Credentials {
     }
 
     /// Set arbitrary property for `Credentials`
+    #[doc(hidden)]
     pub fn set_property<T: Any + Clone + Debug + Send + Sync + 'static>(&mut self, prop: T) {
         self.1
             .insert(TypeId::of::<T>(), TypeErasedBox::new_with_clone(prop));
     }
 
     /// Returns arbitrary property associated with this `Credentials`.
+    #[doc(hidden)]
     pub fn get_property<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.1
             .get(&TypeId::of::<T>())
@@ -231,6 +235,7 @@ impl Credentials {
     }
 
     /// Attempts to retrieve a mutable reference to property of a given type `T`.
+    #[doc(hidden)]
     pub fn get_property_mut<T: Any + Debug + Send + Sync + 'static>(&mut self) -> Option<&mut T> {
         self.1
             .get_mut(&TypeId::of::<T>())
@@ -239,6 +244,7 @@ impl Credentials {
 
     /// Returns a mutable reference to `T` if it is stored in the property, otherwise returns the
     /// [`Default`] implementation of `T`.
+    #[doc(hidden)]
     pub fn get_property_mut_or_default<T: Any + Clone + Debug + Default + Send + Sync + 'static>(
         &mut self,
     ) -> &mut T {
@@ -380,9 +386,9 @@ impl From<Credentials> for Identity {
     fn from(val: Credentials) -> Self {
         let expiry = val.expiry();
         let mut builder = if let Some(account_id) = val.account_id() {
-            Identity::builder().property(account_id.clone()).data(val)
+            Identity::builder().property(account_id.clone())
         } else {
-            Identity::builder().data(val)
+            Identity::builder()
         };
 
         builder.set_expiration(expiry);
@@ -395,13 +401,16 @@ impl From<Credentials> for Identity {
             builder.set_property(layer.freeze());
         }
 
-        builder.build().expect("set required fields")
+        builder.data(val).build().expect("set required fields")
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::Credentials;
+    use aws_features::sdk_feature::AwsSdkFeature;
+    use aws_smithy_runtime_api::client::identity::Identity;
+    use aws_smithy_types::config_bag::FrozenLayer;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -431,5 +440,59 @@ mod test {
             format!("{:?}", creds),
             r#"Credentials { provider_name: "debug tester", access_key_id: "akid", secret_access_key: "** redacted **", expires_after: "2009-02-13T23:31:30Z", account_id: "012345678901" }"#
         );
+    }
+
+    #[test]
+    fn equality_ignores_properties() {
+        #[derive(Clone, Debug)]
+        struct Foo;
+        let mut creds1 = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        creds1.set_property(AwsSdkFeature::CredentialsCode);
+
+        let mut creds2 = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        creds2.set_property(Foo);
+
+        assert_eq!(creds1, creds2)
+    }
+
+    #[test]
+    fn identity_inherits_feature_properties() {
+        let mut creds = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        let mut feature_props = vec![
+            AwsSdkFeature::CredentialsCode,
+            AwsSdkFeature::CredentialsStsSessionToken,
+        ];
+        creds.set_property(feature_props.clone());
+
+        let identity = Identity::from(creds);
+
+        let maybe_props = identity
+            .property::<FrozenLayer>()
+            .unwrap()
+            .load::<AwsSdkFeature>()
+            .cloned()
+            .collect::<Vec<AwsSdkFeature>>();
+
+        // The props get reversed when being popped out of the StoreAppend
+        feature_props.reverse();
+        assert_eq!(maybe_props, feature_props)
     }
 }

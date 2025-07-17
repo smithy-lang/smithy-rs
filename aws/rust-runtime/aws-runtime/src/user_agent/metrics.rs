@@ -233,6 +233,13 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             CredentialsProcess => Some(BusinessMetric::CredentialsProcess),
             CredentialsHttp => Some(BusinessMetric::CredentialsHttp),
             CredentialsImds => Some(BusinessMetric::CredentialsImds),
+            otherwise => {
+                tracing::warn!(
+                    "Attempted to provide `BusinessMetric` for `{otherwise:?}`, which is not recognized in the current version of the `aws-runtime` crate. \
+                    Consider upgrading to the latest version to ensure that all tracked features are properly reported in your metrics."
+                );
+                None
+            }
         }
     }
 }
