@@ -20,10 +20,6 @@ java {
     targetCompatibility = JavaVersion.VERSION_11
 }
 
-kotlin {
-    jvmToolchain(17)
-}
-
 tasks.compileKotlin {
     compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
 }
