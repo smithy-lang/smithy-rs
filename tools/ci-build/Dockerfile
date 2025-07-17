@@ -221,7 +221,7 @@ RUN set -eux; \
         git \
         glibc-langpack-en \
         go \
-        java-17-amazon-corretto-headless \
+        java-17-amazon-corretto-devel \
         jq \
         make \
         openssl-devel \
