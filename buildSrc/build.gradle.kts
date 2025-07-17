@@ -14,6 +14,12 @@ repositories {
     google()
 }
 
+// Workaround for https://github.com/gradle/gradle/issues/30264
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 dependencies {
     api(libs.smithy.codegen.core)
     implementation(libs.smithy.utils)
