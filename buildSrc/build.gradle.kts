@@ -4,6 +4,7 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     `kotlin-dsl`
@@ -12,6 +13,23 @@ plugins {
 repositories {
     mavenCentral()
     google()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+tasks.compileKotlin {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+}
+
+tasks.compileTestKotlin {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
 }
 
 dependencies {
