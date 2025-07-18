@@ -12,12 +12,14 @@ import aws.sdk.parseMembership
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 
-tasks["jar"].enabled = false
-
 plugins {
     java
     alias(libs.plugins.smithy.gradle.base)
     alias(libs.plugins.smithy.gradle.jar)
+}
+
+tasks.jar.configure {
+    enabled = false
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
@@ -413,14 +415,15 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     }
 }
 
-tasks["smithyBuild"].apply {
+tasks.smithyBuild.configure {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
 }
-tasks["assemble"].apply {
+
+tasks.assemble.configure {
     dependsOn(
         "deleteSdk",
         "jar",

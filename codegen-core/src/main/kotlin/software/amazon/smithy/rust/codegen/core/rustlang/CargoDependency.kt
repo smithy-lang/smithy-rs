@@ -89,6 +89,20 @@ class InlineDependency(
             resourcePath: String,
             vararg additionalDependencies: RustDependency,
         ): InlineDependency {
+//            val classpath = System.getProperty("java.class.path")
+//            println("Java Classpath:")
+//            val classPathEntries: Array<String?> =
+//                classpath.split(System.getProperty("path.separator").toRegex()).dropLastWhile { it.isEmpty() }
+//                    .toTypedArray()
+//            for (entry in classPathEntries) {
+//                println(entry)
+//            }
+
+//            val root = this::class.java.getResource("/")
+
+            val root = this::class.java.getResource("/inlineable")
+            println("root = $root")
+
             // The inline crate is loaded as a dependency on the runtime classpath
             val rustFile = this::class.java.getResource(resourcePath)
             check(rustFile != null) {

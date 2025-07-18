@@ -26,7 +26,7 @@ dependencies {
     implementation(libs.smithy.waiters)
     implementation(libs.smithy.protocol.traits)
 
-    testRuntimeOnly(project(":rust-runtime"))
+    implementation(project(":rust-runtime"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
 }

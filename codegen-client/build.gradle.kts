@@ -27,7 +27,7 @@ dependencies {
     // marshalling/unmarshalling tests.
     testImplementation(libs.smithy.validation.model)
 
-    testRuntimeOnly(project(":rust-runtime"))
+    runtimeOnly(project(":rust-runtime"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
 }
