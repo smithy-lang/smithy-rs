@@ -113,6 +113,7 @@ const AWS_SDK_RUNTIMES: &[&str] = &[
     "aws-config",
     "aws-credential-types",
     "aws-endpoint",
+    "aws-features",
     "aws-http",
     "aws-hyper",
     "aws-runtime",

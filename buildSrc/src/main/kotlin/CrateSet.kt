@@ -47,6 +47,7 @@ object CrateSet {
             "aws-config",
             "aws-credential-types",
             "aws-endpoint",
+            "aws-features",
             "aws-http",
             "aws-hyper",
             "aws-runtime",
