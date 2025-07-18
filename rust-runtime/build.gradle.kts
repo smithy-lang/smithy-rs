@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-description = "Rust Runtime"
 plugins {
     id("smithy-rs.kotlin-conventions")
+    id("smithy-rs.publishing-conventions")
 }
+
+description = "Rust Runtime"
+extra["displayName"] = "Smithy :: Rust :: Rust Runtime"
+extra["moduleName"] = "software.amazon.smithy.rust.runtime"
 
 tasks.jar {
     from("./") {
