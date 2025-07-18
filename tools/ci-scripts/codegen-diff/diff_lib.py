@@ -17,8 +17,8 @@ CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 target_codegen_client = 'codegen-client-test'
 target_codegen_server = 'codegen-server-test'
-target_codegen_server_python = 'codegen-server-test:python'
-target_codegen_server_typescript = 'codegen-server-test:typescript'
+target_codegen_server_python = 'codegen-server-test:codegen-server-test-python'
+target_codegen_server_typescript = 'codegen-server-test:codegen-server-test-typescript'
 target_aws_sdk = 'aws:sdk'
 
 
