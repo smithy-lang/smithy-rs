@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_features::sdk_feature::AwsSdkFeature;
+use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::type_erasure::TypeErasedBox;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -21,8 +26,30 @@ use crate::attributes::AccountId;
 ///
 /// When `Credentials` is dropped, its contents are zeroed in memory. Credentials uses an interior Arc to ensure
 /// that even when cloned, credentials don't exist in multiple memory locations.
-#[derive(Clone, Eq, PartialEq)]
-pub struct Credentials(Arc<Inner>);
+pub struct Credentials(Arc<Inner>, HashMap<TypeId, TypeErasedBox>);
+
+impl Clone for Credentials {
+    fn clone(&self) -> Self {
+        let mut new_map = HashMap::new();
+        for (k, v) in &self.1 {
+            new_map.insert(
+                *k,
+                v.try_clone()
+                    .expect("values are guaranteed to implement `Clone` via `set_property`"),
+            );
+        }
+        Self(self.0.clone(), new_map)
+    }
+}
+
+impl PartialEq for Credentials {
+    #[inline] // specified in the output of cargo expand of the original `#[derive(PartialEq)]`
+    fn eq(&self, other: &Credentials) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for Credentials {}
 
 #[derive(Clone, Eq, PartialEq)]
 struct Inner {
@@ -93,14 +120,17 @@ impl Credentials {
         expires_after: Option<SystemTime>,
         provider_name: &'static str,
     ) -> Self {
-        Credentials(Arc::new(Inner {
-            access_key_id: Zeroizing::new(access_key_id.into()),
-            secret_access_key: Zeroizing::new(secret_access_key.into()),
-            session_token: Zeroizing::new(session_token),
-            expires_after,
-            account_id: None,
-            provider_name,
-        }))
+        Credentials(
+            Arc::new(Inner {
+                access_key_id: Zeroizing::new(access_key_id.into()),
+                secret_access_key: Zeroizing::new(secret_access_key.into()),
+                session_token: Zeroizing::new(session_token),
+                expires_after,
+                account_id: None,
+                provider_name,
+            }),
+            HashMap::new(),
+        )
     }
 
     /// Creates `Credentials` from hardcoded access key, secret key, and session token.
@@ -188,6 +218,42 @@ impl Credentials {
     pub fn session_token(&self) -> Option<&str> {
         self.0.session_token.as_deref()
     }
+
+    /// Set arbitrary property for `Credentials`
+    #[doc(hidden)]
+    pub fn set_property<T: Any + Clone + Debug + Send + Sync + 'static>(&mut self, prop: T) {
+        self.1
+            .insert(TypeId::of::<T>(), TypeErasedBox::new_with_clone(prop));
+    }
+
+    /// Returns arbitrary property associated with this `Credentials`.
+    #[doc(hidden)]
+    pub fn get_property<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
+        self.1
+            .get(&TypeId::of::<T>())
+            .and_then(|b| b.downcast_ref())
+    }
+
+    /// Attempts to retrieve a mutable reference to property of a given type `T`.
+    #[doc(hidden)]
+    pub fn get_property_mut<T: Any + Debug + Send + Sync + 'static>(&mut self) -> Option<&mut T> {
+        self.1
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|b| b.downcast_mut())
+    }
+
+    /// Returns a mutable reference to `T` if it is stored in the property, otherwise returns the
+    /// [`Default`] implementation of `T`.
+    #[doc(hidden)]
+    pub fn get_property_mut_or_default<T: Any + Clone + Debug + Default + Send + Sync + 'static>(
+        &mut self,
+    ) -> &mut T {
+        self.1
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| TypeErasedBox::new_with_clone(T::default()))
+            .downcast_mut()
+            .expect("typechecked")
+    }
 }
 
 /// Builder for [`Credentials`]
@@ -259,20 +325,23 @@ impl CredentialsBuilder {
 
     /// Build [`Credentials`] from the builder.
     pub fn build(self) -> Credentials {
-        Credentials(Arc::new(Inner {
-            access_key_id: self
-                .access_key_id
-                .expect("required field `access_key_id` missing"),
-            secret_access_key: self
-                .secret_access_key
-                .expect("required field `secret_access_key` missing"),
-            session_token: self.session_token,
-            expires_after: self.expires_after,
-            account_id: self.account_id,
-            provider_name: self
-                .provider_name
-                .expect("required field `provider_name` missing"),
-        }))
+        Credentials(
+            Arc::new(Inner {
+                access_key_id: self
+                    .access_key_id
+                    .expect("required field `access_key_id` missing"),
+                secret_access_key: self
+                    .secret_access_key
+                    .expect("required field `secret_access_key` missing"),
+                session_token: self.session_token,
+                expires_after: self.expires_after,
+                account_id: self.account_id,
+                provider_name: self
+                    .provider_name
+                    .expect("required field `provider_name` missing"),
+            }),
+            HashMap::new(),
+        )
     }
 }
 
@@ -317,18 +386,31 @@ impl From<Credentials> for Identity {
     fn from(val: Credentials) -> Self {
         let expiry = val.expiry();
         let mut builder = if let Some(account_id) = val.account_id() {
-            Identity::builder().property(account_id.clone()).data(val)
+            Identity::builder().property(account_id.clone())
         } else {
-            Identity::builder().data(val)
+            Identity::builder()
         };
+
         builder.set_expiration(expiry);
-        builder.build().expect("set required fields")
+
+        if let Some(features) = val.get_property::<Vec<AwsSdkFeature>>().cloned() {
+            let mut layer = Layer::new("IdentityResolutionFeatureIdTracking");
+            for feat in features {
+                layer.store_append(feat);
+            }
+            builder.set_property(layer.freeze());
+        }
+
+        builder.data(val).build().expect("set required fields")
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::Credentials;
+    use aws_features::sdk_feature::AwsSdkFeature;
+    use aws_smithy_runtime_api::client::identity::Identity;
+    use aws_smithy_types::config_bag::FrozenLayer;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -358,5 +440,59 @@ mod test {
             format!("{:?}", creds),
             r#"Credentials { provider_name: "debug tester", access_key_id: "akid", secret_access_key: "** redacted **", expires_after: "2009-02-13T23:31:30Z", account_id: "012345678901" }"#
         );
+    }
+
+    #[test]
+    fn equality_ignores_properties() {
+        #[derive(Clone, Debug)]
+        struct Foo;
+        let mut creds1 = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        creds1.set_property(AwsSdkFeature::CredentialsCode);
+
+        let mut creds2 = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        creds2.set_property(Foo);
+
+        assert_eq!(creds1, creds2)
+    }
+
+    #[test]
+    fn identity_inherits_feature_properties() {
+        let mut creds = Credentials::new(
+            "akid",
+            "secret",
+            Some("token".into()),
+            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
+            "debug tester",
+        );
+        let mut feature_props = vec![
+            AwsSdkFeature::CredentialsCode,
+            AwsSdkFeature::CredentialsStsSessionToken,
+        ];
+        creds.set_property(feature_props.clone());
+
+        let identity = Identity::from(creds);
+
+        let maybe_props = identity
+            .property::<FrozenLayer>()
+            .unwrap()
+            .load::<AwsSdkFeature>()
+            .cloned()
+            .collect::<Vec<AwsSdkFeature>>();
+
+        // The props get reversed when being popped out of the StoreAppend
+        feature_props.reverse();
+        assert_eq!(maybe_props, feature_props)
     }
 }
