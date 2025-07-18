@@ -4,7 +4,7 @@
  */
 
 plugins {
-    kotlin("jvm")
+    id("smithy-rs.kotlin-conventions")
 }
 
 description = "AWS SDK Rust Runtime"
