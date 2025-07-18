@@ -43,7 +43,7 @@ RUN yum -y install --allowerasing \
         gcc \
         gcc-c++ \
         git \
-        java-17-amazon-corretto-headless \
+        java-17-amazon-corretto-devel \
         make \
         openssl-devel \
         perl \
@@ -198,7 +198,7 @@ RUN set -eux; \
         git \
         glibc-langpack-en \
         go \
-        java-17-amazon-corretto-headless \
+        java-17-amazon-corretto-devel \
         jq \
         make \
         openssl-devel \

@@ -12,7 +12,7 @@ HAS_MATURIN := $(shell command -v maturin 2> /dev/null)
 all: codegen
 
 codegen:
-	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' :codegen-client-test:assemble :codegen-server-test:python:assemble
+	$(GRADLE) --project-dir $(SRC_DIR) -P modules='pokemon-service-server-sdk,pokemon-service-client' :codegen-client-test:assemble :codegen-server-test:codegen-server-test-python:assemble
 	mkdir -p $(SERVER_SDK_DST) $(CLIENT_SDK_DST) $(WHEELS)
 	cp -av $(SERVER_SDK_SRC)/* $(SERVER_SDK_DST)/
 	cp -av $(CLIENT_SDK_SRC)/* $(CLIENT_SDK_DST)/

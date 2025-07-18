@@ -39,6 +39,14 @@ on:
         required: true
       SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
+      MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_NAME:
+        required: true
+      MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_NAME:
+        required: true
+      MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_NAME:
+        required: true
+      MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_NAME:
+        required: true
 
 jobs:
   check-actor-for-prod-run:
@@ -272,6 +280,77 @@ jobs:
             releaseManifestPath: "smithy-rs-release/smithy-rs-release-manifest.json",
             releaseCommitish: "${{ steps.push-changelog.outputs.commit_sha }}"
           });
+
+  publish-to-maven-central:
+    name: Publish Codegen artifacts to Maven Central
+    needs:
+    - release
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      JRELEASER_DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '17'
+    - name: Check if publishing is needed
+      id: check-publish
+      shell: bash
+      working-directory: smithy-rs-release/smithy-rs
+      run: |
+        # Run the Gradle task to check if publishing is needed
+        ./gradlew checkMavenCentralPublishingNeeded
+
+        # Read the result from the build
+        if grep -q "mavenCentralPublishingNeeded=true" build/maven-central/publishing.properties; then
+          echo "publish=true" >> $GITHUB_OUTPUT
+        else
+          echo "publish=false" >> $GITHUB_OUTPUT
+        fi
+    - name: Acquire credentials
+      if: steps.check-publish.outputs.publish == 'true'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Publish to Maven Central
+      if: steps.check-publish.outputs.publish == 'true'
+      shell: bash
+      working-directory: smithy-rs-release/smithy-rs
+      env:
+        GPG_PUBLIC_KEY_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_NAME }}
+        GPG_PRIVATE_KEY_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_NAME }}
+        GPG_PASSPHRASE_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_NAME }}
+        SONATYPE_CREDENTIALS_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_NAME }}
+      run: |2
+
+        # Get secrets from AWS Secrets Manager
+        GPG_PUBLIC_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PUBLIC_KEY_SECRET_NAME --query SecretString --output text)
+        GPG_PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PRIVATE_KEY_SECRET_NAME --query SecretString --output text)
+        GPG_PASSPHRASE=$(aws secretsmanager get-secret-value --secret-id $GPG_PASSPHRASE_SECRET_NAME --query SecretString --output text)
+
+        # Get Sonatype credentials from JSON secret
+        SONATYPE_CREDS=$(aws secretsmanager get-secret-value --secret-id $SONATYPE_CREDENTIALS_SECRET_NAME --query SecretString --output text)
+        MAVEN_CENTRAL_USERNAME=$(echo $SONATYPE_CREDS | jq -r '.["sonatype-portal-token-username"]')
+        MAVEN_CENTRAL_TOKEN=$(echo $SONATYPE_CREDS | jq -r '.["sonatype-portal-token"]')
+
+        # Set up JReleaser environment variables
+        export JRELEASER_GPG_PUBLIC_KEY="$GPG_PUBLIC_KEY"
+        export JRELEASER_GPG_SECRET_KEY="$GPG_PRIVATE_KEY"
+        export JRELEASER_GPG_PASSPHRASE="$GPG_PASSPHRASE"
+        export JRELEASER_MAVENCENTRAL_USERNAME="$MAVEN_CENTRAL_USERNAME"
+        export JRELEASER_MAVENCENTRAL_TOKEN="$MAVEN_CENTRAL_TOKEN"
+
+        # Run Gradle publish task to stage outputs to build/m2 directory
+        ./gradlew publish
+        ./gradlew jreleaserConfig
+        ./gradlew jreleaserFullRelease
 
   # If this step fails for any reason, there's no need to retry the release workflow, as this step is auxiliary
   # and the release itself was successful. Instead, manually trigger `backport-pull-request.yml`.
