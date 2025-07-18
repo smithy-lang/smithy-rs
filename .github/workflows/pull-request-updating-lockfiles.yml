@@ -18,13 +18,10 @@ on:
     secrets:
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
         required: true
-      SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN:
+      SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
       RELEASE_AUTOMATION_BOT_PAT:
         required: true
-
-env:
-  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
 
 jobs:
   save-docker-login-token:
@@ -42,14 +39,14 @@ jobs:
     - name: Attempt to load a docker login password
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Save the docker login password to the output
       id: set-token
       run: |
         ENCRYPTED_PAYLOAD=$(
-          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr get-login-password --region us-west-2) | base64 -w0
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
 
@@ -77,19 +74,18 @@ jobs:
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Upload image
       run: |
-        IMAGE_TAG="$(./smithy-rs/.github/scripts/docker-image-hash)"
-        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
-        aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
-        docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
+        IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
+        ./smithy-rs/.github/scripts/upload-build-image.sh $IMAGE_TAG
 
   create-pull-request-for-updating-lockfiles:
     name: Create a Pull Request for updating lockfiles
     needs:
+    - save-docker-login-token
     - acquire-base-image
     runs-on: ubuntu-latest
     steps:
@@ -106,6 +102,9 @@ jobs:
         branch_name="update-all-lockfiles-$(date +%s)"
         echo "branch_name=${branch_name}" > $GITHUB_OUTPUT
     - name: Cargo update all lockfiles
+      env:
+        ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+        DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: cargo-update-lockfiles

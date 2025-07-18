@@ -25,9 +25,11 @@ jobs:
     with:
       commit_sha: main
       dry_run: true
-      skip_ci: true
+      # If the automation runs this workflow in the background, we might as well run the full CI to catch any potential issues.
+      skip_ci: false
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
       RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
       CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
       CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
+      SMITHY_RS_ECR_PUSH_ROLE_ARN: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
