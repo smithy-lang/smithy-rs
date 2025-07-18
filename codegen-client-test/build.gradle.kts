@@ -3,15 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
-extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
-
-tasks["jar"].enabled = false
-
 plugins {
     java
     alias(libs.plugins.smithy.gradle.base)
     alias(libs.plugins.smithy.gradle.jar)
+}
+
+extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
+extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
+
+tasks.jar.configure {
+    enabled = false
 }
 
 val properties = PropertyRetriever(rootProject, project)
