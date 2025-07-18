@@ -13,8 +13,10 @@ include(":codegen-serde")
 include(":codegen-server:python")
 include(":codegen-server:typescript")
 include(":codegen-server-test")
-include(":codegen-server-test:python")
-include(":codegen-server-test:typescript")
+// NOTE these have to be named differently or otherwise have different GAV coordinates
+// due to https://github.com/gradle/gradle/issues/847
+include(":codegen-server-test:codegen-server-test-python")
+include(":codegen-server-test:codegen-server-test-typescript")
 include(":rust-runtime")
 include(":aws:rust-runtime")
 // NOTE: we rename the aws/rust-runtime project so that it ends up with different GAV
