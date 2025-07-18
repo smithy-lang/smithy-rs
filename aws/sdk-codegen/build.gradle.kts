@@ -24,7 +24,7 @@ dependencies {
     implementation(libs.smithy.aws.smoke.test.model)
 
 
-    testRuntimeOnly(project(":aws:rust-runtime"))
+    implementation(project(":aws:rust-runtime"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotest.assertions.core.jvm)
 }
