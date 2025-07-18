@@ -5,7 +5,7 @@
 
 description = "Rust Runtime"
 plugins {
-    kotlin("jvm")
+    id("smithy-rs.kotlin-conventions")
 }
 
 tasks.jar {
@@ -19,7 +19,7 @@ val properties = PropertyRetriever(rootProject, project)
 val outputDir = layout.buildDirectory.dir("smithy-rs")
 val runtimeOutputDir = outputDir.get().dir("rust-runtime")
 
-tasks["assemble"].apply {
+tasks.assemble.configure {
     dependsOn("copyRuntimeCrates")
     dependsOn("fixRuntimeCrateVersions")
     dependsOn("fixManifests")
