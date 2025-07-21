@@ -442,6 +442,7 @@ mod test {
         );
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn equality_ignores_properties() {
         #[derive(Clone, Debug)]
@@ -455,6 +456,7 @@ mod test {
         assert_eq!(creds1, creds2)
     }
 
+    #[cfg(feature = "test-util")]
     #[test]
     fn identity_inherits_feature_properties() {
         let mut creds = Credentials::for_tests_with_session_token();
