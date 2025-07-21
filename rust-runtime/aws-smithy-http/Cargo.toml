@@ -2,8 +2,8 @@
 name = "aws-smithy-http"
 version = "0.62.2"
 authors = [
-  "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
-  "Russell Cohen <rcoh@amazon.com>",
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+    "Russell Cohen <rcoh@amazon.com>",
 ]
 description = "Smithy HTTP logic for smithy-rs."
 edition = "2021"
@@ -37,9 +37,9 @@ futures-util = { version = "0.3.29", default-features = false }
 hyper = { version = "1" }
 proptest = "1"
 tokio = { version = "1.23.1", features = [
-  "macros",
-  "rt",
-  "rt-multi-thread",
+    "macros",
+    "rt",
+    "rt-multi-thread",
 ] }
 
 [package.metadata.docs.rs]

@@ -23,5 +23,5 @@ jobs:
       force_update_on_broken_dependencies: false
     secrets:
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
-      SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+      SMITHY_RS_ECR_PUSH_ROLE_ARN: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
