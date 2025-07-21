@@ -291,8 +291,11 @@ jobs:
       JRELEASER_DRY_RUN: ${{ inputs.dry_run }}
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
-    - name: Download all artifacts
-      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+        fetch-depth: 0
     - name: Set up JDK
       uses: actions/setup-java@v4
       with:
