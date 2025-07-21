@@ -39,13 +39,13 @@ on:
         required: true
       SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
-      MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_NAME:
+      MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_ARN:
         required: true
-      MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_NAME:
+      MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_ARN:
         required: true
-      MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_NAME:
+      MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_ARN:
         required: true
-      MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_NAME:
+      MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_ARN:
         required: true
 
 jobs:
@@ -324,19 +324,19 @@ jobs:
       shell: bash
       working-directory: smithy-rs-release/smithy-rs
       env:
-        GPG_PUBLIC_KEY_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_NAME }}
-        GPG_PRIVATE_KEY_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_NAME }}
-        GPG_PASSPHRASE_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_NAME }}
-        SONATYPE_CREDENTIALS_SECRET_NAME: ${{ secrets.MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_NAME }}
+        GPG_PUBLIC_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_ARN }}
+        GPG_PRIVATE_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_ARN }}
+        GPG_PASSPHRASE_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_ARN }}
+        SONATYPE_CREDENTIALS_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_ARN }}
       run: |2
 
         # Get secrets from AWS Secrets Manager
-        GPG_PUBLIC_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PUBLIC_KEY_SECRET_NAME --query SecretString --output text)
-        GPG_PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PRIVATE_KEY_SECRET_NAME --query SecretString --output text)
-        GPG_PASSPHRASE=$(aws secretsmanager get-secret-value --secret-id $GPG_PASSPHRASE_SECRET_NAME --query SecretString --output text)
+        GPG_PUBLIC_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PUBLIC_KEY_SECRET_ARN --query SecretString --output text)
+        GPG_PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PRIVATE_KEY_SECRET_ARN --query SecretString --output text)
+        GPG_PASSPHRASE=$(aws secretsmanager get-secret-value --secret-id $GPG_PASSPHRASE_SECRET_ARN --query SecretString --output text)
 
         # Get Sonatype credentials from JSON secret
-        SONATYPE_CREDS=$(aws secretsmanager get-secret-value --secret-id $SONATYPE_CREDENTIALS_SECRET_NAME --query SecretString --output text)
+        SONATYPE_CREDS=$(aws secretsmanager get-secret-value --secret-id $SONATYPE_CREDENTIALS_SECRET_ARN --query SecretString --output text)
         MAVEN_CENTRAL_USERNAME=$(echo $SONATYPE_CREDS | jq -r '.["sonatype-portal-token-username"]')
         MAVEN_CENTRAL_TOKEN=$(echo $SONATYPE_CREDS | jq -r '.["sonatype-portal-token"]')
 
@@ -346,9 +346,11 @@ jobs:
         export JRELEASER_GPG_PASSPHRASE="$GPG_PASSPHRASE"
         export JRELEASER_MAVENCENTRAL_USERNAME="$MAVEN_CENTRAL_USERNAME"
         export JRELEASER_MAVENCENTRAL_TOKEN="$MAVEN_CENTRAL_TOKEN"
+        export JRELEASER_GENERIC_TOKEN=not-used-but-must-be-set
 
         # Run Gradle publish task to stage outputs to build/m2 directory
         ./gradlew publish
+        ls -lsa build/m2/software/amazon/smithy/rust
         ./gradlew jreleaserConfig
         ./gradlew jreleaserFullRelease
 
