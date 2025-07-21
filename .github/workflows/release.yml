@@ -325,14 +325,13 @@ jobs:
     - name: Publish to Maven Central
       if: steps.check-publish.outputs.publish == 'true'
       shell: bash
-      working-directory: smithy-rs-release/smithy-rs
       env:
         GPG_PUBLIC_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_ARN }}
         GPG_PRIVATE_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_ARN }}
         GPG_PASSPHRASE_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_ARN }}
         SONATYPE_CREDENTIALS_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_ARN }}
-      run: |2
-
+      run: |
+        pwd
         # Get secrets from AWS Secrets Manager
         GPG_PUBLIC_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PUBLIC_KEY_SECRET_ARN --query SecretString --output text)
         GPG_PRIVATE_KEY=$(aws secretsmanager get-secret-value --secret-id $GPG_PRIVATE_KEY_SECRET_ARN --query SecretString --output text)
