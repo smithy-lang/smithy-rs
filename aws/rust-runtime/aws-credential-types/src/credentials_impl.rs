@@ -30,7 +30,7 @@ pub struct Credentials(Arc<Inner>, HashMap<TypeId, TypeErasedBox>);
 
 impl Clone for Credentials {
     fn clone(&self) -> Self {
-        let mut new_map = HashMap::new();
+        let mut new_map = HashMap::with_capacity(self.1.len());
         for (k, v) in &self.1 {
             new_map.insert(
                 *k,
@@ -446,22 +446,10 @@ mod test {
     fn equality_ignores_properties() {
         #[derive(Clone, Debug)]
         struct Foo;
-        let mut creds1 = Credentials::new(
-            "akid",
-            "secret",
-            Some("token".into()),
-            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
-            "debug tester",
-        );
+        let mut creds1 = Credentials::for_tests_with_session_token();
         creds1.set_property(AwsSdkFeature::CredentialsCode);
 
-        let mut creds2 = Credentials::new(
-            "akid",
-            "secret",
-            Some("token".into()),
-            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
-            "debug tester",
-        );
+        let mut creds2 = Credentials::for_tests_with_session_token();
         creds2.set_property(Foo);
 
         assert_eq!(creds1, creds2)
@@ -469,13 +457,7 @@ mod test {
 
     #[test]
     fn identity_inherits_feature_properties() {
-        let mut creds = Credentials::new(
-            "akid",
-            "secret",
-            Some("token".into()),
-            Some(UNIX_EPOCH + Duration::from_secs(1234567890)),
-            "debug tester",
-        );
+        let mut creds = Credentials::for_tests_with_session_token();
         let mut feature_props = vec![
             AwsSdkFeature::CredentialsCode,
             AwsSdkFeature::CredentialsStsSessionToken,
