@@ -408,10 +408,10 @@ impl From<Credentials> for Identity {
 #[cfg(test)]
 mod test {
     use crate::Credentials;
-    use aws_features::sdk_feature::AwsSdkFeature;
-    use aws_smithy_runtime_api::client::identity::Identity;
-    use aws_smithy_types::config_bag::FrozenLayer;
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[cfg(feature = "test-util")]
+    use aws_features::sdk_feature::AwsSdkFeature;
 
     #[test]
     fn debug_impl() {
@@ -459,6 +459,9 @@ mod test {
     #[cfg(feature = "test-util")]
     #[test]
     fn identity_inherits_feature_properties() {
+        use aws_smithy_runtime_api::client::identity::Identity;
+        use aws_smithy_types::config_bag::FrozenLayer;
+
         let mut creds = Credentials::for_tests_with_session_token();
         let mut feature_props = vec![
             AwsSdkFeature::CredentialsCode,
