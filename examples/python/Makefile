@@ -4,7 +4,7 @@ GRADLE := $(SRC_DIR)/gradlew
 WHEELS := $(CUR_DIR)/wheels
 SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
-SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/python/build/smithyprojections/codegen-server-test-python/pokemon-service-server-sdk/rust-server-codegen-python
+SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/codegen-server-test-python/build/smithyprojections/codegen-server-test-python/pokemon-service-server-sdk/rust-server-codegen-python
 CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen
 
 HAS_MATURIN := $(shell command -v maturin 2> /dev/null)
