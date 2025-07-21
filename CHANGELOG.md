@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 17th, 2025
+===============
+**New this release:**
+- (all, [smithy-rs#4212](https://github.com/smithy-lang/smithy-rs/issues/4212)) Event streams now allocate a right-sized buffer avoiding repeated reallocations during serialization
+
+
 July 16th, 2025
 ===============
 **New this release:**
