@@ -287,8 +287,6 @@ jobs:
     - release
     if: always() && needs.release.result == 'success'
     runs-on: ubuntu-latest
-    env:
-      JRELEASER_DRY_RUN: ${{ inputs.dry_run }}
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -304,7 +302,7 @@ jobs:
     - name: Check if publishing is needed
       id: check-publish
       shell: bash
-      working-directory: smithy-rs-release/smithy-rs
+      working-directory: smithy-rs
       run: |
         # Run the Gradle task to check if publishing is needed
         ./gradlew checkMavenCentralPublishingNeeded
@@ -325,11 +323,13 @@ jobs:
     - name: Publish to Maven Central
       if: steps.check-publish.outputs.publish == 'true'
       shell: bash
+      working-directory: smithy-rs
       env:
         GPG_PUBLIC_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_ARN }}
         GPG_PRIVATE_KEY_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY_SECRET_ARN }}
         GPG_PASSPHRASE_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE_SECRET_ARN }}
         SONATYPE_CREDENTIALS_SECRET_ARN: ${{ secrets.MAVEN_CENTRAL_SONATYPE_CREDENTIALS_SECRET_ARN }}
+        JRELEASER_DRY_RUN: ${{ inputs.dry_run }}
       run: |
         pwd
         # Get secrets from AWS Secrets Manager
