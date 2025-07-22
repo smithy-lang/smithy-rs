@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::Region;
+use aws_sdk_s3::config::Region;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::capture_request;
 
@@ -14,16 +14,15 @@ use aws_smithy_http_client::test_util::capture_request;
 #[tokio::test]
 async fn auth_scheme_preference_at_client_level_should_take_the_highest_priority() {
     let (http_client, _) = capture_request(None);
-    let config = aws_config::from_env()
+    let conf = Config::builder()
         .http_client(http_client)
         .region(Region::new("us-east-2"))
+        .with_test_defaults()
         // Explicitly set a preference that favors `sigv4`, otherwise `sigv4a`
         // would normally be resolved based on the endpoint authSchemes property.
         .auth_scheme_preference([aws_runtime::auth::sigv4::SCHEME_ID])
-        .load()
-        .await;
-
-    let client = Client::new(&config);
+        .build();
+    let client = Client::from_conf(conf);
     let _ = client
         .get_object()
         .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
@@ -41,13 +40,15 @@ async fn auth_scheme_preference_at_client_level_should_take_the_highest_priority
 #[tokio::test]
 async fn auth_scheme_preference_at_operation_level_should_take_the_highest_priority() {
     let (http_client, _) = capture_request(None);
-    let config = aws_config::from_env()
+    let conf = Config::builder()
         .http_client(http_client)
         .region(Region::new("us-east-2"))
-        .load()
-        .await;
-
-    let client = Client::new(&config);
+        .with_test_defaults()
+        // Explicitly set a preference that favors `sigv4`, otherwise `sigv4a`
+        // would normally be resolved based on the endpoint authSchemes property.
+        .auth_scheme_preference([aws_runtime::auth::sigv4::SCHEME_ID])
+        .build();
+    let client = Client::from_conf(conf);
     let _ = client
         .get_object()
         .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
