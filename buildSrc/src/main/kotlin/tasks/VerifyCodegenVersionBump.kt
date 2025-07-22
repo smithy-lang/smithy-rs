@@ -55,7 +55,6 @@ open class VerifyCodegenVersionBump : DefaultTask() {
             project.exec {
                 commandLine("git", "diff", "--name-only", effectiveBaseRef, "HEAD", "--", projectName)
                 standardOutput = changesOutput
-                isIgnoreExitValue = true
             }
 
             if (changesOutput.toString().isNotEmpty()) {
