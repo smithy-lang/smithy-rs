@@ -29,8 +29,24 @@ ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0 \
-    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle
+
+# This complicated setup is necessary to keep the docker build working on aarch64 laptops
+# since we now actually use JAVA_HOME in the build (to cache the gradle binary)
+RUN set -eux; \
+    ARCH="$(uname -m)"; \
+    case "${ARCH}" in \
+        aarch64|arm64) \
+            echo "export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.aarch64" >> /etc/profile.d/java_home.sh; \
+            ;; \
+        x86_64) \
+            echo "export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64" >> /etc/profile.d/java_home.sh; \
+            ;; \
+        *) \
+            echo "Unsupported architecture: ${ARCH}"; \
+            exit 1; \
+            ;; \
+    esac
 
 WORKDIR /root
 RUN yum -y install --allowerasing \
@@ -79,15 +95,22 @@ COPY . tools/ci-build
 ARG smithy_rs_commit_hash=main
 # If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
 # source code by checking out smithy-lang/smithy-rs/main rather than copying them from the local directory.
+# If it is false we still clone the smithy-rs repo beecause we need the gradle wrapper to install the gradle
+# binary. But in this case we delete the repo before installing the tools and use the local versions from
+# the build context.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
+    git clone https://github.com/smithy-lang/smithy-rs.git; \
+    cd smithy-rs; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
-        git clone https://github.com/smithy-lang/smithy-rs.git; \
-        cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
+    else \
+        # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
+        ./gradlew; \
+        cd ..; \
+        rm -rf smithy-rs; \
     fi; \
-    # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
-    ./gradlew; \
+
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
     cargo install --locked --path tools/ci-build/difftags; \
