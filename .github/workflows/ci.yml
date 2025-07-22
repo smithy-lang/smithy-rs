@@ -127,6 +127,8 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
+        - action: check-codegen-version
+          runner: ubuntu-latest
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
