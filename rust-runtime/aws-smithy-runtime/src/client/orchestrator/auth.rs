@@ -163,7 +163,7 @@ pub(super) async fn resolve_identity(
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
                         // Extract the FrozenLayer placed in the Identity property bag by the From<Credentials> impl.
-                        // This layer contains AwsSdkFeatures for the user agent
+                        // This layer contains feature data for the user agent and potentially other metadata.
                         if let Some(layer) = identity.property::<FrozenLayer>().cloned() {
                             cfg.push_shared_layer(layer);
                         }
