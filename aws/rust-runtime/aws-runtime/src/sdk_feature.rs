@@ -11,6 +11,8 @@ use aws_smithy_types::config_bag::{Storable, StoreAppend};
 pub enum AwsSdkFeature {
     /// Indicates that an operation was called by the S3 Transfer Manager
     S3Transfer,
+    /// Indicates that an operation was called using a Bearer token resolved from service-specific environment variables
+    BearerServiceEnvVars,
 }
 
 impl Storable for AwsSdkFeature {

@@ -136,7 +136,34 @@ iterable_enum!(
     FlexibleChecksumsReqWhenSupported,
     FlexibleChecksumsReqWhenRequired,
     FlexibleChecksumsResWhenSupported,
-    FlexibleChecksumsResWhenRequired
+    FlexibleChecksumsResWhenRequired,
+    DdbMapper,
+    CredentialsCode,
+    CredentialsJvmSystemProperties,
+    CredentialsEnvVars,
+    CredentialsEnvVarsStsWebIdToken,
+    CredentialsStsAssumeRole,
+    CredentialsStsAssumeRoleSaml,
+    CredentialsStsAssumeRoleWebId,
+    CredentialsStsFederationToken,
+    CredentialsStsSessionToken,
+    CredentialsProfile,
+    CredentialsProfileSourceProfile,
+    CredentialsProfileNamedProvider,
+    CredentialsProfileStsWebIdToken,
+    CredentialsProfileSso,
+    CredentialsSso,
+    CredentialsProfileSsoLegacy,
+    CredentialsSsoLegacy,
+    CredentialsProfileProcess,
+    CredentialsProcess,
+    CredentialsBoto2ConfigFile,
+    CredentialsAwsSdkStore,
+    CredentialsHttp,
+    CredentialsImds,
+    SsoLoginDevice,
+    SsoLoginAuth,
+    BearerServiceEnvVars
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -189,6 +216,7 @@ impl ProvideBusinessMetric for AwsSdkFeature {
         use AwsSdkFeature::*;
         match self {
             S3Transfer => Some(BusinessMetric::S3Transfer),
+            BearerServiceEnvVars => Some(BusinessMetric::BearerServiceEnvVars),
         }
     }
 }
@@ -267,39 +295,7 @@ mod tests {
 
     #[test]
     fn feature_id_to_metric_value() {
-        const EXPECTED: &str = r#"
-{
-  "RESOURCE_MODEL": "A",
-  "WAITER": "B",
-  "PAGINATOR": "C",
-  "RETRY_MODE_LEGACY": "D",
-  "RETRY_MODE_STANDARD": "E",
-  "RETRY_MODE_ADAPTIVE": "F",
-  "S3_TRANSFER": "G",
-  "S3_CRYPTO_V1N": "H",
-  "S3_CRYPTO_V2": "I",
-  "S3_EXPRESS_BUCKET": "J",
-  "S3_ACCESS_GRANTS": "K",
-  "GZIP_REQUEST_COMPRESSION": "L",
-  "PROTOCOL_RPC_V2_CBOR": "M",
-  "ENDPOINT_OVERRIDE": "N",
-  "ACCOUNT_ID_ENDPOINT": "O",
-  "ACCOUNT_ID_MODE_PREFERRED": "P",
-  "ACCOUNT_ID_MODE_DISABLED": "Q",
-  "ACCOUNT_ID_MODE_REQUIRED": "R",
-  "SIGV4A_SIGNING": "S",
-  "RESOLVED_ACCOUNT_ID": "T",
-  "FLEXIBLE_CHECKSUMS_REQ_CRC32" : "U",
-  "FLEXIBLE_CHECKSUMS_REQ_CRC32C" : "V",
-  "FLEXIBLE_CHECKSUMS_REQ_CRC64" : "W",
-  "FLEXIBLE_CHECKSUMS_REQ_SHA1" : "X",
-  "FLEXIBLE_CHECKSUMS_REQ_SHA256" : "Y",
-  "FLEXIBLE_CHECKSUMS_REQ_WHEN_SUPPORTED" : "Z",
-  "FLEXIBLE_CHECKSUMS_REQ_WHEN_REQUIRED" : "a",
-  "FLEXIBLE_CHECKSUMS_RES_WHEN_SUPPORTED" : "b",
-  "FLEXIBLE_CHECKSUMS_RES_WHEN_REQUIRED" : "c"
-}
-        "#;
+        const EXPECTED: &str = include_str!("test_data/feature_id_to_metric_value.json");
 
         let expected: HashMap<&str, &str> = serde_json::from_str(EXPECTED).unwrap();
         assert_eq!(expected.len(), FEATURE_ID_TO_METRIC_VALUE.len());
