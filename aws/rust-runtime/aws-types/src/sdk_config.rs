@@ -14,7 +14,7 @@ use crate::docs_for;
 use crate::endpoint_config::AccountIdEndpointMode;
 use crate::origin::Origin;
 use crate::region::Region;
-use crate::service_config::LoadServiceConfig;
+use crate::service_config::{LoadServiceConfig, SharedServiceConfigLoader};
 use aws_credential_types::provider::token::SharedTokenProvider;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
@@ -33,7 +33,6 @@ pub use aws_smithy_types::checksum_config::{
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 /// Unified docstrings to keep crates in sync. Not intended for public use
 pub mod unified_docs {
@@ -117,7 +116,7 @@ pub struct SdkConfig {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
-    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    service_config: Option<SharedServiceConfigLoader>,
     config_origins: HashMap<&'static str, Origin>,
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
@@ -149,7 +148,7 @@ pub struct Builder {
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
     behavior_version: Option<BehaviorVersion>,
-    service_config: Option<Arc<dyn LoadServiceConfig>>,
+    service_config: Option<SharedServiceConfigLoader>,
     config_origins: HashMap<&'static str, Origin>,
     disable_request_compression: Option<bool>,
     request_min_compression_size_bytes: Option<u32>,
@@ -787,7 +786,7 @@ impl Builder {
         &mut self,
         service_config: Option<impl LoadServiceConfig + 'static>,
     ) -> &mut Self {
-        self.service_config = service_config.map(|it| Arc::new(it) as Arc<dyn LoadServiceConfig>);
+        self.service_config = service_config.map(SharedServiceConfigLoader::new);
         self
     }
 
@@ -1024,9 +1023,14 @@ impl SdkConfig {
         self.behavior_version
     }
 
-    /// Return an immutable reference to the service config provider configured for this client.
+    /// Return an immutable reference to the service config loader configured for this client.
     pub fn service_config(&self) -> Option<&dyn LoadServiceConfig> {
-        self.service_config.as_deref()
+        self.service_config.as_ref().map(|s| s.as_ref())
+    }
+
+    /// Return a shared service config loader configured for this client.
+    pub fn service_config_shared(&self) -> Option<SharedServiceConfigLoader> {
+        self.service_config.clone()
     }
 
     /// Config builder

@@ -7,6 +7,7 @@ use aws_runtime::env_config::EnvConfigValue;
 use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
 use aws_sdk_bedrockruntime::config::{Region, Token};
 use aws_sdk_bedrockruntime::error::DisplayErrorContext;
+use aws_sdk_bedrockruntime::Config;
 use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_runtime::assert_str_contains;
 use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
@@ -56,9 +57,31 @@ async fn test_valid_service_specific_token_configured() {
 
     // Verify that the user agent contains the expected metric value.
     let user_agent = request.headers().get("x-amz-user-agent").unwrap();
-    // TODO(https://github.com/smithy-lang/smithy-rs/tree/feature/credential-features):
-    // Enable the assert once the feature branch has been merged into main.
-    // assert_ua_contains_metric_values(user_agent, &["3"]);
+    assert_ua_contains_metric_values(user_agent, &["3"]);
+}
+
+#[tokio::test]
+async fn test_valid_service_specific_token_configured_raw_config_builder() {
+    let (http_client, captured_request) = capture_request(None);
+    let expected_token = "bedrock-token";
+    let conf = Config::builder()
+        .region(Region::new("us-west-2"))
+        .http_client(http_client)
+        .with_env(&[("AWS_BEARER_TOKEN_BEDROCK", expected_token)])
+        .build();
+    let client = aws_sdk_bedrockruntime::Client::from_conf(conf);
+    let _ = client
+        .get_async_invoke()
+        .invocation_arn("arn:aws:bedrock:us-west-2:123456789012:invoke/ExampleModel")
+        .send()
+        .await;
+    let request = captured_request.expect_request();
+    let authorization_header = request.headers().get("authorization").unwrap();
+    assert!(authorization_header.starts_with(&format!("Bearer {expected_token}")));
+
+    // Verify that the user agent contains the expected metric value.
+    let user_agent = request.headers().get("x-amz-user-agent").unwrap();
+    assert_ua_contains_metric_values(user_agent, &["3"]);
 }
 
 #[tokio::test]

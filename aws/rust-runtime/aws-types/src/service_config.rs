@@ -5,7 +5,7 @@
 
 //! Code for extracting service config from the user's environment.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 /// A struct used with the [`LoadServiceConfig`] trait to extract service config from the user's environment.
 // [profile active-profile]
@@ -143,4 +143,34 @@ pub mod builder {
 pub trait LoadServiceConfig: fmt::Debug + Send + Sync {
     /// Given a [`ServiceConfigKey`], return the value associated with it.
     fn load_config(&self, key: ServiceConfigKey<'_>) -> Option<String>;
+}
+
+/// Service config loader that may be shared
+///
+/// Newtype wrapper around [`LoadServiceConfig`] that implements Clone using an internal
+/// Arc.
+#[derive(Clone, Debug)]
+pub struct SharedServiceConfigLoader {
+    inner: Arc<dyn LoadServiceConfig>,
+}
+
+impl AsRef<dyn LoadServiceConfig> for SharedServiceConfigLoader {
+    fn as_ref(&self) -> &(dyn LoadServiceConfig + 'static) {
+        self.inner.as_ref()
+    }
+}
+
+impl SharedServiceConfigLoader {
+    /// Create a new shared service config loader from `LoadServiceConfig`
+    pub fn new(loader: impl LoadServiceConfig + 'static) -> Self {
+        Self {
+            inner: Arc::new(loader),
+        }
+    }
+}
+
+impl LoadServiceConfig for SharedServiceConfigLoader {
+    fn load_config(&self, key: ServiceConfigKey<'_>) -> Option<String> {
+        self.inner.load_config(key)
+    }
 }
