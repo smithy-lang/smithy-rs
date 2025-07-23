@@ -29,11 +29,12 @@ class ServiceEnvConfigDecorator : ClientCodegenDecorator {
             rustTemplate(
                 """
                 fn service_config_key<'a>(
+                    service_id: Option<&'a str>,
                     env: &'a str,
                     profile: &'a str,
                 ) -> aws_types::service_config::ServiceConfigKey<'a> {
                     #{ServiceConfigKey}::builder()
-                        .service_id($serviceId)
+                        .service_id(service_id.unwrap_or($serviceId))
                         .env(env)
                         .profile(profile)
                         .build()

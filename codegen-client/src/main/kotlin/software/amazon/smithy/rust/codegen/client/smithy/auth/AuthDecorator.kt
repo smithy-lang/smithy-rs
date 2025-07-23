@@ -57,7 +57,11 @@ typealias AuthCustomization = NamedCustomization<AuthSection>
  */
 class AuthDecorator : ClientCodegenDecorator {
     override val name: String = "Auth"
-    override val order: Byte = 0
+    override val order: Byte = ORDER
+
+    companion object {
+        const val ORDER: Byte = 0
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,

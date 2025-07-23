@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
@@ -78,11 +79,12 @@ object SdkConfigCustomization {
                 ${section.serviceConfigBuilder}.set_$fieldName(
                     ${section.sdkConfig}
                         .service_config()
-                        .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
+                        .and_then(|conf| conf.load_config(service_config_key(#{None}, $envKey, $profileKey)).map(|it| it.parse().unwrap()))
                         .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
                 );
             }
             """,
+            *preludeScope,
             "map" to mapBlock,
         )
     }
