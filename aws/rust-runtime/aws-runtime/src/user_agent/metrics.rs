@@ -4,6 +4,7 @@
  */
 
 use crate::sdk_feature::AwsSdkFeature;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -213,6 +214,14 @@ impl ProvideBusinessMetric for AwsSdkFeature {
         use AwsSdkFeature::*;
         match self {
             S3Transfer => Some(BusinessMetric::S3Transfer),
+        }
+    }
+}
+
+impl ProvideBusinessMetric for AwsCredentialFeature {
+    fn provide_business_metric(&self) -> Option<BusinessMetric> {
+        use AwsCredentialFeature::*;
+        match self {
             CredentialsCode => Some(BusinessMetric::CredentialsCode),
             CredentialsEnvVars => Some(BusinessMetric::CredentialsEnvVars),
             CredentialsEnvVarsStsWebIdToken => {
@@ -240,6 +249,9 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             CredentialsHttp => Some(BusinessMetric::CredentialsHttp),
             CredentialsImds => Some(BusinessMetric::CredentialsImds),
             otherwise => {
+                // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
+                // while continuing to use an outdated version of an SDK crate or the `aws-credential-types`
+                // crate.
                 tracing::warn!(
                     "Attempted to provide `BusinessMetric` for `{otherwise:?}`, which is not recognized in the current version of the `aws-runtime` crate. \
                     Consider upgrading to the latest version to ensure that all tracked features are properly reported in your metrics."

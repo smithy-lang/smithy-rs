@@ -40,7 +40,7 @@ pub mod request_info;
 
 /// AWS SDK feature identifies.
 #[doc(hidden)]
-pub use aws_features::sdk_feature;
+pub mod sdk_feature;
 
 /// Interceptor that determines the clock skew between the client and service.
 pub mod service_clock_skew;

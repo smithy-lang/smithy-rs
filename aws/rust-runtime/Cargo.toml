@@ -5,7 +5,6 @@ resolver = "2"
 members = [
     "aws-credential-types",
     "aws-endpoint",
-    "aws-features",
     "aws-http",
     "aws-hyper",
     "aws-inlineable",

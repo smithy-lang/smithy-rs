@@ -12,7 +12,6 @@ hardcoded-credentials = []
 test-util = ["aws-smithy-runtime-api/test-util"]
 
 [dependencies]
-aws-features = { path = "../aws-features" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-auth"] }

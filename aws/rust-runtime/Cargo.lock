@@ -88,7 +88,6 @@ name = "aws-credential-types"
 version = "1.2.5"
 dependencies = [
  "async-trait",
- "aws-features",
  "aws-smithy-async",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -99,13 +98,6 @@ dependencies = [
 [[package]]
 name = "aws-endpoint"
 version = "0.60.3"
-
-[[package]]
-name = "aws-features"
-version = "0.1.0"
-dependencies = [
- "aws-smithy-types",
-]
 
 [[package]]
 name = "aws-http"
@@ -155,7 +147,6 @@ version = "1.5.10"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
- "aws-features",
  "aws-sigv4",
  "aws-smithy-async",
  "aws-smithy-eventstream",

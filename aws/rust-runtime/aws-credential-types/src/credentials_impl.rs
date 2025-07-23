@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_features::sdk_feature::AwsSdkFeature;
 use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::type_erasure::TypeErasedBox;
@@ -18,6 +17,7 @@ use zeroize::Zeroizing;
 use aws_smithy_runtime_api::client::identity::Identity;
 
 use crate::attributes::AccountId;
+use crate::credential_feature::AwsCredentialFeature;
 
 /// AWS SDK Credentials
 ///
@@ -393,7 +393,7 @@ impl From<Credentials> for Identity {
 
         builder.set_expiration(expiry);
 
-        if let Some(features) = val.get_property::<Vec<AwsSdkFeature>>().cloned() {
+        if let Some(features) = val.get_property::<Vec<AwsCredentialFeature>>().cloned() {
             let mut layer = Layer::new("IdentityResolutionFeatureIdTracking");
             for feat in features {
                 layer.store_append(feat);
@@ -411,7 +411,7 @@ mod test {
     use std::time::{Duration, UNIX_EPOCH};
 
     #[cfg(feature = "test-util")]
-    use aws_features::sdk_feature::AwsSdkFeature;
+    use crate::credential_feature::AwsCredentialFeature;
 
     #[test]
     fn debug_impl() {
@@ -448,7 +448,7 @@ mod test {
         #[derive(Clone, Debug)]
         struct Foo;
         let mut creds1 = Credentials::for_tests_with_session_token();
-        creds1.set_property(AwsSdkFeature::CredentialsCode);
+        creds1.set_property(AwsCredentialFeature::CredentialsCode);
 
         let mut creds2 = Credentials::for_tests_with_session_token();
         creds2.set_property(Foo);
@@ -464,8 +464,8 @@ mod test {
 
         let mut creds = Credentials::for_tests_with_session_token();
         let mut feature_props = vec![
-            AwsSdkFeature::CredentialsCode,
-            AwsSdkFeature::CredentialsStsSessionToken,
+            AwsCredentialFeature::CredentialsCode,
+            AwsCredentialFeature::CredentialsStsSessionToken,
         ];
         creds.set_property(feature_props.clone());
 
@@ -474,9 +474,9 @@ mod test {
         let maybe_props = identity
             .property::<FrozenLayer>()
             .unwrap()
-            .load::<AwsSdkFeature>()
+            .load::<AwsCredentialFeature>()
             .cloned()
-            .collect::<Vec<AwsSdkFeature>>();
+            .collect::<Vec<AwsCredentialFeature>>();
 
         // The props get reversed when being popped out of the StoreAppend
         feature_props.reverse();

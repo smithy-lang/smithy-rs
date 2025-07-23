@@ -16,7 +16,6 @@ sigv4a = ["aws-sigv4/sigv4a"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-features = { path = "../aws-features" }
 # TODO(httpRefactor): Remove the http0-compat feature
 aws-sigv4 = { path = "../aws-sigv4", features = ["http0-compat"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }

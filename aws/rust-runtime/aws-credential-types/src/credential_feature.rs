@@ -3,18 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// Note: This code originally lived in the `aws-runtime` crate. It was moved here to avoid circular dependencies
-/// This module is re-exported in `aws-runtime`, and so even though this is a pre-1.0 crate, this module should not
-/// have any breaking changes
 use aws_smithy_types::config_bag::{Storable, StoreAppend};
 
-/// IDs for the features that may be used in the AWS SDK
+/// IDs for the credential related features that may be used in the AWS SDK
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AwsSdkFeature {
-    /// Indicates that an operation was called by the S3 Transfer Manager
-    S3Transfer,
-    // Various features related to how Credentials are set
+pub enum AwsCredentialFeature {
     /// An operation called using credentials resolved from code, cli parameters, session object, or client instance
     CredentialsCode,
     /// An operation called using credentials resolved from environment variables
@@ -53,6 +47,6 @@ pub enum AwsSdkFeature {
     CredentialsImds,
 }
 
-impl Storable for AwsSdkFeature {
+impl Storable for AwsCredentialFeature {
     type Storer = StoreAppend<Self>;
 }
