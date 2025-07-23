@@ -100,7 +100,7 @@ ARG smithy_rs_commit_hash=main
 # the build context.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
-    git clone https://github.com/smithy-lang/smithy-rs.git; \
+    git clone https://github.com/smithy-lang/smithy-rs.git --depth 1; \
     cd smithy-rs; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
         git checkout ${smithy_rs_commit_hash}; \
