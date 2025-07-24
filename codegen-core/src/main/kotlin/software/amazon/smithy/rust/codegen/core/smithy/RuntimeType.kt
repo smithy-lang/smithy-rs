@@ -308,6 +308,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val MaybeConstrained =
             RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
+        val Cacheable = cacheable().resolve("Cacheable")
+
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
 
@@ -488,6 +490,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
                     // clients allow offsets, servers do nt
                     TimestampFormatTrait.Format.DATE_TIME ->
                         codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+
                     TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                     TimestampFormatTrait.Format.UNKNOWN -> TODO()
                 }
@@ -545,5 +548,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun clientRequestCompression(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.clientRequestCompression(runtimeConfig))
+
+        fun cacheable() = forInlineDependency(InlineDependency.cacheable())
     }
 }

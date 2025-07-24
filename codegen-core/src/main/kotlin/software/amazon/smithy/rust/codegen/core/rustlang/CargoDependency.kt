@@ -180,6 +180,12 @@ class InlineDependency(
                 "sdk_feature_tracker",
                 CargoDependency.smithyRuntime(runtimeConfig),
             )
+
+        fun cacheable(): InlineDependency =
+            forInlineableRustFile(
+                "cacheable",
+                CargoDependency.Bytes,
+            )
     }
 }
 

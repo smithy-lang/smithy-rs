@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
+import software.amazon.smithy.rust.codegen.core.smithy.isCacheable
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -70,8 +71,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     ) : CborSerializerSection("BeforeSerializingStructureMembers")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
-    data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
-        CborSerializerSection("BeforeIteratingOverMapOrCollection")
+    data class BeforeIteratingOverMapOrCollection(
+        val shape: Shape,
+        val context: CborSerializerGenerator.Context<Shape>,
+    ) : CborSerializerSection("BeforeIteratingOverMapOrCollection")
 
     /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
     data class BeforeSerializingNonNullMember(val shape: Shape, val context: CborSerializerGenerator.MemberContext) :
@@ -82,24 +85,31 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * This customization point enables extending the serializer's interface with supplementary parameters
      * needed for specialized serialization behaviors.
      */
-    data class AdditionalSerializingParameters(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
-        CborSerializerSection("AdditionalSerializingParameters")
+    data class AdditionalSerializingParameters(
+        val structContext: CborSerializerGenerator.StructContext,
+        val codegenContext: CodegenContext,
+    ) : CborSerializerSection("AdditionalSerializingParameters")
 
     /**
      * Provides a way to specify additional arguments that should be passed when invoking the serializer.
      * This customization point allows for passing through context-specific information needed during
      * the serialization process.
      */
-    data class AdditionalSerializingArguments(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
-        CborSerializerSection("AdditionalSerializingArguments")
+    data class AdditionalSerializingArguments(
+        val structContext: CborSerializerGenerator.StructContext,
+        val codegenContext: CodegenContext,
+    ) : CborSerializerSection("AdditionalSerializingArguments")
 
     /**
      * Customizes how a union variant's shape ID is encoded in the CBOR format.
      * This section allows for specialized handling of union variant identification
      * during serialization.
      */
-    data class CustomizeUnionMemberKeyEncode(val context: CborSerializerGenerator.MemberContext, val encoderBindingName: String, val codegenContext: CodegenContext) :
-        CborSerializerSection("CustomizeUnionMemberKeyEncode")
+    data class CustomizeUnionMemberKeyEncode(
+        val context: CborSerializerGenerator.MemberContext,
+        val encoderBindingName: String,
+        val codegenContext: CodegenContext,
+    ) : CborSerializerSection("CustomizeUnionMemberKeyEncode")
 
     /**
      * Allows customization of the CBOR map length calculation for union types.
@@ -206,6 +216,7 @@ class CborSerializerGenerator(
             "Error" to runtimeConfig.serializationError(),
             "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "Cacheable" to RuntimeType.Cacheable,
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
 
@@ -333,8 +344,7 @@ class CborSerializerGenerator(
     private fun getCustomizedParamsAndArgsForStructSerializer(
         structContext: StructContext,
         sectionType: (StructContext, CodegenContext) -> CborSerializerSection,
-    ) = customizations
-        .map { it.section(sectionType(structContext, codegenContext)) }
+    ) = customizations.map { it.section(sectionType(structContext, codegenContext)) }
         .filter { it.isNotEmpty() } // Remove any empty customizations.
         .takeIf { it.isNotEmpty() } // Proceed only if there are remaining customizations.
         ?.join(", ", prefix = ", ") // Join with commas and add leading comma.
@@ -407,6 +417,30 @@ class CborSerializerGenerator(
         )
     }
 
+    private fun RustWriter.handleCacheable(
+        context: MemberContext,
+        main: Writable,
+    ) {
+        if (symbolProvider.toSymbol(context.shape).isCacheable()) {
+            val modeledMember =
+                writable {
+                    serializeMemberValue(context.copy(valueExpression = ValueExpression.Reference("data")))
+                }
+            rustTemplate(
+                """
+                match ${context.valueExpression.asRef()} {
+                    #{Cacheable}::Cached(data) => { ${context.encoderBindingName}.write_preserialized_data(&data); },
+                    #{Cacheable}::Modeled(data) => { #{modeledMember} }
+                }
+                """,
+                *codegenScope,
+                "modeledMember" to modeledMember,
+            )
+        } else {
+            main(this)
+        }
+    }
+
     private fun RustWriter.serializeMember(context: MemberContext) {
         val targetShape = model.expectShape(context.shape.target)
         if (symbolProvider.toSymbol(context.shape).isOptional()) {
@@ -414,7 +448,9 @@ class CborSerializerGenerator(
                 rustBlock("if let Some($local) = ${context.valueExpression.asRef()}") {
                     context.valueExpression = ValueExpression.Reference(local)
                     resolveValueExpressionForConstrainedType(targetShape, context)
-                    serializeMemberValue(context, targetShape)
+                    handleCacheable(context) {
+                        serializeMemberValue(context)
+                    }
                 }
                 if (context.writeNulls) {
                     rustBlock("else") {
@@ -426,7 +462,9 @@ class CborSerializerGenerator(
             resolveValueExpressionForConstrainedType(targetShape, context)
             with(serializerUtil) {
                 ignoreDefaultsForNumbersAndBools(context.shape, context.valueExpression) {
-                    serializeMemberValue(context, targetShape)
+                    handleCacheable(context) {
+                        serializeMemberValue(context)
+                    }
                 }
             }
         }
@@ -446,31 +484,24 @@ class CborSerializerGenerator(
         }
     }
 
-    private fun RustWriter.serializeMemberValue(
-        context: MemberContext,
-        target: Shape,
-    ) {
+    private fun RustWriter.serializeMemberValue(context: MemberContext) {
         val encoder = context.encoderBindingName
         val value = context.valueExpression
         val containerShape = model.expectShape(context.shape.container)
+        val target = model.expectShape(context.shape.target)
 
         when (target) {
             // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
             is BlobShape -> rust("$encoder.blob(${value.asRef()});")
             is BooleanShape -> rust("$encoder.boolean(${value.asValue()});")
-
             is StringShape -> rust("$encoder.str(${value.name}.as_str());")
-
             is ByteShape -> rust("$encoder.byte(${value.asValue()});")
             is ShortShape -> rust("$encoder.short(${value.asValue()});")
             is IntegerShape -> rust("$encoder.integer(${value.asValue()});")
             is LongShape -> rust("$encoder.long(${value.asValue()});")
-
             is FloatShape -> rust("$encoder.float(${value.asValue()});")
             is DoubleShape -> rust("$encoder.double(${value.asValue()});")
-
             is TimestampShape -> rust("$encoder.timestamp(${value.asRef()});")
-
             is DocumentShape -> UNREACHABLE("Smithy RPC v2 CBOR does not support `document` shapes")
 
             // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
@@ -499,7 +530,12 @@ class CborSerializerGenerator(
 
     private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         for (customization in customizations) {
-            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+            customization.section(
+                CborSerializerSection.BeforeIteratingOverMapOrCollection(
+                    context.shape,
+                    context,
+                ),
+            )(this)
         }
         rust("encoder.array((${context.valueExpression.asValue()}).len());")
         val itemName = safeName("item")
@@ -512,7 +548,12 @@ class CborSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+            customization.section(
+                CborSerializerSection.BeforeIteratingOverMapOrCollection(
+                    context.shape,
+                    context,
+                ),
+            )(this)
         }
         rust("encoder.map((${context.valueExpression.asValue()}).len());")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
@@ -585,16 +626,13 @@ class CborSerializerGenerator(
     ): Writable =
         customizations.map { customization ->
             customization.section(section)
-        }
-            .filter { it.isNotEmpty() }
-            .also { filteredCustomizations ->
-                if (filteredCustomizations.size > 1) {
-                    throw IllegalArgumentException(
-                        "Found ${filteredCustomizations.size} $customizationName customizations, but only one is allowed.",
-                    )
-                }
+        }.filter { it.isNotEmpty() }.also { filteredCustomizations ->
+            if (filteredCustomizations.size > 1) {
+                throw IllegalArgumentException(
+                    "Found ${filteredCustomizations.size} $customizationName customizations, but only one is allowed.",
+                )
             }
-            .firstOrNull() ?: writable {}
+        }.firstOrNull() ?: writable {}
 
     /**
      * Process customizations for union variant encoding, ensuring only one customization exists.

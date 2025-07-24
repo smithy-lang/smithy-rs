@@ -13,7 +13,6 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.codegen.core.SymbolWriter
-import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BooleanShape
@@ -844,6 +843,7 @@ class RustWriter private constructor(
                         }
                     }
                 }
+
                 else ->
                     rustBlock("") {
                         block(variable)
