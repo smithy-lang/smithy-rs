@@ -11,6 +11,7 @@
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::attributes::AccountId;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
 use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
@@ -54,7 +55,14 @@ impl HttpCredentialProvider {
     }
 
     pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> provider::Result {
-        let credentials = self.operation.invoke(HttpProviderAuth { auth }).await;
+        let credentials =
+            self.operation
+                .invoke(HttpProviderAuth { auth })
+                .await
+                .map(|mut creds| {
+                    creds.set_property(AwsCredentialFeature::CredentialsHttp);
+                    creds
+                });
         match credentials {
             Ok(creds) => Ok(creds),
             Err(SdkError::ServiceError(context)) => Err(context.into_err()),

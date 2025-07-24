@@ -28,6 +28,7 @@ use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
 use crate::profile::ProfileFileLoadError;
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::{
     provider::{self, error::CredentialsError, future, ProvideCredentials},
     Credentials,
@@ -186,7 +187,10 @@ impl ProfileFileCredentialsProvider {
                 ),
             )
             .await?;
-        inner_provider.provide_credentials().await
+        inner_provider.provide_credentials().await.map(|mut creds| {
+            creds.set_property(AwsCredentialFeature::CredentialsProfile);
+            creds
+        })
     }
 }
 

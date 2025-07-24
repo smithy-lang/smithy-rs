@@ -5,6 +5,7 @@
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
 
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{
     self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
@@ -285,7 +286,7 @@ impl Inner {
         tracing::debug!("retrieving assumed credentials");
 
         let assumed = self.fluent_builder.clone().send().in_current_span().await;
-        match assumed {
+        let assumed = match assumed {
             Ok(assumed) => {
                 tracing::debug!(
                     access_key_id = ?assumed.credentials.as_ref().map(|c| &c.access_key_id),
@@ -313,7 +314,12 @@ impl Inner {
                 Err(CredentialsError::provider_error(assumed.err().unwrap()))
             }
             Err(err) => Err(CredentialsError::provider_error(err)),
-        }
+        };
+
+        assumed.map(|mut creds| {
+            creds.set_property(AwsCredentialFeature::CredentialsStsAssumeRole);
+            creds
+        })
     }
 }
 

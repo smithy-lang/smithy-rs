@@ -10,6 +10,7 @@
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::sensitive_command::CommandWithSensitiveArgs;
 use aws_credential_types::attributes::AccountId;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_json::deserialize::Token;
@@ -122,14 +123,17 @@ impl CredentialProcessProvider {
             ))
         })?;
 
-        parse_credential_process_json_credentials(output, self.profile_account_id.as_ref()).map_err(
-            |invalid| {
+        parse_credential_process_json_credentials(output, self.profile_account_id.as_ref())
+            .map(|mut creds| {
+                creds.set_property(AwsCredentialFeature::CredentialsProcess);
+                creds
+            })
+            .map_err(|invalid| {
                 CredentialsError::provider_error(format!(
                 "Error retrieving credentials from external process, could not parse response: {}",
                 invalid
             ))
-            },
-        )
+            })
     }
 }
 

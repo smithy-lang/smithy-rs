@@ -6,6 +6,7 @@
 use std::env::VarError;
 
 use aws_credential_types::attributes::AccountId;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
@@ -58,7 +59,9 @@ impl EnvironmentVariableCredentialsProvider {
             .provider_name(ENV_PROVIDER);
         builder.set_session_token(session_token);
         builder.set_account_id(account_id);
-        Ok(builder.build())
+        let mut creds = builder.build();
+        creds.set_property(AwsCredentialFeature::CredentialsEnvVars);
+        Ok(creds)
     }
 }
 

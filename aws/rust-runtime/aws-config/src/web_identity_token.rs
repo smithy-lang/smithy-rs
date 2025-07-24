@@ -63,6 +63,7 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_sdk_sts::{types::PolicyDescriptorType, Client as StsClient};
 use aws_smithy_async::time::SharedTimeSource;
@@ -160,6 +161,10 @@ impl WebIdentityTokenCredentialsProvider {
             &conf.session_name,
         )
         .await
+        .map(|mut creds| {
+            creds.set_property(AwsCredentialFeature::CredentialsProfileStsWebIdToken);
+            creds
+        })
     }
 }
 

@@ -12,6 +12,7 @@ use super::client::error::ImdsError;
 use crate::imds::{self, Client};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_async::time::SharedTimeSource;
@@ -269,6 +270,10 @@ impl ImdsCredentialsProvider {
             // got bad data from IMDS, should not occur during normal operation:
             Err(invalid) => Err(CredentialsError::unhandled(invalid)),
         }
+        .map(|mut creds| {
+            creds.set_property(AwsCredentialFeature::CredentialsImds);
+            creds
+        })
     }
 
     async fn credentials(&self) -> provider::Result {
