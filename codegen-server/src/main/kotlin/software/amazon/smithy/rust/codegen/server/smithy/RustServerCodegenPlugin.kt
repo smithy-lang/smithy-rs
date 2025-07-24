@@ -11,6 +11,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
+import software.amazon.smithy.rust.codegen.core.smithy.CacheableSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
@@ -20,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.WireCacheableTraitDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerDecoratableBuildPlugin
@@ -52,6 +54,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
                 ServerRequiredCustomizations(),
                 SmithyValidationExceptionDecorator(),
                 CustomValidationExceptionWithReasonDecorator(),
+                WireCacheableTraitDecorator(),
                 *decorator,
             )
         logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")
@@ -73,12 +76,22 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
         ) = SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
             // Generate public constrained types for directly constrained shapes.
             .let {
-                if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+                if (includeConstrainedShapeProvider) {
+                    ConstrainedShapeSymbolProvider(
+                        it,
+                        serviceShape,
+                        constrainedTypes,
+                    )
+                } else {
+                    it
+                }
             }
             // Generate different types for EventStream shapes (e.g. transcribe streaming)
             .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
             // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
             .let { StreamingShapeSymbolProvider(it) }
+            // support the cacheable trait
+            .let { CacheableSymbolProvider(it) }
             // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
             .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
             // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.

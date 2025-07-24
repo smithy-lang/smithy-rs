@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.serde
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -34,6 +35,8 @@ sealed class RustType {
         val member: RustType
         val namespace: kotlin.String?
         val name: kotlin.String
+
+        fun map(f: (RustType) -> RustType): RustType
     }
 
     /*
@@ -107,11 +110,16 @@ sealed class RustType {
 
     data class Slice(override val member: RustType) : RustType(), Container {
         override val name: kotlin.String = ""
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(f(member))
     }
 
     data class HashMap(val key: RustType, override val member: RustType) : RustType(), Container {
         // validating that `key` is a string occurs in the constructor in SymbolVisitor
         override val name = RuntimeType.HashMap.name
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
+
         override val namespace = RuntimeType.HashMap.namespace
 
         companion object {
@@ -123,6 +131,8 @@ sealed class RustType {
     data class HashSet(override val member: RustType) : RustType(), Container {
         override val name = RuntimeType.Vec.name
         override val namespace = RuntimeType.Vec.namespace
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(f(member))
 
         companion object {
             // This is Vec intentionally. Note the following passage from the Smithy spec:
@@ -136,6 +146,8 @@ sealed class RustType {
     }
 
     data class Reference(val lifetime: kotlin.String?, override val member: RustType) : RustType(), Container {
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
+
         override val name = member.name
     }
 
@@ -143,6 +155,8 @@ sealed class RustType {
         private val runtimeType = RuntimeType.Option
         override val name = runtimeType.name
         override val namespace = runtimeType.namespace
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
 
         /** Convert `Option<T>` to `Option<&T>` **/
         fun referenced(lifetime: kotlin.String?): Option {
@@ -154,23 +168,31 @@ sealed class RustType {
         private val runtimeType = RuntimeType.MaybeConstrained
         override val name = runtimeType.name
         override val namespace = runtimeType.namespace
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
     }
 
     data class Box(override val member: RustType) : RustType(), Container {
         private val runtimeType = RuntimeType.Box
         override val name = runtimeType.name
         override val namespace = runtimeType.namespace
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
     }
 
     data class Dyn(override val member: RustType) : RustType(), Container {
         override val name = "dyn"
         override val namespace: kotlin.String? = null
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
     }
 
     data class Vec(override val member: RustType) : RustType(), Container {
         private val runtimeType: RuntimeType = RuntimeType.Vec
         override val name = runtimeType.name
         override val namespace = runtimeType.namespace
+
+        override fun map(f: (RustType) -> RustType): RustType = this.copy(member = f(member))
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()

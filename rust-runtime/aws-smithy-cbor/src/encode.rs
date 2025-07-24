@@ -114,4 +114,13 @@ impl Encoder {
     pub fn into_writer(self) -> Vec<u8> {
         self.encoder.into_writer()
     }
+
+    /// Write pre-serialized CBOR bytes directly to the output stream
+    ///
+    /// The caller must ensure that the bytes are a valid segment of CBOR
+    pub fn write_preserialized_data(&mut self, bytes: &[u8]) -> &mut Self {
+        // Write the bytes directly to the output buffer
+        self.encoder.writer_mut().extend_from_slice(bytes);
+        self
+    }
 }

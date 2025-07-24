@@ -124,6 +124,14 @@ fun Symbol.isOptional(): Boolean =
         else -> false
     }
 
+fun Symbol.isCacheable(): Boolean {
+    val rustType = this.rustType().stripOuter<RustType.Option>()
+    if (rustType is RustType.Application) {
+        return rustType.type.name == "Cacheable"
+    }
+    return false
+}
+
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 
 private const val RUST_TYPE_KEY = "rusttype"
