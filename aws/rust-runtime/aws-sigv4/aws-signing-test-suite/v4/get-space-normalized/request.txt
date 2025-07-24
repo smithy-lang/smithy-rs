@@ -1,2 +1,2 @@
-GET /example space/ HTTP/1.1
+GET /example%20space/ HTTP/1.1
 Host:example.amazonaws.com

@@ -18,6 +18,7 @@ use aws_smithy_http::query_writer::QueryWriter;
 use http0::header::{AsHeaderName, HeaderName, HOST};
 use http0::uri::{Port, Scheme};
 use http0::{HeaderMap, HeaderValue, Uri};
+use percent_encoding::utf8_percent_encode;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
@@ -373,13 +374,24 @@ impl CanonicalRequest<'_> {
                 );
             }
         }
-        // Sort by param name, and then by param value
+
+        // Sort on the _encoded_ key/value pairs
+        let mut params: Vec<(String, String)> = params
+            .into_iter()
+            .map(|x| {
+                use aws_smithy_http::query::fmt_string;
+                let enc_k = fmt_string(&x.0);
+                let enc_v = fmt_string(&x.1);
+                (enc_k, enc_v)
+            })
+            .collect();
+
         params.sort();
 
         let mut query = QueryWriter::new(uri);
         query.clear_params();
         for (key, value) in params {
-            query.insert(&key, &value);
+            query.insert_encoded(&key, &value);
         }
 
         let query = query.build_query();
