@@ -15,6 +15,7 @@ use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Storable, StoreReplac
 use aws_smithy_types::type_erasure::TypeErasedBox;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
@@ -139,7 +140,7 @@ impl std::error::Error for AuthSchemeOptionBuilderError {}
 /// Each auth scheme must have a unique string identifier associated with it,
 /// which is used to refer to auth schemes by the auth scheme option resolver, and
 /// also used to select an identity resolver to use.
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Clone, Debug, Eq)]
 pub struct AuthSchemeId {
     scheme_id: Cow<'static, str>,
 }
@@ -189,6 +190,47 @@ impl From<&'static str> for AuthSchemeId {
 impl From<Cow<'static, str>> for AuthSchemeId {
     fn from(scheme_id: Cow<'static, str>) -> Self {
         Self { scheme_id }
+    }
+}
+
+impl PartialEq for AuthSchemeId {
+    fn eq(&self, other: &Self) -> bool {
+        let self_normalized = normalize_auth_scheme_id(&self.scheme_id);
+        let other_normalized = normalize_auth_scheme_id(&other.scheme_id);
+        self_normalized == other_normalized
+    }
+}
+
+impl std::hash::Hash for AuthSchemeId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Hash the normalized scheme ID to ensure equal `AuthSchemeId`s have equal hashes
+        normalize_auth_scheme_id(&self.scheme_id).hash(state);
+    }
+}
+
+impl Ord for AuthSchemeId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let self_normalized = normalize_auth_scheme_id(&self.scheme_id);
+        let other_normalized = normalize_auth_scheme_id(&other.scheme_id);
+        self_normalized.cmp(other_normalized)
+    }
+}
+
+impl PartialOrd for AuthSchemeId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+// Normalizes auth scheme IDs for comparison and hashing by treating "no_auth" and "noAuth" as equivalent
+// by converting "no_auth" to "noAuth".
+// This is for backward compatibility; "no_auth" was incorrectly used in pre-GA versions of the SDK and
+// could be used still in some places.
+fn normalize_auth_scheme_id(scheme_id: &str) -> &str {
+    if scheme_id == "no_auth" {
+        "noAuth"
+    } else {
+        scheme_id
     }
 }
 
@@ -452,5 +494,257 @@ where
         AuthSchemePreference {
             preference_list: slice.as_ref().to_vec(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_auth_scheme_id_equality_no_auth_variants() {
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+
+        // Test that "no_auth" and "noAuth" are considered equal
+        assert_eq!(no_auth_legacy, no_auth_camel);
+        assert_eq!(no_auth_camel, no_auth_legacy);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_equality_same_schemes() {
+        let sigv4_1 = AuthSchemeId::new("sigv4");
+        let sigv4_2 = AuthSchemeId::new("sigv4");
+
+        // Test that identical schemes are equal
+        assert_eq!(sigv4_1, sigv4_2);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_inequality_different_schemes() {
+        let sigv4 = AuthSchemeId::new("sigv4");
+        let sigv4a = AuthSchemeId::new("sigv4a");
+        let bearer = AuthSchemeId::new("httpBearerAuth");
+
+        // Test that different schemes are not equal
+        assert_ne!(sigv4, sigv4a);
+        assert_ne!(sigv4, bearer);
+        assert_ne!(sigv4a, bearer);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_no_auth_vs_other_schemes() {
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+        let sigv4 = AuthSchemeId::new("sigv4");
+        let bearer = AuthSchemeId::new("httpBearerAuth");
+
+        // Test that no_auth variants are not equal to other schemes
+        assert_ne!(no_auth_legacy, sigv4);
+        assert_ne!(no_auth_camel, sigv4);
+        assert_ne!(no_auth_legacy, bearer);
+        assert_ne!(no_auth_camel, bearer);
+
+        // Test symmetry
+        assert_ne!(sigv4, no_auth_legacy);
+        assert_ne!(sigv4, no_auth_camel);
+        assert_ne!(bearer, no_auth_legacy);
+        assert_ne!(bearer, no_auth_camel);
+    }
+
+    #[test]
+    fn test_normalize_auth_scheme_id_function() {
+        // Test the helper function directly
+        assert_eq!("noAuth", normalize_auth_scheme_id("no_auth"));
+        assert_eq!("noAuth", normalize_auth_scheme_id("noAuth"));
+        assert_eq!("sigv4", normalize_auth_scheme_id("sigv4"));
+        assert_eq!("httpBearerAuth", normalize_auth_scheme_id("httpBearerAuth"));
+        assert_eq!("custom_scheme", normalize_auth_scheme_id("custom_scheme"));
+    }
+
+    #[test]
+    fn test_auth_scheme_id_reflexivity() {
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+        let sigv4 = AuthSchemeId::new("sigv4");
+
+        // Test reflexivity: x == x
+        assert_eq!(no_auth_legacy, no_auth_legacy);
+        assert_eq!(no_auth_camel, no_auth_camel);
+        assert_eq!(sigv4, sigv4);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_transitivity() {
+        let no_auth_1 = AuthSchemeId::new("no_auth");
+        let no_auth_2 = AuthSchemeId::new("noAuth");
+        let no_auth_3 = AuthSchemeId::new("no_auth");
+
+        // Test transitivity: if a == b and b == c, then a == c
+        assert_eq!(no_auth_1, no_auth_2);
+        assert_eq!(no_auth_2, no_auth_3);
+        assert_eq!(no_auth_1, no_auth_3);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_hash_consistency() {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        fn calculate_hash<T: Hash>(t: &T) -> u64 {
+            let mut s = DefaultHasher::new();
+            t.hash(&mut s);
+            s.finish()
+        }
+
+        // Test that equal AuthSchemeIds have the same hash
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+
+        // Since these are equal, they must have the same hash
+        assert_eq!(no_auth_legacy, no_auth_camel);
+        assert_eq!(
+            calculate_hash(&no_auth_legacy),
+            calculate_hash(&no_auth_camel)
+        );
+
+        // Test that identical schemes have the same hash
+        let sigv4_1 = AuthSchemeId::new("sigv4");
+        let sigv4_2 = AuthSchemeId::new("sigv4");
+        assert_eq!(calculate_hash(&sigv4_1), calculate_hash(&sigv4_2));
+
+        // Test that different schemes have different hashes (highly likely but not guaranteed)
+        let sigv4 = AuthSchemeId::new("sigv4");
+        let sigv4a = AuthSchemeId::new("sigv4a");
+        let bearer = AuthSchemeId::new("httpBearerAuth");
+
+        // These should be different (though hash collisions are theoretically possible)
+        assert_ne!(calculate_hash(&sigv4), calculate_hash(&sigv4a));
+        assert_ne!(calculate_hash(&sigv4), calculate_hash(&bearer));
+        assert_ne!(calculate_hash(&sigv4a), calculate_hash(&bearer));
+    }
+
+    #[test]
+    fn test_auth_scheme_id_hash_in_collections() {
+        use std::collections::{HashMap, HashSet};
+
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+        let sigv4 = AuthSchemeId::new("sigv4");
+        let bearer = AuthSchemeId::new("httpBearerAuth");
+
+        // Test HashSet behavior - equal items should be treated as the same
+        let mut set = HashSet::new();
+        set.insert(no_auth_legacy.clone());
+        set.insert(no_auth_camel.clone());
+        set.insert(sigv4.clone());
+        set.insert(bearer.clone());
+
+        // Should only have 3 items since no_auth_legacy and no_auth_camel are equal
+        assert_eq!(set.len(), 3);
+        assert!(set.contains(&no_auth_legacy));
+        assert!(set.contains(&no_auth_camel));
+        assert!(set.contains(&sigv4));
+        assert!(set.contains(&bearer));
+
+        // Test HashMap behavior
+        let mut map = HashMap::new();
+        map.insert(no_auth_legacy.clone(), "legacy");
+        map.insert(no_auth_camel.clone(), "camel");
+        map.insert(sigv4.clone(), "v4");
+
+        // Should only have 2 entries since no_auth_legacy and no_auth_camel are equal
+        assert_eq!(map.len(), 2);
+        // The value should be "camel" since it was inserted last
+        assert_eq!(map.get(&no_auth_legacy), Some(&"camel"));
+        assert_eq!(map.get(&no_auth_camel), Some(&"camel"));
+        assert_eq!(map.get(&sigv4), Some(&"v4"));
+    }
+
+    #[test]
+    fn test_auth_scheme_id_ord_consistency() {
+        let no_auth_legacy = AuthSchemeId::new("no_auth");
+        let no_auth_camel = AuthSchemeId::new("noAuth");
+        let sigv4 = AuthSchemeId::new("sigv4");
+        let sigv4a = AuthSchemeId::new("sigv4a");
+        let bearer = AuthSchemeId::new("httpBearerAuth");
+
+        // Test that equal items compare as equal
+        assert_eq!(no_auth_legacy.cmp(&no_auth_camel), Ordering::Equal);
+        assert_eq!(no_auth_camel.cmp(&no_auth_legacy), Ordering::Equal);
+
+        // Test reflexivity: x.cmp(&x) == Equal
+        assert_eq!(sigv4.cmp(&sigv4), Ordering::Equal);
+        assert_eq!(bearer.cmp(&bearer), Ordering::Equal);
+
+        // Test that ordering is consistent with string ordering of normalized values
+        // "sigv4" < "sigv4a" lexicographically
+        assert_eq!(sigv4.cmp(&sigv4a), Ordering::Less);
+        assert_eq!(sigv4a.cmp(&sigv4), Ordering::Greater);
+
+        // Test transitivity with a chain of comparisons
+        let schemes = vec![
+            AuthSchemeId::new("a_scheme"),
+            AuthSchemeId::new("b_scheme"),
+            AuthSchemeId::new("c_scheme"),
+        ];
+
+        // a < b < c should hold
+        assert_eq!(schemes[0].cmp(&schemes[1]), Ordering::Less);
+        assert_eq!(schemes[1].cmp(&schemes[2]), Ordering::Less);
+        assert_eq!(schemes[0].cmp(&schemes[2]), Ordering::Less);
+    }
+
+    #[test]
+    fn test_auth_scheme_id_ord_sorting() {
+        let mut schemes = vec![
+            AuthSchemeId::new("z_last"),
+            AuthSchemeId::new("no_auth"), // Should be normalized to "noAuth"
+            AuthSchemeId::new("sigv4a"),
+            AuthSchemeId::new("noAuth"),
+            AuthSchemeId::new("sigv4"),
+            AuthSchemeId::new("a_first"),
+        ];
+
+        schemes.sort();
+        dbg!(&schemes);
+
+        // Expected order after sorting (considering normalization):
+        // "a_first", "sigv4", "sigv4a", "no_auth", "noAuth", "z_last"
+        // Note: "no_auth" gets normalized to "noAuth" for comparison
+        let expected_inner_values =
+            vec!["a_first", "no_auth", "noAuth", "sigv4", "sigv4a", "z_last"];
+
+        assert_eq!(schemes.len(), expected_inner_values.len());
+        for (scheme, expected) in schemes.iter().zip(expected_inner_values.iter()) {
+            assert_eq!(scheme.inner(), *expected);
+        }
+    }
+
+    #[test]
+    fn test_auth_scheme_id_ord_with_cow_variants() {
+        use std::borrow::Cow;
+
+        // Test ordering with different Cow variants
+        let borrowed = AuthSchemeId::new("test_scheme");
+        let owned = AuthSchemeId::from(Cow::Owned("test_scheme".to_string()));
+        let borrowed2 = AuthSchemeId::from(Cow::Borrowed("test_scheme"));
+
+        // All should be equal
+        assert_eq!(borrowed, owned);
+        assert_eq!(borrowed, borrowed2);
+        assert_eq!(owned, borrowed2);
+
+        // All should have the same ordering
+        assert_eq!(borrowed.cmp(&owned), Ordering::Equal);
+        assert_eq!(borrowed.cmp(&borrowed2), Ordering::Equal);
+        assert_eq!(owned.cmp(&borrowed2), Ordering::Equal);
+
+        // Test with different values
+        let borrowed_a = AuthSchemeId::new("a_scheme");
+        let owned_b = AuthSchemeId::from(Cow::Owned("b_scheme".to_string()));
+
+        assert_eq!(borrowed_a.cmp(&owned_b), Ordering::Less);
+        assert_eq!(owned_b.cmp(&borrowed_a), Ordering::Greater);
     }
 }
