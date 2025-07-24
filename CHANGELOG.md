@@ -1,4 +1,37 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 23rd, 2025
+===============
+
+July 21st, 2025
+===============
+**New this release:**
+- :tada: (client, [smithy-rs#4203](https://github.com/smithy-lang/smithy-rs/issues/4203)) Add support for configuring auth schemes manually using an auth scheme preference list.
+    The preference list allows customers to reprioritize the order of auth schemes originally
+    determined by the auth scheme resolver.
+    Customers can configure the auth scheme preference at the following locations, listed in order of precedence:
+    1. Service Client Configuration
+    ```rust
+    use aws_runtime::auth::sigv4;
+    use aws_smithy_runtime_api::client::auth::AuthSchemeId;
+    use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+
+    let config = aws_sdk_s3::Config::builder()
+        .auth_scheme_preference([AuthSchemeId::from("scheme1"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])
+        // ...
+        .build();
+    ```
+    2. Environment Variable
+    ```
+    AWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth
+    ```
+    3. Configuration File
+    ```
+    auth_scheme_preference=scheme1, sigv4, httpBearerAuth
+    ```
+    With this configuration, the auth scheme resolver will prefer to select them in the specified order,
+    if they are supported.
+
+
 July 17th, 2025
 ===============
 **New this release:**
