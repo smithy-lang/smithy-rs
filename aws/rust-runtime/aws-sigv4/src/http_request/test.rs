@@ -131,26 +131,6 @@ pub(crate) fn run_test_suite_v4(test_name: &'static str) {
     run_v4_test(test_name, SignatureLocation::QueryParams);
 }
 
-// macro_rules! assert_req_eq {
-//         (http: $expected:expr, $actual:expr) => {
-//             let mut expected = ($expected).map(|_b|"body");
-//             let mut actual = ($actual).map(|_b|"body");
-//             make_headers_comparable(&mut expected);
-//             make_headers_comparable(&mut actual);
-//             assert_eq!(format!("{:?}", expected), format!("{:?}", actual));
-//         };
-//         ($expected:tt, $actual:tt) => {
-//             assert_req_eq!(http: ($expected).as_http_request(), $actual);
-//         };
-//     }
-//
-// pub(crate) fn make_headers_comparable<B>(request: &mut http0::Request<B>) {
-//     for (_name, value) in request.headers_mut() {
-//         value.set_sensitive(false);
-//     }
-// }
-//
-
 fn assert_uri_eq(expected: &Uri, actual: &Uri) {
     assert_eq!(expected.scheme(), actual.scheme());
     assert_eq!(expected.authority(), actual.authority());
