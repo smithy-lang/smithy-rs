@@ -13,57 +13,11 @@ use crate::http_request::{
 use aws_credential_types::Credentials;
 use aws_smithy_runtime_api::client::identity::Identity;
 use http0::{Method, Uri};
+use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::time::{Duration, SystemTime};
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
-
-pub(crate) mod v4 {
-    use super::*;
-
-    fn path(name: &str, ext: &str) -> String {
-        format!("aws-sig-v4-test-suite/{}/{}.{}", name, name, ext)
-    }
-
-    pub(crate) fn test_canonical_request(name: &str) -> String {
-        // Tests fail if there's a trailing newline in the file, and pre-commit requires trailing newlines
-        read(&path(name, "creq")).trim().to_string()
-    }
-
-    pub(crate) fn test_sts(name: &str) -> String {
-        read(&path(name, "sts"))
-    }
-
-    pub(crate) fn test_request(name: &str) -> TestRequest {
-        test_parsed_request(name, "req")
-    }
-
-    pub(crate) fn test_signed_request(name: &str) -> TestRequest {
-        test_parsed_request(name, "sreq")
-    }
-
-    pub(crate) fn test_signed_request_query_params(name: &str) -> TestRequest {
-        test_parsed_request(name, "qpsreq")
-    }
-
-    fn test_parsed_request(name: &str, ext: &str) -> TestRequest {
-        let path = path(name, ext);
-        match parse_request(read(&path).as_bytes()) {
-            Ok(parsed) => parsed,
-            Err(err) => panic!("Failed to parse {}: {}", path, err),
-        }
-    }
-
-    #[test]
-    fn test_parse() {
-        test_request("post-header-key-case");
-    }
-
-    #[test]
-    fn test_read_query_params() {
-        test_request("get-vanilla-query-order-key-case");
-    }
-}
 
 /// Common test suite collection
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -81,7 +35,7 @@ pub(crate) struct SigningSuiteTest {
 
 impl SigningSuiteTest {
     /// Create a new test from the V4 test suite
-    fn v4(test_name: &'static str) -> Self {
+    pub(crate) fn v4(test_name: &'static str) -> Self {
         Self {
             test_name,
             collection: Collection::V4,
@@ -89,7 +43,7 @@ impl SigningSuiteTest {
     }
 
     /// Create a new test from the V4a test suite
-    fn v4a(test_name: &'static str) -> Self {
+    pub(crate) fn v4a(test_name: &'static str) -> Self {
         Self {
             test_name,
             collection: Collection::V4A,
@@ -108,6 +62,18 @@ impl SigningSuiteTest {
     /// Get the HTTP request for the test
     pub(crate) fn request(&self) -> TestRequest {
         test_parsed_request(&self.path("request.txt"))
+    }
+
+    /// Get the signed HTTP request for the test
+    pub(crate) fn signed_request(&self, signature_location: SignatureLocation) -> TestRequest {
+        match signature_location {
+            SignatureLocation::QueryParams => {
+                test_parsed_request(&self.path("query-signed-request.txt"))
+            }
+            SignatureLocation::Headers => {
+                test_parsed_request(&self.path("header-signed-request.txt"))
+            }
+        }
     }
 
     /// Get the canonical request for the test
@@ -158,12 +124,66 @@ fn new_v4_signing_params_from_context(
     params.into()
 }
 
+/// Run the given test from the v4 suite for both header and query
+/// signature locations
 pub(crate) fn run_test_suite_v4(test_name: &'static str) {
     run_v4_test(test_name, SignatureLocation::Headers);
     run_v4_test(test_name, SignatureLocation::QueryParams);
 }
 
-fn run_v4_test(test_name: &'static str, signature_location: SignatureLocation) {
+// macro_rules! assert_req_eq {
+//         (http: $expected:expr, $actual:expr) => {
+//             let mut expected = ($expected).map(|_b|"body");
+//             let mut actual = ($actual).map(|_b|"body");
+//             make_headers_comparable(&mut expected);
+//             make_headers_comparable(&mut actual);
+//             assert_eq!(format!("{:?}", expected), format!("{:?}", actual));
+//         };
+//         ($expected:tt, $actual:tt) => {
+//             assert_req_eq!(http: ($expected).as_http_request(), $actual);
+//         };
+//     }
+//
+// pub(crate) fn make_headers_comparable<B>(request: &mut http0::Request<B>) {
+//     for (_name, value) in request.headers_mut() {
+//         value.set_sensitive(false);
+//     }
+// }
+//
+
+fn assert_uri_eq(expected: &Uri, actual: &Uri) {
+    assert_eq!(expected.scheme(), actual.scheme());
+    assert_eq!(expected.authority(), actual.authority());
+    assert_eq!(expected.path(), actual.path());
+
+    // query params may be out of order
+    let mut expected_params: Vec<(Cow<'_, str>, Cow<'_, str>)> =
+        form_urlencoded::parse(expected.query().unwrap_or_default().as_bytes()).collect();
+    expected_params.sort();
+
+    let mut actual_params: Vec<(Cow<'_, str>, Cow<'_, str>)> =
+        form_urlencoded::parse(actual.query().unwrap_or_default().as_bytes()).collect();
+    actual_params.sort();
+
+    assert_eq!(expected_params, actual_params);
+}
+
+fn assert_requests_eq(expected: TestRequest, actual: http0::Request<&str>) {
+    let expected = expected.as_http_request();
+    let actual = actual;
+    assert_eq!(expected.method(), actual.method());
+    assert_eq!(
+        expected.headers().len(),
+        actual.headers().len(),
+        "extra or missing headers"
+    );
+    assert_eq!(expected.headers(), actual.headers(), "headers mismatch");
+    assert_uri_eq(expected.uri(), actual.uri());
+    assert_eq!(*expected.body(), *actual.body(), "body mismatch");
+}
+
+/// Run the given test from the v4 suite for the given signature location
+pub(crate) fn run_v4_test(test_name: &'static str, signature_location: SignatureLocation) {
     let test = SigningSuiteTest::v4(test_name);
     let tc = test.context();
     let params = new_v4_signing_params_from_context(&tc, signature_location);
@@ -197,8 +217,8 @@ fn run_v4_test(test_name: &'static str, signature_location: SignatureLocation) {
     );
 
     let out = crate::http_request::sign(signable_req, &params).unwrap();
-    out.output
-        .apply_to_request_http0x(&mut req.as_http_request());
+    let mut signed = req.as_http_request();
+    out.output.apply_to_request_http0x(&mut signed);
 
     // check signature
     assert_eq!(
@@ -207,7 +227,8 @@ fn run_v4_test(test_name: &'static str, signature_location: SignatureLocation) {
         "signature didn't match (signature location: {signature_location:?})"
     );
 
-    // TODO check signed request
+    let expected = test.signed_request(signature_location);
+    assert_requests_eq(expected, signed);
 }
 
 /// Test suite context.json
@@ -377,8 +398,7 @@ pub(crate) mod v4a {
         let peer_public_key = signing_key.verifying_key();
         let sts = actual_string_to_sign.as_bytes();
         peer_public_key.verify(sts, &sig).unwrap();
-        // TODO - check what CRT/Kotlin verify here for v4a
-        // TODO - public.key.json ?
+        // TODO(sigv4a) - use public.key.json as verifying key?
     }
 
     impl<'a> From<&'a TestContext> for crate::sign::v4a::SigningParams<'a, SigningSettings> {
@@ -528,7 +548,15 @@ fn parse_request(s: &[u8]) -> Result<TestRequest, Box<dyn StdError + Send + Sync
     let mut with_newline = Vec::from(s);
     with_newline.push(b'\n');
     let mut req = httparse::Request::new(&mut headers);
-    let _ = req.parse(&with_newline).unwrap();
+    let status = req.parse(&with_newline).unwrap();
+
+    let body = if status.is_complete() {
+        let body_offset = status.unwrap();
+        // ignore the newline we added, take from original
+        &s[body_offset..]
+    } else {
+        &[]
+    };
 
     let mut uri_builder = Uri::builder().scheme("https");
     if let Some(path) = req.path {
@@ -552,7 +580,7 @@ fn parse_request(s: &[u8]) -> Result<TestRequest, Box<dyn StdError + Send + Sync
         uri: uri_builder.build()?.to_string(),
         method: req.method.unwrap().to_string(),
         headers,
-        body: TestSignedBody::Bytes(vec![]),
+        body: TestSignedBody::Bytes(Vec::from(body)),
     })
 }
 

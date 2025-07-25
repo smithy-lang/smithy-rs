@@ -505,8 +505,9 @@ fn build_authorization_header(
 mod tests {
     use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::sign::{add_header, SignableRequest};
+    use crate::http_request::test::SigningSuiteTest;
     use crate::http_request::{
-        sign, test, SessionTokenMode, SignableBody, SignatureLocation, SigningInstructions,
+        sign, SessionTokenMode, SignableBody, SignatureLocation, SigningInstructions,
         SigningSettings,
     };
     use crate::sign::v4;
@@ -516,7 +517,6 @@ mod tests {
     use proptest::proptest;
     use std::borrow::Cow;
     use std::iter;
-    use std::time::Duration;
 
     macro_rules! assert_req_eq {
         (http: $expected:expr, $actual:expr) => {
@@ -537,41 +537,20 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_sign_vanilla_with_headers() {
-        let settings = SigningSettings::default();
-        let identity = &Credentials::for_tests().into();
-        let params = v4::SigningParams {
-            identity,
-            region: "us-east-1",
-            name: "service",
-            time: parse_date_time("20150830T123600Z").unwrap(),
-            settings,
-        }
-        .into();
-
-        let original = test::v4::test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
-        assert_eq!(
-            "5557820e7380d585310524bd93d51a08d7757fb5efd7344ee12088f2b0860947",
-            out.signature
-        );
-
-        let mut signed = original.as_http_request();
-        out.output.apply_to_request_http0x(&mut signed);
-
-        let expected = test::v4::test_signed_request("get-vanilla-query-order-key-case");
-        assert_req_eq!(expected, signed);
-    }
-
+    // Sigv4A suite tests
     #[cfg(feature = "sigv4a")]
-    mod sigv4a_tests {
+    mod v4a_suite {
         use crate::http_request::test::v4a::run_test_suite_v4a;
 
         #[test]
         fn test_get_header_key_duplicate() {
             run_test_suite_v4a("get-header-key-duplicate")
+        }
+
+        #[test]
+        #[ignore = "httpparse doesn't support parsing multiline headers since they are deprecated in RFC7230"]
+        fn test_get_header_value_multiline() {
+            run_test_suite_v4a("get-header-value-multiline")
         }
 
         #[test]
@@ -645,8 +624,30 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "relies on single encode of path segments"]
+        // rely on single encoding of path segments, i.e. string-to-sign contains %20 for spaces rather than %25%20 as it should.
+        // skipped until we add control over double_uri_encode in context.json
+        fn test_get_space_normalized() {
+            run_test_suite_v4a("get-space-normalized");
+        }
+
+        #[test]
+        #[ignore = "httpparse fails on unencoded spaces in path"]
+        // the input request has unencoded space ' ' in the path which fails to parse
+        fn test_get_space_unnormalized() {
+            run_test_suite_v4a("get-space-unnormalized");
+        }
+
+        #[test]
         fn test_get_unreserved() {
             run_test_suite_v4a("get-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_utf8() {
+            run_test_suite_v4a("get-utf8");
         }
 
         #[test]
@@ -665,6 +666,11 @@ mod tests {
         }
 
         #[test]
+        fn test_get_vanilla_query_order_encoded() {
+            run_test_suite_v4a("get-vanilla-query-order-encoded");
+        }
+
+        #[test]
         fn test_get_vanilla_query_order_key_case() {
             run_test_suite_v4a("get-vanilla-query-order-key-case");
         }
@@ -672,6 +678,13 @@ mod tests {
         #[test]
         fn test_get_vanilla_query_unreserved() {
             run_test_suite_v4a("get-vanilla-query-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_vanilla_utf8_query() {
+            run_test_suite_v4a("get-vanilla-utf8-query");
         }
 
         #[test]
@@ -732,7 +745,7 @@ mod tests {
 
     #[test]
     fn test_sign_url_escape() {
-        let test = "double-encode-path";
+        let test = SigningSuiteTest::v4("double-encode-path");
         let settings = SigningSettings::default();
         let identity = &Credentials::for_tests().into();
         let params = v4::SigningParams {
@@ -744,7 +757,7 @@ mod tests {
         }
         .into();
 
-        let original = test::v4::test_request(test);
+        let original = test.request();
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
@@ -755,40 +768,7 @@ mod tests {
         let mut signed = original.as_http_request();
         out.output.apply_to_request_http0x(&mut signed);
 
-        let expected = test::v4::test_signed_request(test);
-        assert_req_eq!(expected, signed);
-    }
-
-    #[test]
-    fn test_sign_vanilla_with_query_params() {
-        let settings = SigningSettings {
-            signature_location: SignatureLocation::QueryParams,
-            expires_in: Some(Duration::from_secs(35)),
-            ..Default::default()
-        };
-        let identity = &Credentials::for_tests().into();
-        let params = v4::SigningParams {
-            identity,
-            region: "us-east-1",
-            name: "service",
-            time: parse_date_time("20150830T123600Z").unwrap(),
-            settings,
-        }
-        .into();
-
-        let original = test::v4::test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
-        assert_eq!(
-            "ecce208e4b4f7d7e3a4cc22ced6acc2ad1d170ee8ba87d7165f6fa4b9aff09ab",
-            out.signature
-        );
-
-        let mut signed = original.as_http_request();
-        out.output.apply_to_request_http0x(&mut signed);
-
-        let expected =
-            test::v4::test_signed_request_query_params("get-vanilla-query-order-key-case");
+        let expected = test.signed_request(SignatureLocation::Headers);
         assert_req_eq!(expected, signed);
     }
 
@@ -1084,6 +1064,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "httpparse doesn't support parsing multiline headers since they are deprecated in RFC7230"]
         fn test_get_header_value_multiline() {
             run_test_suite_v4("get-header-value-multiline");
         }
@@ -1096,11 +1077,6 @@ mod tests {
         #[test]
         fn test_get_header_value_trim() {
             run_test_suite_v4("get-header-value-trim");
-        }
-
-        #[test]
-        fn test_get_query_plus() {
-            run_test_suite_v4("get-query-plus");
         }
 
         #[test]
@@ -1164,11 +1140,16 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "relies on single encode of path segments"]
+        // rely on single encoding of path segments, i.e. string-to-sign contains %20 for spaces rather than %25%20 as it should.
+        // skipped until we add control over double_uri_encode in context.json
         fn test_get_space_normalized() {
             run_test_suite_v4("get-space-normalized");
         }
 
         #[test]
+        #[ignore = "httpparse fails on unencoded spaces in path"]
+        // the input request has unencoded space ' ' in the path which fails to parse
         fn test_get_space_unnormalized() {
             run_test_suite_v4("get-space-unnormalized");
         }
@@ -1179,6 +1160,8 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
         fn test_get_utf8() {
             run_test_suite_v4("get-utf8");
         }
@@ -1214,6 +1197,8 @@ mod tests {
         }
 
         #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
         fn test_get_vanilla_utf8_query() {
             run_test_suite_v4("get-vanilla-utf8-query");
         }
