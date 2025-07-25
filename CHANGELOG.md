@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 25th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4232](https://github.com/smithy-lang/smithy-rs/issues/4232)) Add fallback equality on no auth `AuthSchemeId` for backward compatibility, treating `AuthSchemeId::from("no_auth")` (legacy) and `AuthSchemeId::from("noAuth")` (updated) as equivalent.
+
+
 July 23rd, 2025
 ===============
 
