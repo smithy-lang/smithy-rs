@@ -152,7 +152,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
                 is ServiceConfig.BuilderBuild ->
                     writable {
-                        rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                        rust("${section.layer}.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     }
 
                 is ServiceConfig.ConfigImpl ->

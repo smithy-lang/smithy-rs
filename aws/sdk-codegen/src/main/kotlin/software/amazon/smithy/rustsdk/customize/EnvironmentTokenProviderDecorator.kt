@@ -8,10 +8,14 @@ package software.amazon.smithy.rustsdk.customize
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -29,57 +33,97 @@ class EnvironmentTokenProviderDecorator(signingName: String) : ConditionalDecora
     },
     delegateTo =
         object : ClientCodegenDecorator {
-            private val pascalCasedSigningName = signingName.replace("[-\\s]", "").toPascalCase()
-            override val name = "${pascalCasedSigningName}EnvironmentTokenProviderDecorator"
+            // private val  = signingName.replace("[-\\s]", "").toPascalCase()
+            override val name = "${signingName.toPascalCase()}EnvironmentTokenProviderDecorator"
 
             // This decorator must decorate after `TokenProvidersDecorator` and  `AuthDecorator`
+            // because those decorators render `builder.set_XXX` within `From<&SdkConfig> for Builder`,
+            // which sets the field origin to be `Origin::service_config` because setters are called
+            // explicitly on the builder.
+            // This decorator needs to override those origins by those coming from `SdkConfig`
             override val order: Byte = (maxOf(TokenProvidersDecorator.ORDER, AuthDecorator.ORDER) + 1).toByte()
+
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> =
+                baseCustomizations + EnvironmentTokenProviderConfigCustomization(codegenContext, signingName)
 
             override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
                 listOf(
-                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { _ ->
-                        val runtimeConfig = codegenContext.runtimeConfig
-                        rustTemplate(
-                            """
-                            if let Some(val) = input.service_config().and_then(|conf| {
-                                conf.load_config(service_config_key(#{Some}(${signingName.dq()}), "AWS_BEARER_TOKEN", ""))
-                                    .map(|it| it.parse::<#{String}>().unwrap())
-                            }) {
-                                if !input.get_origin("auth_scheme_preference").is_client_config() {
-                                    builder.set_auth_scheme_preference(Some([#{HTTP_BEARER_AUTH_SCHEME_ID}].into()));
-                                }
-                                if !input.get_origin("token_provider").is_client_config() {
-                                    let mut layer = #{Layer}::new("AwsBearerToken$pascalCasedSigningName");
-                                    layer.store_append(
-                                        #{AwsSdkFeature}::BearerServiceEnvVars
-                                    );
-                                    let identity = #{Identity}::builder()
-                                        .data(#{Token}::new(val, #{None}))
-                                        .property(layer.freeze())
-                                        .build()
-                                        .unwrap();
-                                    builder.runtime_components.set_identity_resolver(
-                                        #{HTTP_BEARER_AUTH_SCHEME_ID},
-                                        identity,
-                                    );
-                                }
-                            }
-                            """,
-                            *preludeScope,
-                            "AwsSdkFeature" to
-                                AwsRuntimeType.awsRuntime(runtimeConfig)
-                                    .resolve("sdk_feature::AwsSdkFeature"),
-                            "HTTP_BEARER_AUTH_SCHEME_ID" to
-                                CargoDependency.smithyRuntimeApiClient(runtimeConfig)
-                                    .withFeature("http-auth").toType().resolve("client::auth::http")
-                                    .resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
-                            "Identity" to
-                                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                                    .resolve("client::identity::Identity"),
-                            "Layer" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Layer"),
-                            "Token" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Token"),
-                        )
+                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                        section.inheritFieldOriginFromSdkConfig(this, "token_provider")
+                        section.inheritFieldOriginFromSdkConfig(this, "auth_scheme_preference")
                     },
                 )
         },
 )
+
+private class EnvironmentTokenProviderConfigCustomization(codegenContext: ClientCodegenContext, private val signingName: String) :
+    ConfigCustomization() {
+    private val rc = codegenContext.runtimeConfig
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "AuthSchemePreference" to
+                RuntimeType.smithyRuntimeApiClient(rc)
+                    .resolve("client::auth::AuthSchemePreference"),
+            "AwsSdkFeature" to
+                AwsRuntimeType.awsRuntime(rc)
+                    .resolve("sdk_feature::AwsSdkFeature"),
+            "Env" to AwsRuntimeType.awsTypes(rc).resolve("os_shim_internal::Env"),
+            "HTTP_BEARER_AUTH_SCHEME_ID" to
+                CargoDependency.smithyRuntimeApiClient(rc)
+                    .withFeature("http-auth").toType().resolve("client::auth::http")
+                    .resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
+            "Identity" to RuntimeType.smithyRuntimeApiClient(rc).resolve("client::identity::Identity"),
+            "Layer" to RuntimeType.smithyTypes(rc).resolve("config_bag::Layer"),
+            "LoadServiceConfig" to AwsRuntimeType.awsTypes(rc).resolve("service_config::LoadServiceConfig"),
+            "Token" to configReexport(AwsRuntimeType.awsCredentialTypes(rc).resolve("Token")),
+        )
+
+    override fun section(section: ServiceConfig) =
+        when (section) {
+            is ServiceConfig.BuilderBuild ->
+                writable {
+                    rustTemplate(
+                        """
+                        if let #{Some}(val) = #{LoadServiceConfig}::load_config(
+                                &self.service_config_loader, service_config_key(
+                                 ${signingName.dq()},
+                                 "AWS_BEARER_TOKEN",
+                                 "",
+                             ))
+                             .map(|it| it.parse::<#{String}>().unwrap())
+                         {
+                              if !self
+                                  .config_origins
+                                  .get("auth_scheme_preference")
+                                  .map(|origin| origin.is_client_config())
+                                  .unwrap_or_default()
+                             {
+                                 ${section.layer}.store_put(#{AuthSchemePreference}::from([#{HTTP_BEARER_AUTH_SCHEME_ID}]));
+                             }
+                             if !self
+                                 .config_origins
+                                 .get("token_provider")
+                                 .map(|origin| origin.is_client_config())
+                                 .unwrap_or_default() {
+                                 let mut layer = #{Layer}::new("AwsBearerToken${signingName.toPascalCase()}");
+                                 layer.store_append(#{AwsSdkFeature}::BearerServiceEnvVars);
+                                 let identity = #{Identity}::builder()
+                                     .data(#{Token}::new(val, #{None}))
+                                     .property(layer.freeze())
+                                     .build()
+                                     .unwrap();
+                                 self.runtime_components.set_identity_resolver(#{HTTP_BEARER_AUTH_SCHEME_ID}, identity);
+                             }
+                         }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+            else -> emptySection
+        }
+}

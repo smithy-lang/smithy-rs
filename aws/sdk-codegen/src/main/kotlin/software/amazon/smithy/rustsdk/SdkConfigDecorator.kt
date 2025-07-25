@@ -10,19 +10,18 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 sealed class SdkConfigSection(name: String) : AdHocSection(name) {
     /**
@@ -35,7 +34,20 @@ sealed class SdkConfigSection(name: String) : AdHocSection(name) {
      * ```
      */
     data class CopySdkConfigToClientConfig(val sdkConfig: String, val serviceConfigBuilder: String) :
-        SdkConfigSection("CopySdkConfigToClientConfig")
+        SdkConfigSection("CopySdkConfigToClientConfig") {
+        fun inheritFieldOriginFromSdkConfig(
+            writer: RustWriter,
+            fieldName: String,
+        ) {
+            writer.rust(
+                """
+                $serviceConfigBuilder
+                    .config_origins
+                    .insert(${fieldName.dq()}, $sdkConfig.get_origin(${fieldName.dq()}));
+                """,
+            )
+        }
+    }
 }
 
 /**
@@ -55,38 +67,14 @@ object SdkConfigCustomization {
     fun copyField(
         fieldName: String,
         map: Writable?,
+        trackOrigin: (section: SdkConfigSection.CopySdkConfigToClientConfig, w: RustWriter) -> Unit,
     ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
         val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
         rustTemplate(
             "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
             "map" to mapBlock,
         )
-    }
-
-    fun copyFieldAndCheckForServiceConfig(
-        fieldName: String,
-        map: Writable?,
-    ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-        val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
-        val envKey = "AWS_${fieldName.toSnakeCase().uppercase()}".dq()
-        val profileKey = fieldName.toSnakeCase().dq()
-
-        rustTemplate(
-            """
-            if ${section.sdkConfig}.get_origin("endpoint_url").is_client_config() {
-                ${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});
-            } else {
-                ${section.serviceConfigBuilder}.set_$fieldName(
-                    ${section.sdkConfig}
-                        .service_config()
-                        .and_then(|conf| conf.load_config(service_config_key(#{None}, $envKey, $profileKey)).map(|it| it.parse().unwrap()))
-                        .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
-                );
-            }
-            """,
-            *preludeScope,
-            "map" to mapBlock,
-        )
+        trackOrigin(section, this)
     }
 }
 

@@ -81,6 +81,8 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /** impl block of `ConfigBuilder` **/
     data object BuilderImpl : ServiceConfig("BuilderImpl")
 
+    data object BuilderImplDefaultFieldInit : ServiceConfig("BuilderImplDefault")
+
     // It is important to ensure through type system that each field added to config implements this injection,
     // tracked by smithy-rs#3419
 
@@ -100,7 +102,7 @@ sealed class ServiceConfig(name: String) : Section(name) {
      *  rust("""my_field: my_field.unwrap_or_else(||"default")""")
      *  ```
      */
-    data object BuilderBuild : ServiceConfig("BuilderBuild")
+    data class BuilderBuild(val layer: String) : ServiceConfig("BuilderBuild")
 
     /**
      * A section for setting up a field to be used by ConfigOverrideRuntimePlugin
@@ -453,6 +455,7 @@ class ServiceConfigGenerator(
                         runtime_components: self.runtime_components.clone(),
                         runtime_plugins: self.runtime_plugins.clone(),
                         behavior_version: self.behavior_version,
+                        ..Default::default()
                     }
                 }
                 """,
@@ -489,10 +492,17 @@ class ServiceConfigGenerator(
                         runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
                         runtime_plugins: #{Default}::default(),
                         behavior_version: #{Default}::default(),
+                        #{default_field_init:W}
                     }
                 }
                 """,
                 *codegenScope,
+                "default_field_init" to
+                    writable {
+                        customizations.forEach {
+                            it.section(ServiceConfig.BuilderImplDefaultFieldInit)(this)
+                        }
+                    },
             )
         }
 
@@ -572,7 +582,7 @@ class ServiceConfigGenerator(
                     *codegenScope,
                 )
                 customizations.forEach {
-                    it.section(ServiceConfig.BuilderBuild)(this)
+                    it.section(ServiceConfig.BuilderBuild("layer"))(this)
                 }
                 rustBlock("Config") {
                     rustTemplate(

@@ -24,10 +24,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigParam
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.configParamNewtype
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.loadFromConfigBag
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.standardConfigParam
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -42,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.util.Optional
 
@@ -118,11 +121,17 @@ fun Model.sdkConfigSetter(
             else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
         }
 
-    return if (fieldName == "endpoint_url") {
-        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
-    } else {
-        SdkConfigCustomization.copyField(fieldName, map)
-    }
+    val trackOrigin =
+        if (fieldName == "endpoint_url") {
+            { section: SdkConfigSection.CopySdkConfigToClientConfig, writer: RustWriter ->
+                section.inheritFieldOriginFromSdkConfig(writer, "endpoint_url")
+            }
+        } else {
+            // no-op
+            { _, _ -> }
+        }
+
+    return SdkConfigCustomization.copyField(fieldName, map, trackOrigin)
 }
 
 /**
@@ -160,6 +169,8 @@ fun decoratorForBuiltIn(
                     clientParamBuilder?.toConfigParam(builtIn, codegenContext.runtimeConfig) ?: ConfigParam.Builder()
                         .toConfigParam(builtIn, codegenContext.runtimeConfig),
                 )
+            }.extendIf(name == "endpoint_url") {
+                ServiceSpecificEndpointConfigCustomization(codegenContext)
             }
         }
 
@@ -202,6 +213,42 @@ fun decoratorForBuiltIn(
                 },
             )
     }
+}
+
+// Currently handles only the "endpoint_url" for service-specific endpoint configuration,
+// but can be extended for more general use in the future.
+private class ServiceSpecificEndpointConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val serviceId = codegenContext.serviceShape.sdkId()
+
+    override fun section(section: ServiceConfig) =
+        when (section) {
+            is ServiceConfig.BuilderBuild ->
+                writable {
+                    rustTemplate(
+                        """
+                        if !self
+                            .config_origins
+                            .get("endpoint_url")
+                            .map(|origin| origin.is_client_config())
+                            .unwrap_or_default()
+                        {
+                            let endpoint_url =  #{LoadServiceConfig}::load_config(
+                                &self.service_config_loader, service_config_key(
+                                    ${serviceId.dq()},
+                                    "AWS_ENDPOINT_URL",
+                                    "endpoint_url",
+                                ))
+                                .map(|it| it.parse().unwrap());
+                            ${section.layer}.store_or_unset(endpoint_url.map(#{EndpointUrl}));
+                        }
+                        """,
+                        "EndpointUrl" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("endpoint_config::EndpointUrl"),
+                        "LoadServiceConfig" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("service_config::LoadServiceConfig"),
+                    )
+                }
+            else -> emptySection
+        }
 }
 
 private val endpointUrlDocs =

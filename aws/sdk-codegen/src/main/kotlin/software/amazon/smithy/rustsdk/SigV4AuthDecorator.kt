@@ -204,11 +204,11 @@ private class SigV4SigningConfig(
                         )
                     }
 
-                    ServiceConfig.BuilderBuild -> {
+                    is ServiceConfig.BuilderBuild -> {
                         rustTemplate(
                             """
-                            layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
-                            layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
+                            ${section.layer}.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
+                            ${section.layer}.load::<#{Region}>().cloned().map(|r| ${section.layer}.store_put(#{SigningRegion}::from(r)));
                             """,
                             *codegenScope,
                         )
