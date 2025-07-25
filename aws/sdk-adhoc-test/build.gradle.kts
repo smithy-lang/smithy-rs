@@ -26,7 +26,7 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
 
 dependencies {
-    implementation(project(":aws:sdk-codegen"))
+    implementation(project(":aws:codegen-aws-sdk"))
     implementation(libs.smithy.aws.protocol.tests)
     implementation(libs.smithy.protocol.test.traits)
     implementation(libs.smithy.aws.traits)

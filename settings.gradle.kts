@@ -10,8 +10,8 @@ include(":codegen-client")
 include(":codegen-client-test")
 include(":codegen-server")
 include(":codegen-serde")
-include(":codegen-server:python")
-include(":codegen-server:typescript")
+include(":codegen-server:codegen-server-python")
+include(":codegen-server:codegen-server-typescript")
 include(":codegen-server-test")
 // NOTE these have to be named differently or otherwise have different GAV coordinates
 // due to https://github.com/gradle/gradle/issues/847
@@ -25,5 +25,5 @@ include(":aws:rust-runtime")
 project(":aws:rust-runtime").name = "aws-rust-runtime"
 include(":aws:sdk")
 include(":aws:sdk-adhoc-test")
-include(":aws:sdk-codegen")
+include(":aws:codegen-aws-sdk")
 include(":fuzzgen")
