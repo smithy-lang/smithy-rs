@@ -5,7 +5,6 @@
 
 plugins {
     id("smithy-rs.kotlin-conventions")
-    id("smithy-rs.publishing-conventions")
 }
 
 description = "Generates Rust/Node server-side code from Smithy models"
