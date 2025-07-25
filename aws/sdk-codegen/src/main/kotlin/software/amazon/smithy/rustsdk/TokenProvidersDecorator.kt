@@ -30,7 +30,7 @@ class TokenProvidersDecorator : ConditionalDecorator(
     delegateTo =
         object : ClientCodegenDecorator {
             override val name: String get() = "TokenProvidersDecorator"
-            override val order: Byte = ORDER
+            override val order: Byte = 0
 
             override fun configCustomizations(
                 codegenContext: ClientCodegenContext,
@@ -44,11 +44,7 @@ class TokenProvidersDecorator : ConditionalDecorator(
                     },
                 )
         },
-) {
-    companion object {
-        const val ORDER: Byte = 0
-    }
-}
+)
 
 /**
  * Add a `.token_provider` field and builder to the `Config` for a given service

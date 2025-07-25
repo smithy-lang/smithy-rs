@@ -121,7 +121,7 @@ fun Model.sdkConfigSetter(
             else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
         }
 
-    val trackOrigin =
+    val inheritOrigin =
         if (fieldName == "endpoint_url") {
             { section: SdkConfigSection.CopySdkConfigToClientConfig, writer: RustWriter ->
                 section.inheritFieldOriginFromSdkConfig(writer, "endpoint_url")
@@ -131,7 +131,7 @@ fun Model.sdkConfigSetter(
             { _, _ -> }
         }
 
-    return SdkConfigCustomization.copyField(fieldName, map, trackOrigin)
+    return SdkConfigCustomization.copyField(fieldName, map, inheritOrigin)
 }
 
 /**
@@ -227,13 +227,10 @@ private class ServiceSpecificEndpointConfigCustomization(codegenContext: ClientC
                 writable {
                     rustTemplate(
                         """
-                        if !self
-                            .config_origins
-                            .get("endpoint_url")
-                            .map(|origin| origin.is_client_config())
-                            .unwrap_or_default()
+                        if use_service_env(|| ${section.layer}.load::<#{EndpointUrl}>().is_none(),
+                                "endpoint_url", &self.config_origins)
                         {
-                            let endpoint_url =  #{LoadServiceConfig}::load_config(
+                            let endpoint_url = #{LoadServiceConfig}::load_config(
                                 &self.service_config_loader, service_config_key(
                                     ${serviceId.dq()},
                                     "AWS_ENDPOINT_URL",

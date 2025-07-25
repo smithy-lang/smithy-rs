@@ -67,14 +67,14 @@ object SdkConfigCustomization {
     fun copyField(
         fieldName: String,
         map: Writable?,
-        trackOrigin: (section: SdkConfigSection.CopySdkConfigToClientConfig, w: RustWriter) -> Unit,
+        inheritOrigin: (section: SdkConfigSection.CopySdkConfigToClientConfig, w: RustWriter) -> Unit,
     ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
         val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
         rustTemplate(
             "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
             "map" to mapBlock,
         )
-        trackOrigin(section, this)
+        inheritOrigin(section, this)
     }
 }
 

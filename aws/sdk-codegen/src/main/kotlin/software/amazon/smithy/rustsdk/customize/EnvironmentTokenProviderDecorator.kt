@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk.customize
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDecorator
@@ -25,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.SdkConfigSection
-import software.amazon.smithy.rustsdk.TokenProvidersDecorator
 
 class EnvironmentTokenProviderDecorator(signingName: String) : ConditionalDecorator(
     predicate = { codegenContext, _ ->
@@ -35,13 +33,7 @@ class EnvironmentTokenProviderDecorator(signingName: String) : ConditionalDecora
         object : ClientCodegenDecorator {
             // private val  = signingName.replace("[-\\s]", "").toPascalCase()
             override val name = "${signingName.toPascalCase()}EnvironmentTokenProviderDecorator"
-
-            // This decorator must decorate after `TokenProvidersDecorator` and  `AuthDecorator`
-            // because those decorators render `builder.set_XXX` within `From<&SdkConfig> for Builder`,
-            // which sets the field origin to be `Origin::service_config` because setters are called
-            // explicitly on the builder.
-            // This decorator needs to override those origins by those coming from `SdkConfig`
-            override val order: Byte = (maxOf(TokenProvidersDecorator.ORDER, AuthDecorator.ORDER) + 1).toByte()
+            override val order: Byte = 0
 
             override fun configCustomizations(
                 codegenContext: ClientCodegenContext,
@@ -96,19 +88,12 @@ private class EnvironmentTokenProviderConfigCustomization(codegenContext: Client
                              ))
                              .map(|it| it.parse::<#{String}>().unwrap())
                          {
-                              if !self
-                                  .config_origins
-                                  .get("auth_scheme_preference")
-                                  .map(|origin| origin.is_client_config())
-                                  .unwrap_or_default()
-                             {
+                             if use_service_env(|| ${section.layer}.load::<#{AuthSchemePreference}>().is_none(),
+                                "auth_scheme_preference", &self.config_origins) {
                                  ${section.layer}.store_put(#{AuthSchemePreference}::from([#{HTTP_BEARER_AUTH_SCHEME_ID}]));
                              }
-                             if !self
-                                 .config_origins
-                                 .get("token_provider")
-                                 .map(|origin| origin.is_client_config())
-                                 .unwrap_or_default() {
+                              if use_service_env(|| self.runtime_components.identity_resolver(&#{HTTP_BEARER_AUTH_SCHEME_ID}).is_none(),
+                                "token_provider", &self.config_origins) {
                                  let mut layer = #{Layer}::new("AwsBearerToken${signingName.toPascalCase()}");
                                  layer.store_append(#{AwsSdkFeature}::BearerServiceEnvVars);
                                  let identity = #{Identity}::builder()

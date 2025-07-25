@@ -67,6 +67,7 @@ class ServiceConfigDecorator : ClientCodegenDecorator {
                 "Env" to AwsRuntimeType.awsTypes(rc).resolve("os_shim_internal::Env"),
                 "EnvConfigValue" to AwsRuntimeType.awsRuntime(rc).resolve("env_config::EnvConfigValue"),
                 "LoadServiceConfig" to AwsRuntimeType.awsTypes(rc).resolve("service_config::LoadServiceConfig"),
+                "HashMap" to RuntimeType.HashMap,
                 "Origin" to AwsRuntimeType.awsTypes(rc).resolve("origin::Origin"),
                 "ServiceConfigKey" to AwsRuntimeType.awsTypes(rc).resolve("service_config::ServiceConfigKey"),
                 "SharedServiceConfigLoader" to
@@ -106,6 +107,27 @@ class ServiceConfigDecorator : ClientCodegenDecorator {
                             env: #{Env}::from_slice(vars),
                         }
                     }
+                }
+                """,
+                *codegenScope,
+            )
+
+            rustTemplate(
+                """
+                fn use_service_env<P>(
+                    field_unset: P,
+                    field_name: &'static str,
+                    config_origins: &#{HashMap}<&'static str, #{Origin}>,
+                ) -> bool
+                where
+                    P: Fn() -> bool,
+                {
+                    field_unset() || (
+                        match config_origins.get(field_name) {
+                            #{Some}(origin) => !origin.is_client_config(),
+                            #{None} => true,
+                        }
+                    )
                 }
                 """,
                 *codegenScope,
