@@ -33,6 +33,8 @@ pub struct SignableRequest<'a> {
 
 impl<'a> SignableRequest<'a> {
     /// Creates a new `SignableRequest`.
+    ///
+    /// NOTE: The `uri` is expected to already in encoded form.
     pub fn new(
         method: &'a str,
         uri: impl Into<Cow<'a, str>>,

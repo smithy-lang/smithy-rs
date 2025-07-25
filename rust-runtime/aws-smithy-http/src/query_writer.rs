@@ -54,7 +54,7 @@ impl QueryWriter {
     pub fn insert(&mut self, k: &str, v: &str) {
         self.insert_encoded(&percent_encode_query(k), &percent_encode_query(v));
     }
-    
+
     /// Inserts a new already encoded query parameter. The key and value will be inserted
     /// as is.
     pub fn insert_encoded(&mut self, encoded_k: &str, encoded_v: &str) {
@@ -65,7 +65,6 @@ impl QueryWriter {
         self.new_path_and_query.push_str(encoded_k);
         self.new_path_and_query.push('=');
         self.new_path_and_query.push_str(encoded_v)
-        
     }
 
     /// Returns just the built query string.
