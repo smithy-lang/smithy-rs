@@ -41,7 +41,7 @@ open class VerifyCodegenVersionBump : DefaultTask() {
         val publishedCodegenProjectPaths =
             listOf(
                 "codegen-client", "codegen-core", "codegen-serde",
-                "codegen-server", "fuzzgen", "aws/sdk-codegen",
+                "codegen-server", "fuzzgen", "aws/codegen-aws-sdk",
             )
 
         // Determine the base reference

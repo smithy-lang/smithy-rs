@@ -34,10 +34,10 @@ Project Layout
   installed for FIP support to compile properly)
   * `./gradlew :aws:sdk:{cargoCheck, cargoTest, cargoDocs, cargoClippy}`: Generate & run specified cargo command.
 * `codegen-core`: Common code generation logic useful for clients and servers
-* `codegen-client`: Whitelabel Smithy client code generation
+* `codegen-client`: Smithy client code generation
 * `codegen-client-test`: Smithy protocol test generation & integration tests for Smithy client whitelabel code
 * [`design`](design): Design documentation. See the [design/README.md](design/README.md) for details about building / viewing.
-* `codegen-server`: Whitelabel Smithy server code generation
+* `codegen-server`: Smithy server code generation
 * `codegen-server-test`: Smithy protocol test generation & integration tests for Smithy server whitelabel code
 * `examples`: A collection of server implementation examples
 
@@ -53,7 +53,7 @@ In general, the components of smithy-rs affect each other in the following order
 1. `rust-runtime`
 2. `codegen` and `codegen-server`
 3. `aws/rust-runtime`
-4. `aws/sdk-codegen`
+4. `aws/codegen-aws-sdk`
 
 Some components, such as `codegen-client-test` and `codegen-server-test`, are purely for testing other components.
 
@@ -120,7 +120,7 @@ to generate more or less AWS service clients.
 
 ```bash
 # Run Kotlin codegen unit tests
-./gradlew aws:sdk-codegen:check
+./gradlew aws:codegen-aws-sdk:check
 # Generate an SDK, but do not attempt to compile / run tests. Useful for inspecting generated code
 ./gradlew :aws:sdk:assemble
 # Run all the tests

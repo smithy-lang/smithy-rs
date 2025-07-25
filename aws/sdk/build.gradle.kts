@@ -44,7 +44,7 @@ val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
 
 dependencies {
-    implementation(project(":aws:sdk-codegen"))
+    implementation(project(":aws:codegen-aws-sdk"))
     implementation(libs.smithy.protocol.test.traits)
     implementation(libs.smithy.aws.traits)
     implementation(libs.smithy.aws.iam.traits)

@@ -29,7 +29,7 @@ smithy {
 }
 
 dependencies {
-    implementation(project(":codegen-server:python"))
+    implementation(project(":codegen-server:codegen-server-python"))
     implementation(libs.smithy.aws.protocol.tests)
     implementation(libs.smithy.protocol.test.traits)
     implementation(libs.smithy.aws.traits)
