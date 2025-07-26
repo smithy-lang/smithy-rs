@@ -27,6 +27,7 @@ private const val RUNTIME_CONFIG = "runtimeConfig"
 private const val LICENSE = "license"
 private const val EXAMPLES = "examples"
 private const val MINIMUM_SUPPORTED_RUST_VERSION = "minimumSupportedRustVersion"
+private const val HINT_MOSTLY_UNUSED = "hintMostlyUnused"
 private const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
 
@@ -90,6 +91,7 @@ open class CoreRustSettings(
     open val license: String?,
     open val examplesUri: String? = null,
     open val minimumSupportedRustVersion: String? = null,
+    open val hintMostlyUnused: Boolean = false,
     open val customizationConfig: ObjectNode? = null,
 ) {
     /**
@@ -179,6 +181,7 @@ open class CoreRustSettings(
                     EXAMPLES,
                     LICENSE,
                     MINIMUM_SUPPORTED_RUST_VERSION,
+                    HINT_MOSTLY_UNUSED,
                     CUSTOMIZATION_CONFIG,
                 ),
             )
@@ -201,6 +204,7 @@ open class CoreRustSettings(
                 license = config.getStringMember(LICENSE).orNull()?.value,
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 minimumSupportedRustVersion = config.getStringMember(MINIMUM_SUPPORTED_RUST_VERSION).orNull()?.value,
+                hintMostlyUnused = config.getBooleanMemberOrDefault(HINT_MOSTLY_UNUSED, false),
                 customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull(),
             )
         }

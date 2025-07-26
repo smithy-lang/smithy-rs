@@ -37,6 +37,7 @@ data class ClientRustSettings(
     override val license: String?,
     override val examplesUri: String?,
     override val minimumSupportedRustVersion: String? = null,
+    override val hintMostlyUnused: Boolean = true,
     override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
         service,
@@ -50,6 +51,7 @@ data class ClientRustSettings(
         license,
         examplesUri,
         minimumSupportedRustVersion,
+        hintMostlyUnused,
         customizationConfig,
     ) {
     companion object {
@@ -72,6 +74,7 @@ data class ClientRustSettings(
                 license = coreRustSettings.license,
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
+                hintMostlyUnused = coreRustSettings.hintMostlyUnused,
                 customizationConfig = coreRustSettings.customizationConfig,
             )
         }
