@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 26th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4227](https://github.com/smithy-lang/smithy-rs/issues/4227)) Fix canonical request sort order
+
+
 July 25th, 2025
 ===============
 **New this release:**
