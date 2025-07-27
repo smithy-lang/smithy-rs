@@ -60,7 +60,9 @@ impl EnvironmentVariableCredentialsProvider {
         builder.set_session_token(session_token);
         builder.set_account_id(account_id);
         let mut creds = builder.build();
-        creds.set_property(AwsCredentialFeature::CredentialsEnvVars);
+        creds
+            .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+            .push(AwsCredentialFeature::CredentialsEnvVars);
         Ok(creds)
     }
 }

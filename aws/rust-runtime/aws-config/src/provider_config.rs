@@ -90,7 +90,7 @@ impl Default for ProviderConfig {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-util"))]
 impl ProviderConfig {
     /// ProviderConfig with all configuration removed
     ///

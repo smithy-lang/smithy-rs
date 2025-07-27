@@ -317,7 +317,9 @@ impl Inner {
         };
 
         assumed.map(|mut creds| {
-            creds.set_property(AwsCredentialFeature::CredentialsStsAssumeRole);
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsStsAssumeRole);
             creds
         })
     }

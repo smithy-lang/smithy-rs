@@ -96,6 +96,9 @@ impl Debug for Credentials {
         if let Some(account_id) = &self.0.account_id {
             creds.field("account_id", &account_id.as_str());
         }
+        for (i, prop) in self.1.values().enumerate() {
+            creds.field(&format!("property_{i}"), prop);
+        }
         creds.finish()
     }
 }

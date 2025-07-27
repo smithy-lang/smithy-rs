@@ -125,7 +125,9 @@ impl CredentialProcessProvider {
 
         parse_credential_process_json_credentials(output, self.profile_account_id.as_ref())
             .map(|mut creds| {
-                creds.set_property(AwsCredentialFeature::CredentialsProcess);
+                creds
+                    .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                    .push(AwsCredentialFeature::CredentialsProcess);
                 creds
             })
             .map_err(|invalid| {

@@ -271,7 +271,9 @@ impl ImdsCredentialsProvider {
             Err(invalid) => Err(CredentialsError::unhandled(invalid)),
         }
         .map(|mut creds| {
-            creds.set_property(AwsCredentialFeature::CredentialsImds);
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsImds);
             creds
         })
     }
@@ -288,10 +290,10 @@ impl ImdsCredentialsProvider {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod test {
     use super::*;
-    use crate::imds::client::test::{
+    use crate::imds::client::test_util::{
         imds_request, imds_response, make_imds_client, token_request, token_response,
     };
     use crate::provider_config::ProviderConfig;

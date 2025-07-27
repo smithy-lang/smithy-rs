@@ -641,7 +641,77 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
     }
 }
 
-#[cfg(test)]
+/// Utilities for testing IMDS clients
+#[cfg(feature = "test-util")]
+pub mod test_util {
+    use crate::provider_config::ProviderConfig;
+    use aws_smithy_async::test_util::InstantSleep;
+    use aws_smithy_http_client::test_util::StaticReplayClient;
+    use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+    use aws_smithy_types::body::SdkBody;
+    use http::Uri;
+
+    /// Create a simple token request
+    pub fn token_request(base: &str, ttl: u32) -> HttpRequest {
+        http::Request::builder()
+            .uri(format!("{}/latest/api/token", base))
+            .header("x-aws-ec2-metadata-token-ttl-seconds", ttl)
+            .method("PUT")
+            .body(SdkBody::empty())
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    /// Create a simple token response
+    pub fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
+        HttpResponse::try_from(
+            http::Response::builder()
+                .status(200)
+                .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
+                .body(SdkBody::from(token))
+                .unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// Create a simple IMDS request
+    pub fn imds_request(path: &'static str, token: &str) -> HttpRequest {
+        http::Request::builder()
+            .uri(Uri::from_static(path))
+            .method("GET")
+            .header("x-aws-ec2-metadata-token", token)
+            .body(SdkBody::empty())
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    /// Create a simple IMDS response
+    pub fn imds_response(body: &'static str) -> HttpResponse {
+        HttpResponse::try_from(
+            http::Response::builder()
+                .status(200)
+                .body(SdkBody::from(body))
+                .unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// Create an IMDS client with an underlying [StaticReplayClient]
+    pub fn make_imds_client(http_client: &StaticReplayClient) -> super::Client {
+        tokio::time::pause();
+        super::Client::builder()
+            .configure(
+                &ProviderConfig::no_configuration()
+                    .with_sleep_impl(InstantSleep::unlogged())
+                    .with_http_client(http_client.clone()),
+            )
+            .build()
+    }
+}
+
+#[cfg(all(test, feature = "test-util"))]
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
@@ -652,9 +722,7 @@ pub(crate) mod test {
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,
     };
-    use aws_smithy_runtime_api::client::orchestrator::{
-        HttpRequest, HttpResponse, OrchestratorError,
-    };
+    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::result::ConnectorError;
     use aws_smithy_runtime_api::client::retries::classifiers::{
         ClassifyRetry, RetryAction, SharedRetryClassifier,
@@ -663,7 +731,8 @@ pub(crate) mod test {
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
-    use http::Uri;
+
+    use super::test_util::*;
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
@@ -689,60 +758,6 @@ pub(crate) mod test {
 
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
-
-    pub(crate) fn token_request(base: &str, ttl: u32) -> HttpRequest {
-        http::Request::builder()
-            .uri(format!("{}/latest/api/token", base))
-            .header("x-aws-ec2-metadata-token-ttl-seconds", ttl)
-            .method("PUT")
-            .body(SdkBody::empty())
-            .unwrap()
-            .try_into()
-            .unwrap()
-    }
-
-    pub(crate) fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
-        HttpResponse::try_from(
-            http::Response::builder()
-                .status(200)
-                .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
-                .body(SdkBody::from(token))
-                .unwrap(),
-        )
-        .unwrap()
-    }
-
-    pub(crate) fn imds_request(path: &'static str, token: &str) -> HttpRequest {
-        http::Request::builder()
-            .uri(Uri::from_static(path))
-            .method("GET")
-            .header("x-aws-ec2-metadata-token", token)
-            .body(SdkBody::empty())
-            .unwrap()
-            .try_into()
-            .unwrap()
-    }
-
-    pub(crate) fn imds_response(body: &'static str) -> HttpResponse {
-        HttpResponse::try_from(
-            http::Response::builder()
-                .status(200)
-                .body(SdkBody::from(body))
-                .unwrap(),
-        )
-        .unwrap()
-    }
-
-    pub(crate) fn make_imds_client(http_client: &StaticReplayClient) -> super::Client {
-        tokio::time::pause();
-        super::Client::builder()
-            .configure(
-                &ProviderConfig::no_configuration()
-                    .with_sleep_impl(InstantSleep::unlogged())
-                    .with_http_client(http_client.clone()),
-            )
-            .build()
-    }
 
     fn mock_imds_client(events: Vec<ReplayEvent>) -> (Client, StaticReplayClient) {
         let http_client = StaticReplayClient::new(events);

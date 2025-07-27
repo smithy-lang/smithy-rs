@@ -90,7 +90,9 @@ impl SsoCredentialsProvider {
         )
         .await
         .map(|mut creds| {
-            creds.set_property(AwsCredentialFeature::CredentialsSso);
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsSso);
             creds
         })
     }

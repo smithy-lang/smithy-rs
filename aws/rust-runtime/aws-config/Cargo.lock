@@ -89,6 +89,7 @@ dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "tracing",
  "zeroize",
 ]
 

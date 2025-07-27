@@ -162,7 +162,9 @@ impl WebIdentityTokenCredentialsProvider {
         )
         .await
         .map(|mut creds| {
-            creds.set_property(AwsCredentialFeature::CredentialsProfileStsWebIdToken);
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsProfileStsWebIdToken);
             creds
         })
     }

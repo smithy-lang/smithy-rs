@@ -1,0 +1,25 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "credential-features-tests"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dev-dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["test-util", "behavior-version-latest"] }
+aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types"}
+aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["test-util", "behavior-version-latest"] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util", "wire-mock"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"]}
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
+http = "0.2.0"
+tokio = { version = "1.23.1", features = ["full", "test-util"] }
+tracing = "0.1.37"
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }

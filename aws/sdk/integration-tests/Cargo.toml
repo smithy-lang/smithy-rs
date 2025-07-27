@@ -5,6 +5,7 @@ resolver = "2"
 members = [
     "cloudwatchlogs",
     "codecatalyst",
+    "credential_features",
     "dynamodb",
     "ec2",
     "glacier",

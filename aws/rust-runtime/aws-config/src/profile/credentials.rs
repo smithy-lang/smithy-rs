@@ -188,7 +188,9 @@ impl ProfileFileCredentialsProvider {
             )
             .await?;
         inner_provider.provide_credentials().await.map(|mut creds| {
-            creds.set_property(AwsCredentialFeature::CredentialsProfile);
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsProfile);
             creds
         })
     }
