@@ -16,7 +16,6 @@ aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "http-auth"] }
 zeroize = "1.7.0"
-tracing = "0.1.41"
 
 [dev-dependencies]
 async-trait = "0.1.74" # used to test compatibility

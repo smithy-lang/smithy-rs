@@ -13,16 +13,14 @@ use aws_config::{
     provider_config::ProviderConfig,
     Region,
 };
-use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
-use aws_sdk_s3::{config::http::HttpRequest, Client, Config};
+use aws_runtime::user_agent::test_util::{
+    assert_ua_contains_metric_values, get_sdk_metric_str_from_request,
+};
+use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 
 const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
-
-fn get_sdk_metric_str(req: &HttpRequest) -> &str {
-    req.headers().get("x-amz-user-agent").unwrap()
-}
 
 #[tokio::test]
 async fn imds_ua_feature() {
@@ -72,6 +70,6 @@ async fn imds_ua_feature() {
         .expect("XXXXXXXXXXX");
 
     let request = request.expect_request();
-    let ua = get_sdk_metric_str(&request);
+    let ua = get_sdk_metric_str_from_request(&request);
     assert_ua_contains_metric_values(ua, &["0"]);
 }

@@ -92,7 +92,6 @@ dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "tokio",
- "tracing",
  "zeroize",
 ]
 

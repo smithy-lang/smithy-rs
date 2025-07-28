@@ -5,6 +5,7 @@
 
 //! Utilities for testing the User-Agent header
 
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use regex_lite::Regex;
 use std::sync::LazyLock;
 
@@ -48,6 +49,11 @@ pub fn extract_ua_values(user_agent: &str) -> Option<Vec<&str>> {
             .split(',')
             .collect()
     })
+}
+
+/// Extract the `x-amz-user-agent` header from an [HttpRequest]
+pub fn get_sdk_metric_str_from_request(req: &HttpRequest) -> &str {
+    req.headers().get("x-amz-user-agent").unwrap()
 }
 
 #[cfg(test)]

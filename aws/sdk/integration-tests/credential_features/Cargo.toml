@@ -13,13 +13,13 @@ publish = false
 [dev-dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["test-util", "behavior-version-latest"] }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types"}
-aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["test-util", "behavior-version-latest"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features=["rt-tokio"] }
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util", "wire-mock"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"]}
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api"}
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 http = "0.2.0"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
-tracing = "0.1.37"
-tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
