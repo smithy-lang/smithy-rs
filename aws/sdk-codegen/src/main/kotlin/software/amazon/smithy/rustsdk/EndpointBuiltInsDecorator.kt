@@ -175,7 +175,11 @@ fun decoratorForBuiltIn(
                                     "endpoint_url",
                                 ))
                                 .and_then(|it| it.parse::<#{Url}>().ok());
-                            endpoint_url.map(|url| self.set_endpoint_url(#{Some}(url.to_string())));
+                            endpoint_url.map(|url| {
+                                self.config.store_or_unset(#{Some}(
+                                    #{EndpointUrl}(url.to_string()),
+                                ))
+                            });
                         }
                         """,
                         *preludeScope,

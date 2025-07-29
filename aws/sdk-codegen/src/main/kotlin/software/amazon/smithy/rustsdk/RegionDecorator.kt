@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 // Example Generated Code
 // ----------------------
@@ -78,8 +79,6 @@ import software.amazon.smithy.rust.codegen.core.util.extendIf
 class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
-    private val envKey = "AWS_REGION".dq()
-    private val profileKey = "region".dq()
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -133,7 +132,7 @@ class RegionDecorator : ClientCodegenDecorator {
     }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        listOf(
+        usesRegion(codegenContext).thenSingletonListOf {
             adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
                 rustTemplate(
                     """
@@ -143,8 +142,8 @@ class RegionDecorator : ClientCodegenDecorator {
                     """,
                     "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
                 )
-            },
-        )
+            }
+        }
 }
 
 class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {

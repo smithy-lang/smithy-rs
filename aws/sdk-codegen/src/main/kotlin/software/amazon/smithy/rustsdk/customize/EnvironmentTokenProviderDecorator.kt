@@ -70,7 +70,7 @@ class EnvironmentTokenProviderDecorator(signingName: String) : ConditionalDecora
                                 if self.field_never_set::<#{AuthSchemePreference}>() &&
                                     !self.explicitly_set_in_shared_config("aws_scheme_preference")
                                 {
-                                    self.set_auth_scheme_preference(#{Some}(#{AuthSchemePreference}::from([#{HTTP_BEARER_AUTH_SCHEME_ID}])));
+                                    self.config.store_put(#{AuthSchemePreference}::from([#{HTTP_BEARER_AUTH_SCHEME_ID}]));
                                 }
 
                                 if self

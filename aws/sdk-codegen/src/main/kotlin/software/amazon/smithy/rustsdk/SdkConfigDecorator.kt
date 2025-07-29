@@ -154,6 +154,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
             rustTemplate(
                 """
                 impl From<&#{SdkConfig}> for Builder {
+                    ##[allow(clippy::field_reassign_with_default)]
                     fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
                         #{augmentBuilder:W}
@@ -162,7 +163,6 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                 }
 
                 impl From<&#{SdkConfig}> for Config {
-                    ##[allow(clippy::field_reassign_with_default)]
                     fn from(sdk_config: &#{SdkConfig}) -> Self {
                         Builder::from(sdk_config).build()
                     }
