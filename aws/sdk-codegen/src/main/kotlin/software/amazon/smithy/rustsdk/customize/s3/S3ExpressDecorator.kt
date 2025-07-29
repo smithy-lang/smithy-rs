@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk.customize.s3
 import software.amazon.smithy.aws.traits.HttpChecksumTrait
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -20,7 +21,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -28,11 +28,13 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
-import software.amazon.smithy.rustsdk.SdkConfigSection
+import software.amazon.smithy.rustsdk.ServiceConfigSection
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -61,19 +63,29 @@ class S3ExpressDecorator : ClientCodegenDecorator {
             )
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        val serviceId = codegenContext.serviceShape.sdkId()
         return listOf(
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust(
+            adhocCustomization<ServiceConfigSection.LoadFromServiceSpecificEnv> { _ ->
+                rustTemplate(
                     """
-                    ${section.serviceConfigBuilder}.set_disable_s3_express_session_auth(
-                        ${section.sdkConfig}
-                            .service_config()
-                            .and_then(|conf| {
-                                let str_config = conf.load_config(service_config_key("AWS_S3_DISABLE_EXPRESS_SESSION_AUTH", "s3_disable_express_session_auth"));
-                                str_config.and_then(|it| it.parse::<bool>().ok())
-                            }),
+                    self.config.store_or_unset(
+                        #{LoadServiceConfig}::load_config(
+                            &env_config_loader, service_config_key(
+                            ${serviceId.dq()},
+                            "AWS_S3_DISABLE_EXPRESS_SESSION_AUTH",
+                            "s3_disable_express_session_auth",
+                            )
+                        )
+                        .and_then(|it| it.parse::<bool>().ok())
+                        .map(#{DisableS3ExpressSessionAuth})
                     );
                     """,
+                    "DisableS3ExpressSessionAuth" to
+                        ClientRustModule.config.toType()
+                            .resolve("DisableS3ExpressSessionAuth"),
+                    "LoadServiceConfig" to
+                        AwsRuntimeType.awsTypes(codegenContext.runtimeConfig)
+                            .resolve("service_config::LoadServiceConfig"),
                 )
             },
         )

@@ -36,12 +36,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.util.Optional
 
@@ -102,26 +105,33 @@ fun Model.loadBuiltIn(
 }
 
 fun Model.sdkConfigSetter(
-    serviceId: ShapeId,
+    codegenContext: ClientCodegenContext,
     builtInSrc: Parameter,
     configParameterNameOverride: String?,
 ): AdHocCustomization? {
+    val serviceId = codegenContext.serviceShape.id
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
-    val builtinType = builtIn.type!!
-    val map =
-        when (builtinType) {
-            ParameterType.STRING -> writable { rust("|s|s.to_string()") }
-            ParameterType.BOOLEAN -> null
-            // No builtins currently map to stringArray
-            else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
-        }
-
-    return if (fieldName == "endpoint_url") {
-        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
-    } else {
-        SdkConfigCustomization.copyField(fieldName, map)
+    return adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+        val mapToOwned =
+            when (val builtinType = builtIn.type!!) {
+                ParameterType.STRING -> writable { rust("|s|s.to_string()") }
+                ParameterType.BOOLEAN -> null
+                // No builtins currently toOwned to stringArray
+                else -> PANIC("needs to handle unimplemented endpoint parameter builtin type: $builtinType")
+            }
+        val mapToOwnedBlock = mapToOwned?.let { writable { rust(".map(#W)", it) } } ?: writable { }
+        val newType = configParamNewtype(builtInSrc, fieldName, codegenContext.runtimeConfig)
+        rustTemplate(
+            """
+            if self.field_never_set::<#{newType}>() {
+                self.set_$fieldName(${section.sdkConfig}.$fieldName()#{map_to_owned});
+            }
+            """,
+            "newType" to newType,
+            "map_to_owned" to mapToOwnedBlock,
+        )
     }
 }
 
@@ -145,11 +155,38 @@ fun decoratorForBuiltIn(
         override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
             listOfNotNull(
                 codegenContext.model.sdkConfigSetter(
-                    codegenContext.serviceShape.id,
+                    codegenContext,
                     builtIn,
                     clientParamBuilder?.name,
                 ),
-            )
+            ).extendIf(name == "endpoint_url") {
+                adhocCustomization<ServiceConfigSection.LoadFromServiceSpecificEnv> { _ ->
+                    val runtimeConfig = codegenContext.runtimeConfig
+                    val serviceId = codegenContext.serviceShape.sdkId()
+                    rustTemplate(
+                        """
+                        if self.field_never_set::<#{EndpointUrl}>() &&
+                            !self.explicitly_set_in_shared_config("endpoint_url")
+                        {
+                            let endpoint_url = #{LoadServiceConfig}::load_config(
+                                &env_config_loader, service_config_key(
+                                    ${serviceId.dq()},
+                                    "AWS_ENDPOINT_URL",
+                                    "endpoint_url",
+                                ))
+                                .and_then(|it| it.parse::<#{Url}>().ok());
+                            endpoint_url.map(|url| self.set_endpoint_url(#{Some}(url.to_string())));
+                        }
+                        """,
+                        *preludeScope,
+                        "EndpointUrl" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("endpoint_config::EndpointUrl"),
+                        "LoadServiceConfig" to
+                            AwsRuntimeType.awsTypes(runtimeConfig)
+                                .resolve("service_config::LoadServiceConfig"),
+                        "Url" to RuntimeType.Url.resolve("Url"),
+                    )
+                }
+            }
 
         override fun configCustomizations(
             codegenContext: ClientCodegenContext,

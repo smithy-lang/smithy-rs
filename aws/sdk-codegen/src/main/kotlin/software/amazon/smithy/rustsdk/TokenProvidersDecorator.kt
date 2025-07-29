@@ -13,10 +13,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDe
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
@@ -39,8 +39,18 @@ class TokenProvidersDecorator : ConditionalDecorator(
 
             override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
                 listOf(
-                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                        rust("${section.serviceConfigBuilder}.set_token_provider(${section.sdkConfig}.token_provider());")
+                    adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                        rustTemplate(
+                            """
+                            if self.runtime_components.identity_resolver(&#{HTTP_BEARER_AUTH_SCHEME_ID}).is_none() {
+                                self.set_token_provider(${section.sdkConfig}.token_provider());
+                            }
+                            """,
+                            "HTTP_BEARER_AUTH_SCHEME_ID" to
+                                CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                    .withFeature("http-auth").toType().resolve("client::auth::http")
+                                    .resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
+                        )
                     },
                 )
         },

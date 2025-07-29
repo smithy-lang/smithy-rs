@@ -5,11 +5,11 @@
 
 //! Configuration Options for Credential Providers
 
-use crate::env_service_config::EnvServiceConfig;
 use crate::profile;
 #[allow(deprecated)]
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::{ProfileFileLoadError, ProfileSet};
+use aws_runtime::env_config::EnvConfigLoader;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::client::http::HttpClient;
@@ -211,10 +211,10 @@ impl ProviderConfig {
     /// imperfect mapping and should be used sparingly.
     pub(crate) fn client_config(&self) -> SdkConfig {
         let profiles = self.parsed_profile.get().and_then(|v| v.as_ref().ok());
-        let service_config = EnvServiceConfig {
-            env: self.env(),
-            env_config_sections: profiles.cloned().unwrap_or_default(),
-        };
+        let env_config_loader = EnvConfigLoader::builder()
+            .env(self.env())
+            .env_config_sections(profiles.cloned().unwrap_or_default())
+            .build();
 
         let mut builder = SdkConfig::builder()
             .retry_config(
@@ -226,7 +226,7 @@ impl ProviderConfig {
             .time_source(self.time_source())
             .use_fips(self.use_fips().unwrap_or_default())
             .use_dual_stack(self.use_dual_stack().unwrap_or_default())
-            .service_config(service_config)
+            .service_config(env_config_loader)
             .behavior_version(crate::BehaviorVersion::latest());
         builder.set_http_client(self.http_client.clone());
         builder.set_sleep_impl(self.sleep_impl.clone());

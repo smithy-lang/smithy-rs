@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustom
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -26,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
-import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 // Example Generated Code
 // ----------------------
@@ -92,19 +90,6 @@ class RegionDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
-        return usesRegion(codegenContext).thenSingletonListOf {
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust(
-                    """
-                    ${section.serviceConfigBuilder} =
-                         ${section.serviceConfigBuilder}.region(${section.sdkConfig}.region().cloned());
-                    """,
-                )
-            }
-        }
-    }
-
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         if (!usesRegion(codegenContext)) {
             return listOf()
@@ -146,6 +131,20 @@ class RegionDecorator : ClientCodegenDecorator {
             },
         )
     }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf(
+            adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                rustTemplate(
+                    """
+                    if self.field_never_set::<#{Region}>() {
+                        self.set_region(${section.sdkConfig}.region().cloned());
+                    }
+                    """,
+                    "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                )
+            },
+        )
 }
 
 class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {

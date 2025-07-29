@@ -7,7 +7,7 @@ use crate::env_config::property::PropertiesKey;
 use crate::env_config::section::EnvConfigSections;
 use aws_types::origin::Origin;
 use aws_types::os_shim_internal::Env;
-use aws_types::service_config::ServiceConfigKey;
+use aws_types::service_config::{LoadServiceConfig, ServiceConfigKey};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
@@ -354,6 +354,64 @@ fn format_service_id_for_env(service_id: impl AsRef<str>) -> String {
 
 fn format_service_id_for_profile(service_id: impl AsRef<str>) -> String {
     service_id.as_ref().to_lowercase().replace(' ', "-")
+}
+
+/// A loader for environment-based service configuration
+///
+/// This loader reads configuration values from the environment variables and AWS profile files,
+/// allowing for service-specific configurations to be loaded by implementation of the `LoadServiceConfig` trait.
+#[derive(Debug, Default)]
+pub struct EnvConfigLoader {
+    env: Env,
+    env_config_sections: Option<EnvConfigSections>,
+}
+
+impl EnvConfigLoader {
+    /// Create a default builder for `EnvConfigLoader`
+    pub fn builder() -> EnvConfigLoaderBuilder {
+        EnvConfigLoaderBuilder::default()
+    }
+}
+
+impl LoadServiceConfig for EnvConfigLoader {
+    fn load_config(&self, key: ServiceConfigKey<'_>) -> Option<String> {
+        let (value, _source) = EnvConfigValue::new()
+            .env(key.env())
+            .profile(key.profile())
+            .service_id(key.service_id())
+            .load(&self.env, self.env_config_sections.as_ref())?;
+
+        Some(value.to_string())
+    }
+}
+
+/// Builder for `EnvConfigLoader`
+#[derive(Default, Debug)]
+pub struct EnvConfigLoaderBuilder {
+    env: Option<Env>,
+    env_config_sections: Option<EnvConfigSections>,
+}
+
+impl EnvConfigLoaderBuilder {
+    /// Set the environment to use for loading configuration
+    pub fn env(mut self, env: Env) -> Self {
+        self.env = Some(env);
+        self
+    }
+
+    /// Set the environment configuration sections to use for loading configuration
+    pub fn env_config_sections(mut self, sections: EnvConfigSections) -> Self {
+        self.env_config_sections = Some(sections);
+        self
+    }
+
+    /// Build the `EnvConfigLoader`
+    pub fn build(self) -> EnvConfigLoader {
+        EnvConfigLoader {
+            env: self.env.unwrap_or_default(),
+            env_config_sections: self.env_config_sections,
+        }
+    }
 }
 
 #[cfg(test)]

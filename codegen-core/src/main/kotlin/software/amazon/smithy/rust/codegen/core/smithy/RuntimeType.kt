@@ -301,6 +301,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Tracing = CargoDependency.Tracing.toType()
         val TracingTest = CargoDependency.TracingTest.toType()
         val TracingSubscriber = CargoDependency.TracingSubscriber.toType()
+        val Url = CargoDependency.Url.toType()
 
         // codegen types
         val ConstrainedTrait =

@@ -73,7 +73,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                     )
                 }
 
-                ServiceConfig.BuilderBuild -> {
+                is ServiceConfig.BuilderBuild -> {
                     rustTemplate(
                         """
                         if self.runtime_components.time_source().is_none() {

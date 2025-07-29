@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -89,11 +88,16 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         if (serviceHasHttpChecksumOperation(codegenContext)) {
             listOf(
-                adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                    rust(
+                adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                    rustTemplate(
                         """
-                        ${section.serviceConfigBuilder}.set_response_checksum_validation(${section.sdkConfig}.response_checksum_validation());
+                        if self.field_never_set::<#{ResponseChecksumValidation}>() {
+                            self.set_response_checksum_validation(${section.sdkConfig}.response_checksum_validation());
+                        }
                         """,
+                        "ResponseChecksumValidation" to
+                            RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                                .resolve("checksum_config::ResponseChecksumValidation"),
                     )
                 },
             )

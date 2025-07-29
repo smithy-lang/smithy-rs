@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -126,8 +125,17 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
 
             override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
                 listOf(
-                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                        rust("${section.serviceConfigBuilder}.set_$paramName(${section.sdkConfig}.$paramName().cloned());")
+                    adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                        rustTemplate(
+                            """
+                            if self.field_never_set::<#{AccountIdEndpointMode}>() {
+                                self.set_$paramName(${section.sdkConfig}.$paramName().cloned());
+                            }
+                            """,
+                            "AccountIdEndpointMode" to
+                                AwsRuntimeType.awsTypes(codegenContext.runtimeConfig)
+                                    .resolve("endpoint_config::AccountIdEndpointMode"),
+                        )
                     },
                 )
 

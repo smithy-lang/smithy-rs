@@ -74,18 +74,23 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
      * Copy the `request_checksum_calculation` value from the `SdkConfig` to the client config
      */
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        if (!serviceHasHttpChecksumOperation(codegenContext)) {
-            listOf()
-        } else {
+        if (serviceHasHttpChecksumOperation(codegenContext)) {
             listOf(
-                adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                    rust(
+                adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                    rustTemplate(
                         """
-                        ${section.serviceConfigBuilder}.set_request_checksum_calculation(${section.sdkConfig}.request_checksum_calculation());
+                        if self.field_never_set::<#{RequestChecksumCalculation}>() {
+                            self.set_request_checksum_calculation(${section.sdkConfig}.request_checksum_calculation());
+                        }
                         """,
+                        "RequestChecksumCalculation" to
+                            RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                                .resolve("checksum_config::RequestChecksumCalculation"),
                     )
                 },
             )
+        } else {
+            listOf()
         }
 }
 

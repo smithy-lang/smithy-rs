@@ -414,6 +414,14 @@ impl Layer {
         })
     }
 
+    /// Returns true if the value of type `T` is explicitly unset in this layer
+    pub fn is_explicitly_unset<T: Send + Sync + Debug + 'static>(&self) -> bool {
+        match self.get::<StoreReplace<T>>() {
+            Some(Value::ExplicitlyUnset(_)) => true,
+            _ => false,
+        }
+    }
+
     /// Remove `T` from this bag
     pub fn unset<T: Send + Sync + Debug + 'static>(&mut self) -> &mut Self {
         self.put_directly::<StoreReplace<T>>(Value::ExplicitlyUnset(type_name::<T>()));
@@ -1068,5 +1076,27 @@ mod test {
                 .collect::<Vec<_>>()
                 .join(" ")
         );
+    }
+
+    #[test]
+    fn is_explicitly_unset() {
+        #[derive(Debug, PartialEq, Eq)]
+        struct TestValue(i32);
+        impl Storable for TestValue {
+            type Storer = StoreReplace<Self>;
+        }
+
+        let mut layer = Layer::new("test");
+
+        // Initially, the value is not explicitly unset (it's just not present)
+        assert!(!layer.is_explicitly_unset::<TestValue>());
+
+        // Store a value
+        layer.store_put(TestValue(42));
+        assert!(!layer.is_explicitly_unset::<TestValue>());
+
+        // Explicitly unset the value
+        layer.unset::<TestValue>();
+        assert!(layer.is_explicitly_unset::<TestValue>());
     }
 }

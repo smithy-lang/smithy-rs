@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
@@ -162,6 +162,10 @@ pub(super) async fn resolve_identity(
                             .resolve_cached_identity(identity_resolver, runtime_components, cfg)
                             .await?;
                         trace!(identity = ?identity, "resolved identity");
+
+                        if let Some(layer) = identity.property::<FrozenLayer>().cloned() {
+                            cfg.push_shared_layer(layer);
+                        }
                         return Ok((scheme_id.clone(), identity, endpoint));
                     }
                     Err(AuthOrchestrationError::MissingEndpointConfig) => {

@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -42,14 +41,18 @@ class HttpRequestCompressionDecorator : ClientCodegenDecorator {
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return usesRequestCompression(codegenContext).thenSingletonListOf {
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust(
+            adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                rustTemplate(
                     """
-                    ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}
-                        .disable_request_compression(${section.sdkConfig}.disable_request_compression());
-                    ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}
-                        .request_min_compression_size_bytes(${section.sdkConfig}.request_min_compression_size_bytes());
+                    if self.field_never_set::<#{DisableRequestCompression}>() {
+                        self.set_disable_request_compression(${section.sdkConfig}.disable_request_compression());
+                    }
+                    if self.field_never_set::<#{RequestMinCompressionSizeBytes}>() {
+                        self.set_request_min_compression_size_bytes(${section.sdkConfig}.request_min_compression_size_bytes());
+                    }
                     """,
+                    "DisableRequestCompression" to RuntimeType.clientRequestCompression(codegenContext.runtimeConfig).resolve("DisableRequestCompression"),
+                    "RequestMinCompressionSizeBytes" to RuntimeType.clientRequestCompression(codegenContext.runtimeConfig).resolve("RequestMinCompressionSizeBytes"),
                 )
             }
         }

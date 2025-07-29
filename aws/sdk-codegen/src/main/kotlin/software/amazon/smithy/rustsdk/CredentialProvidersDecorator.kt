@@ -37,8 +37,18 @@ class CredentialsProviderDecorator : ConditionalDecorator(
 
             override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
                 listOf(
-                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                        rust("${section.serviceConfigBuilder}.set_credentials_provider(${section.sdkConfig}.credentials_provider());")
+                    adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                        rustTemplate(
+                            """
+                            if self.runtime_components.identity_resolver(&#{SIGV4_AUTH_SCHEME_ID}).is_none() {
+                                self.set_credentials_provider(${section.sdkConfig}.credentials_provider());
+                            }
+                            """,
+                            *preludeScope,
+                            "SIGV4_AUTH_SCHEME_ID" to
+                                AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                    .resolve("auth::sigv4::SCHEME_ID"),
+                        )
                     },
                 )
 

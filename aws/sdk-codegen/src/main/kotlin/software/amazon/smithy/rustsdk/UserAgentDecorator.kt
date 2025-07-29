@@ -44,13 +44,19 @@ class UserAgentDecorator : ClientCodegenDecorator {
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations + AddApiMetadataIntoConfigBag(codegenContext)
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
-        return listOf(
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust("${section.serviceConfigBuilder}.set_app_name(${section.sdkConfig}.app_name().cloned());")
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf(
+            adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                rustTemplate(
+                    """
+                    if self.field_never_set::<#{AppName}>() {
+                        self.set_app_name(${section.sdkConfig}.app_name().cloned());
+                    }
+                    """,
+                    "AppName" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("app_name::AppName"),
+                )
             },
         )
-    }
 
     /**
      * Adds a static `API_METADATA` variable to the crate `config` containing the serviceId & the version of the crate for this individual service
@@ -152,7 +158,10 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
                 is ServiceConfig.BuilderBuild ->
                     writable {
-                        rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                        rust(
+                            "${section.layer}.store_put(#T.clone());",
+                            ClientRustModule.Meta.toType().resolve("API_METADATA"),
+                        )
                     }
 
                 is ServiceConfig.ConfigImpl ->

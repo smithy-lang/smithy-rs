@@ -7,85 +7,35 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 sealed class SdkConfigSection(name: String) : AdHocSection(name) {
     /**
      * [sdkConfig]: A reference to the SDK config struct
      * [serviceConfigBuilder]: A reference (owned) to the `<service>::config::Builder` struct.
      *
-     * Each invocation of this section MUST be a complete statement (ending with a semicolon), e.g:
+     * This section is used within `From<&SdkConfig> for config::Builder` to copy
+     * the provided `SdkConfig` into a field of the Builder, e.g:
      * ```
-     * rust("${section.serviceConfigBuilder}.set_foo(${section.sdkConfig}.foo());")
+     * builder.sdk_config = Some(input.clone());
      * ```
      */
     data class CopySdkConfigToClientConfig(val sdkConfig: String, val serviceConfigBuilder: String) :
         SdkConfigSection("CopySdkConfigToClientConfig")
-}
-
-/**
- * Section enabling linkage between `SdkConfig` and <service>::Config
- */
-object SdkConfigCustomization {
-    /**
-     * Copy a field from SDK config to service config with an optional map block.
-     *
-     * This handles the common case where the field name is identical in both cases and an accessor is used.
-     *
-     * # Examples
-     * ```kotlin
-     * SdkConfigCustomization.copyField("some_string_field") { rust("|s|s.to_to_string()") }
-     * ```
-     */
-    fun copyField(
-        fieldName: String,
-        map: Writable?,
-    ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-        val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
-        rustTemplate(
-            "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
-            "map" to mapBlock,
-        )
-    }
-
-    fun copyFieldAndCheckForServiceConfig(
-        fieldName: String,
-        map: Writable?,
-    ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-        val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
-        val envKey = "AWS_${fieldName.toSnakeCase().uppercase()}".dq()
-        val profileKey = fieldName.toSnakeCase().dq()
-
-        rustTemplate(
-            """
-            if ${section.sdkConfig}.get_origin("endpoint_url").is_client_config() {
-                ${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});
-            } else {
-                ${section.serviceConfigBuilder}.set_$fieldName(
-                    ${section.sdkConfig}
-                        .service_config()
-                        .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
-                        .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
-                );
-            }
-            """,
-            "map" to mapBlock,
-        )
-    }
 }
 
 /**
@@ -95,32 +45,83 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
     override val name: String = "GenericSmithySdkConfigSettings"
     override val order: Byte = 0
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        listOf(
-            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-                rust(
-                    """
-                    // resiliency
-                    ${section.serviceConfigBuilder}.set_retry_config(${section.sdkConfig}.retry_config().cloned());
-                    ${section.serviceConfigBuilder}.set_timeout_config(${section.sdkConfig}.timeout_config().cloned());
-                    ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        val rc = codegenContext.runtimeConfig
+        val codegenScope =
+            arrayOf(
+                *preludeScope,
+                "AuthSchemePreference" to
+                    RuntimeType.smithyRuntimeApiClient(rc)
+                        .resolve("client::auth::AuthSchemePreference"),
+                "RetryConfig" to RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
+                "StalledStreamProtectionConfig" to
+                    configReexport(RuntimeType.smithyRuntimeApi(rc).resolve("client::stalled_stream_protection::StalledStreamProtectionConfig")),
+                "TimeoutConfig" to RuntimeType.smithyTypes(rc).resolve("timeout::TimeoutConfig"),
+            )
 
-                    ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
-                    ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
-                    ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
-                    ${section.serviceConfigBuilder}.set_auth_scheme_preference(${section.sdkConfig}.auth_scheme_preference().cloned());
-                    // setting `None` here removes the default
-                    if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
-                        ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));
+        return listOf(
+            adhocCustomization<ServiceConfigSection.MergeFromSharedConfig> { section ->
+                rustTemplate(
+                    """
+                    if self.field_never_set::<#{RetryConfig}>() {
+                        self.set_retry_config(${section.sdkConfig}.retry_config().cloned());
                     }
 
-                    if let Some(cache) = ${section.sdkConfig}.identity_cache() {
-                        ${section.serviceConfigBuilder}.set_identity_cache(cache);
+                    // The `set_timeout_config` method cannot be called here because it has a custom merge logic
+                    // that assumes the shared config timeout is set first, followed by the service client timeout;
+                    // the shared config timeout is stored in `CloneableLayer`, while the service client timeout is passed
+                    // as an input to `set_timeout_config`. In this method, however, the shared config timeout resides
+                    // in `sdk_config`, and the service client timeout is in `CloneableLayer`. Therefore, we need to
+                    // manually replicate the merge logic to handle this different ordering of values.
+                    match (
+                        self.config
+                            .load::<#{TimeoutConfig}>()
+                            .cloned(),
+                        sdk_config.timeout_config(),
+                    ) {
+                        (#{None}, #{Some}(shared_config_timeout)) => {
+                            self.config.store_put(shared_config_timeout.clone());
+                        }
+                        (#{Some}(mut service_client_timeout), #{Some}(shared_config_timeout)) => {
+                            service_client_timeout.take_defaults_from(shared_config_timeout);
+                            self.config.store_put(service_client_timeout);
+                        }
+                        _ => {}
+                    }
+
+                    if self.runtime_components.sleep_impl().is_none() {
+                        self.set_sleep_impl(${section.sdkConfig}.sleep_impl());
+                    }
+                    if self.runtime_components.http_client().is_none() {
+                        self.set_http_client(${section.sdkConfig}.http_client());
+                    }
+                    if self.runtime_components.time_source().is_none() {
+                        self.set_time_source(${section.sdkConfig}.time_source());
+                    }
+                    if self.behavior_version.is_none() {
+                        self.set_behavior_version(${section.sdkConfig}.behavior_version());
+                    }
+                    if self.field_never_set::<#{AuthSchemePreference}>() {
+                        self.set_auth_scheme_preference(${section.sdkConfig}.auth_scheme_preference().cloned());
+                    }
+                    if self.field_never_set::<#{StalledStreamProtectionConfig}>() {
+                        // only call the setter if stall stream protection config is set in shared config,
+                        // as setting `None` here removes the default
+                        if let #{Some}(config) = ${section.sdkConfig}.stalled_stream_protection() {
+                            self.set_stalled_stream_protection(#{Some}(config));
+                        }
+                    }
+                    if self.runtime_components.identity_cache().is_none() {
+                       if let #{Some}(cache) = ${section.sdkConfig}.identity_cache() {
+                           self.set_identity_cache(cache);
+                       }
                     }
                     """,
+                    *codegenScope,
                 )
             },
         )
+    }
 }
 
 /**
