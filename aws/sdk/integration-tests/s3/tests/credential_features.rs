@@ -5,12 +5,11 @@
 
 use aws_config::credential_process::CredentialProcessProvider;
 use aws_config::Region;
-use aws_runtime::user_agent::test_util::{
-    assert_ua_contains_metric_values, get_sdk_metric_str_from_request,
-};
+use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_http_client::test_util::capture_request;
 
+// Test that the user-agent contains the feature flag for a credential provider, in this case the CredentialProcess feature.
 #[tokio::test]
 async fn process_ua_feature() {
     let (http_client, request) = capture_request(None);
@@ -35,6 +34,6 @@ async fn process_ua_feature() {
         .expect("XXXXXXXXXXX");
 
     let request = request.expect_request();
-    let ua = get_sdk_metric_str_from_request(&request);
+    let ua = request.headers().get("x-amz-user-agent").unwrap();
     assert_ua_contains_metric_values(ua, &["w"]);
 }
