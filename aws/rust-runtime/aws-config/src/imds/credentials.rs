@@ -297,6 +297,7 @@ mod test {
         imds_request, imds_response, make_imds_client, token_request, token_response,
     };
     use crate::provider_config::ProviderConfig;
+    use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
@@ -535,5 +536,40 @@ mod test {
         let creds2 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1, creds2);
         http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn credentials_feature() {
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_A),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"profile-name"#),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"different-profile"#),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/different-profile", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+        ]);
+        let client = ImdsCredentialsProvider::builder()
+            .imds_client(make_imds_client(&http_client))
+            .configure(&ProviderConfig::no_configuration())
+            .build();
+        let creds = client.provide_credentials().await.expect("valid creds");
+        assert_eq!(
+            &vec![AwsCredentialFeature::CredentialsImds],
+            creds.get_property::<Vec<AwsCredentialFeature>>().unwrap()
+        );
     }
 }

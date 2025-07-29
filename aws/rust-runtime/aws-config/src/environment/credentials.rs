@@ -124,6 +124,7 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 
 #[cfg(test)]
 mod test {
+    use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
@@ -262,6 +263,26 @@ mod test {
                 .expect_err("no credentials defined");
             assert!(matches!(err, CredentialsError::CredentialsNotLoaded { .. }));
         }
+    }
+
+    #[test]
+    fn credentials_feature() {
+        let provider = make_provider(&[
+            ("AWS_ACCESS_KEY_ID", "access"),
+            ("AWS_SECRET_ACCESS_KEY", "secret"),
+            ("SECRET_ACCESS_KEY", "secret"),
+            ("AWS_SESSION_TOKEN", "token"),
+        ]);
+
+        let creds = provider
+            .provide_credentials()
+            .now_or_never()
+            .unwrap()
+            .expect("valid credentials");
+        assert_eq!(
+            &vec![AwsCredentialFeature::CredentialsEnvVars],
+            creds.get_property::<Vec<AwsCredentialFeature>>().unwrap()
+        );
     }
 
     #[test]
