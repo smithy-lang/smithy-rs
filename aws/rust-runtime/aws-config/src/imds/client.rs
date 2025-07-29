@@ -641,7 +641,7 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(test)]
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
