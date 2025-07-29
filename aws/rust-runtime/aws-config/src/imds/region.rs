@@ -114,11 +114,9 @@ impl Builder {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(test)]
 mod test {
-    use crate::imds::client::test_util::{
-        imds_request, imds_response, token_request, token_response,
-    };
+    use crate::imds::client::test::{imds_request, imds_response, token_request, token_response};
     use crate::imds::region::ImdsRegionProvider;
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;

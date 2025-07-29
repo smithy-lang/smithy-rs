@@ -290,10 +290,10 @@ impl ImdsCredentialsProvider {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(test)]
 mod test {
     use super::*;
-    use crate::imds::client::test_util::{
+    use crate::imds::client::test::{
         imds_request, imds_response, make_imds_client, token_request, token_response,
     };
     use crate::provider_config::ProviderConfig;

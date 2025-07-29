@@ -76,16 +76,7 @@ impl EnvironmentVariableCredentialsProvider {
     /// Create a new `EnvironmentVariableCredentialsProvider` with `Env` overridden
     ///
     /// This function is intended for tests that mock out the process environment.
-    #[cfg(not(feature = "test-util"))]
     pub(crate) fn new_with_env(env: Env) -> Self {
-        Self { env }
-    }
-
-    /// Create a new `EnvironmentVariableCredentialsProvider` with `Env` overridden
-    ///
-    /// This function is intended for tests that mock out the process environment.
-    #[cfg(feature = "test-util")]
-    pub fn new_with_env(env: Env) -> Self {
         Self { env }
     }
 }

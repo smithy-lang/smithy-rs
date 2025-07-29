@@ -90,7 +90,7 @@ impl Default for ProviderConfig {
     }
 }
 
-#[cfg(any(test, feature = "test-util"))]
+#[cfg(test)]
 impl ProviderConfig {
     /// ProviderConfig with all configuration removed
     ///
@@ -359,7 +359,7 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    fn with_fs_internal(self, fs: Fs) -> Self {
+    pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -367,34 +367,12 @@ impl ProviderConfig {
         }
     }
 
-    #[cfg(not(feature = "test-util"))]
-    pub(crate) fn with_fs(self, fs: Fs) -> Self {
-        self.with_fs_internal(fs)
-    }
-
-    /// Specify a [Fs] implementation for testing
-    #[cfg(feature = "test-util")]
-    pub fn with_fs(self, fs: Fs) -> Self {
-        self.with_fs_internal(fs)
-    }
-
-    fn with_env_internal(self, env: Env) -> Self {
+    pub(crate) fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
             ..self
         }
-    }
-
-    #[cfg(not(feature = "test-util"))]
-    pub(crate) fn with_env(self, env: Env) -> Self {
-        self.with_env_internal(env)
-    }
-
-    /// Specify an [Env] implementation for testing
-    #[cfg(feature = "test-util")]
-    pub fn with_env(self, env: Env) -> Self {
-        self.with_env_internal(env)
     }
 
     /// Override the time source for this configuration
