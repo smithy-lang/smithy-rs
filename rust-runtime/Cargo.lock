@@ -396,7 +396,7 @@ version = "0.2.0"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.2"
+version = "0.62.3"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
