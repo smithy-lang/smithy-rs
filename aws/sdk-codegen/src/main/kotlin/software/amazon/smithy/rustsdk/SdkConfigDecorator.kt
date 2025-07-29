@@ -157,12 +157,12 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                     fn from(input: &#{SdkConfig}) -> Self {
                         let mut builder = Builder::default();
                         #{augmentBuilder:W}
-
                         builder
                     }
                 }
 
                 impl From<&#{SdkConfig}> for Config {
+                    ##[allow(clippy::field_reassign_with_default)]
                     fn from(sdk_config: &#{SdkConfig}) -> Self {
                         Builder::from(sdk_config).build()
                     }

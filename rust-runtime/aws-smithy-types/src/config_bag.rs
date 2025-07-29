@@ -416,10 +416,10 @@ impl Layer {
 
     /// Returns true if the value of type `T` is explicitly unset in this layer
     pub fn is_explicitly_unset<T: Send + Sync + Debug + 'static>(&self) -> bool {
-        match self.get::<StoreReplace<T>>() {
-            Some(Value::ExplicitlyUnset(_)) => true,
-            _ => false,
-        }
+        matches!(
+            self.get::<StoreReplace<T>>(),
+            Some(Value::ExplicitlyUnset(_))
+        )
     }
 
     /// Remove `T` from this bag

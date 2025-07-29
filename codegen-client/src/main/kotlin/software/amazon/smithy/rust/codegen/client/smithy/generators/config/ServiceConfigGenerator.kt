@@ -451,6 +451,7 @@ class ServiceConfigGenerator(
             writer.rustTemplate(
                 """
                 /// Converts this config back into a builder so that it can be tweaked.
+                ##[allow(clippy::needless_update)]
                 pub fn to_builder(&self) -> Builder {
                     Builder {
                         config: self.cloneable.clone(),
