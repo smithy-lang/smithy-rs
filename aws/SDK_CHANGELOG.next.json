@@ -18,7 +18,7 @@
         "smithy-rs#4198"
       ],
       "since-commit": "ccf374dddc0690ef8aca1ed006b9e9b21299558e",
-      "age": 4
+      "age": 5
     },
     {
       "message": "re-use checksums on retry attempts for enhanced durability\n",
@@ -30,7 +30,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "1378695258e645d2c65a99cc0311b8c3d982e167",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Event streams now allocate a right-sized buffer avoiding repeated reallocations during serialization\n",
@@ -44,7 +44,7 @@
         "smithy-rs#4212"
       ],
       "since-commit": "a23d116a79e8920c2efa813a8f831541a9943e4f",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add support for configuring auth schemes manually using an auth scheme preference list.\nThe preference list allows customers to reprioritize the order of auth schemes originally\ndetermined by the auth scheme resolver.\nCustomers can configure the auth scheme preference at the following locations, listed in order of precedence:\n1. Service Client Configuration\n```rust\nuse aws_runtime::auth::sigv4;\nuse aws_smithy_runtime_api::client::auth::AuthSchemeId;\nuse aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;\n\nlet config = aws_sdk_s3::Config::builder()\n    .auth_scheme_preference([AuthSchemeId::from(\"scheme1\"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])\n    // ...\n    .build();\n```\n2. Environment Variable\n```\nAWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth\n```\n3. Configuration File\n```\nauth_scheme_preference=scheme1, sigv4, httpBearerAuth\n```\nWith this configuration, the auth scheme resolver will prefer to select them in the specified order,\nif they are supported.\n",
@@ -58,7 +58,7 @@
         "smithy-rs#4203"
       ],
       "since-commit": "6649098171e33e1e65eaacffb12be58e858a4782",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
