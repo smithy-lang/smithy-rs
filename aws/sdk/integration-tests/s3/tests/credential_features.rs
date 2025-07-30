@@ -31,7 +31,7 @@ async fn process_ua_feature() {
         .bucket("fake")
         .send()
         .await
-        .expect("XXXXXXXXXXX");
+        .expect("Call succeeds");
 
     let request = request.expect_request();
     let ua = request.headers().get("x-amz-user-agent").unwrap();
