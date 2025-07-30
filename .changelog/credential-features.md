@@ -6,7 +6,7 @@ authors:
 references:
   - smithy-rs#4238
 breaking: false
-new_feature: false
-bug_fix: true
+new_feature: true
+bug_fix: false
 ---
 Add user-agent feature tracking for credential providers in `aws-config`.
