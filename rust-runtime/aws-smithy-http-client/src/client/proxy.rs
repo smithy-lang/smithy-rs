@@ -12,6 +12,7 @@
 //! a stable, user-friendly API that doesn't expose hyper-util's potentially unstable interfaces.
 
 use http_1x::Uri;
+use hyper_util::client::proxy::matcher::{Intercept, Matcher};
 use std::fmt;
 
 /// Proxy configuration for HTTP clients
@@ -338,6 +339,89 @@ impl ProxyConfig {
         matches!(self.inner, ProxyConfigInner::FromEnvironment)
     }
 
+    /// Convert this configuration to a hyper-util Matcher for internal use
+    ///
+    /// This method delegates to hyper-util's proven proxy implementation
+    /// while keeping hyper-util types internal to aws-smithy-http-client.
+    pub(crate) fn into_hyper_util_matcher(self) -> Matcher {
+        match self.inner {
+            ProxyConfigInner::FromEnvironment => {
+                // Use hyper-util's environment detection directly
+                Matcher::from_env()
+            }
+            ProxyConfigInner::Http {
+                uri,
+                auth,
+                no_proxy,
+            } => {
+                let mut builder = Matcher::builder();
+
+                // Set HTTP proxy with authentication embedded in URL if present
+                let proxy_url = Self::build_proxy_url(uri, auth);
+                builder = builder.http(proxy_url);
+
+                // Add NO_PROXY rules if present
+                if let Some(no_proxy_rules) = no_proxy {
+                    builder = builder.no(no_proxy_rules);
+                }
+
+                builder.build()
+            }
+            ProxyConfigInner::Https {
+                uri,
+                auth,
+                no_proxy,
+            } => {
+                let mut builder = Matcher::builder();
+
+                // Set HTTPS proxy with authentication embedded in URL if present
+                let proxy_url = Self::build_proxy_url(uri, auth);
+                builder = builder.https(proxy_url);
+
+                // Add NO_PROXY rules if present
+                if let Some(no_proxy_rules) = no_proxy {
+                    builder = builder.no(no_proxy_rules);
+                }
+
+                builder.build()
+            }
+            ProxyConfigInner::All {
+                uri,
+                auth,
+                no_proxy,
+            } => {
+                let mut builder = Matcher::builder();
+
+                // Set proxy for all traffic with authentication embedded in URL if present
+                let proxy_url = Self::build_proxy_url(uri, auth);
+                builder = builder.all(proxy_url);
+
+                // Add NO_PROXY rules if present
+                if let Some(no_proxy_rules) = no_proxy {
+                    builder = builder.no(no_proxy_rules);
+                }
+
+                builder.build()
+            }
+            ProxyConfigInner::Disabled => {
+                // Create an empty matcher that won't intercept anything
+                Matcher::builder().build()
+            }
+        }
+    }
+
+    /// Check if a request should use a proxy
+    ///
+    /// Returns the proxy intercept information if the request should be proxied,
+    /// or None if it should connect directly.
+    pub(crate) fn intercept(&self, uri: &Uri) -> Option<Intercept> {
+        // Convert to matcher and check intercept
+        // Note: This creates a new matcher each time, which is not optimal
+        // In a real implementation, we'd want to cache the matcher
+        let matcher = self.clone().into_hyper_util_matcher();
+        matcher.intercept(uri)
+    }
+
     // Private helper methods
 
     fn validate_proxy_uri(uri: &Uri) -> Result<(), ProxyError> {
@@ -381,6 +465,34 @@ impl ProxyConfig {
         proxy_vars
             .iter()
             .any(|var| std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false))
+    }
+
+    fn build_proxy_url(uri: Uri, auth: Option<ProxyAuth>) -> String {
+        let uri_str = uri.to_string();
+
+        if let Some(auth) = auth {
+            // Embed authentication in the URL: scheme://username:password@host:port/path
+            if let Some(scheme_end) = uri_str.find("://") {
+                let scheme = &uri_str[..scheme_end + 3];
+                let rest = &uri_str[scheme_end + 3..];
+
+                // Check if auth is already present in the URI
+                if rest.contains('@') {
+                    // Auth already present, return as-is
+                    // This handles cases where users provide URLs like "http://user:pass@proxy:8080"
+                    uri_str
+                } else {
+                    // Add auth to the URI
+                    format!("{}{}:{}@{}", scheme, auth.username, auth.password, rest)
+                }
+            } else {
+                // Invalid URI format, return as-is
+                uri_str
+            }
+        } else {
+            // No authentication, return URI as-is
+            uri_str
+        }
     }
 }
 
@@ -537,5 +649,129 @@ mod tests {
             Ok(val) => env::set_var("HTTP_PROXY", val),
             Err(_) => env::remove_var("HTTP_PROXY"),
         }
+    }
+
+    #[test]
+    fn test_build_proxy_url_without_auth() {
+        let uri = "http://proxy.example.com:8080".parse().unwrap();
+        let url = ProxyConfig::build_proxy_url(uri, None);
+        assert_eq!(url, "http://proxy.example.com:8080/");
+    }
+
+    #[test]
+    fn test_build_proxy_url_with_auth() {
+        let uri = "http://proxy.example.com:8080".parse().unwrap();
+        let auth = ProxyAuth {
+            username: "user".to_string(),
+            password: "pass".to_string(),
+        };
+        let url = ProxyConfig::build_proxy_url(uri, Some(auth));
+        assert_eq!(url, "http://user:pass@proxy.example.com:8080/");
+    }
+
+    #[test]
+    fn test_build_proxy_url_with_existing_auth() {
+        let uri = "http://existing:creds@proxy.example.com:8080"
+            .parse()
+            .unwrap();
+        let auth = ProxyAuth {
+            username: "user".to_string(),
+            password: "pass".to_string(),
+        };
+        let url = ProxyConfig::build_proxy_url(uri, Some(auth));
+        // Should not override existing auth
+        assert_eq!(url, "http://existing:creds@proxy.example.com:8080/");
+    }
+
+    #[test]
+    fn test_into_hyper_util_matcher_from_env() {
+        // Save original environment
+        let original_http = env::var("HTTP_PROXY");
+        env::set_var("HTTP_PROXY", "http://test-proxy:8080");
+
+        let config = ProxyConfig::from_env().unwrap();
+        let matcher = config.into_hyper_util_matcher();
+
+        // Test that the matcher intercepts HTTP requests
+        let test_uri = "http://example.com".parse().unwrap();
+        let intercept = matcher.intercept(&test_uri);
+        assert!(intercept.is_some());
+
+        // Restore original environment
+        match original_http {
+            Ok(val) => env::set_var("HTTP_PROXY", val),
+            Err(_) => env::remove_var("HTTP_PROXY"),
+        }
+    }
+
+    #[test]
+    fn test_into_hyper_util_matcher_http() {
+        let config = ProxyConfig::http("http://proxy.example.com:8080").unwrap();
+        let matcher = config.into_hyper_util_matcher();
+
+        // Test that the matcher intercepts HTTP requests
+        let test_uri = "http://example.com".parse().unwrap();
+        let intercept = matcher.intercept(&test_uri);
+        assert!(intercept.is_some());
+        // Note: The intercept URI might be normalized by hyper-util
+        assert!(intercept
+            .unwrap()
+            .uri()
+            .to_string()
+            .starts_with("http://proxy.example.com:8080"));
+
+        // Test that it doesn't intercept HTTPS requests
+        let https_uri = "https://example.com".parse().unwrap();
+        let https_intercept = matcher.intercept(&https_uri);
+        assert!(https_intercept.is_none());
+    }
+
+    #[test]
+    fn test_into_hyper_util_matcher_with_auth() {
+        let config = ProxyConfig::http("http://proxy.example.com:8080")
+            .unwrap()
+            .with_basic_auth("user", "pass");
+        let matcher = config.into_hyper_util_matcher();
+
+        // Test that the matcher intercepts HTTP requests
+        let test_uri = "http://example.com".parse().unwrap();
+        let intercept = matcher.intercept(&test_uri);
+        assert!(intercept.is_some());
+
+        let intercept = intercept.unwrap();
+        // The proxy URI should contain the host (auth is handled separately)
+        assert!(intercept
+            .uri()
+            .to_string()
+            .contains("proxy.example.com:8080"));
+
+        // Test that basic auth is available
+        assert!(intercept.basic_auth().is_some());
+    }
+
+    #[test]
+    fn test_into_hyper_util_matcher_disabled() {
+        let config = ProxyConfig::disabled();
+        let matcher = config.into_hyper_util_matcher();
+
+        // Test that the matcher doesn't intercept any requests
+        let test_uri = "http://example.com".parse().unwrap();
+        let intercept = matcher.intercept(&test_uri);
+        assert!(intercept.is_none());
+    }
+
+    #[test]
+    fn test_intercept_method() {
+        let config = ProxyConfig::http("http://proxy.example.com:8080").unwrap();
+
+        // Test that intercept method works
+        let test_uri = "http://example.com".parse().unwrap();
+        let intercept = config.intercept(&test_uri);
+        assert!(intercept.is_some());
+        assert!(intercept
+            .unwrap()
+            .uri()
+            .to_string()
+            .contains("proxy.example.com:8080"));
     }
 }
