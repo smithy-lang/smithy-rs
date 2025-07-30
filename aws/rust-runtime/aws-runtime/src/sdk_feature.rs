@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Note: This code originally lived in the `aws-runtime` crate. It was moved here to avoid circular dependencies
+/// This module is re-exported in `aws-runtime`, and so even though this is a pre-1.0 crate, this module should not
+/// have any breaking changes
 use aws_smithy_types::config_bag::{Storable, StoreAppend};
 
 /// IDs for the features that may be used in the AWS SDK

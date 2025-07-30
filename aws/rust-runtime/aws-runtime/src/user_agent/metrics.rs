@@ -4,6 +4,7 @@
  */
 
 use crate::sdk_feature::AwsSdkFeature;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -136,7 +137,31 @@ iterable_enum!(
     FlexibleChecksumsReqWhenSupported,
     FlexibleChecksumsReqWhenRequired,
     FlexibleChecksumsResWhenSupported,
-    FlexibleChecksumsResWhenRequired
+    FlexibleChecksumsResWhenRequired,
+    DdbMapper,
+    CredentialsCode,
+    CredentialsJvmSystemProperties,
+    CredentialsEnvVars,
+    CredentialsEnvVarsStsWebIdToken,
+    CredentialsStsAssumeRole,
+    CredentialsStsAssumeRoleSaml,
+    CredentialsStsAssumeRoleWebId,
+    CredentialsStsFederationToken,
+    CredentialsStsSessionToken,
+    CredentialsProfile,
+    CredentialsProfileSourceProfile,
+    CredentialsProfileNamedProvider,
+    CredentialsProfileStsWebIdToken,
+    CredentialsProfileSso,
+    CredentialsSso,
+    CredentialsProfileSsoLegacy,
+    CredentialsSsoLegacy,
+    CredentialsProfileProcess,
+    CredentialsProcess,
+    CredentialsBoto2ConfigFile,
+    CredentialsAwsSdkStore,
+    CredentialsHttp,
+    CredentialsImds
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -189,6 +214,50 @@ impl ProvideBusinessMetric for AwsSdkFeature {
         use AwsSdkFeature::*;
         match self {
             S3Transfer => Some(BusinessMetric::S3Transfer),
+        }
+    }
+}
+
+impl ProvideBusinessMetric for AwsCredentialFeature {
+    fn provide_business_metric(&self) -> Option<BusinessMetric> {
+        use AwsCredentialFeature::*;
+        match self {
+            CredentialsCode => Some(BusinessMetric::CredentialsCode),
+            CredentialsEnvVars => Some(BusinessMetric::CredentialsEnvVars),
+            CredentialsEnvVarsStsWebIdToken => {
+                Some(BusinessMetric::CredentialsEnvVarsStsWebIdToken)
+            }
+            CredentialsStsAssumeRole => Some(BusinessMetric::CredentialsStsAssumeRole),
+            CredentialsStsAssumeRoleSaml => Some(BusinessMetric::CredentialsStsAssumeRoleSaml),
+            CredentialsStsAssumeRoleWebId => Some(BusinessMetric::CredentialsStsAssumeRoleWebId),
+            CredentialsStsFederationToken => Some(BusinessMetric::CredentialsStsFederationToken),
+            CredentialsStsSessionToken => Some(BusinessMetric::CredentialsStsSessionToken),
+            CredentialsProfile => Some(BusinessMetric::CredentialsProfile),
+            CredentialsProfileSourceProfile => {
+                Some(BusinessMetric::CredentialsProfileSourceProfile)
+            }
+            CredentialsProfileNamedProvider => {
+                Some(BusinessMetric::CredentialsProfileNamedProvider)
+            }
+            CredentialsProfileStsWebIdToken => {
+                Some(BusinessMetric::CredentialsProfileStsWebIdToken)
+            }
+            CredentialsProfileSso => Some(BusinessMetric::CredentialsProfileSso),
+            CredentialsSso => Some(BusinessMetric::CredentialsSso),
+            CredentialsProfileProcess => Some(BusinessMetric::CredentialsProfileProcess),
+            CredentialsProcess => Some(BusinessMetric::CredentialsProcess),
+            CredentialsHttp => Some(BusinessMetric::CredentialsHttp),
+            CredentialsImds => Some(BusinessMetric::CredentialsImds),
+            otherwise => {
+                // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
+                // while continuing to use an outdated version of an SDK crate or the `aws-credential-types`
+                // crate.
+                tracing::warn!(
+                    "Attempted to provide `BusinessMetric` for `{otherwise:?}`, which is not recognized in the current version of the `aws-runtime` crate. \
+                    Consider upgrading to the latest version to ensure that all tracked features are properly reported in your metrics."
+                );
+                None
+            }
         }
     }
 }
@@ -297,7 +366,32 @@ mod tests {
   "FLEXIBLE_CHECKSUMS_REQ_WHEN_SUPPORTED" : "Z",
   "FLEXIBLE_CHECKSUMS_REQ_WHEN_REQUIRED" : "a",
   "FLEXIBLE_CHECKSUMS_RES_WHEN_SUPPORTED" : "b",
-  "FLEXIBLE_CHECKSUMS_RES_WHEN_REQUIRED" : "c"
+  "FLEXIBLE_CHECKSUMS_RES_WHEN_REQUIRED" : "c",
+  "DDB_MAPPER" : "d",
+  "CREDENTIALS_CODE" : "e",
+  "CREDENTIALS_JVM_SYSTEM_PROPERTIES" : "f",
+  "CREDENTIALS_ENV_VARS" : "g",
+  "CREDENTIALS_ENV_VARS_STS_WEB_ID_TOKEN" : "h",
+  "CREDENTIALS_STS_ASSUME_ROLE" : "i",
+  "CREDENTIALS_STS_ASSUME_ROLE_SAML" : "j",
+  "CREDENTIALS_STS_ASSUME_ROLE_WEB_ID" : "k",
+  "CREDENTIALS_STS_FEDERATION_TOKEN" : "l",
+  "CREDENTIALS_STS_SESSION_TOKEN" : "m",
+  "CREDENTIALS_PROFILE" : "n",
+  "CREDENTIALS_PROFILE_SOURCE_PROFILE" : "o",
+  "CREDENTIALS_PROFILE_NAMED_PROVIDER" : "p",
+  "CREDENTIALS_PROFILE_STS_WEB_ID_TOKEN" : "q",
+  "CREDENTIALS_PROFILE_SSO" : "r",
+  "CREDENTIALS_SSO" : "s",
+  "CREDENTIALS_PROFILE_SSO_LEGACY" : "t",
+  "CREDENTIALS_SSO_LEGACY" : "u",
+  "CREDENTIALS_PROFILE_PROCESS" : "v",
+  "CREDENTIALS_PROCESS" : "w",
+  "CREDENTIALS_BOTO2_CONFIG_FILE" : "x",
+  "CREDENTIALS_AWS_SDK_STORE" : "y",
+  "CREDENTIALS_HTTP" : "z",
+  "CREDENTIALS_IMDS" : "0"
+
 }
         "#;
 
