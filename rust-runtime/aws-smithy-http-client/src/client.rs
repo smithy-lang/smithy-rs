@@ -4,6 +4,8 @@
  */
 
 mod dns;
+/// Proxy configuration
+pub mod proxy;
 mod timeout;
 /// TLS connector(s)
 pub mod tls;
