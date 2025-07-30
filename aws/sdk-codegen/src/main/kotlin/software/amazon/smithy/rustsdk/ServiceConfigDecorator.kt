@@ -7,8 +7,10 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -56,7 +58,14 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
     private val codegenScope =
         arrayOf(
             *preludeScope,
+            "Env" to AwsRuntimeType.awsTypes(rc).resolve("os_shim_internal::Env"),
+            "EnvConfigLoader" to
+                AwsRuntimeType.awsRuntime(rc)
+                    .resolve("env_config::EnvConfigLoader"),
             "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
+            "SharedServiceConfigLoader" to AwsRuntimeType.awsTypes(rc).resolve("service_config::SharedServiceConfigLoader"),
+            "Storable" to RuntimeType.smithyTypes(rc).resolve("config_bag::Storable"),
+            "StoreReplace" to RuntimeType.smithyTypes(rc).resolve("config_bag::StoreReplace"),
         )
 
     override fun section(section: ServiceConfig): Writable {
@@ -66,6 +75,7 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
                     rustTemplate(
                         """
                         sdk_config: #{Option}<#{SdkConfig}>,
+                        default_env_config_loader: #{Option}<#{SharedServiceConfigLoader}>,
                         """,
                         *codegenScope,
                     )
@@ -76,6 +86,7 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
                     rustTemplate(
                         """
                         sdk_config: #{Default}::default(),
+                        default_env_config_loader: #{Default}::default(),
                         """,
                         *codegenScope,
                     )
@@ -98,19 +109,20 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
                     rustTemplate(
                         """
                         fn load_from_service_specific_env(&mut self) {
-                            let env_config_loader = self
-                                .sdk_config
-                                .as_ref()
-                                .and_then(|cfg| cfg.service_config_shared())
-                                .unwrap_or_else(|| {
-                                    #{EnvConfigLoader}::default().into_shared()
-                                });
+                            let env_config_loader = match (
+                                self.sdk_config
+                                    .as_ref()
+                                    .and_then(|cfg| cfg.service_config_shared()),
+                                self.default_env_config_loader.as_ref().cloned(),
+                            ) {
+                                (#{Some}(from_sdk_config), _) => from_sdk_config,
+                                (#{None}, #{Some}(from_service_default)) => from_service_default,
+                                (#{None}, #{None}) => #{EnvConfigLoader}::default().into_shared(),
+                            };
                             #{load:W}
                         }
                         """,
-                        "EnvConfigLoader" to
-                            AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                                .resolve("env_config::EnvConfigLoader"),
+                        *codegenScope,
                         "load" to
                             writable {
                                 writeCustomizations(
@@ -131,7 +143,7 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
                                 #{merge:W}
                             }
                             """,
-                            *preludeScope,
+                            *codegenScope,
                             "merge" to
                                 writable {
                                     writeCustomizations(
@@ -162,10 +174,26 @@ private class ServiceConfigCustomization(private val codegenContext: ClientCodeg
                                 .unwrap_or_default()
                         }
                         """,
-                        *preludeScope,
-                        "Storable" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::Storable"),
-                        "StoreReplace" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::StoreReplace"),
+                        *codegenScope,
                     )
+
+                    Attribute(Attribute.cfg(Attribute.any(Attribute.feature(TestUtilFeature.name), writable("test"))))
+                        .render(this)
+                    Attribute.DocHidden.render(this)
+                    rustBlock("pub fn with_env<'a>(mut self, vars: &[(&'a str, &'a str)]) -> Self") {
+                        rustTemplate(
+                            """
+                            self.default_env_config_loader = #{Some}(
+                                #{EnvConfigLoader}::builder()
+                                    .env(#{Env}::from_slice(vars))
+                                    .build()
+                                    .into_shared(),
+                            );
+                            self
+                            """,
+                            *codegenScope,
+                        )
+                    }
                 }
             }
 

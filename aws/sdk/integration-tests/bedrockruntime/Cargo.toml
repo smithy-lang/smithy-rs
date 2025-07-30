@@ -9,7 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 [dev-dependencies]
-aws-sdk-bedrockruntime = { path = "../../build/aws-sdk/sdk/bedrockruntime", features = ["behavior-version-latest"] }
+aws-sdk-bedrockruntime = { path = "../../build/aws-sdk/sdk/bedrockruntime", features = ["behavior-version-latest", "test-util"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
