@@ -23,6 +23,7 @@ default-client = [
     "dep:hyper",
     "dep:hyper-util",
     "hyper-util?/client-legacy",
+    "hyper-util?/client-proxy",
     "dep:http-1x",
     "dep:tower",
     "dep:rustls-pki-types",
