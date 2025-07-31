@@ -430,6 +430,7 @@ dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "base64 0.22.1",
  "bytes",
  "h2 0.3.27",
  "h2 0.4.12",
