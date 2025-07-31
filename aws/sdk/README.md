@@ -1,7 +1,7 @@
 AWS SDK Generator
 =================
 
-This directory contains a gradle project to generate an AWS SDK. It uses the Smithy Build Plugin combined with the customizations specified in `aws/sdk-codegen` to generate an AWS SDK from Smithy models.
+This directory contains a gradle project to generate an AWS SDK. It uses the Smithy Build Plugin combined with the customizations specified in `aws/codegen-aws-sdk` to generate an AWS SDK from Smithy models.
 
 `build.gradle.kts` will generate a `smithy-build.json` dynamically from all models in the `models` directory.
 

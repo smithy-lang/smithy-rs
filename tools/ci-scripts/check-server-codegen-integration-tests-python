@@ -6,4 +6,4 @@
 
 set -eux
 cd smithy-rs
-./gradlew codegen-server-test:python:test
+./gradlew codegen-server-test:codegen-server-test-python:test

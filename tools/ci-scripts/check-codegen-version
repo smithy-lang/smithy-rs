@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -eux
+cd smithy-rs
+# GH actions generally does a shallow checkout, we need to fetch the base ref for diffing to work
+BASE_REF="${GITHUB_BASE_REF:=main}"
+echo "fetching base ref $BASE_REF from origin"
+git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin $BASE_REF
+./gradlew verifyCodegenVersionBump
