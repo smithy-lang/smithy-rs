@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rustsdk.AwsCargoDependency.awsConfig
 import software.amazon.smithy.rustsdk.AwsCargoDependency.awsRuntime
+import software.amazon.smithy.rustsdk.AwsCargoDependency.awsTypes
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolute
@@ -145,27 +146,19 @@ class IntegrationTestDependencies(
 
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
-            "transcribestreaming" -> listOf(TranscribeTestDependencies())
-            "s3" -> listOf(S3TestDependencies(runtimeConfig))
+            "bedrockruntime" -> listOf(BedrockRuntimeDependencies(runtimeConfig))
             "dynamodb" -> listOf(DynamoDbTestDependencies())
+            "s3" -> listOf(S3TestDependencies(runtimeConfig))
+            "transcribestreaming" -> listOf(TranscribeTestDependencies())
             "webassembly" -> listOf(WebAssemblyTestDependencies())
             else -> emptyList()
         }
 }
 
-class WebAssemblyTestDependencies : LibRsCustomization() {
+class BedrockRuntimeDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
-            addDependency(GetRandom.withFeature("wasm_js"))
-        }
-}
-
-class TranscribeTestDependencies : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable =
-        writable {
-            addDependency(AsyncStream)
-            addDependency(FuturesCore)
-            addDependency(Hound)
+            addDependency(awsTypes(runtimeConfig).toDevDependency())
         }
 }
 
@@ -193,5 +186,21 @@ class S3TestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustom
             addDependency(TracingAppender)
             addDependency(TracingTest)
             addDependency(smithyMocks(runtimeConfig))
+        }
+}
+
+class TranscribeTestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(AsyncStream)
+            addDependency(FuturesCore)
+            addDependency(Hound)
+        }
+}
+
+class WebAssemblyTestDependencies : LibRsCustomization() {
+    override fun section(section: LibRsSection): Writable =
+        writable {
+            addDependency(GetRandom.withFeature("wasm_js"))
         }
 }

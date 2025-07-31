@@ -14,6 +14,10 @@ use aws_smithy_types::config_bag::{Storable, StoreAppend};
 pub enum AwsSdkFeature {
     /// Indicates that an operation was called by the S3 Transfer Manager
     S3Transfer,
+    /// Calling an SSO-OIDC operation as part of the SSO login flow, when using the OAuth2.0 device code grant
+    SsoLoginDevice,
+    /// Calling an SSO-OIDC operation as part of the SSO login flow, when using the OAuth2.0 authorization code grant
+    SsoLoginAuth,
 }
 
 impl Storable for AwsSdkFeature {
