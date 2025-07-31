@@ -150,6 +150,16 @@ impl ConnectorBuilder<TlsUnset> {
     /// Build an HTTP connector sans TLS
     #[doc(hidden)]
     pub fn build_http(self) -> Connector {
+        if let Some(ref proxy_config) = self.proxy_config {
+            if proxy_config.requires_tls() {
+                tracing::warn!(
+                    "HTTPS proxy configured but no TLS provider set. \
+                     Connections to HTTPS proxy servers will fail. \
+                     Consider configuring a TLS provider to enable TLS support."
+                );
+            }
+        }
+
         let base = self.base_connector();
         self.wrap_connector(base)
     }

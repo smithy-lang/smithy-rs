@@ -31,8 +31,8 @@ use std::fmt;
 /// // HTTP proxy for all traffic
 /// let config = ProxyConfig::http("http://proxy.example.com:8080")?;
 ///
-/// // HTTPS proxy with authentication
-/// let config = ProxyConfig::https("https://proxy.example.com:8080")?
+/// // HTTPS traffic through HTTP proxy (common case - no TLS needed for proxy connection)
+/// let config = ProxyConfig::https("http://proxy.example.com:8080")?
 ///     .with_basic_auth("username", "password")
 ///     .no_proxy("localhost,*.internal");
 ///
@@ -139,14 +139,28 @@ impl ProxyConfig {
 
     /// Create a new proxy configuration for HTTPS traffic only
     ///
+    /// This proxy will only be used for `https://` requests. HTTP requests
+    /// will connect directly unless a separate HTTP proxy is configured.
+    ///
+    /// The proxy URL itself can use either HTTP or HTTPS scheme:
+    /// - `http://proxy.example.com:8080` - Connect to proxy using HTTP (no TLS needed)
+    /// - `https://proxy.example.com:8080` - Connect to proxy using HTTPS (TLS required)
+    ///
+    /// **Note**: If the proxy URL itself uses HTTPS scheme, TLS support must be
+    /// available when building the connector, otherwise connections will fail.
+    ///
     /// # Arguments
-    /// * `proxy_url` - The HTTPS proxy URL (e.g., "http://proxy.example.com:8080")
+    /// * `proxy_url` - The proxy URL (e.g., "http://proxy.example.com:8080" or "https://proxy.example.com:8080")
     ///
     /// # Examples
     /// ```rust
     /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
+    /// // HTTPS traffic through HTTP proxy (no TLS needed for proxy connection)
     /// let config = ProxyConfig::https("http://proxy.example.com:8080")?;
+    ///
+    /// // HTTPS traffic through HTTPS proxy (TLS needed for proxy connection)
+    /// let config = ProxyConfig::https("https://secure-proxy.example.com:8080")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn https<U>(proxy_url: U) -> Result<Self, ProxyError>
@@ -170,6 +184,12 @@ impl ProxyConfig {
     }
 
     /// Create a new proxy configuration for all HTTP and HTTPS traffic
+    ///
+    /// This proxy will be used for both `http://` and `https://` requests.
+    /// This is equivalent to setting both HTTP and HTTPS proxies to the same URL.
+    ///
+    /// **Note**: If the proxy URL itself uses HTTPS scheme, TLS support must be
+    /// available when building the connector, otherwise connections will fail.
     ///
     /// # Arguments
     /// * `proxy_url` - The proxy URL (e.g., "http://proxy.example.com:8080")
@@ -295,6 +315,7 @@ impl ProxyConfig {
             ProxyConfigInner::FromEnvironment | ProxyConfigInner::Disabled => {
                 // Cannot add no_proxy to environment or disabled configs
                 // Environment configs will use NO_PROXY env var
+                // FIXME - is this what we want?
             }
         }
 
@@ -309,26 +330,21 @@ impl ProxyConfig {
     /// - `ALL_PROXY` / `all_proxy`: Proxy for all protocols (fallback)
     /// - `NO_PROXY` / `no_proxy`: Comma-separated bypass rules
     ///
-    /// Returns `None` if no proxy environment variables are set.
+    /// If no proxy environment variables are set, this returns a configuration
+    /// that won't intercept any requests (equivalent to no proxy).
     ///
     /// # Examples
     /// ```rust
     /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
-    /// // Set environment: HTTP_PROXY=http://proxy:8080
-    /// if let Some(config) = ProxyConfig::from_env() {
-    ///     // Use proxy configuration
-    /// }
+    /// // Always succeeds, even if no environment variables are set
+    /// let config = ProxyConfig::from_env();
     /// ```
-    pub fn from_env() -> Option<Self> {
-        // Check if any proxy environment variables are set
-        // This is a simple check - the actual parsing will be done by hyper-util
-        if Self::has_proxy_env_vars() {
-            Some(ProxyConfig {
-                inner: ProxyConfigInner::FromEnvironment,
-            })
-        } else {
-            None
+    pub fn from_env() -> Self {
+        // Delegate to hyper-util's proven environment variable parsing
+        // If no env vars are set, hyper-util creates a matcher that doesn't intercept anything
+        ProxyConfig {
+            inner: ProxyConfigInner::FromEnvironment,
         }
     }
 
@@ -413,6 +429,47 @@ impl ProxyConfig {
         }
     }
 
+    /// Check if this proxy configuration requires TLS support
+    ///
+    /// Returns true if any of the configured proxy URLs use HTTPS scheme,
+    /// which requires TLS to establish the connection to the proxy server.
+    pub(crate) fn requires_tls(&self) -> bool {
+        match &self.inner {
+            ProxyConfigInner::Http { uri, .. } => uri.scheme_str() == Some("https"),
+            ProxyConfigInner::Https { uri, .. } => uri.scheme_str() == Some("https"),
+            ProxyConfigInner::All { uri, .. } => uri.scheme_str() == Some("https"),
+            ProxyConfigInner::FromEnvironment => {
+                // Check environment variables for HTTPS proxy URLs
+                Self::env_vars_require_tls()
+            }
+            ProxyConfigInner::Disabled => false,
+        }
+    }
+
+    /// Check if any environment proxy variables contain HTTPS URLs
+    fn env_vars_require_tls() -> bool {
+        let proxy_vars = [
+            "HTTP_PROXY",
+            "http_proxy",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+        ];
+
+        for var in &proxy_vars {
+            if let Ok(proxy_url) = std::env::var(var) {
+                if !proxy_url.is_empty() {
+                    // Simple check for https:// scheme
+                    if proxy_url.starts_with("https://") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// Check if a request should use a proxy
     ///
     /// Returns the proxy intercept information if the request should be proxied,
@@ -452,22 +509,6 @@ impl ProxyConfig {
         }
 
         Ok(())
-    }
-
-    fn has_proxy_env_vars() -> bool {
-        // Check for any of the standard proxy environment variables
-        let proxy_vars = [
-            "HTTP_PROXY",
-            "http_proxy",
-            "HTTPS_PROXY",
-            "https_proxy",
-            "ALL_PROXY",
-            "all_proxy",
-        ];
-
-        proxy_vars
-            .iter()
-            .any(|var| std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false))
     }
 
     fn build_proxy_url(uri: Uri, auth: Option<ProxyAuth>) -> String {
@@ -699,6 +740,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_proxy_config_from_env_with_vars() {
         // Save original environment
         let original_http = env::var("HTTP_PROXY");
@@ -707,8 +749,7 @@ mod tests {
         env::set_var("HTTP_PROXY", "http://test-proxy:8080");
 
         let config = ProxyConfig::from_env();
-        assert!(config.is_some());
-        assert!(config.unwrap().is_from_env());
+        assert!(config.is_from_env());
 
         // Restore original environment
         match original_http {
@@ -718,6 +759,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_proxy_config_from_env_without_vars() {
         // Save original environment
         let original_vars: Vec<_> = [
@@ -738,7 +780,7 @@ mod tests {
         }
 
         let config = ProxyConfig::from_env();
-        assert!(config.is_none());
+        assert!(config.is_from_env());
 
         // Restore original environment
         for (var, original_value) in original_vars {
@@ -750,14 +792,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_auth_cannot_be_added_to_env_config() {
         // Save original environment
         let original_http = env::var("HTTP_PROXY");
         env::set_var("HTTP_PROXY", "http://test-proxy:8080");
 
-        let config = ProxyConfig::from_env()
-            .unwrap()
-            .with_basic_auth("user", "pass"); // This should be ignored
+        let config = ProxyConfig::from_env().with_basic_auth("user", "pass"); // This should be ignored
 
         assert!(config.is_from_env());
 
@@ -769,12 +810,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_no_proxy_cannot_be_added_to_env_config() {
         // Save original environment
         let original_http = env::var("HTTP_PROXY");
         env::set_var("HTTP_PROXY", "http://test-proxy:8080");
 
-        let config = ProxyConfig::from_env().unwrap().no_proxy("localhost"); // This should be ignored
+        let config = ProxyConfig::from_env().no_proxy("localhost"); // This should be ignored
 
         assert!(config.is_from_env());
 
@@ -818,12 +860,13 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_into_hyper_util_matcher_from_env() {
         // Save original environment
         let original_http = env::var("HTTP_PROXY");
         env::set_var("HTTP_PROXY", "http://test-proxy:8080");
 
-        let config = ProxyConfig::from_env().unwrap();
+        let config = ProxyConfig::from_env();
         let matcher = config.into_hyper_util_matcher();
 
         // Test that the matcher intercepts HTTP requests
@@ -907,5 +950,37 @@ mod tests {
             .uri()
             .to_string()
             .contains("proxy.example.com:8080"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_requires_tls_detection() {
+        // HTTP proxy should not require TLS
+        let http_config = ProxyConfig::http("http://proxy.example.com:8080").unwrap();
+        assert!(!http_config.requires_tls());
+
+        // HTTPS proxy URL should require TLS
+        let https_config = ProxyConfig::http("https://proxy.example.com:8080").unwrap();
+        assert!(https_config.requires_tls());
+
+        // All proxy with HTTP URL should not require TLS
+        let all_http_config = ProxyConfig::all("http://proxy.example.com:8080").unwrap();
+        assert!(!all_http_config.requires_tls());
+
+        // Environment config with HTTPS proxy should require TLS
+        env::set_var("HTTP_PROXY", "https://proxy.example.com:8080");
+        let env_config = ProxyConfig::from_env();
+        assert!(env_config.requires_tls()); // Now detects HTTPS in env vars
+        env::remove_var("HTTP_PROXY");
+
+        // Environment config with HTTP proxy should not require TLS
+        env::set_var("HTTP_PROXY", "http://proxy.example.com:8080");
+        let env_config = ProxyConfig::from_env();
+        assert!(!env_config.requires_tls());
+        env::remove_var("HTTP_PROXY");
+
+        // Disabled config should not require TLS
+        let disabled_config = ProxyConfig::disabled();
+        assert!(!disabled_config.requires_tls());
     }
 }
