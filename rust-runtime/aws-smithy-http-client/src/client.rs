@@ -112,6 +112,7 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     client_builder: Option<hyper_util::client::legacy::Builder>,
     enable_tcp_nodelay: bool,
     interface: Option<String>,
+    proxy_config: Option<proxy::ProxyConfig>,
     #[allow(unused)]
     tls: Tls,
 }
@@ -138,6 +139,7 @@ impl ConnectorBuilder<TlsUnset> {
             client_builder: self.client_builder,
             enable_tcp_nodelay: self.enable_tcp_nodelay,
             interface: self.interface,
+            proxy_config: self.proxy_config,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -176,15 +178,19 @@ impl<Any> ConnectorBuilder<Any> {
             .map(|c| (c.connect_timeout(), c.read_timeout()))
             .unwrap_or((None, None));
 
+        // Wrap the base connector with proxy support
+        let proxy_aware_connector =
+            proxy::ProxyAwareConnector::new(tcp_connector, self.proxy_config.clone());
+
         let connector = match connect_timeout {
             Some(duration) => timeout::ConnectTimeout::new(
-                tcp_connector,
+                proxy_aware_connector,
                 sleep_impl
                     .clone()
                     .expect("a sleep impl must be provided in order to have a connect timeout"),
                 duration,
             ),
-            None => timeout::ConnectTimeout::no_timeout(tcp_connector),
+            None => timeout::ConnectTimeout::no_timeout(proxy_aware_connector),
         };
         let base = client_builder.build(connector);
         let read_timeout = match read_timeout {
@@ -198,6 +204,7 @@ impl<Any> ConnectorBuilder<Any> {
         Connector {
             adapter: Box::new(Adapter {
                 client: read_timeout,
+                proxy_config: self.proxy_config,
             }),
         }
     }
@@ -283,6 +290,40 @@ impl<Any> ConnectorBuilder<Any> {
         self
     }
 
+    /// Configure proxy settings for this connector
+    ///
+    /// This method allows you to set explicit proxy configuration for the HTTP client.
+    /// The proxy configuration will be used to determine whether requests should be
+    /// routed through a proxy server or connect directly.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "rustls-aws-lc")]
+    /// # {
+    /// use aws_smithy_http_client::{Connector, proxy::ProxyConfig, tls};
+    ///
+    /// let proxy_config = ProxyConfig::http("http://proxy.example.com:8080")?;
+    /// let connector = Connector::builder()
+    ///     .proxy_config(proxy_config)
+    ///     .tls_provider(tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc))
+    ///     .build();
+    /// # }
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn proxy_config(mut self, config: proxy::ProxyConfig) -> Self {
+        self.proxy_config = Some(config);
+        self
+    }
+
+    /// Configure proxy settings for this connector
+    ///
+    /// This is the mutable version of [`proxy_config`](Self::proxy_config).
+    pub fn set_proxy_config(&mut self, config: Option<proxy::ProxyConfig>) -> &mut Self {
+        self.proxy_config = config;
+        self
+    }
+
     /// Override the Hyper client [`Builder`](hyper_util::client::legacy::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
@@ -309,16 +350,19 @@ impl<Any> ConnectorBuilder<Any> {
 /// Adapter to use a Hyper 1.0-based Client as an `HttpConnector`
 ///
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`Connector::builder`].
+/// It integrates proxy support following the reqwest pattern.
 struct Adapter<C> {
     client: timeout::HttpReadTimeout<
         hyper_util::client::legacy::Client<timeout::ConnectTimeout<C>, SdkBody>,
     >,
+    proxy_config: Option<proxy::ProxyConfig>,
 }
 
 impl<C> fmt::Debug for Adapter<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Adapter")
             .field("client", &"** hyper client **")
+            .field("proxy_config", &self.proxy_config.is_some())
             .finish()
     }
 }

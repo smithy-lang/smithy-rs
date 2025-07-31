@@ -11,7 +11,10 @@
 //! The implementation delegates to hyper-util's proven proxy functionality while providing
 //! a stable, user-friendly API that doesn't expose hyper-util's potentially unstable interfaces.
 
+use aws_smithy_runtime_api::box_error::BoxError;
 use http_1x::Uri;
+use hyper::rt::{Read, Write};
+use hyper_util::client::legacy::connect::Connection;
 use hyper_util::client::proxy::matcher::{Intercept, Matcher};
 use std::fmt;
 
@@ -23,7 +26,7 @@ use std::fmt;
 /// # Examples
 ///
 /// ```rust
-/// use aws_smithy_http_client::client::proxy::ProxyConfig;
+/// use aws_smithy_http_client::proxy::ProxyConfig;
 ///
 /// // HTTP proxy for all traffic
 /// let config = ProxyConfig::http("http://proxy.example.com:8080")?;
@@ -109,7 +112,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::http("http://proxy.example.com:8080")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -141,7 +144,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::https("http://proxy.example.com:8080")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -173,7 +176,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::all("http://proxy.example.com:8080")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -205,7 +208,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::disabled();
     /// ```
@@ -223,7 +226,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::http("http://proxy.example.com:8080")?
     ///     .with_basic_auth("username", "password");
@@ -267,7 +270,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// let config = ProxyConfig::http("http://proxy.example.com:8080")?
     ///     .no_proxy("localhost,127.0.0.1,*.internal,10.0.0.0/8");
@@ -310,7 +313,7 @@ impl ProxyConfig {
     ///
     /// # Examples
     /// ```rust
-    /// use aws_smithy_http_client::client::proxy::ProxyConfig;
+    /// use aws_smithy_http_client::proxy::ProxyConfig;
     ///
     /// // Set environment: HTTP_PROXY=http://proxy:8080
     /// if let Some(config) = ProxyConfig::from_env() {
@@ -499,6 +502,137 @@ impl ProxyConfig {
 // Note: The actual conversion to hyper-util types will be implemented in Prompt 3
 // This keeps the user-facing API clean while deferring the complex logic to hyper-util
 
+/// A proxy-aware connector that implements tower::Service<Uri>
+///
+/// This follows reqwest's pattern of checking for proxy intercept at the URI level
+/// and routing requests through proxy or direct connection accordingly.
+#[derive(Clone, Debug)]
+pub(crate) struct ProxyAwareConnector<C> {
+    inner: C,
+    proxy_config: Option<ProxyConfig>,
+}
+
+impl<C> ProxyAwareConnector<C> {
+    pub(crate) fn new(inner: C, proxy_config: Option<ProxyConfig>) -> Self {
+        Self {
+            inner,
+            proxy_config,
+        }
+    }
+}
+
+impl<C> tower::Service<Uri> for ProxyAwareConnector<C>
+where
+    C: tower::Service<Uri> + Clone,
+    C::Response: Read + Write + Connection + Send + Sync + Unpin,
+    C::Future: Unpin + Send + 'static,
+    C::Error: Into<BoxError>,
+{
+    type Response = ProxyConnection<C::Response>;
+    type Error = C::Error;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, uri: Uri) -> Self::Future {
+        // Check if this request should be proxied (following reqwest's pattern)
+        let proxy_intercept = if let Some(ref config) = self.proxy_config {
+            let matcher = config.clone().into_hyper_util_matcher();
+            matcher.intercept(&uri)
+        } else {
+            None
+        };
+
+        if let Some(_intercept) = proxy_intercept {
+            // TODO: Implement proxy connection logic following reqwest's connect_via_proxy pattern
+            // For now, fall back to direct connection
+            tracing::debug!(
+                "proxy intercept detected for {}, but proxy connection not yet implemented",
+                uri
+            );
+        }
+
+        // For now, always use direct connection
+        // TODO: Implement actual proxy connection logic
+        let mut inner = self.inner.clone();
+        let fut = inner.call(uri);
+
+        Box::pin(async move {
+            let conn = fut.await?;
+            Ok(ProxyConnection {
+                inner: conn,
+                is_proxied: false, // TODO: Set to true when using proxy
+            })
+        })
+    }
+}
+
+/// A connection wrapper that tracks whether it was established through a proxy
+#[derive(Debug)]
+pub(crate) struct ProxyConnection<C> {
+    inner: C,
+    is_proxied: bool,
+}
+
+impl<C> Connection for ProxyConnection<C>
+where
+    C: Connection,
+{
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        self.inner.connected().proxy(self.is_proxied)
+    }
+}
+
+impl<C> Read for ProxyConnection<C>
+where
+    C: Read + Unpin,
+{
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: hyper::rt::ReadBufCursor<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner).poll_read(cx, buf)
+    }
+}
+
+impl<C> Write for ProxyConnection<C>
+where
+    C: Write + Unpin,
+{
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        let this = self.get_mut();
+        std::pin::Pin::new(&mut this.inner).poll_shutdown(cx)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
