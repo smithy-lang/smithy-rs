@@ -118,6 +118,7 @@ aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "test-util"] }
 http-body-util = { version = "0.1.2" }
+serial_test = "3.0"
 hyper-util = { version = "0.1.7", features = ["full"] }
 rustls-pemfile = "2.2.0"
 rustls-pki-types = { version = "1.12.0", features = ["std"] }
