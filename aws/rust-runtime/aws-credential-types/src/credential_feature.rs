@@ -45,6 +45,8 @@ pub enum AwsCredentialFeature {
     CredentialsHttp,
     /// An operation called using credentials resolved from the instance metadata service (IMDS)
     CredentialsImds,
+    /// An operation called using a Bearer token resolved from service-specific environment variables
+    BearerServiceEnvVars,
 }
 
 impl Storable for AwsCredentialFeature {
