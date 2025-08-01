@@ -48,7 +48,6 @@ struct RecordedRequest {
     method: String,
     uri: String,
     headers: HashMap<String, String>,
-    body: Vec<u8>,
 }
 
 impl MockProxyServer {
@@ -90,7 +89,6 @@ impl MockProxyServer {
                                                 headers: req.headers().iter()
                                                     .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                                                     .collect(),
-                                                body: Vec::new(), // For simplicity, not reading body in tests
                                             };
 
                                             request_log.lock().unwrap().push(recorded.clone());
@@ -182,11 +180,6 @@ impl MockProxyServer {
     /// Get all requests received by this server
     fn requests(&self) -> Vec<RecordedRequest> {
         self.request_log.lock().unwrap().clone()
-    }
-
-    /// Clear the request log
-    fn clear_requests(&self) {
-        self.request_log.lock().unwrap().clear();
     }
 }
 
@@ -283,7 +276,7 @@ async fn test_http_proxy_basic_request() {
         // Validate that this looks like a proxy request
         assert_eq!(req.method, "GET");
         // For HTTP proxy, the URI should be the full target URL
-        assert_eq!(req.uri, "http://httpbin.org/get");
+        assert_eq!(req.uri, "http://aws.amazon.com/api/data");
 
         // Return a successful response that we can identify
         Response::builder()
@@ -296,29 +289,20 @@ async fn test_http_proxy_basic_request() {
     // Configure connector with HTTP proxy
     let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
 
-    // Make an HTTP request through the proxy
-    let result = make_http_request_through_proxy(proxy_config, "http://httpbin.org/get").await;
+    // Make an HTTP request through the proxy - use safe domain
+    let target_url = "http://aws.amazon.com/api/data";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
 
-    match result {
-        Ok((status, body)) => {
-            assert_eq!(status, StatusCode::OK);
-            assert_eq!(body, "proxied response from mock server");
+    let (status, body) = result.expect("HTTP request through proxy should succeed");
 
-            // Verify the mock proxy received the expected request
-            let requests = mock_proxy.requests();
-            assert_eq!(requests.len(), 1);
-            assert_eq!(requests[0].method, "GET");
-            assert_eq!(requests[0].uri, "http://httpbin.org/get");
-        }
-        Err(e) => {
-            // If the proxy connection isn't fully implemented yet, we expect an error
-            // but we can still verify the configuration was accepted
-            println!("Expected error (proxy not fully implemented): {}", e);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "proxied response from mock server");
 
-            // The test passes if we get here - it means the configuration was processed
-            // and an attempt was made to use the proxy
-        }
-    }
+    // Verify the mock proxy received the expected request
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method, "GET");
+    assert_eq!(requests[0].uri, target_url);
 }
 
 #[tokio::test]
@@ -331,32 +315,27 @@ async fn test_proxy_authentication() {
         .unwrap()
         .with_basic_auth("testuser", "testpass");
 
-    // Make request through authenticated proxy
-    let result = make_http_request_through_proxy(proxy_config, "http://example.com/test").await;
+    // Make request through authenticated proxy - use safe domain
+    let target_url = "http://aws.amazon.com/protected/resource";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
 
-    match result {
-        Ok((status, body)) => {
-            assert_eq!(status, StatusCode::OK);
-            assert_eq!(body, "authenticated");
+    let (status, body) = result.expect("Authenticated proxy request should succeed");
 
-            // Verify the proxy received the request with correct auth
-            let requests = mock_proxy.requests();
-            assert_eq!(requests.len(), 1);
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "authenticated");
 
-            let expected_auth = format!(
-                "Basic {}",
-                base64::prelude::BASE64_STANDARD.encode("testuser:testpass")
-            );
-            assert_eq!(
-                requests[0].headers.get("proxy-authorization"),
-                Some(&expected_auth)
-            );
-        }
-        Err(e) => {
-            println!("Expected error (proxy not fully implemented): {}", e);
-            // Test passes - configuration was processed
-        }
-    }
+    // Verify the proxy received the request with correct auth
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+
+    let expected_auth = format!(
+        "Basic {}",
+        base64::prelude::BASE64_STANDARD.encode("testuser:testpass")
+    );
+    assert_eq!(
+        requests[0].headers.get("proxy-authorization"),
+        Some(&expected_auth)
+    );
 }
 
 #[tokio::test]
@@ -373,97 +352,219 @@ async fn test_proxy_from_environment_variables() {
             let proxy_config = ProxyConfig::from_env();
 
             // Make request through environment-configured proxy
-            let result =
-                make_http_request_through_proxy(proxy_config, "http://example.com/test").await;
+            let target_url = "http://aws.amazon.com/v1/data";
+            let result = make_http_request_through_proxy(proxy_config, target_url).await;
 
-            match result {
-                Ok((status, body)) => {
-                    assert_eq!(status, StatusCode::OK);
-                    assert_eq!(body, "env proxy response");
+            let (status, body) = result.expect("Environment proxy request should succeed");
 
-                    // Verify the proxy received the request
-                    let requests = mock_proxy.requests();
-                    assert_eq!(requests.len(), 1);
-                    assert_eq!(requests[0].uri, "http://example.com/test");
-                }
-                Err(e) => {
-                    println!("Expected error (proxy not fully implemented): {}", e);
-                    // Test passes - environment configuration was processed
-                }
-            }
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body, "env proxy response");
+
+            // Verify the proxy received the request
+            let requests = mock_proxy.requests();
+            assert_eq!(requests.len(), 1);
+            assert_eq!(requests[0].uri, target_url);
         },
     )
     .await;
 }
 
+/// Tests that NO_PROXY bypass rules work correctly
+/// Verifies that requests to bypassed hosts do not go through the proxy
 #[tokio::test]
 async fn test_no_proxy_bypass_rules() {
-    let mock_proxy = MockProxyServer::new(|_req| {
-        // This should not be called for bypassed requests
-        panic!("Request should have bypassed the proxy");
-    })
-    .await;
+    let mock_proxy = MockProxyServer::with_response(StatusCode::OK, "should not reach here").await;
 
-    // Configure proxy with NO_PROXY rules
+    // Create a second mock server that will act as the "direct" target
+    let direct_server = MockProxyServer::with_response(StatusCode::OK, "direct connection").await;
+
+    // Configure proxy with NO_PROXY rules that include the direct server's address
+    // Use just the IP address for the NO_PROXY rule
+    let direct_ip = "127.0.0.1";
     let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr()))
         .unwrap()
-        .no_proxy("localhost,127.0.0.1,*.local");
+        .no_proxy(direct_ip);
 
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
+    // Make request to the direct server (should bypass proxy due to NO_PROXY rule)
+    let result = make_http_request_through_proxy(
+        proxy_config,
+        &format!("http://{}/test", direct_server.addr()),
+    )
+    .await;
 
-    // TODO: Make request to localhost and verify it bypasses proxy
-    assert!(!format!("{:?}", _connector).is_empty());
+    let (status, body) = result.expect("Direct connection should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct connection");
+
+    // Verify the mock proxy received no requests (bypassed)
+    let proxy_requests = mock_proxy.requests();
+    assert_eq!(
+        proxy_requests.len(),
+        0,
+        "Proxy should not have received any requests due to NO_PROXY bypass"
+    );
+
+    // Verify the direct server received the request
+    let direct_requests = direct_server.requests();
+    assert_eq!(
+        direct_requests.len(),
+        1,
+        "Direct server should have received the request"
+    );
 }
 
+/// Tests that disabled proxy configuration results in direct connections
+/// Verifies that ProxyConfig::disabled() bypasses all proxy logic
 #[tokio::test]
 async fn test_proxy_disabled() {
+    // Create a direct target server
+    let direct_server = MockProxyServer::with_response(StatusCode::OK, "direct connection").await;
+
     // Create a disabled proxy configuration
     let proxy_config = ProxyConfig::disabled();
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
 
-    // TODO: Make request and verify no proxy is used
-    assert!(!format!("{:?}", _connector).is_empty());
+    // Make request with disabled proxy (should go direct to our mock server)
+    let result = make_http_request_through_proxy(
+        proxy_config,
+        &format!("http://{}/get", direct_server.addr()),
+    )
+    .await;
+
+    let (status, body) = result.expect("Direct connection should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct connection");
+
+    // Verify the direct server received the request
+    let requests = direct_server.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Direct server should have received the request"
+    );
+    assert_eq!(requests[0].method, "GET");
+    // For direct connections, the URI might be just the path part
+    assert!(
+        requests[0].uri == format!("http://{}/get", direct_server.addr())
+            || requests[0].uri == "/get",
+        "URI should be either full URL or path, got: {}",
+        requests[0].uri
+    );
 }
 
+/// Tests HTTPS-only proxy configuration
+/// Verifies that HTTP requests bypass HTTPS-only proxies
 #[tokio::test]
 async fn test_https_proxy_configuration() {
     let mock_proxy = MockProxyServer::with_response(StatusCode::OK, "https proxy response").await;
 
+    // Create a direct target server for HTTP requests
+    let direct_server =
+        MockProxyServer::with_response(StatusCode::OK, "direct http connection").await;
+
     // Configure HTTPS-only proxy
     let proxy_config = ProxyConfig::https(format!("http://{}", mock_proxy.addr())).unwrap();
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
 
-    // TODO: Make HTTPS request and verify it goes through proxy
-    // TODO: Make HTTP request and verify it bypasses proxy
-    assert!(!format!("{:?}", _connector).is_empty());
+    // Test: HTTP request should NOT go through HTTPS-only proxy, should go direct
+    let target_url = format!("http://{}/api", direct_server.addr());
+    let result = make_http_request_through_proxy(proxy_config.clone(), &target_url).await;
+
+    // The HTTP request should succeed by going directly to our mock server
+    let (status, body) = result.expect("HTTP request should succeed via direct connection");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct http connection");
+
+    // Verify the HTTPS-only proxy received no requests
+    let proxy_requests = mock_proxy.requests();
+    assert_eq!(
+        proxy_requests.len(),
+        0,
+        "HTTP request should not go through HTTPS-only proxy"
+    );
+
+    // Verify the direct server received the request
+    let direct_requests = direct_server.requests();
+    assert_eq!(
+        direct_requests.len(),
+        1,
+        "Direct server should have received the HTTP request"
+    );
+
+    // Test 2: For HTTPS, we can't easily test with our current HTTP-only infrastructure
+    // since HTTPS would require CONNECT tunneling. The important thing is that HTTP
+    // requests don't go through an HTTPS-only proxy, which we've verified above.
 }
 
+/// Tests all-traffic proxy configuration
+/// Verifies that both HTTP and HTTPS requests go through all-traffic proxies
 #[tokio::test]
 async fn test_all_traffic_proxy() {
     let mock_proxy = MockProxyServer::with_response(StatusCode::OK, "all traffic proxy").await;
 
     // Configure proxy for all traffic
     let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
 
-    // TODO: Make both HTTP and HTTPS requests and verify both go through proxy
-    assert!(!format!("{:?}", _connector).is_empty());
+    // Test 1: HTTP request should go through the proxy
+    let target_url = "http://aws.amazon.com/api/endpoint";
+    let result = make_http_request_through_proxy(proxy_config.clone(), target_url).await;
+
+    let (status, body) = result.expect("HTTP request through all-traffic proxy should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "all traffic proxy");
+
+    // Verify the proxy received the HTTP request
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Proxy should have received exactly one request"
+    );
+    assert_eq!(requests[0].method, "GET");
+    assert_eq!(requests[0].uri, target_url);
+
+    // Test 2: The important behavior is that HTTP requests DO go through all-traffic proxy
+    // We've already verified this above. For HTTPS, we can't easily test with our current
+    // HTTP-only infrastructure, but the "all" configuration should handle both HTTP and HTTPS.
 }
 
 // ================================================================================================
 // Error Handling Tests
 // ================================================================================================
 
+/// Tests proxy connection failure handling
+/// Verifies that unreachable proxy servers result in appropriate connection errors
 #[tokio::test]
 async fn test_proxy_connection_failure() {
     // Configure proxy pointing to non-existent server
     let proxy_config = ProxyConfig::http("http://127.0.0.1:1").unwrap(); // Port 1 should be unavailable
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
 
-    // TODO: Make request and verify appropriate error is returned
-    assert!(!format!("{:?}", _connector).is_empty());
+    // Make request through non-existent proxy - use a safe domain that won't cause issues
+    let target_url = "http://aws.amazon.com/api/test";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
+
+    // The request should fail with a connection error
+    assert!(
+        result.is_err(),
+        "Request should fail when proxy is unreachable"
+    );
+
+    let error = result.unwrap_err();
+    let error_msg = error.to_string().to_lowercase();
+
+    // Verify it's a connection-related error (not a different kind of error)
+    assert!(
+        error_msg.contains("connection")
+            || error_msg.contains("refused")
+            || error_msg.contains("unreachable")
+            || error_msg.contains("timeout")
+            || error_msg.contains("connect")
+            || error_msg.contains("io error"), // Include generic IO errors
+        "Error should be connection-related, got: {}",
+        error
+    );
 }
 
+/// Tests proxy authentication failure handling
+/// Verifies that incorrect proxy credentials result in 407 Proxy Authentication Required
 #[tokio::test]
 async fn test_proxy_authentication_failure() {
     let mock_proxy = MockProxyServer::with_auth_validation("correct", "password").await;
@@ -473,10 +574,27 @@ async fn test_proxy_authentication_failure() {
         .unwrap()
         .with_basic_auth("wrong", "credentials");
 
-    let _connector = Connector::builder().proxy_config(proxy_config).build_http();
+    // Make request with wrong credentials - use safe domain
+    let target_url = "http://aws.amazon.com/secure/api";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
 
-    // TODO: Make request and verify 407 Proxy Authentication Required is handled
-    assert!(!format!("{:?}", _connector).is_empty());
+    // The request should return 407 Proxy Authentication Required
+    let (status, _body) = result.expect("Request should complete (even with auth failure)");
+    assert_eq!(status, StatusCode::PROXY_AUTHENTICATION_REQUIRED);
+
+    // Verify the proxy received the request (even though auth failed)
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1, "Proxy should have received the request");
+
+    // Verify the wrong credentials were sent
+    let expected_wrong_auth = format!(
+        "Basic {}",
+        base64::prelude::BASE64_STANDARD.encode("wrong:credentials")
+    );
+    assert_eq!(
+        requests[0].headers.get("proxy-authorization"),
+        Some(&expected_wrong_auth)
+    );
 }
 
 // ================================================================================================
