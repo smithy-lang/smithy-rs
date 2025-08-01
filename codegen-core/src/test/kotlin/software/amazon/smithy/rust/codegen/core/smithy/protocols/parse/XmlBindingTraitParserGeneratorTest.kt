@@ -208,7 +208,7 @@ internal class XmlBindingTraitParserGeneratorTest {
             project.moduleFor(top) {
                 UnionGenerator(model, symbolProvider, this, choiceShape).render()
                 model.lookup<StringShape>("test#FooEnum").also { enum ->
-                    EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                    EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
                 }
             }
         }
