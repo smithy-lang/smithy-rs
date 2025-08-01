@@ -93,7 +93,14 @@ class ClientCodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel, settings)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig, codegenDecorator)
+        symbolProvider =
+            RustClientCodegenPlugin.baseSymbolProvider(
+                settings,
+                model,
+                service,
+                rustSymbolProviderConfig,
+                codegenDecorator,
+            )
 
         codegenContext =
             ClientCodegenContext(
@@ -177,7 +184,10 @@ class ClientCodegenVisitor(
         )
         try {
             // use an increased max_width to make rustfmt fail less frequently
-            "cargo fmt -- --config max_width=150".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+            "cargo fmt -- --config max_width=150".runCommand(
+                fileManifest.baseDir,
+                timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
+            )
         } catch (err: CommandError) {
             logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }
@@ -236,7 +246,10 @@ class ClientCodegenVisitor(
 
                         implBlock(symbolProvider.toSymbol(shape)) {
                             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, shape)
-                            if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(shape) == true) {
+                            if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialResponse(
+                                    shape,
+                                ) == true
+                            ) {
                                 BuilderGenerator.renderIntoBuilderMethod(this, symbolProvider, shape)
                             }
                         }
@@ -251,6 +264,7 @@ class ClientCodegenVisitor(
                     }
                     struct to builder
                 }
+
                 else -> {
                     val errorGenerator =
                         ErrorGenerator(
@@ -283,7 +297,11 @@ class ClientCodegenVisitor(
         if (shape.hasTrait<EnumTrait>()) {
             val privateModule = privateModule(shape)
             rustCrate.inPrivateModuleWithReexport(privateModule, symbolProvider.toSymbol(shape)) {
-                ClientEnumGenerator(codegenContext, shape).render(this)
+                ClientEnumGenerator(
+                    codegenContext,
+                    shape,
+                    codegenDecorator.enumCustomizations(codegenContext, emptyList()),
+                ).render(this)
             }
         }
     }

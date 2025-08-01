@@ -159,7 +159,7 @@ class JsonSerializerGeneratorTest {
             project.moduleFor(top) {
                 UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
-                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
         }
 
@@ -333,7 +333,7 @@ class JsonSerializerGeneratorTest {
             project.moduleFor(top) {
                 UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
                 val enum = model.lookup<StringShape>("test#FooEnum")
-                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+                EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
         }
 
