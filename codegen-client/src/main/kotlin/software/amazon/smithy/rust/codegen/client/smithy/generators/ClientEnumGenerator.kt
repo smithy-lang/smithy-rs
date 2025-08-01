@@ -290,18 +290,18 @@ class ClientEnumGenerator(
     customizations: List<EnumCustomization>,
 ) :
     EnumGenerator(
-        codegenContext.model,
-        codegenContext.symbolProvider,
-        shape,
-        InfallibleEnumType(
-            RustModule.new(
-                "sealed_enum_unknown",
-                visibility = Visibility.PUBCRATE,
-                parent = ClientRustModule.primitives,
+            codegenContext.model,
+            codegenContext.symbolProvider,
+            shape,
+            InfallibleEnumType(
+                RustModule.new(
+                    "sealed_enum_unknown",
+                    visibility = Visibility.PUBCRATE,
+                    parent = ClientRustModule.primitives,
+                ),
             ),
-        ),
-        customizations,
-    )
+            customizations,
+        )
 
 private fun unknownVariantError(): RuntimeType =
     RuntimeType.forInlineFun("UnknownVariantError", ClientRustModule.Error) {

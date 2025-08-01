@@ -47,19 +47,19 @@ open class ConstrainedEnum(
         withInlineModule(constraintViolationSymbol.module(), codegenContext.moduleDocProvider) {
             rustTemplate(
                 """
-                    ##[derive(Debug, PartialEq)]
-                    pub struct $constraintViolationName(pub(crate) #{String});
-                    
-                    impl #{Display} for $constraintViolationName {
-                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                            write!(f, r##"${
+                ##[derive(Debug, PartialEq)]
+                pub struct $constraintViolationName(pub(crate) #{String});
+
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, r##"${
                     context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
                 }"##)
-                        }
                     }
+                }
 
-                    impl #{Error} for $constraintViolationName {}
-                    """,
+                impl #{Error} for $constraintViolationName {}
+                """,
                 *preludeScope,
                 "Error" to RuntimeType.StdError,
                 "Display" to RuntimeType.Display,
@@ -68,10 +68,10 @@ open class ConstrainedEnum(
             if (shape.isReachableFromOperationInput()) {
                 rustTemplate(
                     """
-                        impl $constraintViolationName {
-                            #{EnumShapeConstraintViolationImplBlock:W}
-                        }
-                        """,
+                    impl $constraintViolationName {
+                        #{EnumShapeConstraintViolationImplBlock:W}
+                    }
+                    """,
                     "EnumShapeConstraintViolationImplBlock" to
                         validationExceptionConversionGenerator.enumShapeConstraintViolationImplBlock(
                             context.enumTrait,
@@ -167,9 +167,9 @@ class ServerEnumGenerator(
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
     customizations: List<EnumCustomization>,
 ) : EnumGenerator(
-    codegenContext.model,
-    codegenContext.symbolProvider,
-    shape,
-    enumType = ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
-    customizations,
-)
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        shape,
+        enumType = ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
+        customizations,
+    )

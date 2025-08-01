@@ -208,8 +208,9 @@ open class EnumGenerator(
             enumName = symbol.name,
             enumMeta = symbol.expectRustMetadata(),
             enumTrait = enumTrait,
-            sortedMembers = enumTrait.values.sortedBy { it.value }
-                .map { EnumMemberModel(shape, it, symbolProvider, customizations) },
+            sortedMembers =
+                enumTrait.values.sortedBy { it.value }
+                    .map { EnumMemberModel(shape, it, symbolProvider, customizations) },
         )
 
     fun render(writer: RustWriter) {

@@ -93,13 +93,14 @@ class ClientCodegenVisitor(
         model = codegenDecorator.transformModel(untransformedService, baseModel, settings)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
-        symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(
-            settings,
-            model,
-            service,
-            rustSymbolProviderConfig,
-            codegenDecorator,
-        )
+        symbolProvider =
+            RustClientCodegenPlugin.baseSymbolProvider(
+                settings,
+                model,
+                service,
+                rustSymbolProviderConfig,
+                codegenDecorator,
+            )
 
         codegenContext =
             ClientCodegenContext(
