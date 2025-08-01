@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.AwsDisableStalledStreamProtection
 import software.amazon.smithy.rustsdk.customize.DisabledAuthDecorator
+import software.amazon.smithy.rustsdk.customize.EnvironmentTokenProviderDecorator
 import software.amazon.smithy.rustsdk.customize.IsTruncatedPaginatorDecorator
 import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.Sigv4aAuthTraitBackfillDecorator
@@ -105,6 +106,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         SSODecorator().onlyApplyTo("com.amazonaws.sso#SWBPortalService"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamwrite#Timestream_20181101"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamquery#Timestream_20181101"),
+        listOf("bedrock").map { EnvironmentTokenProviderDecorator(it) },
         // Only build docs-rs for linux to reduce load on docs.rs
         listOf(
             DocsRsMetadataDecorator(
