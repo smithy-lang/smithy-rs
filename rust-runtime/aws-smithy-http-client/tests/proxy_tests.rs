@@ -338,6 +338,73 @@ async fn test_proxy_authentication() {
     );
 }
 
+/// Tests URL-embedded proxy authentication (http://user:pass@proxy.com format)
+/// Verifies that credentials in the proxy URL are properly extracted and used
+#[tokio::test]
+async fn test_proxy_url_embedded_auth() {
+    let mock_proxy = MockProxyServer::with_auth_validation("urluser", "urlpass").await;
+
+    // Configure proxy with credentials embedded in URL
+    let proxy_url = format!("http://urluser:urlpass@{}", mock_proxy.addr());
+    let proxy_config = ProxyConfig::http(proxy_url).unwrap();
+
+    // Make request through proxy with URL-embedded auth
+    let target_url = "http://aws.amazon.com/api/test";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
+
+    let (status, body) = result.expect("URL-embedded auth proxy request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "authenticated");
+
+    // Verify the proxy received the request with correct auth
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+
+    let expected_auth = format!(
+        "Basic {}",
+        base64::prelude::BASE64_STANDARD.encode("urluser:urlpass")
+    );
+    assert_eq!(
+        requests[0].headers.get("proxy-authorization"),
+        Some(&expected_auth)
+    );
+}
+
+/// Tests authentication precedence: URL-embedded credentials should take precedence over programmatic auth
+/// Verifies that when both URL auth and with_basic_auth() are provided, URL auth wins
+#[tokio::test]
+async fn test_proxy_auth_precedence() {
+    let mock_proxy = MockProxyServer::with_auth_validation("urluser", "urlpass").await;
+
+    // Configure proxy with URL-embedded auth AND programmatic auth
+    // URL auth should take precedence
+    let proxy_url = format!("http://urluser:urlpass@{}", mock_proxy.addr());
+    let proxy_config = ProxyConfig::http(proxy_url)
+        .unwrap()
+        .with_basic_auth("programmatic", "auth"); // This should be ignored
+
+    // Make request - should use URL-embedded auth, not programmatic auth
+    let target_url = "http://aws.amazon.com/precedence/test";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
+
+    let (status, body) = result.expect("Auth precedence test should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "authenticated");
+
+    // Verify the proxy received the request with URL-embedded auth (not programmatic)
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+
+    let expected_auth = format!(
+        "Basic {}",
+        base64::prelude::BASE64_STANDARD.encode("urluser:urlpass")
+    );
+    assert_eq!(
+        requests[0].headers.get("proxy-authorization"),
+        Some(&expected_auth)
+    );
+}
+
 #[tokio::test]
 async fn test_proxy_from_environment_variables() {
     let mock_proxy = MockProxyServer::with_response(StatusCode::OK, "env proxy response").await;
@@ -670,4 +737,173 @@ async fn test_with_env_vars_utility() {
 
     // Environment should be restored
     assert_eq!(std::env::var("TEST_PROXY_VAR"), original_value);
+}
+
+/// Tests that ProxyConfig::disabled() overrides environment proxy settings
+/// Verifies that explicit proxy disabling takes precedence over environment variables
+#[tokio::test]
+async fn test_explicit_proxy_disable_overrides_environment() {
+    let mock_proxy = MockProxyServer::new(|_req| {
+        panic!("Request should not reach proxy when explicitly disabled");
+    })
+    .await;
+
+    // Create a direct target server
+    let direct_server = MockProxyServer::with_response(StatusCode::OK, "direct connection").await;
+
+    with_env_vars(
+        &[("HTTP_PROXY", &format!("http://{}", mock_proxy.addr()))],
+        || async {
+            // Create connector with explicitly disabled proxy (should override environment)
+            let proxy_config = ProxyConfig::disabled();
+
+            // Make request - should go direct despite HTTP_PROXY environment variable
+            let target_url = format!("http://{}/test", direct_server.addr());
+            let result = make_http_request_through_proxy(proxy_config, &target_url).await;
+
+            let (status, body) = result.expect("Direct connection should succeed");
+            assert_eq!(status, StatusCode::OK);
+            assert_eq!(body, "direct connection");
+
+            // Verify the proxy received no requests (disabled)
+            let proxy_requests = mock_proxy.requests();
+            assert_eq!(
+                proxy_requests.len(),
+                0,
+                "Proxy should not receive requests when explicitly disabled"
+            );
+
+            // Verify the direct server received the request
+            let direct_requests = direct_server.requests();
+            assert_eq!(
+                direct_requests.len(),
+                1,
+                "Direct server should have received the request"
+            );
+        },
+    )
+    .await;
+}
+
+// ================================================================================================
+// HTTPS/CONNECT Tunneling Tests (Future Implementation)
+// ================================================================================================
+//
+// These tests are for HTTPS tunneling through HTTP proxies using the CONNECT method.
+// They are currently ignored because our implementation doesn't yet use hyper-util's
+// Tunnel connector for HTTPS requests.
+//
+// Implementation Requirements:
+// 1. Modify ProxyAwareConnector to detect HTTPS requests through HTTP proxy
+// 2. Use hyper_util::client::legacy::connect::proxy::Tunnel for HTTPS tunneling
+// 3. Add authentication and custom headers to CONNECT requests
+// 4. Handle TLS establishment over tunneled connections
+//
+// Architecture (based on reqwest):
+// - HTTP through proxy: Direct connection to proxy, send full URL in request line
+// - HTTPS through proxy: Use Tunnel to send CONNECT, then establish TLS over tunnel
+//
+// Reference: reqwest/src/connect.rs lines 674-695 and 720-739
+
+/// Tests HTTPS tunneling through HTTP proxy with CONNECT method
+/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
+/// NOTE: This test is ignored until we implement proper HTTPS tunneling with hyper-util's Tunnel
+#[tokio::test]
+#[ignore = "HTTPS CONNECT tunneling not yet implemented - requires hyper-util Tunnel integration"]
+async fn test_https_connect_with_auth() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        // For HTTPS through HTTP proxy, we should see a CONNECT request
+        assert_eq!(req.method, "CONNECT");
+        assert_eq!(req.uri, "secure.aws.amazon.com:443");
+
+        // Verify authentication header is present
+        let expected_auth = format!(
+            "Basic {}",
+            base64::prelude::BASE64_STANDARD.encode("connectuser:connectpass")
+        );
+        assert_eq!(req.headers.get("proxy-authorization"), Some(&expected_auth));
+
+        // Return 400 to avoid dealing with actual TLS tunneling
+        // The important part is that we got the CONNECT request with correct auth
+        Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body("CONNECT tunnel setup failed".to_string())
+            .unwrap()
+    })
+    .await;
+
+    // Configure HTTPS proxy with authentication
+    let proxy_config = ProxyConfig::https(format!("http://{}", mock_proxy.addr()))
+        .unwrap()
+        .with_basic_auth("connectuser", "connectpass");
+
+    // Make HTTPS request - should trigger CONNECT method
+    let target_url = "https://secure.aws.amazon.com/api/secure";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
+
+    // We expect this to fail with a connection error since we returned 400
+    // The important thing is that the CONNECT request was made correctly
+    assert!(
+        result.is_err(),
+        "CONNECT tunnel should fail with 400 response"
+    );
+
+    // Verify the proxy received the CONNECT request
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Proxy should have received exactly one CONNECT request"
+    );
+}
+
+/// Tests CONNECT method without authentication (should get 407)
+/// Verifies that HTTPS requests without auth get proper 407 response
+/// NOTE: This test is ignored until we implement proper HTTPS tunneling with hyper-util's Tunnel
+#[tokio::test]
+#[ignore = "HTTPS CONNECT tunneling not yet implemented - requires hyper-util Tunnel integration"]
+async fn test_https_connect_auth_required() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        // For HTTPS through HTTP proxy, we should see a CONNECT request
+        assert_eq!(req.method, "CONNECT");
+        assert_eq!(req.uri, "secure.aws.amazon.com:443");
+
+        // Verify NO authentication header is present
+        assert!(!req.headers.contains_key("proxy-authorization"));
+
+        // Return 407 Proxy Authentication Required
+        Response::builder()
+            .status(StatusCode::PROXY_AUTHENTICATION_REQUIRED)
+            .body("Proxy authentication required for CONNECT".to_string())
+            .unwrap()
+    })
+    .await;
+
+    // Configure HTTPS proxy WITHOUT authentication
+    let proxy_config = ProxyConfig::https(format!("http://{}", mock_proxy.addr())).unwrap();
+
+    // Make HTTPS request - should trigger CONNECT method and get 407
+    let target_url = "https://secure.aws.amazon.com/api/secure";
+    let result = make_http_request_through_proxy(proxy_config, target_url).await;
+
+    // We expect this to fail with authentication error
+    assert!(
+        result.is_err(),
+        "CONNECT tunnel should fail with 407 response"
+    );
+
+    let error_msg = result.unwrap_err().to_string().to_lowercase();
+    assert!(
+        error_msg.contains("407") || error_msg.contains("proxy") || error_msg.contains("auth"),
+        "Error should be proxy authentication related, got: {}",
+        error_msg
+    );
+
+    // Verify the proxy received the CONNECT request
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Proxy should have received exactly one CONNECT request"
+    );
 }
