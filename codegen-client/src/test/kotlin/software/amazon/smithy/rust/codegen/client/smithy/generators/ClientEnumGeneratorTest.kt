@@ -134,10 +134,10 @@ class ClientEnumGeneratorTest {
         val context = testClientCodegenContext(model)
         val project = TestWorkspace.testProject(context.symbolProvider)
         project.moduleFor(shapeA) {
-            ClientEnumGenerator(context, shapeA).render(this)
+            ClientEnumGenerator(context, shapeA, emptyList()).render(this)
         }
         project.moduleFor(shapeB) {
-            ClientEnumGenerator(context, shapeB).render(this)
+            ClientEnumGenerator(context, shapeB, emptyList()).render(this)
             unitTest(
                 "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
                 """
