@@ -7,6 +7,8 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ManifestHintsDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ManifestHintsSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.AwsDisableStalledStreamProtection
@@ -71,6 +73,11 @@ val DECORATORS: List<ClientCodegenDecorator> =
             Sigv4aAuthTraitBackfillDecorator(),
             EndpointBasedAuthSchemeDecorator(),
             SpanDecorator(),
+            ManifestHintsDecorator(
+                ManifestHintsSettings(
+                    mostlyUnused = true,
+                ),
+            ),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),

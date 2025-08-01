@@ -74,6 +74,13 @@ fun loadServiceMembership(): Membership {
     return membershipOverride ?: fullSdk
 }
 
+val hintMostlyUnusedList: Set<String> by lazy { hintMostlyUnusedList() }
+
+fun hintMostlyUnusedList(): Set<String> {
+    val list = properties.get("aws.services.hints.mostlyUnused") ?: ""
+    return list.split(",").map { it.trim() }.toSet()
+}
+
 fun generateSmithyBuild(services: AwsServices): String {
     val awsConfigVersion = properties.get(CrateSet.STABLE_VERSION_PROP_NAME)
         ?: throw IllegalStateException("missing ${CrateSet.STABLE_VERSION_PROP_NAME} for aws-config version")
@@ -92,6 +99,7 @@ fun generateSmithyBuild(services: AwsServices): String {
             services.partitionsConfigPath.let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
         val integrationTestPath = project.projectDir.resolve("integration-tests")
             .let { software.amazon.smithy.utils.StringUtils.escapeJavaString(it, "") }
+        val hintMostlyUnusedListMembers = hintMostlyUnusedList.joinToString(", ") { "\"$it\"" }
         """
             "${service.module}": {
                 "imports": [${files.joinToString()}],
@@ -118,6 +126,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0",
                         "minimumSupportedRustVersion": "${getRustMSRV()}",
+                        "hintMostlyUnusedList": [$hintMostlyUnusedListMembers],
                         "customizationConfig": {
                             "awsSdk": {
                                 "awsSdkBuild": true,
@@ -148,6 +157,7 @@ fun generateSmithyBuild(services: AwsServices): String {
 tasks.register("generateSmithyBuild") {
     description = "generate smithy-build.json"
     inputs.property("servicelist", awsServices.services.toString())
+    inputs.property("hintMostlyUnusedList", hintMostlyUnusedList)
     inputs.dir(projectDir.resolve("aws-models"))
     outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
@@ -494,8 +504,8 @@ fun Project.registerDowngradeFor(
             val crateNameToLastKnownWorkingVersions =
                 mapOf(
                     "minicbor" to "0.24.2",
-                    "libfuzzer-sys" to "0.4.7" // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
-                    )
+                    "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
+                )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile

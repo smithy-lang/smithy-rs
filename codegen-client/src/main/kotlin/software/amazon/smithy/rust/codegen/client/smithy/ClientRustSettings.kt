@@ -38,6 +38,7 @@ data class ClientRustSettings(
     override val examplesUri: String?,
     override val minimumSupportedRustVersion: String? = null,
     override val customizationConfig: ObjectNode?,
+    override val hintMostlyUnusedList: List<String>,
 ) : CoreRustSettings(
         service,
         moduleName,
@@ -51,6 +52,7 @@ data class ClientRustSettings(
         examplesUri,
         minimumSupportedRustVersion,
         customizationConfig,
+        hintMostlyUnusedList,
     ) {
     companion object {
         fun from(
@@ -73,6 +75,7 @@ data class ClientRustSettings(
                 examplesUri = coreRustSettings.examplesUri,
                 minimumSupportedRustVersion = coreRustSettings.minimumSupportedRustVersion,
                 customizationConfig = coreRustSettings.customizationConfig,
+                hintMostlyUnusedList = coreRustSettings.hintMostlyUnusedList,
             )
         }
     }
@@ -115,14 +118,29 @@ data class ClientCodegenConfig(
         ) = if (node.isPresent) {
             ClientCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_ACCESSORS),
+                flattenCollectionAccessors =
+                    node.get()
+                        .getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_ACCESSORS),
                 debugMode = coreCodegenConfig.debugMode,
                 renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", DEFAULT_RENAME_EXCEPTIONS),
-                includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", DEFAULT_INCLUDE_FLUENT_CLIENT),
-                addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", DEFAULT_ADD_MESSAGE_TO_ERRORS),
-                includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG),
-                enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS),
-                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", DEFAULT_NULLABILITY_CHECK_MODE)),
+                includeFluentClient =
+                    node.get()
+                        .getBooleanMemberOrDefault("includeFluentClient", DEFAULT_INCLUDE_FLUENT_CLIENT),
+                addMessageToErrors =
+                    node.get()
+                        .getBooleanMemberOrDefault("addMessageToErrors", DEFAULT_ADD_MESSAGE_TO_ERRORS),
+                includeEndpointUrlConfig =
+                    node.get()
+                        .getBooleanMemberOrDefault("includeEndpointUrlConfig", DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG),
+                enableUserConfigurableRuntimePlugins =
+                    node.get().getBooleanMemberOrDefault(
+                        "enableUserConfigurableRuntimePlugins",
+                        DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
+                    ),
+                nullabilityCheckMode =
+                    NullableIndex.CheckMode.valueOf(
+                        node.get().getStringMemberOrDefault("nullabilityCheckMode", DEFAULT_NULLABILITY_CHECK_MODE),
+                    ),
             )
         } else {
             ClientCodegenConfig(
