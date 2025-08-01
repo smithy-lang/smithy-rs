@@ -16,13 +16,17 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryCompatible
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsQueryProtocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Ec2QueryProtocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.ParseErrorMetadataParams
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
@@ -37,13 +41,13 @@ class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, C
     companion object {
         val DefaultProtocols =
             mapOf(
+                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
                 AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
                 AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
-                AwsQueryTrait.ID to ClientAwsQueryFactory(),
-                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
                 RestJson1Trait.ID to ClientRestJsonFactory(),
                 RestXmlTrait.ID to ClientRestXmlFactory(),
-                Rpcv2CborTrait.ID to ClientRpcV2CborFactory(),
+                AwsQueryTrait.ID to ClientAwsQueryFactory(),
+                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
             )
         val Default = ClientProtocolLoader(DefaultProtocols)
     }
@@ -67,7 +71,23 @@ private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
     ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol =
         if (compatibleWithAwsQuery(codegenContext.serviceShape, version)) {
-            AwsQueryCompatible(codegenContext, AwsJson(codegenContext, version))
+            AwsQueryCompatible(
+                codegenContext, AwsJson(codegenContext, version),
+                ParseErrorMetadataParams(
+                    RuntimeType.smithyJson(codegenContext.runtimeConfig)
+                        .resolve("deserialize::error::DeserializeError"),
+                    writable {
+                        rustTemplate(
+                            """
+                            #{parse_error_metadata}(response_body, response_headers)?
+                            """,
+                            "parse_error_metadata" to
+                                RuntimeType.jsonErrors(codegenContext.runtimeConfig)
+                                    .resolve("parse_error_metadata"),
+                        )
+                    },
+                ),
+            )
         } else {
             AwsJson(codegenContext, version)
         }
@@ -122,10 +142,33 @@ class ClientRestXmlFactory(
 }
 
 class ClientRpcV2CborFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RpcV2Cbor(codegenContext)
+    override fun protocol(codegenContext: ClientCodegenContext): Protocol =
+        if (compatibleWithAwsQuery(codegenContext.serviceShape)) {
+            AwsQueryCompatible(
+                codegenContext, RpcV2Cbor(codegenContext),
+                ParseErrorMetadataParams(
+                    RuntimeType.smithyCbor(codegenContext.runtimeConfig)
+                        .resolve("decode::DeserializeError"),
+                    writable {
+                        rustTemplate(
+                            """
+                            #{parse_error_metadata}(_response_status, response_headers, response_body)?
+                            """,
+                            "parse_error_metadata" to
+                                RuntimeType.cborErrors(codegenContext.runtimeConfig)
+                                    .resolve("parse_error_metadata"),
+                        )
+                    },
+                ),
+            )
+        } else {
+            RpcV2Cbor(codegenContext)
+        }
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
         OperationGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
+
+    private fun compatibleWithAwsQuery(serviceShape: ServiceShape) = serviceShape.hasTrait<AwsQueryCompatibleTrait>()
 }

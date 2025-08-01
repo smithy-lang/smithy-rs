@@ -22,6 +22,10 @@
     unreachable_pub
 )]
 
+/// Supporting code to determine auth scheme options based on the `authSchemes` endpoint list property.
+#[allow(dead_code)]
+pub mod endpoint_auth;
+
 /// Interceptors for API Gateway
 pub mod apigateway_interceptors;
 

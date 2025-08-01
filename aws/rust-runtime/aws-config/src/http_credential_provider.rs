@@ -10,6 +10,8 @@
 
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::attributes::AccountId;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
 use aws_smithy_runtime::client::metrics::MetricsRuntimePlugin;
@@ -53,7 +55,16 @@ impl HttpCredentialProvider {
     }
 
     pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> provider::Result {
-        let credentials = self.operation.invoke(HttpProviderAuth { auth }).await;
+        let credentials =
+            self.operation
+                .invoke(HttpProviderAuth { auth })
+                .await
+                .map(|mut creds| {
+                    creds
+                        .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                        .push(AwsCredentialFeature::CredentialsHttp);
+                    creds
+                });
         match credentials {
             Ok(creds) => Ok(creds),
             Err(SdkError::ServiceError(context)) => Err(context.into_err()),
@@ -178,14 +189,18 @@ fn parse_response(
             access_key_id,
             secret_access_key,
             session_token,
+            account_id,
             expiration,
-        }) => Ok(Credentials::new(
-            access_key_id,
-            secret_access_key,
-            Some(session_token.to_string()),
-            Some(expiration),
-            provider_name,
-        )),
+        }) => {
+            let mut builder = Credentials::builder()
+                .access_key_id(access_key_id)
+                .secret_access_key(secret_access_key)
+                .session_token(session_token)
+                .expiry(expiration)
+                .provider_name(provider_name);
+            builder.set_account_id(account_id.map(AccountId::from));
+            Ok(builder.build())
+        }
         JsonCredentials::Error { code, message } => Err(OrchestratorError::operation(
             CredentialsError::provider_error(format!(
                 "failed to load credentials [{}]: {}",
@@ -228,6 +243,7 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
 #[cfg(test)]
 mod test {
     use super::*;
+    use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::error::CredentialsError;
     use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_types::body::SdkBody;
@@ -340,5 +356,15 @@ mod test {
             "should be CredentialsError::ProviderError: {err}",
         );
         http_client.assert_requests_match(&[]);
+    }
+
+    #[tokio::test]
+    async fn credentials_feature() {
+        let http_client = StaticReplayClient::new(vec![successful_req_resp()]);
+        let creds = provide_creds(http_client.clone()).await.expect("success");
+        assert_eq!(
+            &vec![AwsCredentialFeature::CredentialsHttp],
+            creds.get_property::<Vec<AwsCredentialFeature>>().unwrap()
+        );
     }
 }

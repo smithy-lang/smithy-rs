@@ -11,6 +11,7 @@
 
 use crate::app_name::AppName;
 use crate::docs_for;
+use crate::endpoint_config::AccountIdEndpointMode;
 use crate::origin::Origin;
 use crate::region::Region;
 use crate::service_config::LoadServiceConfig;
@@ -19,6 +20,7 @@ pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::auth::AuthSchemePreference;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -70,6 +72,28 @@ This is useful for request bodies because, for small request bodies, compression
 **Only some services support request compression.** For services
 that don't support request compression, this setting does nothing.
 " };
+        (account_id_endpoint_mode) => {
+"Controls the account ID-based routing behavior.
+
+By default, the routing behavior is set to `preferred`.
+Customers can adjust this setting to other values to switch between different routing patterns or temporarily disable the feature.
+
+See the developer guide on [account-based endpoints](https://docs.aws.amazon.com/sdkref/latest/guide/feature-account-endpoints.html)
+for more information.
+
+For services that do not use the account-based endpoints, this setting does nothing.
+" };
+        (auth_scheme_preference) => {
+"Set the auth scheme preference for an auth scheme resolver
+(typically the default auth scheme resolver).
+
+Each operation has a predefined order of auth schemes, as determined by the service,
+for auth scheme resolution. By using the auth scheme preference, customers
+can reorder the schemes resolved by the auth scheme resolver.
+
+The preference list is intended as a hint rather than a strict override.
+Any schemes not present in the originally resolved auth schemes will be ignored.
+" };
     }
 }
 
@@ -77,10 +101,12 @@ that don't support request compression, this setting does nothing.
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
     app_name: Option<AppName>,
+    auth_scheme_preference: Option<AuthSchemePreference>,
     identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
+    account_id_endpoint_mode: Option<AccountIdEndpointMode>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -107,10 +133,12 @@ pub struct SdkConfig {
 #[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
+    auth_scheme_preference: Option<AuthSchemePreference>,
     identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
     token_provider: Option<SharedTokenProvider>,
     region: Option<Region>,
+    account_id_endpoint_mode: Option<AccountIdEndpointMode>,
     endpoint_url: Option<String>,
     retry_config: Option<RetryConfig>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -161,6 +189,24 @@ impl Builder {
     /// ```
     pub fn set_region(&mut self, region: impl Into<Option<Region>>) -> &mut Self {
         self.region = region.into();
+        self
+    }
+
+    #[doc = docs_for!(account_id_endpoint_mode)]
+    pub fn account_id_endpoint_mode(
+        mut self,
+        account_id_endpoint_mode: AccountIdEndpointMode,
+    ) -> Self {
+        self.set_account_id_endpoint_mode(Some(account_id_endpoint_mode));
+        self
+    }
+
+    #[doc = docs_for!(account_id_endpoint_mode)]
+    pub fn set_account_id_endpoint_mode(
+        &mut self,
+        account_id_endpoint_mode: Option<AccountIdEndpointMode>,
+    ) -> &mut Self {
+        self.account_id_endpoint_mode = account_id_endpoint_mode;
         self
     }
 
@@ -745,6 +791,24 @@ impl Builder {
         self
     }
 
+    #[doc = docs_for!(auth_scheme_preference)]
+    pub fn auth_scheme_preference(
+        mut self,
+        auth_scheme_preference: impl Into<AuthSchemePreference>,
+    ) -> Self {
+        self.set_auth_scheme_preference(Some(auth_scheme_preference));
+        self
+    }
+
+    #[doc = docs_for!(auth_scheme_preference)]
+    pub fn set_auth_scheme_preference(
+        &mut self,
+        auth_scheme_preference: Option<impl Into<AuthSchemePreference>>,
+    ) -> &mut Self {
+        self.auth_scheme_preference = auth_scheme_preference.map(|pref| pref.into());
+        self
+    }
+
     /// Set the origin of a setting.
     ///
     /// This is used internally to understand how to merge config structs while
@@ -757,10 +821,12 @@ impl Builder {
     pub fn build(self) -> SdkConfig {
         SdkConfig {
             app_name: self.app_name,
+            auth_scheme_preference: self.auth_scheme_preference,
             identity_cache: self.identity_cache,
             credentials_provider: self.credentials_provider,
             token_provider: self.token_provider,
             region: self.region,
+            account_id_endpoint_mode: self.account_id_endpoint_mode,
             endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,
@@ -856,6 +922,16 @@ impl SdkConfig {
     /// Configured region
     pub fn region(&self) -> Option<&Region> {
         self.region.as_ref()
+    }
+
+    /// Configured account ID endpoint mode
+    pub fn account_id_endpoint_mode(&self) -> Option<&AccountIdEndpointMode> {
+        self.account_id_endpoint_mode.as_ref()
+    }
+
+    /// Configured auth scheme preference
+    pub fn auth_scheme_preference(&self) -> Option<&AuthSchemePreference> {
+        self.auth_scheme_preference.as_ref()
     }
 
     /// Configured endpoint URL
@@ -982,10 +1058,12 @@ impl SdkConfig {
     pub fn into_builder(self) -> Builder {
         Builder {
             app_name: self.app_name,
+            auth_scheme_preference: self.auth_scheme_preference,
             identity_cache: self.identity_cache,
             credentials_provider: self.credentials_provider,
             token_provider: self.token_provider,
             region: self.region,
+            account_id_endpoint_mode: self.account_id_endpoint_mode,
             endpoint_url: self.endpoint_url,
             retry_config: self.retry_config,
             sleep_impl: self.sleep_impl,

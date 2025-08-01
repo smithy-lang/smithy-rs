@@ -21,6 +21,7 @@ pub struct TagVersionsManifestArgs {
 pub fn subcommand_tag_versions_manifest(
     TagVersionsManifestArgs { manifest_path, tag }: &TagVersionsManifestArgs,
 ) -> Result<()> {
+    println!("Tagging manifest at: {manifest_path:#?}");
     let mut manifest = VersionsManifest::from_file(manifest_path)?;
     if let Some(release) = manifest.release.as_mut() {
         release.tag = Some(tag.to_string());

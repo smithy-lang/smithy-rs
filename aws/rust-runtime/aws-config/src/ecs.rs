@@ -23,11 +23,11 @@
 //! 2. The URL refers to an allowed IP address. If a URL contains a domain name instead of an IP address,
 //!    a DNS lookup will be performed. ALL resolved IP addresses MUST refer to an allowed IP address, or
 //!    the credentials provider will return `CredentialsError::InvalidConfiguration`. Valid IP addresses are:
-//!     a) Loopback interfaces
-//!     b) The [ECS Task Metadata V2](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v2.html)
-//!        address ie 169.254.170.2.
-//!     c) [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) addresses
-//!        ie 169.254.170.23 or fd00:ec2::23
+//!    a) Loopback interfaces
+//!    b) The [ECS Task Metadata V2](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v2.html)
+//!    address ie 169.254.170.2.
+//!    c) [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) addresses
+//!    ie 169.254.170.23 or fd00:ec2::23
 //!
 //! **Next**: It will check the value of `$AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`. If this is set,
 //! the filename specified will be read, and the value passed in the `Authorization` header. If the file
@@ -724,6 +724,7 @@ mod test {
                        "AccessKeyId" : "AKID",
                        "SecretAccessKey" : "SECRET",
                        "Token" : "TOKEN....=",
+                       "AccountId" : "AID",
                        "Expiration" : "2009-02-13T23:31:30Z"
                      }"#,
             ))
@@ -734,6 +735,7 @@ mod test {
     fn assert_correct(creds: Credentials) {
         assert_eq!(creds.access_key_id(), "AKID");
         assert_eq!(creds.secret_access_key(), "SECRET");
+        assert_eq!(creds.account_id().unwrap().as_str(), "AID");
         assert_eq!(creds.session_token().unwrap(), "TOKEN....=");
         assert_eq!(
             creds.expiry().unwrap(),

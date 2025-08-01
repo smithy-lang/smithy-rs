@@ -195,7 +195,12 @@ data class InfallibleEnumType(
                 This is not intended to be used directly.
                 """.trimIndent(),
             )
-            context.enumMeta.render(this)
+
+            // The UnknownVariant's underlying opaque type should always derive `Debug`. If this isn't explicitly
+            // added and the first enum to render this module has the `@sensitive` trait then the UnknownVariant
+            // inherits that sensitivity and does not derive `Debug`. This leads to issues deriving `Debug` for
+            // all enum variants that are not marked `@sensitive`.
+            context.enumMeta.withDerives(RuntimeType.Debug).render(this)
             rustTemplate("struct $UNKNOWN_VARIANT_VALUE(pub(crate) #{String});", *preludeScope)
             rustBlock("impl $UNKNOWN_VARIANT_VALUE") {
                 // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.

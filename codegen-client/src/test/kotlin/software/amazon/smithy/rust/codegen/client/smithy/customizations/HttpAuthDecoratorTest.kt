@@ -213,7 +213,7 @@ class HttpAuthDecoratorTest {
                                     // Register our identity resolver with our auth scheme ID
                                     .with_identity_resolver(
                                         // This scheme ID needs to match the scheme ID returned in the auth scheme implementation
-                                        scheme_id,
+                                        scheme_id.clone(),
                                         TestResolver,
                                     )
                                     // Set the auth scheme option resolver to always use our basic auth auth scheme
@@ -467,7 +467,7 @@ class HttpAuthDecoratorTest {
     }
 }
 
-private object TestModels {
+internal object TestModels {
     val allSchemes =
         """
         namespace test

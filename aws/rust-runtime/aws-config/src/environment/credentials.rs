@@ -5,6 +5,8 @@
 
 use std::env::VarError;
 
+use aws_credential_types::attributes::AccountId;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_types::os_shim_internal::Env;
@@ -14,7 +16,8 @@ use aws_types::os_shim_internal::Env;
 /// `EnvironmentVariableCredentialsProvider` uses the following variables:
 /// - `AWS_ACCESS_KEY_ID`
 /// - `AWS_SECRET_ACCESS_KEY` with fallback to `SECRET_ACCESS_KEY`
-/// - `AWS_SESSION_TOKEN`
+/// - `AWS_SESSION_TOKEN` (optional)
+/// - `AWS_ACCOUNT_ID` (optional)
 #[derive(Debug, Clone)]
 pub struct EnvironmentVariableCredentialsProvider {
     env: Env,
@@ -42,13 +45,25 @@ impl EnvironmentVariableCredentialsProvider {
                     "" => None,
                     s => Some(s.to_string()),
                 });
-        Ok(Credentials::new(
-            access_key,
-            secret_key,
-            session_token,
-            None,
-            ENV_PROVIDER,
-        ))
+        let account_id =
+            self.env
+                .get("AWS_ACCOUNT_ID")
+                .ok()
+                .and_then(|account_id| match account_id.trim() {
+                    "" => None,
+                    s => Some(AccountId::from(s)),
+                });
+        let mut builder = Credentials::builder()
+            .access_key_id(access_key)
+            .secret_access_key(secret_key)
+            .provider_name(ENV_PROVIDER);
+        builder.set_session_token(session_token);
+        builder.set_account_id(account_id);
+        let mut creds = builder.build();
+        creds
+            .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+            .push(AwsCredentialFeature::CredentialsEnvVars);
+        Ok(creds)
     }
 }
 
@@ -100,6 +115,7 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 
 #[cfg(test)]
 mod test {
+    use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
     use aws_types::os_shim_internal::Env;
     use futures_util::FutureExt;
@@ -238,6 +254,26 @@ mod test {
                 .expect_err("no credentials defined");
             assert!(matches!(err, CredentialsError::CredentialsNotLoaded { .. }));
         }
+    }
+
+    #[test]
+    fn credentials_feature() {
+        let provider = make_provider(&[
+            ("AWS_ACCESS_KEY_ID", "access"),
+            ("AWS_SECRET_ACCESS_KEY", "secret"),
+            ("SECRET_ACCESS_KEY", "secret"),
+            ("AWS_SESSION_TOKEN", "token"),
+        ]);
+
+        let creds = provider
+            .provide_credentials()
+            .now_or_never()
+            .unwrap()
+            .expect("valid credentials");
+        assert_eq!(
+            &vec![AwsCredentialFeature::CredentialsEnvVars],
+            creds.get_property::<Vec<AwsCredentialFeature>>().unwrap()
+        );
     }
 
     #[test]

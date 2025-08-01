@@ -1,6 +1,6 @@
 [package]
 name = "aws-credential-types"
-version = "1.2.2"
+version = "1.2.5"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Types for AWS SDK credentials."
 edition = "2021"
@@ -19,6 +19,7 @@ zeroize = "1.7.0"
 
 [dev-dependencies]
 async-trait = "0.1.74" # used to test compatibility
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tokio = { version = "1.23.1", features = ["full", "test-util", "rt"] }
 
 [package.metadata.docs.rs]

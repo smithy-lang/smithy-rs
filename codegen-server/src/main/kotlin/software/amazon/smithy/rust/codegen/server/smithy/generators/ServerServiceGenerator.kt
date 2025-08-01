@@ -85,7 +85,7 @@ class ServerServiceGenerator(
                 protocol.serverRouterRequestSpec(
                     operationShape,
                     operationName,
-                    serviceName,
+                    serviceId.name,
                     smithyHttpServer.resolve("routing::request_spec"),
                 )
             val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())

@@ -16,10 +16,10 @@
 //! with a lower priority. The intention is that:
 //!
 //! 1. Generic classifiers that look at things like the HTTP error code run
-//!     first.
+//!    first.
 //! 2. More specific classifiers such as ones that check for certain error
-//!     messages are run **after** the generic classifiers. This gives them the
-//!     ability to override the actions set by the generic retry classifiers.
+//!    messages are run **after** the generic classifiers. This gives them the
+//!    ability to override the actions set by the generic retry classifiers.
 //!
 //! Put another way:
 //!
@@ -431,7 +431,7 @@ mod tests {
         let mid_priority_classifier = RetryClassifierPriority::run_before(high_priority_classifier);
         let low_priority_classifier = RetryClassifierPriority::run_before(mid_priority_classifier);
 
-        let mut list = vec![
+        let mut list = [
             wrap("mid", mid_priority_classifier),
             wrap("high", high_priority_classifier),
             wrap("low", low_priority_classifier),
@@ -450,7 +450,7 @@ mod tests {
         let mid_priority_classifier = RetryClassifierPriority::run_after(low_priority_classifier);
         let high_priority_classifier = RetryClassifierPriority::run_after(mid_priority_classifier);
 
-        let mut list = vec![
+        let mut list = [
             wrap("mid", mid_priority_classifier),
             wrap("high", high_priority_classifier),
             wrap("low", low_priority_classifier),
@@ -466,7 +466,7 @@ mod tests {
         let before_modeled_as_retryable = RetryClassifierPriority::run_before(
             RetryClassifierPriority::modeled_as_retryable_classifier(),
         );
-        let mut list = vec![
+        let mut list = [
             wrap(
                 "modeled as retryable",
                 RetryClassifierPriority::modeled_as_retryable_classifier(),

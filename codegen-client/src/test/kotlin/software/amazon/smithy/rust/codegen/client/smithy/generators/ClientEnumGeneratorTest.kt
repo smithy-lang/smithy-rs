@@ -106,6 +106,55 @@ class ClientEnumGeneratorTest {
         project.compileAndTest()
     }
 
+    // The idempotency of RustModules paired with Smithy's alphabetic order shape iteration meant that
+    // if an @sensitive enum was the first enum generated that the opaque type underlying the Unknown
+    // variant would not derive Debug, breaking all non-@sensitive enums
+    @Test
+    fun `sensitive enum in earlier alphabetic order does not break non-sensitive enums`() {
+        val model =
+            """
+            namespace test
+
+            @sensitive
+            @enum([
+                { name: "Foo", value: "Foo" },
+                { name: "Bar", value: "Bar" },
+            ])
+            string FooA
+
+            @enum([
+                { name: "Baz", value: "Baz" },
+                { name: "Ahh", value: "Ahh" },
+            ])
+            string FooB
+            """.asSmithyModel()
+
+        val shapeA = model.lookup<StringShape>("test#FooA")
+        val shapeB = model.lookup<StringShape>("test#FooB")
+        val context = testClientCodegenContext(model)
+        val project = TestWorkspace.testProject(context.symbolProvider)
+        project.moduleFor(shapeA) {
+            ClientEnumGenerator(context, shapeA).render(this)
+        }
+        project.moduleFor(shapeB) {
+            ClientEnumGenerator(context, shapeB).render(this)
+            unitTest(
+                "impl_debug_for_non_sensitive_enum_should_implement_the_derived_debug_trait",
+                """
+                assert_eq!(format!("{:?}", FooB::Baz), "Baz");
+                assert_eq!(format!("{:?}", FooB::Ahh), "Ahh");
+                assert_eq!(format!("{}", FooB::Baz), "Baz");
+                assert_eq!(FooB::Ahh.to_string(), "Ahh");
+                assert_eq!(
+                    format!("{:?}", FooB::from("Bar")),
+                    "Unknown(UnknownVariantValue(\"Bar\"))"
+                );
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
     @Test
     fun `it escapes the Unknown variant if the enum has an unknown value in the model`() {
         val model =

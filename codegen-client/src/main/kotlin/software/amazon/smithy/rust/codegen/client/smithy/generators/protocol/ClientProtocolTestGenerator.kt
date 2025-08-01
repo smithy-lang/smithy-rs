@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
+import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -15,6 +16,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -27,9 +29,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Broke
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.AWS_JSON_10
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_JSON
+import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.REST_XML
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ServiceShapeId.RPC_V2_CBOR
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -73,64 +75,30 @@ class ClientProtocolTestGenerator(
         private val ExpectFail =
             setOf<FailingTest>(
                 // Failing because we don't serialize default values if they match the default.
-                FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse"),
+                FailingTest.ResponseTest(
+                    AWS_JSON_10,
+                    "AwsJson10ClientErrorCorrectsWithDefaultValuesWhenServerFailsToSerializeRequiredValues",
+                ),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
                 FailingTest.RequestTest(AWS_JSON_10, "AwsJson10ClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientPopulatesDefaultValuesInInput"),
                 FailingTest.RequestTest(REST_JSON, "RestJsonClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                FailingTest.ResponseTest(REST_JSON, "RestJsonClientPopulatesDefaultsValuesWhenMissingInResponse"),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientPopulatesDefaultValuesInInput"),
+                FailingTest.ResponseTest(
+                    RPC_V2_CBOR,
+                    "RpcV2CborClientPopulatesDefaultsValuesWhenMissingInResponse",
+                ),
                 FailingTest.RequestTest(RPC_V2_CBOR, "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults"),
+                // Failing due to bug in httpPreficHeaders serialization
+                // https://github.com/smithy-lang/smithy-rs/issues/4184
+                FailingTest.RequestTest(REST_XML, "HttpEmptyPrefixHeadersRequestClient"),
+                FailingTest.RequestTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersRequestClient"),
             )
 
         private val BrokenTests:
-            Set<BrokenTest> =
-            // The two tests below were fixed in "https://github.com/smithy-lang/smithy/pull/2423", but the fixes didn't make
-            // it into the build artifact for 1.52
-            setOf(
-                BrokenTest.ResponseTest(
-                    ServiceShapeId.REST_XML,
-                    "NestedXmlMapWithXmlNameDeserializes",
-                    howToFixItFn = ::fixRestXMLInvalidRootNodeResponse,
-                    inAtLeast = setOf("1.52.0"),
-                    trackedIn =
-                        setOf(
-                            "https://github.com/smithy-lang/smithy/pull/2423",
-                        ),
-                ),
-                BrokenTest.RequestTest(
-                    ServiceShapeId.REST_XML,
-                    "NestedXmlMapWithXmlNameSerializes",
-                    howToFixItFn = ::fixRestXMLInvalidRootNodeRequest,
-                    inAtLeast = setOf("1.52.0"),
-                    trackedIn =
-                        setOf(
-                            "https://github.com/smithy-lang/smithy/pull/2423",
-                        ),
-                ),
-            )
-
-        private fun fixRestXMLInvalidRootNodeResponse(testCase: TestCase.ResponseTest): TestCase.ResponseTest {
-            val fixedBody =
-                testCase.testCase.body.get()
-                    .replace("NestedXmlMapWithXmlNameResponse", "NestedXmlMapWithXmlNameInputOutput")
-            return TestCase.ResponseTest(
-                testCase.testCase.toBuilder()
-                    .body(fixedBody)
-                    .build(),
-                testCase.targetShape,
-            )
-        }
-
-        private fun fixRestXMLInvalidRootNodeRequest(testCase: TestCase.RequestTest): TestCase.RequestTest {
-            val fixedBody =
-                testCase.testCase.body.get()
-                    .replace("NestedXmlMapWithXmlNameRequest", "NestedXmlMapWithXmlNameInputOutput")
-            return TestCase.RequestTest(
-                testCase.testCase.toBuilder()
-                    .body(fixedBody)
-                    .build(),
-            )
-        }
+            Set<BrokenTest> = setOf()
     }
 
     override val appliesTo: AppliesTo
@@ -156,6 +124,7 @@ class ClientProtocolTestGenerator(
     private val codegenScope =
         arrayOf(
             "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
+            "Bytes" to RT.Bytes,
             "Uri" to RT.Http.resolve("Uri"),
         )
 
@@ -189,12 +158,32 @@ class ClientProtocolTestGenerator(
                     }
                 }
             } ?: writable { }
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177):
+        //  Until the incorrect separation is addressed, we need to rely on this workaround.
+        val noAuthSchemeResolver =
+            codegenContext.rootDecorator.authSchemeOptions(codegenContext, emptyList()).find {
+                it.authSchemeId == SigV4Trait.ID
+            }?.let { writable {} } ?: writable {
+                // If the `Sigv4AuthDecorator` is absent in the codegen plugin, we add `noAuth` as a fallback
+                // during protocol tests. This ensures compatibility when a test model references Sigv4,
+                // but the codegen, built with the generic client plugin, does not include the decorator.
+                rust(
+                    ".auth_scheme_resolver(#T)",
+                    AuthSchemeResolverGenerator(
+                        codegenContext,
+                        emptyList(),
+                    ).noAuthSchemeResolver(),
+                )
+            }
         // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
         val host = "https://${httpRequestTestCase.host.orNull() ?: "example.com"}".dq()
         rustTemplate(
             """
             let (http_client, request_receiver) = #{capture_request}(None);
-            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_url($host);
+            let config_builder = #{config}::Config::builder()
+                .with_test_defaults()
+                #{no_auth_scheme_resolver:W}
+                .endpoint_url($host);
             #{customParams}
 
             """,
@@ -203,6 +192,7 @@ class ClientProtocolTestGenerator(
                     .resolve("test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
+            "no_auth_scheme_resolver" to noAuthSchemeResolver,
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "http_client", "config_builder", "client"))
 
@@ -388,7 +378,7 @@ class ClientProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body.
-                #{AssertEq}(&body, &bytes::Bytes::new());
+                #{AssertEq}(&body, &#{Bytes}::new());
                 """,
                 *codegenScope,
             )

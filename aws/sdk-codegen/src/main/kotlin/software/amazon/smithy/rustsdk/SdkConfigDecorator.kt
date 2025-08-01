@@ -63,6 +63,7 @@ object SdkConfigCustomization {
     }
 
     fun copyFieldAndCheckForServiceConfig(
+        serviceId: String,
         fieldName: String,
         map: Writable?,
     ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
@@ -78,7 +79,7 @@ object SdkConfigCustomization {
                 ${section.serviceConfigBuilder}.set_$fieldName(
                     ${section.sdkConfig}
                         .service_config()
-                        .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
+                        .and_then(|conf| conf.load_config(service_config_key(${serviceId.dq()}, $envKey, $profileKey)).map(|it| it.parse().unwrap()))
                         .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
                 );
             }
@@ -108,6 +109,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
                     ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
+                    ${section.serviceConfigBuilder}.set_auth_scheme_preference(${section.sdkConfig}.auth_scheme_preference().cloned());
                     // setting `None` here removes the default
                     if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
                         ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));

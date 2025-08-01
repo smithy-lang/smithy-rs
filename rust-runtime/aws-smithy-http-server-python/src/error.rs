@@ -5,6 +5,8 @@
 
 //! Python error definition.
 
+#![allow(non_local_definitions)]
+
 use aws_smithy_http_server::{
     body::{to_boxed, BoxBody},
     protocol::{
@@ -44,7 +46,6 @@ impl From<PyError> for PyErr {
 /// :param status_code typing.Optional\[int\]:
 /// :rtype None:
 #[pyclass(name = "MiddlewareException", extends = BasePyException)]
-#[pyo3(text_signature = "($self, message, status_code=None)")]
 #[derive(Debug, Clone)]
 pub struct PyMiddlewareException {
     /// :type str:
@@ -59,6 +60,7 @@ pub struct PyMiddlewareException {
 #[pymethods]
 impl PyMiddlewareException {
     /// Create a new [PyMiddlewareException].
+    #[pyo3(text_signature = "($self, message, status_code=None)")]
     #[new]
     fn newpy(message: String, status_code: Option<u16>) -> Self {
         Self {

@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
@@ -58,7 +57,6 @@ open class OperationGenerator(
         renderOperationStruct(
             operationWriter,
             operationShape,
-            codegenDecorator.authOptions(codegenContext, operationShape, emptyList()),
             operationCustomizations,
         )
     }
@@ -66,7 +64,6 @@ open class OperationGenerator(
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        authSchemeOptions: List<AuthSchemeOption>,
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -110,14 +107,6 @@ open class OperationGenerator(
                     writeCustomizations(
                         operationCustomizations,
                         OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
-                    )
-                    rustTemplate(
-                        ".with_client_plugin(#{auth_plugin})",
-                        "auth_plugin" to
-                            AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                                operationShape,
-                                authSchemeOptions,
-                            ),
                     )
                 }
             val additionalSpanFields =

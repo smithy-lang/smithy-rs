@@ -357,7 +357,7 @@ declare_runtime_components! {
         endpoint_resolver: Option<SharedEndpointResolver>,
 
         #[atLeastOneRequired]
-        auth_schemes: Vec<SharedAuthScheme>,
+        auth_schemes: OptionalAuthSchemeMap<SharedAuthScheme>,
 
         #[required]
         identity_cache: Option<SharedIdentityCache>,
@@ -410,10 +410,9 @@ impl RuntimeComponents {
     }
 
     /// Returns the requested auth scheme if it is set.
-    pub fn auth_scheme(&self, scheme_id: AuthSchemeId) -> Option<SharedAuthScheme> {
+    pub fn auth_scheme(&self, scheme_id: impl AsRef<AuthSchemeId>) -> Option<SharedAuthScheme> {
         self.auth_schemes
-            .iter()
-            .find(|s| s.value.scheme_id() == scheme_id)
+            .get(scheme_id.as_ref())
             .map(|s| s.value.clone())
     }
 
@@ -489,7 +488,7 @@ impl RuntimeComponents {
 
         validate!(Option: self.http_client);
         validate!(Required: self.endpoint_resolver);
-        validate!(Vec: &self.auth_schemes);
+        validate!(Map: &self.auth_schemes);
         validate!(Required: self.identity_cache);
         validate!(Map: self.identity_resolvers);
         validate!(Vec: &self.interceptors);
@@ -513,7 +512,7 @@ impl RuntimeComponentsBuilder {
             auth_scheme_option_resolver: Some(rc.auth_scheme_option_resolver),
             http_client: rc.http_client,
             endpoint_resolver: Some(rc.endpoint_resolver),
-            auth_schemes: rc.auth_schemes,
+            auth_schemes: Some(rc.auth_schemes),
             identity_cache: Some(rc.identity_cache),
             identity_resolvers: Some(rc.identity_resolvers),
             interceptors: rc.interceptors,
@@ -594,13 +593,19 @@ impl RuntimeComponentsBuilder {
 
     /// Returns the auth schemes.
     pub fn auth_schemes(&self) -> impl Iterator<Item = SharedAuthScheme> + '_ {
-        self.auth_schemes.iter().map(|s| s.value.clone())
+        self.auth_schemes
+            .iter()
+            .flat_map(|s| s.values().map(|t| t.value.clone()))
     }
 
-    /// Adds an auth scheme.
+    /// Adds an auth scheme, replacing the existing one.
     pub fn push_auth_scheme(&mut self, auth_scheme: impl AuthScheme + 'static) -> &mut Self {
-        self.auth_schemes
-            .push(Tracked::new(self.builder_name, auth_scheme.into_shared()));
+        let mut auth_schemes = self.auth_schemes.take().unwrap_or_default();
+        auth_schemes.insert(
+            auth_scheme.scheme_id(),
+            Tracked::new(self.builder_name, auth_scheme.into_shared()),
+        );
+        self.auth_schemes = Some(auth_schemes);
         self
     }
 
@@ -632,6 +637,14 @@ impl RuntimeComponentsBuilder {
     ) -> Self {
         self.set_identity_cache(identity_cache);
         self
+    }
+
+    /// Returns [`SharedIdentityResolver`] configured in the builder for a given `scheme_id`.
+    pub fn identity_resolver(&self, scheme_id: &AuthSchemeId) -> Option<SharedIdentityResolver> {
+        self.identity_resolvers
+            .as_ref()
+            .and_then(|resolvers| resolvers.get(scheme_id))
+            .map(|tracked| tracked.value.clone())
     }
 
     /// This method is broken since it does not replace an existing identity resolver of the given auth scheme ID.
@@ -880,7 +893,9 @@ impl RuntimeComponentsBuilder {
         }
         validate!(&self.http_client);
         validate!(&self.endpoint_resolver);
-        validate!(&self.auth_schemes);
+        if let Some(auth_schemes) = &self.auth_schemes {
+            validate!(auth_schemes.values())
+        }
         validate!(&self.identity_cache);
         if let Some(resolvers) = &self.identity_resolvers {
             validate!(resolvers.values())

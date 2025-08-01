@@ -22,9 +22,10 @@ else
     cargo test --all-features
 fi
 
-for test_dir in tests/*; do
-    if [ -f "${test_dir}/Cargo.toml" ]; then
-        echo "#### Testing ${test_dir}..."
-        cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
-    fi
-done
+# TODO reenable these tests when they have lockfiles
+# for test_dir in tests/*; do
+#     if [ -f "${test_dir}/Cargo.toml" ]; then
+#         echo "#### Testing ${test_dir}..."
+#         cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
+#     fi
+# done

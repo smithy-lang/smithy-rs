@@ -101,6 +101,13 @@ impl<'a> SignatureValues<'a> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
+    /*
+       QueryParams(QueryParamValues<'a>),
+       --------------------------------- the largest variant contains at least 192 bytes
+
+       Suppressing the Clippy warning, as the variant above is always returned wrapped in `Ok`.
+    */
     pub(crate) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
         match self {
             SignatureValues::QueryParams(values) => Ok(values),
@@ -118,7 +125,7 @@ pub(crate) struct CanonicalRequest<'a> {
     pub(crate) values: SignatureValues<'a>,
 }
 
-impl<'a> CanonicalRequest<'a> {
+impl CanonicalRequest<'_> {
     /// Construct a CanonicalRequest from a [`SignableRequest`] and [`SigningParams`].
     ///
     /// The returned canonical request includes information required for signing as well
@@ -366,13 +373,24 @@ impl<'a> CanonicalRequest<'a> {
                 );
             }
         }
-        // Sort by param name, and then by param value
+
+        // Sort on the _encoded_ key/value pairs
+        let mut params: Vec<(String, String)> = params
+            .into_iter()
+            .map(|x| {
+                use aws_smithy_http::query::fmt_string;
+                let enc_k = fmt_string(&x.0);
+                let enc_v = fmt_string(&x.1);
+                (enc_k, enc_v)
+            })
+            .collect();
+
         params.sort();
 
         let mut query = QueryWriter::new(uri);
         query.clear_params();
         for (key, value) in params {
-            query.insert(&key, &value);
+            query.insert_encoded(&key, &value);
         }
 
         let query = query.build_query();
@@ -443,7 +461,7 @@ impl<'a> CanonicalRequest<'a> {
     }
 }
 
-impl<'a> fmt::Display for CanonicalRequest<'a> {
+impl fmt::Display for CanonicalRequest<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}", self.method)?;
         writeln!(f, "{}", self.path)?;
@@ -561,13 +579,13 @@ pub(crate) struct SigningScope<'a> {
     pub(crate) service: &'a str,
 }
 
-impl<'a> SigningScope<'a> {
+impl SigningScope<'_> {
     pub(crate) fn v4a_display(&self) -> String {
         format!("{}/{}/aws4_request", format_date(self.time), self.service)
     }
 }
 
-impl<'a> fmt::Display for SigningScope<'a> {
+impl fmt::Display for SigningScope<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -639,7 +657,7 @@ impl<'a> StringToSign<'a> {
     }
 }
 
-impl<'a> fmt::Display for StringToSign<'a> {
+impl fmt::Display for StringToSign<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -662,6 +680,7 @@ mod tests {
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
     use crate::http_request::test;
+    use crate::http_request::test::SigningSuiteTest;
     use crate::http_request::{
         PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SignatureLocation,
         SigningParams, SigningSettings,
@@ -691,7 +710,8 @@ mod tests {
 
     #[test]
     fn test_repeated_header() {
-        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
+        let test = test::SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let mut req = test.request();
         req.headers.push((
             "x-amz-object-attributes".to_string(),
             "Checksum".to_string(),
@@ -723,7 +743,8 @@ mod tests {
     #[test]
     fn test_host_header_properly_handles_ports() {
         fn host_header_test_setup(endpoint: String) -> String {
-            let mut req = test::v4::test_request("get-vanilla");
+            let test = SigningSuiteTest::v4("get-vanilla");
+            let mut req = test.request();
             req.uri = endpoint;
             let req = SignableRequest::from(&req);
             let settings = SigningSettings {
@@ -756,7 +777,8 @@ mod tests {
 
     #[test]
     fn test_set_xamz_sha_256() {
-        let req = test::v4::test_request("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let req = test.request();
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
@@ -783,7 +805,8 @@ mod tests {
 
     #[test]
     fn test_unsigned_payload() {
-        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let mut req = test.request();
         req.set_body(SignableBody::UnsignedPayload);
         let req: SignableRequest<'_> = SignableRequest::from(&req);
 
@@ -801,7 +824,8 @@ mod tests {
     #[test]
     fn test_precomputed_payload() {
         let payload_hash = "44ce7dd67c959e0d3524ffac1771dfbba87d2b6b4b4e99e42034a8b803f8b072";
-        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let mut req = test.request();
         req.set_body(SignableBody::Precomputed(String::from(payload_hash)));
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
@@ -829,8 +853,9 @@ mod tests {
     #[test]
     fn test_string_to_sign() {
         let time = parse_date_time("20150830T123600Z").unwrap();
-        let creq = test::v4::test_canonical_request("get-vanilla-query-order-key-case");
-        let expected_sts = test::v4::test_sts("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let creq = test.canonical_request(SignatureLocation::Headers);
+        let expected_sts = test.string_to_sign(SignatureLocation::Headers);
         let encoded = sha256_hex_string(creq.as_bytes());
 
         let actual = StringToSign::new_v4(time, "us-east-1", "service", &encoded);
@@ -839,7 +864,8 @@ mod tests {
 
     #[test]
     fn test_digest_of_canonical_request() {
-        let creq = test::v4::test_canonical_request("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let creq = test.canonical_request(SignatureLocation::Headers);
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
         let actual = sha256_hex_string(creq.as_bytes());
         assert_eq!(expected, actual);
@@ -847,26 +873,27 @@ mod tests {
 
     #[test]
     fn test_double_url_encode_path() {
-        let req = test::v4::test_request("double-encode-path");
+        let test = SigningSuiteTest::v4("double-encode-path");
+        let req = test.request();
         let req = SignableRequest::from(&req);
         let identity = Credentials::for_tests().into();
         let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
-        let expected = test::v4::test_canonical_request("double-encode-path");
+        let expected = test.canonical_request(SignatureLocation::Headers);
         let actual = format!("{}", creq);
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_double_url_encode() {
-        let req = test::v4::test_request("double-url-encode");
+        let test = SigningSuiteTest::v4("double-url-encode");
+        let req = test.request();
         let req = SignableRequest::from(&req);
         let identity = Credentials::for_tests().into();
         let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
-
-        let expected = test::v4::test_canonical_request("double-url-encode");
+        let expected = test.canonical_request(SignatureLocation::Headers);
         let actual = format!("{}", creq);
         assert_eq!(actual, expected);
     }
@@ -911,7 +938,8 @@ mod tests {
 
     #[test]
     fn test_omit_session_token() {
-        let req = test::v4::test_request("get-vanilla-query-order-key-case");
+        let test = SigningSuiteTest::v4("get-vanilla-query-order-key-case");
+        let req = test.request();
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             session_token_mode: SessionTokenMode::Include,

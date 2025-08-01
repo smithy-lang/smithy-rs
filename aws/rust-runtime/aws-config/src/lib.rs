@@ -223,6 +223,7 @@ mod loader {
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime::client::identity::IdentityCache;
+    use aws_smithy_runtime_api::client::auth::AuthSchemePreference;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
@@ -235,15 +236,17 @@ mod loader {
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
+    use aws_types::endpoint_config::AccountIdEndpointMode;
     use aws_types::origin::Origin;
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
-        app_name, checksums, credentials, disable_request_compression, endpoint_url,
-        ignore_configured_endpoint_urls as ignore_ep, region, request_min_compression_size_bytes,
-        retry_config, timeout_config, use_dual_stack, use_fips,
+        account_id_endpoint_mode, app_name, auth_scheme_preference, checksums, credentials,
+        disable_request_compression, endpoint_url, ignore_configured_endpoint_urls as ignore_ep,
+        region, request_min_compression_size_bytes, retry_config, timeout_config, use_dual_stack,
+        use_fips,
     };
     use crate::meta::region::ProvideRegion;
     #[allow(deprecated)]
@@ -270,9 +273,11 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        auth_scheme_preference: Option<AuthSchemePreference>,
         identity_cache: Option<SharedIdentityCache>,
         credentials_provider: TriStateOption<SharedCredentialsProvider>,
         token_provider: Option<SharedTokenProvider>,
+        account_id_endpoint_mode: Option<AccountIdEndpointMode>,
         endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
         retry_config: Option<RetryConfig>,
@@ -398,6 +403,28 @@ mod loader {
         /// then override the HTTP client set with this function on the client-specific `Config`s.
         pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
+            self
+        }
+
+        #[doc = docs_for!(auth_scheme_preference)]
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # use aws_smithy_runtime_api::client::auth::AuthSchemeId;
+        /// # async fn create_config() {
+        /// let config = aws_config::from_env()
+        ///     // Favors a custom auth scheme over the SigV4 auth scheme.
+        ///     // Note: This will not result in an error, even if the custom scheme is missing from the resolved auth schemes.
+        ///     .auth_scheme_preference([AuthSchemeId::from("custom"), aws_runtime::auth::sigv4::SCHEME_ID])
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn auth_scheme_preference(
+            mut self,
+            auth_scheme_preference: impl Into<AuthSchemePreference>,
+        ) -> Self {
+            self.auth_scheme_preference = Some(auth_scheme_preference.into());
             self
         }
 
@@ -623,6 +650,15 @@ mod loader {
         /// # }
         pub fn profile_name(mut self, profile_name: impl Into<String>) -> Self {
             self.profile_name_override = Some(profile_name.into());
+            self
+        }
+
+        #[doc = docs_for!(account_id_endpoint_mode)]
+        pub fn account_id_endpoint_mode(
+            mut self,
+            account_id_endpoint_mode: AccountIdEndpointMode,
+        ) -> Self {
+            self.account_id_endpoint_mode = Some(account_id_endpoint_mode);
             self
         }
 
@@ -858,31 +894,13 @@ mod loader {
                 TriStateOption::ExplicitlyUnset => None,
             };
 
-            let token_provider = match self.token_provider {
-                Some(provider) => Some(provider),
-                None => {
-                    #[cfg(feature = "sso")]
-                    {
-                        let mut builder =
-                            crate::default_provider::token::DefaultTokenChain::builder()
-                                .configure(conf.clone());
-                        builder.set_region(region.clone());
-                        Some(SharedTokenProvider::new(builder.build().await))
-                    }
-                    #[cfg(not(feature = "sso"))]
-                    {
-                        None
-                    }
-                }
-            };
-
             let profiles = conf.profile().await;
             let service_config = EnvServiceConfig {
                 env: conf.env(),
                 env_config_sections: profiles.cloned().unwrap_or_default(),
             };
             let mut builder = SdkConfig::builder()
-                .region(region)
+                .region(region.clone())
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
                 .time_source(time_source)
@@ -911,6 +929,30 @@ mod loader {
                     let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
                     builder.insert_origin("endpoint_url", origin);
                     v
+                }
+            };
+
+            let token_provider = match self.token_provider {
+                Some(provider) => {
+                    builder.insert_origin("token_provider", Origin::shared_config());
+                    Some(provider)
+                }
+                None => {
+                    #[cfg(feature = "sso")]
+                    {
+                        let mut builder =
+                            crate::default_provider::token::DefaultTokenChain::builder()
+                                .configure(conf.clone());
+                        builder.set_region(region);
+                        Some(SharedTokenProvider::new(builder.build().await))
+                    }
+                    #[cfg(not(feature = "sso"))]
+                    {
+                        None
+                    }
+                    // Not setting `Origin` in this arm, and that's good for now as long as we know
+                    // it's not programmatically set in the shared config.
+                    // We can consider adding `Origin::Default` if needed.
                 }
             };
 
@@ -944,6 +986,23 @@ mod loader {
                     checksums::response_checksum_validation_provider(&conf).await
                 };
 
+            let account_id_endpoint_mode =
+                if let Some(acccount_id_endpoint_mode) = self.account_id_endpoint_mode {
+                    Some(acccount_id_endpoint_mode)
+                } else {
+                    account_id_endpoint_mode::account_id_endpoint_mode_provider(&conf).await
+                };
+
+            let auth_scheme_preference =
+                if let Some(auth_scheme_preference) = self.auth_scheme_preference {
+                    builder.insert_origin("auth_scheme_preference", Origin::shared_config());
+                    Some(auth_scheme_preference)
+                } else {
+                    auth_scheme_preference::auth_scheme_preference_provider(&conf).await
+                    // Not setting `Origin` in this arm, and that's good for now as long as we know
+                    // it's not programmatically set in the shared config.
+                };
+
             builder.set_request_checksum_calculation(request_checksum_calculation);
             builder.set_response_checksum_validation(response_checksum_validation);
             builder.set_identity_cache(identity_cache);
@@ -955,6 +1014,8 @@ mod loader {
             builder.set_disable_request_compression(disable_request_compression);
             builder.set_request_min_compression_size_bytes(request_min_compression_size_bytes);
             builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
+            builder.set_account_id_endpoint_mode(account_id_endpoint_mode);
+            builder.set_auth_scheme_preference(auth_scheme_preference);
             builder.build()
         }
     }

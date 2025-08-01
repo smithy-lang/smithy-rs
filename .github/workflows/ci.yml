@@ -22,7 +22,7 @@ on:
         type: string
         default: ''
     secrets:
-      # the docker login password for ECR. This is
+      # the docker login password for ECR (encrypted with the DOCKER_LOGIN_TOKEN_PASSPHRASE)
       ENCRYPTED_DOCKER_PASSWORD:
         required: false
       DOCKER_LOGIN_TOKEN_PASSPHRASE:
@@ -33,7 +33,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.81.0
+  rust_version: 1.86.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -43,7 +43,7 @@ jobs:
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
-    timeout-minutes: 25
+    timeout-minutes: 30
     runs-on: smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
@@ -84,7 +84,7 @@ jobs:
   test-codegen:
     name: Test Codegen
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 35
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -97,7 +97,7 @@ jobs:
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-core-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
@@ -167,7 +167,7 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -238,7 +238,7 @@ jobs:
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     env:
       CROSS_CONFIG: Cross.toml
     strategy:
@@ -343,7 +343,7 @@ jobs:
     if: ${{ inputs.run_canary }}
     needs: generate
     runs-on: smithy_ubuntu-latest_8-core
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       id-token: write
       contents: read

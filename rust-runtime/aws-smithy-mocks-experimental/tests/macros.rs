@@ -51,6 +51,8 @@ mod fake_crate {
         }
     }
 }
+
+#[allow(deprecated)]
 #[test]
 fn mock_client() {
     aws_smithy_mocks_experimental::mock_client!(fake_crate, &[]);

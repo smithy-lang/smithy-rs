@@ -20,12 +20,15 @@
     unreachable_pub
 )]
 
+pub mod attributes;
+#[doc(hidden)]
+pub mod credential_feature;
 pub mod credential_fn;
 mod credentials_impl;
 pub mod provider;
 pub mod token_fn;
 
-pub use credentials_impl::Credentials;
+pub use credentials_impl::{Credentials, CredentialsBuilder};
 
 /// AWS Access Token
 ///

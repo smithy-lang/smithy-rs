@@ -39,7 +39,7 @@ pub(crate) struct Partition<'a> {
 }
 
 #[allow(unused)]
-impl<'a> Partition<'a> {
+impl Partition<'_> {
     pub(crate) fn name(&self) -> &str {
         self.name
     }

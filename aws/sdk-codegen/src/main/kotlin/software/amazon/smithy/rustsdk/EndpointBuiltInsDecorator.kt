@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.util.Optional
 
@@ -102,10 +103,11 @@ fun Model.loadBuiltIn(
 }
 
 fun Model.sdkConfigSetter(
-    serviceId: ShapeId,
+    serviceShape: ServiceShape,
     builtInSrc: Parameter,
     configParameterNameOverride: String?,
 ): AdHocCustomization? {
+    val serviceId = serviceShape.id
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
@@ -119,7 +121,7 @@ fun Model.sdkConfigSetter(
         }
 
     return if (fieldName == "endpoint_url") {
-        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
+        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(serviceShape.sdkId(), fieldName, map)
     } else {
         SdkConfigCustomization.copyField(fieldName, map)
     }
@@ -127,14 +129,11 @@ fun Model.sdkConfigSetter(
 
 /**
  * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide
- * [clientParam.Builder] which allows control over the config parameter that will be generated. You can also opt
- * to exclude including the extra sections that set the builtIn value on the SdkConfig. This is useful for builtIns
- * that are only minimally supported, like accountId and accountIdEndpointMode.
+ * [clientParam.Builder] which allows control over the config parameter that will be generated.
  */
 fun decoratorForBuiltIn(
     builtIn: Parameter,
     clientParamBuilder: ConfigParam.Builder? = null,
-    includeSdkConfigSetter: Boolean = true,
 ): ClientCodegenDecorator {
     val nameOverride = clientParamBuilder?.name
     val name = nameOverride ?: builtIn.name.rustName()
@@ -145,19 +144,14 @@ fun decoratorForBuiltIn(
         private fun rulesetContainsBuiltIn(codegenContext: ClientCodegenContext) =
             codegenContext.getBuiltIn(builtIn) != null
 
-        override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
-            if (includeSdkConfigSetter) {
-                return listOfNotNull(
-                    codegenContext.model.sdkConfigSetter(
-                        codegenContext.serviceShape.id,
-                        builtIn,
-                        clientParamBuilder?.name,
-                    ),
-                )
-            } else {
-                return listOf()
-            }
-        }
+        override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+            listOfNotNull(
+                codegenContext.model.sdkConfigSetter(
+                    codegenContext.serviceShape,
+                    builtIn,
+                    clientParamBuilder?.name,
+                ),
+            )
 
         override fun configCustomizations(
             codegenContext: ClientCodegenContext,
@@ -216,8 +210,8 @@ private val endpointUrlDocs =
     writable {
         rust(
             """
-            /// Sets the endpoint URL used to communicate with this service
-
+            /// Sets the endpoint URL used to communicate with this service.
+            ///
             /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
             /// will be prefixed onto this URL. To fully override the endpoint resolver, use
             /// [`Builder::endpoint_resolver`].
@@ -247,6 +241,6 @@ val PromotedBuiltInsDecorators =
                 .type(RuntimeType.String.toSymbol())
                 .setterDocs(endpointUrlDocs),
         ),
-        decoratorForBuiltIn(AwsBuiltIns.ACCOUNT_ID_ENDPOINT_MODE, null, false),
-        decoratorForBuiltIn(AwsBuiltIns.ACCOUNT_ID, null, false),
+        AccountIdEndpointModeBuiltInParamDecorator(),
+        AccountIdBuiltInParamDecorator(),
     ).toTypedArray()

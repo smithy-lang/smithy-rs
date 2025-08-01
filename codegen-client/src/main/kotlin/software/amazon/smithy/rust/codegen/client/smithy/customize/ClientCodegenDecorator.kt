@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
@@ -25,18 +27,6 @@ import java.util.logging.Logger
 
 typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenContext>
 
-sealed interface AuthSchemeOption {
-    /** Auth scheme for the `StaticAuthSchemeOptionResolver` */
-    data class StaticAuthSchemeOption(
-        val schemeShapeId: ShapeId,
-        val constructor: List<Writable>,
-    ) : AuthSchemeOption
-
-    class CustomResolver(
-        // unimplemented
-    ) : AuthSchemeOption
-}
-
 /**
  * [ClientCodegenDecorator] allows downstream users to customize code generation.
  *
@@ -45,9 +35,8 @@ sealed interface AuthSchemeOption {
  * attributes to the generated classes.
  */
 interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, ClientRustSettings> {
-    fun authOptions(
+    fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> = baseAuthSchemeOptions
 
@@ -74,6 +63,11 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, Cl
         serviceId: ShapeId,
         currentProtocols: ClientProtocolMap,
     ): ClientProtocolMap = currentProtocols
+
+    fun authCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AuthCustomization>,
+    ): List<AuthCustomization> = baseCustomizations
 
     fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> = listOf()
 
@@ -106,13 +100,12 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     override val order: Byte
         get() = 0
 
-    override fun authOptions(
+    override fun authSchemeOptions(
         codegenContext: ClientCodegenContext,
-        operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> =
         combineCustomizations(baseAuthSchemeOptions) { decorator, authOptions ->
-            decorator.authOptions(codegenContext, operationShape, authOptions)
+            decorator.authSchemeOptions(codegenContext, authOptions)
         }
 
     override fun configCustomizations(
@@ -146,6 +139,14 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     ): ClientProtocolMap =
         combineCustomizations(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
+        }
+
+    override fun authCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<AuthCustomization>,
+    ): List<AuthCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.authCustomizations(codegenContext, customizations)
         }
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> =

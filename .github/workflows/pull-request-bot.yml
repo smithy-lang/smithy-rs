@@ -20,6 +20,11 @@ on:
         required: true
       SMITHY_RS_PULL_REQUEST_CDN_ROLE_ARN:
         required: true
+      # the docker login password for ECR (encrypted with the DOCKER_LOGIN_TOKEN_PASSPHRASE)
+      ENCRYPTED_DOCKER_PASSWORD:
+        required: false
+      DOCKER_LOGIN_TOKEN_PASSPHRASE:
+        required: false
 
 # Allow one instance of this workflow per pull request, and cancel older runs when new changes are pushed
 concurrency:
@@ -30,7 +35,9 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
   java_version: 17
   rust_toolchain_components: clippy,rustfmt
-  rust_nightly_version: nightly-2024-06-30
+  rust_nightly_version: nightly-2025-05-04
+  ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
+  DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
 jobs:
   generate-diff:

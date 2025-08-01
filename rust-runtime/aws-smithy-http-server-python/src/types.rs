@@ -15,6 +15,8 @@
 //! get coerced to `&aws_smithy_types::Document`). This is a hack, we should ideally handle this
 //! in `JsonSerializerGenerator.kt` but it's not easy to do it with our current Kotlin structure.
 
+#![allow(non_local_definitions)]
+
 use std::{
     collections::HashMap,
     future::Future,

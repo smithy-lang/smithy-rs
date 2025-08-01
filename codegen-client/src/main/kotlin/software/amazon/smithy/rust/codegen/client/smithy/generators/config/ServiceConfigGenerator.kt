@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -371,7 +372,7 @@ class ServiceConfigGenerator(
                 ///     .build();
                 /// let client = $moduleUseName::Client::from_conf(config);
                 /// ```
-            """
+            ///"""
             rustTemplate(
                 """
                 $docs
@@ -406,6 +407,12 @@ class ServiceConfigGenerator(
             the <a href="https://crates.io/crates/aws-config" target="_blank">aws-config</a> crate.
             </div>
         """
+
+        // The doc line directly following this attribute is sometimes followed by empty lines.
+        // This triggers a clippy lint. I cannot figure out what is adding those lines, so
+        // allowing the line for now. Setting it as an inner attribute since this happens several
+        // times in this file.
+        Attribute.AllowClippyEmptyLineAfterDocComments.render(writer, AttributeKind.Inner)
         writer.docs("Configuration for a $moduleUseName service client.\n")
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
@@ -421,7 +428,7 @@ class ServiceConfigGenerator(
                 cloneable: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                behavior_version: #{Option}<#{BehaviorVersion}>,
+                pub(crate) behavior_version: #{Option}<#{BehaviorVersion}>,
                 """,
                 *codegenScope,
             )
@@ -541,7 +548,10 @@ class ServiceConfigGenerator(
             docs("Apply test defaults to the builder")
             rustBlock("pub fn apply_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
-                rustTemplate("self.behavior_version = #{Some}(crate::config::BehaviorVersion::latest());", *preludeScope)
+                rustTemplate(
+                    "self.behavior_version = #{Some}(crate::config::BehaviorVersion::latest());",
+                    *preludeScope,
+                )
                 rust("self")
             }
 

@@ -1,4 +1,203 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 25th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4232](https://github.com/smithy-lang/smithy-rs/issues/4232)) Add fallback equality on no auth `AuthSchemeId` for backward compatibility, treating `AuthSchemeId::from("no_auth")` (legacy) and `AuthSchemeId::from("noAuth")` (updated) as equivalent.
+
+
+July 23rd, 2025
+===============
+
+July 21st, 2025
+===============
+**New this release:**
+- :tada: (client, [smithy-rs#4203](https://github.com/smithy-lang/smithy-rs/issues/4203)) Add support for configuring auth schemes manually using an auth scheme preference list.
+    The preference list allows customers to reprioritize the order of auth schemes originally
+    determined by the auth scheme resolver.
+    Customers can configure the auth scheme preference at the following locations, listed in order of precedence:
+    1. Service Client Configuration
+    ```rust
+    use aws_runtime::auth::sigv4;
+    use aws_smithy_runtime_api::client::auth::AuthSchemeId;
+    use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+
+    let config = aws_sdk_s3::Config::builder()
+        .auth_scheme_preference([AuthSchemeId::from("scheme1"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])
+        // ...
+        .build();
+    ```
+    2. Environment Variable
+    ```
+    AWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth
+    ```
+    3. Configuration File
+    ```
+    auth_scheme_preference=scheme1, sigv4, httpBearerAuth
+    ```
+    With this configuration, the auth scheme resolver will prefer to select them in the specified order,
+    if they are supported.
+
+
+July 17th, 2025
+===============
+**New this release:**
+- (all, [smithy-rs#4212](https://github.com/smithy-lang/smithy-rs/issues/4212)) Event streams now allocate a right-sized buffer avoiding repeated reallocations during serialization
+
+
+July 16th, 2025
+===============
+**New this release:**
+- (client) re-use checksums on retry attempts for enhanced durability
+
+
+July 8th, 2025
+==============
+**New this release:**
+- (client, [smithy-rs#4076](https://github.com/smithy-lang/smithy-rs/issues/4076), [smithy-rs#4198](https://github.com/smithy-lang/smithy-rs/issues/4198)) Allows customers to configure the auth schemes and auth scheme resolver. For more information see the GitHub [discussion](https://github.com/smithy-lang/smithy-rs/discussions/4197).
+
+
+June 30th, 2025
+===============
+
+June 27th, 2025
+===============
+**New this release:**
+- :bug: (client) Fix hyper 1.x connection refused errors not marked as retryable
+- (client, [smithy-rs#4186](https://github.com/smithy-lang/smithy-rs/issues/4186)) Make Rpc V2 CBOR a compatible protocol for `awsQuery` using `awsQueryCompatible` trait
+
+
+June 11th, 2025
+===============
+**Breaking Changes:**
+- :bug::warning: (server) Fixed SmithyRpcV2CBOR Router to properly respect case in service names, preventing routing failures for services with mixed-case service shape ID.
+
+**New this release:**
+- :bug: (client, [smithy-rs#4165](https://github.com/smithy-lang/smithy-rs/issues/4165)) Fix default supported protocols incorrectly ordered in `ClientProtocolLoader`.
+
+
+June 3rd, 2025
+==============
+**New this release:**
+- :bug: (client, [aws-sdk-rust#1272](https://github.com/awslabs/aws-sdk-rust/issues/1272)) Fix h2 GoAway errors not being retried by hyper legacy client
+
+
+May 19th, 2025
+==============
+**New this release:**
+- :tada: (client, [smithy-rs#4135](https://github.com/smithy-lang/smithy-rs/issues/4135)) Introduce a new `repeatedly()` function to `aws-smithy-mocks` sequence builder to build mock rules that behave as an
+    infinite sequence.
+
+    ```rust
+    let rule = mock!(aws_sdk_s3::Client::get_object)
+        .sequence()
+        .http_status(503, None)
+        .times(2)        // repeat the last output twice before moving onto the next response in the sequence
+        .output(|| GetObjectOutput::builder()
+            .body(ByteStream::from_static(b"success"))
+            .build()
+        )
+        .repeatedly()    // repeat the last output forever
+        .build();
+    ```
+- :bug: (client, [aws-sdk-rust#1291](https://github.com/awslabs/aws-sdk-rust/issues/1291)) Removing the `optimize_crc32_auto` feature flag from the `crc-fast` dependency of the `aws-smithy-checksums` crate since it was causing build issues for some customers.
+- :bug: (client, [smithy-rs#4137](https://github.com/smithy-lang/smithy-rs/issues/4137)) Fix bug with enum codegen
+
+    When the first enum generated has the `@sensitive` trait the opaque type
+    underlying the `UnknownVariant` inherits that sensitivity. This means that
+    it does not derive `Debug`. Since the module is only generated once this
+    causes a problem for non-sensitive enums that rely on the type deriving
+    `Debug` so that they can also derive `Debug`. We manually add `Debug` to
+    the module so it will always be there since the `UnknownVariant` is not
+    modeled and cannot be `@sensitive`.
+- :bug: (client, [smithy-rs#4135](https://github.com/smithy-lang/smithy-rs/issues/4135)) fix simple rules behavior with `RuleMode::MatchAny`
+
+
+May 15th, 2025
+==============
+**New this release:**
+- :bug: (all, [smithy-rs#4132](https://github.com/smithy-lang/smithy-rs/issues/4132)) Smithy unions that contain members named "unknown" will now codegen correctly
+- (all, [smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105), @FalkWoldmann) Replace once_cell with std equivalents
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4105](https://github.com/smithy-lang/smithy-rs/issues/4105))
+
+
+May 9th, 2025
+=============
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#4120](https://github.com/smithy-lang/smithy-rs/issues/4120)) Update MSRV to 1.82.0
+
+**New this release:**
+- :bug::tada: (client, [smithy-rs#4074](https://github.com/smithy-lang/smithy-rs/issues/4074), [smithy-rs#3926](https://github.com/smithy-lang/smithy-rs/issues/3926)) Promote `aws-smithy-mocks-experimental` to `aws-smithy-mocks`. This crate is now a recommended tool for testing
+    generated SDK clients. This release includes several fixes as well as a new sequence builder API that can be
+    used to test more complex scenarios such as retries.
+
+    ```rust
+    use aws_sdk_s3::operation::get_object::GetObjectOutput;
+    use aws_sdk_s3::config::retry::RetryConfig;
+    use aws_smithy_types::byte_stream::ByteStream;
+    use aws_smithy_mocks::{mock, mock_client, RuleMode};
+
+    #[tokio::test]
+    async fn test_retry_behavior() {
+        // Create a rule that returns 503 twice, then succeeds
+        let retry_rule = mock!(aws_sdk_s3::Client::get_object)
+            .sequence()
+            .http_status(503, None)
+            .times(2)                                            // Return 503 HTTP status twice
+            .output(|| GetObjectOutput::builder()                // Finally return a successful output
+                .body(ByteStream::from_static(b"success"))
+                .build())
+            .build();
+
+        // Create a mocked client with the rule
+        let s3 = mock_client!(
+            aws_sdk_s3,
+            RuleMode::Sequential,
+            [&retry_rule],
+            |client_builder| {
+                client_builder.retry_config(RetryConfig::standard().with_max_attempts(3))
+            }
+        );
+
+        // This should succeed after two retries
+        let result = s3
+            .get_object()
+            .bucket("test-bucket")
+            .key("test-key")
+            .send()
+            .await
+            .expect("success after retries");
+
+        // Verify the response
+        let data = result.body.collect().await.expect("successful read").to_vec();
+        assert_eq!(data, b"success");
+
+        // Verify all responses were used
+        assert_eq!(retry_rule.num_calls(), 3);
+    }
+    ```
+- :bug: (all, [smithy-rs#4117](https://github.com/smithy-lang/smithy-rs/issues/4117)) Fix a bug where fields that were initially annotated with the `required` trait and later updated to use the `addedDefault` trait were not serialized when their values matched the default, even when the values were explicitly set. With this fix, fields with `addedDefault` are now always serialized.
+
+
+May 2nd, 2025
+=============
+
+April 23rd, 2025
+================
+**Breaking Changes:**
+- :warning: (client, [smithy-rs#3776](https://github.com/smithy-lang/smithy-rs/issues/3776)) [AuthSchemeId](https://docs.rs/aws-smithy-runtime-api/1.7.4/aws_smithy_runtime_api/client/auth/struct.AuthSchemeId.html) no longer implements the `Copy` trait. This type has primarily been used by the Smithy code generator, so this change is not expected to affect users of SDKs.
+
+**New this release:**
+- (all, [smithy-rs#4050](https://github.com/smithy-lang/smithy-rs/issues/4050), @FalkWoldmann) Replace the `once_cell` crate with the `std` counterpart in Smithy runtime crates.
+- (client) remove redundant span attributes and improve log output format
+
+**Contributors**
+Thank you for your contributions! ❤
+- @FalkWoldmann ([smithy-rs#4050](https://github.com/smithy-lang/smithy-rs/issues/4050))
+
+
 March 27th, 2025
 ================
 

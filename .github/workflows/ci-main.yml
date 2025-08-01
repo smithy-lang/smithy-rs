@@ -15,9 +15,6 @@ concurrency:
   group: ci-main-yml
   cancel-in-progress: true
 
-env:
-  ecr_repository: public.ecr.aws/w0m4q9l7/github-awslabs-smithy-rs-ci
-
 permissions:
   actions: read
   contents: read
@@ -42,14 +39,14 @@ jobs:
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: ${{ secrets.SMITHY_RS_PUBLIC_ECR_PUSH_ROLE_ARN }}
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
         role-session-name: GitHubActions
         aws-region: us-west-2
     - name: Save the docker login password to the output
       id: set-token
       run: |
         ENCRYPTED_PAYLOAD=$(
-          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr-public get-login-password --region us-east-1) | base64 -w0
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr get-login-password --region us-west-2) | base64 -w0
         )
         echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
     - name: Acquire base image
@@ -61,11 +58,9 @@ jobs:
       run: ./.github/scripts/acquire-build-image
     - name: Tag and upload image
       run: |
-        IMAGE_TAG="$(./.github/scripts/docker-image-hash)"
-        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:${IMAGE_TAG}"
-        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${{ env.ecr_repository }}:main"
-        docker push "${{ env.ecr_repository }}:${IMAGE_TAG}"
-        docker push "${{ env.ecr_repository }}:main"
+        pwd
+        IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
+        ./.github/scripts/upload-build-image.sh $IMAGE_TAG
 
   # Run the shared CI after a Docker build image has been uploaded to ECR
   ci:

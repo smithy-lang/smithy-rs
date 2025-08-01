@@ -63,6 +63,7 @@
 
 use crate::provider_config::ProviderConfig;
 use crate::sts;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_sdk_sts::{types::PolicyDescriptorType, Client as StsClient};
 use aws_smithy_async::time::SharedTimeSource;
@@ -76,7 +77,7 @@ const ENV_VAR_TOKEN_FILE: &str = "AWS_WEB_IDENTITY_TOKEN_FILE";
 const ENV_VAR_ROLE_ARN: &str = "AWS_ROLE_ARN";
 const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 
-/// Credential provider to load credentials from Web Identity  Tokens
+/// Credential provider to load credentials from Web Identity Tokens
 ///
 /// See Module documentation for more details
 #[derive(Debug)]
@@ -160,6 +161,12 @@ impl WebIdentityTokenCredentialsProvider {
             &conf.session_name,
         )
         .await
+        .map(|mut creds| {
+            creds
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::CredentialsProfileStsWebIdToken);
+            creds
+        })
     }
 }
 
@@ -273,7 +280,7 @@ async fn load_credentials(
             tracing::warn!(error = %DisplayErrorContext(&sdk_error), "STS returned an error assuming web identity role");
             CredentialsError::provider_error(sdk_error)
         })?;
-    sts::util::into_credentials(resp.credentials, "WebIdentityToken")
+    sts::util::into_credentials(resp.credentials, resp.assumed_role_user, "WebIdentityToken")
 }
 
 #[cfg(test)]

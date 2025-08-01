@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.81.0
+  rust_version: 1.86.0
 
 name: Release smithy-rs
 on:
@@ -36,6 +36,8 @@ on:
       CANARY_GITHUB_ACTIONS_ROLE_ARN:
         required: true
       CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
+        required: true
+      SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
 
 jobs:
@@ -82,6 +84,12 @@ jobs:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+    - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
     - name: Acquire base image
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
@@ -276,3 +284,48 @@ jobs:
     uses: ./.github/workflows/backport-pull-request.yml
     secrets:
       RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+
+  publish-build-image:
+    name: Publish new smithy-rs-build-image tag to ECR
+    runs-on: smithy_ubuntu-latest_8-core
+    needs:
+    - acquire-base-image
+    - release
+    if: always() && needs.release.result == 'success'
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+        fetch-depth: 0
+    - name: Download all artifacts
+      uses: ./smithy-rs/.github/actions/download-all-artifacts
+    - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Tag and upload new build image
+      env:
+        DRY_RUN: ${{ inputs.dry_run }}
+      shell: bash
+      run: |
+        set -x
+        ls -lsa
+        docker image ls
+
+        # re-load the already built image from previous acquire-build-image step
+        # image tags in CI are tagged as ci-<tools-dir-sha>
+        CI_IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
+        docker load -i smithy-rs-base-image/smithy-rs-base-image
+        docker tag "smithy-rs-base-image:${CI_IMAGE_TAG}" "smithy-rs-base-image:local"
+        docker image ls
+        # running acquire-build-image with local builds turned off is mostly a no-op
+        # but it sets up the appropriate "local" tags needed for re-tagging
+        ALLOW_LOCAL_BUILD=false ./smithy-rs/.github/scripts/acquire-build-image
+        docker image ls
+
+        RELEASE_IMAGE_TAG=$(jq -r ".tagName" smithy-rs-release/smithy-rs-release-manifest.json)
+        ./smithy-rs/.github/scripts/upload-build-image.sh $RELEASE_IMAGE_TAG

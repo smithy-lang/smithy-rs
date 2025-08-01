@@ -13,13 +13,13 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SyntheticNoAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.getBuiltIn
@@ -99,8 +98,8 @@ class S3Decorator : ClientCodegenDecorator {
                     },
                 )::transform,
             )
-            // enable optional auth for operations commonly used with public buckets
-            .let(AddOptionalAuth()::transform)
+            // enable no auth for the service to support operations commonly used with public buckets
+            .let(AddSyntheticNoAuth()::transform)
             .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
@@ -210,13 +209,13 @@ class FilterEndpointTests(
 }
 
 // TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
-private class AddOptionalAuth {
+// See the comment in the `SyntheticNoAuthTrait` class for why we use a synthetic trait instead of `optionalAuth`.
+private class AddSyntheticNoAuth {
     fun transform(model: Model): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
-            // Add @optionalAuth to all S3 operations
-            if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
+            if (shape is ServiceShape) {
                 shape.toBuilder()
-                    .addTrait(OptionalAuthTrait())
+                    .addTrait(SyntheticNoAuthTrait())
                     .build()
             } else {
                 shape

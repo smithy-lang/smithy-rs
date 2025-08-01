@@ -30,7 +30,8 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val newLayerName: String, val serviceConfigName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val newLayerName: String, val serviceConfigName: String) :
+        ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(
             writer: RustWriter,
@@ -40,7 +41,8 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
         }
     }
 
-    data class RegisterRuntimeComponents(val serviceConfigName: String) : ServiceRuntimePluginSection("RegisterRuntimeComponents") {
+    data class RegisterRuntimeComponents(val serviceConfigName: String) :
+        ServiceRuntimePluginSection("RegisterRuntimeComponents") {
         /** Generates the code to register an interceptor */
         fun registerInterceptor(
             writer: RustWriter,
@@ -56,11 +58,18 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
+        fun registerAuthSchemeOptionResolver(
+            writer: RustWriter,
+            resolver: Writable,
+        ) {
+            writer.rustTemplate("runtime_components.set_auth_scheme_option_resolver(#{Some}(#{resolver}));", *preludeScope, "resolver" to resolver)
+        }
+
         fun registerEndpointResolver(
             writer: RustWriter,
             resolver: Writable,
         ) {
-            writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
+            writer.rustTemplate("runtime_components.set_endpoint_resolver(#{Some}(#{resolver}));", *preludeScope, "resolver" to resolver)
         }
 
         fun registerRetryClassifier(
@@ -111,7 +120,10 @@ class ServiceRuntimePluginGenerator(
     ) {
         val additionalConfig =
             writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_service_config"))
+                writeCustomizations(
+                    customizations,
+                    ServiceRuntimePluginSection.AdditionalConfig("cfg", "_service_config"),
+                )
             }
         writer.rustTemplate(
             """
@@ -144,7 +156,7 @@ class ServiceRuntimePluginGenerator(
                 }
             }
 
-            /// Cross-operation shared-state singletons
+            // Cross-operation shared-state singletons
             #{declare_singletons}
             """,
             *codegenScope,
@@ -166,7 +178,10 @@ class ServiceRuntimePluginGenerator(
                 },
             "runtime_components" to
                 writable {
-                    writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterRuntimeComponents("_service_config"))
+                    writeCustomizations(
+                        customizations,
+                        ServiceRuntimePluginSection.RegisterRuntimeComponents("_service_config"),
+                    )
                 },
             "declare_singletons" to
                 writable {
