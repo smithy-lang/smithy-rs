@@ -403,6 +403,40 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
     }
 }
 
+impl<C> Adapter<C> {
+    /// Add proxy authentication header to the request if needed
+    /// Following the reqwest pattern for proxy authentication
+    fn add_proxy_auth_header(&self, request: &mut http_1x::Request<SdkBody>) {
+        // Only add auth for HTTP requests (not HTTPS which uses CONNECT tunneling)
+        if request.uri().scheme() != Some(&http_1x::uri::Scheme::HTTP) {
+            return;
+        }
+
+        // Don't override existing proxy authorization header
+        if request
+            .headers()
+            .contains_key(http_1x::header::PROXY_AUTHORIZATION)
+        {
+            return;
+        }
+
+        // Check if we have proxy configuration
+        if let Some(ref proxy_config) = self.proxy_config {
+            // Use hyper-util matcher to check if this request should be proxied
+            let matcher = proxy_config.clone().into_hyper_util_matcher();
+            if let Some(intercept) = matcher.intercept(request.uri()) {
+                // Add basic auth header if available
+                if let Some(auth_header) = intercept.basic_auth() {
+                    request
+                        .headers_mut()
+                        .insert(http_1x::header::PROXY_AUTHORIZATION, auth_header.clone());
+                    tracing::debug!("added proxy authentication header for {}", request.uri());
+                }
+            }
+        }
+    }
+}
+
 impl<C> HttpConnector for Adapter<C>
 where
     C: Clone + Send + Sync + 'static,
@@ -419,6 +453,10 @@ where
                 return HttpConnectorFuture::ready(Err(ConnectorError::user(err.into())));
             }
         };
+
+        // Inject proxy authentication headers if needed (following reqwest pattern)
+        self.add_proxy_auth_header(&mut request);
+
         let capture_connection = capture_connection(&mut request);
         if let Some(capture_smithy_connection) =
             request.extensions().get::<CaptureSmithyConnection>()

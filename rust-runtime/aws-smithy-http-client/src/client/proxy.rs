@@ -564,7 +564,7 @@ impl<C> ProxyAwareConnector<C> {
 
 impl<C> tower::Service<Uri> for ProxyAwareConnector<C>
 where
-    C: tower::Service<Uri> + Clone,
+    C: tower::Service<Uri> + Clone + Send + 'static,
     C::Response: Read + Write + Connection + Send + Sync + Unpin,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
@@ -591,27 +591,36 @@ where
             None
         };
 
-        if let Some(_intercept) = proxy_intercept {
-            // TODO: Implement proxy connection logic following reqwest's connect_via_proxy pattern
-            // For now, fall back to direct connection
-            tracing::debug!(
-                "proxy intercept detected for {}, but proxy connection not yet implemented",
-                uri
-            );
-        }
+        if let Some(intercept) = proxy_intercept {
+            // Use proxy connection via hyper-util
+            tracing::debug!("routing request through proxy: {}", intercept.uri());
 
-        // For now, always use direct connection
-        // TODO: Implement actual proxy connection logic
-        let mut inner = self.inner.clone();
-        let fut = inner.call(uri);
+            // Create a proxy connector using hyper-util
+            let proxy_uri = intercept.uri().clone();
+            let mut inner = self.inner.clone();
 
-        Box::pin(async move {
-            let conn = fut.await?;
-            Ok(ProxyConnection {
-                inner: conn,
-                is_proxied: false, // TODO: Set to true when using proxy
+            Box::pin(async move {
+                // For HTTP requests through HTTP proxy, we connect to the proxy
+                // and send the full URL in the request line
+                let conn = inner.call(proxy_uri).await?;
+                Ok(ProxyConnection {
+                    inner: conn,
+                    is_proxied: true,
+                })
             })
-        })
+        } else {
+            // Direct connection
+            let mut inner = self.inner.clone();
+            let fut = inner.call(uri);
+
+            Box::pin(async move {
+                let conn = fut.await?;
+                Ok(ProxyConnection {
+                    inner: conn,
+                    is_proxied: false,
+                })
+            })
+        }
     }
 }
 
