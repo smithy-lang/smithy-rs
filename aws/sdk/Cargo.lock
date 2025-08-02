@@ -335,7 +335,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-config"
-version = "1.8.3"
+version = "1.8.4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "async-trait",
  "aws-smithy-async",
@@ -435,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.9"
+version = "1.5.10"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -481,20 +481,28 @@ dependencies = [
  "aws-config",
  "aws-credential-types",
  "aws-runtime",
+ "aws-sigv4",
  "aws-smithy-async",
  "aws-smithy-eventstream",
  "aws-smithy-http",
+ "aws-smithy-http-client",
  "aws-smithy-json",
+ "aws-smithy-protocol-test",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
  "fastrand 2.3.0",
+ "futures-util",
  "http 0.2.12",
+ "http 1.3.1",
+ "hyper 0.14.32",
  "regex-lite",
+ "serde_json",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -1156,7 +1164,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.63.5"
+version = "0.63.6"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -1371,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.5"
+version = "1.8.6"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -1399,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.5"
+version = "1.8.7"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
