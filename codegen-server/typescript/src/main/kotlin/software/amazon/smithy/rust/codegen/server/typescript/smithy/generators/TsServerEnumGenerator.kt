@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -41,6 +42,7 @@ class TsServerEnumGenerator(
     codegenContext: ServerCodegenContext,
     shape: StringShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+    customizations: List<EnumCustomization>,
 ) : EnumGenerator(
         codegenContext.model,
         codegenContext.symbolProvider,
@@ -50,4 +52,5 @@ class TsServerEnumGenerator(
             shape,
             validationExceptionConversionGenerator,
         ),
+        customizations,
     )
