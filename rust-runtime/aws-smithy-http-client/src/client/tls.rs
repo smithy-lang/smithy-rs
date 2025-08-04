@@ -221,7 +221,7 @@ cfg_rustls! {
                 certs
             });
 
-            fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
+            pub(crate) fn restrict_ciphers(base: CryptoProvider) -> CryptoProvider {
                 let suites = &[
                     rustls::CipherSuite::TLS13_AES_256_GCM_SHA384,
                     rustls::CipherSuite::TLS13_AES_128_GCM_SHA256,
@@ -248,7 +248,7 @@ cfg_rustls! {
             }
 
             impl TlsContext {
-                fn rustls_root_certs(&self) -> rustls::RootCertStore {
+                pub(crate) fn rustls_root_certs(&self) -> rustls::RootCertStore {
                     let mut roots = rustls::RootCertStore::empty();
                     if self.trust_store.enable_native_roots {
                         let (valid, _invalid) = roots.add_parsable_certificates(
@@ -268,27 +268,65 @@ cfg_rustls! {
                 }
             }
 
+            /// Create a rustls ClientConfig with smithy-rs defaults
+            /// 
+            /// This centralizes the rustls ClientConfig creation logic to ensure
+            /// consistency between the main HTTPS connector and tunnel handlers.
+            pub(crate) fn create_rustls_client_config(
+                crypto_mode: CryptoMode,
+                tls_context: &TlsContext,
+            ) -> rustls::ClientConfig {
+                let root_certs = tls_context.rustls_root_certs();
+                rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_mode.provider())))
+                    .with_safe_default_protocol_versions()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
+                    .with_root_certificates(root_certs)
+                    .with_no_client_auth()
+            }
+
             pub(crate) fn wrap_connector<R>(
                 mut conn: HttpConnector<R>,
                 crypto_mode: CryptoMode,
                 tls_context: &TlsContext,
             ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
-                let root_certs = tls_context.rustls_root_certs();
+                let client_config = create_rustls_client_config(crypto_mode, tls_context);
                 conn.enforce_http(false);
                 hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_tls_config(
-                        rustls::ClientConfig::builder_with_provider(Arc::new(restrict_ciphers(crypto_mode.provider())))
-                            .with_safe_default_protocol_versions()
-                            .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                            .with_root_certificates(root_certs)
-                            .with_no_client_auth()
-                    )
+                    .with_tls_config(client_config)
                     .https_or_http()
                     .enable_http1()
                     .enable_http2()
                     .wrap_connector(conn)
             }
         }
+
+        /// Rustls-specific tunnel handler for HTTPS CONNECT tunneling
+        ///
+        /// This handler performs manual TLS handshakes over tunneled connections
+        /// using tokio-rustls, reusing the same TLS configuration as the main
+        /// rustls connector.
+        /// 
+        /// Note: This is a placeholder implementation for Prompt 11b.
+        /// Full CONNECT tunneling will be implemented in Prompt 11c.
+        #[derive(Clone)]
+        pub(crate) struct RustlsTunnelHandler {
+            tls_config: std::sync::Arc<rustls::ClientConfig>,
+        }
+
+        impl RustlsTunnelHandler {
+            /// Create a new RustlsTunnelHandler with the given TLS configuration
+            pub(crate) fn new(crypto_mode: CryptoMode, tls_context: &crate::tls::TlsContext) -> Self {
+                // Use the consolidated ClientConfig creation function
+                let tls_config = std::sync::Arc::new(
+                    build_connector::create_rustls_client_config(crypto_mode, tls_context)
+                );
+                
+                Self { tls_config }
+            }
+        }
+
+        // Note: TunnelHandler implementation will be added in Prompt 11c
+        // when we implement full CONNECT tunneling support
     }
 }
 
