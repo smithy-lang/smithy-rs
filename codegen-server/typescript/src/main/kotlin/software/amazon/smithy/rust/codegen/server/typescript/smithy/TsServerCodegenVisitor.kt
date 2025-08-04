@@ -1,4 +1,3 @@
-
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -83,8 +82,15 @@ class TsServerCodegenVisitor(
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
             codegenDecorator: ServerCodegenDecorator,
-        ) =
-            RustServerCodegenTsPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
+        ) = RustServerCodegenTsPlugin.baseSymbolProvider(
+            settings,
+            model,
+            serviceShape,
+            rustSymbolProviderConfig,
+            publicConstrainedTypes,
+            includeConstraintShapeProvider,
+            codegenDecorator,
+        )
 
         val serverSymbolProviders =
             ServerSymbolProviders.from(
@@ -171,7 +177,7 @@ class TsServerCodegenVisitor(
         fun tsServerEnumGeneratorFactory(
             codegenContext: ServerCodegenContext,
             shape: StringShape,
-        ) = TsServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+        ) = TsServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator, emptyList())
         stringShape(shape, ::tsServerEnumGeneratorFactory)
     }
 
