@@ -17,6 +17,9 @@ use hyper::rt::{Read, Write};
 use hyper_util::client::legacy::connect::Connection;
 use hyper_util::client::proxy::matcher::{Intercept, Matcher};
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Proxy configuration for HTTP clients
 ///
@@ -683,6 +686,52 @@ where
         std::pin::Pin::new(&mut this.inner).poll_shutdown(cx)
     }
 }
+
+// ===== HTTPS/CONNECT Tunneling Infrastructure =====
+
+/// Trait for performing manual TLS handshakes over tunneled connections
+///
+/// This trait enables HTTPS requests through HTTP proxies by allowing TLS providers
+/// to perform manual TLS handshakes over streams established via CONNECT tunneling.
+///
+/// Each TLS provider (e.g. rustls, s2n, etc) implements this trait to handle provider-specific
+/// TLS handshake logic while maintaining a common interface for the proxy system.
+pub(crate) trait TunnelHandler: Clone + Send + Sync + 'static {
+    /// The TLS stream type returned after successful handshake
+    type Stream: AsyncRead + AsyncWrite + Connection + Unpin + Send + Sync + 'static;
+
+    /// Perform a TLS handshake over an existing stream
+    ///
+    /// This method takes a raw stream (typically from a CONNECT tunnel) and performs
+    /// a TLS handshake with the target server, returning a TLS-encrypted stream.
+    ///
+    /// # Arguments
+    ///
+    /// - `stream`: The underlying stream to perform TLS handshake over
+    /// - `server_name`: The server name for TLS SNI and certificate validation
+    ///
+    /// # Returns
+    ///
+    /// A TLS-encrypted stream on success, or a ConnectorError on failure.
+    fn perform_tls_handshake<S>(
+        &self,
+        stream: S,
+        server_name: &str,
+    ) -> Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Self::Stream,
+                        aws_smithy_runtime_api::client::result::ConnectorError,
+                    >,
+                > + Send
+                + '_,
+        >,
+    >
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
