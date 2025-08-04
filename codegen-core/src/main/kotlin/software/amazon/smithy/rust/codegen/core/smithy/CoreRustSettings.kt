@@ -15,7 +15,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 import java.util.logging.Logger
-import kotlin.jvm.optionals.getOrElse
 import kotlin.streams.toList
 
 private const val SERVICE = "service"
@@ -30,7 +29,6 @@ private const val EXAMPLES = "examples"
 private const val MINIMUM_SUPPORTED_RUST_VERSION = "minimumSupportedRustVersion"
 private const val CUSTOMIZATION_CONFIG = "customizationConfig"
 const val CODEGEN_SETTINGS = "codegen"
-private const val HINT_MOSTLY_UNUSED_LIST = "hintMostlyUnusedList"
 
 /**
  * [CoreCodegenConfig] contains code-generation configuration that is _common to all_  smithy-rs plugins.
@@ -97,7 +95,6 @@ open class CoreRustSettings(
     open val examplesUri: String? = null,
     open val minimumSupportedRustVersion: String? = null,
     open val customizationConfig: ObjectNode? = null,
-    open val hintMostlyUnusedList: List<String> = emptyList(),
 ) {
     /**
      * Get the corresponding [ServiceShape] from a model.
@@ -189,7 +186,6 @@ open class CoreRustSettings(
                     LICENSE,
                     MINIMUM_SUPPORTED_RUST_VERSION,
                     CUSTOMIZATION_CONFIG,
-                    HINT_MOSTLY_UNUSED_LIST,
                 ),
             )
 
@@ -212,14 +208,6 @@ open class CoreRustSettings(
                 examplesUri = config.getStringMember(EXAMPLES).orNull()?.value,
                 minimumSupportedRustVersion = config.getStringMember(MINIMUM_SUPPORTED_RUST_VERSION).orNull()?.value,
                 customizationConfig = config.getObjectMember(CUSTOMIZATION_CONFIG).orNull(),
-                hintMostlyUnusedList =
-                    config.getArrayMember("hintMostlyUnusedList").map {
-                        it.elements.mapNotNull { node ->
-                            node.asStringNode().map { stringNode ->
-                                stringNode.value
-                            }.orNull()
-                        }
-                    }.getOrElse { emptyList() },
             )
         }
     }

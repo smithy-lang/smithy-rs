@@ -38,7 +38,6 @@ fun testClientRustSettings(
     examplesUri: String? = null,
     minimumSupportedRustVersion: String? = null,
     customizationConfig: ObjectNode? = null,
-    hintMostlyUnusedList: List<String> = emptyList(),
 ) = ClientRustSettings(
     service,
     moduleName,
@@ -52,7 +51,6 @@ fun testClientRustSettings(
     examplesUri,
     minimumSupportedRustVersion,
     customizationConfig,
-    hintMostlyUnusedList,
 )
 
 val TestClientRustSymbolProviderConfig =

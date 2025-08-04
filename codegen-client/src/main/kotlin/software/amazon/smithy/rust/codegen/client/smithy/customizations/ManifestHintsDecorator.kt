@@ -25,7 +25,7 @@ fun ManifestHintsSettings.asMap(): Map<String, Any> {
 }
 
 /**
- * Write compilation hints metdata settings into Cargo.toml
+ * Write compilation hints metdata settings into Cargo.toml.
  *
  * # Notes
  * This decorator is not used by default, code generators must manually configure and include it in their builds.
@@ -35,10 +35,6 @@ class ManifestHintsDecorator(private val manifestHintsSettings: ManifestHintsSet
     override val order: Byte = 0
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations {
-        if (codegenContext.settings.hintMostlyUnusedList.contains(codegenContext.settings.moduleName)) {
-            return manifestHintsSettings.asMap()
-        } else {
-            return emptyMap()
-        }
+        return manifestHintsSettings.asMap()
     }
 }

@@ -24,6 +24,7 @@ import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
+import software.amazon.smithy.rustsdk.customize.onlyApplyToList
 import software.amazon.smithy.rustsdk.customize.rds.RdsDecorator
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
@@ -74,11 +75,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
             Sigv4aAuthTraitBackfillDecorator(),
             EndpointBasedAuthSchemeDecorator(),
             SpanDecorator(),
-            ManifestHintsDecorator(
-                ManifestHintsSettings(
-                    mostlyUnused = true,
-                ),
-            ),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),
@@ -114,6 +110,18 @@ val DECORATORS: List<ClientCodegenDecorator> =
                     targets = listOf("x86_64-unknown-linux-gnu"),
                     allFeatures = true,
                 ),
+            ),
+        ),
+        ManifestHintsDecorator(ManifestHintsSettings(mostlyUnused = true)).onlyApplyToList(
+            listOf(
+                "com.amazonaws.cloudformation#CloudFormation",
+                "com.amazonaws.dynamodb#DynamoDB_20120810",
+                "com.amazonaws.ec2#AmazonEC2",
+                "com.amazonaws.s3#AmazonS3",
+                "com.amazonaws.sns#AmazonSimpleNotificationService",
+                "com.amazonaws.sqs#AmazonSQS",
+                "com.amazonaws.ssm#AmazonSSM",
+                "com.amazonaws.sts#AWSSecurityTokenServiceV20110615",
             ),
         ),
     ).flatten()
