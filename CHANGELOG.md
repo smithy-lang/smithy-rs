@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 4th, 2025
+================
+**New this release:**
+- :tada: (all, @Dorenavant) Add EnumSection to allow decorators to modify enum member attributes
+- :bug: (client, [smithy-rs#4227](https://github.com/smithy-lang/smithy-rs/issues/4227)) Fix canonical request sort order
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Dorenavant
+
+
 July 25th, 2025
 ===============
 **New this release:**
