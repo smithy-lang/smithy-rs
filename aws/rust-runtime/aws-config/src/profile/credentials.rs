@@ -616,7 +616,8 @@ mod test {
     make_test!(credential_process_invalid);
     #[cfg(feature = "sso")]
     make_test!(sso_credentials);
-    make_test!(invalid_sso_credentials_config); // no feature flag since this is just testing for invalid config
+    #[cfg(feature = "sso")]
+    make_test!(invalid_sso_credentials_config);
     #[cfg(feature = "sso")]
     make_test!(sso_override_global_env_url);
     #[cfg(feature = "sso")]
