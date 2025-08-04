@@ -7,6 +7,8 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMetadataSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ManifestHintsDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.ManifestHintsSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.AwsDisableStalledStreamProtection
@@ -22,6 +24,7 @@ import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
+import software.amazon.smithy.rustsdk.customize.onlyApplyToList
 import software.amazon.smithy.rustsdk.customize.rds.RdsDecorator
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
@@ -107,6 +110,18 @@ val DECORATORS: List<ClientCodegenDecorator> =
                     targets = listOf("x86_64-unknown-linux-gnu"),
                     allFeatures = true,
                 ),
+            ),
+        ),
+        ManifestHintsDecorator(ManifestHintsSettings(mostlyUnused = true)).onlyApplyToList(
+            listOf(
+                "com.amazonaws.cloudformation#CloudFormation",
+                "com.amazonaws.dynamodb#DynamoDB_20120810",
+                "com.amazonaws.ec2#AmazonEC2",
+                "com.amazonaws.s3#AmazonS3",
+                "com.amazonaws.sns#AmazonSimpleNotificationService",
+                "com.amazonaws.sqs#AmazonSQS",
+                "com.amazonaws.ssm#AmazonSSM",
+                "com.amazonaws.sts#AWSSecurityTokenServiceV20110615",
             ),
         ),
     ).flatten()
