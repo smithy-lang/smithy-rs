@@ -163,7 +163,19 @@ impl ConnectorBuilder<TlsUnset> {
         }
 
         let base = self.base_connector();
-        self.wrap_connector(base)
+
+        // Wrap with HTTP proxy support if proxy is configured
+        let proxy_config = self
+            .proxy_config
+            .clone()
+            .unwrap_or_else(proxy::ProxyConfig::disabled);
+
+        if !proxy_config.is_disabled() {
+            let http_proxy_connector = connect::HttpProxyConnector::new(base, proxy_config);
+            self.wrap_connector(http_proxy_connector)
+        } else {
+            self.wrap_connector(base)
+        }
     }
 }
 
