@@ -17,6 +17,8 @@ pub(crate) trait AsyncConn:
 {
 }
 
+impl<T: Read + Write + Connection + Send + Sync + Unpin + 'static> AsyncConn for T {}
+
 pub(crate) type BoxConn = Box<dyn AsyncConn>;
 
 // Future for connecting

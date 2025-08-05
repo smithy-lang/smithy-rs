@@ -53,8 +53,11 @@ impl Provider {
 pub(crate) mod build_connector {
     use crate::client::tls::rustls_provider::CryptoMode;
     use crate::tls::TlsContext;
+    use aws_smithy_runtime_api::box_error::BoxError;
     use client::connect::HttpConnector;
+    use http_1x::Uri;
     use hyper_util::client::legacy as client;
+    use hyper_util::client::legacy::connect::Connection;
     use rustls::crypto::CryptoProvider;
     use rustls_native_certs::CertificateResult;
     use rustls_pki_types::pem::PemObject;
@@ -149,27 +152,33 @@ pub(crate) mod build_connector {
         mut conn: HttpConnector<R>,
         crypto_mode: CryptoMode,
         tls_context: &TlsContext,
-    ) -> hyper_rustls::HttpsConnector<HttpConnector<R>> {
+        proxy_config: crate::client::proxy::ProxyConfig,
+    ) -> super::connect::RustTlsConnector<R> {
         let client_config = create_rustls_client_config(crypto_mode, tls_context);
         conn.enforce_http(false);
-        hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(client_config)
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(client_config.clone())
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .wrap_connector(conn)
+            .wrap_connector(conn);
+
+        super::connect::RustTlsConnector::new(https_connector, client_config, proxy_config)
     }
 }
 
-mod connect {
+pub(crate) mod connect {
     use crate::client::connect::{Conn, Connecting};
+    use crate::client::proxy::ProxyConfig;
     use aws_smithy_runtime_api::box_error::BoxError;
+    use http_1x::uri::Scheme;
     use http_1x::Uri;
     use hyper::rt::{Read, ReadBufCursor, Write};
     use hyper_rustls::MaybeHttpsStream;
     use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
     use hyper_util::rt::TokioIo;
     use pin_project_lite::pin_project;
+    use std::error::Error;
     use std::sync::Arc;
     use std::{
         io::{self, IoSlice},
@@ -179,29 +188,163 @@ mod connect {
     use tokio::io::{AsyncRead, AsyncWrite};
     use tokio::net::TcpStream;
     use tokio_rustls::client::TlsStream;
+    use tower::Service;
 
     #[derive(Debug, Clone)]
-    pub(super) struct RustTlsConnector<R> {
+    pub(crate) struct RustTlsConnector<R> {
         https: hyper_rustls::HttpsConnector<HttpConnector<R>>,
         tls_config: Arc<rustls::ClientConfig>,
+        proxy_config: ProxyConfig,
     }
 
-    impl<R> tower::Service<Uri> for RustTlsConnector<R> {
+    impl<R> RustTlsConnector<R> {
+        pub(super) fn new(
+            https: hyper_rustls::HttpsConnector<HttpConnector<R>>,
+            tls_config: rustls::ClientConfig,
+            proxy_config: ProxyConfig,
+        ) -> Self {
+            Self {
+                https,
+                tls_config: Arc::new(tls_config),
+                proxy_config,
+            }
+        }
+    }
+
+    impl<R> Service<Uri> for RustTlsConnector<R>
+    where
+        R: Clone + Send + Sync + 'static,
+        R: Service<hyper_util::client::legacy::connect::dns::Name>,
+        R::Response: Iterator<Item = std::net::SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
         type Response = Conn;
         type Error = BoxError;
         type Future = Connecting;
 
         fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-            Poll::Ready(Ok(()))
+            self.https.poll_ready(cx).map_err(Into::into)
         }
 
         fn call(&mut self, dst: Uri) -> Self::Future {
-            todo!()
+            // Check if this request should be proxied
+            let proxy_intercept = if !self.proxy_config.is_disabled() {
+                let matcher = self.proxy_config.clone().into_hyper_util_matcher();
+                matcher.intercept(&dst)
+            } else {
+                None
+            };
+
+            if let Some(intercept) = proxy_intercept {
+                if dst.scheme() == Some(&Scheme::HTTPS) {
+                    // HTTPS through HTTP proxy: Use CONNECT tunneling + manual TLS
+                    self.handle_https_through_proxy(dst, intercept)
+                } else {
+                    // HTTP through proxy: Direct connection to proxy
+                    self.handle_http_through_proxy(dst, intercept)
+                }
+            } else {
+                // Direct connection: Use the existing HTTPS connector
+                self.handle_direct_connection(dst)
+            }
+        }
+    }
+
+    impl<R> RustTlsConnector<R>
+    where
+        R: Clone + Send + Sync + 'static,
+        R: Service<hyper_util::client::legacy::connect::dns::Name>,
+        R::Response: Iterator<Item = std::net::SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
+        fn handle_direct_connection(&mut self, dst: Uri) -> Connecting {
+            let fut = self.https.call(dst);
+            Box::pin(async move {
+                let conn = fut.await?;
+                Ok(Conn {
+                    inner: Box::new(conn),
+                    is_proxy: false,
+                })
+            })
+        }
+
+        fn handle_http_through_proxy(
+            &mut self,
+            _dst: Uri,
+            intercept: hyper_util::client::proxy::matcher::Intercept,
+        ) -> Connecting {
+            // For HTTP through proxy, connect to the proxy and let it handle the request
+            let proxy_uri = intercept.uri().clone();
+            let fut = self.https.call(proxy_uri);
+            Box::pin(async move {
+                let conn = fut.await?;
+                Ok(Conn {
+                    inner: Box::new(conn),
+                    is_proxy: true,
+                })
+            })
+        }
+
+        fn handle_https_through_proxy(
+            &mut self,
+            dst: Uri,
+            intercept: hyper_util::client::proxy::matcher::Intercept,
+        ) -> Connecting {
+            use rustls_pki_types::ServerName;
+            // For HTTPS through HTTP proxy, we need to:
+            // 1. Establish CONNECT tunnel using the HTTPS connector
+            // 2. Perform manual TLS handshake over the tunneled stream
+
+            let tunnel = hyper_util::client::legacy::connect::proxy::Tunnel::new(
+                intercept.uri().clone(),
+                self.https.clone(),
+            );
+
+            // Configure tunnel with authentication if present
+            let mut tunnel = if let Some(auth) = intercept.basic_auth() {
+                tunnel.with_auth(auth.clone())
+            } else {
+                tunnel
+            };
+
+            let tls_config = self.tls_config.clone();
+            let dst_clone = dst.clone();
+
+            Box::pin(async move {
+                // Establish CONNECT tunnel
+                tracing::trace!("tunneling HTTPS over proxy");
+                let tunneled = tunnel
+                    .call(dst_clone.clone())
+                    .await
+                    .map_err(|e| BoxError::from(format!("CONNECT tunnel failed: {}", e)))?;
+
+                // Stage 2: Manual TLS handshake over tunneled stream
+                let host = dst_clone
+                    .host()
+                    .ok_or("missing host in URI for TLS handshake")?;
+
+                let server_name = ServerName::try_from(host.to_owned()).map_err(|e| {
+                    BoxError::from(format!("invalid server name for TLS handshake: {}", e))
+                })?;
+
+                let tls_connector = tokio_rustls::TlsConnector::from(tls_config)
+                    .connect(server_name, TokioIo::new(tunneled))
+                    .await?;
+
+                Ok(Conn {
+                    inner: Box::new(RustTlsConn {
+                        inner: TokioIo::new(tls_connector),
+                    }),
+                    is_proxy: true,
+                })
+            })
         }
     }
 
     pin_project! {
-        pub(super) struct RustTlsConn<T> {
+        pub(crate) struct RustTlsConn<T> {
             #[pin] pub(super) inner: TokioIo<TlsStream<T>>
         }
     }
