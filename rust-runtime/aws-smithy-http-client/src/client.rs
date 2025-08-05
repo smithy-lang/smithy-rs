@@ -706,10 +706,15 @@ cfg_tls! {
                     feature = "rustls-ring"
                 ))]
                 tls::Provider::Rustls(crypto_mode) => {
+                    // Get proxy config, defaulting to disabled if not set
+                    let proxy_config = self.proxy_config.clone()
+                        .unwrap_or_else(proxy::ProxyConfig::disabled);
+
                     let https_connector = tls::rustls_provider::build_connector::wrap_connector(
                         http_connector,
                         crypto_mode.clone(),
                         &self.tls.context,
+                        proxy_config,
                     );
                     self.wrap_connector(https_connector)
                 },
