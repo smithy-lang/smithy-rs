@@ -10,6 +10,8 @@ mod timeout;
 /// TLS connector(s)
 pub mod tls;
 
+pub(crate) mod connect;
+
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
 use aws_smithy_async::future::timeout::TimedOutError;
@@ -188,19 +190,15 @@ impl<Any> ConnectorBuilder<Any> {
             .map(|c| (c.connect_timeout(), c.read_timeout()))
             .unwrap_or((None, None));
 
-        // Wrap the base connector with proxy support
-        let proxy_aware_connector =
-            proxy::ProxyAwareConnector::new(tcp_connector, self.proxy_config.clone());
-
         let connector = match connect_timeout {
             Some(duration) => timeout::ConnectTimeout::new(
-                proxy_aware_connector,
+                tcp_connector,
                 sleep_impl
                     .clone()
                     .expect("a sleep impl must be provided in order to have a connect timeout"),
                 duration,
             ),
-            None => timeout::ConnectTimeout::no_timeout(proxy_aware_connector),
+            None => timeout::ConnectTimeout::no_timeout(tcp_connector),
         };
         let base = client_builder.build(connector);
         let read_timeout = match read_timeout {

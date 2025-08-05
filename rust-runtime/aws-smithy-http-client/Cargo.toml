@@ -66,9 +66,9 @@ legacy-test-util = [
 
 legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "hyper-014"]
 
-rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "default-client"]
-rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "default-client"]
-rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "default-client"]
+rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
+rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
+rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls","default-client"]
 s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "default-client"]
 
 [dependencies]
@@ -88,6 +88,7 @@ http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23.31", default-features = false, optional = true }
+tokio-rustls = {  version = "0.26.2", default-features = false, optional = true}
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
 s2n-tls-hyper = { version = "0.0.4", optional = true }
 s2n-tls = { version = "0.3.12", optional = true }
@@ -124,7 +125,7 @@ base64 = "0.22"
 rustls-pemfile = "2.2.0"
 rustls-pki-types = { version = "1.12.0", features = ["std"] }
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
-tokio-rustls = "0.26.1"
+tokio-rustls = "0.26.2"
 
 
 [[example]]
