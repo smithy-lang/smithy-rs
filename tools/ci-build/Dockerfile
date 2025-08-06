@@ -134,17 +134,17 @@ cargo_mdbook_version=0.4.37 \
 cargo_mdbook_mermaid_version=0.13.0
 
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version} \
-cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version} \
-cargo install cargo-hack --locked --version ${cargo_hack_version} \
-cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version} \
-cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version} \
-cargo install maturin --locked --version ${maturin_version} \
-cargo install wasm-pack --locked --version ${wasm_pack_version} \
-cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version} \
-cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version} \
-cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version} \
-cargo install mdbook --locked --version ${cargo_mdbook_version} \
-cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+&& cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version} \
+&& cargo install cargo-hack --locked --version ${cargo_hack_version} \
+&& cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version} \
+&& cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version} \
+&& cargo install maturin --locked --version ${maturin_version} \
+&& cargo install wasm-pack --locked --version ${wasm_pack_version} \
+&& cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version} \
+&& cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version} \
+&& cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version} \
+&& cargo install mdbook --locked --version ${cargo_mdbook_version} \
+&& cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
 
 # nodejs needed by internal release process
 FROM install_rust AS nodejs
