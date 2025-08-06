@@ -117,6 +117,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
                 "com.amazonaws.cloudformation#CloudFormation",
                 "com.amazonaws.dynamodb#DynamoDB_20120810",
                 "com.amazonaws.ec2#AmazonEC2",
+                "com.amazonaws.lambda#AWSGirApiService",
                 "com.amazonaws.rds#AmazonRDSv19",
                 "com.amazonaws.s3#AmazonS3",
                 "com.amazonaws.sns#AmazonSimpleNotificationService",
