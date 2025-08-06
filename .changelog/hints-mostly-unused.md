@@ -11,7 +11,7 @@ new_feature: true
 bug_fix: false
 ---
 Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:
-- aws-sd-cloudformation
+- aws-sdk-cloudformation
 - aws-sdk-dynamodb
 - aws-sdk-ec2
 - aws-sdk-s3
