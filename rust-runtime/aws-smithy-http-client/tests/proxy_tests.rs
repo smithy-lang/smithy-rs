@@ -192,6 +192,7 @@ impl Drop for MockProxyServer {
 }
 
 /// Utility for running tests with specific environment variables
+#[allow(clippy::await_holding_lock)]
 async fn with_env_vars<F, Fut, R>(vars: &[(&str, &str)], test: F) -> R
 where
     F: FnOnce() -> Fut,
@@ -848,144 +849,12 @@ async fn make_https_request_through_proxy(
 }
 
 // ================================================================================================
-//
-// HTTPS CONNECT Tunneling Tests
-//
-// These tests verify HTTPS tunneling through HTTP proxies using the CONNECT method.
-// They are provider-specific since each TLS provider has its own connector implementation.
-//
+// Generic HTTPS/CONNECT Test Functions
 // ================================================================================================
 
-/// Tests HTTPS tunneling through HTTP proxy with CONNECT method (rustls provider)
-/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
-#[cfg(feature = "rustls-ring")]
-#[tokio::test]
-async fn test_https_connect_with_auth_rustls() {
-    let mock_proxy = MockProxyServer::new(|req| {
-        // For HTTPS through HTTP proxy, we should see a CONNECT request
-        assert_eq!(req.method, "CONNECT");
-        assert_eq!(req.uri, "secure.aws.amazon.com:443");
-
-        // Verify authentication header is present
-        let expected_auth = format!(
-            "Basic {}",
-            base64::prelude::BASE64_STANDARD.encode("connectuser:connectpass")
-        );
-        assert_eq!(req.headers.get("proxy-authorization"), Some(&expected_auth));
-
-        // Return 400 to avoid dealing with actual TLS tunneling
-        // The important part is that we got the CONNECT request with correct auth
-        Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body("CONNECT tunnel setup failed".to_string())
-            .unwrap()
-    })
-    .await;
-
-    // Configure HTTP proxy for ALL traffic (including HTTPS tunneling)
-    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr()))
-        .unwrap()
-        .with_basic_auth("connectuser", "connectpass");
-
-    // Make HTTPS request - should trigger CONNECT method
-    let target_url = "https://secure.aws.amazon.com/api/secure";
-    let result = make_https_request_through_proxy(
-        proxy_config,
-        target_url,
-        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
-    )
-    .await;
-
-    // We expect this to fail with a connection error since we returned 400
-    // The important thing is that the CONNECT request was made correctly
-    assert!(
-        result.is_err(),
-        "CONNECT tunnel should fail with 400 response"
-    );
-
-    // Verify the proxy received the CONNECT request
-    let requests = mock_proxy.requests();
-    assert_eq!(
-        requests.len(),
-        1,
-        "Proxy should have received exactly one CONNECT request"
-    );
-}
-
-/// Tests CONNECT method without authentication (should get 407) - rustls provider
-/// Verifies that HTTPS requests without auth get proper 407 response
-#[cfg(feature = "rustls-ring")]
-#[tokio::test]
-async fn test_https_connect_auth_required_rustls() {
-    let mock_proxy = MockProxyServer::new(|req| {
-        // For HTTPS through HTTP proxy, we should see a CONNECT request
-        assert_eq!(req.method, "CONNECT");
-        assert_eq!(req.uri, "secure.aws.amazon.com:443");
-
-        // Verify NO authentication header is present
-        assert!(!req.headers.contains_key("proxy-authorization"));
-
-        // Return 407 Proxy Authentication Required
-        Response::builder()
-            .status(StatusCode::PROXY_AUTHENTICATION_REQUIRED)
-            .body("Proxy authentication required for CONNECT".to_string())
-            .unwrap()
-    })
-    .await;
-
-    // Configure HTTP proxy for ALL traffic (including HTTPS tunneling) WITHOUT authentication
-    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
-
-    // Make HTTPS request - should trigger CONNECT method and get 407
-    let target_url = "https://secure.aws.amazon.com/api/secure";
-    let result = make_https_request_through_proxy(
-        proxy_config,
-        target_url,
-        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
-    )
-    .await;
-
-    // We expect this to fail with authentication error
-    assert!(
-        result.is_err(),
-        "CONNECT tunnel should fail with 407 response"
-    );
-
-    let error_msg = result.unwrap_err().to_string();
-    let error_msg_lower = error_msg.to_lowercase();
-
-    // The important thing is that the request failed (which means CONNECT was attempted)
-    // The specific error message format is less critical for this test
-    // We accept either specific proxy auth errors OR generic connection errors
-    // since both indicate the CONNECT tunnel attempt was made
-    assert!(
-        error_msg_lower.contains("407")
-            || error_msg_lower.contains("proxy")
-            || error_msg_lower.contains("auth")
-            || error_msg_lower.contains("io error")
-            || error_msg_lower.contains("connection"),
-        "Error should be connection-related (indicating CONNECT was attempted), got: {}",
-        error_msg
-    );
-
-    // Verify the proxy received the CONNECT request
-    let requests = mock_proxy.requests();
-    assert_eq!(
-        requests.len(),
-        1,
-        "Proxy should have received exactly one CONNECT request"
-    );
-}
-
-// ================================================================================================
-// S2N-TLS Provider CONNECT Tests
-// ================================================================================================
-
-/// Tests HTTPS tunneling through HTTP proxy with CONNECT method (s2n-tls provider)
-/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
-#[cfg(feature = "s2n-tls")]
-#[tokio::test]
-async fn test_https_connect_with_auth_s2n_tls() {
+/// Generic test function for HTTPS CONNECT with authentication
+/// Tests that HTTPS requests through HTTP proxy use CONNECT method with proper auth headers
+async fn run_https_connect_with_auth_test(tls_provider: tls::Provider, provider_name: &str) {
     let mock_proxy = MockProxyServer::new(|req| {
         // For HTTPS through HTTP proxy, we should see a CONNECT request
         assert_eq!(req.method, "CONNECT");
@@ -1014,14 +883,14 @@ async fn test_https_connect_with_auth_s2n_tls() {
 
     // Make HTTPS request - should trigger CONNECT method
     let target_url = "https://secure.aws.amazon.com/api/secure";
-    let result =
-        make_https_request_through_proxy(proxy_config, target_url, tls::Provider::S2nTls).await;
+    let result = make_https_request_through_proxy(proxy_config, target_url, tls_provider).await;
 
     // We expect this to fail with a connection error since we returned 400
     // The important thing is that the CONNECT request was made correctly
     assert!(
         result.is_err(),
-        "CONNECT tunnel should fail with 400 response"
+        "CONNECT tunnel should fail with 400 response for {}",
+        provider_name
     );
 
     // Verify the proxy received the CONNECT request
@@ -1029,22 +898,21 @@ async fn test_https_connect_with_auth_s2n_tls() {
     assert_eq!(
         requests.len(),
         1,
-        "Proxy should have received exactly one CONNECT request"
+        "Proxy should have received exactly one CONNECT request for {}",
+        provider_name
     );
 }
 
-/// Tests CONNECT method without authentication (should get 407) - s2n-tls provider
-/// Verifies that HTTPS requests without auth get proper 407 response
-#[cfg(feature = "s2n-tls")]
-#[tokio::test]
-async fn test_https_connect_auth_required_s2n_tls() {
+/// Generic test function for CONNECT without authentication (should get 407)
+/// Tests that HTTPS requests without auth get proper 407 response
+async fn run_https_connect_auth_required_test(tls_provider: tls::Provider, provider_name: &str) {
     let mock_proxy = MockProxyServer::new(|req| {
         // For HTTPS through HTTP proxy, we should see a CONNECT request
         assert_eq!(req.method, "CONNECT");
         assert_eq!(req.uri, "secure.aws.amazon.com:443");
 
         // No auth header should be present
-        assert!(req.headers.get("proxy-authorization").is_none());
+        assert!(!req.headers.contains_key("proxy-authorization"));
 
         // Return 407 Proxy Authentication Required
         Response::builder()
@@ -1059,13 +927,13 @@ async fn test_https_connect_auth_required_s2n_tls() {
 
     // Make HTTPS request - should trigger CONNECT method and get 407
     let target_url = "https://secure.aws.amazon.com/api/secure";
-    let result =
-        make_https_request_through_proxy(proxy_config, target_url, tls::Provider::S2nTls).await;
+    let result = make_https_request_through_proxy(proxy_config, target_url, tls_provider).await;
 
     // We expect this to fail with a connection error since we returned 407
     assert!(
         result.is_err(),
-        "CONNECT tunnel should fail with 407 response"
+        "CONNECT tunnel should fail with 407 response for {}",
+        provider_name
     );
 
     let error_msg = result.unwrap_err().to_string();
@@ -1081,7 +949,8 @@ async fn test_https_connect_auth_required_s2n_tls() {
             || error_msg_lower.contains("auth")
             || error_msg_lower.contains("io error")
             || error_msg_lower.contains("connection"),
-        "Error should be connection-related (indicating CONNECT was attempted), got: {}",
+        "Error should be connection-related (indicating CONNECT was attempted) for {}, got: {}",
+        provider_name,
         error_msg
     );
 
@@ -1090,8 +959,62 @@ async fn test_https_connect_auth_required_s2n_tls() {
     assert_eq!(
         requests.len(),
         1,
-        "Proxy should have received exactly one CONNECT request"
+        "Proxy should have received exactly one CONNECT request for {}",
+        provider_name
     );
+}
+
+// ================================================================================================
+//
+// HTTPS CONNECT Tunneling Tests
+//
+// These tests verify HTTPS tunneling through HTTP proxies using the CONNECT method.
+// They are provider-specific since each TLS provider has its own connector implementation.
+//
+// ================================================================================================
+
+/// Tests HTTPS tunneling through HTTP proxy with CONNECT method (rustls provider)
+/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_https_connect_with_auth_rustls() {
+    run_https_connect_with_auth_test(
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+        "rustls",
+    )
+    .await;
+}
+
+/// Tests CONNECT method without authentication (should get 407) - rustls provider
+/// Verifies that HTTPS requests without auth get proper 407 response
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_https_connect_auth_required_rustls() {
+    run_https_connect_auth_required_test(
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+        "rustls",
+    )
+    .await;
+}
+
+// ================================================================================================
+// S2N-TLS Provider CONNECT Tests
+// ================================================================================================
+
+/// Tests HTTPS tunneling through HTTP proxy with CONNECT method (s2n-tls provider)
+/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_connect_with_auth_s2n_tls() {
+    run_https_connect_with_auth_test(tls::Provider::S2nTls, "s2n-tls").await;
+}
+
+/// Tests CONNECT method without authentication (should get 407) - s2n-tls provider
+/// Verifies that HTTPS requests without auth get proper 407 response
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_connect_auth_required_s2n_tls() {
+    run_https_connect_auth_required_test(tls::Provider::S2nTls, "s2n-tls").await;
 }
 
 // ================================================================================================
@@ -1241,11 +1164,9 @@ async fn test_uri_form_proxy_vs_direct() {
     }
 }
 
-/// Tests CONNECT method URI form for HTTPS tunneling
-/// Verifies that CONNECT requests use the correct host:port format
-#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
-#[tokio::test]
-async fn test_connect_uri_form() {
+/// Generic test function for CONNECT URI form validation
+/// Tests that CONNECT requests use the correct host:port format
+async fn run_connect_uri_form_test(tls_provider: tls::Provider, provider_name: &str) {
     let target_host = "secure.example.com";
     let target_port = 443;
     let expected_connect_uri = format!("{}:{}", target_host, target_port);
@@ -1280,12 +1201,6 @@ async fn test_connect_uri_form() {
     // Try to make an HTTPS request - this should trigger CONNECT
     let target_url = format!("https://{}/api/secure", target_host);
 
-    // Use the first available TLS provider for this test
-    #[cfg(feature = "rustls-ring")]
-    let tls_provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::Ring);
-    #[cfg(all(feature = "s2n-tls", not(feature = "rustls-ring")))]
-    let tls_provider = tls::Provider::S2nTls;
-
     let _result = make_https_request_through_proxy(proxy_config, &target_url, tls_provider).await;
 
     // The request will likely fail due to our mock setup, but that's OK
@@ -1294,8 +1209,29 @@ async fn test_connect_uri_form() {
     assert_eq!(
         requests.len(),
         1,
-        "Should have received exactly one CONNECT request"
+        "Should have received exactly one CONNECT request for {}",
+        provider_name
     );
     assert_eq!(requests[0].method, "CONNECT");
     assert_eq!(requests[0].uri, expected_connect_uri);
+}
+
+/// Tests CONNECT method URI form for HTTPS tunneling - rustls provider
+/// Verifies that CONNECT requests use the correct host:port format
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn test_connect_uri_form_rustls() {
+    run_connect_uri_form_test(
+        tls::Provider::rustls(tls::rustls_provider::CryptoMode::Ring),
+        "rustls",
+    )
+    .await;
+}
+
+/// Tests CONNECT method URI form for HTTPS tunneling - s2n-tls provider
+/// Verifies that CONNECT requests use the correct host:port format
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_connect_uri_form_s2n_tls() {
+    run_connect_uri_form_test(tls::Provider::S2nTls, "s2n-tls").await;
 }

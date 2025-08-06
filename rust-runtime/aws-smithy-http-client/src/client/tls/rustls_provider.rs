@@ -173,6 +173,7 @@ pub(crate) mod connect {
     use hyper::rt::{Read, ReadBufCursor, Write};
     use hyper_rustls::MaybeHttpsStream;
     use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
+    use hyper_util::client::proxy::matcher::Matcher;
     use hyper_util::rt::TokioIo;
     use pin_project_lite::pin_project;
     use std::error::Error;
@@ -191,7 +192,7 @@ pub(crate) mod connect {
     pub(crate) struct RustTlsConnector<R> {
         https: hyper_rustls::HttpsConnector<HttpConnector<R>>,
         tls_config: Arc<rustls::ClientConfig>,
-        proxy_config: ProxyConfig,
+        proxy_matcher: Option<Arc<Matcher>>, // Pre-computed for performance
     }
 
     impl<R> RustTlsConnector<R> {
@@ -200,10 +201,17 @@ pub(crate) mod connect {
             tls_config: rustls::ClientConfig,
             proxy_config: ProxyConfig,
         ) -> Self {
+            // Pre-compute the proxy matcher once during construction
+            let proxy_matcher = if proxy_config.is_disabled() {
+                None
+            } else {
+                Some(Arc::new(proxy_config.into_hyper_util_matcher()))
+            };
+
             Self {
                 https,
                 tls_config: Arc::new(tls_config),
-                proxy_config,
+                proxy_matcher,
             }
         }
     }
@@ -225,9 +233,8 @@ pub(crate) mod connect {
         }
 
         fn call(&mut self, dst: Uri) -> Self::Future {
-            // Check if this request should be proxied
-            let proxy_intercept = if !self.proxy_config.is_disabled() {
-                let matcher = self.proxy_config.clone().into_hyper_util_matcher();
+            // Check if this request should be proxied using pre-computed matcher
+            let proxy_intercept = if let Some(ref matcher) = self.proxy_matcher {
                 matcher.intercept(&dst)
             } else {
                 None

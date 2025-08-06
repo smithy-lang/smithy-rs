@@ -4,10 +4,10 @@
  */
 
 pub(crate) mod build_connector {
-    use hyper_util::client::legacy as client;
-    use client::connect::HttpConnector;
-    use s2n_tls::security::Policy;
     use crate::tls::TlsContext;
+    use client::connect::HttpConnector;
+    use hyper_util::client::legacy as client;
+    use s2n_tls::security::Policy;
     use std::sync::LazyLock;
 
     // Default S2N security policy which sets protocol versions and cipher suites
@@ -17,7 +17,9 @@ pub(crate) mod build_connector {
     fn base_config() -> s2n_tls::config::Builder {
         let mut builder = s2n_tls::config::Config::builder();
         let policy = Policy::from_version(S2N_POLICY_VERSION).unwrap();
-        builder.set_security_policy(&policy).expect("valid s2n security policy");
+        builder
+            .set_security_policy(&policy)
+            .expect("valid s2n security policy");
         // default is true
         builder.with_system_certs(false).unwrap();
         builder
@@ -38,9 +40,13 @@ pub(crate) mod build_connector {
                 CACHED_CONFIG.clone()
             } else {
                 let mut config = base_config();
-                config.with_system_certs(self.trust_store.enable_native_roots).unwrap();
+                config
+                    .with_system_certs(self.trust_store.enable_native_roots)
+                    .unwrap();
                 for pem_cert in &self.trust_store.custom_certs {
-                    config.trust_pem(pem_cert.0.as_slice()).expect("valid certificate");
+                    config
+                        .trust_pem(pem_cert.0.as_slice())
+                        .expect("valid certificate");
                 }
                 config.build().expect("valid s2n config")
             }
@@ -54,7 +60,10 @@ pub(crate) mod build_connector {
     ) -> super::connect::S2nTlsConnector<R> {
         let config = tls_context.s2n_config();
         http_connector.enforce_http(false);
-        let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config.clone());
+        let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(
+            http_connector,
+            config.clone(),
+        );
         builder.with_plaintext_http(true);
         let https_connector = builder.build();
 
@@ -69,8 +78,10 @@ pub(crate) mod connect {
     use http_1x::uri::Scheme;
     use http_1x::Uri;
     use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
+    use hyper_util::client::proxy::matcher::Matcher;
     use hyper_util::rt::TokioIo;
     use std::error::Error;
+    use std::sync::Arc;
     use std::{
         io::IoSlice,
         pin::Pin,
@@ -82,7 +93,7 @@ pub(crate) mod connect {
     pub(crate) struct S2nTlsConnector<R> {
         https: s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>>,
         tls_config: s2n_tls::config::Config,
-        proxy_config: ProxyConfig,
+        proxy_matcher: Option<Arc<Matcher>>, // Pre-computed for performance
     }
 
     impl<R> S2nTlsConnector<R> {
@@ -91,10 +102,17 @@ pub(crate) mod connect {
             tls_config: s2n_tls::config::Config,
             proxy_config: ProxyConfig,
         ) -> Self {
+            // Pre-compute the proxy matcher once during construction
+            let proxy_matcher = if proxy_config.is_disabled() {
+                None
+            } else {
+                Some(Arc::new(proxy_config.into_hyper_util_matcher()))
+            };
+
             Self {
                 https,
                 tls_config,
-                proxy_config,
+                proxy_matcher,
             }
         }
     }
@@ -116,9 +134,8 @@ pub(crate) mod connect {
         }
 
         fn call(&mut self, dst: Uri) -> Self::Future {
-            // Check if this request should be proxied
-            let proxy_intercept = if !self.proxy_config.is_disabled() {
-                let matcher = self.proxy_config.clone().into_hyper_util_matcher();
+            // Check if this request should be proxied using pre-computed matcher
+            let proxy_intercept = if let Some(ref matcher) = self.proxy_matcher {
                 matcher.intercept(&dst)
             } else {
                 None
@@ -273,7 +290,10 @@ pub(crate) mod connect {
             Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
         }
 
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), tokio::io::Error>> {
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), tokio::io::Error>> {
             Pin::new(&mut self.get_mut().inner).poll_flush(cx)
         }
 

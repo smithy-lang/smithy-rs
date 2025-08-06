@@ -37,8 +37,7 @@ pin_project! {
 
 impl Connection for Conn {
     fn connected(&self) -> Connected {
-        let connected = self.inner.connected().proxy(self.is_proxy);
-        connected
+        self.inner.connected().proxy(self.is_proxy)
     }
 }
 
