@@ -110,7 +110,6 @@ RUN set -eux; \
         cd ..; \
         rm -rf smithy-rs; \
     fi; \
-
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
     cargo install --locked --path tools/ci-build/difftags; \
@@ -121,56 +120,31 @@ RUN set -eux; \
     cargo install --locked --path tools/ci-build/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
-FROM install_rust AS cargo_deny
-ARG cargo_deny_version=0.16.4
-RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
+ARG cargo_deny_version=0.16.4 \
+cargo_udeps_version=0.1.56 \
+cargo_hack_version=0.6.27 \
+cargo_minimal_versions_version=0.1.27 \
+cargo_check_external_types_version=0.2.0 \
+maturin_version=1.5.1 \
+wasm_pack_version=0.13.1 \
+cargo_wasmtime_version=34.0.1 \
+cargo_component_version=0.20.0 \
+cargo_semver_checks_version=0.41.0 \
+cargo_mdbook_version=0.4.37 \
+cargo_mdbook_mermaid_version=0.13.0
 
-FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.56
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
-
-FROM install_rust AS cargo_hack
-ARG cargo_hack_version=0.6.27
-RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
-
-FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.27
-RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
-
-FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.2.0
-RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
-
-FROM install_rust AS maturin
-ARG maturin_version=1.5.1
-RUN cargo install maturin --locked --version ${maturin_version}
-
-FROM install_rust AS wasm_pack
-ARG wasm_pack_version=0.13.1
-RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
-
-FROM install_rust AS wasmtime
-ARG cargo_wasmtime_version=34.0.1
-ARG rust_nightly_version
-RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
-
-FROM install_rust AS cargo_component
-ARG cargo_component_version=0.20.0
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
-
-FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.41.0
-RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
-
-FROM install_rust AS cargo_mdbook
-ARG cargo_mdbook_version=0.4.37
-RUN cargo install mdbook --locked --version ${cargo_mdbook_version}
-
-FROM install_rust AS cargo_mdbook_mermaid
-ARG cargo_mdbook_mermaid_version=0.13.0
-RUN cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+RUN cargo install cargo-deny --locked --version ${cargo_deny_version} \
+&& cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version} \
+&& cargo install cargo-hack --locked --version ${cargo_hack_version} \
+&& cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version} \
+&& cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version} \
+&& cargo install maturin --locked --version ${maturin_version} \
+&& cargo install wasm-pack --locked --version ${wasm_pack_version} \
+&& cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version} \
+&& cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version} \
+&& cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version} \
+&& cargo install mdbook --locked --version ${cargo_mdbook_version} \
+&& cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
 
 # nodejs needed by internal release process
 FROM install_rust AS nodejs
@@ -240,19 +214,19 @@ RUN set -eux; \
     chmod 775 /home/build;
 RUN set -eux; cd /tmp; curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && unzip awscliv2.zip && ./aws/install
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
-COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
-COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
-COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
-COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
-COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
-COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
-COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/maturin /opt/cargo/bin/maturin
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
-COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
-COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
