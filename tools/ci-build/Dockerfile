@@ -214,19 +214,19 @@ RUN set -eux; \
     chmod 775 /home/build;
 RUN set -eux; cd /tmp; curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && unzip awscliv2.zip && ./aws/install
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
-COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
-COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
-COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
-COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
-COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
-COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
-COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/maturin /opt/cargo/bin/maturin
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
-COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
-COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
+COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
