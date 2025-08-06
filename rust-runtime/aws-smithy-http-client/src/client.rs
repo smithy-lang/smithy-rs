@@ -43,6 +43,7 @@ use hyper_util::client::legacy::connect::dns::GaiResolver;
 use hyper_util::client::legacy::connect::{
     capture_connection, CaptureConnection, Connect, HttpConnector as HyperHttpConnector, HttpInfo,
 };
+use hyper_util::client::proxy::matcher::Matcher;
 use hyper_util::rt::TokioExecutor;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -221,10 +222,17 @@ impl<Any> ConnectorBuilder<Any> {
             ),
             None => timeout::HttpReadTimeout::no_timeout(base),
         };
+
+        // Pre-compute proxy matcher for performance
+        let proxy_matcher = self
+            .proxy_config
+            .as_ref()
+            .map(|config| config.clone().into_hyper_util_matcher());
+
         Connector {
             adapter: Box::new(Adapter {
                 client: read_timeout,
-                proxy_config: self.proxy_config,
+                proxy_matcher,
             }),
         }
     }
@@ -375,14 +383,14 @@ struct Adapter<C> {
     client: timeout::HttpReadTimeout<
         hyper_util::client::legacy::Client<timeout::ConnectTimeout<C>, SdkBody>,
     >,
-    proxy_config: Option<proxy::ProxyConfig>,
+    proxy_matcher: Option<Matcher>,
 }
 
 impl<C> fmt::Debug for Adapter<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Adapter")
             .field("client", &"** hyper client **")
-            .field("proxy_config", &self.proxy_config.is_some())
+            .field("proxy_matcher", &self.proxy_matcher.is_some())
             .finish()
     }
 }
@@ -430,10 +438,7 @@ impl<C> Adapter<C> {
             return;
         }
 
-        // Check if we have proxy configuration
-        if let Some(ref proxy_config) = self.proxy_config {
-            // Use hyper-util matcher to check if this request should be proxied
-            let matcher = proxy_config.clone().into_hyper_util_matcher();
+        if let Some(ref matcher) = self.proxy_matcher {
             if let Some(intercept) = matcher.intercept(request.uri()) {
                 // Add basic auth header if available
                 if let Some(auth_header) = intercept.basic_auth() {
@@ -1110,7 +1115,7 @@ mod test {
             .build();
 
         let resolver = HyperUtilResolver {
-            resolver: TestResolver::default(),
+            resolver: TestResolver,
         };
         let connector = Connector::builder().base_connector_with_resolver(resolver);
 

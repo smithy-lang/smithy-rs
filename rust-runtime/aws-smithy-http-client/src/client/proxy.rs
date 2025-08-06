@@ -7,9 +7,6 @@
 //!
 //! This module provides types and utilities for configuring HTTP and HTTPS proxies,
 //! including support for environment variable detection, authentication, and bypass rules.
-//!
-//! The implementation delegates to hyper-util's proven proxy functionality while providing
-//! a stable, user-friendly API that doesn't expose hyper-util's potentially unstable interfaces.
 
 use http_1x::Uri;
 use hyper_util::client::proxy::matcher::Matcher;
@@ -43,10 +40,10 @@ pub struct ProxyConfig {
     inner: ProxyConfigInner,
 }
 
-/// Internal configuration that will be converted to hyper-util types
+/// Internal configuration representation
 #[derive(Debug, Clone)]
 enum ProxyConfigInner {
-    /// Use hyper-util's environment detection
+    /// Use environment variable detection
     FromEnvironment,
     /// Explicit HTTP proxy
     Http {
@@ -72,7 +69,7 @@ enum ProxyConfigInner {
 
 /// Proxy authentication configuration
 ///
-/// Stored for later conversion to hyper-util's authentication format.
+/// Stored for later conversion to the internal authentication format.
 #[derive(Debug, Clone)]
 struct ProxyAuth {
     /// Username for authentication
@@ -271,7 +268,6 @@ impl ProxyConfig {
             } => *a = Some(auth),
             ProxyConfigInner::FromEnvironment | ProxyConfigInner::Disabled => {
                 // Cannot add auth to environment or disabled configs
-                // This is a design decision - auth must be set on explicit proxy configs
             }
         }
 
@@ -321,7 +317,7 @@ impl ProxyConfig {
 
     /// Create proxy configuration from environment variables
     ///
-    /// Reads standard proxy environment variables using hyper-util's implementation:
+    /// Reads standard proxy environment variables:
     /// - `HTTP_PROXY` / `http_proxy`: HTTP proxy URL
     /// - `HTTPS_PROXY` / `https_proxy`: HTTPS proxy URL
     /// - `ALL_PROXY` / `all_proxy`: Proxy for all protocols (fallback)
@@ -338,8 +334,8 @@ impl ProxyConfig {
     /// let config = ProxyConfig::from_env();
     /// ```
     pub fn from_env() -> Self {
-        // Delegate to hyper-util's proven environment variable parsing
-        // If no env vars are set, hyper-util creates a matcher that doesn't intercept anything
+        // Delegate to environment variable parsing
+        // If no env vars are set, creates a matcher that doesn't intercept anything
         ProxyConfig {
             inner: ProxyConfigInner::FromEnvironment,
         }
@@ -355,16 +351,13 @@ impl ProxyConfig {
         matches!(self.inner, ProxyConfigInner::FromEnvironment)
     }
 
-    /// Convert this configuration to a hyper-util Matcher for internal use
+    /// Convert this configuration to internal proxy matcher
     ///
-    /// This method delegates to hyper-util's proven proxy implementation
-    /// while keeping hyper-util types internal to aws-smithy-http-client.
+    /// This method converts the user-friendly configuration to the internal
+    /// proxy matching implementation used by the HTTP client.
     pub(crate) fn into_hyper_util_matcher(self) -> Matcher {
         match self.inner {
-            ProxyConfigInner::FromEnvironment => {
-                // Use hyper-util's environment detection directly
-                Matcher::from_env()
-            }
+            ProxyConfigInner::FromEnvironment => Matcher::from_env(),
             ProxyConfigInner::Http {
                 uri,
                 auth,
@@ -508,7 +501,6 @@ impl ProxyConfig {
                 // Check if auth is already present in the URI
                 if rest.contains('@') {
                     // Auth already present, return as-is
-                    // This handles cases where users provide URLs like "http://user:pass@proxy:8080"
                     uri_str
                 } else {
                     // Add auth to the URI
@@ -564,7 +556,7 @@ mod tests {
             .unwrap()
             .with_basic_auth("user", "pass");
 
-        // Auth is stored internally - we'll test the conversion in later prompts
+        // Auth is stored internally
         assert!(!config.is_disabled());
     }
 
@@ -574,7 +566,7 @@ mod tests {
             .unwrap()
             .no_proxy("localhost,*.internal");
 
-        // NO_PROXY rules are stored internally - we'll test the conversion in later prompts
+        // NO_PROXY rules are stored internally
         assert!(!config.is_disabled());
     }
 
@@ -741,7 +733,7 @@ mod tests {
         let test_uri = "http://example.com".parse().unwrap();
         let intercept = matcher.intercept(&test_uri);
         assert!(intercept.is_some());
-        // Note: The intercept URI might be normalized by hyper-util
+        // The intercept URI might be normalized
         assert!(intercept
             .unwrap()
             .uri()
@@ -786,21 +778,6 @@ mod tests {
         let test_uri = "http://example.com".parse().unwrap();
         let intercept = matcher.intercept(&test_uri);
         assert!(intercept.is_none());
-    }
-
-    #[test]
-    fn test_intercept_method() {
-        let config = ProxyConfig::http("http://proxy.example.com:8080").unwrap();
-
-        // Test that intercept method works
-        let test_uri = "http://example.com".parse().unwrap();
-        let intercept = config.intercept(&test_uri);
-        assert!(intercept.is_some());
-        assert!(intercept
-            .unwrap()
-            .uri()
-            .to_string()
-            .contains("proxy.example.com:8080"));
     }
 
     #[test]
