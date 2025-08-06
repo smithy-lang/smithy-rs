@@ -732,7 +732,15 @@ cfg_tls! {
                 },
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls  => {
-                    let https_connector = tls::s2n_tls_provider::build_connector::wrap_connector(http_connector, &self.tls.context);
+                    // Get proxy config, defaulting to disabled if not set
+                    let proxy_config = self.proxy_config.clone()
+                        .unwrap_or_else(proxy::ProxyConfig::disabled);
+
+                    let https_connector = tls::s2n_tls_provider::build_connector::wrap_connector(
+                        http_connector,
+                        &self.tls.context,
+                        proxy_config,
+                    );
                     self.wrap_connector(https_connector)
                 }
             }

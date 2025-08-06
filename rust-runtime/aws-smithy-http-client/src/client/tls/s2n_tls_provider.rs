@@ -50,11 +50,250 @@ pub(crate) mod build_connector {
     pub(crate) fn wrap_connector<R>(
         mut http_connector: HttpConnector<R>,
         tls_context: &TlsContext,
-    ) -> s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>> {
+        proxy_config: crate::client::proxy::ProxyConfig,
+    ) -> super::connect::S2nTlsConnector<R> {
         let config = tls_context.s2n_config();
         http_connector.enforce_http(false);
-        let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config);
+        let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(http_connector, config.clone());
         builder.with_plaintext_http(true);
-        builder.build()
+        let https_connector = builder.build();
+
+        super::connect::S2nTlsConnector::new(https_connector, config, proxy_config)
+    }
+}
+
+pub(crate) mod connect {
+    use crate::client::connect::{Conn, Connecting};
+    use crate::client::proxy::ProxyConfig;
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use http_1x::uri::Scheme;
+    use http_1x::Uri;
+    use hyper_util::client::legacy::connect::{Connected, Connection, HttpConnector};
+    use hyper_util::rt::TokioIo;
+    use std::error::Error;
+    use std::{
+        io::IoSlice,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+    use tower::Service;
+
+    #[derive(Clone)]
+    pub(crate) struct S2nTlsConnector<R> {
+        https: s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>>,
+        tls_config: s2n_tls::config::Config,
+        proxy_config: ProxyConfig,
+    }
+
+    impl<R> S2nTlsConnector<R> {
+        pub(super) fn new(
+            https: s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>>,
+            tls_config: s2n_tls::config::Config,
+            proxy_config: ProxyConfig,
+        ) -> Self {
+            Self {
+                https,
+                tls_config,
+                proxy_config,
+            }
+        }
+    }
+
+    impl<R> Service<Uri> for S2nTlsConnector<R>
+    where
+        R: Clone + Send + Sync + 'static,
+        R: Service<hyper_util::client::legacy::connect::dns::Name>,
+        R::Response: Iterator<Item = std::net::SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
+        type Response = Conn;
+        type Error = BoxError;
+        type Future = Connecting;
+
+        fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+            self.https.poll_ready(cx).map_err(Into::into)
+        }
+
+        fn call(&mut self, dst: Uri) -> Self::Future {
+            // Check if this request should be proxied
+            let proxy_intercept = if !self.proxy_config.is_disabled() {
+                let matcher = self.proxy_config.clone().into_hyper_util_matcher();
+                matcher.intercept(&dst)
+            } else {
+                None
+            };
+
+            if let Some(intercept) = proxy_intercept {
+                if dst.scheme() == Some(&Scheme::HTTPS) {
+                    // HTTPS through HTTP proxy: Use CONNECT tunneling + manual TLS
+                    self.handle_https_through_proxy(dst, intercept)
+                } else {
+                    // HTTP through proxy: Direct connection to proxy
+                    self.handle_http_through_proxy(dst, intercept)
+                }
+            } else {
+                // Direct connection: Use the existing HTTPS connector
+                self.handle_direct_connection(dst)
+            }
+        }
+    }
+
+    impl<R> S2nTlsConnector<R>
+    where
+        R: Clone + Send + Sync + 'static,
+        R: Service<hyper_util::client::legacy::connect::dns::Name>,
+        R::Response: Iterator<Item = std::net::SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn Error + Send + Sync>>,
+    {
+        fn handle_direct_connection(&mut self, dst: Uri) -> Connecting {
+            let fut = self.https.call(dst);
+            Box::pin(async move {
+                let conn = fut.await?;
+                Ok(Conn {
+                    inner: Box::new(conn),
+                    is_proxy: false,
+                })
+            })
+        }
+
+        fn handle_http_through_proxy(
+            &mut self,
+            _dst: Uri,
+            intercept: hyper_util::client::proxy::matcher::Intercept,
+        ) -> Connecting {
+            // For HTTP through proxy, connect to the proxy and let it handle the request
+            let proxy_uri = intercept.uri().clone();
+            let fut = self.https.call(proxy_uri);
+            Box::pin(async move {
+                let conn = fut.await?;
+                Ok(Conn {
+                    inner: Box::new(conn),
+                    is_proxy: true,
+                })
+            })
+        }
+
+        fn handle_https_through_proxy(
+            &mut self,
+            dst: Uri,
+            intercept: hyper_util::client::proxy::matcher::Intercept,
+        ) -> Connecting {
+            // For HTTPS through HTTP proxy, we need to:
+            // 1. Establish CONNECT tunnel using the HTTPS connector
+            // 2. Perform manual TLS handshake over the tunneled stream
+
+            let tunnel = hyper_util::client::legacy::connect::proxy::Tunnel::new(
+                intercept.uri().clone(),
+                self.https.clone(),
+            );
+
+            // Configure tunnel with authentication if present
+            let mut tunnel = if let Some(auth) = intercept.basic_auth() {
+                tunnel.with_auth(auth.clone())
+            } else {
+                tunnel
+            };
+
+            let tls_config = self.tls_config.clone();
+            let dst_clone = dst.clone();
+
+            Box::pin(async move {
+                // Stage 1: Establish CONNECT tunnel
+                tracing::trace!("tunneling HTTPS over proxy using s2n-tls");
+                let tunneled = tunnel
+                    .call(dst_clone.clone())
+                    .await
+                    .map_err(|e| BoxError::from(format!("CONNECT tunnel failed: {}", e)))?;
+
+                // Stage 2: Manual TLS handshake over tunneled stream
+                let host = dst_clone
+                    .host()
+                    .ok_or("missing host in URI for TLS handshake")?;
+
+                // s2n-tls uses string server names (simpler than rustls ServerName)
+                let tls_connector = s2n_tls_tokio::TlsConnector::new(tls_config);
+                let tls_stream = tls_connector
+                    .connect(host, TokioIo::new(tunneled))
+                    .await
+                    .map_err(|e| BoxError::from(format!("s2n-tls handshake failed: {}", e)))?;
+
+                Ok(Conn {
+                    inner: Box::new(S2nTlsConn {
+                        inner: TokioIo::new(tls_stream),
+                    }),
+                    is_proxy: true,
+                })
+            })
+        }
+    }
+
+    // Simple wrapper that implements Connection for s2n-tls streams
+    struct S2nTlsConn<T>
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        inner: TokioIo<s2n_tls_tokio::TlsStream<T>>,
+    }
+
+    impl<T> Connection for S2nTlsConn<T>
+    where
+        T: Connection + tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        fn connected(&self) -> Connected {
+            // For tunneled connections, we can't easily access the underlying connection info
+            // from s2n-tls, so we'll return a basic Connected instance
+            Connected::new()
+        }
+    }
+
+    impl<T> hyper::rt::Read for S2nTlsConn<T>
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: hyper::rt::ReadBufCursor<'_>,
+        ) -> Poll<tokio::io::Result<()>> {
+            Pin::new(&mut self.get_mut().inner).poll_read(cx, buf)
+        }
+    }
+
+    impl<T> hyper::rt::Write for S2nTlsConn<T>
+    where
+        T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize, tokio::io::Error>> {
+            Pin::new(&mut self.get_mut().inner).poll_write(cx, buf)
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), tokio::io::Error>> {
+            Pin::new(&mut self.get_mut().inner).poll_flush(cx)
+        }
+
+        fn poll_shutdown(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), tokio::io::Error>> {
+            Pin::new(&mut self.get_mut().inner).poll_shutdown(cx)
+        }
+
+        fn poll_write_vectored(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            bufs: &[IoSlice<'_>],
+        ) -> Poll<Result<usize, tokio::io::Error>> {
+            Pin::new(&mut self.get_mut().inner).poll_write_vectored(cx, bufs)
+        }
+
+        fn is_write_vectored(&self) -> bool {
+            self.inner.is_write_vectored()
+        }
     }
 }
