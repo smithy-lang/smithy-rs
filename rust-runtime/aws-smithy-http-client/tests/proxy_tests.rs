@@ -12,12 +12,10 @@
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http_client::{proxy::ProxyConfig, tls, Connector};
 use aws_smithy_runtime_api::client::http::{
-    http_client_fn, HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
+    http_client_fn, HttpClient, HttpConnector, HttpConnectorSettings,
 };
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
-use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-use aws_smithy_types::body::SdkBody;
 use base64::Engine;
 use http_1x::{Request, Response, StatusCode};
 use http_body_util::BodyExt;
@@ -1094,4 +1092,210 @@ async fn test_https_connect_auth_required_s2n_tls() {
         1,
         "Proxy should have received exactly one CONNECT request"
     );
+}
+
+// ================================================================================================
+// URI Form Tests
+// ================================================================================================
+
+/// Tests that HTTP requests through proxy use absolute URI form
+/// Verifies that the full URL (including hostname) is sent to the proxy
+#[tokio::test]
+async fn test_http_proxy_absolute_uri_form() {
+    let target_host = "api.example.com";
+    let target_path = "/v1/data";
+    let expected_absolute_uri = format!("http://{}{}", target_host, target_path);
+
+    // Clone for use in closure
+    let expected_uri_clone = expected_absolute_uri.clone();
+    let target_host_clone = target_host.to_string();
+
+    let mock_proxy = MockProxyServer::new(move |req| {
+        // For HTTP through proxy, we should see the full absolute URI
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.uri, expected_uri_clone);
+
+        // Host header should still be present
+        assert_eq!(req.headers.get("host"), Some(&target_host_clone));
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("proxied response".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
+
+    let result = make_http_request_through_proxy(proxy_config, &expected_absolute_uri).await;
+
+    let (status, body) = result.expect("HTTP request through proxy should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "proxied response");
+
+    // Verify the proxy received the request with absolute URI
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].uri, expected_absolute_uri);
+}
+
+/// Tests that direct HTTP requests (no proxy) use origin form URI
+/// Verifies that only the path is sent when connecting directly
+#[tokio::test]
+async fn test_direct_http_origin_uri_form() {
+    let target_path = "/v1/data";
+
+    // Create a direct target server (no proxy)
+    let direct_server = MockProxyServer::new(move |req| {
+        // For direct connections, we should see only the path (origin form)
+        assert_eq!(req.method, "GET");
+        // The URI should be just the path part, not the full URL
+        assert!(
+            req.uri == target_path || req.uri.ends_with(target_path),
+            "Expected origin form URI ending with '{}', got '{}'",
+            target_path,
+            req.uri
+        );
+
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("direct response".to_string())
+            .unwrap()
+    })
+    .await;
+
+    // Use disabled proxy to ensure direct connection
+    let proxy_config = ProxyConfig::disabled();
+
+    let target_url = format!("http://{}{}", direct_server.addr(), target_path);
+    let result = make_http_request_through_proxy(proxy_config, &target_url).await;
+
+    let (status, body) = result.expect("Direct HTTP request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct response");
+
+    // Verify the server received the request
+    let requests = direct_server.requests();
+    assert_eq!(requests.len(), 1);
+}
+
+/// Tests URI form handling with different proxy configurations
+/// Verifies that URI form changes based on proxy vs direct connection
+#[tokio::test]
+async fn test_uri_form_proxy_vs_direct() {
+    let target_host = "test.example.com";
+    let target_path = "/api/test";
+    let full_url = format!("http://{}{}", target_host, target_path);
+
+    // Test 1: Through proxy - should use absolute form
+    {
+        // Clone for use in closure
+        let target_host_clone = target_host.to_string();
+        let target_path_clone = target_path.to_string();
+
+        let mock_proxy = MockProxyServer::new(move |req| {
+            // Should receive absolute URI
+            assert!(req.uri.starts_with("http://"));
+            assert!(req.uri.contains(&target_host_clone));
+            assert!(req.uri.contains(&target_path_clone));
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .body("proxy response".to_string())
+                .unwrap()
+        })
+        .await;
+
+        let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
+        let result = make_http_request_through_proxy(proxy_config, &full_url).await;
+
+        assert!(result.is_ok(), "Proxy request should succeed");
+        let requests = mock_proxy.requests();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].uri, full_url);
+    }
+
+    // Test 2: Direct connection - should use origin form
+    {
+        let target_path_clone = target_path.to_string();
+
+        let direct_server = MockProxyServer::new(move |req| {
+            // Should receive only the path part
+            assert!(!req.uri.starts_with("http://"));
+            assert!(req.uri == target_path_clone || req.uri.ends_with(&target_path_clone));
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .body("direct response".to_string())
+                .unwrap()
+        })
+        .await;
+
+        let proxy_config = ProxyConfig::disabled();
+        let direct_url = format!("http://{}{}", direct_server.addr(), target_path);
+        let result = make_http_request_through_proxy(proxy_config, &direct_url).await;
+
+        assert!(result.is_ok(), "Direct request should succeed");
+        let requests = direct_server.requests();
+        assert_eq!(requests.len(), 1);
+    }
+}
+
+/// Tests CONNECT method URI form for HTTPS tunneling
+/// Verifies that CONNECT requests use the correct host:port format
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
+#[tokio::test]
+async fn test_connect_uri_form() {
+    let target_host = "secure.example.com";
+    let target_port = 443;
+    let expected_connect_uri = format!("{}:{}", target_host, target_port);
+
+    // Clone for use in closure
+    let expected_uri_clone = expected_connect_uri.clone();
+
+    let mock_proxy = MockProxyServer::new(move |req| {
+        if req.method == "CONNECT" {
+            // CONNECT should use host:port format
+            assert_eq!(req.uri, expected_uri_clone);
+
+            // CONNECT requests should not have a Host header in the CONNECT line
+            // (the Host header is for the tunneled HTTP request, not the CONNECT)
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .body("Connection established".to_string())
+                .unwrap()
+        } else {
+            // This shouldn't happen in our test, but handle it gracefully
+            Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body("Unexpected non-CONNECT request".to_string())
+                .unwrap()
+        }
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
+
+    // Try to make an HTTPS request - this should trigger CONNECT
+    let target_url = format!("https://{}/api/secure", target_host);
+
+    // Use the first available TLS provider for this test
+    #[cfg(feature = "rustls-ring")]
+    let tls_provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::Ring);
+    #[cfg(all(feature = "s2n-tls", not(feature = "rustls-ring")))]
+    let tls_provider = tls::Provider::S2nTls;
+
+    let _result = make_https_request_through_proxy(proxy_config, &target_url, tls_provider).await;
+
+    // The request will likely fail due to our mock setup, but that's OK
+    // The important thing is that the CONNECT request was made with correct URI
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Should have received exactly one CONNECT request"
+    );
+    assert_eq!(requests[0].method, "CONNECT");
+    assert_eq!(requests[0].uri, expected_connect_uri);
 }

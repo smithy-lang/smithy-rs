@@ -45,7 +45,7 @@ impl Connection for Conn {
 impl Read for Conn {
     fn poll_read(
         self: Pin<&mut Self>,
-        cx: &mut Context,
+        cx: &mut Context<'_>,
         buf: ReadBufCursor<'_>,
     ) -> Poll<io::Result<()>> {
         let this = self.project();
@@ -56,7 +56,7 @@ impl Read for Conn {
 impl Write for Conn {
     fn poll_write(
         self: Pin<&mut Self>,
-        cx: &mut Context,
+        cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
         let this = self.project();
@@ -76,12 +76,12 @@ impl Write for Conn {
         self.inner.is_write_vectored()
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         let this = self.project();
         Write::poll_flush(this.inner, cx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Result<(), io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         let this = self.project();
         Write::poll_shutdown(this.inner, cx)
     }

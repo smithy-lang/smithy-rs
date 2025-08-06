@@ -11,16 +11,9 @@
 //! The implementation delegates to hyper-util's proven proxy functionality while providing
 //! a stable, user-friendly API that doesn't expose hyper-util's potentially unstable interfaces.
 
-use aws_smithy_runtime_api::box_error::BoxError;
-use http_1x::uri::Scheme;
 use http_1x::Uri;
-use hyper::rt::{Read, Write};
-use hyper_util::client::legacy::connect::Connection;
-use hyper_util::client::proxy::matcher::{Intercept, Matcher};
+use hyper_util::client::proxy::matcher::Matcher;
 use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
-use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Proxy configuration for HTTP clients
 ///
@@ -472,18 +465,6 @@ impl ProxyConfig {
             }
         }
         false
-    }
-
-    /// Check if a request should use a proxy
-    ///
-    /// Returns the proxy intercept information if the request should be proxied,
-    /// or None if it should connect directly.
-    pub(crate) fn intercept(&self, uri: &Uri) -> Option<Intercept> {
-        // Convert to matcher and check intercept
-        // Note: This creates a new matcher each time, which is not optimal
-        // In a real implementation, we'd want to cache the matcher
-        let matcher = self.clone().into_hyper_util_matcher();
-        matcher.intercept(uri)
     }
 
     // Private helper methods
