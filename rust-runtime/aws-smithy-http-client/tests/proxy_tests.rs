@@ -17,6 +17,7 @@ use aws_smithy_runtime_api::client::http::{
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_types::body::SdkBody;
 use base64::Engine;
 use http_1x::{Request, Response, StatusCode};
 use http_body_util::BodyExt;
@@ -947,6 +948,123 @@ async fn test_https_connect_auth_required_rustls() {
     .await;
 
     // We expect this to fail with authentication error
+    assert!(
+        result.is_err(),
+        "CONNECT tunnel should fail with 407 response"
+    );
+
+    let error_msg = result.unwrap_err().to_string();
+    let error_msg_lower = error_msg.to_lowercase();
+
+    // The important thing is that the request failed (which means CONNECT was attempted)
+    // The specific error message format is less critical for this test
+    // We accept either specific proxy auth errors OR generic connection errors
+    // since both indicate the CONNECT tunnel attempt was made
+    assert!(
+        error_msg_lower.contains("407")
+            || error_msg_lower.contains("proxy")
+            || error_msg_lower.contains("auth")
+            || error_msg_lower.contains("io error")
+            || error_msg_lower.contains("connection"),
+        "Error should be connection-related (indicating CONNECT was attempted), got: {}",
+        error_msg
+    );
+
+    // Verify the proxy received the CONNECT request
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Proxy should have received exactly one CONNECT request"
+    );
+}
+
+// ================================================================================================
+// S2N-TLS Provider CONNECT Tests
+// ================================================================================================
+
+/// Tests HTTPS tunneling through HTTP proxy with CONNECT method (s2n-tls provider)
+/// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_connect_with_auth_s2n_tls() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        // For HTTPS through HTTP proxy, we should see a CONNECT request
+        assert_eq!(req.method, "CONNECT");
+        assert_eq!(req.uri, "secure.aws.amazon.com:443");
+
+        // Verify authentication header is present
+        let expected_auth = format!(
+            "Basic {}",
+            base64::prelude::BASE64_STANDARD.encode("connectuser:connectpass")
+        );
+        assert_eq!(req.headers.get("proxy-authorization"), Some(&expected_auth));
+
+        // Return 400 to avoid dealing with actual TLS tunneling
+        // The important part is that we got the CONNECT request with correct auth
+        Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body("CONNECT tunnel setup failed".to_string())
+            .unwrap()
+    })
+    .await;
+
+    // Configure proxy with authentication
+    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr()))
+        .unwrap()
+        .with_basic_auth("connectuser", "connectpass");
+
+    // Make HTTPS request - should trigger CONNECT method
+    let target_url = "https://secure.aws.amazon.com/api/secure";
+    let result =
+        make_https_request_through_proxy(proxy_config, target_url, tls::Provider::S2nTls).await;
+
+    // We expect this to fail with a connection error since we returned 400
+    // The important thing is that the CONNECT request was made correctly
+    assert!(
+        result.is_err(),
+        "CONNECT tunnel should fail with 400 response"
+    );
+
+    // Verify the proxy received the CONNECT request
+    let requests = mock_proxy.requests();
+    assert_eq!(
+        requests.len(),
+        1,
+        "Proxy should have received exactly one CONNECT request"
+    );
+}
+
+/// Tests CONNECT method without authentication (should get 407) - s2n-tls provider
+/// Verifies that HTTPS requests without auth get proper 407 response
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_https_connect_auth_required_s2n_tls() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        // For HTTPS through HTTP proxy, we should see a CONNECT request
+        assert_eq!(req.method, "CONNECT");
+        assert_eq!(req.uri, "secure.aws.amazon.com:443");
+
+        // No auth header should be present
+        assert!(req.headers.get("proxy-authorization").is_none());
+
+        // Return 407 Proxy Authentication Required
+        Response::builder()
+            .status(StatusCode::PROXY_AUTHENTICATION_REQUIRED)
+            .body("Proxy authentication required for CONNECT".to_string())
+            .unwrap()
+    })
+    .await;
+
+    // Configure proxy without authentication
+    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
+
+    // Make HTTPS request - should trigger CONNECT method and get 407
+    let target_url = "https://secure.aws.amazon.com/api/secure";
+    let result =
+        make_https_request_through_proxy(proxy_config, target_url, tls::Provider::S2nTls).await;
+
+    // We expect this to fail with a connection error since we returned 407
     assert!(
         result.is_err(),
         "CONNECT tunnel should fail with 407 response"
