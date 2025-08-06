@@ -53,11 +53,8 @@ impl Provider {
 pub(crate) mod build_connector {
     use crate::client::tls::rustls_provider::CryptoMode;
     use crate::tls::TlsContext;
-    use aws_smithy_runtime_api::box_error::BoxError;
     use client::connect::HttpConnector;
-    use http_1x::Uri;
     use hyper_util::client::legacy as client;
-    use hyper_util::client::legacy::connect::Connection;
     use rustls::crypto::CryptoProvider;
     use rustls_native_certs::CertificateResult;
     use rustls_pki_types::pem::PemObject;
@@ -383,7 +380,7 @@ pub(crate) mod connect {
     impl<T: AsyncRead + AsyncWrite + Unpin> Read for RustTlsConn<T> {
         fn poll_read(
             self: Pin<&mut Self>,
-            cx: &mut Context,
+            cx: &mut Context<'_>,
             buf: ReadBufCursor<'_>,
         ) -> Poll<tokio::io::Result<()>> {
             let this = self.project();
@@ -394,7 +391,7 @@ pub(crate) mod connect {
     impl<T: AsyncRead + AsyncWrite + Unpin> Write for RustTlsConn<T> {
         fn poll_write(
             self: Pin<&mut Self>,
-            cx: &mut Context,
+            cx: &mut Context<'_>,
             buf: &[u8],
         ) -> Poll<Result<usize, tokio::io::Error>> {
             let this = self.project();
@@ -416,7 +413,7 @@ pub(crate) mod connect {
 
         fn poll_flush(
             self: Pin<&mut Self>,
-            cx: &mut Context,
+            cx: &mut Context<'_>,
         ) -> Poll<Result<(), tokio::io::Error>> {
             let this = self.project();
             Write::poll_flush(this.inner, cx)
@@ -424,7 +421,7 @@ pub(crate) mod connect {
 
         fn poll_shutdown(
             self: Pin<&mut Self>,
-            cx: &mut Context,
+            cx: &mut Context<'_>,
         ) -> Poll<Result<(), tokio::io::Error>> {
             let this = self.project();
             Write::poll_shutdown(this.inner, cx)
