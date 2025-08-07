@@ -86,7 +86,8 @@ hyper-util = { version = "0.1.10", features = ["http1", "http2"], optional = tru
 http-1x = { package = "http", version = "1" , optional = true }
 http-body-1x = { package = "http-body", version = "1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
-rustls = { version = "0.23", default-features = false, optional = true }
+# NOTE: the prefer-post-quantum feature flag will be removed by rustls in 0.24
+rustls = { version = "0.23", features = ["prefer-post-quantum"], default-features = false, optional = true }
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
 s2n-tls-hyper = { version = "0.0.4", optional = true }
 s2n-tls = { version = "0.3.12", optional = true }
