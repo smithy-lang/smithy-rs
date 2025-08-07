@@ -535,7 +535,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.4"
+version = "0.61.5"
 dependencies = [
  "aws-smithy-types",
  "proptest",
