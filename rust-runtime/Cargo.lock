@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.6"
+version = "1.9.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.7"
+version = "1.9.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",

@@ -108,7 +108,7 @@ impl HttpConnector for Connector {
 }
 
 /// Builder for [`Connector`].
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ConnectorBuilder<Tls = TlsUnset> {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -121,11 +121,12 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
 }
 
 /// Initial builder state, `TlsProvider` choice required
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
 #[non_exhaustive]
 pub struct TlsUnset {}
 
 /// TLS implementation selected
+#[derive(Debug, Clone)]
 pub struct TlsProviderSelected {
     #[allow(unused)]
     provider: tls::Provider,
@@ -797,6 +798,23 @@ impl Builder<TlsUnset> {
     /// Creates a new builder.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Returns a [`SharedHttpClient`] that calls the given `connector` function to select an HTTP(S) connector.
+    #[doc(hidden)]
+    pub fn build_with_connector_fn<F>(self, connector_fn: F) -> SharedHttpClient
+    where
+        F: Fn(Option<&HttpConnectorSettings>, Option<&RuntimeComponents>) -> Connector
+            + Send
+            + Sync
+            + 'static,
+    {
+        build_with_conn_fn(
+            self.client_builder,
+            move |_builder, settings, runtime_components| {
+                connector_fn(settings, runtime_components)
+            },
+        )
     }
 
     /// Build a new HTTP client without TLS enabled
