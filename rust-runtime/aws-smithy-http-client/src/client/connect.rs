@@ -88,7 +88,7 @@ impl Write for Conn {
 
 /// HTTP-only proxy connector for handling HTTP requests through HTTP proxies
 ///
-/// This connector handles the HTTP proxy logic for non-TLS connections,
+/// This connector handles the HTTP proxy logic when no TLS provider is selected,
 /// including request URL modification and proxy authentication.
 #[derive(Debug, Clone)]
 pub(crate) struct HttpProxyConnector<C> {

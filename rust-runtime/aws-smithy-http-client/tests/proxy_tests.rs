@@ -6,7 +6,7 @@
 //! Integration tests for proxy functionality
 //!
 //! These tests verify that proxy configuration works end-to-end with real HTTP requests
-//! using mock proxy servers. This follows the testing strategy outlined in the design docs.
+//! using mock proxy servers.
 #![cfg(feature = "default-client")]
 
 use aws_smithy_async::time::SystemTimeSource;
@@ -265,10 +265,6 @@ async fn make_http_request_through_proxy(
 
     Ok((status.into(), body_string))
 }
-
-// ================================================================================================
-// Integration Tests
-// ================================================================================================
 
 #[tokio::test]
 async fn test_http_proxy_basic_request() {
@@ -556,10 +552,6 @@ async fn test_https_proxy_configuration() {
         1,
         "Direct server should have received the HTTP request"
     );
-
-    // Test 2: For HTTPS, we can't easily test with our current HTTP-only infrastructure
-    // since HTTPS would require CONNECT tunneling. The important thing is that HTTP
-    // requests don't go through an HTTPS-only proxy, which we've verified above.
 }
 
 /// Tests all-traffic proxy configuration
@@ -588,15 +580,7 @@ async fn test_all_traffic_proxy() {
     );
     assert_eq!(requests[0].method, "GET");
     assert_eq!(requests[0].uri, target_url);
-
-    // Test 2: The important behavior is that HTTP requests DO go through all-traffic proxy
-    // We've already verified this above. For HTTPS, we can't easily test with our current
-    // HTTP-only infrastructure, but the "all" configuration should handle both HTTP and HTTPS.
 }
-
-// ================================================================================================
-// Error Handling Tests
-// ================================================================================================
 
 /// Tests proxy connection failure handling
 /// Verifies that unreachable proxy servers result in appropriate connection errors
@@ -665,81 +649,6 @@ async fn test_proxy_authentication_failure() {
     );
 }
 
-// ================================================================================================
-// Mock Server Tests (Test the Test Infrastructure)
-// ================================================================================================
-
-#[tokio::test]
-async fn test_mock_proxy_server_basic() {
-    let server = MockProxyServer::with_response(StatusCode::OK, "test response").await;
-
-    // The server should be listening
-    assert!(server.addr().port() > 0);
-
-    // Make a simple HTTP request to verify the server works
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build_http();
-
-    let uri: http_1x::Uri = format!("http://{}/test", server.addr()).parse().unwrap();
-    let request = Request::builder().uri(uri).body(String::new()).unwrap();
-
-    let response = timeout(Duration::from_secs(5), client.request(request))
-        .await
-        .expect("Request should complete within timeout")
-        .expect("Request should succeed");
-
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Verify request was logged
-    let requests = server.requests();
-    assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0].method, "GET");
-    assert_eq!(requests[0].uri, "/test");
-}
-
-#[tokio::test]
-async fn test_mock_proxy_auth_validation() {
-    let server = MockProxyServer::with_auth_validation("user", "pass").await;
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build_http();
-
-    // Test without authentication - should get 407
-    let uri: http_1x::Uri = format!("http://{}/test", server.addr()).parse().unwrap();
-    let request = Request::builder().uri(uri).body(String::new()).unwrap();
-
-    let response = client.request(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::PROXY_AUTHENTICATION_REQUIRED);
-
-    // Test with correct authentication - should get 200
-    let uri: http_1x::Uri = format!("http://{}/test", server.addr()).parse().unwrap();
-    let auth_header = format!(
-        "Basic {}",
-        base64::prelude::BASE64_STANDARD.encode("user:pass")
-    );
-    let request = Request::builder()
-        .uri(uri)
-        .header("proxy-authorization", auth_header)
-        .body(String::new())
-        .unwrap();
-
-    let response = client.request(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn test_with_env_vars_utility() {
-    // Test that environment variables are properly set and restored
-    let original_value = std::env::var("TEST_PROXY_VAR");
-
-    with_env_vars(&[("TEST_PROXY_VAR", "test_value")], || async {
-        assert_eq!(std::env::var("TEST_PROXY_VAR").unwrap(), "test_value");
-    })
-    .await;
-
-    // Environment should be restored
-    assert_eq!(std::env::var("TEST_PROXY_VAR"), original_value);
-}
-
 /// Tests that ProxyConfig::disabled() overrides environment proxy settings
 /// Verifies that explicit proxy disabling takes precedence over environment variables
 #[tokio::test]
@@ -787,24 +696,10 @@ async fn test_explicit_proxy_disable_overrides_environment() {
 }
 
 // ================================================================================================
-// HTTPS/CONNECT Tunneling Tests (Future Implementation)
+// HTTPS/CONNECT Tunneling Tests
 // ================================================================================================
 //
 // These tests are for HTTPS tunneling through HTTP proxies using the CONNECT method.
-// They are currently ignored because our implementation doesn't yet use hyper-util's
-// Tunnel connector for HTTPS requests.
-//
-// Implementation Requirements:
-// 1. Modify ProxyAwareConnector to detect HTTPS requests through HTTP proxy
-// 2. Use hyper_util::client::legacy::connect::proxy::Tunnel for HTTPS tunneling
-// 3. Add authentication and custom headers to CONNECT requests
-// 4. Handle TLS establishment over tunneled connections
-//
-// Architecture (based on reqwest):
-// - HTTP through proxy: Direct connection to proxy, send full URL in request line
-// - HTTPS through proxy: Use Tunnel to send CONNECT, then establish TLS over tunnel
-//
-// Reference: reqwest/src/connect.rs lines 674-695 and 720-739
 
 /// Helper function to make HTTPS requests through proxy using TLS providers
 /// This is similar to make_http_request_through_proxy but uses TLS-enabled connectors
@@ -813,7 +708,6 @@ async fn make_https_request_through_proxy(
     target_url: &str,
     tls_provider: tls::Provider,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
-    // Create an HttpClient using http_client_fn with TLS-enabled proxy connector
     let http_client = http_client_fn(move |settings, _components| {
         let connector = Connector::builder()
             .proxy_config(proxy_config.clone())
@@ -824,33 +718,25 @@ async fn make_https_request_through_proxy(
         aws_smithy_runtime_api::client::http::SharedHttpConnector::new(connector)
     });
 
-    // Set up runtime components (following smoke_test_client pattern)
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()
         .with_time_source(Some(SystemTimeSource::new()))
         .build()
         .unwrap();
 
-    // Get the HTTP connector from the client
     let http_connector = http_client.http_connector(&connector_settings, &runtime_components);
 
-    // Create and make the HTTP request
     let request = HttpRequest::get(target_url)
         .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
     let response = http_connector.call(request).await?;
 
-    // Extract status and body
     let status = response.status();
     let body_bytes = response.into_body().collect().await?.to_bytes();
     let body_string = String::from_utf8(body_bytes.to_vec())?;
 
     Ok((status.into(), body_string))
 }
-
-// ================================================================================================
-// Generic HTTPS/CONNECT Test Functions
-// ================================================================================================
 
 /// Generic test function for HTTPS CONNECT with authentication
 /// Tests that HTTPS requests through HTTP proxy use CONNECT method with proper auth headers
@@ -964,15 +850,6 @@ async fn run_https_connect_auth_required_test(tls_provider: tls::Provider, provi
     );
 }
 
-// ================================================================================================
-//
-// HTTPS CONNECT Tunneling Tests
-//
-// These tests verify HTTPS tunneling through HTTP proxies using the CONNECT method.
-// They are provider-specific since each TLS provider has its own connector implementation.
-//
-// ================================================================================================
-
 /// Tests HTTPS tunneling through HTTP proxy with CONNECT method (rustls provider)
 /// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
 #[cfg(feature = "rustls-ring")]
@@ -997,10 +874,6 @@ async fn test_https_connect_auth_required_rustls() {
     .await;
 }
 
-// ================================================================================================
-// S2N-TLS Provider CONNECT Tests
-// ================================================================================================
-
 /// Tests HTTPS tunneling through HTTP proxy with CONNECT method (s2n-tls provider)
 /// Verifies that HTTPS requests through HTTP proxy use CONNECT method with authentication
 #[cfg(feature = "s2n-tls")]
@@ -1016,10 +889,6 @@ async fn test_https_connect_with_auth_s2n_tls() {
 async fn test_https_connect_auth_required_s2n_tls() {
     run_https_connect_auth_required_test(tls::Provider::S2nTls, "s2n-tls").await;
 }
-
-// ================================================================================================
-// URI Form Tests
-// ================================================================================================
 
 /// Tests that HTTP requests through proxy use absolute URI form
 /// Verifies that the full URL (including hostname) is sent to the proxy

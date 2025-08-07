@@ -36,7 +36,6 @@ use std::fmt;
 /// ```
 #[derive(Debug, Clone)]
 pub struct ProxyConfig {
-    /// Internal configuration representation
     inner: ProxyConfigInner,
 }
 
@@ -69,7 +68,7 @@ enum ProxyConfigInner {
 
 /// Proxy authentication configuration
 ///
-/// Stored for later conversion to the internal authentication format.
+/// Stored for later conversion to hyper-util format.
 #[derive(Debug, Clone)]
 struct ProxyAuth {
     /// Username for authentication
@@ -459,8 +458,6 @@ impl ProxyConfig {
         }
         false
     }
-
-    // Private helper methods
 
     fn validate_proxy_uri(uri: &Uri) -> Result<(), ProxyError> {
         // Validate scheme

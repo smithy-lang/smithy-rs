@@ -224,7 +224,6 @@ impl<Any> ConnectorBuilder<Any> {
             None => timeout::HttpReadTimeout::no_timeout(base),
         };
 
-        // Pre-compute proxy matcher for performance
         let proxy_matcher = self
             .proxy_config
             .as_ref()
@@ -379,7 +378,6 @@ impl<Any> ConnectorBuilder<Any> {
 /// Adapter to use a Hyper 1.0-based Client as an `HttpConnector`
 ///
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`Connector::builder`].
-/// It integrates proxy support following the reqwest pattern.
 struct Adapter<C> {
     client: timeout::HttpReadTimeout<
         hyper_util::client::legacy::Client<timeout::ConnectTimeout<C>, SdkBody>,
@@ -424,7 +422,6 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
 
 impl<C> Adapter<C> {
     /// Add proxy authentication header to the request if needed
-    /// Following the reqwest pattern for proxy authentication
     fn add_proxy_auth_header(&self, request: &mut http_1x::Request<SdkBody>) {
         // Only add auth for HTTP requests (not HTTPS which uses CONNECT tunneling)
         if request.uri().scheme() != Some(&http_1x::uri::Scheme::HTTP) {
@@ -470,7 +467,6 @@ where
             }
         };
 
-        // Inject proxy authentication headers if needed (following reqwest pattern)
         self.add_proxy_auth_header(&mut request);
 
         let capture_connection = capture_connection(&mut request);
@@ -724,7 +720,6 @@ cfg_tls! {
                     feature = "rustls-ring"
                 ))]
                 tls::Provider::Rustls(crypto_mode) => {
-                    // Get proxy config, defaulting to disabled if not set
                     let proxy_config = self.proxy_config.clone()
                         .unwrap_or_else(proxy::ProxyConfig::disabled);
 
@@ -738,7 +733,6 @@ cfg_tls! {
                 },
                 #[cfg(feature = "s2n-tls")]
                 tls::Provider::S2nTls  => {
-                    // Get proxy config, defaulting to disabled if not set
                     let proxy_config = self.proxy_config.clone()
                         .unwrap_or_else(proxy::ProxyConfig::disabled);
 
