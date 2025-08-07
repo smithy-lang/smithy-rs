@@ -7,7 +7,7 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.86.0
-ARG rust_nightly_version=nightly-2025-05-04
+ARG rust_nightly_version=nightly-2025-08-06
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
