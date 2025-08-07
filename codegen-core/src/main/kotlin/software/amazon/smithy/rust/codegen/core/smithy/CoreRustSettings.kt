@@ -52,9 +52,13 @@ open class CoreCodegenConfig(
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", DEFAULT_FORMAT_TIMEOUT_SECONDS).toInt(),
+                    formatTimeoutSeconds =
+                        node.get()
+                            .getNumberMemberOrDefault("formatTimeoutSeconds", DEFAULT_FORMAT_TIMEOUT_SECONDS).toInt(),
                     debugMode = node.get().getBooleanMemberOrDefault("debugMode", DEFAULT_DEBUG_MODE),
-                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_MODE),
+                    flattenCollectionAccessors =
+                        node.get()
+                            .getBooleanMemberOrDefault("flattenCollectionAccessors", DEFAULT_FLATTEN_MODE),
                 )
             } else {
                 CoreCodegenConfig(
@@ -123,12 +127,14 @@ open class CoreRustSettings(
                             "contain any service shapes",
                     )
                 }
+
                 services.size > 1 -> {
                     throw CodegenException(
                         "Cannot infer service to generate because the model contains " +
                             "multiple service shapes: " + services,
                     )
                 }
+
                 else -> {
                     val service = services[0]
                     LOGGER.info("Inferring service to generate as: $service")
