@@ -92,8 +92,9 @@ impl ClientRateLimiter {
             .build()
     }
 
-    fn builder() -> Builder {
-        Builder::new()
+    /// Creates a new `ClientRateLimiterBuilder`
+    pub fn builder() -> ClientRateLimiterBuilder {
+        ClientRateLimiterBuilder::new()
     }
 
     pub(crate) fn acquire_permission_to_send_a_request(
@@ -236,8 +237,9 @@ fn cubic_throttle(rate_to_use: f64) -> f64 {
     rate_to_use * BETA
 }
 
+/// Builder for `ClientRateLimiter`.
 #[derive(Clone, Debug, Default)]
-struct Builder {
+pub struct ClientRateLimiterBuilder {
     ///The rate at which token are replenished.
     token_refill_rate: Option<f64>,
     ///The maximum capacity allowed in the token bucket.
@@ -260,9 +262,9 @@ struct Builder {
     time_of_last_throttle: Option<f64>,
 }
 
-impl Builder {
+impl ClientRateLimiterBuilder {
     fn new() -> Self {
-        Builder::default()
+        ClientRateLimiterBuilder::default()
     }
     ///The rate at which token are replenished.
     fn set_token_refill_rate(&mut self, token_refill_rate: Option<f64>) -> &mut Self {

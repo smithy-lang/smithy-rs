@@ -15,10 +15,11 @@ mod token_bucket;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt;
 
-pub use client_rate_limiter::ClientRateLimiter;
-pub use token_bucket::TokenBucket;
+pub use client_rate_limiter::{
+    ClientRateLimiter, ClientRateLimiterBuilder, ClientRateLimiterPartition,
+};
+pub use token_bucket::{TokenBucket, TokenBucketBuilder};
 
-pub use client_rate_limiter::ClientRateLimiterPartition;
 use std::borrow::Cow;
 
 /// Represents the retry partition, e.g. an endpoint, a region
