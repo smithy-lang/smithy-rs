@@ -28,7 +28,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
-use tokio::time::{timeout, Duration};
 
 // ================================================================================================
 // Test Utilities (Mock Proxy Server)

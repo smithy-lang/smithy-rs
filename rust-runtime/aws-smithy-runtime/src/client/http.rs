@@ -2,8 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use aws_smithy_http_client::proxy::ProxyConfig;
-use aws_smithy_http_client::ConnectorBuilder;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 #[cfg(feature = "default-https-client")]
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -85,7 +83,8 @@ impl DefaultClientOptions {
 /// Creates an HTTPS client using the default TLS provider
 #[cfg(feature = "default-https-client")]
 pub(crate) fn default_https_client(options: DefaultClientOptions) -> Option<SharedHttpClient> {
-    use aws_smithy_http_client::{tls, Builder};
+    use aws_smithy_http_client::proxy::ProxyConfig;
+    use aws_smithy_http_client::{tls, Builder, ConnectorBuilder};
     tracing::trace!("creating a new default hyper 1.x client using rustls<aws-lc>");
 
     let client = Builder::new().build_with_connector_fn(move |settings, runtime_components| {
