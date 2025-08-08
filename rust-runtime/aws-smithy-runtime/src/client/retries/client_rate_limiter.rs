@@ -9,6 +9,7 @@
 #![allow(dead_code)]
 
 use crate::client::retries::RetryPartition;
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::debug;
@@ -43,6 +44,10 @@ const SCALE_CONSTANT: f64 = 0.4;
 #[derive(Clone, Debug)]
 pub struct ClientRateLimiter {
     inner: Arc<Mutex<Inner>>,
+}
+
+impl Storable for ClientRateLimiter {
+    type Storer = StoreReplace<Self>;
 }
 
 #[derive(Debug)]

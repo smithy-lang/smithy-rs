@@ -85,13 +85,22 @@ impl StandardRetryStrategy {
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .expect("the present takes place after the UNIX_EPOCH")
                     .as_secs_f64();
-                let client_rate_limiter_partition =
-                    ClientRateLimiterPartition::new(retry_partition.clone());
-                let client_rate_limiter = CLIENT_RATE_LIMITER
-                    .get_or_init(client_rate_limiter_partition, || {
-                        ClientRateLimiter::new(seconds_since_unix_epoch)
-                    });
-                return Some(client_rate_limiter);
+                match cfg.load::<ClientRateLimiter>().cloned() {
+                    Some(client_rate_limiter) => {
+                        // Use a custom rate limiter if already configured by a user.
+                        return Some(client_rate_limiter);
+                    }
+                    None => {
+                        // Otherwise, obtain one for the retry partition.
+                        let client_rate_limiter_partition =
+                            ClientRateLimiterPartition::new(retry_partition.clone());
+                        let client_rate_limiter = CLIENT_RATE_LIMITER
+                            .get_or_init(client_rate_limiter_partition, || {
+                                ClientRateLimiter::new(seconds_since_unix_epoch)
+                            });
+                        return Some(client_rate_limiter);
+                    }
+                }
             }
         }
         None
@@ -376,22 +385,24 @@ impl Intercept for TokenBucketProvider {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let retry_partition = cfg.load::<RetryPartition>().expect("set in default config");
+        // If a user does not provide a custom token bucket, we obtain one from retry partition and add it to the config bag.
+        if cfg.load::<TokenBucket>().is_none() {
+            let retry_partition = cfg.load::<RetryPartition>().expect("set in default config");
+            // we store the original retry partition configured and associated token bucket
+            // for the client when created so that we can avoid locking on _every_ request
+            // from _every_ client
+            let tb = if *retry_partition != self.default_partition {
+                TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
+            } else {
+                // avoid contention on the global lock
+                self.token_bucket.clone()
+            };
 
-        // we store the original retry partition configured and associated token bucket
-        // for the client when created so that we can avoid locking on _every_ request
-        // from _every_ client
-        let tb = if *retry_partition != self.default_partition {
-            TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
-        } else {
-            // avoid contention on the global lock
-            self.token_bucket.clone()
-        };
-
-        trace!("token bucket for {retry_partition:?} added to config bag");
-        let mut layer = Layer::new("token_bucket_partition");
-        layer.store_put(tb);
-        cfg.push_layer(layer);
+            trace!("token bucket for {retry_partition:?} added to config bag");
+            let mut layer = Layer::new("token_bucket_partition");
+            layer.store_put(tb);
+            cfg.push_layer(layer);
+        }
         Ok(())
     }
 }

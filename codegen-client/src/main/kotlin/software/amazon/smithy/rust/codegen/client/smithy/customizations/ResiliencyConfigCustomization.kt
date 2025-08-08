@@ -15,6 +15,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -23,14 +25,12 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
     private val retries = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries")
     private val moduleUseName = codegenContext.moduleUseName()
+    private val sdkId = codegenContext.serviceShape.sdkId().lowercase().replace(" ", "")
     private val codegenScope =
         arrayOf(
             *preludeScope,
             "AsyncSleep" to configReexport(sleepModule.resolve("AsyncSleep")),
-            "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
-            "Sleep" to configReexport(sleepModule.resolve("Sleep")),
             "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
-            "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
             "debug" to RuntimeType.Tracing.resolve("debug"),
             "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
             "RetryConfig" to retryConfig.resolve("RetryConfig"),
@@ -39,9 +39,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
             "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
             "SharedRetryStrategy" to configReexport(RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::retries::SharedRetryStrategy")),
             "SharedTimeSource" to configReexport(RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource")),
+            "Sleep" to configReexport(sleepModule.resolve("Sleep")),
             "StandardRetryStrategy" to configReexport(retries.resolve("strategy::StandardRetryStrategy")),
             "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
             "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
+            "TokenBucket" to retries.resolve("TokenBucket"),
         )
 
     override fun section(section: ServiceConfig) =
@@ -63,6 +65,16 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// Return a reference to the timeout configuration contained in this config, if any.
                         pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
                             self.config.load::<#{TimeoutConfig}>()
+                        }
+
+                        /// Returns a reference to the token bucket configured in this config, if any.
+                        pub fn token_bucket(&self) -> #{Option}<&#{TokenBucket}> {
+                            self.config.load::<#{TokenBucket}>()
+                        }
+
+                        /// Returns a reference to the client rate limiter configured in this config, if any.
+                        pub fn client_rate_limiter(&self) -> #{Option}<&#{ClientRateLimiter}> {
+                            self.config.load::<#{ClientRateLimiter}>()
                         }
 
                         /// Returns a reference to the retry partition contained in this config, if any.
@@ -91,7 +103,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// let config = Config::builder().retry_config(retry_config).build();
                         /// ```
                         pub fn retry_config(mut self, retry_config: #{RetryConfig}) -> Self {
-                            self.set_retry_config(Some(retry_config));
+                            self.set_retry_config(#{Some}(retry_config));
                             self
                         }
 
@@ -111,14 +123,80 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// disable_retries(&mut builder);
                         /// let config = builder.build();
                         /// ```
+                        pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
+                            retry_config.map(|r| self.config.store_put(r));
+                            self
+                        }
                         """,
                         *codegenScope,
                     )
 
                     rustTemplate(
                         """
-                        pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
-                            retry_config.map(|r| self.config.store_put(r));
+
+                        /// Set the [TokenBucket](#{TokenBucket}) for the builder
+                        ///
+                        /// This is an advanced setting — most users should not need to set this.
+                        /// If a custom `TokenBucket` is specified, the default `TokenBucket` associated with a [`RetryPartition`](#{RetryPartition})
+                        /// (defaults to ${sdkId.dq()}) is ignored. As a result, if another service client uses the default `TokenBucket`,
+                        /// the two clients may perform retries independently, unaware of each other’s token usage.
+                        ///
+                        /// ## Examples
+                        ///
+                        /// ```no_run
+                        /// ## use $moduleUseName::config::retry::TokenBucket;
+                        /// ## use $moduleUseName::config::Config;
+                        ///
+                        /// let token_bucket = TokenBucket::new(10);
+                        /// let config = Config::builder().token_bucket(token_bucket).build();
+                        /// ```
+                        pub fn token_bucket(mut self, token_bucket: #{TokenBucket}) -> Self {
+                            self.set_token_bucket(#{Some}(token_bucket));
+                            self
+                        }
+
+                        /// Like [`Self::token_bucket`], but takes a mutable reference to the builder.
+                        pub fn set_token_bucket(&mut self, token_bucket: #{Option}<#{TokenBucket}>) -> &mut Self {
+                            token_bucket.map(|tb| self.config.store_put(tb));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    rustTemplate(
+                        """
+
+                        /// Set the [ClientRateLimiter](#{ClientRateLimiter}) for the builder
+                        ///
+                        /// This is an advanced setting — most users should not need to set this.
+                        /// If a custom `ClientRateLimiter` is specified, the default `ClientRateLimiter` associated with a [`RetryPartition`](#{RetryPartition})
+                        /// (defaults to ${sdkId.dq()}) is ignored. As a result, if another service client uses the default `ClientRateLimiter`,
+                        /// the two clients may perform retries independently, unaware of each other’s rate limiter.
+                        ///
+                        /// NOTE: To use the passed-in `ClientRateLimiter`, `RetryConfig` must be set to `RetryConfig::adaptive()`; otherwise, it is a no-op.
+                        ///
+                        /// ## Examples
+                        ///
+                        /// ```no_run
+                        /// ## use $moduleUseName::config::retry::ClientRateLimiter;
+                        /// ## use $moduleUseName::config::retry::RetryConfig;
+                        /// ## use $moduleUseName::config::Config;
+                        ///
+                        /// let client_rate_limiter = ClientRateLimiter::new(10.0);
+                        /// let config = Config::builder()
+                        ///     .client_rate_limiter(client_rate_limiter)
+                        ///     .retry_config(RetryConfig::adaptive())
+                        ///     .build();
+                        /// ```
+                        pub fn client_rate_limiter(mut self, client_rate_limiter: #{ClientRateLimiter}) -> Self {
+                            self.set_client_rate_limiter(#{Some}(client_rate_limiter));
+                            self
+                        }
+
+                        /// Like [`Self::client_rate_limiter`], but takes a mutable reference to the builder.
+                        pub fn set_client_rate_limiter(&mut self, client_rate_limiter: #{Option}<#{ClientRateLimiter}>) -> &mut Self {
+                            client_rate_limiter.map(|limiter| self.config.store_put(limiter));
                             self
                         }
                         """,
@@ -148,7 +226,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// let config = Config::builder().sleep_impl(sleep_impl).build();
                         /// ```
                         pub fn sleep_impl(mut self, sleep_impl: impl #{AsyncSleep} + 'static) -> Self {
-                            self.set_sleep_impl(Some(#{IntoShared}::into_shared(sleep_impl)));
+                            self.set_sleep_impl(#{Some}(#{IntoShared}::into_shared(sleep_impl)));
                             self
                         }
 
@@ -209,7 +287,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// let config = Config::builder().timeout_config(timeout_config).build();
                         /// ```
                         pub fn timeout_config(mut self, timeout_config: #{TimeoutConfig}) -> Self {
-                            self.set_timeout_config(Some(timeout_config));
+                            self.set_timeout_config(#{Some}(timeout_config));
                             self
                         }
 
@@ -249,11 +327,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         """
                         pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
                             // passing None has no impact.
-                            let Some(mut timeout_config) = timeout_config else {
+                            let #{Some}(mut timeout_config) = timeout_config else {
                                 return self
                             };
 
-                            if let Some(base) = self.config.load::<#{TimeoutConfig}>() {
+                            if let #{Some}(base) = self.config.load::<#{TimeoutConfig}>() {
                                 timeout_config.take_defaults_from(base);
                             }
                             self.config.store_put(timeout_config);
@@ -269,7 +347,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         /// also share things like token buckets and client rate limiters. By default, all clients
                         /// for the same service will share a partition.
                         pub fn retry_partition(mut self, retry_partition: #{RetryPartition}) -> Self {
-                            self.set_retry_partition(Some(retry_partition));
+                            self.set_retry_partition(#{Some}(retry_partition));
                             self
                         }
                         """,
@@ -325,9 +403,16 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
                 "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode, ReconnectMode};",
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
             )
-
             rustTemplate(
                 "pub use #{types_retry}::RetryPartition;",
+                "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
+            )
+            rustTemplate(
+                "pub use #{types_retry}::TokenBucket;",
+                "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
+            )
+            rustTemplate(
+                "pub use #{types_retry}::ClientRateLimiter;",
                 "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
             )
         }
