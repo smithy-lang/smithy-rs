@@ -101,7 +101,7 @@ impl ProxyConfig {
     /// Create a new proxy configuration for HTTP traffic only
     ///
     /// # Arguments
-    /// * `proxy_url` - The HTTP proxy URL (e.g., "http://proxy.example.com:8080")
+    /// * `proxy_url` - The HTTP proxy URL
     ///
     /// # Examples
     /// ```rust
@@ -143,7 +143,7 @@ impl ProxyConfig {
     /// available when building the connector, otherwise connections will fail.
     ///
     /// # Arguments
-    /// * `proxy_url` - The proxy URL (e.g., "http://proxy.example.com:8080" or "https://proxy.example.com:8080")
+    /// * `proxy_url` - The proxy URL
     ///
     /// # Examples
     /// ```rust
@@ -185,7 +185,7 @@ impl ProxyConfig {
     /// available when building the connector, otherwise connections will fail.
     ///
     /// # Arguments
-    /// * `proxy_url` - The proxy URL (e.g., "http://proxy.example.com:8080")
+    /// * `proxy_url` - The proxy URL
     ///
     /// # Examples
     /// ```rust
