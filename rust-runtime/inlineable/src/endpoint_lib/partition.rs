@@ -120,7 +120,7 @@ impl PartitionResolver {
         &self,
         region: &str,
         e: &mut DiagnosticCollector,
-    ) -> Option<Partition> {
+    ) -> Option<Partition<'_>> {
         let mut explicit_match_partition = self
             .partitions
             .iter()
