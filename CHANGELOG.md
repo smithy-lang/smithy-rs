@@ -1,4 +1,27 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 11th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208)) Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:
+    - aws-sdk-cloudformation
+    - aws-sdk-dynamodb
+    - aws-sdk-ec2
+    - aws-sdk-s3
+    - aws-sdk-sns
+    - aws-sdk-sqs
+    - aws-sdk-ssm
+    - aws-sdk-sts
+
+    See more information about this hint at https://blog.rust-lang.org/inside-rust/2025/07/15/call-for-testing-hint-mostly-unused/
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208), @joshtriplett) Enable `hints.mostly-unused = true` for `aws-sdk-lambda` (taking a release
+    build from 57s to 40s) and `aws-sdk-rds` (taking a release build from 1m34s to
+    49s).
+
+**Contributors**
+Thank you for your contributions! ❤
+- @joshtriplett ([smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208))
+
+
 August 4th, 2025
 ================
 **New this release:**
