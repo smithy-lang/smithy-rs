@@ -4,6 +4,8 @@ applies_to:
   - client
 authors:
   - joshtriplett
+references:
+  - smithy-rs#4208
 breaking: false
 new_feature: true
 bug_fix: false
