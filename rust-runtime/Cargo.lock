@@ -3171,9 +3171,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "s2n-tls"
-version = "0.3.23"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7795b2643472ca0c92abd9649fbbc96ce6b90ce88f8a75412abe49c580db89f8"
+checksum = "902398e2a0bd7ed40ecc61ba85f5985139213b86bb6decb547120367733c9545"
 dependencies = [
  "errno",
  "hex",
@@ -3184,9 +3184,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-hyper"
-version = "0.0.15"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad7b9b2f67c180c23ae200d435b8d43c5696a916b33411732689435bf5affb69"
+checksum = "d5bfd127ef11ae746efd789549ee807f5370d5cb04e2955324420f361b2c2bbe"
 dependencies = [
  "http 1.3.1",
  "hyper 1.6.0",
@@ -3198,9 +3198,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-sys"
-version = "0.3.23"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a1f57616b8f5b24e38f5506a1ed22133088b5d307565953d3fded6e42714639"
+checksum = "c17994d4b67dcca7c7c01120ad30a639c1500c589d695478490e7ad6584683fd"
 dependencies = [
  "aws-lc-rs",
  "cc",
@@ -3209,9 +3209,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-tokio"
-version = "0.3.23"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a02d61c88fabd0f64781e121acec3da2bcd192da4625d1f94a5c0e8886e2320"
+checksum = "84e990a681d8c701037c14d475c239803b353cdd6dcec9c8d5ba4216d4a58937"
 dependencies = [
  "errno",
  "libc",
