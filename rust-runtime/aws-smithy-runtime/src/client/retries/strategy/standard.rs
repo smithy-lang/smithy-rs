@@ -26,7 +26,7 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
     APermitWasReleased, NoPermitWasReleased,
 };
 use crate::client::retries::token_bucket::TokenBucket;
-use crate::client::retries::{ClientRateLimiterPartition, RetryPartition};
+use crate::client::retries::{ClientRateLimiterPartition, RetryPartition, RetryPartitionInner};
 use crate::static_partition_map::StaticPartitionMap;
 
 static CLIENT_RATE_LIMITER: StaticPartitionMap<ClientRateLimiterPartition, ClientRateLimiter> =
@@ -85,12 +85,19 @@ impl StandardRetryStrategy {
                     .duration_since(SystemTime::UNIX_EPOCH)
                     .expect("the present takes place after the UNIX_EPOCH")
                     .as_secs_f64();
-                let client_rate_limiter_partition =
-                    ClientRateLimiterPartition::new(retry_partition.clone());
-                let client_rate_limiter = CLIENT_RATE_LIMITER
-                    .get_or_init(client_rate_limiter_partition, || {
-                        ClientRateLimiter::new(seconds_since_unix_epoch)
-                    });
+                let client_rate_limiter = match &retry_partition.inner {
+                    RetryPartitionInner::Default(_) => {
+                        let client_rate_limiter_partition =
+                            ClientRateLimiterPartition::new(retry_partition.clone());
+                        CLIENT_RATE_LIMITER.get_or_init(client_rate_limiter_partition, || {
+                            ClientRateLimiter::new(seconds_since_unix_epoch)
+                        })
+                    }
+                    RetryPartitionInner::Configured {
+                        client_rate_limiter,
+                        ..
+                    } => client_rate_limiter.clone().unwrap_or_default(),
+                };
                 return Some(client_rate_limiter);
             }
         }
@@ -378,14 +385,21 @@ impl Intercept for TokenBucketProvider {
     ) -> Result<(), BoxError> {
         let retry_partition = cfg.load::<RetryPartition>().expect("set in default config");
 
-        // we store the original retry partition configured and associated token bucket
-        // for the client when created so that we can avoid locking on _every_ request
-        // from _every_ client
-        let tb = if *retry_partition != self.default_partition {
-            TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
-        } else {
-            // avoid contention on the global lock
-            self.token_bucket.clone()
+        let tb = match &retry_partition.inner {
+            RetryPartitionInner::Default(name) => {
+                // we store the original retry partition configured and associated token bucket
+                // for the client when created so that we can avoid locking on _every_ request
+                // from _every_ client
+                if name == self.default_partition.name() {
+                    // avoid contention on the global lock
+                    self.token_bucket.clone()
+                } else {
+                    TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
+                }
+            }
+            RetryPartitionInner::Configured { token_bucket, .. } => {
+                token_bucket.clone().unwrap_or_default()
+            }
         };
 
         trace!("token bucket for {retry_partition:?} added to config bag");

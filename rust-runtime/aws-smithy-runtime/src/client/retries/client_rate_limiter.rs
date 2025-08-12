@@ -77,6 +77,12 @@ pub(crate) enum RequestReason {
     InitialRequest,
 }
 
+impl Default for ClientRateLimiter {
+    fn default() -> Self {
+        Self::builder().build()
+    }
+}
+
 impl ClientRateLimiter {
     /// Creates a new `ClientRateLimiter`
     pub fn new(seconds_since_unix_epoch: f64) -> Self {

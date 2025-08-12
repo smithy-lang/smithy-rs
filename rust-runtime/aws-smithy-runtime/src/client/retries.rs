@@ -22,25 +22,177 @@ pub use client_rate_limiter::ClientRateLimiterPartition;
 use std::borrow::Cow;
 
 /// Represents the retry partition, e.g. an endpoint, a region
+///
+/// By default, a retry partition created via [`RetryPartition::new`] uses built-in token bucket and rate limiter settings,
+/// with no option for customization.
+///
+/// To configure these components, use a custom retry partition created via [`RetryPartition::custom`].
+/// Custom partitions allow full control over token bucket and rate limiter.
+///
+/// Two `RetryPartition`s that are equal, as defined by the `Eq` trait, share the same token bucket and client rate limiter.
+/// This means that the token bucket and rate limiter in a custom retry partition are independent
+/// of those in a default retry partition, even if the custom partition has the same name as the default partition.
 #[non_exhaustive]
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct RetryPartition {
-    name: Cow<'static, str>,
+    pub(crate) inner: RetryPartitionInner,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum RetryPartitionInner {
+    Default(Cow<'static, str>),
+    Configured {
+        name: Cow<'static, str>,
+        token_bucket: Option<TokenBucket>,
+        client_rate_limiter: Option<ClientRateLimiter>,
+    },
 }
 
 impl RetryPartition {
     /// Creates a new `RetryPartition` from the given `name`.
     pub fn new(name: impl Into<Cow<'static, str>>) -> Self {
-        Self { name: name.into() }
+        Self {
+            inner: RetryPartitionInner::Default(name.into()),
+        }
+    }
+
+    /// Creates a builder for a custom `RetryPartition`.
+    pub fn custom(name: impl Into<Cow<'static, str>>) -> RetryPartitionBuilder {
+        RetryPartitionBuilder {
+            name: name.into(),
+            token_bucket: None,
+            client_rate_limiter: None,
+        }
+    }
+
+    fn name(&self) -> &str {
+        match &self.inner {
+            RetryPartitionInner::Default(name) => name,
+            RetryPartitionInner::Configured { name, .. } => name,
+        }
+    }
+}
+
+impl PartialEq for RetryPartition {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.inner, &other.inner) {
+            (RetryPartitionInner::Default(name1), RetryPartitionInner::Default(name2)) => {
+                name1 == name2
+            }
+            (
+                RetryPartitionInner::Configured { name: name1, .. },
+                RetryPartitionInner::Configured { name: name2, .. },
+            ) => name1 == name2,
+            // Different variants: not equal
+            _ => false,
+        }
+    }
+}
+
+impl Eq for RetryPartition {}
+
+impl std::hash::Hash for RetryPartition {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match &self.inner {
+            RetryPartitionInner::Default(name) => {
+                // Hash discriminant for Default variant
+                0u8.hash(state);
+                name.hash(state);
+            }
+            RetryPartitionInner::Configured { name, .. } => {
+                // Hash discriminant for Configured variant
+                1u8.hash(state);
+                name.hash(state);
+            }
+        }
     }
 }
 
 impl fmt::Display for RetryPartition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.name)
+        f.write_str(self.name())
     }
 }
 
 impl Storable for RetryPartition {
     type Storer = StoreReplace<RetryPartition>;
+}
+
+/// Builder for creating custom retry partitions.
+pub struct RetryPartitionBuilder {
+    name: Cow<'static, str>,
+    token_bucket: Option<TokenBucket>,
+    client_rate_limiter: Option<ClientRateLimiter>,
+}
+
+impl RetryPartitionBuilder {
+    /// Sets the token bucket.
+    pub fn token_bucket(mut self, token_bucket: TokenBucket) -> Self {
+        self.token_bucket = Some(token_bucket);
+        self
+    }
+
+    /// Sets the client rate limiter.
+    pub fn client_rate_limiter(mut self, client_rate_limiter: ClientRateLimiter) -> Self {
+        self.client_rate_limiter = Some(client_rate_limiter);
+        self
+    }
+
+    /// Builds the custom retry partition.
+    pub fn build(self) -> RetryPartition {
+        RetryPartition {
+            inner: RetryPartitionInner::Configured {
+                name: self.name,
+                token_bucket: self.token_bucket,
+                client_rate_limiter: self.client_rate_limiter,
+            },
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn hash_value<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn test_retry_partition_equality() {
+        let default1 = RetryPartition::new("test");
+        let default2 = RetryPartition::new("test");
+        let default3 = RetryPartition::new("other");
+
+        let configured1 = RetryPartition::custom("test").build();
+        let configured2 = RetryPartition::custom("test").build();
+        let configured3 = RetryPartition::custom("other").build();
+
+        // Same variant, same name
+        assert_eq!(default1, default2);
+        assert_eq!(configured1, configured2);
+
+        // Same variant, different name
+        assert_ne!(default1, default3);
+        assert_ne!(configured1, configured3);
+
+        // Different variant, same name
+        assert_ne!(default1, configured1);
+    }
+
+    #[test]
+    fn test_retry_partition_hash() {
+        let default = RetryPartition::new("test");
+        let configured = RetryPartition::custom("test").build();
+
+        // Different variants with same name should have different hashes
+        assert_ne!(hash_value(&default), hash_value(&configured));
+
+        // Same variants with same name should have same hashes
+        let default2 = RetryPartition::new("test");
+        assert_eq!(hash_value(&default), hash_value(&default2));
+    }
 }
