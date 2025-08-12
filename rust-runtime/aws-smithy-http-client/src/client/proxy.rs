@@ -79,18 +79,25 @@ struct ProxyAuth {
 
 /// Errors that can occur during proxy configuration
 #[derive(Debug)]
-pub enum ProxyError {
-    /// Invalid proxy URL
+pub struct ProxyError {
+    kind: ErrorKind,
+}
+
+#[derive(Debug)]
+enum ErrorKind {
     InvalidUrl(String),
-    /// Environment variable parsing error
-    EnvVarError(String),
+}
+
+impl From<ErrorKind> for ProxyError {
+    fn from(value: ErrorKind) -> Self {
+        Self { kind: value }
+    }
 }
 
 impl fmt::Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ProxyError::InvalidUrl(url) => write!(f, "invalid proxy URL: {}", url),
-            ProxyError::EnvVarError(msg) => write!(f, "environment variable error: {}", msg),
+        match &self.kind {
+            ErrorKind::InvalidUrl(url) => write!(f, "invalid proxy URL: {}", url),
         }
     }
 }
@@ -117,7 +124,7 @@ impl ProxyConfig {
     {
         let uri = proxy_url
             .try_into()
-            .map_err(|e| ProxyError::InvalidUrl(e.to_string()))?;
+            .map_err(|e| ErrorKind::InvalidUrl(e.to_string()))?;
 
         Self::validate_proxy_uri(&uri)?;
 
@@ -163,7 +170,7 @@ impl ProxyConfig {
     {
         let uri = proxy_url
             .try_into()
-            .map_err(|e| ProxyError::InvalidUrl(e.to_string()))?;
+            .map_err(|e| ErrorKind::InvalidUrl(e.to_string()))?;
 
         Self::validate_proxy_uri(&uri)?;
 
@@ -201,7 +208,7 @@ impl ProxyConfig {
     {
         let uri = proxy_url
             .try_into()
-            .map_err(|e| ProxyError::InvalidUrl(e.to_string()))?;
+            .map_err(|e| ErrorKind::InvalidUrl(e.to_string()))?;
 
         Self::validate_proxy_uri(&uri)?;
 
@@ -464,23 +471,21 @@ impl ProxyConfig {
         match uri.scheme_str() {
             Some("http") | Some("https") => {}
             Some(scheme) => {
-                return Err(ProxyError::InvalidUrl(format!(
-                    "unsupported proxy scheme: {}",
-                    scheme
-                )));
+                return Err(
+                    ErrorKind::InvalidUrl(format!("unsupported proxy scheme: {}", scheme)).into(),
+                );
             }
             None => {
-                return Err(ProxyError::InvalidUrl(
+                return Err(ErrorKind::InvalidUrl(
                     "proxy URL must include scheme (http:// or https://)".to_string(),
-                ));
+                )
+                .into());
             }
         }
 
         // Validate host
         if uri.host().is_none() {
-            return Err(ProxyError::InvalidUrl(
-                "proxy URL must include host".to_string(),
-            ));
+            return Err(ErrorKind::InvalidUrl("proxy URL must include host".to_string()).into());
         }
 
         Ok(())

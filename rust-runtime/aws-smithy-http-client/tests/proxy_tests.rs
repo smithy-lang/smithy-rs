@@ -562,7 +562,7 @@ async fn test_all_traffic_proxy() {
     // Configure proxy for all traffic
     let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
 
-    // Test 1: HTTP request should go through the proxy
+    // HTTP request should go through the proxy
     let target_url = "http://aws.amazon.com/api/endpoint";
     let result = make_http_request_through_proxy(proxy_config.clone(), target_url).await;
 
