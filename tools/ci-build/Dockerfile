@@ -7,7 +7,7 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.86.0
-ARG rust_nightly_version=nightly-2025-05-04
+ARG rust_nightly_version=nightly-2025-08-06
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -124,7 +124,7 @@ ARG cargo_deny_version=0.16.4 \
 cargo_udeps_version=0.1.56 \
 cargo_hack_version=0.6.27 \
 cargo_minimal_versions_version=0.1.27 \
-cargo_check_external_types_version=0.2.0 \
+cargo_check_external_types_version=0.3.0 \
 maturin_version=1.5.1 \
 wasm_pack_version=0.13.1 \
 cargo_wasmtime_version=34.0.1 \
