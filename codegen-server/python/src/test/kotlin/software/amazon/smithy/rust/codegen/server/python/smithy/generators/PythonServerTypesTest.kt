@@ -17,13 +17,14 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.testutil.generat
 import kotlin.io.path.appendText
 
 internal class PythonServerTypesTest {
-    @Test
-    fun `document type`() {
-        val model =
-            """
+    private fun getModel(
+        structures: String,
+        vararg errors: String = emptyArray(),
+    ) = """
             namespace test
 
             use aws.protocols#restJson1
+            use smithy.framework#ValidationException
 
             @restJson1
             service Service {
@@ -36,16 +37,25 @@ internal class PythonServerTypesTest {
             operation Echo {
                 input: EchoInput,
                 output: EchoOutput,
+                ${if (errors.isNotEmpty()) "errors: [${errors.joinToString(", ")}]," else ""}
             }
 
+            $structures
+            """.asSmithyModel()
+
+    @Test
+    fun `document type`() {
+        val model =
+            getModel(
+                """
             structure EchoInput {
                 value: Document,
             }
-
             structure EchoOutput {
                 value: Document,
             }
-            """.asSmithyModel()
+            """,
+            )
 
         val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
         executePythonServerCodegenVisitor(pluginCtx)
@@ -152,26 +162,8 @@ internal class PythonServerTypesTest {
     @Test
     fun `timestamp type`() {
         val model =
-            """
-            namespace test
-
-            use aws.protocols#restJson1
-            use smithy.framework#ValidationException
-
-            @restJson1
-            service Service {
-                operations: [
-                    Echo,
-                ],
-            }
-
-            @http(method: "POST", uri: "/echo")
-            operation Echo {
-                input: EchoInput,
-                output: EchoOutput,
-                errors: [ValidationException],
-            }
-
+            getModel(
+                """
             structure EchoInput {
                 @required
                 value: Timestamp,
@@ -183,7 +175,9 @@ internal class PythonServerTypesTest {
                 value: Timestamp,
                 opt_value: Timestamp,
             }
-            """.asSmithyModel()
+            """,
+                "ValidationException",
+            )
 
         val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
         executePythonServerCodegenVisitor(pluginCtx)
@@ -239,6 +233,52 @@ internal class PythonServerTypesTest {
         }
 
         testDir.resolve("src/service.rs").appendText(writer.toString())
+
+        cargoTest(testDir)
+    }
+
+    @Test
+    fun `unnamed enum type`() {
+        val model =
+            getModel(
+                """
+            structure EchoInput {
+                @required
+                unnamedValue: Choice,
+                unnamedOptValue: Choice,
+                @required
+                namedValue: Choice,
+                namedOptValue: Choice,
+            }
+
+            structure EchoOutput {
+                @required
+                unnamedValue: Choice,
+                unnamedOptValue: Choice,
+                @required
+                namedValue: Choice,
+                namedOptValue: Choice,
+            }
+
+            @enum([
+                {
+                    value: "t2.nano",
+                },
+                {
+                    value: "t2.micro",
+                },
+                {
+                    value: "m256.mega",
+                    deprecated: true
+                }
+            ])
+            string Choice
+            """,
+                "ValidationException",
+            )
+
+        val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
+        executePythonServerCodegenVisitor(pluginCtx)
 
         cargoTest(testDir)
     }
