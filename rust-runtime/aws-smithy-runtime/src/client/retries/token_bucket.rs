@@ -103,7 +103,7 @@ impl TokenBucketBuilder {
         Self::default()
     }
 
-    /// Sets the specified initial capacity for the builder.
+    /// Sets the maximum bucket capacity for the builder.
     pub fn capacity(mut self, capacity: usize) -> Self {
         self.capacity = Some(capacity);
         self
