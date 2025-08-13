@@ -21,7 +21,6 @@ pub struct TokenBucket {
     max_permits: usize,
     timeout_retry_cost: u32,
     retry_cost: u32,
-    regeneration_amount: usize,
 }
 
 impl Storable for TokenBucket {
@@ -35,7 +34,6 @@ impl Default for TokenBucket {
             max_permits: DEFAULT_CAPACITY,
             timeout_retry_cost: RETRY_TIMEOUT_COST,
             retry_cost: RETRY_COST,
-            regeneration_amount: PERMIT_REGENERATION_AMOUNT,
         }
     }
 }
@@ -57,7 +55,6 @@ impl TokenBucket {
             max_permits: Semaphore::MAX_PERMITS,
             timeout_retry_cost: 0,
             retry_cost: 0,
-            regeneration_amount: 0,
         }
     }
 
@@ -80,12 +77,9 @@ impl TokenBucket {
     }
 
     pub(crate) fn regenerate_a_token(&self) {
-        if self.semaphore.available_permits() < (self.max_permits) {
-            trace!(
-                "adding {regeneration_amount} back into the bucket",
-                regeneration_amount = self.regeneration_amount
-            );
-            self.semaphore.add_permits(self.regeneration_amount)
+        if self.semaphore.available_permits() < self.max_permits {
+            trace!("adding {PERMIT_REGENERATION_AMOUNT} back into the bucket");
+            self.semaphore.add_permits(PERMIT_REGENERATION_AMOUNT)
         }
     }
 
@@ -101,7 +95,6 @@ pub struct TokenBucketBuilder {
     capacity: Option<usize>,
     retry_cost: Option<u32>,
     timeout_retry_cost: Option<u32>,
-    regeneration_amount: Option<usize>,
 }
 
 impl TokenBucketBuilder {
@@ -128,12 +121,6 @@ impl TokenBucketBuilder {
         self
     }
 
-    /// Sets the specified regeneration amount for the builder.
-    pub fn regeneration_amount(mut self, regeneration_amount: usize) -> Self {
-        self.regeneration_amount = Some(regeneration_amount);
-        self
-    }
-
     /// Builds a `TokenBucket`.
     pub fn build(self) -> TokenBucket {
         TokenBucket {
@@ -141,9 +128,6 @@ impl TokenBucketBuilder {
             max_permits: self.capacity.unwrap_or(DEFAULT_CAPACITY),
             retry_cost: self.retry_cost.unwrap_or(RETRY_COST),
             timeout_retry_cost: self.timeout_retry_cost.unwrap_or(RETRY_TIMEOUT_COST),
-            regeneration_amount: self
-                .regeneration_amount
-                .unwrap_or(PERMIT_REGENERATION_AMOUNT),
         }
     }
 }
