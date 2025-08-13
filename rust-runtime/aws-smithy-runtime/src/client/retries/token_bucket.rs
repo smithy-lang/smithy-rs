@@ -157,6 +157,11 @@ mod tests {
             let permit = bucket.acquire(&ErrorKind::ThrottlingError);
             assert!(permit.is_some());
             permits.push(permit);
+            // Available permits should stay constant
+            assert_eq!(
+                tokio::sync::Semaphore::MAX_PERMITS,
+                bucket.semaphore.available_permits()
+            );
         }
     }
 
