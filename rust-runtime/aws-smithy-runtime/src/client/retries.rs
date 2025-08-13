@@ -24,15 +24,19 @@ use std::borrow::Cow;
 
 /// Represents the retry partition, e.g. an endpoint, a region
 ///
-/// By default, a retry partition created via [`RetryPartition::new`] uses built-in token bucket and rate limiter settings,
-/// with no option for customization.
+/// A retry partition created with [`RetryPartition::new`] uses built-in
+/// token bucket and rate limiter settings, with no option for customization.
+/// Default partitions with the same name share the same token bucket
+/// and client rate limiter.
 ///
-/// To configure these components, use a custom retry partition created via [`RetryPartition::custom`].
-/// Custom partitions allow full control over token bucket and rate limiter.
+/// To customize these components, use a custom retry partition via [`RetryPartition::custom`].
+/// A custom partition owns its token bucket and rate limiter, which:
+/// - Are independent from those in any default partition.
+/// - Are not shared with other custom partitions, even if they have the same name.
 ///
-/// Two `RetryPartition`s that are equal, as defined by the `Eq` trait, share the same token bucket and client rate limiter.
-/// This means that the token bucket and rate limiter in a custom retry partition are independent
-/// of those in a default retry partition, even if the custom partition has the same name as the default partition.
+/// To share a token bucket and rate limiter among custom partitions,
+/// either clone the custom partition itself or clone these components
+/// beforehand and pass them to each custom partition.
 #[non_exhaustive]
 #[derive(Clone, Debug)]
 pub struct RetryPartition {
