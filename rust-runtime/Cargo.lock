@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.63.6"
+version = "0.63.7"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -424,12 +424,13 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.0.7"
+version = "1.1.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
+ "base64 0.22.1",
  "bytes",
  "h2 0.3.27",
  "h2 0.4.12",
@@ -452,8 +453,10 @@ dependencies = [
  "rustls-pki-types",
  "s2n-tls",
  "s2n-tls-hyper",
+ "s2n-tls-tokio",
  "serde",
  "serde_json",
+ "serial_test",
  "tokio",
  "tokio-rustls 0.26.2",
  "tower 0.5.2",
@@ -614,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.6"
+version = "1.9.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -642,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.7"
+version = "1.9.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -3168,9 +3171,9 @@ checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
 
 [[package]]
 name = "s2n-tls"
-version = "0.3.12"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bca784a7bd2303b31dee13fe5d8617bd27c9e983342b6f07277d7bc07a2f32ea"
+checksum = "902398e2a0bd7ed40ecc61ba85f5985139213b86bb6decb547120367733c9545"
 dependencies = [
  "errno",
  "hex",
@@ -3181,9 +3184,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-hyper"
-version = "0.0.4"
+version = "0.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de97dea004ba2d03d6f1618f0ee770b4a63e3ba98d1764a0fecd2e520123f9ec"
+checksum = "d5bfd127ef11ae746efd789549ee807f5370d5cb04e2955324420f361b2c2bbe"
 dependencies = [
  "http 1.3.1",
  "hyper 1.6.0",
@@ -3195,9 +3198,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-sys"
-version = "0.3.12"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ac0a964de7522dd815253bea5f17e70fd382920ab20c69783ad5294519f4712"
+checksum = "c17994d4b67dcca7c7c01120ad30a639c1500c589d695478490e7ad6584683fd"
 dependencies = [
  "aws-lc-rs",
  "cc",
@@ -3206,9 +3209,9 @@ dependencies = [
 
 [[package]]
 name = "s2n-tls-tokio"
-version = "0.3.12"
+version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ef2b3f1b676575bf221cb8fe5c0bb5720736b98957e7dc9d873cd50412cbc7a"
+checksum = "84e990a681d8c701037c14d475c239803b353cdd6dcec9c8d5ba4216d4a58937"
 dependencies = [
  "errno",
  "libc",
