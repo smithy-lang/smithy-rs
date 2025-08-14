@@ -93,10 +93,10 @@ impl StandardRetryStrategy {
                             ClientRateLimiter::new(seconds_since_unix_epoch)
                         })
                     }
-                    RetryPartitionInner::Configured {
+                    RetryPartitionInner::Custom {
                         client_rate_limiter,
                         ..
-                    } => client_rate_limiter.clone().unwrap_or_default(),
+                    } => client_rate_limiter.clone(),
                 };
                 return Some(client_rate_limiter);
             }
@@ -397,9 +397,7 @@ impl Intercept for TokenBucketProvider {
                     TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
                 }
             }
-            RetryPartitionInner::Configured { token_bucket, .. } => {
-                token_bucket.clone().unwrap_or_default()
-            }
+            RetryPartitionInner::Custom { token_bucket, .. } => token_bucket.clone(),
         };
 
         trace!("token bucket for {retry_partition:?} added to config bag");

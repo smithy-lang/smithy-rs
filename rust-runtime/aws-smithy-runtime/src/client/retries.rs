@@ -46,10 +46,10 @@ pub struct RetryPartition {
 #[derive(Clone, Debug)]
 pub(crate) enum RetryPartitionInner {
     Default(Cow<'static, str>),
-    Configured {
+    Custom {
         name: Cow<'static, str>,
-        token_bucket: Option<TokenBucket>,
-        client_rate_limiter: Option<ClientRateLimiter>,
+        token_bucket: TokenBucket,
+        client_rate_limiter: ClientRateLimiter,
     },
 }
 
@@ -73,7 +73,7 @@ impl RetryPartition {
     fn name(&self) -> &str {
         match &self.inner {
             RetryPartitionInner::Default(name) => name,
-            RetryPartitionInner::Configured { name, .. } => name,
+            RetryPartitionInner::Custom { name, .. } => name,
         }
     }
 }
@@ -85,8 +85,8 @@ impl PartialEq for RetryPartition {
                 name1 == name2
             }
             (
-                RetryPartitionInner::Configured { name: name1, .. },
-                RetryPartitionInner::Configured { name: name2, .. },
+                RetryPartitionInner::Custom { name: name1, .. },
+                RetryPartitionInner::Custom { name: name2, .. },
             ) => name1 == name2,
             // Different variants: not equal
             _ => false,
@@ -104,7 +104,7 @@ impl std::hash::Hash for RetryPartition {
                 0u8.hash(state);
                 name.hash(state);
             }
-            RetryPartitionInner::Configured { name, .. } => {
+            RetryPartitionInner::Custom { name, .. } => {
                 // Hash discriminant for Configured variant
                 1u8.hash(state);
                 name.hash(state);
@@ -146,10 +146,10 @@ impl RetryPartitionBuilder {
     /// Builds the custom retry partition.
     pub fn build(self) -> RetryPartition {
         RetryPartition {
-            inner: RetryPartitionInner::Configured {
+            inner: RetryPartitionInner::Custom {
                 name: self.name,
-                token_bucket: self.token_bucket,
-                client_rate_limiter: self.client_rate_limiter,
+                token_bucket: self.token_bucket.unwrap_or_default(),
+                client_rate_limiter: self.client_rate_limiter.unwrap_or_default(),
             },
         }
     }
