@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -23,6 +24,8 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
     private val retries = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries")
     private val moduleUseName = codegenContext.moduleUseName()
+    private val sdkId = codegenContext.serviceShape.sdkId()
+    private val defaultRetryPartition = sdkId.lowercase().replace(" ", "")
     private val codegenScope =
         arrayOf(
             *preludeScope,
@@ -266,8 +269,50 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     rustTemplate(
                         """
                         /// Set the partition for retry-related state. When clients share a retry partition, they will
-                        /// also share things like token buckets and client rate limiters. By default, all clients
-                        /// for the same service will share a partition.
+                        /// also share components such as token buckets and client rate limiters.
+                        /// See the [`RetryPartition`](#{RetryPartition}) documentation for more details.
+                        ///
+                        /// ## Default Behavior
+                        ///
+                        /// When no retry partition is explicitly set, the SDK automatically creates a default retry partition named `$defaultRetryPartition`
+                        /// (or `$defaultRetryPartition-<region>` if a region is configured).
+                        /// All $sdkId clients without an explicit retry partition will share this default partition.
+                        ///
+                        /// ## Notes
+                        ///
+                        /// - This is an advanced setting — most users won't need to modify it.
+                        /// - A configured client rate limiter has no effect unless [`RetryConfig::adaptive`](#{RetryConfig}::adaptive) is used.
+                        ///
+                        /// ## Examples
+                        ///
+                        /// Creating a custom retry partition with a token bucket:
+                        /// ```no_run
+                        /// use $moduleUseName::config::Config;
+                        /// use $moduleUseName::config::retry::{RetryPartition, TokenBucket};
+                        ///
+                        /// let token_bucket = TokenBucket::new(10);
+                        /// let config = Config::builder()
+                        ///     .retry_partition(RetryPartition::custom("custom")
+                        ///         .token_bucket(token_bucket)
+                        ///         .build()
+                        ///     )
+                        ///     .build();
+                        /// ```
+                        ///
+                        /// Configuring a client rate limiter with adaptive retry mode:
+                        /// ```no_run
+                        /// use $moduleUseName::config::Config;
+                        /// use $moduleUseName::config::retry::{ClientRateLimiter, RetryConfig, RetryPartition};
+                        ///
+                        /// let client_rate_limiter = ClientRateLimiter::new(10.0);
+                        /// let config = Config::builder()
+                        ///     .retry_partition(RetryPartition::custom("custom")
+                        ///         .client_rate_limiter(client_rate_limiter)
+                        ///         .build()
+                        ///     )
+                        ///     .retry_config(RetryConfig::adaptive())
+                        ///     .build();
+                        /// ```
                         pub fn retry_partition(mut self, retry_partition: #{RetryPartition}) -> Self {
                             self.set_retry_partition(Some(retry_partition));
                             self
@@ -278,9 +323,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
 
                     rustTemplate(
                         """
-                        /// Set the partition for retry-related state. When clients share a retry partition, they will
-                        /// also share things like token buckets and client rate limiters. By default, all clients
-                        /// for the same service will share a partition.
+                        /// Like [`Self::retry_partition`], but takes a mutable reference to the builder and an optional `RetryPartition`
                         pub fn set_retry_partition(&mut self, retry_partition: #{Option}<#{RetryPartition}>) -> &mut Self {
                             retry_partition.map(|r| self.config.store_put(r));
                             self
@@ -327,7 +370,7 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
             )
 
             rustTemplate(
-                "pub use #{types_retry}::RetryPartition;",
+                "pub use #{types_retry}::{ClientRateLimiter, RetryPartition, TokenBucket};",
                 "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
             )
         }
