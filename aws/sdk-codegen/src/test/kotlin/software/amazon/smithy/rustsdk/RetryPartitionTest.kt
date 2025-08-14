@@ -108,7 +108,6 @@ class RetryPartitionTest {
                         CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig).toType()
                             .resolve("test_util::capture_test_logs::capture_test_logs"),
                     "capture_request" to RuntimeType.captureRequest(ctx.runtimeConfig),
-                    "ClientRateLimiter" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::ClientRateLimiter"),
                     "ConfigBag" to RuntimeType.configBag(ctx.runtimeConfig),
                     "Intercept" to RuntimeType.intercept(ctx.runtimeConfig),
                     "RetryConfig" to RuntimeType.smithyTypes(ctx.runtimeConfig).resolve("retry::RetryConfig"),
@@ -167,39 +166,6 @@ class RetryPartitionTest {
                             test_interceptor.called.load(Ordering::Relaxed) == 1,
                             "the interceptor should have been called"
                         );
-                        """,
-                        *codegenScope,
-                    )
-                }
-
-                tokioTest("test_custom_client_rate_limiter") {
-                    val moduleName = ctx.moduleUseName()
-                    rustTemplate(
-                        """
-                        use $moduleName::{Client, Config};
-
-                        let (_logs, logs_rx) = #{capture_test_logs}();
-                        let (http_client, _) = #{capture_request}(None);
-                        let bucket_capacity = 0.5; // Should be less than INITIAL_REQUEST_COST (1.0)
-                        let client_config = Config::builder()
-                            .retry_partition(#{RetryPartition}::custom("test")
-                                .client_rate_limiter(
-                                    #{ClientRateLimiter}::builder()
-                                        .enable_throttling(true)
-                                        .current_bucket_capacity(bucket_capacity)
-                                        .build()
-                                )
-                                .build()
-                            )
-                            .retry_config(#{RetryConfig}::adaptive())
-                            .http_client(http_client)
-                            .build();
-
-                        let client = Client::from_conf(client_config);
-                        let _ = client.some_operation().send().await;
-
-                        let log_contents = logs_rx.contents();
-                        assert!(log_contents.contains("client rate limiter delayed a request"));
                         """,
                         *codegenScope,
                     )

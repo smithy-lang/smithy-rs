@@ -417,6 +417,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
+    use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,
     };
@@ -434,7 +435,7 @@ mod tests {
     use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
-    use crate::client::retries::TokenBucket;
+    use crate::client::retries::{ClientRateLimiter, RetryPartition, TokenBucket};
 
     #[test]
     fn no_retry_necessary_for_ok_result() {
@@ -546,6 +547,36 @@ mod tests {
             .should_attempt_retry(&ctx, &rc, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::YesAfterDelay(MAX_BACKOFF), actual);
+    }
+
+    #[test]
+    fn should_yield_client_rate_limiter_from_custom_partition() {
+        let expected = ClientRateLimiter::builder().token_refill_rate(3.14).build();
+        let cfg = ConfigBag::of_layers(vec![
+            // Emulate default config layer overriden by a user config layer
+            {
+                let mut layer = Layer::new("default");
+                layer.store_put(RetryPartition::new("default"));
+                layer
+            },
+            {
+                let mut layer = Layer::new("user");
+                layer.store_put(RetryConfig::adaptive());
+                layer.store_put(
+                    RetryPartition::custom("user")
+                        .client_rate_limiter(expected.clone())
+                        .build(),
+                );
+                layer
+            },
+        ]);
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .build()
+            .unwrap();
+        let actual = StandardRetryStrategy::adaptive_retry_rate_limiter(&rc, &cfg)
+            .expect("should yield client rate limiter from custom partition");
+        assert!(std::sync::Arc::ptr_eq(&expected.inner, &actual.inner));
     }
 
     #[allow(dead_code)] // will be unused with `--no-default-features --features client`
