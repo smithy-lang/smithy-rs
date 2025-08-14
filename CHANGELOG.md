@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 13th, 2025
+=================
+**New this release:**
+- :bug: (client) pin crc-fast to <1.4 to workaround SIGILL
+
+
 August 11th, 2025
 =================
 **New this release:**
