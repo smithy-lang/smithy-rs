@@ -90,6 +90,7 @@ RUN set -eux; \
 
 FROM install_rust AS local_tools
 ARG rust_nightly_version
+ENV GRADLE_USER_HOME=/home/build/.gradle
 COPY . tools/ci-build
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
@@ -229,6 +230,7 @@ COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook /opt/cargo/bin
 COPY --chown=build:build --from=local_tools /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
+COPY --chown=build:build --from=local_tools /home/build/.gradle /home/build/.gradle
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
     NODE_HOME=/opt/nodejs \
     CARGO_HOME=/opt/cargo \
@@ -236,6 +238,7 @@ ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
+    GRADLE_USER_HOME=/home/build/.gradle \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 # SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.
