@@ -1,26 +1,5 @@
-
-> Status: RFC
->
-> Applies to: server
-
-For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
-
-This RFC defines a mechanism to use custom `ValidationException` instead of `smithy.framework#ValidationException`, enabling service teams to use a validation exception that they might have already published to the external world or maybe they are porting an existing non-smithy based model to smithy and need backward compatibility. There are some server developers who have requested a way to pass a list of failing fields to the client with error messages for use cases where they would like to display and make use of the errors to show on the user interface .
-
-Terminology
------------
-
-- **Constrained shape**: a shape that is either:
-1. a shape with a [constraint trait][https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html] attached
-2. a (member) shape with a [required trait] attached
-3. an [enum shape]
-4. an [intEnum shape]
-5. a [structure shape] with at least one required member shape; or
-6. a shape whose closure includes any of the above.
-- **ValidationException**: A Smithy shape that should be serialized on the wire in case the required field is not present.
-- **Shape closure**:
-- **::std::hash::Hash**:
-RFC: Custom Validation Exceptions
+RFC: Custom Validation Exception
+================================
 
 > Status: RFC
 >
@@ -49,29 +28,6 @@ Terminology
 [`enum` shape]: https://smithy.io/2.0/spec/simple-types.html#enum
 [`intEnum` shape]: https://smithy.io/2.0/spec/simple-types.html#intenum
 [`structure` shape]: https://smithy.io/2.0/spec/aggregate-types.html#structure
-================================
-
-> Status: RFC
->
-> Applies to: server
-
-For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
-
-This RFC defines a mechanism to use custom `ValidationException` instead of `smithy.framework#ValidationException`, enabling service teams to use a validation exception that they might have already published to the external world or maybe they are porting an existing non-smithy based model to smithy and need backward compatibility. There are some server developers who have requested a way to pass a list of failing fields to the client with error messages for use cases where they would like to display and make use of the errors to show on the user interface .
-
-Terminology
------------
-
-- **Constrained shape**: a shape that is either:
-1. a shape with a [constraint trait][https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html] attached
-2. a (member) shape with a [required trait] attached
-3. an [enum shape]
-4. an [intEnum shape]
-5. a [structure shape] with at least one required member shape; or
-6. a shape whose closure includes any of the above.
-- **ValidationException**: A Smithy shape that should be serialized on the wire in case the required field is not present.
-- **Shape closure**:
-- **::std::hash::Hash**:
 
 The user experience if this RFC is implemented
 ----------------------------------------------
@@ -109,7 +65,6 @@ Service teams face several challenges with the mandatory use of `smithy.framewor
 1. **Backward compatibility**: Teams migrating existing APIs to Smithy cannot maintain their existing validation error format
 2. **Published APIs**: Teams that have already published validation exception schemas to external consumers cannot change the response format without breaking clients
 3. **Custom error handling**: Teams may need additional fields or different field names for their validation errors
-4. **Legacy system integration**: Teams integrating with existing systems that expect specific validation error formats
 
 ### Solution: Custom validation exception traits
 
@@ -129,7 +84,7 @@ structure CustomValidationException {
 
 #### 2. Specify the message field (required)
 
-The custom validation exception **must** have exactly one String member marked with the `@validationMessage` trait to serve as the primary error message:
+The custom validation exception **must** have **exactly one** String member marked with the `@validationMessage` trait to serve as the primary error message:
 
 ```smithy
 @validationException
@@ -138,6 +93,8 @@ structure CustomValidationException {
     @validationMessage
     @required
     message: String
+
+    // <... other fields ...>
 }
 ```
 
@@ -145,8 +102,8 @@ structure CustomValidationException {
 
 For the initial implementation, the custom validation exception structure **must** be default constructible. This means the shape either:
 
-a. **must not** contain any constrained shapes that the framework cannot construct; or
-b. any constrained shapes **must** have default values specified
+  1. **must not** contain any constrained shapes that the framework cannot construct; or
+  2. any constrained shapes **must** have default values specified
 
 ```smithy
 @validationException
@@ -171,15 +128,13 @@ enum ErrorKind {
 
 #### 4. Optional field list support
 
-Optionally, the custom validation exception **may** include a field marked with `@validationFieldList` to provide detailed information about which fields failed validation. This field can be one of:
+Optionally, the custom validation exception **may** include a field marked with `@validationFieldList` to provide detailed information about which fields failed validation. This **must** be a list shape where the member is a structure shape with detailed field information:
 
-a. A String shape (for simple field name listing)
-b. A List shape where the member is a String shape (for multiple field names)
-c. A List shape where the member is a structure shape with detailed field information
-
-For option (c), the structure shape:
-- **must** have a String member marked with `@validationFieldName`
-- **may** have a String member marked with `@validationFieldMessage`
+* **must** have a String member marked with `@validationFieldName`
+* **may** have a String member marked with `@validationFieldMessage`
+* Regarding additional fields:
+  * The structure may have no additional fields beyond those specified above, or
+  * If additional fields are present, each must be default constructible
 
 ```smithy
 @validationException
@@ -213,7 +168,7 @@ structure ValidationField {
 
 #### 5. Using custom validation exceptions in operations
 
-Replace `smithy.framework#ValidationException` with your custom validation exception in operation error lists:
+Replace `smithy.framework#ValidationException` with the custom validation exception in operation error lists:
 
 ```smithy
 operation GetUser {
@@ -226,7 +181,18 @@ operation GetUser {
 }
 ```
 
-#### 6. Future extensibility
+#### 6. Using different validation exceptions in operations
+
+For the initial implementation, we're adopting a simplified approach: validation exceptions cannot be mixed within a service. This means:
+
+* All operations within a service must use the same custom validation exception type, or
+* All operations must use the standard Smithy validation exception
+
+While implementing support for multiple validation exception types would not be technically difficult, we've chosen to defer this complexity for the time being.
+
+Future enhancement: If developers need to use shapes from imported models that use either custom or standard Smithy validation exceptions, we plan to add a customization flag that will allow mapping these imported exceptions to a service's preferred exception type. This will enable greater flexibility when working with mixed models while maintaining consistency within a given service.
+
+#### 7. Future extensibility
 
 In a future iteration, the default constructibility requirement (rule #3) **may** be relaxed by allowing developers to register a factory function on the service builder. This factory function would be called by the framework whenever it needs to instantiate the custom validation exception, providing access to:
 
@@ -246,16 +212,6 @@ let service = MyService::builder()
     })
     .build();
 ```
-
-### Additional use cases
-
-This RFC addresses several additional scenarios beyond basic backward compatibility:
-
-1. **Multi-language service teams**: Teams with clients in multiple programming languages may need validation errors in a format that's easier to parse in specific languages
-2. **UI-focused applications**: Frontend applications may require structured field-level errors for form validation display
-3. **Monitoring and analytics**: Teams may need additional metadata in validation errors for monitoring, logging, or analytics purposes
-4. **Compliance requirements**: Some domains may have regulatory requirements for specific error message formats
-5. **Internationalization**: Teams may need to include locale information or error codes that map to localized messages
 
 ### Backwards compatibility
 
@@ -312,12 +268,10 @@ structure validationFieldMessage {}
 ### 2. Validation logic
 
 **Location**: `codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/validators/`
-
 Add validation to ensure custom validation exceptions are properly defined:
 
 ```kotlin
-class CustomValidationExceptionValidator : Validator {
-    override fun validate(model: Model): List<ValidationEvent> {
+class CustomValidationExceptionValidator : Validator { override fun validate(model: Model): List<ValidationEvent> {
         val events = mutableListOf<ValidationEvent>()
         
         model.shapes(StructureShape::class.java)
@@ -362,73 +316,118 @@ class CustomValidationExceptionValidator : Validator {
 }
 ```
 
-### 3. Code generation modifications
+### 3. Generated Rust code changes 
 
-**Location**: `codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/`
+#### 3.1 `ValidationExceptionField` is independent of `ValidationException`
 
-Modify the constraint violation handling to detect and use custom validation exceptions:
+Each constraint violation, like `@required` or `@pattern`, is represented in a custom type called `ValidationExceptionField`. This type is independent of what shape has been modelled in the Smithy model. Therefore, there will be no change in this.
 
-```kotlin
-class CustomValidationExceptionGenerator(
-    private val model: Model,
-    private val symbolProvider: SymbolProvider,
-    private val rustCrate: RustCrate
-) {
-    fun generateCustomValidationExceptionSupport(serviceShape: ServiceShape) {
-        val customValidationExceptions = findCustomValidationExceptions(serviceShape)
-        
-        customValidationExceptions.forEach { (operation, customException) ->
-            generateValidationExceptionMapper(operation, customException)
-        }
-    }
-    
-    private fun generateValidationExceptionMapper(
-        operation: OperationShape,
-        customException: StructureShape
-    ) {
-        val operationName = symbolProvider.toSymbol(operation).name
-        val exceptionSymbol = symbolProvider.toSymbol(customException)
-        
-        rustCrate.withModule(RustModule.private("validation_mappers")) {
-            rust("""
-                pub(crate) fn map_constraint_violations_to_${operationName.toSnakeCase()}(
-                    violations: crate::constrained::ConstraintViolations
-                ) -> ${exceptionSymbol.rustType().render()} {
-                    ${generateMappingLogic(customException, violations)}
-                }
-            """)
-        }
-    }
+```rust
+pub struct ValidationExceptionField {
+    /// A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
+    pub path: ::std::string::String,
+    /// A detailed description of the validation failure.
+    pub message: ::std::string::String,
 }
 ```
 
-### 4. Framework integration
+#### 3.2 ValidationExceptionField to CustomValidationException
 
-**Location**: `codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/protocol/`
+Each operation's input (For example [GetStorage](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L43) operation in the example model) has an associated `ConstraintViolation` enum type:
 
-Update protocol generators to use custom validation exceptions when available:
+```rust
+pub mod get_storage_input {
+    pub enum ConstraintViolation {
+        /// `user` was not provided but it is required when building `GetStorageInput`.
+        MissingUser,
+        /// `passcode` was not provided but it is required when building `GetStorageInput`.
+        MissingPasscode,
+    }
+}
+```
+Which implements a `as_validation_exception_field` function to return a `ValidationExceptionField`, which would remain unchanged.
+
+```rust
+    impl ConstraintViolation {
+        pub(crate) fn as_validation_exception_field(
+            self,
+            path: ::std::string::String,
+        ) -> crate::model::ValidationExceptionField {
+            match self {
+            ConstraintViolation::MissingUser => crate::model::ValidationExceptionField {
+                                                message: format!("Value at '{}/user' failed to satisfy constraint: Member must not be null", path),
+                                                path: path + "/user",
+                                            },
+            ConstraintViolation::MissingPasscode => crate::model::ValidationExceptionField {
+                                                message: format!("Value at '{}/passcode' failed to satisfy constraint: Member must not be null", path),
+                                                path: path + "/passcode",
+                                            },
+        }
+        }
+    }
+```
+
+Consequently, each `ConstraintViolation` also defines a conversion into `RequestRejection`, which is an enum with a variant `ConstraintViolation`. This is where the smithy model independent `ValidationExceptionField` gets converted into the model defined `ValidationException`, and would need to be changed.
+
+```rust
+impl ::std::convert::From<ConstraintViolation>
+        for ::aws_smithy_http_server::protocol::rest_json_1::rejection::RequestRejection
+    {
+        fn from(constraint_violation: ConstraintViolation) -> Self {
+            let first_validation_exception_field =
+                constraint_violation.as_validation_exception_field("".to_owned());
+
+    // ---- Generate code for instantiating the CustomValidationException instead of Smithy's
+
+            let validation_exception = crate::error::ValidationException {
+                message: format!(
+                    "1 validation error detected. {}",
+                    &first_validation_exception_field.message
+                ),
+                field_list: Some(vec![first_validation_exception_field]),
+            };
+
+    // ----
+            Self::ConstraintViolation(
+                                crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                                    .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                            )
+        }
+    }
+```
+
+#### Protocol serialization changes
+
+A protocol dependent function is generated in the `protocol_serde` module for Smithy's `ValidationException`. This function will need to change to ouptut the fields of the `CustomValidationException`:
+
+```rust
+pub fn ser_validation_exception(
+    object: &mut ::aws_smithy_json::serialize::JsonObjectWriter,
+    // Change this to `CustomValidationException`
+    input: &crate::error::ValidationException,
+) -> ::std::result::Result<(), ::aws_smithy_types::error::operation::SerializationError> {
+
+    // Serialize all fields of the CustomValidationException
+
+} 
+```
+
+### 4. Code generator changes
+
+**Location**: `software/amazon/smithy/rust/codegen/server/smithy/customizations/CustomValidationGeneratorDecorator.kt`
+
+Most of the implementation is going to be similar to ` software/amazon/smithy/rust/codegen/server/smithy/customizations/SmithyValidationExceptionDecorator.kt` 
 
 ```kotlin
-// In the appropriate protocol generator
-private fun generateConstraintViolationHandling(operation: OperationShape): Writable {
-    val customValidationException = findCustomValidationException(operation)
-    
-    return if (customValidationException != null) {
-        writable {
-            rust("""
-                match constraint_violations {
-                    Ok(input) => input,
-                    Err(violations) => {
-                        let custom_exception = crate::validation_mappers::map_constraint_violations_to_${operation.id.name.toSnakeCase()}(violations);
-                        return Err(${customValidationException.name}(custom_exception).into());
-                    }
-                }
-            """)
-        }
-    } else {
-        // Use standard ValidationException
-        generateStandardValidationExceptionHandling()
-    }
+class CustomValidationExceptionDecorator : ServerCodegenDecorator {
+    override val name: String
+        get() = "CustomValidationExceptionDecorator"
+    override val order: Byte
+        get() = 69
+
+    override fun validationExceptionConversion(
+        codegenContext: ServerCodegenContext,
+    ): ValidationExceptionConversionGenerator = CustomValidationExceptionConversionGenerator(codegenContext)
 }
 ```
 
