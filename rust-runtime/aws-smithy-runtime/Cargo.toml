@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.8.6"
+version = "1.8.7"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
@@ -17,7 +17,7 @@ http-auth = ["aws-smithy-runtime-api/http-auth"]
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
-rt-tokio = ["tokio/rt"]
+rt-tokio = ["tokio/rt", "hickory-resolver"]
 
 # Features for testing
 # NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
@@ -54,6 +54,7 @@ bytes = "1.10.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.3.0"
+hickory-resolver = {version = "0.25.2", optional = true}
 http-02x = { package = "http", version = "0.2.9" }
 http-1x = { package = "http", version = "1" }
 http-body-04x = { package = "http-body", version = "0.4.5" }
