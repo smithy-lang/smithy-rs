@@ -522,7 +522,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                         // Create custom validation exception using the builder
                         let custom_exception = crate::error::${codegenContext.customExceptionName}::builder()
                             .message(format!("1 validation error detected. {}", &first_validation_exception_field.message))
-                            .field_list(vec![first_validation_exception_field])
+                            .field_list(Some(vec![first_validation_exception_field]))
                             .build()
                             .expect("Custom validation exception should be valid");
                         
