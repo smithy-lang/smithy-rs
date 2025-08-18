@@ -316,24 +316,22 @@ class CustomValidationExceptionValidator : Validator { override fun validate(mod
 }
 ```
 
-### 3. Generated Rust code changes 
+### 3. Generated Rust Code Changes
 
-#### 3.1 `ValidationExceptionField` is independent of `ValidationException`
+#### 3.1 Structure of Validation Exceptions
 
-Each constraint violation, like `@required` or `@pattern`, is represented in a custom type called `ValidationExceptionField`. This type is independent of what shape has been modelled in the Smithy model. Therefore, there will be no change in this.
+The `ValidationExceptionField` structure will remain unchanged as it's independent of the modeled `ValidationException` shape:
 
 ```rust
 pub struct ValidationExceptionField {
-    /// A JSONPointer expression to the structure member whose value failed to satisfy the modeled constraints.
     pub path: ::std::string::String,
-    /// A detailed description of the validation failure.
     pub message: ::std::string::String,
 }
 ```
 
-#### 3.2 ValidationExceptionField to CustomValidationException
+#### 3.2 From Constraint Violations to Custom Exceptions
 
-Each operation's input (For example [GetStorage](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L43) operation in the example model) has an associated `ConstraintViolation` enum type:
+**Step 1**: Each operation input has an associated `ConstraintViolation` enum representing possible validation failures:
 
 ```rust
 pub mod get_storage_input {
@@ -345,78 +343,88 @@ pub mod get_storage_input {
     }
 }
 ```
-Which implements a `as_validation_exception_field` function to return a `ValidationExceptionField`, which would remain unchanged.
+
+**Step 2**: Each `ConstraintViolation` can be converted to a `ValidationExceptionField`:
 
 ```rust
-    impl ConstraintViolation {
-        pub(crate) fn as_validation_exception_field(
-            self,
-            path: ::std::string::String,
-        ) -> crate::model::ValidationExceptionField {
-            match self {
+impl ConstraintViolation {
+    pub(crate) fn as_validation_exception_field(
+        self,
+        path: ::std::string::String,
+    ) -> crate::model::ValidationExceptionField {
+        match self {
             ConstraintViolation::MissingUser => crate::model::ValidationExceptionField {
-                                                message: format!("Value at '{}/user' failed to satisfy constraint: Member must not be null", path),
-                                                path: path + "/user",
-                                            },
+                message: format!("Value at '{}/user' failed to satisfy constraint: Member must not be null", path),
+                path: path + "/user",
+            },
             ConstraintViolation::MissingPasscode => crate::model::ValidationExceptionField {
-                                                message: format!("Value at '{}/passcode' failed to satisfy constraint: Member must not be null", path),
-                                                path: path + "/passcode",
-                                            },
-        }
-        }
-    }
-```
-
-Consequently, each `ConstraintViolation` also defines a conversion into `RequestRejection`, which is an enum with a variant `ConstraintViolation`. This is where the smithy model independent `ValidationExceptionField` gets converted into the model defined `ValidationException`, and would need to be changed.
-
-```rust
-impl ::std::convert::From<ConstraintViolation>
-        for ::aws_smithy_http_server::protocol::rest_json_1::rejection::RequestRejection
-    {
-        fn from(constraint_violation: ConstraintViolation) -> Self {
-            let first_validation_exception_field =
-                constraint_violation.as_validation_exception_field("".to_owned());
-
-    // ---- Generate code for instantiating the CustomValidationException instead of Smithy's
-
-            let validation_exception = crate::error::ValidationException {
-                message: format!(
-                    "1 validation error detected. {}",
-                    &first_validation_exception_field.message
-                ),
-                field_list: Some(vec![first_validation_exception_field]),
-            };
-
-    // ----
-            Self::ConstraintViolation(
-                                crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                                    .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-                            )
+                message: format!("Value at '{}/passcode' failed to satisfy constraint: Member must not be null", path),
+                path: path + "/passcode",
+            },
         }
     }
+}
 ```
 
-#### Protocol serialization changes
-
-A protocol dependent function is generated in the `protocol_serde` module for Smithy's `ValidationException`. This function will need to change to ouptut the fields of the `CustomValidationException`:
+**Step 3**: The `From<ConstraintViolation>` implementation for `RequestRejection` needs modification to use the custom exception:
 
 ```rust
-pub fn ser_validation_exception(
-    object: &mut ::aws_smithy_json::serialize::JsonObjectWriter,
-    // Change this to `CustomValidationException`
-    input: &crate::error::ValidationException,
-) -> ::std::result::Result<(), ::aws_smithy_types::error::operation::SerializationError> {
-
-    // Serialize all fields of the CustomValidationException
-
-} 
+impl From<ConstraintViolation> for RequestRejection {
+    fn from(constraint_violation: ConstraintViolation) -> Self {
+        // Convert the constraint violation to a ValidationExceptionField
+        let field = constraint_violation.as_validation_exception_field("".to_owned());
+        
+        // CHANGE: Create CustomValidationException instead of ValidationException
+        let custom_exception = crate::error::CustomValidationException::builder()
+            .message(format!("1 validation error detected. {}", &field.message))
+            .field_list(Some(vec![field]))
+            .build();
+        
+        Self::ConstraintViolation(
+            // CHANGE: Call serializer for CustomValidationException
+            crate::protocol_serde::shape_custom_validation_exception::ser_custom_validation_exception_error(&custom_exception)
+                .expect("serialization should not fail")
+        )
+    }
+}
 ```
 
-### 4. Code generator changes
+#### 3.3 Serialization Function
+
+A new serialization function must be implemented for the custom exception:
+
+```rust
+// CHANGE: New serialization function for CustomValidationException
+pub fn ser_custom_validation_exception(
+    object: &mut JsonObjectWriter,
+    input: &crate::error::CustomValidationException,
+) -> Result<(), SerializationError> {
+    // Serialize standard fields
+    object.key("message").string(&input.message);
+    
+    // Serialize validation field list
+    if let Some(fields) = &input.field_list {
+        let mut array = object.key("fieldList").array();
+        for item in fields {
+            let mut obj = array.object();
+            crate::protocol_serde::shape_validation_exception_field::ser_validation_exception_field(&mut obj, item)?;
+            obj.finish();
+        }
+        array.finish();
+    }
+    
+    // Serialize any custom fields
+    // [serialization code for custom fields]
+    
+    Ok(())
+}
+```
+
+### 4. Code Generator Changes
 
 **Location**: `software/amazon/smithy/rust/codegen/server/smithy/customizations/CustomValidationGeneratorDecorator.kt`
 
-Most of the implementation is going to be similar to ` software/amazon/smithy/rust/codegen/server/smithy/customizations/SmithyValidationExceptionDecorator.kt` 
+To support custom validation exceptions, we need to create a new decorator that follows a similar pattern to the existing `SmithyValidationExceptionDecorator`. The key changes are:
 
 ```kotlin
 class CustomValidationExceptionDecorator : ServerCodegenDecorator {
@@ -424,10 +432,109 @@ class CustomValidationExceptionDecorator : ServerCodegenDecorator {
         get() = "CustomValidationExceptionDecorator"
     override val order: Byte
         get() = 69
-
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
     ): ValidationExceptionConversionGenerator = CustomValidationExceptionConversionGenerator(codegenContext)
+}
+```
+
+The existing validation field generation logic should be refactored into a common class:
+
+```kotlin
+// New shared utility class
+class ValidationExceptionFieldGenerator(private val codegenContext: ServerCodegenContext) {
+    // Common code for generating ValidationExceptionField structures and conversion methods
+    fun generateValidationExceptionField(): Writable {
+        // Implementation moved from SmithyValidationExceptionDecorator
+    }
+}
+```
+
+#### Define a Builder for the `CustomValidationException`
+
+Unlike Smithy's standard `ValidationException` which doesn't have a builder, we should generate a builder for the `CustomValidationException` to simplify its construction and allow for default values:
+
+```kotlin
+fun generateCustomValidationExceptionBuilder(): Writable {
+    return writer {
+        write("""
+            impl ${codegenContext.customExceptionName} {
+                /// Create a new builder for the custom validation exception
+                pub fn builder() -> ${codegenContext.customExceptionName}Builder {
+                    ${codegenContext.customExceptionName}Builder::default()
+                }
+            }
+            
+            /// Builder for ${codegenContext.customExceptionName}
+            #[derive(Default)]
+            pub struct ${codegenContext.customExceptionName}Builder {
+                message: Option<String>,
+                field_list: Option<Vec<ValidationExceptionField>>,
+                // Add additional fields from the custom exception model
+                ${renderAdditionalBuilderFields()}
+            }
+            
+            impl ${codegenContext.customExceptionName}Builder {
+                /// Set the error message
+                pub fn message(mut self, message: impl Into<String>) -> Self {
+                    self.message = Some(message.into());
+                    self
+                }
+                
+                /// Set the list of validation exception fields
+                pub fn field_list(mut self, field_list: Vec<ValidationExceptionField>) -> Self {
+                    self.field_list = Some(field_list);
+                    self
+                }
+                
+                ${renderAdditionalBuilderMethods()}
+                
+                /// Build the custom validation exception
+                pub fn build(self) -> Result<${codegenContext.customExceptionName}, String> {
+                    let message = self.message.ok_or("message is required")?;
+                    
+                    Ok(${codegenContext.customExceptionName} {
+                        message,
+                        field_list: self.field_list,
+                        ${renderAdditionalBuildFields()}
+                    })
+                }
+            }
+        """.trimIndent())
+    }
+}
+```
+
+Then, the custom validation exception generator would implement the conversion from constraint violations to the custom exception:
+
+```kotlin
+class CustomValidationExceptionConversionGenerator(private val codegenContext: ServerCodegenContext) :
+    ValidationExceptionConversionGenerator {
+    
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
+        return writer {
+            write("""
+                impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        let first_validation_exception_field =
+                            constraint_violation.as_validation_exception_field("".to_owned());
+                        
+                        // Create custom validation exception using the builder
+                        let custom_exception = crate::error::${codegenContext.customExceptionName}::builder()
+                            .message(format!("1 validation error detected. {}", &first_validation_exception_field.message))
+                            .field_list(vec![first_validation_exception_field])
+                            .build()
+                            .expect("Custom validation exception should be valid");
+                        
+                        Self::ConstraintViolation(
+                            crate::protocol_serde::shape_${codegenContext.customExceptionName.decapitalize()}::ser_${codegenContext.customExceptionName.decapitalize()}_error(&custom_exception)
+                                .expect("validation exceptions should never fail to serialize")
+                        )
+                    }
+                }
+            """.trimIndent())
+        }
+    }
 }
 ```
 
@@ -441,15 +548,15 @@ Comprehensive testing is required to ensure the feature works correctly:
 4. **Backward compatibility tests**: Ensure existing services continue to work unchanged
 5. **Error message tests**: Verify custom validation exceptions contain expected field information
 
-Changes checklist
+Changes Checklist
 -----------------
-
 - [ ] Create `validationException`, `validationMessage`, `validationFieldList`, `validationFieldName`, and `validationFieldMessage` traits in `codegen-server-traits`
 - [ ] Implement `CustomValidationExceptionValidator` to validate proper usage of custom validation exception traits
-- [ ] Create `CustomValidationExceptionGenerator` to generate mapping logic from constraint violations to custom exceptions
-- [ ] Modify protocol generators to detect and use custom validation exceptions instead of standard `ValidationException`
-- [ ] Update constraint violation handling in server request processing to use custom validation exception mappers
-- [ ] Generate default constructors for custom validation exception shapes
+- [ ] Create shared `ValidationExceptionFieldGenerator` for common validation field generation logic
+- [ ] Implement `CustomValidationExceptionDecorator` and `CustomValidationExceptionConversionGenerator` to generate custom exception mapping logic
+- [ ] Add builder pattern generation for custom validation exception shapes via `CustomValidationExceptionBuilderGenerator`
+- [ ] Update `From<ConstraintViolation>` implementations to create custom exceptions instead of `ValidationException`
+- [ ] Implement serialization functions for custom validation exception shapes
 - [ ] Add comprehensive unit tests for trait validation logic
 - [ ] Add integration tests for end-to-end custom validation exception handling
 - [ ] Create documentation explaining custom validation exception usage and migration strategies
