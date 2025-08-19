@@ -26,6 +26,8 @@ pub struct CachingDnsResolver {
 }
 
 impl Default for CachingDnsResolver {
+    /// Constructs a new Tokio based [ResolveDns] with the system configuration.
+    /// This uses `/etc/resolv.conf` on Unix OSes and registry settings on Windows.
     fn default() -> Self {
         Self {
             resolver: Resolver::builder_tokio().expect("In tokio runtime").build(),
@@ -43,6 +45,11 @@ impl CachingDnsResolver {
             cache_size: None,
             num_concurrent_reqs: None,
         }
+    }
+
+    /// Flush the cache
+    pub fn clear_cache(&self) {
+        self.resolver.clear_cache();
     }
 }
 
@@ -99,6 +106,8 @@ impl CachingDnsResolverBuilder {
     }
 
     /// Cache size is in number of records (some records can be large). Defaults to 32.
+    /// Note: cache items are not evicted by new items, they are only evicted when their
+    /// TTL expires.
     pub fn cache_size(mut self, cache_size: usize) -> Self {
         self.cache_size = Some(cache_size);
         self

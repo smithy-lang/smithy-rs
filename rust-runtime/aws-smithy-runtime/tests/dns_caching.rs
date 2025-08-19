@@ -21,7 +21,6 @@ async fn test_dns_caching_performance() {
     let first_result = resolver.resolve_dns(hostname).await;
     let first_duration = start.elapsed();
 
-    assert!(first_result.is_ok());
     let first_ips = first_result.unwrap();
     assert!(!first_ips.is_empty());
 
@@ -30,7 +29,6 @@ async fn test_dns_caching_performance() {
     let second_result = resolver.resolve_dns(hostname).await;
     let second_duration = start.elapsed();
 
-    assert!(second_result.is_ok());
     let second_ips = second_result.unwrap();
 
     // Verify same IPs returned
@@ -49,12 +47,24 @@ async fn test_dns_cache_size_limit() {
     assert!(result1.is_ok());
 
     // Resolve second hostname (should evict first from cache)
-    let result2 = resolver.resolve_dns("google.com").await;
+    let result2 = resolver.resolve_dns("aws.com").await;
     assert!(result2.is_ok());
 
-    // Both should still work (second should be cached, first should re-resolve)
+    // Both should still work first should still be in cache (its TTL has not expired),
+    // second should have to re-resolve since it was never cached
+
+    let start = Instant::now();
+    let result2_again = resolver.resolve_dns("aws.com").await;
+    let result2_again_duration = start.elapsed();
+
+    let start = Instant::now();
     let result1_again = resolver.resolve_dns("example.com").await;
-    let result2_again = resolver.resolve_dns("google.com").await;
+    let result1_again_duration = start.elapsed();
+
+    // result1_again should be resolved more quickly than result2_again
+    println!("result1_again_duration: {:?}", result1_again_duration);
+    println!("result2_again_duration: {:?}", result2_again_duration);
+    assert!(result1_again_duration < result2_again_duration);
 
     assert!(result1_again.is_ok());
     assert!(result2_again.is_ok());
