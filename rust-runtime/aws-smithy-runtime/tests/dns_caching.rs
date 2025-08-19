@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(all(feature = "client", feature = "rt-tokio",))]
+
 use aws_smithy_runtime::client::dns::CachingDnsResolver;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
 use std::time::Instant;
@@ -46,12 +48,10 @@ async fn test_dns_cache_size_limit() {
     let result1 = resolver.resolve_dns("example.com").await;
     assert!(result1.is_ok());
 
-    // Resolve second hostname (should evict first from cache)
+    // Resolve second hostname (should not be placed into cache because result1 is already occupying
+    // the single allocated space and entries are only evicted from the cache when their TTL expires)
     let result2 = resolver.resolve_dns("aws.com").await;
     assert!(result2.is_ok());
-
-    // Both should still work first should still be in cache (its TTL has not expired),
-    // second should have to re-resolve since it was never cached
 
     let start = Instant::now();
     let result2_again = resolver.resolve_dns("aws.com").await;
@@ -61,13 +61,13 @@ async fn test_dns_cache_size_limit() {
     let result1_again = resolver.resolve_dns("example.com").await;
     let result1_again_duration = start.elapsed();
 
+    assert!(result1_again.is_ok());
+    assert!(result2_again.is_ok());
+
     // result1_again should be resolved more quickly than result2_again
     println!("result1_again_duration: {:?}", result1_again_duration);
     println!("result2_again_duration: {:?}", result2_again_duration);
     assert!(result1_again_duration < result2_again_duration);
-
-    assert!(result1_again.is_ok());
-    assert!(result2_again.is_ok());
 }
 
 #[test]
