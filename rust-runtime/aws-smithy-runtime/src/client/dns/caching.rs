@@ -77,7 +77,7 @@ struct Nameservers {
 
 impl CachingDnsResolverBuilder {
     /// Configure upstream nameservers to use for resolution. Defaults to the system
-    /// configuration
+    /// configuration.
     pub fn nameservers(mut self, ips: &[IpAddr], port: u16) -> Self {
         self.nameservers = Some(Nameservers {
             ips: ips.to_vec(),
@@ -86,29 +86,29 @@ impl CachingDnsResolverBuilder {
         self
     }
 
-    /// Specify the timeout for a request. Defaults to 5 seconds
+    /// Specify the timeout for a request. Defaults to 5 seconds.
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }
 
-    /// Number of retries after lookup failure before giving up. Defaults to 2
+    /// Number of retries after lookup failure before giving up. Defaults to 2.
     pub fn attempts(mut self, attempts: usize) -> Self {
         self.attempts = Some(attempts);
         self
     }
 
-    /// Cache size is in number of records (some records can be large). Defaults to 32
+    /// Cache size is in number of records (some records can be large). Defaults to 32.
     pub fn cache_size(mut self, cache_size: usize) -> Self {
         self.cache_size = Some(cache_size);
         self
     }
 
-    /// Number of concurrent requests per query
+    /// Number of concurrent requests per query.
     ///
     /// Where more than one nameserver is configured, this configures the resolver
-    /// to send queries to a number of servers in parallel. Defaults to 2; 0 or 1
-    /// will execute requests serially.
+    /// to send queries to a number of servers in parallel. Defaults to 2. Setting
+    /// to 0 or 1 will execute requests serially.
     pub fn num_concurrent_reqs(mut self, num_concurrent_reqs: usize) -> Self {
         self.num_concurrent_reqs = Some(num_concurrent_reqs);
         self
