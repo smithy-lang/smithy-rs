@@ -189,6 +189,8 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-standalone-integration-tests
           runner: ubuntu-latest
+        - action: check-aws-sdk-benchmarks
+          runner: ubuntu-latest
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
