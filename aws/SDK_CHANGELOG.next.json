@@ -6,34 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Event streams now allocate a right-sized buffer avoiding repeated reallocations during serialization\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#4212"
-      ],
-      "since-commit": "a23d116a79e8920c2efa813a8f831541a9943e4f",
-      "age": 5
-    },
-    {
-      "message": "Add support for configuring auth schemes manually using an auth scheme preference list.\nThe preference list allows customers to reprioritize the order of auth schemes originally\ndetermined by the auth scheme resolver.\nCustomers can configure the auth scheme preference at the following locations, listed in order of precedence:\n1. Service Client Configuration\n```rust\nuse aws_runtime::auth::sigv4;\nuse aws_smithy_runtime_api::client::auth::AuthSchemeId;\nuse aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;\n\nlet config = aws_sdk_s3::Config::builder()\n    .auth_scheme_preference([AuthSchemeId::from(\"scheme1\"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])\n    // ...\n    .build();\n```\n2. Environment Variable\n```\nAWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth\n```\n3. Configuration File\n```\nauth_scheme_preference=scheme1, sigv4, httpBearerAuth\n```\nWith this configuration, the auth scheme resolver will prefer to select them in the specified order,\nif they are supported.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4203"
-      ],
-      "since-commit": "6649098171e33e1e65eaacffb12be58e858a4782",
-      "age": 4
-    },
-    {
       "message": "Add fallback equality on no auth `AuthSchemeId` for backward compatibility, treating `AuthSchemeId::from(\"no_auth\")` (legacy) and `AuthSchemeId::from(\"noAuth\")` (updated) as equivalent.\n",
       "meta": {
         "bug": true,
@@ -45,7 +17,7 @@
         "smithy-rs#4232"
       ],
       "since-commit": "a2a7d7aa371ed8d9af191f4220b6c8ddebcb2ce0",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Fix canonical request sort order\n",
@@ -59,7 +31,7 @@
         "smithy-rs#4227"
       ],
       "since-commit": "ca76037be5edef991257dc7d1d8425c859468d5a",
-      "age": 1
+      "age": 4
     },
     {
       "message": "Add support for environment token provider for AWS services whose SigV4 service signing name matches `bedrock`. Setting this environment variable, `AWS_BEARER_TOKEN_BEDROCK`, allows SDKs to prefer the `httpBearerAuth` auth scheme and to retrieve a Token value from the said environment. Customers would use the environment variable as follows:\n```\n// export AWS_BEARER_TOKEN_BEDROCK=my-token\nlet sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;\nlet bedrock_client = aws_sdk_bedrock::Client::new(&sdk_config);\n// call an operation on `bedrock_client`...\n```\nUnder the hood, this is equivalent roughly to\n```\nlet sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;\nlet bedrock_config = aws_sdk_bedrock::config::Builder::from(sdk_config)\n    .auth_scheme_preference([HTTP_BEARER_AUTH_SCHEME_ID])\n    .token_provider(Token::new(\"my-token\", None))\n    .build();\nlet bedrock_client = aws_sdk_bedrock::Client::from_conf(bedrock_config);\n// call an operation on `bedrock_client`...\n```\nHowever, note that if customers create the service client directly from the service config builder, the environment variable will not be applied:\n```\n// export AWS_BEARER_TOKEN_BEDROCK=my-token\nlet bedrock_config = aws_sdk_bedrock::Config::builder()\n    // other configurations\n    .build();\nlet bedrock_client = aws_sdk_bedrock::Client::from_conf(bedrock_config);\n// `bedrock_client` neither prefers HTTP_BEARER_AUTH_SCHEME_ID nor sets a Token with my-token.\n```\n",
@@ -73,7 +45,7 @@
         "smithy-rs#4241"
       ],
       "since-commit": "ca76037be5edef991257dc7d1d8425c859468d5a",
-      "age": 1
+      "age": 4
     },
     {
       "message": "Add user-agent feature tracking for credential providers in `aws-config`.\n",
@@ -87,6 +59,84 @@
         "smithy-rs#4238"
       ],
       "since-commit": "ca76037be5edef991257dc7d1d8425c859468d5a",
+      "age": 4
+    },
+    {
+      "message": "Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:\n- aws-sdk-cloudformation\n- aws-sdk-dynamodb\n- aws-sdk-ec2\n- aws-sdk-s3\n- aws-sdk-sns\n- aws-sdk-sqs\n- aws-sdk-ssm\n- aws-sdk-sts\n\nSee more information about this hint at https://blog.rust-lang.org/inside-rust/2025/07/15/call-for-testing-hint-mostly-unused/\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#4208"
+      ],
+      "since-commit": "fd54b8282920c862db4604f620ab188ec4a235b9",
+      "age": 3
+    },
+    {
+      "message": "Enable `hints.mostly-unused = true` for `aws-sdk-lambda` (taking a release\nbuild from 57s to 40s) and `aws-sdk-rds` (taking a release build from 1m34s to\n49s).\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "joshtriplett",
+      "references": [
+        "smithy-rs#4208"
+      ],
+      "since-commit": "fd54b8282920c862db4604f620ab188ec4a235b9",
+      "age": 3
+    },
+    {
+      "message": "pin crc-fast to <1.4 to workaround SIGILL\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "01aece8b664968ac63354e52b88915e8f8546738",
+      "age": 2
+    },
+    {
+      "message": "Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "aajtodd",
+      "references": [
+        "aws-sdk-rust#169"
+      ],
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
+      "age": 1
+    },
+    {
+      "message": "Enable rustls post-quantum by default.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "WillChilds-Klein",
+      "references": [],
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
+      "age": 1
+    },
+    {
+      "message": "fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
       "age": 1
     }
   ],
