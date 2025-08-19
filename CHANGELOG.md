@@ -1,4 +1,22 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 18th, 2025
+=================
+**New this release:**
+- :tada: (client, [aws-sdk-rust#169](https://github.com/awslabs/aws-sdk-rust/issues/169)) Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.
+- :tada: (client, @WillChilds-Klein) Enable rustls post-quantum by default.
+- (client) fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2
+
+**Contributors**
+Thank you for your contributions! ❤
+- @WillChilds-Klein
+
+
+August 13th, 2025
+=================
+**New this release:**
+- :bug: (client) pin crc-fast to <1.4 to workaround SIGILL
+
+
 August 11th, 2025
 =================
 **New this release:**
