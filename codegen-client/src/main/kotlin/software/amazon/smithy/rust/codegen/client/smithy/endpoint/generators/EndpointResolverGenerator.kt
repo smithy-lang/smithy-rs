@@ -205,7 +205,7 @@ internal class EndpointResolverGenerator(
                 }
 
                 impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
-                    fn resolve_endpoint(&self, params: &#{Params}) -> #{EndpointFuture} {
+                    fn resolve_endpoint(&self, params: &#{Params}) -> #{EndpointFuture}<'_> {
                         #{EndpointFuture}::ready(self.resolve_endpoint(params))
                     }
                 }
