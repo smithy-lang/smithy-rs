@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -eux
+cd smithy-rs
+
+./gradlew :aws:sdk:assemble
+
+# Build all benchmark directories
+pushd aws/sdk/benchmarks
+for dir in */; do
+    if [ -f "$dir/Cargo.toml" ]; then
+        echo -e "${C_YELLOW}# Building benchmark $dir...${C_RESET}"
+        pushd "$dir"
+        cargo build
+        popd
+    fi
+done
+popd
