@@ -8,18 +8,21 @@
 use aws_smithy_runtime::client::dns::CachingDnsResolver;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
 use std::{
-    collections::HashMap,
     net::{IpAddr, Ipv4Addr},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tokio::test;
 
-// Note: I couldn't come up with a way to mock the DNS returns to hickory so these
-// tests actually hit the network. We should ideally find a better way to do this.
-
 #[test]
 async fn test_dns_caching_performance() {
-    let resolver = CachingDnsResolver::default();
+    let dns_server = test_dns_server::setup_dns_server().await;
+    let (dns_ip, dns_port) = dns_server.addr();
+
+    let resolver = CachingDnsResolver::builder()
+        .nameservers(&[dns_ip], dns_port)
+        .cache_size(1)
+        .build();
+
     let hostname = "example.com";
 
     // First resolution should hit the network
@@ -45,58 +48,47 @@ async fn test_dns_caching_performance() {
 }
 
 #[test]
-#[tracing_test::traced_test]
 async fn test_dns_cache_size_limit() {
-    let mut records = HashMap::new();
-    records.insert(
-        "example.com".to_string(),
-        IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
-    );
-    records.insert("aws.com".to_string(), IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8)));
-
-    let dns_server = test_dns_server::TestDnsServer::start(records)
-        .await
-        .unwrap();
-
+    let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
-    println!("DNS_IP: {dns_ip:#?}, DNS_PORT: {dns_port:#?}");
+
     let resolver = CachingDnsResolver::builder()
         .nameservers(&[dns_ip], dns_port)
         .cache_size(1)
         .build();
 
     // Resolve first hostname
-    let result1 = resolver.resolve_dns("example.com").await;
-    // assert!(result1.is_ok());
+    let result1 = resolver.resolve_dns("example.com").await.unwrap();
+    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], result1);
 
     // Resolve second hostname (should not be placed into cache because result1 is already occupying
     // the single allocated space and entries are only evicted from the cache when their TTL expires)
-    let result2 = resolver.resolve_dns("aws.com").await;
-    // assert!(result2.is_ok());
-
-    println!("RESULT1: {result1:#?}");
-    println!("RESULT2: {result2:#?}");
+    let result2 = resolver.resolve_dns("aws.com").await.unwrap();
+    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))], result2);
 
     let start = Instant::now();
-    let result2_again = resolver.resolve_dns("aws.com").await;
+    let _result2_again = resolver.resolve_dns("aws.com").await.unwrap();
     let result2_again_duration = start.elapsed();
 
     let start = Instant::now();
-    let result1_again = resolver.resolve_dns("example.com").await;
+    let _result1_again = resolver.resolve_dns("example.com").await.unwrap();
     let result1_again_duration = start.elapsed();
 
-    assert!(result1_again.is_ok());
-    assert!(result2_again.is_ok());
-
-    // result1_again should be resolved more quickly than result2_again
-    println!("result1_again_duration: {:?}", result1_again_duration);
-    println!("result2_again_duration: {:?}", result2_again_duration);
+    // result1_again should be resolved more quickly than result2_again since result1
+    // is in the cache
     assert!(result1_again_duration < result2_again_duration);
 }
 
 #[test]
 async fn test_dns_error_handling() {
-    let resolver = CachingDnsResolver::default();
+    let dns_server = test_dns_server::setup_dns_server().await;
+    let (dns_ip, dns_port) = dns_server.addr();
+
+    let resolver = CachingDnsResolver::builder()
+        .nameservers(&[dns_ip], dns_port)
+        .timeout(Duration::from_millis(100))
+        .attempts(1)
+        .build();
 
     // Try to resolve an invalid hostname
     let result = resolver
@@ -111,8 +103,20 @@ mod test_dns_server {
         collections::HashMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         sync::Arc,
+        time::Duration,
     };
     use tokio::{net::UdpSocket, sync::Notify, task::JoinHandle};
+
+    pub async fn setup_dns_server() -> TestDnsServer {
+        let mut records = HashMap::new();
+        records.insert(
+            "example.com".to_string(),
+            IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
+        );
+        records.insert("aws.com".to_string(), IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8)));
+
+        TestDnsServer::start(records).await.unwrap()
+    }
 
     pub struct TestDnsServer {
         handle: JoinHandle<()>,
@@ -137,14 +141,12 @@ mod test_dns_server {
                     tokio::select! {
                         _ = shutdown_clone.notified() => break,
                         result = socket.recv_from(&mut buf) => {
-                            // println!("IN SOCKET RECV_FROM: {buf:#?}");
                             if let Ok((len, src)) = result {
-                                // Simple DNS response - just echo back with a mock A record
-                                // This is a minimal implementation for testing purposes
+                                // Short sleep before returning DNS response to simulate real
+                                // network call
+                                tokio::time::sleep(Duration::from_millis(1000)).await;
                                 let response = create_dns_response(&buf[..len], &records);
-                                // println!("SOCKET SEND RES: {response:#?}");
-                                let res = socket.send_to(&response, src).await;
-
+                                let _ = socket.send_to(&response, src).await;
                             }
                         }
                     }
@@ -172,10 +174,7 @@ mod test_dns_server {
 
     fn create_dns_response(query: &[u8], records: &HashMap<String, IpAddr>) -> Vec<u8> {
         let parsed = DnsQuery::parse(query).unwrap_or_default();
-        let ip = records
-            .get(&parsed.domain)
-            .copied()
-            .unwrap_or(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        let ip = records.get(&parsed.domain).copied().unwrap();
 
         let response = DnsResponse {
             id: parsed.id,
@@ -185,10 +184,11 @@ mod test_dns_server {
             ttl: 300,
         };
 
-        response.serialize()
+        response.to_bytes()
     }
 
     #[derive(Debug, Default)]
+    #[allow(dead_code)]
     struct DnsQuery {
         id: u16,
         flags: u16,
@@ -257,6 +257,7 @@ mod test_dns_server {
     }
 
     #[derive(Debug)]
+    #[allow(dead_code)]
     struct DnsResponse {
         id: u16,
         flags: u16,
@@ -266,10 +267,11 @@ mod test_dns_server {
     }
 
     impl DnsResponse {
-        fn serialize(&self) -> Vec<u8> {
-            let mut response = Vec::new();
+        fn to_bytes(&self) -> Vec<u8> {
+            // 30ish required bytes, 6 more added for the question section
+            let mut response = Vec::with_capacity(36);
 
-            // Header (12 bytes)
+            // Header (12 bytes) all values besides id/flags hardcoded
             response.extend_from_slice(&self.id.to_be_bytes());
             response.extend_from_slice(&self.flags.to_be_bytes());
             response.extend_from_slice(&1u16.to_be_bytes()); // Questions: 1
@@ -278,6 +280,9 @@ mod test_dns_server {
             response.extend_from_slice(&0u16.to_be_bytes()); // Additional: 0
 
             // Question section
+            // In a more ideal world the DnsResponse would contain a ref to the
+            // DnsQuery that triggered this response and recreate the question section
+            // from that
             for label in self.question.split('.') {
                 response.push(label.len() as u8);
                 response.extend_from_slice(label.as_bytes());
@@ -298,7 +303,8 @@ mod test_dns_server {
                     response.extend_from_slice(&ipv4.octets());
                 }
                 IpAddr::V6(_) => {
-                    response.extend_from_slice(&4u16.to_be_bytes()); // Fallback to IPv4
+                    // Unsupported, fallback to IPv4
+                    response.extend_from_slice(&4u16.to_be_bytes());
                     response.extend_from_slice(&[127, 0, 0, 1]);
                 }
             }
