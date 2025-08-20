@@ -83,7 +83,7 @@ struct Nameservers {
 }
 
 impl CachingDnsResolverBuilder {
-    /// Configure upstream nameservers to use for resolution. Defaults to the system
+    /// Configure upstream nameservers and the port to use for resolution. Defaults to the system
     /// configuration.
     pub fn nameservers(mut self, ips: &[IpAddr], port: u16) -> Self {
         self.nameservers = Some(Nameservers {
@@ -106,8 +106,6 @@ impl CachingDnsResolverBuilder {
     }
 
     /// Cache size is in number of records (some records can be large). Defaults to 32.
-    /// Note: cache items are not evicted by new items, they are only evicted when their
-    /// TTL expires.
     pub fn cache_size(mut self, cache_size: usize) -> Self {
         self.cache_size = Some(cache_size);
         self

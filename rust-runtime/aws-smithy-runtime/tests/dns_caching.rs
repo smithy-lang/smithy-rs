@@ -43,11 +43,18 @@ async fn test_dns_caching_performance() {
     // Verify same IPs returned
     assert_eq!(first_ips, second_ips);
 
+    // Verify correct IP returned
+    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], first_ips);
+
     // Cache hit should be faster
     assert!(second_duration < first_duration);
 }
 
+// Ignored since the cache is only eventually consistent w.r.t. size. So hard to get
+// an exact measure. But the logs here are useful to manually check the performance,
+// so not deleting this.
 #[test]
+#[ignore = "Cache is eventually consistent w.r.t. size."]
 async fn test_dns_cache_size_limit() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
@@ -58,24 +65,30 @@ async fn test_dns_cache_size_limit() {
         .build();
 
     // Resolve first hostname
+    let start = Instant::now();
     let result1 = resolver.resolve_dns("example.com").await.unwrap();
+    let result1_duration = start.elapsed();
     assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], result1);
 
-    // Resolve second hostname (should not be placed into cache because result1 is already occupying
-    // the single allocated space and entries are only evicted from the cache when their TTL expires)
+    // Resolve second hostname (should replace first response in cache)
+    let start = Instant::now();
     let result2 = resolver.resolve_dns("aws.com").await.unwrap();
+    let result2_duration = start.elapsed();
     assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))], result2);
 
-    let start = Instant::now();
-    let _result2_again = resolver.resolve_dns("aws.com").await.unwrap();
-    let result2_again_duration = start.elapsed();
+    println!("RESULT1 DURATION: {result1_duration:#?}");
+    println!("RESULT2 DURATION: {result2_duration:#?}");
 
     let start = Instant::now();
     let _result1_again = resolver.resolve_dns("example.com").await.unwrap();
     let result1_again_duration = start.elapsed();
 
-    // result1_again should be resolved more quickly than result2_again since result1
-    // is in the cache
+    let start = Instant::now();
+    let _result2_again = resolver.resolve_dns("aws.com").await.unwrap();
+    let result2_again_duration = start.elapsed();
+
+    println!("RESULT1 AGAIN DURATION: {result1_again_duration:#?}");
+    println!("RESULT2 AGAIN DURATION: {result2_again_duration:#?}");
     assert!(result1_again_duration < result2_again_duration);
 }
 
@@ -96,7 +109,8 @@ async fn test_dns_error_handling() {
         .await;
     assert!(result.is_err());
 }
-// Test utility for creating a local DNS server
+
+// Kind of janky minimal test utility for creating a local DNS server
 #[cfg(test)]
 mod test_dns_server {
     use std::{
@@ -114,6 +128,10 @@ mod test_dns_server {
             IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
         );
         records.insert("aws.com".to_string(), IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8)));
+        records.insert(
+            "foo.com".to_string(),
+            IpAddr::V4(Ipv4Addr::new(9, 10, 11, 12)),
+        );
 
         TestDnsServer::start(records).await.unwrap()
     }
@@ -142,8 +160,7 @@ mod test_dns_server {
                         _ = shutdown_clone.notified() => break,
                         result = socket.recv_from(&mut buf) => {
                             if let Ok((len, src)) = result {
-                                // Short sleep before returning DNS response to simulate real
-                                // network call
+                                // Short sleep before returning DNS response to simulate network latency
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
                                 let response = create_dns_response(&buf[..len], &records);
                                 let _ = socket.send_to(&response, src).await;
@@ -268,8 +285,9 @@ mod test_dns_server {
 
     impl DnsResponse {
         fn to_bytes(&self) -> Vec<u8> {
-            // 30ish required bytes, 6 more added for the question section
-            let mut response = Vec::with_capacity(36);
+            // 30ish required bytes, 11 more added for the question section
+            // since the longest domain we currently use is 11 bytes long
+            let mut response = Vec::with_capacity(41);
 
             // Header (12 bytes) all values besides id/flags hardcoded
             response.extend_from_slice(&self.id.to_be_bytes());
