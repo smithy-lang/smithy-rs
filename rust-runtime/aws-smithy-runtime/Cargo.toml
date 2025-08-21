@@ -17,7 +17,7 @@ http-auth = ["aws-smithy-runtime-api/http-auth"]
 connector-hyper-0-14-x = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/hyper-014"]
 tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rustls-ring", "connector-hyper-0-14-x"]
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
-rt-tokio = ["tokio/rt", "hickory-resolver"]
+rt-tokio = ["tokio/rt", "dep:hickory-resolver"]
 
 # Features for testing
 # NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
