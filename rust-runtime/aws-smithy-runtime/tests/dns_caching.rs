@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg(all(feature = "client", feature = "rt-tokio",))]
+#![cfg(all(feature = "client", feature = "rt-tokio", not(target_family = "wasm")))]
 
 use aws_smithy_runtime::client::dns::CachingDnsResolver;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
