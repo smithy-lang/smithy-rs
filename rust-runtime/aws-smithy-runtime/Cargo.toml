@@ -54,7 +54,6 @@ bytes = "1.10.0"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.3.0"
-hickory-resolver = {version = "0.25.2", optional = true}
 http-02x = { package = "http", version = "0.2.9" }
 http-1x = { package = "http", version = "1" }
 http-body-04x = { package = "http-body", version = "0.4.5" }
@@ -66,6 +65,10 @@ pin-utils = "0.1.0"
 tokio = { version = "1.40.0", features = [] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.16", optional = true, features = ["env-filter", "fmt", "json"] }
+
+# hickory-resolver enables some tokio features that break in wasm
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+hickory-resolver = {version = "0.25.2", optional = true}
 
 [dev-dependencies]
 approx = "0.5.1"
