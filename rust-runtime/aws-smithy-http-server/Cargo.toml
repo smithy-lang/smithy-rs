@@ -13,9 +13,11 @@ Server runtime for Smithy Rust Server Framework.
 publish = true
 
 [features]
+default = ["http-02x"]
 aws-lambda = ["dep:lambda_http"]
 unredacted-logging = []
 request-id = ["dep:uuid"]
+http-02x = ["dep:http", "dep:http-body", "dep:hyper", "aws-smithy-runtime-api/http-02x", "aws-smithy-types/http-body-0-4-x", "aws-smithy-types/hyper-0-14-x"]
 http-1x = ["dep:http-1x", "dep:http-body-1x", "dep:http-body-util", "dep:hyper-1x", "aws-smithy-runtime-api/http-1x", "aws-smithy-types/http-body-1-x"]
 
 [dependencies]
@@ -27,9 +29,9 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
-http = "0.2.12"
-http-body = "0.4.6"
-hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+http = { version = "0.2.12", optional = true }
+http-body = { version = "0.4.6", optional = true }
+hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"], optional = true }
 http-1x = { package = "http", version = "1.3.1", optional = true }
 http-body-1x = { package = "http-body", version = "1.0.1", optional = true }
 http-body-util = { version = "0.1.3", optional = true }

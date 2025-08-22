@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 
+#[cfg(feature = "http-02x")]
 use http::Request;
 use regex::Regex;
 
@@ -77,6 +78,7 @@ impl UriSpec {
     }
 }
 
+#[cfg(feature = "http-02x")]
 #[derive(Debug, Clone)]
 pub struct RequestSpec {
     method: http::Method,
@@ -119,7 +121,9 @@ impl From<&PathSpec> for Regex {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl RequestSpec {
+    #[cfg(feature = "http-02x")]
     pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
         RequestSpec {
@@ -161,6 +165,7 @@ impl RequestSpec {
         self.uri_spec.path_and_query.path_segments.0.len() + self.uri_spec.path_and_query.query_segments.0.len()
     }
 
+    #[cfg(feature = "http-02x")]
     pub(crate) fn matches<B>(&self, req: &Request<B>) -> Match {
         if let Some(_host_prefix) = &self.uri_spec.host_prefix {
             todo!("Look at host prefix");
@@ -171,6 +176,7 @@ impl RequestSpec {
         }
 
         if self.uri_spec.path_and_query.query_segments.0.is_empty() {
+            #[cfg(feature = "http-02x")]
             if self.method == req.method() {
                 return Match::Yes;
             } else {
@@ -215,6 +221,7 @@ impl RequestSpec {
                             }
                         }
 
+                        #[cfg(feature = "http-02x")]
                         if self.method == req.method() {
                             Match::Yes
                         } else {
@@ -228,7 +235,7 @@ impl RequestSpec {
     }
 
     // Helper function to build a `RequestSpec`.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "http-02x"))]
     pub fn from_parts(
         method: http::Method,
         path_segments: Vec<PathSegment>,
@@ -247,11 +254,12 @@ impl RequestSpec {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 mod tests {
     use super::*;
     use crate::protocol::test_helpers::req;
 
+    #[cfg(feature = "http-02x")]
     use http::Method;
 
     #[test]

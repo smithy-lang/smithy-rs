@@ -10,6 +10,7 @@ mod query;
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
+#[cfg(feature = "http-02x")]
 use http::Uri;
 
 pub use label::*;
@@ -21,6 +22,7 @@ use crate::instrumentation::{MakeDisplay, MakeFmt, MakeIdentity};
 /// marked as sensitive using the methods provided.
 ///
 /// The [`Display`] implementation will respect the `unredacted-logging` flag.
+#[cfg(feature = "http-02x")]
 #[allow(missing_debug_implementations)]
 pub struct SensitiveUri<'a, P, Q> {
     uri: &'a Uri,
@@ -28,6 +30,7 @@ pub struct SensitiveUri<'a, P, Q> {
     make_query: Q,
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a> SensitiveUri<'a, MakeIdentity, MakeIdentity> {
     /// Constructs a new [`SensitiveUri`] with nothing marked as sensitive.
     pub fn new(uri: &'a Uri) -> Self {
@@ -39,6 +42,7 @@ impl<'a> SensitiveUri<'a, MakeIdentity, MakeIdentity> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     pub(crate) fn make_path<M>(self, make_path: M) -> SensitiveUri<'a, M, Q> {
         SensitiveUri {
@@ -74,6 +78,7 @@ impl<'a, P, Q> SensitiveUri<'a, P, Q> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, P, Q> Display for SensitiveUri<'a, P, Q>
 where
     P: MakeDisplay<&'a str>,
@@ -102,18 +107,21 @@ where
 }
 
 /// A [`MakeFmt`] producing [`SensitiveUri`].
+#[cfg(feature = "http-02x")]
 #[derive(Clone)]
 pub struct MakeUri<P, Q> {
     pub(crate) make_path: P,
     pub(crate) make_query: Q,
 }
 
+#[cfg(feature = "http-02x")]
 impl<P, Q> Debug for MakeUri<P, Q> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("MakeUri").finish_non_exhaustive()
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, P, Q> MakeFmt<&'a http::Uri> for MakeUri<P, Q>
 where
     Q: Clone,

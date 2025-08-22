@@ -34,10 +34,13 @@ use futures_util::{
     future::{Either, MapOk},
     TryFutureExt,
 };
+#[cfg(feature = "http-02x")]
 use http::Response;
+#[cfg(feature = "http-02x")]
 use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
 
+#[cfg(feature = "http-02x")]
 use crate::{
     body::{boxed, BoxBody},
     error::BoxError,
@@ -58,6 +61,7 @@ pub use self::{
 pub(crate) const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
 
 /// Constructs common response to method disallowed.
+#[cfg(feature = "http-02x")]
 pub(crate) fn method_disallowed() -> http::Response<BoxBody> {
     let mut responses = http::Response::default();
     *responses.status_mut() = http::StatusCode::METHOD_NOT_ALLOWED;
@@ -65,6 +69,7 @@ pub(crate) fn method_disallowed() -> http::Response<BoxBody> {
 }
 
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].
+#[cfg(feature = "http-02x")]
 pub trait Router<B> {
     type Service;
     type Error;
@@ -76,11 +81,13 @@ pub trait Router<B> {
 /// A [`Service`] using the [`Router`] `R` to redirect messages to specific routes.
 ///
 /// The `Protocol` parameter is used to determine the serialization of errors.
+#[cfg(feature = "http-02x")]
 pub struct RoutingService<R, Protocol> {
     router: R,
     _protocol: PhantomData<Protocol>,
 }
 
+#[cfg(feature = "http-02x")]
 impl<R, P> fmt::Debug for RoutingService<R, P>
 where
     R: fmt::Debug,
@@ -93,6 +100,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<R, P> Clone for RoutingService<R, P>
 where
     R: Clone,
@@ -105,6 +113,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<R, P> RoutingService<R, P> {
     /// Creates a [`RoutingService`] from a [`Router`].
     pub fn new(router: R) -> Self {
@@ -126,11 +135,13 @@ impl<R, P> RoutingService<R, P> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 type EitherOneshotReady<S, B> = Either<
     MapOk<Oneshot<S, http::Request<B>>, fn(<S as Service<http::Request<B>>>::Response) -> http::Response<BoxBody>>,
     Ready<Result<http::Response<BoxBody>, <S as Service<http::Request<B>>>::Error>>,
 >;
 
+#[cfg(feature = "http-02x")]
 pin_project_lite::pin_project! {
     pub struct RoutingFuture<S, B> where S: Service<http::Request<B>> {
         #[pin]
@@ -138,11 +149,13 @@ pin_project_lite::pin_project! {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S, B> RoutingFuture<S, B>
 where
     S: Service<http::Request<B>>,
 {
     /// Creates a [`RoutingFuture`] from [`ServiceExt::oneshot`].
+    #[cfg(feature = "http-02x")]
     pub(super) fn from_oneshot<RespB>(future: Oneshot<S, http::Request<B>>) -> Self
     where
         S: Service<http::Request<B>, Response = http::Response<RespB>>,
@@ -155,6 +168,7 @@ where
     }
 
     /// Creates a [`RoutingFuture`] from [`Service::Response`].
+    #[cfg(feature = "http-02x")]
     pub(super) fn from_response(response: http::Response<BoxBody>) -> Self {
         Self {
             inner: Either::Right(ready(Ok(response))),
@@ -162,6 +176,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S, B> Future for RoutingFuture<S, B>
 where
     S: Service<http::Request<B>>,
@@ -173,6 +188,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<R, P, B, RespB> Service<http::Request<B>> for RoutingService<R, P>
 where
     R: Router<B>,

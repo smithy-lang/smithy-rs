@@ -8,15 +8,20 @@ use std::convert::Infallible;
 use tower::Layer;
 use tower::Service;
 
+#[cfg(feature = "http-02x")]
 use crate::body::BoxBody;
 use crate::routing::tiny_map::TinyMap;
+#[cfg(feature = "http-02x")]
 use crate::routing::Route;
+#[cfg(feature = "http-02x")]
 use crate::routing::Router;
 
+#[cfg(feature = "http-02x")]
 use http::header::ToStrError;
 use thiserror::Error;
 
 /// An AWS JSON routing error.
+#[cfg(feature = "http-02x")]
 #[derive(Debug, Error)]
 pub enum Error {
     /// Relative URI was not "/".
@@ -30,6 +35,7 @@ pub enum Error {
     MissingHeader,
     /// Unable to parse header into UTF-8.
     #[error("failed to parse header: {0}")]
+    #[cfg(feature = "http-02x")]
     InvalidHeader(ToStrError),
     /// Operation not found.
     #[error("operation not found")]
@@ -45,11 +51,13 @@ pub(crate) const ROUTE_CUTOFF: usize = 15;
 ///
 /// [AWS JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
+#[cfg(feature = "http-02x")]
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
     routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
+#[cfg(feature = "http-02x")]
 impl<S> AwsJsonRouter<S> {
     /// Applies a [`Layer`] uniformly to all routes.
     pub fn layer<L>(self, layer: L) -> AwsJsonRouter<L::Service>
@@ -66,6 +74,7 @@ impl<S> AwsJsonRouter<S> {
     }
 
     /// Applies type erasure to the inner route using [`Route::new`].
+    #[cfg(feature = "http-02x")]
     pub fn boxed<B>(self) -> AwsJsonRouter<Route<B>>
     where
         S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
@@ -78,6 +87,7 @@ impl<S> AwsJsonRouter<S> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<B, S> Router<B> for AwsJsonRouter<S>
 where
     S: Clone,
@@ -85,6 +95,7 @@ where
     type Service = S;
     type Error = Error;
 
+    #[cfg(feature = "http-02x")]
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
         // The URI must be root,
         if request.uri() != "/" {
@@ -92,6 +103,7 @@ where
         }
 
         // Only `Method::POST` is allowed.
+        #[cfg(feature = "http-02x")]
         if request.method() != http::Method::POST {
             return Err(Error::MethodNotAllowed);
         }
@@ -106,6 +118,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
@@ -115,11 +128,12 @@ impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::Router};
 
+    #[cfg(feature = "http-02x")]
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
 

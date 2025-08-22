@@ -12,6 +12,7 @@ use std::{
 };
 
 use futures_util::{ready, TryFuture};
+#[cfg(feature = "http-02x")]
 use http::{HeaderMap, Request, Response, StatusCode, Uri};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
@@ -20,6 +21,7 @@ use crate::shape_id::ShapeId;
 
 use super::{MakeDebug, MakeDisplay, MakeIdentity};
 
+#[cfg(feature = "http-02x")]
 pin_project_lite::pin_project! {
     /// A [`Future`] responsible for logging the response status code and headers.
     struct InnerFuture<Fut, ResponseMakeFmt> {
@@ -29,6 +31,7 @@ pin_project_lite::pin_project! {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Fut, ResponseMakeFmt, T> Future for InnerFuture<Fut, ResponseMakeFmt>
 where
     Fut: TryFuture<Ok = Response<T>>,
@@ -54,6 +57,7 @@ where
 }
 
 // This is to provide type erasure.
+#[cfg(feature = "http-02x")]
 pin_project_lite::pin_project! {
     /// An instrumented [`Future`] responsible for logging the response status code and headers.
     pub struct InstrumentedFuture<Fut, ResponseMakeFmt> {
@@ -62,6 +66,7 @@ pin_project_lite::pin_project! {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Fut, ResponseMakeFmt, T> Future for InstrumentedFuture<Fut, ResponseMakeFmt>
 where
     Fut: TryFuture<Ok = Response<T>>,
@@ -104,6 +109,7 @@ where
 ///     .response_fmt(response_fmt);
 /// # svc.call(Request::new(()));
 /// ```
+#[cfg(feature = "http-02x")]
 #[derive(Debug, Clone)]
 pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt = MakeIdentity> {
     inner: S,
@@ -112,6 +118,7 @@ pub struct InstrumentOperation<S, RequestMakeFmt = MakeIdentity, ResponseMakeFmt
     make_response: ResponseMakeFmt,
 }
 
+#[cfg(feature = "http-02x")]
 impl<S> InstrumentOperation<S> {
     /// Constructs a new [`InstrumentOperation`] with no data redacted.
     pub fn new(inner: S, operation_id: ShapeId) -> Self {
@@ -124,6 +131,7 @@ impl<S> InstrumentOperation<S> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, ResponseMakeFmt> {
     /// Configures the request format.
     ///
@@ -150,6 +158,7 @@ impl<S, RequestMakeFmt, ResponseMakeFmt> InstrumentOperation<S, RequestMakeFmt, 
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S, U, V, RequestMakeFmt, ResponseMakeFmt> Service<Request<U>>
     for InstrumentOperation<S, RequestMakeFmt, ResponseMakeFmt>
 where

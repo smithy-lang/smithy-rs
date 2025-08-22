@@ -27,25 +27,31 @@ use std::convert::Infallible;
 use std::task::{Context, Poll};
 
 use futures_util::{Future, FutureExt};
+#[cfg(feature = "http-02x")]
 use http::StatusCode;
+#[cfg(feature = "http-02x")]
 use hyper::{Body, Request, Response};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
+#[cfg(feature = "http-02x")]
 use crate::body::BoxBody;
 
 use crate::plugin::either::Either;
 use crate::plugin::either::EitherProj;
 
 /// A [`tower::Layer`] used to apply [`AlbHealthCheckService`].
+#[cfg(feature = "http-02x")]
 #[derive(Clone, Debug)]
 pub struct AlbHealthCheckLayer<HealthCheckHandler> {
     health_check_uri: Cow<'static, str>,
     health_check_handler: HealthCheckHandler,
 }
 
+#[cfg(feature = "http-02x")]
 impl AlbHealthCheckLayer<()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
+    #[cfg(feature = "http-02x")]
     pub fn from_handler<HandlerFuture: Future<Output = StatusCode>, H: Fn(Request<Body>) -> HandlerFuture + Clone>(
         health_check_uri: impl Into<Cow<'static, str>>,
         health_check_handler: H,
@@ -63,6 +69,7 @@ impl AlbHealthCheckLayer<()> {
     }
 
     /// Handle health check requests at `health_check_uri` with the specified service.
+    #[cfg(feature = "http-02x")]
     pub fn new<H: Service<Request<Body>, Response = StatusCode>>(
         health_check_uri: impl Into<Cow<'static, str>>,
         health_check_handler: H,
@@ -74,6 +81,7 @@ impl AlbHealthCheckLayer<()> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<S, H: Clone> Layer<S> for AlbHealthCheckLayer<H> {
     type Service = AlbHealthCheckService<H, S>;
 
@@ -86,12 +94,14 @@ impl<S, H: Clone> Layer<S> for AlbHealthCheckLayer<H> {
 }
 
 /// A middleware [`Service`] responsible for handling health check requests.
+#[cfg(feature = "http-02x")]
 #[derive(Clone, Debug)]
 pub struct AlbHealthCheckService<H, S> {
     inner: S,
     layer: AlbHealthCheckLayer<H>,
 }
 
+#[cfg(feature = "http-02x")]
 impl<H, S> Service<Request<Body>> for AlbHealthCheckService<H, S>
 where
     S: Service<Request<Body>, Response = Response<BoxBody>> + Clone,
@@ -124,8 +134,10 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 type HealthCheckFutureInner<H, S> = Either<Oneshot<H, Request<Body>>, Oneshot<S, Request<Body>>>;
 
+#[cfg(feature = "http-02x")]
 pin_project! {
     /// Future for [`AlbHealthCheckService`].
     pub struct AlbHealthCheckFuture<H: Service<Request<Body>, Response = StatusCode>, S: Service<Request<Body>>> {
@@ -134,6 +146,7 @@ pin_project! {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<H, S> AlbHealthCheckFuture<H, S>
 where
     H: Service<Request<Body>, Response = StatusCode>,
@@ -152,6 +165,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<H, S> Future for AlbHealthCheckFuture<H, S>
 where
     H: Service<Request<Body>, Response = StatusCode, Error = Infallible>,

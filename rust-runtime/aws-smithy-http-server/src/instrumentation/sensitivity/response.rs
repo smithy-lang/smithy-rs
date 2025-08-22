@@ -7,10 +7,12 @@
 
 use std::fmt::{Debug, Error, Formatter};
 
+#[cfg(feature = "http-02x")]
 use http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::{MakeFmt, MakeIdentity};
 
+#[cfg(feature = "http-02x")]
 use super::{
     headers::{HeaderMarker, MakeHeaders},
     MakeSensitive,
@@ -20,12 +22,14 @@ use super::{
 /// [`Debug`] to accommodate sensitivity.
 ///
 /// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
+#[cfg(feature = "http-02x")]
 #[derive(Clone)]
 pub struct ResponseFmt<Headers, StatusCode> {
     headers: Headers,
     status_code: StatusCode,
 }
 
+#[cfg(feature = "http-02x")]
 impl<Headers, StatusCode> Debug for ResponseFmt<Headers, StatusCode> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("ResponseFmt").finish_non_exhaustive()
@@ -33,8 +37,10 @@ impl<Headers, StatusCode> Debug for ResponseFmt<Headers, StatusCode> {
 }
 
 /// Default [`ResponseFmt`].
+#[cfg(feature = "http-02x")]
 pub type DefaultResponseFmt = ResponseFmt<MakeIdentity, MakeIdentity>;
 
+#[cfg(feature = "http-02x")]
 impl Default for DefaultResponseFmt {
     fn default() -> Self {
         Self {
@@ -44,6 +50,7 @@ impl Default for DefaultResponseFmt {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl DefaultResponseFmt {
     /// Constructs a new [`ResponseFmt`] with no redactions.
     pub fn new() -> Self {
@@ -51,10 +58,12 @@ impl DefaultResponseFmt {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Header, StatusCode> ResponseFmt<Header, StatusCode> {
     /// Marks headers as sensitive using a closure.
     ///
     /// See [`SensitiveHeaders`](super::headers::SensitiveHeaders) for more info.
+    #[cfg(feature = "http-02x")]
     pub fn header<F>(self, header: F) -> ResponseFmt<MakeHeaders<F>, StatusCode>
     where
         F: Fn(&HeaderName) -> HeaderMarker,
@@ -74,6 +83,7 @@ impl<Header, StatusCode> ResponseFmt<Header, StatusCode> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, Headers, StatusCode> MakeFmt<&'a HeaderMap> for ResponseFmt<Headers, StatusCode>
 where
     Headers: MakeFmt<&'a HeaderMap>,
@@ -85,6 +95,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Headers, StatusCode> MakeFmt<http::StatusCode> for ResponseFmt<Headers, StatusCode>
 where
     StatusCode: MakeFmt<http::StatusCode>,

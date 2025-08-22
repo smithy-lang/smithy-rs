@@ -7,10 +7,12 @@
 
 use std::fmt::{Debug, Error, Formatter};
 
+#[cfg(feature = "http-02x")]
 use http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::{MakeFmt, MakeIdentity};
 
+#[cfg(feature = "http-02x")]
 use super::{
     headers::{HeaderMarker, MakeHeaders},
     uri::{GreedyLabel, MakeLabel, MakeQuery, MakeUri, QueryMarker},
@@ -20,12 +22,14 @@ use super::{
 /// [`Debug`] to accommodate sensitivity.
 ///
 /// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](http::Uri).
+#[cfg(feature = "http-02x")]
 #[derive(Clone)]
 pub struct RequestFmt<Headers, Uri> {
     headers: Headers,
     uri: Uri,
 }
 
+#[cfg(feature = "http-02x")]
 impl<Headers, Uri> Debug for RequestFmt<Headers, Uri> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("RequestFmt").finish_non_exhaustive()
@@ -33,8 +37,10 @@ impl<Headers, Uri> Debug for RequestFmt<Headers, Uri> {
 }
 
 /// Default [`RequestFmt`].
+#[cfg(feature = "http-02x")]
 pub type DefaultRequestFmt = RequestFmt<MakeIdentity, MakeUri<MakeIdentity, MakeIdentity>>;
 
+#[cfg(feature = "http-02x")]
 impl Default for DefaultRequestFmt {
     fn default() -> Self {
         Self {
@@ -44,6 +50,7 @@ impl Default for DefaultRequestFmt {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl DefaultRequestFmt {
     /// Constructs a new [`RequestFmt`] with no redactions.
     pub fn new() -> Self {
@@ -51,10 +58,12 @@ impl DefaultRequestFmt {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Header, Uri> RequestFmt<Header, Uri> {
     /// Marks parts of headers as sensitive using a closure.
     ///
     /// See [`SensitiveHeaders`](super::headers::SensitiveHeaders) for more info.
+    #[cfg(feature = "http-02x")]
     pub fn header<F>(self, headers: F) -> RequestFmt<MakeHeaders<F>, Uri>
     where
         F: Fn(&HeaderName) -> HeaderMarker,
@@ -66,6 +75,7 @@ impl<Header, Uri> RequestFmt<Header, Uri> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Header, P, Q> RequestFmt<Header, MakeUri<P, Q>> {
     /// Marks parts of the URI as sensitive.
     ///
@@ -107,6 +117,7 @@ impl<Header, P, Q> RequestFmt<Header, MakeUri<P, Q>> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, Headers, Uri> MakeFmt<&'a HeaderMap> for RequestFmt<Headers, Uri>
 where
     Headers: MakeFmt<&'a HeaderMap>,
@@ -118,6 +129,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, Headers, Uri> MakeFmt<&'a http::Uri> for RequestFmt<Headers, Uri>
 where
     Uri: MakeFmt<&'a http::Uri>,

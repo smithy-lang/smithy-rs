@@ -7,6 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
+#[cfg(feature = "http-02x")]
 use http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::MakeFmt;
@@ -14,6 +15,7 @@ use crate::instrumentation::MakeFmt;
 use super::Sensitive;
 
 /// Marks the sensitive data of a header pair.
+#[cfg(feature = "http-02x")]
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct HeaderMarker {
     /// Set to `true` to mark the value as sensitive.
@@ -46,11 +48,13 @@ pub struct HeaderMarker {
 ///
 /// [httpPrefixHeaders trait]: https://smithy.io/2.0/spec/http-bindings.html#httpprefixheaders-trait
 /// [httpHeader trait]: https://smithy.io/2.0/spec/http-bindings.html#httpheader-trait
+#[cfg(feature = "http-02x")]
 pub struct SensitiveHeaders<'a, F> {
     headers: &'a HeaderMap,
     marker: F,
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, F> SensitiveHeaders<'a, F> {
     /// Constructs a new [`SensitiveHeaders`].
     pub fn new(headers: &'a HeaderMap, marker: F) -> Self {
@@ -102,6 +106,7 @@ where
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, F> Debug for SensitiveHeaders<'a, F>
 where
     F: Fn(&'a HeaderName) -> HeaderMarker,
@@ -134,15 +139,18 @@ where
 }
 
 /// A [`MakeFmt`] producing [`SensitiveHeaders`].
+#[cfg(feature = "http-02x")]
 #[derive(Clone)]
 pub struct MakeHeaders<F>(pub(crate) F);
 
+#[cfg(feature = "http-02x")]
 impl<F> Debug for MakeHeaders<F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("MakeHeaders").field(&"...").finish()
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<'a, F> MakeFmt<&'a HeaderMap> for MakeHeaders<F>
 where
     F: Clone,
@@ -153,8 +161,9 @@ where
         SensitiveHeaders::new(source, self.0.clone())
     }
 }
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 mod tests {
+    #[cfg(feature = "http-02x")]
     use http::{header::HeaderName, HeaderMap, HeaderValue};
 
     use super::*;

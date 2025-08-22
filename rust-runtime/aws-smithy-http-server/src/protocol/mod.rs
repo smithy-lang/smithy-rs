@@ -13,10 +13,12 @@ pub mod rpc_v2_cbor;
 
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
+#[cfg(feature = "http-02x")]
 use http::header::CONTENT_TYPE;
+#[cfg(feature = "http-02x")]
 use http::HeaderMap;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 pub mod test_helpers {
     use http::{HeaderMap, Method, Request};
 
@@ -49,6 +51,7 @@ fn parse_mime(content_type: &str) -> Result<mime::Mime, MissingContentTypeReason
 
 /// Checks that the `content-type` header from a `SmithyHeaders` matches what we expect.
 #[allow(clippy::result_large_err)]
+#[cfg(feature = "http-02x")]
 pub fn content_type_header_classifier_smithy(
     headers: &SmithyHeaders,
     expected_content_type: Option<&'static str>,
@@ -106,6 +109,7 @@ fn content_type_header_classifier(
     }
 }
 
+#[cfg(feature = "http-02x")]
 pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) -> bool {
     if !headers.contains_key(http::header::ACCEPT) {
         return true;
@@ -140,7 +144,7 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) 
         })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 mod tests {
     use super::*;
     use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
