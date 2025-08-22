@@ -9,12 +9,12 @@ use aws_smithy_runtime::client::dns::CachingDnsResolver;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
 use std::{
     net::{IpAddr, Ipv4Addr},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use tokio::test;
 
 #[test]
-async fn test_dns_caching_performance() {
+async fn test_dns_caching() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
 
@@ -25,36 +25,26 @@ async fn test_dns_caching_performance() {
 
     let hostname = "example.com";
 
-    // First resolution should hit the network
-    let start = Instant::now();
+    // First resolution should hit the server
     let first_result = resolver.resolve_dns(hostname).await;
-    let first_duration = start.elapsed();
-
     let first_ips = first_result.unwrap();
-    assert!(!first_ips.is_empty());
+
+    // Verify correct IP returned and server hit to get it
+    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], first_ips);
+    assert!(dns_server.query_count() == 1);
 
     // Second resolution should hit the cache
-    let start = Instant::now();
     let second_result = resolver.resolve_dns(hostname).await;
-    let second_duration = start.elapsed();
-
     let second_ips = second_result.unwrap();
+
+    // Verify second resolution hit cache, not server
+    assert!(dns_server.query_count() == 1);
 
     // Verify same IPs returned
     assert_eq!(first_ips, second_ips);
-
-    // Verify correct IP returned
-    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], first_ips);
-
-    // Cache hit should be faster
-    assert!(second_duration < first_duration);
 }
 
-// Ignored since the cache is only eventually consistent w.r.t. size. So hard to get
-// an exact measure. But the logs here are useful to manually check the performance,
-// so not deleting this.
 #[test]
-#[ignore = "Cache is eventually consistent w.r.t. size."]
 async fn test_dns_cache_size_limit() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
@@ -64,32 +54,35 @@ async fn test_dns_cache_size_limit() {
         .cache_size(1)
         .build();
 
-    // Resolve first hostname
-    let start = Instant::now();
-    let result1 = resolver.resolve_dns("example.com").await.unwrap();
-    let result1_duration = start.elapsed();
-    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))], result1);
+    // First resolution should hit the server
+    let _first_result = resolver.resolve_dns("example.com").await;
 
-    // Resolve second hostname (should replace first response in cache)
-    let start = Instant::now();
-    let result2 = resolver.resolve_dns("aws.com").await.unwrap();
-    let result2_duration = start.elapsed();
-    assert_eq!(vec![IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))], result2);
+    // Verify server hit
+    assert!(dns_server.query_count() == 1);
 
-    println!("RESULT1 DURATION: {result1_duration:#?}");
-    println!("RESULT2 DURATION: {result2_duration:#?}");
+    // Second resolution should hit the server
+    let _second_result = resolver.resolve_dns("aws.com").await;
 
-    let start = Instant::now();
-    let _result1_again = resolver.resolve_dns("example.com").await.unwrap();
-    let result1_again_duration = start.elapsed();
+    // Verify server hit
+    assert!(dns_server.query_count() == 2);
 
-    let start = Instant::now();
-    let _result2_again = resolver.resolve_dns("aws.com").await.unwrap();
-    let result2_again_duration = start.elapsed();
+    // Third resolution should hit the server
+    let _third_result = resolver.resolve_dns("foo.com").await;
 
-    println!("RESULT1 AGAIN DURATION: {result1_again_duration:#?}");
-    println!("RESULT2 AGAIN DURATION: {result2_again_duration:#?}");
-    assert!(result1_again_duration < result2_again_duration);
+    // Verify server hit
+    assert!(dns_server.query_count() == 3);
+
+    // Third result should now be in cache
+    let _third_result = resolver.resolve_dns("foo.com").await;
+
+    // Verify server not hit in favor of the cache
+    assert!(dns_server.query_count() == 3);
+
+    // First result should have been removed from the cache, so querying it again should hit server
+    let _first_result_again = resolver.resolve_dns("example.com").await;
+
+    // Verify server hit
+    assert!(dns_server.query_count() == 4);
 }
 
 #[test]
@@ -116,7 +109,7 @@ mod test_dns_server {
     use std::{
         collections::HashMap,
         net::{IpAddr, Ipv4Addr, SocketAddr},
-        sync::Arc,
+        sync::{atomic::AtomicUsize, Arc},
         time::Duration,
     };
     use tokio::{net::UdpSocket, sync::Notify, task::JoinHandle};
@@ -140,6 +133,7 @@ mod test_dns_server {
         handle: JoinHandle<()>,
         addr: SocketAddr,
         shutdown: Arc<Notify>,
+        query_count: Arc<AtomicUsize>,
     }
 
     impl TestDnsServer {
@@ -152,6 +146,8 @@ mod test_dns_server {
 
             let shutdown = Arc::new(Notify::new());
             let shutdown_clone = shutdown.clone();
+            let query_count = Arc::new(AtomicUsize::new(0));
+            let query_count_clone = query_count.clone();
 
             let handle = tokio::spawn(async move {
                 let mut buf = [0; 512];
@@ -160,6 +156,7 @@ mod test_dns_server {
                         _ = shutdown_clone.notified() => break,
                         result = socket.recv_from(&mut buf) => {
                             if let Ok((len, src)) = result {
+                                query_count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 // Short sleep before returning DNS response to simulate network latency
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
                                 let response = create_dns_response(&buf[..len], &records);
@@ -174,11 +171,16 @@ mod test_dns_server {
                 handle,
                 addr,
                 shutdown,
+                query_count,
             })
         }
 
         pub fn addr(&self) -> (IpAddr, u16) {
             (self.addr.ip(), self.addr.port())
+        }
+
+        pub fn query_count(&self) -> usize {
+            self.query_count.load(std::sync::atomic::Ordering::Relaxed)
         }
     }
 
