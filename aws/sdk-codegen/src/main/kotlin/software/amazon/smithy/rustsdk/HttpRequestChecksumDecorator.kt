@@ -57,7 +57,6 @@ internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
-    private val defaultAlgorithm = "CRC32"
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -103,6 +102,11 @@ private fun HttpChecksumTrait.requestAlgorithmMember(
     return codegenContext.symbolProvider.toMemberName(checksumAlgorithmMemberShape)
 }
 
+// This is the single place where the default algorithm is set. It must be all uppercased.
+// There is some special logic in HttpChecksumTest and in the http_request_checksum inlineable
+// for testing the default case, if you change this value you will have to update that logic as well.
+const val defaultAlgorithm = "CRC32"
+
 /**
  * Extract the name of the operation's input member that indicates which checksum algorithm to use
  */
@@ -116,8 +120,8 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 
     return {
         if (requestAlgorithmMember == null && isRequestChecksumRequired) {
-            // Checksums are required but a user can't set one, so we set crc32 for them
-            rust("""let checksum_algorithm = Some("crc32");""")
+            // Checksums are required but a user can't set one, so we set the default for them
+            rust("""let checksum_algorithm = Some("${defaultAlgorithm.lowercase()}");""")
         } else {
             // Use checksum algo set by user
             rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str());""")
@@ -209,7 +213,7 @@ class HttpRequestChecksumCustomization(
 
                                     // If the request is presigned we do not set a default.
                                     // If the RequestChecksumCalculation is WhenSupported and the user has not set a checksum value or algo
-                                    // we default to Crc32. If it is WhenRequired and a checksum is required by the trait and the user has not
+                                    // we set the default. If it is WhenRequired and a checksum is required by the trait and the user has not
                                     // set a checksum value or algo we also set the default. In all other cases we do nothing.
                                     match (
                                         request_checksum_calculation,
@@ -221,7 +225,7 @@ class HttpRequestChecksumCustomization(
                                         (_, _, _, _, true) => {}
                                         (#{RequestChecksumCalculation}::WhenSupported, _, false, false, _)
                                         | (#{RequestChecksumCalculation}::WhenRequired, true, false, false, _) => {
-                                            request.headers_mut().insert(${requestAlgoHeader.dq()}, "CRC32");
+                                            request.headers_mut().insert(${requestAlgoHeader.dq()}, "$defaultAlgorithm");
                                         }
                                         _ => {},
                                     }
