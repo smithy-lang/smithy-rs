@@ -19,6 +19,7 @@ tls-rustls = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/legacy-rust
 default-https-client = ["dep:aws-smithy-http-client", "aws-smithy-http-client?/rustls-aws-lc"]
 rt-tokio = ["tokio/rt"]
 hickory-dns = ["dep:hickory-resolver", "rt-tokio"]
+
 # Features for testing
 # NOTE: `test-util` originally enabled the HTTP related test utils which have since been relocated to `aws-smithy-http-client`
 # and updated to work with the 1.x HTTP/hyper ecosystem. Prefer using the `test-util` and `wire-mock` features from

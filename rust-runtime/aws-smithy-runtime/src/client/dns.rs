@@ -11,8 +11,8 @@ mod tokio;
 #[cfg(all(feature = "rt-tokio", not(target_family = "wasm")))]
 pub use self::tokio::TokioDnsResolver;
 
-#[cfg(all(feature = "rt-tokio", not(target_family = "wasm")))]
+#[cfg(all(feature = "hickory-dns", not(target_family = "wasm")))]
 mod caching;
 
-#[cfg(all(feature = "rt-tokio", not(target_family = "wasm")))]
+#[cfg(all(feature = "hickory-dns", not(target_family = "wasm")))]
 pub use self::caching::CachingDnsResolver;
