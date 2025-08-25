@@ -3,13 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg(all(
-    feature = "client",
-    feature = "hickory-dns",
-    not(target_family = "wasm")
-))]
+#![cfg(all(feature = "hickory-dns", not(target_family = "wasm")))]
 
-use aws_smithy_runtime::client::dns::CachingDnsResolver;
+use aws_smithy_dns::HickoryDnsResolver;
 use aws_smithy_runtime_api::client::dns::ResolveDns;
 use std::{
     net::{IpAddr, Ipv4Addr},
@@ -22,7 +18,7 @@ async fn test_dns_caching() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
 
-    let resolver = CachingDnsResolver::builder()
+    let resolver = HickoryDnsResolver::builder()
         .nameservers(&[dns_ip], dns_port)
         .cache_size(1)
         .build();
@@ -53,7 +49,7 @@ async fn test_dns_cache_size_limit() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
 
-    let resolver = CachingDnsResolver::builder()
+    let resolver = HickoryDnsResolver::builder()
         .nameservers(&[dns_ip], dns_port)
         .cache_size(1)
         .build();
@@ -94,7 +90,7 @@ async fn test_dns_error_handling() {
     let dns_server = test_dns_server::setup_dns_server().await;
     let (dns_ip, dns_port) = dns_server.addr();
 
-    let resolver = CachingDnsResolver::builder()
+    let resolver = HickoryDnsResolver::builder()
         .nameservers(&[dns_ip], dns_port)
         .timeout(Duration::from_millis(100))
         .attempts(1)

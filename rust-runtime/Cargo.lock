@@ -379,6 +379,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-dns"
+version = "0.1.0"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "criterion",
+ "hickory-resolver",
+ "tokio",
+]
+
+[[package]]
 name = "aws-smithy-eventstream"
 version = "0.60.11"
 dependencies = [
@@ -632,7 +642,6 @@ dependencies = [
  "bytes",
  "fastrand",
  "futures-util",
- "hickory-resolver",
  "http 0.2.12",
  "http 1.3.1",
  "http-body 0.4.6",

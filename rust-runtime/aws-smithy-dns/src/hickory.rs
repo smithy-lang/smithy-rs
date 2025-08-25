@@ -21,11 +21,11 @@ use hickory_resolver::{
 /// This resolver requires a [tokio] runtime to function and isn't available for WASM targets.
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct CachingDnsResolver {
+pub struct HickoryDnsResolver {
     resolver: Resolver<TokioConnectionProvider>,
 }
 
-impl Default for CachingDnsResolver {
+impl Default for HickoryDnsResolver {
     /// Constructs a new Tokio based [ResolveDns] with the system configuration.
     /// This uses `/etc/resolv.conf` on Unix OSes and registry settings on Windows.
     fn default() -> Self {
@@ -35,10 +35,10 @@ impl Default for CachingDnsResolver {
     }
 }
 
-impl CachingDnsResolver {
+impl HickoryDnsResolver {
     /// Creates a new DNS resolver that caches IP addresses in memory.
-    pub fn builder() -> CachingDnsResolverBuilder {
-        CachingDnsResolverBuilder {
+    pub fn builder() -> HickoryDnsResolverBuilder {
+        HickoryDnsResolverBuilder {
             nameservers: None,
             timeout: None,
             attempts: None,
@@ -53,7 +53,7 @@ impl CachingDnsResolver {
     }
 }
 
-impl ResolveDns for CachingDnsResolver {
+impl ResolveDns for HickoryDnsResolver {
     fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
         DnsFuture::new(async move {
             let result = self.resolver.lookup_ip(name).await;
@@ -69,7 +69,7 @@ impl ResolveDns for CachingDnsResolver {
     }
 }
 
-pub struct CachingDnsResolverBuilder {
+pub struct HickoryDnsResolverBuilder {
     nameservers: Option<Nameservers>,
     timeout: Option<Duration>,
     attempts: Option<usize>,
@@ -82,7 +82,7 @@ struct Nameservers {
     port: u16,
 }
 
-impl CachingDnsResolverBuilder {
+impl HickoryDnsResolverBuilder {
     /// Configure upstream nameservers and the port to use for resolution. Defaults to the system
     /// configuration.
     pub fn nameservers(mut self, ips: &[IpAddr], port: u16) -> Self {
@@ -121,7 +121,7 @@ impl CachingDnsResolverBuilder {
         self
     }
 
-    pub fn build(self) -> CachingDnsResolver {
+    pub fn build(self) -> HickoryDnsResolver {
         let mut builder = if let Some(nameservers) = self.nameservers {
             let nameserver_config =
                 NameServerConfigGroup::from_ips_clear(&nameservers.ips, nameservers.port, true);
@@ -150,7 +150,7 @@ impl CachingDnsResolverBuilder {
             opts.num_concurrent_reqs = num_concurrent_reqs;
         }
 
-        CachingDnsResolver {
+        HickoryDnsResolver {
             resolver: builder.build(),
         }
     }
