@@ -50,10 +50,12 @@ class CrateSetTest {
             val contents = File(path).readText()
             val isStable =
                 try {
-                    Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable") ?: false
+                    Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable")
+                        ?: false
                 } catch (e: java.lang.IllegalStateException) {
-                    // sigv4 doesn't parse but it's stable now, hax hax hax
-                    contents.trim().endsWith("[package.metadata.smithy-rs-release-tooling]\nstable = true")
+                    // Several crates are stable, but their Cargo.toml does not properly parse due to cfg statements
+                    // like `[target.'cfg(not(target_family = "wasm"))'.dependencies]`. Those packages are handled here
+                    contents.contains("[package.metadata.smithy-rs-release-tooling]\nstable = true")
                 }
             sutStabilityMatchesManifestStability(it.versionPropertyName, isStable, it.name)
         }
