@@ -69,8 +69,8 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
                 get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
-                get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
-                get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/codegen-server-python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/codegen-server-typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")
