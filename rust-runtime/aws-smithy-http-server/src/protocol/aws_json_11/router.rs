@@ -3,29 +3,35 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::body::{empty, BoxBody};
-use crate::extension::RuntimeErrorExtension;
-use crate::response::IntoResponse;
-use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
+// use crate::body::{empty, BoxBody};
+#[cfg(all(feature = "http-02x", not(feature = "http-1x")))]
+use crate::body;
 
-use super::AwsJson1_1;
+#[cfg(feature = "http-1x")]
+use crate::body_http1x as body;
 
-pub use crate::protocol::aws_json::router::*;
+// use crate::extension::RuntimeErrorExtension;
+// use crate::response::IntoResponse;
+// use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
-// TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
-// we have no tests to pin our implemenation against!
-impl IntoResponse<AwsJson1_1> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
-        match self {
-            Error::MethodNotAllowed => method_disallowed(),
-            _ => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.1")
-                .extension(RuntimeErrorExtension::new(
-                    UNKNOWN_OPERATION_EXCEPTION.to_string(),
-                ))
-                .body(empty())
-                .expect("invalid HTTP response for AWS JSON 1.1 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
-        }
-    }
-}
+// use super::AwsJson1_1;
+
+// pub use crate::protocol::aws_json::router::*;
+
+// // TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
+// // we have no tests to pin our implemenation against!
+// impl IntoResponse<AwsJson1_1> for Error {
+//     fn into_response(self) -> http::Response<BoxBody> {
+//         match self {
+//             Error::MethodNotAllowed => method_disallowed(),
+//             _ => http::Response::builder()
+//                 .status(http::StatusCode::NOT_FOUND)
+//                 .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.1")
+//                 .extension(RuntimeErrorExtension::new(
+//                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
+//                 ))
+//                 .body(empty())
+//                 .expect("invalid HTTP response for AWS JSON 1.1 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
+//         }
+//     }
+// }

@@ -15,7 +15,11 @@
 #[macro_use]
 pub(crate) mod macros;
 
+#[cfg(feature = "http-02x")]
 pub mod body;
+#[cfg(feature = "http-1x")]
+pub mod body_http1x;
+
 pub(crate) mod error;
 pub mod extension;
 pub mod instrumentation;
@@ -44,3 +48,6 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
 mod test_helpers;
+
+// #[cfg(all(feature = "http-02x", feature = "http-1x"))]
+// compile_error!("Features 'http-02x' and 'http-1x' are mutually exclusive");
