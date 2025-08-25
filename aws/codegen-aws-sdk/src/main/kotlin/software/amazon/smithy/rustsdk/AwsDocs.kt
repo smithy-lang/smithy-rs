@@ -55,7 +55,7 @@ object AwsDocs {
                 val crateName = codegenContext.moduleUseName()
                 docsTemplate(
                     """
-                    #### Constructing a `Client`
+                    #### Constructing a `Client` test
 
                     A [`Config`] is required to construct a client. For most use cases, the [`aws-config`]
                     crate should be used to automatically resolve this config using
