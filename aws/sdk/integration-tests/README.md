@@ -49,4 +49,4 @@ When adding new dependencies or adding new features to old dependencies, don't f
 [`IntegrationTestDependencies` file][IntegrationTestDependencies]. Otherwise, after your tests have been copied into
 their respective SDK crates may fail when run due to a dependency resolution error.
 
-[IntegrationTestDependencies]: ../../sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/IntegrationTestDependencies.kt
+[IntegrationTestDependencies]: ../../codegen-aws-sdk/src/main/kotlin/software/amazon/smithy/rustsdk/IntegrationTestDependencies.kt

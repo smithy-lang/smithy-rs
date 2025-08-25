@@ -11,11 +11,10 @@ tasks["jar"].enabled = false
 
 plugins {
     java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-server-codegen"
@@ -23,11 +22,11 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 
 dependencies {
     implementation(project(":codegen-server"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.validation.model)
 }
 
 smithy {
