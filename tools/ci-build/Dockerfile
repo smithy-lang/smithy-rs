@@ -7,17 +7,18 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.86.0
-ARG rust_nightly_version=nightly-2025-05-04
+ARG rust_nightly_version=nightly-2025-08-06
 
 FROM ${base_image} AS bare_base_image
-RUN yum -y updateinfo
+RUN yum -y updateinfo && yum clean all && rm -rf /var/cache/yum
 
 FROM bare_base_image as musl_toolchain
-RUN yum -y install --allowerasing tar gzip gcc make
-RUN curl https://musl.libc.org/releases/musl-1.2.5.tar.gz -o musl-1.2.5.tar.gz \
-    && ls \
-    && tar xvzf musl-1.2.5.tar.gz \
-    && (cd musl-1.2.5 && ./configure && make install)
+RUN yum -y install --allowerasing tar gzip gcc make && \
+    curl https://musl.libc.org/releases/musl-1.2.5.tar.gz -o musl-1.2.5.tar.gz && \
+    tar xzf musl-1.2.5.tar.gz && \
+    (cd musl-1.2.5 && ./configure && make install) && \
+    rm -rf musl-1.2.5* && \
+    yum clean all && rm -rf /var/cache/yum
 
 #
 # Rust & Tools Installation Stage
@@ -29,8 +30,24 @@ ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0 \
-    JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64 \
     GRADLE_USER_HOME=/home/build/.gradle
+
+# This complicated setup is necessary to keep the docker build working on aarch64 laptops
+# since we now actually use JAVA_HOME in the build (to cache the gradle binary)
+RUN set -eux; \
+    ARCH="$(uname -m)"; \
+    case "${ARCH}" in \
+        aarch64|arm64) \
+            echo "export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.aarch64" >> /etc/profile.d/java_home.sh; \
+            ;; \
+        x86_64) \
+            echo "export JAVA_HOME=/usr/lib/jvm/java-17-amazon-corretto.x86_64" >> /etc/profile.d/java_home.sh; \
+            ;; \
+        *) \
+            echo "Unsupported architecture: ${ARCH}"; \
+            exit 1; \
+            ;; \
+    esac
 
 WORKDIR /root
 RUN yum -y install --allowerasing \
@@ -50,8 +67,8 @@ RUN yum -y install --allowerasing \
         pkgconfig \
         tar \
         xz && \
-    yum clean all
-RUN set -eux; \
+    yum clean all && rm -rf /var/cache/yum && \
+    set -eux; \
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
         curl https://static.rust-lang.org/rustup/archive/1.24.3/aarch64-unknown-linux-gnu/rustup-init --output rustup-init; \
         echo "32a1532f7cef072a667bac53f1a5542c99666c4071af0c9549795bbdb2069ec1 rustup-init" | sha256sum --check; \
@@ -72,82 +89,67 @@ RUN set -eux; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
+FROM install_rust AS gradle_wrapper
+# Commit/branch to checkout for gradle wrapper
+ARG smithy_rs_commit_hash=main
+ENV GRADLE_USER_HOME=/opt/gradle
+WORKDIR /opt/gradle
+RUN set -eux; \
+    source /etc/profile.d/java_home.sh; \
+    git init smithy-rs && cd smithy-rs; \
+    git remote add origin https://github.com/smithy-lang/smithy-rs.git; \
+    git sparse-checkout init --cone; \
+    git sparse-checkout set gradlew gradle/wrapper gradle.properties; \
+    git fetch --depth=1 origin ${smithy_rs_commit_hash}; \
+    git checkout FETCH_HEAD; \
+    # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
+    ./gradlew; \
+    cd ..; \
+    rm -rf smithy-rs
+
 FROM install_rust AS local_tools
 ARG rust_nightly_version
 COPY . tools/ci-build
-# when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
-ARG smithy_rs_commit_hash=main
-# If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
-# source code by checking out smithy-lang/smithy-rs/main rather than copying them from the local directory.
-ARG checkout_smithy_rs_tools=false
-RUN set -eux; \
-    if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
-        git clone https://github.com/smithy-lang/smithy-rs.git; \
-        cd smithy-rs; \
-        git checkout ${smithy_rs_commit_hash}; \
-        # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
-        ./gradlew; \
-    fi; \
-    cargo install --locked --path tools/ci-build/changelogger; \
-    cargo install --locked --path tools/ci-build/crate-hasher; \
-    cargo install --locked --path tools/ci-build/difftags; \
-    cargo install --locked --path tools/ci-build/publisher; \
-    cargo install --locked --path tools/ci-build/runtime-versioner; \
-    cargo install --locked --path tools/ci-build/sdk-lints; \
-    cargo install --locked --path tools/ci-build/sdk-lockfiles; \
-    cargo install --locked --path tools/ci-build/sdk-versioner; \
-    chmod g+rw -R /opt/cargo/registry
+RUN cargo install --locked --path tools/ci-build/changelogger && \
+    cargo install --locked --path tools/ci-build/crate-hasher && \
+    cargo install --locked --path tools/ci-build/difftags && \
+    cargo install --locked --path tools/ci-build/publisher && \
+    cargo install --locked --path tools/ci-build/runtime-versioner && \
+    cargo install --locked --path tools/ci-build/sdk-lints && \
+    cargo install --locked --path tools/ci-build/sdk-lockfiles && \
+    cargo install --locked --path tools/ci-build/sdk-versioner && \
+    chmod g+rw -R /opt/cargo/registry && \
+    rm -rf /opt/cargo/registry/src && \
+    rm -rf /opt/cargo/git/db
 
-FROM install_rust AS cargo_deny
+FROM install_rust AS cargo_tools
 ARG cargo_deny_version=0.16.4
-RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
-
-FROM install_rust AS cargo_udeps
 ARG cargo_udeps_version=0.1.56
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
-
-FROM install_rust AS cargo_hack
 ARG cargo_hack_version=0.6.27
-RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
-
-FROM install_rust AS cargo_minimal_versions
 ARG cargo_minimal_versions_version=0.1.27
-RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
-
-FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.2.0
-RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
-
-FROM install_rust AS maturin
+ARG cargo_check_external_types_version=0.3.0
 ARG maturin_version=1.5.1
-RUN cargo install maturin --locked --version ${maturin_version}
-
-FROM install_rust AS wasm_pack
 ARG wasm_pack_version=0.13.1
-RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
-
-FROM install_rust AS wasmtime
 ARG cargo_wasmtime_version=34.0.1
-ARG rust_nightly_version
-RUN cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
-
-FROM install_rust AS cargo_component
 ARG cargo_component_version=0.20.0
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version}
-
-FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.41.0
-RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
-
-FROM install_rust AS cargo_mdbook
 ARG cargo_mdbook_version=0.4.37
-RUN cargo install mdbook --locked --version ${cargo_mdbook_version}
-
-FROM install_rust AS cargo_mdbook_mermaid
 ARG cargo_mdbook_mermaid_version=0.13.0
-RUN cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+ARG rust_nightly_version
+RUN cargo install cargo-deny --locked --version ${cargo_deny_version} && \
+    cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version} && \
+    cargo install cargo-hack --locked --version ${cargo_hack_version} && \
+    cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version} && \
+    cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version} && \
+    cargo install maturin --locked --version ${maturin_version} && \
+    cargo install wasm-pack --locked --version ${wasm_pack_version} && \
+    cargo install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version} && \
+    cargo +${rust_nightly_version} install cargo-component --locked --version ${cargo_component_version} && \
+    cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version} && \
+    cargo install mdbook --locked --version ${cargo_mdbook_version} && \
+    cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version} && \
+    rm -rf /opt/cargo/registry/src && \
+    rm -rf /opt/cargo/git/db
 
 # nodejs needed by internal release process
 FROM install_rust AS nodejs
@@ -209,27 +211,34 @@ RUN set -eux; \
         shadow-utils \
         cmake \
         tar \
-        unzip; \
-    yum clean all; \
-    rm -rf /var/cache/yum; \
-    groupadd build; \
-    useradd -m -g build build; \
-    chmod 775 /home/build;
-RUN set -eux; cd /tmp; curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && unzip awscliv2.zip && ./aws/install
+        unzip && \
+    yum clean all && \
+    rm -rf /var/cache/yum && \
+    groupadd build && \
+    useradd -m -g build build && \
+    chmod 775 /home/build && \
+    cd /tmp && \
+    curl 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' -o awscliv2.zip && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws && \
+    pip3 install --no-cache-dir mypy==0.991
+
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
-COPY --chown=build:build --from=cargo_deny /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
-COPY --chown=build:build --from=cargo_udeps /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
-COPY --chown=build:build --from=cargo_hack /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
-COPY --chown=build:build --from=cargo_minimal_versions /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
-COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
-COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
-COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
+COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/maturin /opt/cargo/bin/maturin
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
-COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
-COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
@@ -239,13 +248,13 @@ ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
     CARGO_INCREMENTAL=0 \
+    GRADLE_USER_HOME=/home/build/.gradle \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 # SMITHY_RS_DOCKER_BUILD_IMAGE indicates to build scripts that they are being built inside of the Docker build image.
 # This is used primarily by the `build.gradle.kts` files in choosing how to execute build tools. If inside the image,
 # they will assume the tools are on the PATH, but if outside of the image, they will `cargo run` the tools.
 ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
-RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 # RUSTUP_TOOLCHAIN takes precedence over everything except `+<toolchain>` args. This will allow us to ignore the toolchain
 # file during CI, avoiding issues during Rust version upgrades.

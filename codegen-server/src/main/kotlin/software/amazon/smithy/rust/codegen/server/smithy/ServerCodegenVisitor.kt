@@ -512,7 +512,12 @@ open class ServerCodegenVisitor(
         fun serverEnumGeneratorFactory(
             codegenContext: ServerCodegenContext,
             shape: StringShape,
-        ) = ServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+        ) = ServerEnumGenerator(
+            codegenContext,
+            shape,
+            validationExceptionConversionGenerator,
+            codegenDecorator.enumCustomizations(codegenContext, emptyList()),
+        )
         stringShape(shape, ::serverEnumGeneratorFactory)
     }
 

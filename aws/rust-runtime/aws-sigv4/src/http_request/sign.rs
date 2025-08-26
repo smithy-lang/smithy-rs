@@ -33,6 +33,8 @@ pub struct SignableRequest<'a> {
 
 impl<'a> SignableRequest<'a> {
     /// Creates a new `SignableRequest`.
+    ///
+    /// NOTE: The `uri` is expected to already in encoded form.
     pub fn new(
         method: &'a str,
         uri: impl Into<Cow<'a, str>>,
@@ -510,8 +512,9 @@ fn build_authorization_header(
 mod tests {
     use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::sign::{add_header, SignableRequest};
+    use crate::http_request::test::SigningSuiteTest;
     use crate::http_request::{
-        sign, test, SessionTokenMode, SignableBody, SignatureLocation, SigningInstructions,
+        sign, SessionTokenMode, SignableBody, SignatureLocation, SigningInstructions,
         SigningSettings,
     };
     use crate::sign::v4;
@@ -521,7 +524,6 @@ mod tests {
     use proptest::proptest;
     use std::borrow::Cow;
     use std::iter;
-    use std::time::Duration;
 
     macro_rules! assert_req_eq {
         (http: $expected:expr, $actual:expr) => {
@@ -635,201 +637,216 @@ mod tests {
             let sts = actual_string_to_sign.as_bytes();
             peer_public_key.verify(sts, &sig).unwrap();
         }
+    }
+    // Sigv4A suite tests
+    #[cfg(feature = "sigv4a")]
+    mod v4a_suite {
+        use crate::http_request::test::v4a::run_test_suite_v4a;
 
         #[test]
         fn test_get_header_key_duplicate() {
-            run_v4a_test_suite("get-header-key-duplicate", SignatureLocation::Headers);
+            run_test_suite_v4a("get-header-key-duplicate")
+        }
+
+        #[test]
+        #[ignore = "httpparse doesn't support parsing multiline headers since they are deprecated in RFC7230"]
+        fn test_get_header_value_multiline() {
+            run_test_suite_v4a("get-header-value-multiline")
         }
 
         #[test]
         fn test_get_header_value_order() {
-            run_v4a_test_suite("get-header-value-order", SignatureLocation::Headers);
+            run_test_suite_v4a("get-header-value-order")
         }
 
         #[test]
         fn test_get_header_value_trim() {
-            run_v4a_test_suite("get-header-value-trim", SignatureLocation::Headers);
+            run_test_suite_v4a("get-header-value-trim");
         }
 
         #[test]
         fn test_get_relative_normalized() {
-            run_v4a_test_suite("get-relative-normalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-relative-normalized");
         }
 
         #[test]
         fn test_get_relative_relative_normalized() {
-            run_v4a_test_suite(
-                "get-relative-relative-normalized",
-                SignatureLocation::Headers,
-            );
+            run_test_suite_v4a("get-relative-relative-normalized");
         }
 
         #[test]
         fn test_get_relative_relative_unnormalized() {
-            run_v4a_test_suite(
-                "get-relative-relative-unnormalized",
-                SignatureLocation::Headers,
-            );
+            run_test_suite_v4a("get-relative-relative-unnormalized");
         }
 
         #[test]
         fn test_get_relative_unnormalized() {
-            run_v4a_test_suite("get-relative-unnormalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-relative-unnormalized");
         }
 
         #[test]
         fn test_get_slash_dot_slash_normalized() {
-            run_v4a_test_suite("get-slash-dot-slash-normalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-slash-dot-slash-normalized");
         }
 
         #[test]
         fn test_get_slash_dot_slash_unnormalized() {
-            run_v4a_test_suite(
-                "get-slash-dot-slash-unnormalized",
-                SignatureLocation::Headers,
-            );
+            run_test_suite_v4a("get-slash-dot-slash-unnormalized");
         }
 
         #[test]
         fn test_get_slash_normalized() {
-            run_v4a_test_suite("get-slash-normalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-slash-normalized");
         }
 
         #[test]
         fn test_get_slash_pointless_dot_normalized() {
-            run_v4a_test_suite(
-                "get-slash-pointless-dot-normalized",
-                SignatureLocation::Headers,
-            );
+            run_test_suite_v4a("get-slash-pointless-dot-normalized");
         }
 
         #[test]
         fn test_get_slash_pointless_dot_unnormalized() {
-            run_v4a_test_suite(
-                "get-slash-pointless-dot-unnormalized",
-                SignatureLocation::Headers,
-            );
+            run_test_suite_v4a("get-slash-pointless-dot-unnormalized");
         }
 
         #[test]
         fn test_get_slash_unnormalized() {
-            run_v4a_test_suite("get-slash-unnormalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-slash-unnormalized");
         }
 
         #[test]
         fn test_get_slashes_normalized() {
-            run_v4a_test_suite("get-slashes-normalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-slashes-normalized");
         }
 
         #[test]
         fn test_get_slashes_unnormalized() {
-            run_v4a_test_suite("get-slashes-unnormalized", SignatureLocation::Headers);
+            run_test_suite_v4a("get-slashes-unnormalized");
+        }
+
+        #[test]
+        #[ignore = "relies on single encode of path segments"]
+        // rely on single encoding of path segments, i.e. string-to-sign contains %20 for spaces rather than %25%20 as it should.
+        // skipped until we add control over double_uri_encode in context.json
+        fn test_get_space_normalized() {
+            run_test_suite_v4a("get-space-normalized");
+        }
+
+        #[test]
+        #[ignore = "httpparse fails on unencoded spaces in path"]
+        // the input request has unencoded space ' ' in the path which fails to parse
+        fn test_get_space_unnormalized() {
+            run_test_suite_v4a("get-space-unnormalized");
         }
 
         #[test]
         fn test_get_unreserved() {
-            run_v4a_test_suite("get-unreserved", SignatureLocation::Headers);
+            run_test_suite_v4a("get-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_utf8() {
+            run_test_suite_v4a("get-utf8");
         }
 
         #[test]
         fn test_get_vanilla() {
-            run_v4a_test_suite("get-vanilla", SignatureLocation::Headers);
+            run_test_suite_v4a("get-vanilla");
         }
 
         #[test]
         fn test_get_vanilla_empty_query_key() {
-            run_v4a_test_suite(
-                "get-vanilla-empty-query-key",
-                SignatureLocation::QueryParams,
-            );
+            run_test_suite_v4a("get-vanilla-empty-query-key");
         }
 
         #[test]
         fn test_get_vanilla_query() {
-            run_v4a_test_suite("get-vanilla-query", SignatureLocation::QueryParams);
+            run_test_suite_v4a("get-vanilla-query");
+        }
+
+        #[test]
+        fn test_get_vanilla_query_order_encoded() {
+            run_test_suite_v4a("get-vanilla-query-order-encoded");
         }
 
         #[test]
         fn test_get_vanilla_query_order_key_case() {
-            run_v4a_test_suite(
-                "get-vanilla-query-order-key-case",
-                SignatureLocation::QueryParams,
-            );
+            run_test_suite_v4a("get-vanilla-query-order-key-case");
         }
 
         #[test]
         fn test_get_vanilla_query_unreserved() {
-            run_v4a_test_suite(
-                "get-vanilla-query-unreserved",
-                SignatureLocation::QueryParams,
-            );
+            run_test_suite_v4a("get-vanilla-query-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_vanilla_utf8_query() {
+            run_test_suite_v4a("get-vanilla-utf8-query");
         }
 
         #[test]
         fn test_get_vanilla_with_session_token() {
-            run_v4a_test_suite("get-vanilla-with-session-token", SignatureLocation::Headers);
+            run_test_suite_v4a("get-vanilla-with-session-token")
         }
 
         #[test]
         fn test_post_header_key_case() {
-            run_v4a_test_suite("post-header-key-case", SignatureLocation::Headers);
+            run_test_suite_v4a("post-header-key-case");
         }
 
         #[test]
         fn test_post_header_key_sort() {
-            run_v4a_test_suite("post-header-key-sort", SignatureLocation::Headers);
+            run_test_suite_v4a("post-header-key-sort");
         }
 
         #[test]
         fn test_post_header_value_case() {
-            run_v4a_test_suite("post-header-value-case", SignatureLocation::Headers);
+            run_test_suite_v4a("post-header-value-case");
         }
 
         #[test]
         fn test_post_sts_header_after() {
-            run_v4a_test_suite("post-sts-header-after", SignatureLocation::Headers);
+            run_test_suite_v4a("post-sts-header-after");
         }
 
         #[test]
         fn test_post_sts_header_before() {
-            run_v4a_test_suite("post-sts-header-before", SignatureLocation::Headers);
+            run_test_suite_v4a("post-sts-header-before");
         }
 
         #[test]
         fn test_post_vanilla() {
-            run_v4a_test_suite("post-vanilla", SignatureLocation::Headers);
+            run_test_suite_v4a("post-vanilla");
         }
 
         #[test]
         fn test_post_vanilla_empty_query_value() {
-            run_v4a_test_suite(
-                "post-vanilla-empty-query-value",
-                SignatureLocation::QueryParams,
-            );
+            run_test_suite_v4a("post-vanilla-empty-query-value");
         }
 
         #[test]
         fn test_post_vanilla_query() {
-            run_v4a_test_suite("post-vanilla-query", SignatureLocation::QueryParams);
+            run_test_suite_v4a("post-vanilla-query");
         }
 
         #[test]
         fn test_post_x_www_form_urlencoded() {
-            run_v4a_test_suite("post-x-www-form-urlencoded", SignatureLocation::Headers);
+            run_test_suite_v4a("post-x-www-form-urlencoded");
         }
 
         #[test]
         fn test_post_x_www_form_urlencoded_parameters() {
-            run_v4a_test_suite(
-                "post-x-www-form-urlencoded-parameters",
-                SignatureLocation::QueryParams,
-            );
+            run_test_suite_v4a("post-x-www-form-urlencoded-parameters");
         }
     }
 
     #[test]
     fn test_sign_url_escape() {
-        let test = "double-encode-path";
+        let test = SigningSuiteTest::v4("double-encode-path");
         let settings = SigningSettings::default();
         let identity = &Credentials::for_tests().into();
         let params = v4::SigningParams {
@@ -841,7 +858,7 @@ mod tests {
         }
         .into();
 
-        let original = test::v4::test_request(test);
+        let original = test.request();
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
@@ -1169,5 +1186,210 @@ mod tests {
 
         let sut = SignableBody::StreamingUnsignedPayloadTrailer;
         assert_eq!("StreamingUnsignedPayloadTrailer", format!("{sut:?}"));
+    }
+
+    // v4 test suite
+    mod v4_suite {
+        use crate::http_request::test::run_test_suite_v4;
+
+        #[test]
+        fn test_get_header_key_duplicate() {
+            run_test_suite_v4("get-header-key-duplicate");
+        }
+
+        #[test]
+        #[ignore = "httpparse doesn't support parsing multiline headers since they are deprecated in RFC7230"]
+        fn test_get_header_value_multiline() {
+            run_test_suite_v4("get-header-value-multiline");
+        }
+
+        #[test]
+        fn test_get_header_value_order() {
+            run_test_suite_v4("get-header-value-order");
+        }
+
+        #[test]
+        fn test_get_header_value_trim() {
+            run_test_suite_v4("get-header-value-trim");
+        }
+
+        #[test]
+        fn test_get_relative_normalized() {
+            run_test_suite_v4("get-relative-normalized");
+        }
+
+        #[test]
+        fn test_get_relative_relative_normalized() {
+            run_test_suite_v4("get-relative-relative-normalized");
+        }
+
+        #[test]
+        fn test_get_relative_relative_unnormalized() {
+            run_test_suite_v4("get-relative-relative-unnormalized");
+        }
+
+        #[test]
+        fn test_get_relative_unnormalized() {
+            run_test_suite_v4("get-relative-unnormalized");
+        }
+
+        #[test]
+        fn test_get_slash_dot_slash_normalized() {
+            run_test_suite_v4("get-slash-dot-slash-normalized");
+        }
+
+        #[test]
+        fn test_get_slash_dot_slash_unnormalized() {
+            run_test_suite_v4("get-slash-dot-slash-unnormalized");
+        }
+
+        #[test]
+        fn test_get_slash_normalized() {
+            run_test_suite_v4("get-slash-normalized");
+        }
+
+        #[test]
+        fn test_get_slash_pointless_dot_normalized() {
+            run_test_suite_v4("get-slash-pointless-dot-normalized");
+        }
+
+        #[test]
+        fn test_get_slash_pointless_dot_unnormalized() {
+            run_test_suite_v4("get-slash-pointless-dot-unnormalized");
+        }
+
+        #[test]
+        fn test_get_slash_unnormalized() {
+            run_test_suite_v4("get-slash-unnormalized");
+        }
+
+        #[test]
+        fn test_get_slashes_normalized() {
+            run_test_suite_v4("get-slashes-normalized");
+        }
+
+        #[test]
+        fn test_get_slashes_unnormalized() {
+            run_test_suite_v4("get-slashes-unnormalized");
+        }
+
+        #[test]
+        #[ignore = "relies on single encode of path segments"]
+        // rely on single encoding of path segments, i.e. string-to-sign contains %20 for spaces rather than %25%20 as it should.
+        // skipped until we add control over double_uri_encode in context.json
+        fn test_get_space_normalized() {
+            run_test_suite_v4("get-space-normalized");
+        }
+
+        #[test]
+        #[ignore = "httpparse fails on unencoded spaces in path"]
+        // the input request has unencoded space ' ' in the path which fails to parse
+        fn test_get_space_unnormalized() {
+            run_test_suite_v4("get-space-unnormalized");
+        }
+
+        #[test]
+        fn test_get_unreserved() {
+            run_test_suite_v4("get-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_utf8() {
+            run_test_suite_v4("get-utf8");
+        }
+
+        #[test]
+        fn test_get_vanilla() {
+            run_test_suite_v4("get-vanilla");
+        }
+
+        #[test]
+        fn test_get_vanilla_empty_query_key() {
+            run_test_suite_v4("get-vanilla-empty-query-key");
+        }
+
+        #[test]
+        fn test_get_vanilla_query() {
+            run_test_suite_v4("get-vanilla-query");
+        }
+
+        #[test]
+        fn test_get_vanilla_query_order_encoded() {
+            run_test_suite_v4("get-vanilla-query-order-encoded");
+        }
+
+        #[test]
+        fn test_get_vanilla_query_order_key_case() {
+            run_test_suite_v4("get-vanilla-query-order-key-case");
+        }
+
+        #[test]
+        fn test_get_vanilla_query_unreserved() {
+            run_test_suite_v4("get-vanilla-query-unreserved");
+        }
+
+        #[test]
+        #[ignore = "httparse fails on invalid uri character"]
+        // relies on /ሴ canonicalized as /%E1%88%B4 when it should be /%25%E1%25%88%25%B4
+        fn test_get_vanilla_utf8_query() {
+            run_test_suite_v4("get-vanilla-utf8-query");
+        }
+
+        #[test]
+        fn test_get_vanilla_with_session_token() {
+            run_test_suite_v4("get-vanilla-with-session-token");
+        }
+
+        #[test]
+        fn test_post_header_key_case() {
+            run_test_suite_v4("post-header-key-case");
+        }
+
+        #[test]
+        fn test_post_header_key_sort() {
+            run_test_suite_v4("post-header-key-sort");
+        }
+
+        #[test]
+        fn test_post_header_value_case() {
+            run_test_suite_v4("post-header-value-case");
+        }
+
+        #[test]
+        fn test_post_sts_header_after() {
+            run_test_suite_v4("post-sts-header-after");
+        }
+
+        #[test]
+        fn test_post_sts_header_before() {
+            run_test_suite_v4("post-sts-header-before");
+        }
+
+        #[test]
+        fn test_post_vanilla() {
+            run_test_suite_v4("post-vanilla");
+        }
+
+        #[test]
+        fn test_post_vanilla_empty_query_value() {
+            run_test_suite_v4("post-vanilla-empty-query-value");
+        }
+
+        #[test]
+        fn test_post_vanilla_query() {
+            run_test_suite_v4("post-vanilla-query");
+        }
+
+        #[test]
+        fn test_post_x_www_form_urlencoded() {
+            run_test_suite_v4("post-x-www-form-urlencoded");
+        }
+
+        #[test]
+        fn test_post_x_www_form_urlencoded_parameters() {
+            run_test_suite_v4("post-x-www-form-urlencoded-parameters");
+        }
     }
 }

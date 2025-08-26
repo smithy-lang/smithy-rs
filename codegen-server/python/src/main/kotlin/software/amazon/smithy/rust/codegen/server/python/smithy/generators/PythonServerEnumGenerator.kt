@@ -85,4 +85,5 @@ class PythonServerEnumGenerator(
         codegenContext.symbolProvider,
         shape,
         PythonConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
+        emptyList(),
     )

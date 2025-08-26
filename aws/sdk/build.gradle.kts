@@ -494,8 +494,9 @@ fun Project.registerDowngradeFor(
             val crateNameToLastKnownWorkingVersions =
                 mapOf(
                     "minicbor" to "0.24.2",
-                    "libfuzzer-sys" to "0.4.7" // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
-                    )
+                    "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
+                    "crc-fast" to "1.3.0", // TODO(https://github.com/awesomized/crc-fast-rust/issues/14)
+                )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile

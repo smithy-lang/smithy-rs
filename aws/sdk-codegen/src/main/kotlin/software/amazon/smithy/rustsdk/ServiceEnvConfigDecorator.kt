@@ -11,8 +11,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ServiceEnvConfigDecorator : ClientCodegenDecorator {
     override val name: String = "ServiceEnvConfigDecorator"
@@ -23,17 +21,17 @@ class ServiceEnvConfigDecorator : ClientCodegenDecorator {
         rustCrate: RustCrate,
     ) {
         val rc = codegenContext.runtimeConfig
-        val serviceId = codegenContext.serviceShape.sdkId().dq()
         rustCrate.withModule(ClientRustModule.config) {
             Attribute.AllowDeadCode.render(this)
             rustTemplate(
                 """
                 fn service_config_key<'a>(
+                    service_id: &'a str,
                     env: &'a str,
                     profile: &'a str,
                 ) -> aws_types::service_config::ServiceConfigKey<'a> {
                     #{ServiceConfigKey}::builder()
-                        .service_id($serviceId)
+                        .service_id(service_id)
                         .env(env)
                         .profile(profile)
                         .build()

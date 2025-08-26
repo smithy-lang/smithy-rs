@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumType
@@ -46,17 +47,19 @@ open class ConstrainedEnum(
         withInlineModule(constraintViolationSymbol.module(), codegenContext.moduleDocProvider) {
             rustTemplate(
                 """
-                    ##[derive(Debug, PartialEq)]
-                    pub struct $constraintViolationName(pub(crate) #{String});
-                    
-                    impl #{Display} for $constraintViolationName {
-                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                            write!(f, r##"${context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")}"##)
-                        }
-                    }
+                ##[derive(Debug, PartialEq)]
+                pub struct $constraintViolationName(pub(crate) #{String});
 
-                    impl #{Error} for $constraintViolationName {}
-                    """,
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, r##"${
+                    context.enumTrait.shapeConstraintViolationDisplayMessage(shape).replace("#", "##")
+                }"##)
+                    }
+                }
+
+                impl #{Error} for $constraintViolationName {}
+                """,
                 *preludeScope,
                 "Error" to RuntimeType.StdError,
                 "Display" to RuntimeType.Display,
@@ -65,10 +68,10 @@ open class ConstrainedEnum(
             if (shape.isReachableFromOperationInput()) {
                 rustTemplate(
                     """
-                        impl $constraintViolationName {
-                            #{EnumShapeConstraintViolationImplBlock:W}
-                        }
-                        """,
+                    impl $constraintViolationName {
+                        #{EnumShapeConstraintViolationImplBlock:W}
+                    }
+                    """,
                     "EnumShapeConstraintViolationImplBlock" to
                         validationExceptionConversionGenerator.enumShapeConstraintViolationImplBlock(
                             context.enumTrait,
@@ -162,9 +165,11 @@ class ServerEnumGenerator(
     codegenContext: ServerCodegenContext,
     shape: StringShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+    customizations: List<EnumCustomization>,
 ) : EnumGenerator(
         codegenContext.model,
         codegenContext.symbolProvider,
         shape,
         enumType = ConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
+        customizations,
     )
