@@ -124,6 +124,7 @@ pub fn make_target<
 >(
     service: impl Fn(Sender<String>) -> T,
 ) -> Mutex<LocalFuzzTarget> {
+    use http_body_util::BodyExt;
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let service =
         service(tx)
