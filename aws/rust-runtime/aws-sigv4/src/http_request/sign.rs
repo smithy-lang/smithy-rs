@@ -544,100 +544,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_sign_vanilla_with_headers() {
-        let settings = SigningSettings::default();
-        let identity = &Credentials::for_tests().into();
-        let params = v4::SigningParams {
-            identity,
-            region: "us-east-1",
-            name: "service",
-            time: parse_date_time("20150830T123600Z").unwrap(),
-            settings,
-        }
-        .into();
-
-        let original = test::v4::test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
-        assert_eq!(
-            "5557820e7380d585310524bd93d51a08d7757fb5efd7344ee12088f2b0860947",
-            out.signature
-        );
-
-        let mut signed = original.as_http_request();
-        out.output.apply_to_request_http1x(&mut signed);
-
-        let expected = test::v4::test_signed_request("get-vanilla-query-order-key-case");
-        assert_req_eq!(expected, signed);
-    }
-
-    #[cfg(feature = "sigv4a")]
-    mod sigv4a_tests {
-        use super::*;
-        use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
-        use crate::http_request::{sign, test, SigningParams};
-        use crate::sign::v4a;
-        use p256::ecdsa::signature::{Signature, Verifier};
-        use p256::ecdsa::{DerSignature, SigningKey};
-        use pretty_assertions::assert_eq;
-
-        fn new_v4a_signing_params_from_context(
-            test_context: &'_ test::v4a::TestContext,
-            signature_location: SignatureLocation,
-        ) -> SigningParams<'_> {
-            let mut params = v4a::SigningParams::from(test_context);
-            params.settings.signature_location = signature_location;
-
-            params.into()
-        }
-
-        fn run_v4a_test_suite(test_name: &str, signature_location: SignatureLocation) {
-            let tc = test::v4a::test_context(test_name);
-            let params = new_v4a_signing_params_from_context(&tc, signature_location);
-
-            let req = test::v4a::test_request(test_name);
-            let expected_creq = test::v4a::test_canonical_request(test_name, signature_location);
-            let signable_req = SignableRequest::from(&req);
-            let actual_creq = CanonicalRequest::from(&signable_req, &params).unwrap();
-
-            assert_eq!(expected_creq, actual_creq.to_string(), "creq didn't match");
-
-            let expected_string_to_sign =
-                test::v4a::test_string_to_sign(test_name, signature_location);
-            let hashed_creq = &v4::sha256_hex_string(actual_creq.to_string().as_bytes());
-            let actual_string_to_sign = StringToSign::new_v4a(
-                *params.time(),
-                params.region_set().unwrap(),
-                params.name(),
-                hashed_creq,
-            )
-            .to_string();
-
-            assert_eq!(
-                expected_string_to_sign, actual_string_to_sign,
-                "'string to sign' didn't match"
-            );
-
-            let out = sign(signable_req, &params).unwrap();
-            // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
-            out.output
-                .apply_to_request_http1x(&mut req.as_http_request());
-
-            let creds = params.credentials().unwrap();
-            let signing_key =
-                v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
-            let sig = DerSignature::from_bytes(&hex::decode(out.signature).unwrap()).unwrap();
-            let sig = sig
-                .try_into()
-                .expect("DER-style signatures are always convertible into fixed-size signatures");
-
-            let signing_key = SigningKey::from_bytes(signing_key.as_ref()).unwrap();
-            let peer_public_key = signing_key.verifying_key();
-            let sts = actual_string_to_sign.as_bytes();
-            peer_public_key.verify(sts, &sig).unwrap();
-        }
-    }
     // Sigv4A suite tests
     #[cfg(feature = "sigv4a")]
     mod v4a_suite {
@@ -869,40 +775,7 @@ mod tests {
         let mut signed = original.as_http_request();
         out.output.apply_to_request_http1x(&mut signed);
 
-        let expected = test::v4::test_signed_request(test);
-        assert_req_eq!(expected, signed);
-    }
-
-    #[test]
-    fn test_sign_vanilla_with_query_params() {
-        let settings = SigningSettings {
-            signature_location: SignatureLocation::QueryParams,
-            expires_in: Some(Duration::from_secs(35)),
-            ..Default::default()
-        };
-        let identity = &Credentials::for_tests().into();
-        let params = v4::SigningParams {
-            identity,
-            region: "us-east-1",
-            name: "service",
-            time: parse_date_time("20150830T123600Z").unwrap(),
-            settings,
-        }
-        .into();
-
-        let original = test::v4::test_request("get-vanilla-query-order-key-case");
-        let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
-        assert_eq!(
-            "ecce208e4b4f7d7e3a4cc22ced6acc2ad1d170ee8ba87d7165f6fa4b9aff09ab",
-            out.signature
-        );
-
-        let mut signed = original.as_http_request();
-        out.output.apply_to_request_http1x(&mut signed);
-
-        let expected =
-            test::v4::test_signed_request_query_params("get-vanilla-query-order-key-case");
+        let expected = test.signed_request(SignatureLocation::Headers);
         assert_req_eq!(expected, signed);
     }
 

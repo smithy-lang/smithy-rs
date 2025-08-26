@@ -13,7 +13,6 @@ use crate::http_request::{
 use aws_credential_types::Credentials;
 use aws_smithy_runtime_api::client::identity::Identity;
 use http::Uri;
-use http0::{Method, Uri};
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::time::{Duration, SystemTime};
@@ -149,7 +148,7 @@ fn assert_uri_eq(expected: &Uri, actual: &Uri) {
     assert_eq!(expected_params, actual_params);
 }
 
-fn assert_requests_eq(expected: TestRequest, actual: http0::Request<&str>) {
+fn assert_requests_eq(expected: TestRequest, actual: http::Request<&str>) {
     let expected = expected.as_http_request();
     let actual = actual;
     assert_eq!(expected.method(), actual.method());
@@ -199,7 +198,7 @@ pub(crate) fn run_v4_test(test_name: &'static str, signature_location: Signature
 
     let out = crate::http_request::sign(signable_req, &params).unwrap();
     let mut signed = req.as_http_request();
-    out.output.apply_to_request_http0x(&mut signed);
+    out.output.apply_to_request_http1x(&mut signed);
 
     // check signature
     assert_eq!(
@@ -365,7 +364,7 @@ pub(crate) mod v4a {
         let out = sign(signable_req, &params).unwrap();
         // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
         out.output
-            .apply_to_request_http0x(&mut req.as_http_request());
+            .apply_to_request_http1x(&mut req.as_http_request());
 
         let creds = params.credentials().unwrap();
         let signing_key =
