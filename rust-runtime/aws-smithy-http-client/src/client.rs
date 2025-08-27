@@ -44,7 +44,7 @@ use hyper_util::client::legacy::connect::{
     capture_connection, CaptureConnection, Connect, HttpConnector as HyperHttpConnector, HttpInfo,
 };
 use hyper_util::client::proxy::matcher::Matcher;
-use hyper_util::rt::TokioExecutor;
+use hyper_util::rt::{TokioExecutor, TokioTimer};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
@@ -193,11 +193,13 @@ impl<Any> ConnectorBuilder<Any> {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
-        let client_builder =
-            self.client_builder
-                .unwrap_or(hyper_util::client::legacy::Builder::new(
-                    TokioExecutor::new(),
-                ));
+        let client_builder = self.client_builder.unwrap_or_else(|| {
+            let mut builder = hyper_util::client::legacy::Builder::new(TokioExecutor::new());
+            builder.pool_timer(TokioTimer::new());
+            builder.pool_idle_timeout(Duration::from_secs(90));
+
+            builder
+        });
         let sleep_impl = self.sleep_impl.or_else(default_async_sleep);
         let (connect_timeout, read_timeout) = self
             .connector_settings
