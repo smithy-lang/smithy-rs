@@ -63,6 +63,7 @@ object SdkConfigCustomization {
     }
 
     fun copyFieldAndCheckForServiceConfig(
+        serviceId: String,
         fieldName: String,
         map: Writable?,
     ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
@@ -78,7 +79,7 @@ object SdkConfigCustomization {
                 ${section.serviceConfigBuilder}.set_$fieldName(
                     ${section.sdkConfig}
                         .service_config()
-                        .and_then(|conf| conf.load_config(service_config_key($envKey, $profileKey)).map(|it| it.parse().unwrap()))
+                        .and_then(|conf| conf.load_config(service_config_key(${serviceId.dq()}, $envKey, $profileKey)).map(|it| it.parse().unwrap()))
                         .or_else(|| ${section.sdkConfig}.$fieldName()#{map})
                 );
             }

@@ -1,0 +1,18 @@
+# This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
+[package]
+name = "bedrockruntime-tests"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+[dev-dependencies]
+aws-sdk-bedrockruntime = { path = "../../build/aws-sdk/sdk/bedrockruntime", features = ["behavior-version-latest"] }
+aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
+tokio = { version = "1.23.1", features = ["full", "test-util"]}

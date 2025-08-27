@@ -423,7 +423,7 @@ impl ByteStream {
     /// :param path str:
     /// :rtype typing.Awaitable[ByteStream]:
     #[staticmethod]
-    pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
+    pub fn from_path(py: Python<'_>, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
             let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await

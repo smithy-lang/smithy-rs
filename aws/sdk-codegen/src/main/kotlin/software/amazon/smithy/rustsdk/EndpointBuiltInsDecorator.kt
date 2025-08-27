@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.util.Optional
 
@@ -102,10 +103,11 @@ fun Model.loadBuiltIn(
 }
 
 fun Model.sdkConfigSetter(
-    serviceId: ShapeId,
+    serviceShape: ServiceShape,
     builtInSrc: Parameter,
     configParameterNameOverride: String?,
 ): AdHocCustomization? {
+    val serviceId = serviceShape.id
     val builtIn = loadBuiltIn(serviceId, builtInSrc) ?: return null
     val fieldName = configParameterNameOverride ?: builtIn.name.rustName()
 
@@ -119,7 +121,7 @@ fun Model.sdkConfigSetter(
         }
 
     return if (fieldName == "endpoint_url") {
-        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(fieldName, map)
+        SdkConfigCustomization.copyFieldAndCheckForServiceConfig(serviceShape.sdkId(), fieldName, map)
     } else {
         SdkConfigCustomization.copyField(fieldName, map)
     }
@@ -145,7 +147,7 @@ fun decoratorForBuiltIn(
         override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
             listOfNotNull(
                 codegenContext.model.sdkConfigSetter(
-                    codegenContext.serviceShape.id,
+                    codegenContext.serviceShape,
                     builtIn,
                     clientParamBuilder?.name,
                 ),

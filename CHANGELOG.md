@@ -1,4 +1,95 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 18th, 2025
+=================
+**New this release:**
+- :tada: (client, [aws-sdk-rust#169](https://github.com/awslabs/aws-sdk-rust/issues/169)) Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.
+- :tada: (client, @WillChilds-Klein) Enable rustls post-quantum by default.
+- (client) fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2
+
+**Contributors**
+Thank you for your contributions! ❤
+- @WillChilds-Klein
+
+
+August 13th, 2025
+=================
+**New this release:**
+- :bug: (client) pin crc-fast to <1.4 to workaround SIGILL
+
+
+August 11th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208)) Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:
+    - aws-sdk-cloudformation
+    - aws-sdk-dynamodb
+    - aws-sdk-ec2
+    - aws-sdk-s3
+    - aws-sdk-sns
+    - aws-sdk-sqs
+    - aws-sdk-ssm
+    - aws-sdk-sts
+
+    See more information about this hint at https://blog.rust-lang.org/inside-rust/2025/07/15/call-for-testing-hint-mostly-unused/
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208), @joshtriplett) Enable `hints.mostly-unused = true` for `aws-sdk-lambda` (taking a release
+    build from 57s to 40s) and `aws-sdk-rds` (taking a release build from 1m34s to
+    49s).
+
+**Contributors**
+Thank you for your contributions! ❤
+- @joshtriplett ([smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208))
+
+
+August 4th, 2025
+================
+**New this release:**
+- :tada: (all, @Dorenavant) Add EnumSection to allow decorators to modify enum member attributes
+- :bug: (client, [smithy-rs#4227](https://github.com/smithy-lang/smithy-rs/issues/4227)) Fix canonical request sort order
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Dorenavant
+
+
+July 25th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4232](https://github.com/smithy-lang/smithy-rs/issues/4232)) Add fallback equality on no auth `AuthSchemeId` for backward compatibility, treating `AuthSchemeId::from("no_auth")` (legacy) and `AuthSchemeId::from("noAuth")` (updated) as equivalent.
+
+
+July 23rd, 2025
+===============
+
+July 21st, 2025
+===============
+**New this release:**
+- :tada: (client, [smithy-rs#4203](https://github.com/smithy-lang/smithy-rs/issues/4203)) Add support for configuring auth schemes manually using an auth scheme preference list.
+    The preference list allows customers to reprioritize the order of auth schemes originally
+    determined by the auth scheme resolver.
+    Customers can configure the auth scheme preference at the following locations, listed in order of precedence:
+    1. Service Client Configuration
+    ```rust
+    use aws_runtime::auth::sigv4;
+    use aws_smithy_runtime_api::client::auth::AuthSchemeId;
+    use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
+
+    let config = aws_sdk_s3::Config::builder()
+        .auth_scheme_preference([AuthSchemeId::from("scheme1"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])
+        // ...
+        .build();
+    ```
+    2. Environment Variable
+    ```
+    AWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth
+    ```
+    3. Configuration File
+    ```
+    auth_scheme_preference=scheme1, sigv4, httpBearerAuth
+    ```
+    With this configuration, the auth scheme resolver will prefer to select them in the specified order,
+    if they are supported.
+
+
 July 17th, 2025
 ===============
 **New this release:**
