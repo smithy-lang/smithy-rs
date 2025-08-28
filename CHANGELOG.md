@@ -1,4 +1,12 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 28th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) Add a new crate, `aws-smithy-dns` that contains a `HickoryDnsResolver`. This wraps a `hickory_resolver::Resolver` and provides some minimal configuration options (timeouts, retries, etc.) Instructions for overriding the DNS resolver on your HTTP client can be found in our documentation at https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#overrideDns
+- :bug: (client, [smithy-rs#4282](https://github.com/smithy-lang/smithy-rs/issues/4282)) Set the `pool_timer` for the default Hyper client. This is required to allow the `pool_idle_timeout` to work. Now idle connections will be released by the pool after 90 seconds.
+- (client, [smithy-rs#4263](https://github.com/smithy-lang/smithy-rs/issues/4263)) Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).
+
+
 August 18th, 2025
 =================
 **New this release:**
