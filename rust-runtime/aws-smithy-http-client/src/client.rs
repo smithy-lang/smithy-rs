@@ -195,8 +195,8 @@ impl<Any> ConnectorBuilder<Any> {
     {
         let client_builder = self.client_builder.unwrap_or_else(|| {
             let mut builder = hyper_util::client::legacy::Builder::new(TokioExecutor::new());
+            // Explicitly setting the pool_timer is required for connection timeouts to work.
             builder.pool_timer(TokioTimer::new());
-            builder.pool_idle_timeout(Duration::from_secs(90));
 
             builder
         });

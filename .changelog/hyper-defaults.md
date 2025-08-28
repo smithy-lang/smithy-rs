@@ -4,10 +4,9 @@ applies_to:
 authors:
   - landonxjames
 references:
-  - smithy-rs#4274
+  - smithy-rs#4282
 breaking: false
 new_feature: false
 bug_fix: true
 ---
-Set the `pool_idle_timeout` for the default Hyper client to 90 seconds. This aligns with the behavior of the hyper 0.14.x client that was previously the default.
-https://github.com/smithy-lang/smithy-rs/issues/4282
+Set the `pool_timer` for the default Hyper client. This is required to allow the `pool_idle_timeout` to work. Now idle connections will be released by the pool after 90 seconds.
