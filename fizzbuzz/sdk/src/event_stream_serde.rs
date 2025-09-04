@@ -76,17 +76,6 @@ impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamErrorMar
                 })?
             }
         };
-
-        for h in &headers {
-            println!("{h:?}");
-        }
-
-        println!("Outgoing bytes");
-        for b in &payload {
-            print!("{b:02X}");
-        }
-        println!("");
-
         Ok(::aws_smithy_types::event_stream::Message::new_from_parts(
             headers, payload,
         ))
@@ -95,17 +84,15 @@ impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamErrorMar
 
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct FizzBuzzStreamMarshaller {}
+pub struct FizzBuzzStreamMarshaller;
 
 impl FizzBuzzStreamMarshaller {
     pub fn new() -> Self {
-        FizzBuzzStreamMarshaller {}
+        FizzBuzzStreamMarshaller
     }
 }
-
 impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamMarshaller {
     type Input = crate::model::FizzBuzzStream;
-
     fn marshall(
         &self,
         input: Self::Input,

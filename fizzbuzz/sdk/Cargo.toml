@@ -33,13 +33,13 @@ version = "0.2"
 version = "0.4"
 [dependencies.tracing]
 version = "0.1"
+[dependencies.hyper]
+version = "0.14.26"
+
 [dev-dependencies.hyper]
 version = "0.14.12"
 [dev-dependencies.tokio]
 version = "1.23.1"
-[dependencies.hyper]
-version = "0.14.26"
-
 [features]
 rt-tokio = ["aws-smithy-types/rt-tokio"]
 aws-lambda = ["aws-smithy-http-server/aws-lambda"]

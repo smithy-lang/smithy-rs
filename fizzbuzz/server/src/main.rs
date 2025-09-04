@@ -2,7 +2,7 @@ use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
 use async_stream::stream;
 use sdk::{
-    FizzBuzzService, FizzBuzzServiceConfig,
+    TickService, TickServiceConfig,
     error::{FizzBuzzError, ValidationException},
     input::FizzBuzzInput,
     model::{BuzzEvent, FizzEvent, ValueStream},
@@ -104,17 +104,17 @@ pub fn setup_tracing() {
 async fn main() {
     setup_tracing();
 
-    let config = FizzBuzzServiceConfig::builder()
+    let config = TickServiceConfig::builder()
         .layer(AddExtensionLayer::new(Arc::new(State::default())))
         .build();
 
-    let app = FizzBuzzService::builder(config)
+    let app = TickService::builder(config)
         .fizz_buzz(fizz_buzz_handler)
         .build()
         .expect("failed to create service");
 
     let make_app = app.into_make_service();
-    let bind: SocketAddr = "0.0.0.0:9543"
+    let bind: SocketAddr = "0.0.0.0:8000"
         .parse()
         .expect("unable to parse the server bind address and port");
     let server = hyper::Server::bind(&bind)
