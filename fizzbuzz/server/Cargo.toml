@@ -1,0 +1,11 @@
+[package]
+name = "sample"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hyper = { version = "0.x", features = ["full", "server"] }
+tokio = { version = "1.47.1", features = ["full"] }
+sdk = { path = "../sdk/"}
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"]}
+async-stream = "0.3.6"
