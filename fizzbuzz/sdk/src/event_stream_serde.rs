@@ -95,44 +95,12 @@ impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamErrorMar
 
 #[non_exhaustive]
 #[derive(Debug)]
-pub struct FizzBuzzStreamMarshaller {
-    //   inital_response_sent: RefCell<bool>,
-}
+pub struct FizzBuzzStreamMarshaller {}
 
 impl FizzBuzzStreamMarshaller {
     pub fn new() -> Self {
-        FizzBuzzStreamMarshaller {
-            // inital_response_sent: RefCell::new(false),
-        }
+        FizzBuzzStreamMarshaller {}
     }
-
-    // fn initial_response(
-    //     &self,
-    // ) -> std::result::Result<
-    //     ::aws_smithy_types::event_stream::Message,
-    //     ::aws_smithy_eventstream::error::Error,
-    // > {
-    //     let mut headers = Vec::new();
-    //     headers.push(::aws_smithy_types::event_stream::Header::new(
-    //         ":message-type",
-    //         ::aws_smithy_types::event_stream::HeaderValue::String("event".into()),
-    //     ));
-    //     headers.push(::aws_smithy_types::event_stream::Header::new(
-    //         ":event-type",
-    //         ::aws_smithy_types::event_stream::HeaderValue::String("initial-response".into()),
-    //     ));
-    //     headers.push(::aws_smithy_types::event_stream::Header::new(
-    //         ":content-type",
-    //         ::aws_smithy_types::event_stream::HeaderValue::String("application/cbor".into()),
-    //     ));
-
-    //     let payload = vec![0xbf, 0xff];
-    //     *self.inital_response_sent.borrow_mut() = true;
-
-    //     Ok(::aws_smithy_types::event_stream::Message::new_from_parts(
-    //         headers, payload,
-    //     ))
-    // }
 }
 
 impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamMarshaller {
@@ -145,10 +113,6 @@ impl ::aws_smithy_eventstream::frame::MarshallMessage for FizzBuzzStreamMarshall
         ::aws_smithy_types::event_stream::Message,
         ::aws_smithy_eventstream::error::Error,
     > {
-        // if !*self.inital_response_sent.borrow() {
-        //     return self.initial_response();
-        // }
-
         let mut headers = Vec::new();
         headers.push(::aws_smithy_types::event_stream::Header::new(
             ":message-type",
