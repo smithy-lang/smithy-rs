@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "plugins": {
+    "java-client-codegen": {
+      "service": "smithy.example.eventstreaming#FizzBuzzService",
+      "namespace": "software.amazon.smithy.java.example.eventstreaming",
+      "protocol": "smithy.protocols#rpcv2Cbor"
+    }
+  }
+}
