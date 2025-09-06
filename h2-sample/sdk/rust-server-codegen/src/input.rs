@@ -56,7 +56,7 @@ pub mod sample_operation_input {
         }
     }
     impl ::std::convert::From<ConstraintViolation>
-        for ::aws_smithy_http_server::protocol::rest_json_1::rejection::RequestRejection
+        for ::aws_smithy_http_server::protocol::rpc_v2_cbor::rejection::RequestRejection
     {
         fn from(constraint_violation: ConstraintViolation) -> Self {
             let first_validation_exception_field =

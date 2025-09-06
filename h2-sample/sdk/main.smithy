@@ -2,11 +2,11 @@ $version: "2"
 
 namespace com.test
 
-use aws.protocols#restJson1
+use smithy.protocols#rpcv2Cbor
 use smithy.framework#ValidationException
 
 @title("Sample Service")
-@restJson1
+@rpcv2Cbor
 service SampleService {
     version: "2024-03-18"
     operations: [
@@ -14,7 +14,6 @@ service SampleService {
     ]
 }
 
-@http(uri: "/sample", method: "POST")
 operation SampleOperation {
     input:= {
         @required

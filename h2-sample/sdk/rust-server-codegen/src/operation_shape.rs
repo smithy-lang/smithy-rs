@@ -16,17 +16,8 @@ impl ::aws_smithy_http_server::operation::OperationShape for SampleOperation {
 }
 
 impl ::aws_smithy_http_server::instrumentation::sensitivity::Sensitivity for SampleOperation {
-    type RequestFmt = ::aws_smithy_http_server::instrumentation::sensitivity::RequestFmt<
-        ::aws_smithy_http_server::instrumentation::MakeIdentity,
-        ::aws_smithy_http_server::instrumentation::sensitivity::uri::MakeUri<
-            ::aws_smithy_http_server::instrumentation::MakeIdentity,
-            ::aws_smithy_http_server::instrumentation::MakeIdentity,
-        >,
-    >;
-    type ResponseFmt = ::aws_smithy_http_server::instrumentation::sensitivity::ResponseFmt<
-        ::aws_smithy_http_server::instrumentation::MakeIdentity,
-        ::aws_smithy_http_server::instrumentation::MakeIdentity,
-    >;
+    type RequestFmt = ::aws_smithy_http_server::instrumentation::sensitivity::DefaultRequestFmt;
+    type ResponseFmt = ::aws_smithy_http_server::instrumentation::sensitivity::DefaultResponseFmt;
 
     fn request_fmt() -> Self::RequestFmt {
         ::aws_smithy_http_server::instrumentation::sensitivity::RequestFmt::new()

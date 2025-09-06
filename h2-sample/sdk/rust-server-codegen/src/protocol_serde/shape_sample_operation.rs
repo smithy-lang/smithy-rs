@@ -4,12 +4,12 @@ pub async fn de_sample_operation_http_request<B>(
     #[allow(unused_variables)] request: ::http::Request<B>,
 ) -> std::result::Result<
     crate::input::SampleOperationInput,
-    ::aws_smithy_http_server::protocol::rest_json_1::rejection::RequestRejection,
+    ::aws_smithy_http_server::protocol::rpc_v2_cbor::rejection::RequestRejection,
 >
 where
     B: ::aws_smithy_http_server::body::HttpBody + Send,
     B::Data: Send,
-    ::aws_smithy_http_server::protocol::rest_json_1::rejection::RequestRejection:
+    ::aws_smithy_http_server::protocol::rpc_v2_cbor::rejection::RequestRejection:
         From<<B as ::aws_smithy_http_server::body::HttpBody>::Error>,
 {
     Ok({
@@ -23,7 +23,7 @@ where
         if !bytes.is_empty() {
             ::aws_smithy_http_server::protocol::content_type_header_classifier_smithy(
                 &headers,
-                Some("application/json"),
+                Some("application/cbor"),
             )?;
             input = crate::protocol_serde::shape_sample_operation::de_sample_operation(
                 bytes.as_ref(),
@@ -39,7 +39,7 @@ pub fn ser_sample_operation_http_response(
     #[allow(unused_variables)] output: crate::output::SampleOperationOutput,
 ) -> std::result::Result<
     ::aws_smithy_http_server::response::Response,
-    ::aws_smithy_http_server::protocol::rest_json_1::rejection::ResponseRejection,
+    ::aws_smithy_http_server::protocol::rpc_v2_cbor::rejection::ResponseRejection,
 > {
     Ok({
         #[allow(unused_mut)]
@@ -47,7 +47,12 @@ pub fn ser_sample_operation_http_response(
         builder = ::aws_smithy_http::header::set_response_header_if_absent(
             builder,
             ::http::header::CONTENT_TYPE,
-            "application/json",
+            "application/cbor",
+        );
+        builder = ::aws_smithy_http::header::set_response_header_if_absent(
+            builder,
+            ::http::header::HeaderName::from_static("smithy-protocol"),
+            "rpc-v2-cbor",
         );
         let http_status: u16 = 200;
         builder = builder.status(http_status);
@@ -70,7 +75,7 @@ pub fn ser_sample_operation_http_error(
     error: &crate::error::SampleOperationError,
 ) -> std::result::Result<
     ::aws_smithy_http_server::response::Response,
-    ::aws_smithy_http_server::protocol::rest_json_1::rejection::ResponseRejection,
+    ::aws_smithy_http_server::protocol::rpc_v2_cbor::rejection::ResponseRejection,
 > {
     Ok({
         match error {
@@ -81,12 +86,12 @@ pub fn ser_sample_operation_http_error(
                 builder = ::aws_smithy_http::header::set_response_header_if_absent(
                     builder,
                     ::http::header::CONTENT_TYPE,
-                    "application/json",
+                    "application/cbor",
                 );
                 builder = ::aws_smithy_http::header::set_response_header_if_absent(
                     builder,
-                    ::http::header::HeaderName::from_static("x-amzn-errortype"),
-                    "ValidationException",
+                    ::http::header::HeaderName::from_static("smithy-protocol"),
+                    "rpc-v2-cbor",
                 );
                 let content_length = payload.len();
                 builder = ::aws_smithy_http::header::set_response_header_if_absent(
@@ -107,48 +112,52 @@ pub(crate) fn de_sample_operation(
     mut builder: crate::input::sample_operation_input::Builder,
 ) -> ::std::result::Result<
     crate::input::sample_operation_input::Builder,
-    ::aws_smithy_json::deserialize::error::DeserializeError,
+    ::aws_smithy_cbor::decode::DeserializeError,
 > {
-    let mut tokens_owned =
-        ::aws_smithy_json::deserialize::json_token_iter(crate::protocol_serde::or_empty_doc(value))
-            .peekable();
-    let tokens = &mut tokens_owned;
-    ::aws_smithy_json::deserialize::token::expect_start_object(tokens.next())?;
-    loop {
-        match tokens.next().transpose()? {
-            Some(::aws_smithy_json::deserialize::Token::EndObject { .. }) => break,
-            Some(::aws_smithy_json::deserialize::Token::ObjectKey { key, .. }) => {
-                match key.to_unescaped()?.as_ref() {
-                    "inputValue" => {
-                        if let Some(v) =
-                            ::aws_smithy_json::deserialize::token::expect_string_or_null(
-                                tokens.next(),
-                            )?
-                            .map(|s| s.to_unescaped().map(|u| u.into_owned()))
-                            .transpose()?
-                        {
-                            builder = builder.set_input_value(v);
-                        }
-                    }
-                    _ => ::aws_smithy_json::deserialize::token::skip_value(tokens)?,
-                }
+    #[allow(clippy::match_single_binding)]
+    fn pair(
+        mut builder: crate::input::sample_operation_input::Builder,
+        decoder: &mut ::aws_smithy_cbor::Decoder,
+    ) -> ::std::result::Result<
+        crate::input::sample_operation_input::Builder,
+        ::aws_smithy_cbor::decode::DeserializeError,
+    > {
+        builder = match decoder.str()?.as_ref() {
+            "inputValue" => builder.set_input_value(decoder.string()?),
+            _ => {
+                decoder.skip()?;
+                builder
             }
-            other => {
-                return Err(
-                    ::aws_smithy_json::deserialize::error::DeserializeError::custom(format!(
-                        "expected object key or end object, found: {:?}",
-                        other
-                    )),
-                )
+        };
+        Ok(builder)
+    }
+
+    let decoder = &mut ::aws_smithy_cbor::Decoder::new(value);
+
+    match decoder.map()? {
+        None => loop {
+            match decoder.datatype()? {
+                ::aws_smithy_cbor::data::Type::Break => {
+                    decoder.skip()?;
+                    break;
+                }
+                _ => {
+                    builder = pair(builder, decoder)?;
+                }
+            };
+        },
+        Some(n) => {
+            for _ in 0..n {
+                builder = pair(builder, decoder)?;
             }
         }
-    }
-    if tokens.next().is_some() {
+    };
+
+    if decoder.position() != value.len() {
         return Err(
-            ::aws_smithy_json::deserialize::error::DeserializeError::custom(
-                "found more JSON tokens after completing parsing",
-            ),
+            ::aws_smithy_cbor::decode::DeserializeError::expected_end_of_stream(decoder.position()),
         );
     }
+
     Ok(builder)
 }

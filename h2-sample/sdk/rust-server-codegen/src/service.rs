@@ -32,7 +32,7 @@ impl<Body, L, HttpPl, ModelPl> SampleServiceBuilder<Body, L, HttpPl, ModelPl> {
     ///     /* Set other handlers */
     ///     .build()
     ///     .unwrap();
-    /// # let app: SampleService<::aws_smithy_http_server::routing::RoutingService<::aws_smithy_http_server::protocol::rest::router::RestRouter<::aws_smithy_http_server::routing::Route>, ::aws_smithy_http_server::protocol::rest_json_1::RestJson1>> = app;
+    /// # let app: SampleService<::aws_smithy_http_server::routing::RoutingService<::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<::aws_smithy_http_server::routing::Route>, ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor>> = app;
     /// ```
     ///
                     pub fn sample_operation<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
@@ -99,7 +99,7 @@ impl<Body, L, HttpPl, ModelPl> SampleServiceBuilder<Body, L, HttpPl, ModelPl> {
     ///     /* Set other handlers */
     ///     .build()
     ///     .unwrap();
-    /// # let app: SampleService<::aws_smithy_http_server::routing::RoutingService<::aws_smithy_http_server::protocol::rest::router::RestRouter<::aws_smithy_http_server::routing::Route>, ::aws_smithy_http_server::protocol::rest_json_1::RestJson1>> = app;
+    /// # let app: SampleService<::aws_smithy_http_server::routing::RoutingService<::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<::aws_smithy_http_server::routing::Route>, ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor>> = app;
     /// ```
     ///
                     pub fn sample_operation_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
@@ -173,8 +173,10 @@ impl<Body, L, HttpPl, ModelPl> SampleServiceBuilder<Body, L, HttpPl, ModelPl> {
     ) -> ::std::result::Result<
         SampleService<
             ::aws_smithy_http_server::routing::RoutingService<
-                ::aws_smithy_http_server::protocol::rest::router::RestRouter<L::Service>,
-                ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+                ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<
+                    L::Service,
+                >,
+                ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
             >,
         >,
         MissingOperationsError,
@@ -198,7 +200,7 @@ impl<Body, L, HttpPl, ModelPl> SampleServiceBuilder<Body, L, HttpPl, ModelPl> {
             }
             let unexpected_error_msg = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
-            ::aws_smithy_http_server::protocol::rest::router::RestRouter::from_iter([(
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_iter([(
                 request_specs::sample_operation(),
                 self.sample_operation.expect(unexpected_error_msg),
             )])
@@ -218,22 +220,25 @@ impl<Body, L, HttpPl, ModelPl> SampleServiceBuilder<Body, L, HttpPl, ModelPl> {
         Body: Send + 'static,
         L: ::tower::Layer<
             ::aws_smithy_http_server::routing::RoutingService<
-                ::aws_smithy_http_server::protocol::rest::router::RestRouter<
+                ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<
                     ::aws_smithy_http_server::routing::Route<Body>,
                 >,
-                ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+                ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
             >,
         >,
     {
-        let router = ::aws_smithy_http_server::protocol::rest::router::RestRouter::from_iter([(
-            request_specs::sample_operation(),
-            self.sample_operation.unwrap_or_else(|| {
-                let svc = ::aws_smithy_http_server::operation::MissingFailure::<
-                    ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
-                >::default();
-                ::aws_smithy_http_server::routing::Route::new(svc)
-            }),
-        )]);
+        let router =
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter::from_iter([
+                (
+                    request_specs::sample_operation(),
+                    self.sample_operation.unwrap_or_else(|| {
+                        let svc = ::aws_smithy_http_server::operation::MissingFailure::<
+                            ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
+                        >::default();
+                        ::aws_smithy_http_server::routing::Route::new(svc)
+                    }),
+                ),
+            ]);
         let svc = self
             .layer
             .layer(::aws_smithy_http_server::routing::RoutingService::new(
@@ -273,20 +278,8 @@ impl std::fmt::Display for MissingOperationsError {
 impl std::error::Error for MissingOperationsError {}
 
 mod request_specs {
-    pub(super) fn sample_operation() -> ::aws_smithy_http_server::routing::request_spec::RequestSpec
-    {
-        ::aws_smithy_http_server::routing::request_spec::RequestSpec::new(
-                    ::http::Method::POST,
-                    ::aws_smithy_http_server::routing::request_spec::UriSpec::new(
-                        ::aws_smithy_http_server::routing::request_spec::PathAndQuerySpec::new(
-                            ::aws_smithy_http_server::routing::request_spec::PathSpec::from_vector_unchecked(vec![
-    ::aws_smithy_http_server::routing::request_spec::PathSegment::Literal(String::from("sample")),
-]),
-                            ::aws_smithy_http_server::routing::request_spec::QuerySpec::from_vector_unchecked(vec![
-])
-                        )
-                    ),
-                )
+    pub(super) fn sample_operation() -> &'static str {
+        "SampleService.SampleOperation"
     }
 }
 
@@ -296,10 +289,10 @@ mod request_specs {
 #[derive(Clone)]
 pub struct SampleService<
     S = ::aws_smithy_http_server::routing::RoutingService<
-        ::aws_smithy_http_server::protocol::rest::router::RestRouter<
+        ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<
             ::aws_smithy_http_server::routing::Route<::aws_smithy_http_server::body::BoxBody>,
         >,
-        ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+        ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
     >,
 > {
     // This is the router wrapped by layers.
@@ -391,8 +384,8 @@ impl<S> SampleService<S> {
 impl<S>
     SampleService<
         ::aws_smithy_http_server::routing::RoutingService<
-            ::aws_smithy_http_server::protocol::rest::router::RestRouter<S>,
-            ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<S>,
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
         >,
     >
 {
@@ -406,8 +399,8 @@ impl<S>
         layer: &L,
     ) -> SampleService<
         ::aws_smithy_http_server::routing::RoutingService<
-            ::aws_smithy_http_server::protocol::rest::router::RestRouter<L::Service>,
-            ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<L::Service>,
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
         >,
     >
     where
@@ -425,10 +418,10 @@ impl<S>
         self,
     ) -> SampleService<
         ::aws_smithy_http_server::routing::RoutingService<
-            ::aws_smithy_http_server::protocol::rest::router::RestRouter<
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::router::RpcV2CborRouter<
                 ::aws_smithy_http_server::routing::Route<B>,
             >,
-            ::aws_smithy_http_server::protocol::rest_json_1::RestJson1,
+            ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor,
         >,
     >
     where
@@ -502,7 +495,7 @@ impl<S> ::aws_smithy_http_server::service::ServiceShape for SampleService<S> {
 
     const VERSION: Option<&'static str> = Some("2024-03-18");
 
-    type Protocol = ::aws_smithy_http_server::protocol::rest_json_1::RestJson1;
+    type Protocol = ::aws_smithy_http_server::protocol::rpc_v2_cbor::RpcV2Cbor;
 
     type Operations = Operation;
 }
