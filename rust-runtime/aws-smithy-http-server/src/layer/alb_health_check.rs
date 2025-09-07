@@ -108,7 +108,7 @@ where
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        if req.uri() == self.layer.health_check_uri.as_ref() {
+        if req.uri().path() == self.layer.health_check_uri.as_ref() {
             let clone = self.layer.health_check_handler.clone();
             let service = std::mem::replace(&mut self.layer.health_check_handler, clone);
             let handler_future = service.oneshot(req);
@@ -177,5 +177,34 @@ where
             }
             EitherProj::Right { value } => value.poll(cx),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::Uri;
+    use tower::{service_fn, ServiceExt};
+
+    #[tokio::test]
+    async fn health_check_matches_path_with_scheme_and_authority() {
+        let layer = AlbHealthCheckLayer::from_handler("/ping", |_req| async { StatusCode::OK });
+
+        let inner_service = service_fn(|_req| async {
+            Ok::<_, std::convert::Infallible>(
+                Response::builder()
+                    .status(StatusCode::IM_A_TEAPOT)
+                    .body(crate::body::empty())
+                    .expect("infallible"),
+            )
+        });
+
+        let service = layer.layer(inner_service);
+
+        let uri: Uri = "https://example.com/ping".parse().unwrap();
+        let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
+
+        let response = service.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
