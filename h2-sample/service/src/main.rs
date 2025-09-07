@@ -1,12 +1,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
+use hyper::{Body, Request, Response, StatusCode};
 use sdk::{
     SampleService, SampleServiceConfig,
     error::{SampleOperationError, ValidationException},
     input::SampleOperationInput,
     output::SampleOperationOutput,
-    server::AddExtensionLayer,
+    server::{AddExtensionLayer, body::BoxBody, routing::IntoMakeServiceWithConnectInfo},
 };
+use tower::{ServiceExt, service_fn};
 use tracing_subscriber::{EnvFilter, prelude::*};
 
 async fn sample_handler(
@@ -50,11 +52,41 @@ async fn main() {
         .build()
         .expect("failed to create service");
 
-    let make_app = app.into_make_service();
+    // Instead of this:
+
+    // let health_check_layer =
+    //     AlbHealthCheckLayer::from_handler("/ping", |_req| async { StatusCode::OK });
+    // let health_check_service = health_check_layer.layer(app);
+
+    // For the time being, you can do this:
+
+    let health_check_service = service_fn(move |req: Request<Body>| {
+        let app = app.clone();
+        async move {
+            let uri_path = req.uri().path();
+
+            // If the above doesn't work, the following will work.
+            // .path_and_query()
+            // .map(|pq| pq.path())
+            // .unwrap_or(req.uri().path());
+
+            if uri_path == "/ping" {
+                Ok(Response::builder()
+                    .status(StatusCode::OK)
+                    .body(BoxBody::default())
+                    .unwrap())
+            } else {
+                app.oneshot(req).await
+            }
+        }
+    });
+
+    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(health_check_service);
+
     let bind: SocketAddr = "0.0.0.0:8000"
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).http2_only(true).serve(make_app);
+    let server = hyper::Server::bind(&bind).http2_only(false).serve(make_app);
 
     tracing::info!(%bind, "Running server");
 
