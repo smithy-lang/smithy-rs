@@ -7,6 +7,7 @@ SERVICE="SampleService"
 OPERATION="SampleOperation"
 JSON_INPUT='{"inputValue": "some value"}'
 VERBOSE=""
+KEEP_FILES=false
 
 # Parse named arguments
 while [[ $# -gt 0 ]]; do
@@ -33,6 +34,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --verbose)
       VERBOSE="-vv"
+      shift
+      ;;
+    --keep)
+      KEEP_FILES=true
       shift
       ;;
     *)
@@ -62,6 +67,19 @@ if [ $? -ne 0 ]; then
     echo "Failed to convert JSON to CBOR"
     exit 1
 fi
+
+# Show the exact curl command
+echo "=== Curl Command ==="
+echo "curl $VERBOSE --http2-prior-knowledge \\"
+echo "  -X POST \\"
+echo "  -H \"Smithy-Protocol: rpc-v2-cbor\" \\"
+echo "  -H \"Content-Type: application/cbor\" \\"
+echo "  -H \"Accept: application/cbor\" \\"
+echo "  --data-binary @input.cbor \\"
+echo "  -D response_headers.txt \\"
+echo "  -o response_body.cbor \\"
+echo "  ${HOST}:${PORT}/service/${SERVICE}/operation/${OPERATION}"
+echo
 
 # Make request and save response with headers
 curl $VERBOSE --http2-prior-knowledge \
@@ -118,6 +136,13 @@ except Exception as e:
     sys.exit(1)
 "
 
-# Clean up temporary files
-rm -f input.cbor response_headers.txt response_body.cbor
+# Clean up temporary files unless --keep is specified
+if [ "$KEEP_FILES" = false ]; then
+    rm -f input.cbor response_headers.txt response_body.cbor
+else
+    echo "=== Files Kept ==="
+    echo "Input: input.cbor"
+    echo "Response headers: response_headers.txt"
+    echo "Response body: response_body.cbor"
+fi
 
