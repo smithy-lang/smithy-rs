@@ -6,8 +6,10 @@ PORT="8000"
 SERVICE="SampleService"
 OPERATION="SampleOperation"
 JSON_INPUT='{"inputValue": "some value"}'
+CBOR_INPUT=""
 VERBOSE=""
 KEEP_FILES=false
+NO_DECODE=false
 
 # Parse named arguments
 while [[ $# -gt 0 ]]; do
@@ -32,12 +34,20 @@ while [[ $# -gt 0 ]]; do
       JSON_INPUT="$2"
       shift 2
       ;;
+    --cbor)
+      CBOR_INPUT="$2"
+      shift 2
+      ;;
     --verbose)
       VERBOSE="-vv"
       shift
       ;;
     --keep)
       KEEP_FILES=true
+      shift
+      ;;
+    --no-decode)
+      NO_DECODE=true
       shift
       ;;
     *)
@@ -47,8 +57,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Convert JSON to CBOR using Python
-python3 -c "
+# Handle CBOR input or convert JSON to CBOR
+if [ -n "$CBOR_INPUT" ]; then
+    # Use provided CBOR file directly
+    if [ ! -f "$CBOR_INPUT" ]; then
+        echo "Error: CBOR file '$CBOR_INPUT' not found"
+        exit 1
+    fi
+    cp "$CBOR_INPUT" input.cbor
+else
+    # Convert JSON to CBOR using Python
+    if [ "$NO_DECODE" = true ]; then
+        echo "Error: --no-decode requires --cbor (cannot convert JSON without Python)"
+        exit 1
+    fi
+    
+    python3 -c "
 import json
 import sys
 try:
@@ -63,9 +87,10 @@ with open('input.cbor', 'wb') as f:
     f.write(cbor_data)
 "
 
-if [ $? -ne 0 ]; then
-    echo "Failed to convert JSON to CBOR"
-    exit 1
+    if [ $? -ne 0 ]; then
+        echo "Failed to convert JSON to CBOR"
+        exit 1
+    fi
 fi
 
 # Show the exact curl command
@@ -115,9 +140,10 @@ HEX_VALUE=$(hexdump -ve '1/1 "%.2x"' response_body.cbor)
 echo "=== CBOR Analyzer Link ==="
 echo "https://cbor.nemo157.com/#type=hex&value=$HEX_VALUE"
 
-# Convert CBOR response back to JSON
-echo "=== JSON Response ==="
-python3 -c "
+# Convert CBOR response back to JSON (unless --no-decode)
+if [ "$NO_DECODE" = false ]; then
+    echo "=== JSON Response ==="
+    python3 -c "
 import json
 import sys
 try:
@@ -135,6 +161,10 @@ except Exception as e:
     print(f'Error converting CBOR to JSON: {e}')
     sys.exit(1)
 "
+else
+    echo "=== JSON Response ==="
+    echo "Skipped (use --cbor analyzer link above to decode)"
+fi
 
 # Clean up temporary files unless --keep is specified
 if [ "$KEEP_FILES" = false ]; then
