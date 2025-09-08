@@ -9,7 +9,15 @@ use sdk::{
     output::FizzBuzzOutput,
     server::AddExtensionLayer,
 };
-use tracing_subscriber::{EnvFilter, prelude::*};
+use tracing_subscriber::{
+    EnvFilter,
+    fmt::{
+        self,
+        format::{FmtSpan, Format},
+        time::SystemTime,
+    },
+    prelude::*,
+};
 
 async fn fizz_buzz_handler(mut input: FizzBuzzInput) -> Result<FizzBuzzOutput, FizzBuzzError> {
     let output_stream = stream! {
@@ -90,13 +98,30 @@ fn generate_events(
 pub struct State {}
 
 pub fn setup_tracing() {
-    let format = tracing_subscriber::fmt::layer().json();
+    color_eyre::install().expect("cannot install color-eyre");
+
+    let format = Format::default()
+        .with_ansi(true)
+        .with_level(true)
+        .with_target(true)
+        .with_thread_ids(false)
+        .with_thread_names(false)
+        .with_source_location(false) // This is key - disables source location entirely
+        .with_timer(SystemTime::default());
+
+    // Use this formatter in the fmt layer
+    let fmt_layer = fmt::layer()
+        .event_format(format)
+        .with_span_events(FmtSpan::CLOSE)
+        .compact();
+
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
+
     tracing_subscriber::registry()
-        .with(format)
         .with(filter)
+        .with(fmt_layer)
         .init();
 }
 
@@ -121,10 +146,10 @@ async fn main() {
         //.http2_only(true)
         .serve(make_app);
 
-    println!("CBOR Server is listening on {bind:?}");
+    tracing::info!("CBOR Server is listening on {bind:?}");
 
     // Run forever-ish...
     if let Err(err) = server.await {
-        eprintln!("server error: {err}");
+        tracing::error!("server error: {err}");
     }
 }

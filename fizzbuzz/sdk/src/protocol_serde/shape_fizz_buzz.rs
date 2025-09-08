@@ -16,8 +16,11 @@ where
         From<<B as ::aws_smithy_http_server::body::HttpBody>::Error>,
 {
     Ok({
+        // TODO: needs to look into the intial request to find if the non-streaming
+        // member shapes have been set or not.
         #[allow(unused_mut)]
         let mut input = crate::input::fizz_buzz_input::Builder::default();
+
         #[allow(unused_variables)]
         let ::aws_smithy_runtime_api::http::RequestParts {
             uri, headers, body, ..
@@ -30,7 +33,8 @@ where
         //     println!("\t{h} = {v}");
         // }
 
-        let bytes = ::hyper::body::to_bytes(body).await?;
+        // tracing::info!("Using ::hyper::body::to_bytes");
+        // let bytes = ::hyper::body::to_bytes(body).await?;
         // println!("Incoming bytes");
         // for b in &bytes {
         //     print!("{b:02X}");
@@ -41,11 +45,11 @@ where
         // println!("{s}");
 
         if let Some(value) = {
-            let mut body = aws_smithy_types::body::SdkBody::from(bytes);
+            // let mut body = aws_smithy_types::body::SdkBody::from(bytes);
             Some(
                 crate::protocol_serde::shape_fizz_buzz_input::de_stream_payload(
-                    // &mut body.into().into_inner(),
-                    &mut body,
+                    &mut body.into().into_inner(),
+                    // &mut body,
                 )
                 .await?,
             )
