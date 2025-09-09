@@ -3,20 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-description = "Rust Runtime"
 plugins {
-    kotlin("jvm")
-    `maven-publish`
+    id("smithy-rs.kotlin-conventions")
+    id("smithy-rs.publishing-conventions")
 }
 
-group = "software.amazon.rustruntime"
-
-version = "0.0.3"
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
+description = "Rust Runtime"
+extra["displayName"] = "Smithy :: Rust :: Rust Runtime"
+extra["moduleName"] = "software.amazon.smithy.rust.runtime"
 
 tasks.jar {
     from("./") {
@@ -29,7 +23,7 @@ val properties = PropertyRetriever(rootProject, project)
 val outputDir = layout.buildDirectory.dir("smithy-rs")
 val runtimeOutputDir = outputDir.get().dir("rust-runtime")
 
-tasks["assemble"].apply {
+tasks.assemble.configure {
     dependsOn("copyRuntimeCrates")
     dependsOn("fixRuntimeCrateVersions")
     dependsOn("fixManifests")
@@ -62,13 +56,4 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     binaryName = "publisher"
     arguments = listOf("fix-manifests", "--location", runtimeOutputDir.asFile.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("default") {
-            from(components["java"])
-        }
-    }
-    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

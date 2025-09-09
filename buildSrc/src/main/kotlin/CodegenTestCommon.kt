@@ -252,7 +252,7 @@ fun Project.registerGenerateSmithyBuildTask(
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
             project.extra[PREVIOUS_BUILD_HASHES_KEY] =
-                project.buildDir.walk()
+                project.layout.buildDirectory.get().asFile.walk()
                     .filter { it.isFile }
                     .map {
                         getChecksumForFile(it) to it.lastModified()
@@ -271,10 +271,10 @@ fun Project.registerGenerateCargoWorkspaceTask(
     val properties = PropertyRetriever(rootProject, this)
     project.tasks.register("generateCargoWorkspace") {
         description = "generate Cargo.toml workspace file"
-        val path = project.buildDir.resolve("$workingDirUnderBuildDir/Cargo.toml")
+        val path = project.layout.buildDirectory.file("$workingDirUnderBuildDir/Cargo.toml")
         outputs.file(path)
         doFirst {
-            path.writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
+            path.get().asFile.writeText(generateCargoWorkspace(pluginName, codegenTests(properties, allCodegenTests)))
         }
     }
 }
@@ -330,7 +330,7 @@ fun Project.registerModifyMtimeTask() {
                 val previousBuildHashes: Map<String, Long> =
                     project.extra[PREVIOUS_BUILD_HASHES_KEY] as Map<String, Long>
 
-                project.buildDir.walk()
+                project.layout.buildDirectory.get().asFile.walk()
                     .filter { it.isFile }
                     .map {
                         getChecksumForFile(it) to it

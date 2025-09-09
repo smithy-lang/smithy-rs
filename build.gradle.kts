@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+import org.jreleaser.model.Active
 
 buildscript {
     repositories {
@@ -9,10 +10,13 @@ buildscript {
         google()
     }
 
-    val kotlinVersion: String by project
     dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath(libs.kotlin.gradle.plugin)
     }
+}
+
+plugins {
+    alias(libs.plugins.jreleaser)
 }
 
 
@@ -26,14 +30,66 @@ allprojects {
         google()
     }
 
+    group = "software.amazon.smithy.rust"
+    val codegenVersion: String by project
+    version = codegenVersion
 }
 
 
+// jreleaser requires a "clean" task to exist
+tasks.register("clean")
+
+// Register custom tasks for Maven Central publishing
+tasks.register<tasks.VerifyCodegenVersionBump>("verifyCodegenVersionBump")
+tasks.register<tasks.CheckMavenCentralPublishingNeeded>("checkMavenCentralPublishingNeeded")
+
+jreleaser {
+    // Creates a generic release, which won't publish anything (we are only interested in publishing the jar)
+    // https://jreleaser.org/guide/latest/reference/release/index.html
+    release {
+        generic {
+            enabled = true
+            skipRelease = true
+        }
+    }
+
+    // Used to announce a release to configured announcers.
+    // https://jreleaser.org/guide/latest/reference/announce/index.html
+    announce {
+        active = Active.NEVER
+    }
+
+    // Signing configuration.
+    // https://jreleaser.org/guide/latest/reference/signing.html
+    signing {
+        active = Active.ALWAYS
+        armored = true
+    }
+
+    // Configuration for deploying to Maven Central.
+    // https://jreleaser.org/guide/latest/examples/maven/maven-central.html#_gradle
+    deploy {
+        maven {
+            mavenCentral {
+                create("maven-central") {
+                    active = Active.ALWAYS
+                    url = "https://central.sonatype.com/api/v1/publisher"
+                    stagingRepository(stagingDir().get().asFile.path)
+                    maxRetries = 100
+                    retryDelay = 60
+                }
+            }
+        }
+    }
+}
+
+
+
+
 val ktlint by configurations.creating
-val ktlintVersion: String by project
 
 dependencies {
-    ktlint("com.pinterest.ktlint:ktlint-cli:$ktlintVersion") {
+    ktlint(libs.ktlint.cli) {
         attributes {
             attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.EXTERNAL))
         }
