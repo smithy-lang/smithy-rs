@@ -3,34 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+plugins {
+    java
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
+}
+
 description = "Generates Rust/Python code from Smithy models and runs the protocol tests"
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Python :: Test"
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.test"
 
-tasks["jar"].enabled = false
-
-plugins {
-    java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+tasks.jar.configure {
+    enabled = false
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-python"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
 
-configure<software.amazon.smithy.gradle.SmithyExtension> {
+smithy {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
+    format = false
 }
 
 dependencies {
-    implementation(project(":codegen-server:python"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation(project(":codegen-server:codegen-server-python"))
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
 }
 
 val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
@@ -115,12 +117,22 @@ tasks.register("stubs") {
     }
 }
 
-tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace")
+tasks.smithyBuild.configure {
+    dependsOn("generateSmithyBuild")
+}
+tasks.assemble.configure {
+    finalizedBy("generateCargoWorkspace")
+}
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir))
 
-tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
+tasks.test.configure {
+    finalizedBy(cargoCommands(properties).map { it.toString })
+}
 
-tasks["clean"].doFirst { delete("smithy-build.json") }
+tasks.clean.configure {
+    doFirst {
+        delete("smithy-build.json")
+    }
+}
