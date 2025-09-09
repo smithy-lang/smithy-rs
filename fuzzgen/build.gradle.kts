@@ -7,7 +7,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     id("smithy-rs.kotlin-conventions")
-    id("smithy-rs.publishing-conventions")
 }
 
 description = "Plugin to generate a fuzz harness"
