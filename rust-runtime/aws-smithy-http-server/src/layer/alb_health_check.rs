@@ -187,9 +187,19 @@ mod tests {
     use tower::{service_fn, ServiceExt};
 
     #[tokio::test]
-    async fn health_check_matches_path_with_scheme_and_authority() {
-        let layer = AlbHealthCheckLayer::from_handler("/ping", |_req| async { StatusCode::OK });
+    async fn health_check_matches_path_when_uri_contains_scheme_authority_and_path() {
+        let uri: Uri = "https://example.com/ping".parse().unwrap();
+        ensure_health_check_path_matches(uri, "/ping".to_string()).await;
+    }
 
+    #[tokio::test]
+    async fn health_check_matches_path_when_uri_contains_only_path() {
+        let uri: Uri = "/ping".parse().unwrap();
+        ensure_health_check_path_matches(uri, "/ping".to_string()).await;
+    }
+
+    async fn ensure_health_check_path_matches(uri: Uri, health_check_path: String) {
+        let layer = AlbHealthCheckLayer::from_handler(health_check_path, |_req| async { StatusCode::OK });
         let inner_service = service_fn(|_req| async {
             Ok::<_, std::convert::Infallible>(
                 Response::builder()
@@ -200,10 +210,7 @@ mod tests {
         });
 
         let service = layer.layer(inner_service);
-
-        let uri: Uri = "https://example.com/ping".parse().unwrap();
         let request = Request::builder().uri(uri).body(Body::empty()).unwrap();
-
         let response = service.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
