@@ -666,7 +666,7 @@ class RustWriter private constructor(
                     ?.also { super.writeInline(it) }
             }
 
-            return super.write(content, *args)
+            return super.enableStackTraceComments(true).write(content, *args)
         }
 
         fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
@@ -844,6 +844,7 @@ class RustWriter private constructor(
                         }
                     }
                 }
+
                 else ->
                     rustBlock("") {
                         block(variable)
