@@ -665,8 +665,8 @@ class RustWriter private constructor(
                 location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
                     ?.also { super.writeInline(it) }
             }
-
-            return super.enableStackTraceComments(true).write(content, *args)
+            super.enableStackTraceComments(true)
+            return super.write(content, *args)
         }
 
         fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
