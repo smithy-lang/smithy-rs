@@ -15,7 +15,6 @@ class VersionsManifestTest {
             VersionsManifest.fromString(
                 """
                 smithy_rs_revision = 'some-smithy-rs-revision'
-                aws_doc_sdk_examples_revision = 'some-doc-revision'
 
                 [crates.aws-config]
                 category = 'AwsRuntime'
@@ -31,7 +30,6 @@ class VersionsManifestTest {
             )
 
         assertEquals("some-smithy-rs-revision", manifest.smithyRsRevision)
-        assertEquals("some-doc-revision", manifest.awsDocSdkExamplesRevision)
         assertEquals(
             mapOf(
                 "aws-config" to
