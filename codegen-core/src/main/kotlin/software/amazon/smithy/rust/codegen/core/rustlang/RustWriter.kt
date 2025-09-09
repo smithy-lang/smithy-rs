@@ -592,7 +592,7 @@ class RustWriter private constructor(
     private val commentCharacter: String = "//",
     private val printWarning: Boolean = true,
     /** Insert comments indicating where code was generated */
-    val debugMode: Boolean = false,
+    val debugMode: Boolean = true,
     /** When true, automatically change all dependencies to be in the test scope */
     val devDependenciesOnly: Boolean = false,
 ) :
@@ -665,7 +665,7 @@ class RustWriter private constructor(
                 location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
                     ?.also { super.writeInline(it) }
             }
-            super.enableStackTraceComments(true)
+//            super.enableStackTraceComments(true)
             return super.write(content, *args)
         }
 
