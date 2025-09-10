@@ -16,7 +16,7 @@ fn test_hydrate_readme() {
     let versions_manifest_path = tmp_dir.path().join("versions.toml");
     VersionsManifest {
         smithy_rs_revision: "dontcare".into(),
-        aws_doc_sdk_examples_revision: "dontcare".into(),
+        aws_doc_sdk_examples_revision: None,
         manual_interventions: Default::default(),
         crates: [
             (

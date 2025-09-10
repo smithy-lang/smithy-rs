@@ -23,8 +23,10 @@ pub struct VersionsManifest {
     /// Git commit hash of the version of smithy-rs used to generate this SDK
     pub smithy_rs_revision: String,
 
+    // TODO(examples removal post cleanup): Remove this field once examples revision is removed
+    // from `versions.toml` in the main branch of `aws-sdk-rust` repository.
     /// Git commit hash of the `aws-doc-sdk-examples` repository that was synced into this SDK
-    pub aws_doc_sdk_examples_revision: String,
+    pub aws_doc_sdk_examples_revision: Option<String>,
 
     /// Optional manual interventions to apply to the next release.
     /// These are intended to be filled out manually in the `versions.toml` via pull request

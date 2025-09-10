@@ -405,8 +405,6 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         outputDir.asFile.absolutePath,
         "--smithy-build",
         layout.buildDirectory.file("smithy-build.json").get().asFile.normalize().absolutePath,
-        "--examples-revision",
-        properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
         getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
