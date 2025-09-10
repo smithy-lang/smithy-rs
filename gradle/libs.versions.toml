@@ -1,0 +1,53 @@
+[versions]
+kotlin-version = "2.1.0"
+ktlint-version = "1.0.1"
+
+# codegen
+smithy-version = "1.61.0"
+smithy-gradle-plugin-version = "1.3.0"
+
+# publishing
+jreleaser = "1.19.0"
+
+# testing
+junit-version = "5.10.5"
+jsoup-version = "1.16.2"
+jackson-dataformat-cbor-version = "2.13.0"
+kotest-version = "5.9.1"
+toml4j-version = "0.7.2"
+
+[libraries]
+ktlint-cli = { module = "com.pinterest.ktlint:ktlint-cli", version.ref = "ktlint-version" }
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin-version" }
+kotest-assertions-core-jvm = { module = "io.kotest:kotest-assertions-core-jvm", version.ref = "kotest-version" }
+jackson-dataformat-cbor = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor", version.ref = "jackson-dataformat-cbor-version" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-version" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup-version"}
+toml4j = { module = "com.moandjiezana.toml:toml4j", version.ref = "toml4j-version" }
+
+
+smithy-codegen-core = { module = "software.amazon.smithy:smithy-codegen-core", version.ref = "smithy-version" }
+smithy-cli = { module = "software.amazon.smithy:smithy-cli", version.ref = "smithy-version" }
+smithy-model = { module = "software.amazon.smithy:smithy-model", version.ref = "smithy-version" }
+smithy-waiters = { module = "software.amazon.smithy:smithy-waiters", version.ref = "smithy-version" }
+smithy-protocol-traits = { module = "software.amazon.smithy:smithy-protocol-traits", version.ref = "smithy-version" }
+smithy-protocol-tests = { module = "software.amazon.smithy:smithy-protocol-tests", version.ref = "smithy-version" }
+smithy-protocol-test-traits = { module = "software.amazon.smithy:smithy-protocol-test-traits", version.ref = "smithy-version" }
+smithy-aws-traits = { module = "software.amazon.smithy:smithy-aws-traits", version.ref = "smithy-version" }
+smithy-rules-engine = { module = "software.amazon.smithy:smithy-rules-engine", version.ref = "smithy-version" }
+smithy-aws-endpoints = { module = "software.amazon.smithy:smithy-aws-endpoints", version.ref = "smithy-version" }
+smithy-validation-model = { module = "software.amazon.smithy:smithy-validation-model", version.ref = "smithy-version" }
+smithy-aws-protocol-tests = { module = "software.amazon.smithy:smithy-aws-protocol-tests", version.ref = "smithy-version" }
+smithy-aws-smoke-test-model = { module = "software.amazon.smithy:smithy-aws-smoke-test-model", version.ref = "smithy-version" }
+smithy-aws-iam-traits = { module = "software.amazon.smithy:smithy-aws-iam-traits", version.ref = "smithy-version" }
+smithy-aws-cloudformation-traits = { module = "software.amazon.smithy:smithy-aws-cloudformation-traits", version.ref = "smithy-version" }
+smithy-smoke-test-traits = { module = "software.amazon.smithy:smithy-smoke-test-traits", version.ref = "smithy-version" }
+smithy-utils = { module = "software.amazon.smithy:smithy-utils", version.ref = "smithy-version" }
+
+
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin-version" }
+smithy-gradle-base = { id = "software.amazon.smithy.gradle.smithy-base", version.ref = "smithy-gradle-plugin-version" }
+smithy-gradle-jar = { id = "software.amazon.smithy.gradle.smithy-jar", version.ref = "smithy-gradle-plugin-version" }
+jreleaser = { id = "org.jreleaser", version.ref = "jreleaser" }

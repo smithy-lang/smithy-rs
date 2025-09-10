@@ -4,33 +4,45 @@
  */
 
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     `kotlin-dsl`
 }
+
 repositories {
     mavenCentral()
     google()
 }
 
-// Load properties manually to avoid hard coding smithy version
-val props = Properties().apply {
-    file("../gradle.properties").inputStream().use { load(it) }
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
-val smithyVersion = props["smithyVersion"]
+tasks.compileKotlin {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+}
+
+tasks.compileTestKotlin {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+}
 
 dependencies {
-    api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-utils:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
+    api(libs.smithy.codegen.core)
+    implementation(libs.smithy.utils)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.aws.iam.traits)
+    implementation(libs.smithy.aws.cloudformation.traits)
     implementation(gradleApi())
-    implementation("com.moandjiezana.toml:toml4j:0.7.2")
-    testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+    implementation(libs.toml4j)
+    // required for convention plugins to use
+    implementation(libs.kotlin.gradle.plugin)
+    testImplementation(libs.junit.jupiter)
+
+    // https://github.com/gradle/gradle/issues/15383
+    implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))
 
     constraints {
         implementation("com.google.code.gson:gson:2.8.9") {

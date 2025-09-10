@@ -3,34 +3,36 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+plugins {
+    java
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
+}
+
 description = "Generates Rust/Typescript code from Smithy models and runs the protocol tests"
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server :: Typescript :: Test"
 extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.typescript.test"
 
-tasks["jar"].enabled = false
-
-plugins {
-    java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+tasks.jar.configure {
+    enabled = false
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-typescript"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-typescript/"
 
-configure<software.amazon.smithy.gradle.SmithyExtension> {
+smithy {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
+    format = false
 }
 
 dependencies {
-    implementation(project(":codegen-server:typescript"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation(project(":codegen-server:codegen-server-typescript"))
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
 }
 
 val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
