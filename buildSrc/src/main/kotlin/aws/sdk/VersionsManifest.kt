@@ -18,7 +18,6 @@ data class CrateVersion(
 /** Kotlin representation of aws-sdk-rust's `versions.toml` file */
 data class VersionsManifest(
     val smithyRsRevision: String,
-    val awsDocSdkExamplesRevision: String,
     val crates: Map<String, CrateVersion>,
 ) {
     companion object {
@@ -31,7 +30,6 @@ data class VersionsManifest(
             val toml = Toml().read(value)
             return VersionsManifest(
                 smithyRsRevision = toml.getString("smithy_rs_revision"),
-                awsDocSdkExamplesRevision = toml.getString("aws_doc_sdk_examples_revision"),
                 crates =
                     toml.getTable("crates").entrySet().map { entry ->
                         val crate = (entry.value as Toml)
