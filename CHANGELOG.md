@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 10th, 2025
+====================
+**New this release:**
+- :bug: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) The `HickoryDnsResolver` and `TokioDnsResolver` were not `Clone` making it impossible to use them in the http_client builder's `build_with_resolver` method.
+
+
 August 28th, 2025
 =================
 **New this release:**
