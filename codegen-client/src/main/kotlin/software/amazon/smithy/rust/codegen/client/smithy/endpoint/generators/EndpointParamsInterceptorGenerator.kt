@@ -51,6 +51,7 @@ class EndpointParamsInterceptorGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
+    private val endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val codegenScope =
         codegenContext.runtimeConfig.let { rc ->
             val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
@@ -108,7 +109,11 @@ class EndpointParamsInterceptorGenerator(
                         #{param_setters}
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
+
+                    #{track_sdk_features:W}
+
                     cfg.interceptor_state().store_put(#{EndpointResolverParams}::new(params));
+
                     #{Ok}(())
                 }
             }
@@ -122,6 +127,7 @@ class EndpointParamsInterceptorGenerator(
             "endpoint_prefix" to endpointPrefix(operationShape),
             "param_setters" to paramSetters(operationShape, endpointTypesGenerator.params),
             "jmespath_getters" to jmesPathGetters(operationShape),
+            "track_sdk_features" to trackSdkFeatures(),
         )
     }
 
@@ -268,6 +274,15 @@ class EndpointParamsInterceptorGenerator(
                     )
                 }
                 rust("cfg.interceptor_state().store_put(endpoint_prefix);")
+            }
+        }
+
+    private fun trackSdkFeatures() =
+        writable {
+            endpointCustomizations.mapNotNull {
+                it.trackSdkFeatures(codegenContext, "cfg")
+            }.forEach {
+                rust("#T", it)
             }
         }
 }
