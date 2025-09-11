@@ -199,6 +199,10 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
                                 "AccountIdEndpointMode" to
                                     AwsRuntimeType.awsTypes(codegenContext.runtimeConfig)
                                         .resolve("endpoint_config::AccountIdEndpointMode"),
+                                "AwsSdkFeature" to
+                                    AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                        .resolve("sdk_feature::AwsSdkFeature"),
+                                "tracing" to RuntimeType.Tracing,
                             )
 
                         override fun loadBuiltInFromServiceConfig(
@@ -233,6 +237,38 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
                                     *codegenScope,
                                 )
                             }
+                        }
+
+                        override fun trackSdkFeatures(
+                            codegenContext: ClientCodegenContext,
+                            configBag: String,
+                        ) = writable {
+                            rustTemplate(
+                                """
+                                match cfg
+                                    .load::<#{AccountIdEndpointMode}>()
+                                    .cloned()
+                                    .unwrap_or_default()
+                                {
+                                    #{AccountIdEndpointMode}::Preferred => {
+                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModePreferred);
+                                    }
+                                    #{AccountIdEndpointMode}::Required => {
+                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModeRequired);
+                                    }
+                                    #{AccountIdEndpointMode}::Disabled => {
+                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModeDisabled);
+                                    }
+                                    otherwise => {
+                                        #{tracing}::warn!(
+                                            "Attempted to track an SDK feature for `{otherwise:?}`, which is not recognized in the current version of the SDK. \
+                                            Consider upgrading to the latest version to ensure that it is properly tracked."
+                                        );
+                                    }
+                                }
+                                """,
+                                *codegenScope,
+                            )
                         }
                     },
                 )
