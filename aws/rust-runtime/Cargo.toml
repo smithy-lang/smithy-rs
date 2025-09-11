@@ -4,13 +4,9 @@
 resolver = "2"
 members = [
     "aws-credential-types",
-    "aws-endpoint",
-    "aws-http",
-    "aws-hyper",
     "aws-inlineable",
     "aws-runtime",
     "aws-runtime-api",
-    "aws-sig-auth",
     "aws-sigv4",
     "aws-types",
 ]
