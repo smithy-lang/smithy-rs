@@ -112,12 +112,8 @@ static FALSE_POSITIVES: LazyLock<HashSet<SuspectDependency>> = LazyLock::new(|| 
 const AWS_SDK_RUNTIMES: &[&str] = &[
     "aws-config",
     "aws-credential-types",
-    "aws-endpoint",
-    "aws-http",
-    "aws-hyper",
     "aws-runtime",
     "aws-runtime-api",
-    "aws-sig-auth",
     "aws-sigv4",
     "aws-types",
 ];
