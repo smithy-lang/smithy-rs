@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 12th, 2025
+====================
+
 September 10th, 2025
 ====================
 **New this release:**
