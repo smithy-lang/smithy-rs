@@ -38,7 +38,6 @@ val awsRustRuntimePath = rootProject.projectDir.resolve("aws/rust-runtime")
 val awsSdkPath = rootProject.projectDir.resolve("aws/sdk")
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
-val examplesOutputDir = outputDir.dir("examples")
 val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
 val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
@@ -110,7 +109,6 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "moduleVersion": "${crateVersioner.decideCrateVersion(moduleName, service)}",
                         "moduleAuthors": ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"],
                         "moduleDescription": "${service.moduleDescription}",
-                        ${service.examplesUri(project)?.let { """"examples": "$it",""" } ?: ""}
                         "moduleRepository": "https://github.com/awslabs/aws-sdk-rust",
                         "license": "Apache-2.0",
                         "minimumSupportedRustVersion": "${getRustMSRV()}",
@@ -192,30 +190,6 @@ tasks.register("relocateServices") {
     outputs.dir(sdkOutputDir)
 }
 
-tasks.register("relocateExamples") {
-    description = "relocate the examples folder & rewrite path dependencies"
-    dependsOn("jar")
-
-    doLast {
-        if (awsServices.examples.isNotEmpty()) {
-            copy {
-                from(projectDir)
-                awsServices.examples.forEach { example ->
-                    include("$example/**")
-                }
-                into(outputDir)
-                exclude("**/target")
-                exclude("**/rust-toolchain.toml")
-                filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
-            }
-        }
-    }
-    if (awsServices.examples.isNotEmpty()) {
-        inputs.dir(projectDir.resolve("examples"))
-    }
-    outputs.dir(outputDir)
-}
-
 tasks.register("relocateTests") {
     description = "relocate the root integration tests and rewrite path dependencies"
     dependsOn("jar")
@@ -238,24 +212,6 @@ tasks.register("relocateTests") {
         inputs.dir(test.path)
     }
     outputs.dir(outputDir)
-}
-
-tasks.register<ExecRustBuildTool>("fixExampleManifests") {
-    description = "Adds dependency path and corrects version number of examples after relocation"
-    enabled = awsServices.examples.isNotEmpty()
-    dependsOn("relocateExamples")
-
-    toolPath = sdkVersionerToolPath
-    binaryName = "sdk-versioner"
-    arguments = listOf(
-        "use-path-and-version-dependencies",
-        "--sdk-path", sdkOutputDir.asFile.absolutePath,
-        "--versions-toml", outputDir.file("versions.toml").asFile.absolutePath,
-        outputDir.dir("examples").asFile.absolutePath,
-    )
-
-    outputs.dir(outputDir)
-    dependsOn("relocateExamples", "generateVersionManifest")
 }
 
 /**
@@ -336,9 +292,6 @@ tasks.register("generateCargoWorkspace") {
         rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.file("clippy.toml").asFile, overwrite = true)
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
-    if (awsServices.examples.isNotEmpty()) {
-        inputs.dir(projectDir.resolve("examples"))
-    }
     for (test in awsServices.rootTests) {
         inputs.dir(test.path)
     }
@@ -352,7 +305,6 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     dependsOn("relocateServices")
     dependsOn("relocateRuntime")
     dependsOn("relocateAwsRuntime")
-    dependsOn("relocateExamples")
     dependsOn("relocateTests")
 
     inputs.dir(publisherToolPath)
@@ -428,12 +380,10 @@ tasks.assemble.configure {
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
-        "relocateExamples",
         "relocateTests",
         "generateIndexMd",
         "fixManifests",
         "generateVersionManifest",
-        "fixExampleManifests",
         "hydrateReadme",
         "relocateChangelog",
     )
