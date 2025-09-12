@@ -35,23 +35,13 @@ fun Project.docsLandingPage(
         writer.write("| Service | Package |")
         writer.write("| ------- | ------- |")
         awsServices.services.sortedBy { it.humanName }.forEach {
-            val items = listOfNotNull(cratesIo(it), docsRs(it), examplesLink(it, project)).joinToString(" ")
+            val items = listOfNotNull(cratesIo(it), docsRs(it)).joinToString(" ")
             writer.write(
                 "| ${it.humanName} | $items |",
             )
         }
     }
     outputPath.writeText(writer.toString())
-}
-
-/**
- * Generate a link to the examples for a given service
- */
-private fun examplesLink(
-    service: AwsService,
-    project: Project,
-) = service.examplesUri(project)?.let {
-    "([examples]($it))"
 }
 
 /**

@@ -21,11 +21,6 @@ if [[ ! -d "${AWS_SDK_MODELS_PATH}" ]]; then
   exit 1
 fi
 
-echo -e "${C_YELLOW}Taking examples from 'awsdocs/aws-doc-sdk-examples'...${C_RESET}"
-examples_revision=$(cd aws-doc-sdk-examples; git rev-parse HEAD)
-mv aws-doc-sdk-examples/rustv1 smithy-rs/aws/sdk/examples
-rm -rf smithy-rs/aws/sdk/examples/.cargo
-
 echo -e "${C_YELLOW}Creating empty model metadata file since we don't have model update information...${C_RESET}"
 MODEL_METADATA_PATH="$(pwd)/model-metadata.toml"
 echo > "${MODEL_METADATA_PATH}"
@@ -35,7 +30,6 @@ cd smithy-rs
 
 ./gradlew \
     -Paws.sdk.models.path="${AWS_SDK_MODELS_PATH}" \
-    -Paws.sdk.examples.revision="${examples_revision}" \
     -Paws.sdk.previous.release.versions.manifest="${PREVIOUS_RELEASE_VERSIONS_ARG}" \
     -Paws.sdk.model.metadata="${MODEL_METADATA_PATH}" \
     aws:sdk:assemble
