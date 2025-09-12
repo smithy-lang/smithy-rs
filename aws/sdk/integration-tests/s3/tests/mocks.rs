@@ -90,6 +90,37 @@ async fn test_mock_client() {
 }
 
 #[tokio::test]
+async fn test_mock_client_compute() {
+    let s3_computed = mock!(aws_sdk_s3::Client::get_object)
+        .match_requests(|inp| {
+            inp.bucket() == Some("test-bucket") && inp.key() == Some("correct-key")
+        })
+        .then_compute_output(|input| {
+            GetObjectOutput::builder()
+                .body(ByteStream::from(format!("{}.{}", input.bucket().unwrap(), input.key().unwrap())))
+                .build()
+        });
+
+    let s3 = mock_client!(aws_sdk_s3, &[&s3_computed]);
+
+    let data = s3
+        .get_object()
+        .bucket("test-bucket")
+        .key("correct-key")
+        .send()
+        .await
+        .expect("success response")
+        .body
+        .collect()
+        .await
+        .expect("successful read")
+        .to_vec();
+
+    assert_eq!(data, b"test-bucket.correct-key");
+    assert_eq!(s3_real_object.num_calls(), 1);
+}
+
+#[tokio::test]
 async fn test_mock_client_sequence() {
     let rule = mock!(aws_sdk_s3::Client::get_object)
         .sequence()
