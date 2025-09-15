@@ -452,10 +452,8 @@ mod tests {
         // Create a rule that computes its responses based off of input data
         let rule = create_rule_builder()
             .match_requests(|input| input.bucket == "test-bucket" && input.key == "test-key")
-            .then_compute_output(|input| {
-                TestOutput {
-                    content: format!("{}.{}", input.bucket, input.key),
-                }
+            .then_compute_output(|input| TestOutput {
+                content: format!("{}.{}", input.bucket, input.key),
             });
 
         // Create an interceptor with the rule
