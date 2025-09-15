@@ -97,7 +97,11 @@ async fn test_mock_client_compute() {
         })
         .then_compute_output(|input| {
             GetObjectOutput::builder()
-                .body(ByteStream::from(format!("{}.{}", input.bucket().unwrap(), input.key().unwrap())))
+                .body(ByteStream::from(format!(
+                    "{}.{}",
+                    input.bucket().unwrap(),
+                    input.key().unwrap()
+                )))
                 .build()
         });
 
