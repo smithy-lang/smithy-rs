@@ -69,6 +69,10 @@ jobs:
       with:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
+    - name: Run ${{ matrix.actions.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.actions.action }}
 
   # Test the code generator and other parts (styles and lints) that don't require
   # code to have already been generated in order to run.
