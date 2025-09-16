@@ -90,16 +90,6 @@ jobs:
       bot-message: ${{ steps.generate-preview.outputs.bot-message }}
     steps:
     - uses: actions/checkout@v4
-    - uses: actions/cache@v4
-      name: Gradle Cache
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # JDK is needed to generate code
     - name: Set up JDK
       uses: actions/setup-java@v4
       with:
