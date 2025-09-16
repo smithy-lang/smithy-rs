@@ -36,6 +36,7 @@ jobs:
       with:
         distribution: corretto
         java-version: 17
+        cache: gradle
     - name: Stop nginx
       run: sudo systemctl stop nginx
     - name: Checkout smithy-rs

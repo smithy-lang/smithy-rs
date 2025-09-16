@@ -299,6 +299,7 @@ jobs:
       with:
         distribution: temurin
         java-version: '17'
+        cache: gradle
     - name: Check if publishing is needed
       id: check-publish
       shell: bash

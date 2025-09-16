@@ -42,6 +42,7 @@ jobs:
         distribution: corretto
         java-package: jdk
         java-version: 17
+        cache: gradle
       # Rust is only used to `rustfmt` the generated code; doesn't need to match MSRV
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master

@@ -106,6 +106,7 @@ jobs:
         distribution: corretto
         java-package: jdk
         java-version: ${{ env.java_version }}
+        cache: gradle
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_nightly_version }}
