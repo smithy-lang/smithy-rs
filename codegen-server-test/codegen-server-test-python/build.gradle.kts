@@ -23,6 +23,9 @@ val buildDir = layout.buildDirectory.get().asFile
 val pluginName = "rust-server-codegen-python"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
 
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/4303): Remove lockfile when the issue is resolved
+val checkedInSmithyRuntimeLockfile = rootProject.projectDir.resolve("rust-runtime/Cargo.lock")
+
 smithy {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
     format = false
@@ -101,6 +104,7 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerCopyCheckedInCargoLockfileTask(checkedInSmithyRuntimeLockfile, layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks.register("stubs") {
     description = "Generate Python stubs for all models"
@@ -121,7 +125,7 @@ tasks.smithyBuild.configure {
     dependsOn("generateSmithyBuild")
 }
 tasks.assemble.configure {
-    finalizedBy("generateCargoWorkspace")
+    finalizedBy("generateCargoWorkspace", "copyCheckedInCargoLockfile")
 }
 
 project.registerModifyMtimeTask()
