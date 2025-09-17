@@ -15,7 +15,7 @@ structure validationMessage {}
 /// Marks a member as containing the list of field-level validation errors.
 /// The target shape must be a String, List<String>, or List<Structure> where
 /// the structure contains validation field information.
-@trait(selector: "structure[trait|smithy.rust.codegen.server.traits#validationFieldList] > member")
+@trait(selector: "structure > member")
 structure validationFieldList {}
 
 /// Marks a String member as containing the field name in a validation field structure.
