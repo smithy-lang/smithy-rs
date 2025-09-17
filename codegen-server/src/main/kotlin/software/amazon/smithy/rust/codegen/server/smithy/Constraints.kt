@@ -129,10 +129,25 @@ fun Shape.canReachConstrainedShape(
         DirectedWalker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }
 
+/**
+ * See [Shape.canReachConstrainedShape]
+ *
+ * We use this to check for constrained shapes in validation phase because the [SymbolProvider] has not yet been created
+ */
+fun Shape.canReachConstrainedShapeForValidation(model: Model): Boolean =
+    if (this is MemberShape) {
+        this.targetCanReachConstrainedShapeForValidation(model)
+    } else {
+        DirectedWalker(model).walkShapes(this).toSet().any { it.isDirectlyConstrainedForValidation() }
+    }
+
 fun MemberShape.targetCanReachConstrainedShape(
     model: Model,
     symbolProvider: SymbolProvider,
 ): Boolean = model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
+
+fun MemberShape.targetCanReachConstrainedShapeForValidation(model: Model): Boolean =
+    model.expectShape(this.target).canReachConstrainedShapeForValidation(model)
 
 fun Shape.hasPublicConstrainedWrapperTupleType(
     model: Model,
