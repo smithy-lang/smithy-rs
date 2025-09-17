@@ -6,22 +6,73 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Allows customers to configure the auth schemes and auth scheme resolver. For more information see the GitHub [discussion](https://github.com/smithy-lang/smithy-rs/discussions/4197).\n",
+      "message": "Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:\n- aws-sdk-cloudformation\n- aws-sdk-dynamodb\n- aws-sdk-ec2\n- aws-sdk-s3\n- aws-sdk-sns\n- aws-sdk-sqs\n- aws-sdk-ssm\n- aws-sdk-sts\n\nSee more information about this hint at https://blog.rust-lang.org/inside-rust/2025/07/15/call-for-testing-hint-mostly-unused/\n",
       "meta": {
         "bug": false,
         "breaking": false,
+        "tada": true
+      },
+      "author": "landonxjames",
+      "references": [
+        "smithy-rs#4208"
+      ],
+      "since-commit": "fd54b8282920c862db4604f620ab188ec4a235b9",
+      "age": 5
+    },
+    {
+      "message": "Enable `hints.mostly-unused = true` for `aws-sdk-lambda` (taking a release\nbuild from 57s to 40s) and `aws-sdk-rds` (taking a release build from 1m34s to\n49s).\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "joshtriplett",
+      "references": [
+        "smithy-rs#4208"
+      ],
+      "since-commit": "fd54b8282920c862db4604f620ab188ec4a235b9",
+      "age": 5
+    },
+    {
+      "message": "pin crc-fast to <1.4 to workaround SIGILL\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
         "tada": false
       },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4076",
-        "smithy-rs#4198"
-      ],
-      "since-commit": "ccf374dddc0690ef8aca1ed006b9e9b21299558e",
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "01aece8b664968ac63354e52b88915e8f8546738",
       "age": 4
     },
     {
-      "message": "re-use checksums on retry attempts for enhanced durability\n",
+      "message": "Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "aajtodd",
+      "references": [
+        "aws-sdk-rust#169"
+      ],
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
+      "age": 3
+    },
+    {
+      "message": "Enable rustls post-quantum by default.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "WillChilds-Klein",
+      "references": [],
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
+      "age": 3
+    },
+    {
+      "message": "fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2\n",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -29,36 +80,22 @@
       },
       "author": "aajtodd",
       "references": [],
-      "since-commit": "1378695258e645d2c65a99cc0311b8c3d982e167",
+      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
       "age": 3
     },
     {
-      "message": "Event streams now allocate a right-sized buffer avoiding repeated reallocations during serialization\n",
+      "message": "Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).\n",
       "meta": {
         "bug": false,
         "breaking": false,
         "tada": false
       },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#4212"
-      ],
-      "since-commit": "a23d116a79e8920c2efa813a8f831541a9943e4f",
-      "age": 2
-    },
-    {
-      "message": "Add support for configuring auth schemes manually using an auth scheme preference list.\nThe preference list allows customers to reprioritize the order of auth schemes originally\ndetermined by the auth scheme resolver.\nCustomers can configure the auth scheme preference at the following locations, listed in order of precedence:\n1. Service Client Configuration\n```rust\nuse aws_runtime::auth::sigv4;\nuse aws_smithy_runtime_api::client::auth::AuthSchemeId;\nuse aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;\n\nlet config = aws_sdk_s3::Config::builder()\n    .auth_scheme_preference([AuthSchemeId::from(\"scheme1\"), sigv4::SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID])\n    // ...\n    .build();\n```\n2. Environment Variable\n```\nAWS_AUTH_SCHEME_PREFERENCE=scheme1, sigv4, httpBearerAuth\n```\n3. Configuration File\n```\nauth_scheme_preference=scheme1, sigv4, httpBearerAuth\n```\nWith this configuration, the auth scheme resolver will prefer to select them in the specified order,\nif they are supported.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
       "author": "ysaito1001",
       "references": [
-        "smithy-rs#4203"
+        "smithy-rs#4263"
       ],
-      "since-commit": "6649098171e33e1e65eaacffb12be58e858a4782",
-      "age": 1
+      "since-commit": "f18c70d36c40fa0f40860547394c134566704e69",
+      "age": 2
     }
   ],
   "aws-sdk-model": []

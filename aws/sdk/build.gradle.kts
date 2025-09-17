@@ -12,17 +12,14 @@ import aws.sdk.parseMembership
 extra["displayName"] = "Smithy :: Rust :: AWS-SDK"
 extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 
-tasks["jar"].enabled = false
-
 plugins {
     java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
+tasks.jar.configure {
+    enabled = false
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
@@ -30,7 +27,6 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
     allowUnknownTraits = true
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
@@ -48,11 +44,11 @@ val generatedSdkLockfile = outputDir.file("Cargo.lock")
 
 
 dependencies {
-    implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-iam-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-cloudformation-traits:$smithyVersion")
+    implementation(project(":aws:codegen-aws-sdk"))
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.aws.iam.traits)
+    implementation(libs.smithy.aws.cloudformation.traits)
 }
 
 // Class and functions for service and protocol membership for SDK generation
@@ -409,8 +405,6 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         outputDir.asFile.absolutePath,
         "--smithy-build",
         layout.buildDirectory.file("smithy-build.json").get().asFile.normalize().absolutePath,
-        "--examples-revision",
-        properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
         getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
@@ -419,14 +413,15 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     }
 }
 
-tasks["smithyBuild"].apply {
+tasks.smithyBuild.configure {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
     outputs.upToDateWhen { false }
 }
-tasks["assemble"].apply {
+
+tasks.assemble.configure {
     dependsOn(
         "deleteSdk",
         "jar",
@@ -494,8 +489,9 @@ fun Project.registerDowngradeFor(
             val crateNameToLastKnownWorkingVersions =
                 mapOf(
                     "minicbor" to "0.24.2",
-                    "libfuzzer-sys" to "0.4.7" // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
-                    )
+                    "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
+                    "crc-fast" to "1.3.0", // TODO(https://github.com/awesomized/crc-fast-rust/issues/14)
+                )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
                 // doesn't matter even if the specified crate does not exist in the lockfile

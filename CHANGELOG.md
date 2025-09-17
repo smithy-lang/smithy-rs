@@ -1,4 +1,79 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+September 10th, 2025
+====================
+**New this release:**
+- :bug: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) The `HickoryDnsResolver` and `TokioDnsResolver` were not `Clone` making it impossible to use them in the http_client builder's `build_with_resolver` method.
+
+
+August 28th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) Add a new crate, `aws-smithy-dns` that contains a `HickoryDnsResolver`. This wraps a `hickory_resolver::Resolver` and provides some minimal configuration options (timeouts, retries, etc.) Instructions for overriding the DNS resolver on your HTTP client can be found in our documentation at https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#overrideDns
+- :bug: (client, [smithy-rs#4282](https://github.com/smithy-lang/smithy-rs/issues/4282)) Set the `pool_timer` for the default Hyper client. This is required to allow the `pool_idle_timeout` to work. Now idle connections will be released by the pool after 90 seconds.
+- (client, [smithy-rs#4263](https://github.com/smithy-lang/smithy-rs/issues/4263)) Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).
+
+
+August 18th, 2025
+=================
+**New this release:**
+- :tada: (client, [aws-sdk-rust#169](https://github.com/awslabs/aws-sdk-rust/issues/169)) Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.
+- :tada: (client, @WillChilds-Klein) Enable rustls post-quantum by default.
+- (client) fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2
+
+**Contributors**
+Thank you for your contributions! ❤
+- @WillChilds-Klein
+
+
+August 13th, 2025
+=================
+**New this release:**
+- :bug: (client) pin crc-fast to <1.4 to workaround SIGILL
+
+
+August 11th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208)) Add the ability to insert `hints.mostly-unused = true` in Cargo.toml. Enable this hint for the below crates:
+    - aws-sdk-cloudformation
+    - aws-sdk-dynamodb
+    - aws-sdk-ec2
+    - aws-sdk-s3
+    - aws-sdk-sns
+    - aws-sdk-sqs
+    - aws-sdk-ssm
+    - aws-sdk-sts
+
+    See more information about this hint at https://blog.rust-lang.org/inside-rust/2025/07/15/call-for-testing-hint-mostly-unused/
+- :tada: (client, [smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208), @joshtriplett) Enable `hints.mostly-unused = true` for `aws-sdk-lambda` (taking a release
+    build from 57s to 40s) and `aws-sdk-rds` (taking a release build from 1m34s to
+    49s).
+
+**Contributors**
+Thank you for your contributions! ❤
+- @joshtriplett ([smithy-rs#4208](https://github.com/smithy-lang/smithy-rs/issues/4208))
+
+
+August 4th, 2025
+================
+**New this release:**
+- :tada: (all, @Dorenavant) Add EnumSection to allow decorators to modify enum member attributes
+- :bug: (client, [smithy-rs#4227](https://github.com/smithy-lang/smithy-rs/issues/4227)) Fix canonical request sort order
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Dorenavant
+
+
+July 25th, 2025
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4232](https://github.com/smithy-lang/smithy-rs/issues/4232)) Add fallback equality on no auth `AuthSchemeId` for backward compatibility, treating `AuthSchemeId::from("no_auth")` (legacy) and `AuthSchemeId::from("noAuth")` (updated) as equivalent.
+
+
+July 23rd, 2025
+===============
+
 July 21st, 2025
 ===============
 **New this release:**

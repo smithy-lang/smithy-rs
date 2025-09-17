@@ -63,6 +63,7 @@ object CrateSet {
             "aws-smithy-checksums",
             "aws-smithy-compression",
             "aws-smithy-client",
+            "aws-smithy-dns",
             "aws-smithy-eventstream",
             "aws-smithy-experimental",
             "aws-smithy-http",

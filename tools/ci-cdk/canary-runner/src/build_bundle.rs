@@ -688,7 +688,7 @@ default = ["latest"]
             generate_crate_manifest(CrateSource::VersionsManifest {
                 versions: VersionsManifest {
                     smithy_rs_revision: "some-revision-smithy-rs".into(),
-                    aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+                    aws_doc_sdk_examples_revision: None,
                     manual_interventions: Default::default(),
                     crates: [
                         crate_version("aws-config", "0.46.0"),
@@ -750,7 +750,7 @@ aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
         let crate_source = CrateSource::VersionsManifest {
             versions: VersionsManifest {
                 smithy_rs_revision: "some-revision-smithy-rs".into(),
-                aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+                aws_doc_sdk_examples_revision: None,
                 manual_interventions: Default::default(),
                 crates: [
                     crate_version("aws-config", "0.46.0"),
@@ -848,7 +848,7 @@ aws-smithy-wasm = { version = "0.1.0" }
     fn test_notable_versions() {
         let versions = VersionsManifest {
             smithy_rs_revision: "some-revision-smithy-rs".into(),
-            aws_doc_sdk_examples_revision: "some-revision-docs".into(),
+            aws_doc_sdk_examples_revision: None,
             manual_interventions: Default::default(),
             crates: [].into_iter().collect(),
             release: None,
