@@ -10,6 +10,8 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.IntEnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MapShape
@@ -97,6 +99,35 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean =
             this.members().any { !symbolProvider.toSymbol(it).isOptional() && !it.hasNonNullDefault() }
         }
 
+        else -> this.isDirectlyConstrainedHelper()
+    }
+
+/**
+ * See [Shape.isDirectlyConstrained]
+ *
+ * We use this to check for constrained shapes in validation phase because the [SymbolProvider] has not yet been created
+ */
+fun Shape.isDirectlyConstrainedForValidation(): Boolean =
+    when (this) {
+        is StructureShape -> {
+            // we use `member.isOptional` here because the issue outlined in (https://github.com/smithy-lang/smithy-rs/issues/1302)
+            // should not be relevant in validation phase
+            this.members().any { !it.isOptional && !it.hasNonNullDefault() }
+        }
+
+        // For alignment with
+        // (https://github.com/smithy-lang/smithy-rs/blob/custom-validation-rfc/design/src/rfcs/rfc0047_custom_validation.md#terminology)
+        // TODO: move to [isDirectlyConstrainerHelper] if they can be safely applied to [isDirectlyConstrained] without breaking implications
+        is EnumShape -> true
+        is IntEnumShape -> true
+        // constraint traits on members shapes is completed: https://github.com/smithy-lang/smithy-rs/issues/1969
+        is MemberShape -> !this.isOptional && !this.hasNonNullDefault()
+
+        else -> this.isDirectlyConstrainedHelper()
+    }
+
+private fun Shape.isDirectlyConstrainedHelper(): Boolean =
+    when (this) {
         is MapShape -> this.hasTrait<LengthTrait>()
         is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
         is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
