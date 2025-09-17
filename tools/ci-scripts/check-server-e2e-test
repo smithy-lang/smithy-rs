@@ -6,7 +6,4 @@
 set -eux
 cd smithy-rs/examples
 
-#TODO(https://github.com/smithy-lang/smithy-rs/issues/4303): Remove `cp` when the issue is resolved
-cp ../rust-runtime/Cargo.lock .
-
 make test clippy

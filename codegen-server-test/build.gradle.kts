@@ -20,9 +20,6 @@ val properties = PropertyRetriever(rootProject, project)
 val pluginName = "rust-server-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test/"
 
-// TODO(https://github.com/smithy-lang/smithy-rs/issues/4303): Remove lockfile when the issue is resolved
-val checkedInSmithyRuntimeLockfile = rootProject.projectDir.resolve("rust-runtime/Cargo.lock")
-
 dependencies {
     implementation(project(":codegen-server"))
     implementation(libs.smithy.aws.protocol.tests)
@@ -106,10 +103,9 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
-project.registerCopyCheckedInCargoLockfileTask(checkedInSmithyRuntimeLockfile, layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml", "copyCheckedInCargoLockfile")
+tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
