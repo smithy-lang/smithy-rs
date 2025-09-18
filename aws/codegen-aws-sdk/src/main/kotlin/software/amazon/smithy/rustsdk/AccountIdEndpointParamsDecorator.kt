@@ -258,7 +258,7 @@ private class AccountIdEndpointFeatureTrackerInterceptor(codegenContext: ClientC
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
                 section.registerInterceptor(this) {
                     rustTemplate(
-                        "#{Interceptor}::default()",
+                        "#{Interceptor}",
                         "Interceptor" to
                             RuntimeType.forInlineDependency(
                                 InlineAwsDependency.forRustFile(
