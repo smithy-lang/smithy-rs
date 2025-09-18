@@ -69,11 +69,6 @@ jobs:
       with:
         repository: awslabs/aws-sdk-rust
         path: aws-sdk-rust
-    # The examples from aws-doc-sdk-examples are needed to see if smithy-rs changes break examples
-    - uses: actions/checkout@v4
-      with:
-        repository: awsdocs/aws-doc-sdk-examples
-        path: aws-doc-sdk-examples
     - name: Run ${{ matrix.actions.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
