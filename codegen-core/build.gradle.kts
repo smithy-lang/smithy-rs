@@ -84,7 +84,7 @@ val generateBuildEnvironmentConstants = tasks.register("generateBuildEnvironment
 
             object BuildEnvironment {
                 const val MSRV: String = "$rustMsrv"
-                const val PROJECT_DIR: String = "$rootDir"
+                const val PROJECT_DIR: String = "${rootDir.invariantSeparatorsPath}"
             }
         """.trimIndent())
     }
