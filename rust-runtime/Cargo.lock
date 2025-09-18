@@ -437,7 +437,7 @@ version = "0.60.3"
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -478,7 +478,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.65.5"
+version = "0.65.6"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -508,7 +508,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.66.2"
+version = "0.66.3"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
@@ -2241,9 +2241,9 @@ dependencies = [
 
 [[package]]
 name = "lambda_http"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2505c4a24f5a8d8ac66a87691215ec1f79736c5bc6e62bb921788dca9753f650"
+checksum = "cfba45269ac18740ba882b09d1617c1f05eb4bdc026a5149b593bf77dab12e6b"
 dependencies = [
  "aws_lambda_events",
  "base64 0.21.7",
