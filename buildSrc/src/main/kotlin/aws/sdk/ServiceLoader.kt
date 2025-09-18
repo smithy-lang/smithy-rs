@@ -38,16 +38,8 @@ class AwsServices(
                 CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/${it.name}" } +
                 CrateSet.AWS_SDK_RUNTIME.map { "sdk/${it.name}" }
             // Root tests should not be included since they can't be part of the root Cargo workspace
-            // in order to test differences in Cargo features. Examples should not be included either
-            // because each example itself is a workspace.
+            // in order to test differences in Cargo features.
         ).toSortedSet()
-    }
-
-    val examples: List<String> by lazy {
-        val examplesRoot = project.projectDir.resolve("examples")
-        examplesRoot.listFiles { file ->
-            !file.name.startsWith(".") && file.isDirectory() && file.resolve("Cargo.toml").exists()
-        }.orEmpty().toList().map { "examples/${it.name}" }
     }
 
     /**
@@ -88,7 +80,7 @@ class AwsServices(
     /**
      * Returns a list of crates excluded from the workspace.
      */
-    fun excludedFromWorkspace() = examples + rootTests.map(RootTest::manifestName)
+    fun excludedFromWorkspace() = rootTests.map(RootTest::manifestName)
 }
 
 /**
@@ -192,18 +184,6 @@ data class AwsService(
     val humanName: String,
 ) {
     fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
-
-    fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
-
-    /**
-     * Generate a link to the examples for a given service
-     */
-    fun examplesUri(project: Project) =
-        if (project.examples().exists()) {
-            "https://github.com/awslabs/aws-sdk-rust/tree/main/examples/$module"
-        } else {
-            null
-        }
 }
 
 fun AwsService.crate(): String = "aws-sdk-$module"
