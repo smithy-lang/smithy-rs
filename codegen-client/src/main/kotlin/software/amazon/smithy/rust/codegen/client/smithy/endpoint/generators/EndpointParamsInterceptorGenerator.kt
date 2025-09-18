@@ -51,7 +51,6 @@ class EndpointParamsInterceptorGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-    private val endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val codegenScope =
         codegenContext.runtimeConfig.let { rc ->
             val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
