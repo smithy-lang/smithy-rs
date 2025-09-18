@@ -13,7 +13,7 @@ publish = false
 [dependencies]
 approx = "0.5.1"
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
-aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime" }
+aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }

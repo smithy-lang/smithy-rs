@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDe
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -199,6 +201,10 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
                                 "AccountIdEndpointMode" to
                                     AwsRuntimeType.awsTypes(codegenContext.runtimeConfig)
                                         .resolve("endpoint_config::AccountIdEndpointMode"),
+                                "AwsSdkFeature" to
+                                    AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                                        .resolve("sdk_feature::AwsSdkFeature"),
+                                "tracing" to RuntimeType.Tracing,
                             )
 
                         override fun loadBuiltInFromServiceConfig(
@@ -236,5 +242,31 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
                         }
                     },
                 )
+
+            override fun serviceRuntimePluginCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ServiceRuntimePluginCustomization>,
+            ): List<ServiceRuntimePluginCustomization> =
+                baseCustomizations + listOf(AccountIdEndpointFeatureTrackerInterceptor(codegenContext))
         },
 )
+
+private class AccountIdEndpointFeatureTrackerInterceptor(codegenContext: ClientCodegenContext) :
+    ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection) =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rustTemplate(
+                        "#{Interceptor}",
+                        "Interceptor" to
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile(
+                                    "account_id_endpoint",
+                                ),
+                            ).resolve("AccountIdEndpointFeatureTrackerInterceptor"),
+                    )
+                }
+            }
+        }
+}
