@@ -82,6 +82,56 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
+    fun `it should work when an operation with constrained input has a custom validation exception attached in errors`() {
+        val version = "\$version: \"2\""
+        val model =
+            """
+            $version
+            namespace test
+
+            use smithy.rust.codegen.server.traits#validationException
+            use smithy.rust.codegen.server.traits#validationMessage
+    
+            service TestService {
+                operations: [TestOperation]
+            }
+    
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+                errors: [
+                    CustomValidationException
+                ]
+            }
+
+            structure TestInputOutput {
+                @required
+                requiredString: String
+            }
+            
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                @default("Validation Failed")
+                @required
+                message: String,
+
+                errorCode: String,
+            }
+            """.asSmithyModel()
+        val service = model.lookup<ServiceShape>("test#TestService")
+        val validationResult =
+            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                model,
+                service,
+                SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+            )
+
+        validationResult.messages shouldHaveSize 0
+    }
+
+    @Test
     fun `should detect when event streams are used, even without constraints, as the event member is required`() {
         val model =
             """
