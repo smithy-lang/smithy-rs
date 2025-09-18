@@ -93,7 +93,9 @@ async fn basic_positive_cases() {
         ),
     ];
 
-    for (i, (update_builder, table_name, expected_uri, expected_metrics)) in test_cases.into_iter().enumerate() {
+    for (i, (update_builder, table_name, expected_uri, expected_metrics)) in
+        test_cases.into_iter().enumerate()
+    {
         let (client, rx) = test_client(*update_builder);
         let _ = call_operation(client, table_name).await;
         let req = rx.expect_request();
