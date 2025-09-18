@@ -16,7 +16,7 @@ allowed_external_types = [
     "serde::ser::Serialize",
     "serde::de::Deserialize",
     "serde_core::de::Deserialize",
-    "serde_core::se::Serialize",
+    "serde_core::ser::Serialize",
     "hyper::client::connect::dns::Name",
     "http::request::Request",
     "http::response::Response",
