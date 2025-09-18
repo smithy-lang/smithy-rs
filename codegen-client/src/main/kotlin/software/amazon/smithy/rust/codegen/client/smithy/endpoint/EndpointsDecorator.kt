@@ -107,28 +107,6 @@ interface EndpointCustomization {
         codegenContext: ClientCodegenContext,
         params: String,
     ): Writable? = null
-
-    /**
-     * Allows tracking SDK features (generic SDK or AWS SDK) in the config bag.
-     *
-     * Example:
-     * ```kotlin
-     * override fun trackSdkFeatures(codegenContext: ClientCodegenContext, configBag: String): Writable? {
-     *     return writable {
-     *         rustTemplate("""
-     *             $configBag.interceptor_state().store_put(#{SmithySdkFeature}::Foo);
-     *         """,
-     *         "SmithySdkFeature" to RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
-     *             .resolve("client::sdk_feature::SmithySdkFeature"),
-     *         )
-     *     }
-     * }
-     * ```
-     */
-    fun trackSdkFeatures(
-        codegenContext: ClientCodegenContext,
-        configBag: String,
-    ): Writable? = null
 }
 
 /**

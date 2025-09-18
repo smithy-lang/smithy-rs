@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ConditionalDe
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -238,39 +240,33 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
                                 )
                             }
                         }
-
-                        override fun trackSdkFeatures(
-                            codegenContext: ClientCodegenContext,
-                            configBag: String,
-                        ) = writable {
-                            rustTemplate(
-                                """
-                                match cfg
-                                    .load::<#{AccountIdEndpointMode}>()
-                                    .cloned()
-                                    .unwrap_or_default()
-                                {
-                                    #{AccountIdEndpointMode}::Preferred => {
-                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModePreferred);
-                                    }
-                                    #{AccountIdEndpointMode}::Required => {
-                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModeRequired);
-                                    }
-                                    #{AccountIdEndpointMode}::Disabled => {
-                                        $configBag.interceptor_state().store_append(#{AwsSdkFeature}::AccountIdModeDisabled);
-                                    }
-                                    otherwise => {
-                                        #{tracing}::warn!(
-                                            "Attempted to track an SDK feature for `{otherwise:?}`, which is not recognized in the current version of the SDK. \
-                                            Consider upgrading to the latest version to ensure that it is properly tracked."
-                                        );
-                                    }
-                                }
-                                """,
-                                *codegenScope,
-                            )
-                        }
                     },
                 )
+
+            override fun serviceRuntimePluginCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ServiceRuntimePluginCustomization>,
+            ): List<ServiceRuntimePluginCustomization> =
+                baseCustomizations + listOf(AccountIdEndpointFeatureTrackerInterceptor(codegenContext))
         },
 )
+
+private class AccountIdEndpointFeatureTrackerInterceptor(codegenContext: ClientCodegenContext) :
+    ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection) =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rustTemplate(
+                        "#{Interceptor}::default()",
+                        "Interceptor" to
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile(
+                                    "account_id_endpoint",
+                                ),
+                            ).resolve("AccountIdEndpointFeatureTrackerInterceptor"),
+                    )
+                }
+            }
+        }
+}
