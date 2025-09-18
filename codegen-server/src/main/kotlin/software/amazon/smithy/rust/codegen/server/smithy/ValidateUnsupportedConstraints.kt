@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
 import java.util.logging.Level
 
 private sealed class UnsupportedConstraintMessageKind {
@@ -210,7 +211,13 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
         operationShapesThatMustHaveValidationException(model, service)
-            .filter { !it.errors.contains(validationExceptionShapeId) }
+            .filter {
+                !it.errors.contains(validationExceptionShapeId) && it.errors.none { error ->
+                    model.expectShape(
+                        error,
+                    ).hasTrait(ValidationExceptionTrait.ID)
+                }
+            }
             .map { OperationWithConstrainedInputWithoutValidationException(it) }
             .toSet()
 
@@ -218,6 +225,7 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
         operationsWithConstrainedInputWithoutValidationExceptionSet.map {
             LogMessage(
                 Level.SEVERE,
+                // TODO: Add custom validation exception option to error message and link docs
                 """
                 Operation ${it.shape.id} takes in input that is constrained
                 (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
@@ -327,7 +335,7 @@ fun validateUnsupportedConstraints(
                 mapShapeReachableFromUniqueItemsListShapeSet.map {
                     it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
                 }
-        ).toMutableList()
+            ).toMutableList()
 
     if (messages.isEmpty() && codegenConfig.ignoreUnsupportedConstraints) {
         messages +=
