@@ -96,12 +96,10 @@ async fn test_mock_client_compute() {
             inp.bucket() == Some("test-bucket") && inp.key() == Some("correct-key")
         })
         .then_compute_output(|input| {
+            let content =
+                format!("{}.{}", input.bucket().unwrap(), input.key().unwrap()).into_bytes();
             GetObjectOutput::builder()
-                .body(ByteStream::from(format!(
-                    "{}.{}",
-                    input.bucket().unwrap(),
-                    input.key().unwrap()
-                )))
+                .body(ByteStream::from(content))
                 .build()
         });
 
@@ -121,7 +119,7 @@ async fn test_mock_client_compute() {
         .to_vec();
 
     assert_eq!(data, b"test-bucket.correct-key");
-    assert_eq!(s3_real_object.num_calls(), 1);
+    assert_eq!(s3_computed.num_calls(), 1);
 }
 
 #[tokio::test]
