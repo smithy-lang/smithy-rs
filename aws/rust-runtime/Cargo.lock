@@ -96,21 +96,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-endpoint"
-version = "0.60.3"
-
-[[package]]
-name = "aws-http"
-version = "0.60.6"
-dependencies = [
- "aws-runtime",
-]
-
-[[package]]
-name = "aws-hyper"
-version = "0.60.3"
-
-[[package]]
 name = "aws-inlineable"
 version = "0.1.0"
 dependencies = [
@@ -181,10 +166,6 @@ dependencies = [
 [[package]]
 name = "aws-runtime-api"
 version = "1.1.8"
-
-[[package]]
-name = "aws-sig-auth"
-version = "0.60.3"
 
 [[package]]
 name = "aws-sigv4"
@@ -276,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.1"
+version = "1.1.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
