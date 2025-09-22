@@ -210,7 +210,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     rustTemplate(
                         """
                         if ${section.configBuilderRef}.config.load::<#{Region}>().is_none() {
-                            self.set_region(#{Region}::new("us-east-1"));
+                            self.set_region(#{Some}(#{Region}::new("us-east-1")));
                         }
                         """,
                         *codegenScope,
