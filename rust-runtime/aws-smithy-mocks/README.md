@@ -22,7 +22,7 @@ You must enable the `test-util` feature of the service client crate in order to 
 
 If the feature is not enabled a compilation error similar to the following will occur:
 
-```
+```ignore
 no method named with_test_defaults found for struct <service-client-crate>::config::Builder in the current scope
 method not found in Builder
 ```

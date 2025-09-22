@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// Basic test of using the mock_client macro from an "external" crate
+//! Basic test of using the mock_client macro from an "external" crate
 
 mod fake_crate {
     pub(crate) mod client {
@@ -32,9 +32,6 @@ mod fake_crate {
             pub fn build(self) -> Config {
                 Config {}
             }
-            pub fn region(self, _region: crate::fake_crate::config::Region) -> Self {
-                Self {}
-            }
             pub fn with_test_defaults(self) -> Self {
                 Self {}
             }
@@ -44,13 +41,6 @@ mod fake_crate {
 
             pub fn interceptor(self, _interceptor: impl Intercept + 'static) -> Self {
                 self
-            }
-        }
-
-        pub(crate) struct Region {}
-        impl Region {
-            pub fn from_static(_region: &'static str) -> Self {
-                Self {}
             }
         }
     }
