@@ -17,12 +17,13 @@ without mocking the entire client or using traits.
 ## Prerequisites
 
 <div class="warning">
-You must enable the `test-util` feature of the service client crate in order to use the `mock_client` macro.
+You must enable the `test-util` feature of the service client crate in order to use the `mock_client` macro. This should
+usually only be enabled as part of your `dev-dependencies` (see the example `Cargo.toml` below).
 </div>
 
 If the feature is not enabled a compilation error similar to the following will occur:
 
-```ignore
+```txt
 no method named with_test_defaults found for struct <service-client-crate>::config::Builder in the current scope
 method not found in Builder
 ```
@@ -33,7 +34,7 @@ Example `Cargo.toml` using the `aws-sdk-s3` crate as the service client crate un
 [dependencies]
 aws-sdk-s3 = "1"
 
-[test-dependencies]
+[dev-dependencies]
 aws-smithy-mocks = "0.2"
 aws-sdk-s3 = { version = "1", features = ["test-util"] }
 ```
