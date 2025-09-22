@@ -77,6 +77,9 @@ macro_rules! mock {
 
 /// `mock_client!` macro produces a Client configured with a number of Rules and appropriate test default configuration.
 ///
+/// ## Prerequisites
+/// You must enable the `test-util` feature of the service client crate in order to use the `mock_client` macro.
+///
 /// # Examples
 ///
 /// **Create a client that uses a mock failure and then a success**:
@@ -143,7 +146,6 @@ macro_rules! mock_client {
             coerce($additional_configuration)(
                 $aws_crate::config::Config::builder()
                     .with_test_defaults()
-                    .region($aws_crate::config::Region::from_static("us-east-1"))
                     .http_client(mock_http_client)
                     .interceptor(mock_response_interceptor),
             )
