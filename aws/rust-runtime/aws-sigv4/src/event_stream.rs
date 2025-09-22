@@ -51,10 +51,12 @@ use crate::http_request::SigningError;
 use crate::sign::v4::{calculate_signature, generate_signing_key, sha256_hex_string};
 use crate::SigningOutput;
 use aws_credential_types::Credentials;
-use aws_smithy_eventstream::frame::{write_headers_to, write_message_to};
+use aws_smithy_eventstream::error::Error;
+use aws_smithy_eventstream::frame::{read_message_from, write_headers_to, write_message_to};
+use aws_smithy_eventstream::frame::{UnmarshallMessage, UnmarshalledMessage};
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::time::SystemTime;
 
 /// Event stream signing parameters
@@ -157,6 +159,172 @@ fn sign_payload<'a>(
     ))
 }
 
+/// Error type for signed message extraction operations
+#[derive(Debug)]
+pub enum ExtractionError {
+    /// The payload could not be decoded as a valid message
+    InvalidPayload(Option<Error>),
+    /// The timestamp header is missing or has an invalid format
+    InvalidTimestamp,
+}
+
+/// Information extracted from a signed event stream message
+#[derive(Debug, Clone)]
+pub struct SignatureInfo {
+    /// The chunk signature bytes from the `:chunk-signature` header
+    pub chunk_signature: Bytes,
+    /// The timestamp from the `:date` header
+    pub timestamp: SystemTime,
+}
+
+/// Result of extracting a potentially signed message (raw API)
+#[derive(Debug)]
+pub enum MaybeSignedMessage {
+    /// Message was signed and has been extracted
+    Signed {
+        /// The inner message that was signed
+        message: Message,
+        /// Signature information from the outer message
+        signature: SignatureInfo,
+    },
+    /// Message was not signed (no `:chunk-signature` header present)
+    Unsigned,
+}
+
+/// Extracts the inner message from a potentially signed event stream message.
+///
+/// This is the "raw" API that only handles message extraction. For a higher-level
+/// API that integrates with unmarshallers, see [`SigV4Unmarshaller`].
+pub fn extract_signed_message(message: &Message) -> Result<MaybeSignedMessage, ExtractionError> {
+    // Check if message has chunk signature
+    let mut chunk_signature = None;
+    let mut timestamp = None;
+
+    for header in message.headers() {
+        match header.name().as_str() {
+            ":chunk-signature" => {
+                if let HeaderValue::ByteArray(bytes) = header.value() {
+                    chunk_signature = Some(bytes.clone());
+                }
+            }
+            ":date" => {
+                if let HeaderValue::Timestamp(ts) = header.value() {
+                    timestamp = Some(
+                        SystemTime::try_from(*ts)
+                            // this only occurs if the datetime is thousands of years in the future
+                            .map_err(|_err| ExtractionError::InvalidTimestamp)?,
+                    );
+                } else {
+                    return Err(ExtractionError::InvalidTimestamp);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let Some(chunk_signature) = chunk_signature else {
+        return Ok(MaybeSignedMessage::Unsigned);
+    };
+
+    let Some(timestamp) = timestamp else {
+        return Err(ExtractionError::InvalidTimestamp);
+    };
+
+    // Extract inner message
+    let cursor = Cursor::new(message.payload());
+    let inner_message =
+        read_message_from(cursor).map_err(|err| ExtractionError::InvalidPayload(Some(err)))?;
+
+    Ok(MaybeSignedMessage::Signed {
+        message: inner_message,
+        signature: SignatureInfo {
+            chunk_signature,
+            timestamp,
+        },
+    })
+}
+
+/// A wrapper unmarshaller that handles SigV4 signed event stream messages
+#[derive(Debug)]
+pub struct SigV4Unmarshaller<I> {
+    inner: I,
+}
+
+impl<I> SigV4Unmarshaller<I> {
+    /// Creates a new SigV4 unmarshaller wrapping the given inner unmarshaller
+    pub fn new(inner: I) -> Self {
+        Self { inner }
+    }
+}
+
+/// An event that may or may not be signed, containing the unmarshalled message
+#[derive(Debug)]
+pub struct SignedEvent<T> {
+    /// Signature information if the message was signed, None if unsigned
+    pub signature: Option<SignatureInfo>,
+    /// The unmarshalled message content
+    pub message: T,
+}
+
+/// Error type for the SigV4 unmarshaller
+#[derive(Debug)]
+pub enum SignedEventError<E> {
+    /// Error from the inner unmarshaller when parsing the message
+    ParseError(E),
+    /// Error when extracting the signed message (invalid signature format, etc.)
+    InvalidSignedEvent(ExtractionError),
+}
+
+// Note: This would need to be implemented when we have access to the UnmarshallMessage trait
+impl<I> UnmarshallMessage for SigV4Unmarshaller<I>
+where
+    I: UnmarshallMessage,
+{
+    type Output = SignedEvent<I::Output>;
+    type Error = SignedEventError<I::Error>;
+
+    fn unmarshall(
+        &self,
+        message: &Message,
+    ) -> Result<UnmarshalledMessage<Self::Output, Self::Error>, Error> {
+        let extract_result = match extract_signed_message(message) {
+            Ok(result) => result,
+            Err(extraction_error) => {
+                return Ok(UnmarshalledMessage::Error(
+                    SignedEventError::InvalidSignedEvent(extraction_error),
+                ));
+            }
+        };
+
+        match extract_result {
+            MaybeSignedMessage::Signed { message, signature } => {
+                match self.inner.unmarshall(&message)? {
+                    UnmarshalledMessage::Event(inner_result) => {
+                        Ok(UnmarshalledMessage::Event(SignedEvent {
+                            signature: Some(signature),
+                            message: inner_result,
+                        }))
+                    }
+                    UnmarshalledMessage::Error(inner_error) => Ok(UnmarshalledMessage::Error(
+                        SignedEventError::ParseError(inner_error),
+                    )),
+                }
+            }
+            MaybeSignedMessage::Unsigned => match self.inner.unmarshall(message)? {
+                UnmarshalledMessage::Event(inner_result) => {
+                    Ok(UnmarshalledMessage::Event(SignedEvent {
+                        signature: None,
+                        message: inner_result,
+                    }))
+                }
+                UnmarshalledMessage::Error(inner_error) => Ok(UnmarshalledMessage::Error(
+                    SignedEventError::ParseError(inner_error),
+                )),
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::event_stream::{calculate_string_to_sign, sign_message, SigningParams};
@@ -236,6 +404,157 @@ mod tests {
             assert_eq!(0, value.subsec_nanos());
         } else {
             panic!("expected timestamp for :date header");
+        }
+    }
+
+    #[test]
+    fn sign_and_unsign_roundtrip() {
+        let original_message = Message::new(&b"test payload"[..]).add_header(Header::new(
+            "some-header",
+            HeaderValue::String("value".into()),
+        ));
+        let params = SigningParams {
+            identity: &Credentials::for_tests().into(),
+            region: "us-east-1",
+            name: "testservice",
+            time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
+            settings: (),
+        };
+
+        let last_signature = sha256_hex_string(b"last message sts");
+        let (signed_message, _signature) =
+            sign_message(&original_message, &last_signature, &params)
+                .unwrap()
+                .into_parts();
+
+        let unsigned_message = match super::extract_signed_message(&signed_message).unwrap() {
+            super::MaybeSignedMessage::Signed { message, .. } => message,
+            super::MaybeSignedMessage::Unsigned => panic!("Expected signed message"),
+        };
+
+        // Verify the unsigned message matches the original
+        assert_eq!(original_message.payload(), unsigned_message.payload());
+        assert_eq!(
+            original_message.headers().len(),
+            unsigned_message.headers().len()
+        );
+        for (orig, unsigned) in original_message
+            .headers()
+            .iter()
+            .zip(unsigned_message.headers().iter())
+        {
+            assert_eq!(orig.name(), unsigned.name());
+            assert_eq!(orig.value(), unsigned.value());
+        }
+    }
+
+    #[test]
+    fn test_extract_signed_message() {
+        let original_message = Message::new(&b"test payload"[..]).add_header(Header::new(
+            "some-header",
+            HeaderValue::String("value".into()),
+        ));
+        let params = SigningParams {
+            identity: &Credentials::for_tests().into(),
+            region: "us-east-1",
+            name: "testservice",
+            time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
+            settings: (),
+        };
+
+        let last_signature = sha256_hex_string(b"last message sts");
+        let (signed_message, _signature) =
+            sign_message(&original_message, &last_signature, &params)
+                .unwrap()
+                .into_parts();
+
+        // Test extracting signed message
+        let result = super::extract_signed_message(&signed_message).unwrap();
+        match result {
+            super::MaybeSignedMessage::Signed { message, signature } => {
+                assert_eq!(original_message.payload(), message.payload());
+                assert_eq!(original_message.headers().len(), message.headers().len());
+                assert_eq!(
+                    signature
+                        .timestamp
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs(),
+                    123_456_789
+                );
+            }
+            super::MaybeSignedMessage::Unsigned => panic!("Expected signed message"),
+        }
+
+        // Test unsigned message
+        let unsigned_result = super::extract_signed_message(&original_message).unwrap();
+        assert!(matches!(
+            unsigned_result,
+            super::MaybeSignedMessage::Unsigned
+        ));
+    }
+
+    #[test]
+    fn test_sigv4_unmarshaller() {
+        use aws_smithy_eventstream::frame::{UnmarshallMessage, UnmarshalledMessage};
+
+        // Mock unmarshaller for testing
+        #[derive(Debug)]
+        struct MockUnmarshaller;
+        impl UnmarshallMessage for MockUnmarshaller {
+            type Output = String;
+            type Error = &'static str;
+
+            fn unmarshall(
+                &self,
+                message: &Message,
+            ) -> Result<
+                UnmarshalledMessage<Self::Output, Self::Error>,
+                aws_smithy_eventstream::error::Error,
+            > {
+                Ok(UnmarshalledMessage::Event(format!(
+                    "unmarshalled: {}",
+                    String::from_utf8_lossy(message.payload())
+                )))
+            }
+        }
+
+        let original_message = Message::new(&b"test payload"[..]);
+        let params = SigningParams {
+            identity: &Credentials::for_tests().into(),
+            region: "us-east-1",
+            name: "testservice",
+            time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
+            settings: (),
+        };
+
+        let last_signature = sha256_hex_string(b"last message sts");
+        let (signed_message, _) = sign_message(&original_message, &last_signature, &params)
+            .unwrap()
+            .into_parts();
+
+        let sigv4_unmarshaller = super::SigV4Unmarshaller::new(MockUnmarshaller);
+
+        // Test signed message
+        let result = sigv4_unmarshaller.unmarshall(&signed_message).unwrap();
+        match result {
+            UnmarshalledMessage::Event(signed_event) => {
+                assert!(signed_event.signature.is_some());
+                assert_eq!(signed_event.message, "unmarshalled: test payload");
+            }
+            UnmarshalledMessage::Error(err) => {
+                panic!("Expected successful unmarshalling. got {err:?}")
+            }
+        }
+
+        // Test unsigned message
+        let result = sigv4_unmarshaller.unmarshall(&original_message).unwrap();
+        match result {
+            UnmarshalledMessage::Event(signed_event) => {
+                assert!(signed_event.signature.is_none());
+                assert_eq!(signed_event.message, "unmarshalled: test payload");
+            }
+            UnmarshalledMessage::Error(_) => panic!("Expected successful unmarshalling"),
         }
     }
 }

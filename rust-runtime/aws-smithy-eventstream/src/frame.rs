@@ -346,6 +346,7 @@ fn read_prelude_from<B: Buf>(mut buffer: B) -> Result<(u32, u32), Error> {
 
 /// Reads a message from the given `buffer`. For streaming use cases, use
 /// the [`MessageFrameDecoder`] instead of this.
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/4313): this can be significantly optimized when `B = Bytes`.
 pub fn read_message_from<B: Buf>(mut buffer: B) -> Result<Message, Error> {
     if buffer.remaining() < PRELUDE_LENGTH_BYTES_USIZE {
         return Err(ErrorKind::InvalidMessageLength.into());
