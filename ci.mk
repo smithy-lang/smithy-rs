@@ -84,6 +84,10 @@ check-server-codegen-integration-tests:
 check-server-codegen-unit-tests:
 	$(CI_ACTION) $@ $(ARGS)
 
+.PHONY: check-serde-codegen-unit-tests
+check-serde-codegen-unit-tests:
+	$(CI_ACTION) $@ $(ARGS)
+
 .PHONY: check-server-codegen-integration-tests-python
 check-server-codegen-integration-tests-python:
 	$(CI_ACTION) $@ $(ARGS)
