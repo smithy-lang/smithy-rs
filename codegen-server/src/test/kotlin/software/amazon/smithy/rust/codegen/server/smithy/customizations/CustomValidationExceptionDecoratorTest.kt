@@ -8,12 +8,8 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
-import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 internal class CustomValidationExceptionDecoratorTest {
@@ -55,18 +51,18 @@ internal class CustomValidationExceptionDecoratorTest {
 
         val codegenContext = serverTestCodegenContext(model)
         val decorator = CustomValidationExceptionDecorator()
-        
+
         val generator = decorator.validationExceptionConversion(codegenContext)
-        
+
         generator shouldNotBe null
         codegenContext.customExceptionName shouldBe "MyValidationException"
-        
+
         // Test helper methods
         val conversionGenerator = generator as CustomValidationExceptionConversionGenerator
         val customShape = conversionGenerator.getCustomExceptionShape()
         customShape shouldNotBe null
         customShape!!.id.name shouldBe "MyValidationException"
-        
+
         val additionalMembers = conversionGenerator.getAdditionalMembers()
         additionalMembers shouldHaveSize 2
         additionalMembers.map { it.memberName }.toSet() shouldBe setOf("errorCode", "timestamp")
@@ -85,9 +81,9 @@ internal class CustomValidationExceptionDecoratorTest {
 
         val codegenContext = serverTestCodegenContext(model)
         val decorator = CustomValidationExceptionDecorator()
-        
+
         val generator = decorator.validationExceptionConversion(codegenContext)
-        
+
         generator shouldBe null
         codegenContext.customExceptionName shouldBe null
     }
