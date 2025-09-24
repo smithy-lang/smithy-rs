@@ -246,6 +246,13 @@ open class ServerCodegenVisitor(
                 ),
             ),
             validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
+            codegenDecorator.postprocessMultipleValidationExceptionsErrorMessage(
+                validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
+                    model,
+                    service,
+                    validationExceptionShapeId,
+                ),
+            ),
         )) {
             for (logMessage in validationResult.messages) {
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/1756): These are getting duplicated.
