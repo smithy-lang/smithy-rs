@@ -2,6 +2,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.validators
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -41,7 +42,15 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                             .message("@validationException requires exactly one @validationMessage field").build(),
                     )
 
-                    1 -> { /* Valid */
+                    1 -> {
+                        val validationMessageField = messageFields.first()
+                        if (!model.expectShape(validationMessageField.target).isStringShape) {
+                            events.add(
+                                ValidationEvent.builder().id("CustomValidationException.NonStringMessageField")
+                                    .severity(Severity.ERROR).shape(shape)
+                                    .message("@validationMessage field must be a String").build(),
+                            )
+                        }
                     }
 
                     else -> events.add(
