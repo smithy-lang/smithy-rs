@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator.Companion.hasFallibleBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
@@ -23,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
+import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -322,6 +325,35 @@ class AwsQuerySerializerGeneratorTest {
 
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
             input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `union with unit struct demonstrates query serialization bug`() {
+        val model =
+            """
+            namespace test
+
+            union TestUnion {
+                unitMember: Unit,
+                dataMember: String
+            }
+
+            structure Unit {}
+            """.asSmithyModel()
+
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        val codegenContext = testCodegenContext(model)
+
+        // Render the Unit structure
+        model.lookup<StructureShape>("test#Unit").also { unit ->
+            unit.renderWithModelBuilder(model, codegenContext.symbolProvider, project)
+        }
+
+        // Render the Union
+        project.moduleFor(model.lookup<UnionShape>("test#TestUnion")) {
+            UnionGenerator(model, codegenContext.symbolProvider, this, model.lookup("test#TestUnion")).render()
         }
         project.compileAndTest()
     }
