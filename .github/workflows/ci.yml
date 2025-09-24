@@ -110,6 +110,8 @@ jobs:
           runner: ubuntu-latest
         - action: check-server-codegen-unit-tests-python
           runner: ubuntu-latest
+        - action: check-serde-codegen-unit-tests
+          runner: ubuntu-latest
         - action: check-server-e2e-test
           runner: ubuntu-latest
         - action: check-server-python-e2e-test
