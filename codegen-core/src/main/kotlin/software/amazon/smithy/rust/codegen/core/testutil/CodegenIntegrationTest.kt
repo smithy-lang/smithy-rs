@@ -39,97 +39,73 @@ data class IntegrationTestParams(
  *     model,
  *     IntegrationTestParams(
  *         additionalSettings =
- *             ServerAdditionalSettings.builder()
- *                 .generateCodegenComments()
- *                 .publicConstrainedTypes()
+ *             ServerAdditionalSettings()
+ *                 .generateCodegenComments(true)
+ *                 .publicConstrainedTypes(true)
  *                 .toObjectNode()
  * )),
  * ```
  */
-sealed class AdditionalSettings {
-    abstract fun toObjectNode(): ObjectNode
+open class AdditionalSettings<T : AdditionalSettings<T>> {
+    private val codegenBuilderDelegate =
+        lazy {
+            ObjectNode.builder()
+        }
+    private val codegenBuilder: ObjectNode.Builder by codegenBuilderDelegate
 
-    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) : AdditionalSettings() {
-        override fun toObjectNode(): ObjectNode {
-            val merged =
-                settings.map { it.toObjectNode() }
-                    .reduce { acc, next -> acc.merge(next) }
-
-            return ObjectNode.builder()
-                .withMember("codegen", merged)
+    fun build(): ObjectNode {
+        return if (codegenBuilderDelegate.isInitialized()) {
+            ObjectNode.builder()
+                .withMember("codegen", codegenBuilder.build())
                 .build()
+        } else {
+            ObjectNode.builder().build()
         }
+    }
 
-        abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
-            protected val settings = mutableListOf<AdditionalSettings>()
+    @Suppress("UNCHECKED_CAST")
+    open fun generateCodegenComments(debugMode: Boolean = true): T {
+        codegenBuilder.withMember("debugMode", debugMode)
+        return this as T
+    }
 
-            fun generateCodegenComments(debugMode: Boolean = true): Builder<T> {
-                settings.add(GenerateCodegenComments(debugMode))
-                return this
-            }
+    @Suppress("UNCHECKED_CAST")
+    protected fun withCodegenMember(
+        key: String,
+        value: Boolean,
+    ): T {
+        codegenBuilder.withMember(key, value)
+        return this as T
+    }
 
-            abstract fun build(): T
+    @Suppress("UNCHECKED_CAST")
+    protected fun withCodegenMember(
+        key: String,
+        value: String,
+    ): T {
+        codegenBuilder.withMember(key, value)
+        return this as T
+    }
 
-            override fun toObjectNode(): ObjectNode = build().toObjectNode()
-        }
-
-        // Core settings that are common to both Servers and Clients should be defined here.
-        data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("debugMode", debugMode)
-                    .build()
-        }
+    @Suppress("UNCHECKED_CAST")
+    protected fun withCodegenMember(
+        key: String,
+        value: Number,
+    ): T {
+        codegenBuilder.withMember(key, value)
+        return this as T
     }
 }
 
-class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
-    AdditionalSettings.CoreAdditionalSettings(settings) {
-        class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>() {
-            override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
-        }
+class ServerAdditionalSettings : AdditionalSettings<ServerAdditionalSettings>() {
+    fun publicConstrainedTypes(enabled: Boolean = true): ServerAdditionalSettings =
+        withCodegenMember("publicConstrainedTypes", enabled)
 
-        // Additional settings that are specific to client generation should be defined here.
+    fun addValidationExceptionToConstrainedOperations(enabled: Boolean = true) =
+        withCodegenMember("addValidationExceptionToConstrainedOperations", enabled)
 
-        companion object {
-            fun builder() = Builder()
-        }
-    }
-
-class ServerAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
-    AdditionalSettings.CoreAdditionalSettings(settings) {
-        class Builder : CoreAdditionalSettings.Builder<ServerAdditionalSettings>() {
-            fun publicConstrainedTypes(enabled: Boolean = true): Builder {
-                settings.add(PublicConstrainedTypes(enabled))
-                return this
-            }
-
-            fun addValidationExceptionToConstrainedOperations(enabled: Boolean = true): Builder {
-                settings.add(AddValidationExceptionToConstrainedOperations(enabled))
-                return this
-            }
-
-            override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
-        }
-
-        private data class PublicConstrainedTypes(val enabled: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("publicConstrainedTypes", enabled)
-                    .build()
-        }
-
-        private data class AddValidationExceptionToConstrainedOperations(val enabled: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("addValidationExceptionToConstrainedOperations", enabled)
-                    .build()
-        }
-
-        companion object {
-            fun builder() = Builder()
-        }
-    }
+    fun ignoreUnsupportedConstraints() = withCodegenMember("ignoreUnsupportedConstraints", true)
+}
 
 /**
  * Run cargo test on a true, end-to-end, codegen product of a given model.
