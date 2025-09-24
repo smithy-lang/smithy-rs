@@ -371,4 +371,86 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """.trimIndent().replace("\n", " ")
         )
     }
+
+    @Test
+    fun `it should detect multiple validation exceptions in model`() {
+        val model =
+            """
+            namespace test
+
+            use smithy.rust.codegen.server.traits#validationException
+            use smithy.rust.codegen.server.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            @validationException
+            @error("client")
+            structure AnotherValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String,
+            }
+            """.asSmithyModel()
+
+        val validationResult = validateModelHasAtMostOneValidationException(model, SmithyValidationExceptionConversionGenerator.SHAPE_ID)
+
+        validationResult.shouldAbort shouldBe true
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].level shouldBe Level.SEVERE
+    }
+
+    @Test
+    fun `it should allow single validation exception in model`() {
+        val model =
+            """
+            namespace test
+
+            use smithy.rust.codegen.server.traits#validationException
+            use smithy.rust.codegen.server.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String,
+            }
+            """.asSmithyModel()
+
+        val validationResult = validateModelHasAtMostOneValidationException(model, SmithyValidationExceptionConversionGenerator.SHAPE_ID)
+
+        validationResult.shouldAbort shouldBe false
+        validationResult.messages shouldHaveSize 0
+    }
 }

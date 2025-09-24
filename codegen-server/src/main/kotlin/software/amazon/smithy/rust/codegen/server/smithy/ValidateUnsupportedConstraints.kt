@@ -251,6 +251,10 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
 
+/**
+ * Validate that all constrained operations have exactly one of: [validationExceptionShapeId] or a shape with @validationException
+ * attached to their errors.
+ */
 fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
     model: Model,
     service: ServiceShape,
@@ -280,6 +284,36 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
         }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
+}
+
+/**
+ * Restrict custom validation exceptions to just one
+ */
+fun validateModelHasAtMostOneValidationException(
+    model: Model,
+    validationExceptionShapeId: ShapeId,
+): ValidationResult {
+    val customValidationExceptionShapes = model.shapes()
+        .filter { it.hasTrait(ValidationExceptionTrait.ID) }
+        .toList()
+
+    return if (customValidationExceptionShapes.size > 1) {
+        ValidationResult(
+            shouldAbort = true,
+            listOf(
+                LogMessage(
+                    Level.SEVERE,
+                    """
+                        Defining multiple custom validation exceptions is unsupported.
+                        Found ${customValidationExceptionShapes.size} validation exception shapes: 
+                        """.trimIndent() +
+                        customValidationExceptionShapes.joinToString(", ") { it.id.toString() },
+                ),
+            ),
+        )
+    } else {
+        ValidationResult(shouldAbort = false, emptyList())
+    }
 }
 
 fun validateUnsupportedConstraints(

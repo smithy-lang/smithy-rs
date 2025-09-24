@@ -238,6 +238,7 @@ open class ServerCodegenVisitor(
 
         val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
+            validateModelHasAtMostOneValidationException(model, validationExceptionShapeId),
             codegenDecorator.postprocessValidationExceptionNotAttachedErrorMessage(
                 validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
                     model,
