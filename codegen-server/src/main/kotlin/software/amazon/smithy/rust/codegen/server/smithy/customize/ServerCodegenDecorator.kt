@@ -10,8 +10,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -31,6 +33,11 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
         serviceId: ShapeId,
         currentProtocols: ServerProtocolMap,
     ): ServerProtocolMap = currentProtocols
+
+    fun httpCustomizations(
+        symbolProvider: RustSymbolProvider,
+        protocol: ShapeId,
+    ): List<HttpBindingCustomization> = emptyList()
 
     fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator? =
         null
@@ -87,6 +94,11 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
         combineCustomizations(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
         }
+
+    override fun httpCustomizations(
+        symbolProvider: RustSymbolProvider,
+        protocol: ShapeId,
+    ): List<HttpBindingCustomization> = orderedDecorators.flatMap { it.httpCustomizations(symbolProvider, protocol) }
 
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,

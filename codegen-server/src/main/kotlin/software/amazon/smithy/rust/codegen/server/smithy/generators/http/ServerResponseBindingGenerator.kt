@@ -74,6 +74,7 @@ class ServerResponseBeforeIteratingOverMapBoundWithHttpPrefixHeadersUnwrapConstr
             is HttpBindingSection.BeforeRenderingHeaderValue,
             is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
             is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
+            is HttpBindingSection.BeforeCreatingEventStreamReceiver,
             -> emptySection
         }
 }
@@ -88,7 +89,8 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
         when (section) {
             is HttpBindingSection.BeforeRenderingHeaderValue ->
                 writable {
-                    val isIntegral = section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
+                    val isIntegral =
+                        section.context.shape is ByteShape || section.context.shape is ShortShape || section.context.shape is IntegerShape || section.context.shape is LongShape
                     val isCollection = section.context.shape is CollectionShape
 
                     val workingWithPublicWrapper =
@@ -107,6 +109,7 @@ class ServerResponseBeforeRenderingHeadersHttpBindingCustomization(val codegenCo
             is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
             is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders,
             is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders,
+            is HttpBindingSection.BeforeCreatingEventStreamReceiver,
             -> emptySection
         }
 }

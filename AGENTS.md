@@ -48,6 +48,26 @@ operation MyOperation {
 - **`codegen-core/common-test-models/constraints.smithy`** - Constraint validation tests with restJson1
 - **`codegen-client-test/model/main.smithy`** - awsJson1_1 protocol tests
 
+### httpQueryParams Bug Investigation
+
+When investigating the `@httpQueryParams` bug (where query parameters weren't appearing in requests), the issue was in `RequestBindingGenerator.kt` line 173. The bug occurred when:
+
+1. An operation had ONLY `@httpQueryParams` (no regular `@httpQuery` parameters)
+2. The condition `if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty())` would skip generating the `uri_query` function
+
+The fix was to ensure `mapParams.isEmpty()` was included in the condition check. The current implementation correctly generates query parameters for `@httpQueryParams` even when no other query parameters exist.
+
+**Testing httpQueryParams**: Create operations with only `@httpQueryParams` to ensure they generate proper query strings in requests.
+
+## rustTemplate Formatting
+
+**CRITICAL**: Because `#` is the formatting character in `rustTemplate`, Rust attributes must be escaped:
+
+❌ Wrong: `#[derive(Debug)]`
+✅ Correct: `##[derive(Debug)]`
+
+This applies to ALL Rust attributes: `##[non_exhaustive]`, `##[derive(...)]`, `##[cfg(...)]`, etc.
+
 ## preludeScope: Rust Prelude Types
 
 **Always use `preludeScope` for Rust prelude types:**
