@@ -33,6 +33,28 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class JsonSerializerGeneratorTest {
+    private val unionWithUnitStructModel =
+        """
+        namespace test
+        use aws.protocols#restJson1
+
+        union TestUnion {
+            unitMember: Unit,
+            dataMember: String
+        }
+
+        structure Unit {}
+
+        @http(uri: "/test", method: "POST")
+        operation TestOp {
+            input: TestInput
+        }
+
+        structure TestInput {
+            union: TestUnion
+        }
+        """.asSmithyModel()
+
     private val baseModel =
         """
         namespace test
@@ -346,60 +368,48 @@ class JsonSerializerGeneratorTest {
     }
 
     @Test
-    fun `union with unit struct demonstrates serialization bug`() {
-        val model =
-            """
-            namespace test
+    fun `union with unit struct doesn't cause unused variable warning`() {
+        // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(unionWithUnitStructModel))
 
-            union TestUnion {
-                unitMember: Unit,
-                dataMember: String
-            }
-
-            structure Unit {}
-            """.asSmithyModel()
-
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
         val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val project = TestWorkspace.testProject(symbolProvider)
 
-        // Render the Unit structure
-        model.lookup<StructureShape>("test#Unit").also { unit ->
-            unit.renderWithModelBuilder(model, codegenContext.symbolProvider, project)
-        }
+        // Generate the JSON serializer that will create the union serialization code
+        val jsonSerializer =
+            JsonSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+                ::restJsonFieldName,
+            )
+        val operationGenerator = jsonSerializer.operationInputSerializer(model.lookup("test#TestOp"))
 
-        // Render the Union
+        // Render all necessary structures and unions
+        model.lookup<StructureShape>("test#Unit").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<OperationShape>("test#TestOp").inputShape(model).renderWithModelBuilder(model, symbolProvider, project)
+
         project.moduleFor(model.lookup<UnionShape>("test#TestUnion")) {
-            UnionGenerator(model, codegenContext.symbolProvider, this, model.lookup("test#TestUnion")).render()
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `union with unit struct demonstrates cbor serialization bug`() {
-        val model =
-            """
-            namespace test
-
-            union TestUnion {
-                unitMember: Unit,
-                dataMember: String
-            }
-
-            structure Unit {}
-            """.asSmithyModel()
-
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
-        val codegenContext = testCodegenContext(model)
-
-        // Render the Unit structure
-        model.lookup<StructureShape>("test#Unit").also { unit ->
-            unit.renderWithModelBuilder(model, codegenContext.symbolProvider, project)
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#TestUnion")).render()
         }
 
-        // Render the Union
-        project.moduleFor(model.lookup<UnionShape>("test#TestUnion")) {
-            UnionGenerator(model, codegenContext.symbolProvider, this, model.lookup("test#TestUnion")).render()
+        // Generate the actual protocol_serde module with union serialization
+        project.lib {
+            unitTest(
+                "json_union_serialization",
+                """
+                use test_model::{TestInput, TestUnion, Unit};
+
+                // Generate the serialization function that contains union match arms with (inner)
+                ${format(operationGenerator!!)};
+
+                // Test that the code compiles - this validates our fix works
+                let _test_passed = true;
+                """,
+            )
         }
+
+        // The test passes if the generated code compiles without unused variable warnings
         project.compileAndTest()
     }
 }

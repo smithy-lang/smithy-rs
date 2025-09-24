@@ -357,11 +357,18 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 ) {
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
+                            val memberShape = model.expectShape(member.target)
+                            val memberName = symbolProvider.toMemberName(member)
                             val variantName =
                                 if (member.isTargetUnit()) {
-                                    "${symbolProvider.toMemberName(member)}"
+                                    "$memberName"
+                                } else if (memberShape.isStructureShape &&
+                                    memberShape.asStructureShape().get().allMembers.isEmpty()
+                                ) {
+                                    // Unit structs don't serialize inner, so it is never accessed
+                                    "$memberName(_inner)"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "$memberName(inner)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(
