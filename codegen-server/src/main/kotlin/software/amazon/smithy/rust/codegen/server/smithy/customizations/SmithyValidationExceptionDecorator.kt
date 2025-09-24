@@ -68,7 +68,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
     }
 
     override val shapeId: ShapeId = SHAPE_ID
-    private val fieldGenerator = ValidationExceptionFieldGenerator(codegenContext, "ValidationExceptionField")
+    private val fieldGenerator = ValidationExceptionDecoratorGenerator(codegenContext)
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         fieldGenerator.renderImplFromConstraintViolationForRequestRejection(protocol)
