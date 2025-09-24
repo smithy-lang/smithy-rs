@@ -143,13 +143,15 @@ async fn streaming_operation_handler(
     state.lock().unwrap().streaming_operation.num_calls += 1;
     let ev = input.events.recv().await;
 
-    if let Ok(Some(event)) = &ev {
+    if let Ok(Some(signed_event)) = &ev {
+        // Extract the actual event from the SignedEvent wrapper
+        let actual_event = &signed_event.message;
         state
             .lock()
             .unwrap()
             .streaming_operation
             .events
-            .push(event.clone());
+            .push(actual_event.clone());
     }
 
     Ok(output::StreamingOperationOutput::builder()
@@ -174,13 +176,15 @@ async fn streaming_operation_with_initial_data_handler(
 
     let ev = input.events.recv().await;
 
-    if let Ok(Some(event)) = &ev {
+    if let Ok(Some(signed_event)) = &ev {
+        // Extract the actual event from the SignedEvent wrapper
+        let actual_event = &signed_event.message;
         state
             .lock()
             .unwrap()
             .streaming_operation_with_initial_data
             .events
-            .push(event.clone());
+            .push(actual_event.clone());
     }
 
     Ok(output::StreamingOperationWithInitialDataOutput::builder()
@@ -348,6 +352,39 @@ fn build_event(event_type: &str) -> Message {
     Message::new_from_parts(headers, empty_cbor)
 }
 
+fn build_sigv4_signed_event(event_type: &str) -> Message {
+    use aws_smithy_eventstream::frame::write_message_to;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Build the inner event message
+    let inner_event = build_event(event_type);
+
+    // Serialize the inner message to bytes
+    let mut inner_bytes = Vec::new();
+    write_message_to(&inner_event, &mut inner_bytes).unwrap();
+
+    // Create the SigV4 envelope with signature headers
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let headers = vec![
+        Header::new(
+            ":chunk-signature",
+            HeaderValue::ByteArray(Bytes::from(
+                "example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )),
+        ),
+        Header::new(
+            ":date",
+            HeaderValue::Timestamp(aws_smithy_types::DateTime::from_secs(timestamp as i64)),
+        ),
+    ];
+
+    Message::new_from_parts(headers, Bytes::from(inner_bytes))
+}
+
 fn get_event_type(msg: &Message) -> &str {
     msg.headers()
         .iter()
@@ -436,6 +473,24 @@ async fn test_streaming_operation_with_initial_data_missing() {
             .server
             .streaming_operation_with_initial_data_events(),
         vec![]
+    );
+}
+
+/// Test that the server can handle SigV4 signed event stream messages.
+/// The client wraps the actual event in a SigV4 envelope with signature headers.
+#[tokio::test]
+async fn test_sigv4_signed_event_stream() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Send a SigV4 signed event - the inner message is wrapped in an envelope
+    let signed_event = build_sigv4_signed_event("A");
+    harness.client.send(signed_event).await.unwrap();
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+    assert_eq!(
+        harness.server.streaming_operation_events(),
+        vec![Events::A(Event {})]
     );
 }
 
