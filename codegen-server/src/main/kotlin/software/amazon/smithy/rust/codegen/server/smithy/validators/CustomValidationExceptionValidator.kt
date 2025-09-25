@@ -1,7 +1,9 @@
 package software.amazon.smithy.rust.codegen.server.smithy.validators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DefaultTrait
@@ -13,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShapeForValidation
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrainedForValidation
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.server.traits.ValidationMessageTrait
 
@@ -62,7 +65,7 @@ class CustomValidationExceptionValidator : AbstractValidator() {
 
                 // Validate default constructibility if it contains constrained shapes
                 if (shape.canReachConstrainedShapeForValidation(model)) {
-                    shape.validateDefaultConstructibility(model, events)
+                    shape.members().forEach { member -> member.validateDefaultConstructibility(model, events) }
                 }
             }
 
@@ -73,17 +76,24 @@ class CustomValidationExceptionValidator : AbstractValidator() {
         model: Model,
         events: MutableList<ValidationEvent>,
     ) {
-        val shapes = DirectedWalker(model).walkShapes(this)
-        for (shape in shapes) {
-            if (shape == this) continue
-            if (shape.isDirectlyConstrainedForValidation() && !shape.hasTrait<DefaultTrait>()) {
-                events.add(
-                    ValidationEvent.builder().id("CustomValidationException.MissingDefault")
-                        .severity(Severity.ERROR)
-                        .message("$shape must be default constructible")
-                        .build(),
-                )
+        when (this.type) {
+            ShapeType.STRUCTURE -> {
+                this.members().forEach { member -> member.validateDefaultConstructibility(model, events) }
             }
+
+            ShapeType.MEMBER -> {
+                // We want to check if the member's target is constrained. If so, we want the default trait to be on the member
+                if (this.targetOrSelf(model).isDirectlyConstrainedForValidation() && !this.hasTrait<DefaultTrait>()) {
+                    events.add(
+                        ValidationEvent.builder().id("CustomValidationException.MissingDefault")
+                            .severity(Severity.ERROR)
+                            .message("$this must be default constructible")
+                            .build(),
+                    )
+                }
+            }
+
+            else -> return
         }
     }
 }
