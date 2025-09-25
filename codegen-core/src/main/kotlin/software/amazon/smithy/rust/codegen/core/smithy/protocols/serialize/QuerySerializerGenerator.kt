@@ -371,10 +371,18 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                                     "$memberName(inner)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
+                                val innerRef =
+                                    if (memberShape.isStructureShape &&
+                                        memberShape.asStructureShape().get().allMembers.isEmpty()
+                                    ) {
+                                        "_inner"
+                                    } else {
+                                        "inner"
+                                    }
                                 serializeMember(
                                     MemberContext.unionMember(
                                         context.copy(writerExpression = "writer"),
-                                        "inner",
+                                        innerRef,
                                         member,
                                     ),
                                 )

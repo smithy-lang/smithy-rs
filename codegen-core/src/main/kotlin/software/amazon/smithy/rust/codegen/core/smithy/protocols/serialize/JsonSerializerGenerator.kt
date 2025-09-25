@@ -555,14 +555,28 @@ class JsonSerializerGenerator(
                     }
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
+                            val memberShape = model.expectShape(member.target)
                             val variantName =
                                 if (member.isTargetUnit()) {
                                     "${symbolProvider.toMemberName(member)}"
+                                } else if (memberShape.isStructureShape &&
+                                    memberShape.asStructureShape().get().allMembers.isEmpty()
+                                ) {
+                                    // Unit structs don't serialize inner, so it is never accessed
+                                    "${symbolProvider.toMemberName(member)}(_inner)"
                                 } else {
                                     "${symbolProvider.toMemberName(member)}(inner)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
-                                serializeMember(MemberContext.unionMember(context, "inner", member, jsonName))
+                                val innerRef =
+                                    if (memberShape.isStructureShape &&
+                                        memberShape.asStructureShape().get().allMembers.isEmpty()
+                                    ) {
+                                        "_inner"
+                                    } else {
+                                        "inner"
+                                    }
+                                serializeMember(MemberContext.unionMember(context, innerRef, member, jsonName))
                             }
                         }
                         if (codegenTarget.renderUnknownVariant()) {

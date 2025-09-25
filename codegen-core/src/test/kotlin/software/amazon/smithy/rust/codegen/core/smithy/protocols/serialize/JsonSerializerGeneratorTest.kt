@@ -33,28 +33,6 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class JsonSerializerGeneratorTest {
-    private val unionWithUnitStructModel =
-        """
-        namespace test
-        use aws.protocols#restJson1
-
-        union TestUnion {
-            unitMember: Unit,
-            dataMember: String
-        }
-
-        structure Unit {}
-
-        @http(uri: "/test", method: "POST")
-        operation TestOp {
-            input: TestInput
-        }
-
-        structure TestInput {
-            union: TestUnion
-        }
-        """.asSmithyModel()
-
     private val baseModel =
         """
         namespace test
@@ -370,7 +348,8 @@ class JsonSerializerGeneratorTest {
     @Test
     fun `union with unit struct doesn't cause unused variable warning`() {
         // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
-        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(unionWithUnitStructModel))
+        // This test ensures that union serialization with unit structs compiles without unused variable warnings.
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(QuerySerializerGeneratorTest.unionWithUnitStructModel))
 
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
@@ -398,13 +377,19 @@ class JsonSerializerGeneratorTest {
             unitTest(
                 "json_union_serialization",
                 """
-                use test_model::{TestInput, TestUnion, Unit};
+                use test_model::{TestUnion, Unit};
 
-                // Generate the serialization function that contains union match arms with (inner)
-                ${format(operationGenerator!!)};
+                // Create a test input to actually use the serializer
+                let input = crate::test_input::TestOpInput::builder()
+                    .union(TestUnion::UnitMember(Unit::builder().build()))
+                    .build()
+                    .unwrap();
 
-                // Test that the code compiles - this validates our fix works
-                let _test_passed = true;
+                // This will generate and use the serialization code that should not have unused variable warnings
+                let _serialized = ${format(operationGenerator!!)};
+                let _result = _serialized(&input);
+
+                // Test that the code compiles and runs - this validates our fix works
                 """,
             )
         }
