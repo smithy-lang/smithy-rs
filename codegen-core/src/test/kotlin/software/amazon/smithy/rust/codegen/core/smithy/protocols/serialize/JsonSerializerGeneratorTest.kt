@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
@@ -340,6 +342,61 @@ class JsonSerializerGeneratorTest {
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
             input.renderWithModelBuilder(model, symbolProvider, project)
         }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `union with unit struct doesn't cause unused variable warning`() {
+        // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
+        // This test ensures that union serialization with unit structs compiles without unused variable warnings.
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(QuerySerializerGeneratorTest.unionWithUnitStructModel))
+
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val project = TestWorkspace.testProject(symbolProvider)
+
+        // Generate the JSON serializer that will create the union serialization code
+        val jsonSerializer =
+            JsonSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+                ::restJsonFieldName,
+            )
+        val operationGenerator = jsonSerializer.operationInputSerializer(model.lookup("test#TestOp"))
+
+        // Render all necessary structures and unions
+        model.lookup<StructureShape>("test#NoneFilter").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<StructureShape>("test#AesFilter").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<OperationShape>("test#TestOp").inputShape(model).renderWithModelBuilder(model, symbolProvider, project)
+
+        project.moduleFor(model.lookup<UnionShape>("test#EncryptionFilter")) {
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#EncryptionFilter")).render()
+        }
+
+        // Generate the actual protocol_serde module with union serialization
+        project.lib {
+            unitTest(
+                "json_union_serialization",
+                """
+                use test_model::{EncryptionFilter, NoneFilter};
+
+                // Create a test input using unit struct pattern that causes unused variable warnings
+                let input = crate::test_input::TestOpInput::builder()
+                    .filter(EncryptionFilter::None(NoneFilter::builder().build()))
+                    .build()
+                    .unwrap();
+
+                // This will generate and use the serialization code that should not have unused variable warnings
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+
+                // Verify the serialization worked
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert!(output.contains("none"));
+                """,
+            )
+        }
+
+        // The test passes if the generated code compiles without unused variable warnings
         project.compileAndTest()
     }
 }

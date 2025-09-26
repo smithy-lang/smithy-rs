@@ -357,17 +357,26 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 ) {
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
+                            val memberShape = model.expectShape(member.target)
+                            val memberName = symbolProvider.toMemberName(member)
+                            val isEmptyStruct =
+                                memberShape.isStructureShape &&
+                                    memberShape.asStructureShape().get().allMembers.isEmpty()
                             val variantName =
                                 if (member.isTargetUnit()) {
-                                    "${symbolProvider.toMemberName(member)}"
+                                    "$memberName"
+                                } else if (isEmptyStruct) {
+                                    // Empty structures don't use the inner variable
+                                    "$memberName(_inner)"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "$memberName(inner)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
+                                val innerRef = if (isEmptyStruct) "_inner" else "inner"
                                 serializeMember(
                                     MemberContext.unionMember(
                                         context.copy(writerExpression = "writer"),
-                                        "inner",
+                                        innerRef,
                                         member,
                                     ),
                                 )
