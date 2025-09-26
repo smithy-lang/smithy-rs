@@ -13,13 +13,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
+import software.amazon.smithy.rust.codegen.core.testutil.rustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 class QuerySerializerGeneratorTest {
     companion object {
@@ -27,19 +29,24 @@ class QuerySerializerGeneratorTest {
             """
             namespace test
 
-            union TestUnion {
-                unitMember: Unit
+            union EncryptionFilter {
+                none: NoneFilter,
+                aes: AesFilter
             }
 
-            structure Unit {}
+            structure NoneFilter {}
+
+            structure AesFilter {
+                keyId: String
+            }
 
             @http(uri: "/test", method: "POST")
             operation TestOp {
-                input: TestInput
+                input: TestOpInput
             }
 
-            structure TestInput {
-                union: TestUnion
+            structure TestOpInput {
+                filter: EncryptionFilter
             }
             """.asSmithyModel()
     }
@@ -57,11 +64,12 @@ class QuerySerializerGeneratorTest {
         val operationGenerator = querySerializer.operationInputSerializer(model.lookup("test#TestOp"))
 
         // Render all necessary structures and unions
-        model.lookup<StructureShape>("test#Unit").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<StructureShape>("test#NoneFilter").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<StructureShape>("test#AesFilter").renderWithModelBuilder(model, symbolProvider, project)
         model.lookup<OperationShape>("test#TestOp").inputShape(model).renderWithModelBuilder(model, symbolProvider, project)
 
-        project.moduleFor(model.lookup<UnionShape>("test#TestUnion")) {
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#TestUnion")).render()
+        project.moduleFor(model.lookup<UnionShape>("test#EncryptionFilter")) {
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#EncryptionFilter")).render()
         }
 
         // Generate the serialization module that will contain the union serialization code
@@ -69,23 +77,49 @@ class QuerySerializerGeneratorTest {
             unitTest(
                 "test_query_union_serialization",
                 """
-                use test_model::{TestUnion, Unit};
+                use test_model::{EncryptionFilter, NoneFilter};
 
-                // Create a test input to actually use the serializer
+                // Create a test input using unit struct pattern that causes unused variable warnings
                 let input = crate::test_input::TestOpInput::builder()
-                    .union(TestUnion::UnitMember(Unit::builder().build()))
+                    .filter(EncryptionFilter::None(NoneFilter::builder().build()))
                     .build()
                     .unwrap();
 
-                // This will generate and use the serialization code that should not have unused variable warnings
-                let _serialized = ${format(operationGenerator!!)};
-                let _result = _serialized(&input);
-
-                // Test that the code compiles and runs - this validates our fix works
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert!(!output.is_empty());
                 """,
             )
         }
 
-        project.compileAndTest()
+        // Compile with warnings as errors to ensure no unused variable warnings
+        compileWithWarningsAsErrors(project)
+    }
+
+    private fun compileWithWarningsAsErrors(project: TestWriterDelegator) {
+        val stubModel =
+            """
+            namespace fake
+            service Fake {
+                version: "123"
+            }
+            """.asSmithyModel()
+
+        project.finalize(
+            project.rustSettings(),
+            stubModel,
+            manifestCustomizations = emptyMap(),
+            libRsCustomizations = listOf(),
+        )
+
+        try {
+            "cargo fmt".runCommand(project.baseDir)
+        } catch (e: Exception) {
+            // cargo fmt errors are useless, ignore
+        }
+
+        // Use RUSTFLAGS to treat unused variable warnings as errors, but allow dead code
+        val env = mapOf("RUSTFLAGS" to "-D unused-variables -A dead-code")
+        "cargo test".runCommand(project.baseDir, env)
     }
 }

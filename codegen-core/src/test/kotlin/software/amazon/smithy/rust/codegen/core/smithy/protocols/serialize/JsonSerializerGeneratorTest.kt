@@ -365,11 +365,12 @@ class JsonSerializerGeneratorTest {
         val operationGenerator = jsonSerializer.operationInputSerializer(model.lookup("test#TestOp"))
 
         // Render all necessary structures and unions
-        model.lookup<StructureShape>("test#Unit").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<StructureShape>("test#NoneFilter").renderWithModelBuilder(model, symbolProvider, project)
+        model.lookup<StructureShape>("test#AesFilter").renderWithModelBuilder(model, symbolProvider, project)
         model.lookup<OperationShape>("test#TestOp").inputShape(model).renderWithModelBuilder(model, symbolProvider, project)
 
-        project.moduleFor(model.lookup<UnionShape>("test#TestUnion")) {
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#TestUnion")).render()
+        project.moduleFor(model.lookup<UnionShape>("test#EncryptionFilter")) {
+            UnionGenerator(model, symbolProvider, this, model.lookup("test#EncryptionFilter")).render()
         }
 
         // Generate the actual protocol_serde module with union serialization
@@ -377,19 +378,20 @@ class JsonSerializerGeneratorTest {
             unitTest(
                 "json_union_serialization",
                 """
-                use test_model::{TestUnion, Unit};
+                use test_model::{EncryptionFilter, NoneFilter};
 
-                // Create a test input to actually use the serializer
+                // Create a test input using unit struct pattern that causes unused variable warnings
                 let input = crate::test_input::TestOpInput::builder()
-                    .union(TestUnion::UnitMember(Unit::builder().build()))
+                    .filter(EncryptionFilter::None(NoneFilter::builder().build()))
                     .build()
                     .unwrap();
 
                 // This will generate and use the serialization code that should not have unused variable warnings
-                let _serialized = ${format(operationGenerator!!)};
-                let _result = _serialized(&input);
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
 
-                // Test that the code compiles and runs - this validates our fix works
+                // Verify the serialization worked
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert!(output.contains("none"));
                 """,
             )
         }
