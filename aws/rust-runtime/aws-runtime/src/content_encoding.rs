@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::{Buf, Bytes, BytesMut};
 use bytes_utils::SegmentedBuf;
 use pin_project_lite::pin_project;
 
-use std::io::Read;
 use std::pin::Pin;
+use std::sync::{mpsc, Mutex};
 use std::task::{Context, Poll};
 
 const CRLF: &str = "\r\n";
@@ -25,6 +26,81 @@ const DEFAULT_CHUNK_SIZE_BYTE: usize = 64 * 1024; // 64 KB
 pub mod header_value {
     /// Header value denoting "aws-chunked" encoding
     pub const AWS_CHUNKED: &str = "aws-chunked";
+}
+
+pub trait SignChunk: std::fmt::Debug {
+    fn sign(&mut self);
+
+    fn sign_trailer(&mut self);
+}
+
+#[derive(Debug)]
+pub struct DeferredSigner {
+    rx: Option<Mutex<mpsc::Receiver<Box<dyn SignChunk + Send + Sync>>>>,
+    signer: Option<Box<dyn SignChunk + Send + Sync>>,
+}
+
+impl Storable for DeferredSigner {
+    type Storer = StoreReplace<Self>;
+}
+
+#[derive(Debug)]
+pub struct DeferredSignerSender {
+    tx: Mutex<mpsc::Sender<Box<dyn SignChunk + Send + Sync>>>,
+}
+impl DeferredSignerSender {
+    /// Sends a signer on the channel
+    pub fn send(
+        &self,
+        signer: Box<dyn SignChunk + Send + Sync>,
+    ) -> Result<(), mpsc::SendError<Box<dyn SignChunk + Send + Sync>>> {
+        self.tx.lock().unwrap().send(signer)
+    }
+}
+
+impl DeferredSigner {
+    pub fn new() -> (Self, DeferredSignerSender) {
+        let (tx, rx) = mpsc::channel();
+        (
+            Self {
+                rx: Some(Mutex::new(rx)),
+                signer: None,
+            },
+            DeferredSignerSender { tx: Mutex::new(tx) },
+        )
+    }
+
+    fn acquire(&mut self) -> &mut (dyn SignChunk + Send + Sync) {
+        if self.signer.is_some() {
+            self.signer.as_mut().unwrap().as_mut()
+        } else {
+            self.signer = Some(
+                self.rx
+                    .take()
+                    .expect("only taken once")
+                    .lock()
+                    .unwrap()
+                    .try_recv()
+                    .ok()
+                    .unwrap(),
+            );
+            self.acquire()
+        }
+    }
+}
+
+impl Storable for DeferredSignerSender {
+    type Storer = StoreReplace<Self>;
+}
+
+impl SignChunk for DeferredSigner {
+    fn sign(&mut self) {
+        self.acquire().sign();
+    }
+
+    fn sign_trailer(&mut self) {
+        self.acquire().sign_trailer();
+    }
 }
 
 /// Options used when constructing an [`AwsChunkedBody`].
@@ -192,6 +268,8 @@ pin_project! {
         chunk_buffer: ChunkBuf,
         #[pin]
         buffered_trailer: Option<http_1x::HeaderMap>,
+        #[pin]
+        signer: Option<Box<dyn SignChunk + Send + Sync>>,
     }
 }
 
@@ -205,7 +283,13 @@ impl<Inner> AwsChunkedBody<Inner> {
             inner_body_bytes_read_so_far: 0,
             chunk_buffer: ChunkBuf::Empty,
             buffered_trailer: None,
+            signer: None,
         }
+    }
+
+    pub fn with_signer(mut self, signer: Box<dyn SignChunk + Send + Sync>) -> Self {
+        self.signer = Some(signer);
+        self
     }
 
     fn buffer_next_chunk(
