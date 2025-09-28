@@ -65,7 +65,7 @@ fun serverTestSymbolProviders(
         settings ?: serverTestRustSettings(
             (serviceShape ?: testServiceShapeFor(model)).id,
         )
-    ).codegenConfig.publicConstrainedTypes,
+        ).codegenConfig.publicConstrainedTypes,
     CombinedServerCodegenDecorator(decorators),
     RustServerCodegenPlugin::baseSymbolProvider,
 )

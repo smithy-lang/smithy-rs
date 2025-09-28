@@ -51,8 +51,8 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
             CombinedServerCodegenDecorator.fromClasspath(
                 context,
                 ServerRequiredCustomizations(),
-                SmithyValidationExceptionDecorator(),
                 CustomValidationExceptionDecorator(),
+                SmithyValidationExceptionDecorator(),
                 CustomValidationExceptionWithReasonDecorator(),
                 *decorator,
             )
