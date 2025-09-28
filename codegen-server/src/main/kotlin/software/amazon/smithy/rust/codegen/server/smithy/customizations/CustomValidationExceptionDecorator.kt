@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldListTrait
+import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldMessageTrait
 import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldNameTrait
 import software.amazon.smithy.rust.codegen.server.traits.ValidationMessageTrait
 
@@ -108,6 +109,12 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         return validationFieldShape
     }
 
+    fun customValidationFieldMessage(): MemberShape? {
+        val customValidationField = customValidationField() ?: return null
+
+        return customValidationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
+    }
+
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
         val customValidationException = customValidationException() ?: return writable { }
         val customValidationMessage = customValidationMessage() ?: return writable { }
@@ -116,6 +123,13 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 protocol,
                 customValidationException,
                 customValidationMessage,
+            )
+        val customValidationFieldMessage = customValidationFieldMessage()
+            ?: return renderImplFromConstraintViolationForRequestRejectionWithoutFieldMessage(
+                protocol,
+                customValidationException,
+                customValidationMessage,
+                customValidationFieldList,
             )
 
         // TODO: add additional fields
@@ -127,7 +141,48 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                     fn from(constraint_violation: ConstraintViolation) -> Self {
                         let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
                         let validation_exception = crate::error::#{CustomValidationException} {
-                            #{CustomValidationMessage}: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                            #{CustomValidationMessage}: format!("1 validation error detected. {}", &first_validation_exception_field.#{CustomValidationFieldMessage}),
+                            #{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),
+                        };
+                        Self::ConstraintViolation(
+                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                        )
+                    }
+                }
+                """,
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "CustomValidationException" to writable {
+                    rust(codegenContext.symbolProvider.toSymbol(customValidationException).name)
+                },
+                "CustomValidationMessage" to writable {
+                    rust(codegenContext.symbolProvider.toMemberName(customValidationMessage))
+                },
+                "CustomValidationFieldList" to writable {
+                    rust(codegenContext.symbolProvider.toMemberName(customValidationFieldList))
+                },
+                "CustomValidationFieldMessage" to writable {
+                    rust(codegenContext.symbolProvider.toMemberName(customValidationFieldMessage))
+                },
+                "From" to RuntimeType.From,
+            )
+        }
+    }
+
+    private fun renderImplFromConstraintViolationForRequestRejectionWithoutFieldMessage(
+        protocol: ServerProtocol,
+        customValidationException: StructureShape,
+        customValidationMessage: MemberShape,
+        customValidationFieldList: MemberShape,
+    ): Writable {
+        return writable {
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
+                        let validation_exception = crate::error::#{CustomValidationException} {
+                            #{CustomValidationMessage}: format!("1 validation error detected"),
                             #{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),
                         };
                         Self::ConstraintViolation(
