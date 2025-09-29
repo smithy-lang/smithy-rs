@@ -287,12 +287,10 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
 }
 
 /**
- * Restrict custom validation exceptions to just one
+ * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom
+ * validation exception is defined
  */
-fun validateModelHasAtMostOneValidationException(
-    model: Model,
-    validationExceptionShapeId: ShapeId,
-): ValidationResult {
+fun validateModelHasOneValidationException(model: Model): ValidationResult {
     val customValidationExceptionShapes = model.shapes()
         .filter { it.hasTrait(ValidationExceptionTrait.ID) }
         .toList()
