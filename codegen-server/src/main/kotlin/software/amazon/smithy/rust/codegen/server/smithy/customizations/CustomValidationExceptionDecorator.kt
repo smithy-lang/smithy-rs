@@ -63,7 +63,7 @@ class CustomValidationExceptionDecorator : ServerCodegenDecorator {
 class CustomValidationExceptionConversionGenerator(private val codegenContext: ServerCodegenContext) :
     ValidationExceptionConversionGenerator {
     companion object {
-        val SHAPE_ID: ShapeId = ShapeId.from("smithy.framework#ValidationException")
+        val SHAPE_ID: ShapeId = ShapeId.from("smithy.framework#CustomValidationException")
     }
 
     override val shapeId: ShapeId = SHAPE_ID

@@ -290,28 +290,61 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
  * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom
  * validation exception is defined
  */
-fun validateModelHasOneValidationException(model: Model): ValidationResult {
+fun validateModelHasAtMostOneValidationException(model: Model, service: ServiceShape): ValidationResult {
     val customValidationExceptionShapes = model.shapes()
         .filter { it.hasTrait(ValidationExceptionTrait.ID) }
         .toList()
 
-    return if (customValidationExceptionShapes.size > 1) {
-        ValidationResult(
-            shouldAbort = true,
-            listOf(
-                LogMessage(
-                    Level.SEVERE,
-                    """
-                        Defining multiple custom validation exceptions is unsupported.
-                        Found ${customValidationExceptionShapes.size} validation exception shapes: 
-                        """.trimIndent() +
-                        customValidationExceptionShapes.joinToString(", ") { it.id.toString() },
-                ),
+    val messages = mutableListOf<LogMessage>()
+
+    if (customValidationExceptionShapes.isEmpty()) {
+        return ValidationResult(shouldAbort = false, messages)
+    }
+
+    if (customValidationExceptionShapes.size > 1) {
+        messages.add(
+            LogMessage(
+                Level.SEVERE,
+                """
+                    Defining multiple custom validation exceptions is unsupported.
+                    Found ${customValidationExceptionShapes.size} validation exception shapes: 
+                    """.trimIndent() +
+                    customValidationExceptionShapes.joinToString(", ") { it.id.toString() },
             ),
         )
-    } else {
-        ValidationResult(shouldAbort = false, emptyList())
+        return ValidationResult(shouldAbort = true, messages)
     }
+
+    // Traverse the model and error out if the default ValidationException exists in an error closure of a service or operation:
+    val walker = DirectedWalker(model)
+
+    val defaultValidationExceptionId = ShapeId.from("smithy.framework#ValidationException")
+
+    val operationsWithDefault = walker
+        .walkShapes(service)
+        .asSequence()
+        .filterIsInstance<OperationShape>()
+        .filter { it.errors.contains(defaultValidationExceptionId) }
+
+    val servicesWithDefault = walker
+        .walkShapes(service)
+        .asSequence()
+        .filterIsInstance<ServiceShape>()
+        .filter { it.errors.contains(defaultValidationExceptionId) }
+
+    sequenceOf(operationsWithDefault, servicesWithDefault).flatten().forEach {
+        messages.add(
+            LogMessage(
+                Level.SEVERE,
+                """
+                    Operation ${it.id} uses the default ValidationException, but a custom validation exception is defined.
+                    Remove ValidationException from the operation's errors and use the custom validation exception instead.
+                    """.trimIndent(),
+            ),
+        )
+    }
+
+    return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
 
 fun validateUnsupportedConstraints(
