@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
-import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -54,7 +53,7 @@ class QuerySerializerGeneratorTest {
     @Test
     fun `union with unit struct doesn't cause unused variable warning`() {
         // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
-        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(unionWithUnitStructModel))
+        val model = OperationNormalizer.transform(unionWithUnitStructModel)
 
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
