@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
@@ -113,7 +112,6 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                                     "MessageWritable" to it.errorMessage(),
                                 )
                             }
-
                             is Length -> {
                                 rust(
                                     """
@@ -145,8 +143,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) =
         writable {
             val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-            val message =
-                "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+            val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
@@ -287,7 +284,6 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                                 """,
                             )
                         }
-
                         is CollectionTraitInfo.UniqueItems -> {
                             rust(
                                 """
