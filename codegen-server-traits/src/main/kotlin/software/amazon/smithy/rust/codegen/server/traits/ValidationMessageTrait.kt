@@ -11,12 +11,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.Trait
 
-/**
- * Indicates a structure member or list member should support wire caching.
- * When a member is marked with this trait, the code generator will wrap the field type
- * in a `Cacheable<T>` enum, allowing the server to store and retrieve serialized response data
- * without full deserialization and reserialization.
- */
 class ValidationMessageTrait(sourceLocation: SourceLocation) : AbstractTrait(ID, sourceLocation) {
     companion object {
         val ID: ShapeId = ShapeId.from("smithy.rust.codegen.server.traits#validationMessage")

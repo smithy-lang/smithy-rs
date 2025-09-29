@@ -1,9 +1,9 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm")
