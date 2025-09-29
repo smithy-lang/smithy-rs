@@ -158,32 +158,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
             val additionalFieldAssignments = additionalFields.joinToString("\n                            ") { member ->
                 val memberName = codegenContext.symbolProvider.toMemberName(member)
-                val targetShape = member.targetOrSelf(codegenContext.model)
-                val defaultValue =
-                    member.getTrait<software.amazon.smithy.model.traits.DefaultTrait>()?.toNode()?.let { node ->
-                        when {
-                            targetShape.isEnumShape && node.isStringNode -> {
-                                val enumShape = targetShape.asEnumShape().get()
-                                val enumSymbol = codegenContext.symbolProvider.toSymbol(targetShape)
-                                val enumValue = node.expectStringNode().value
-                                // Find enum member by its value, not by member name
-                                val enumMember = enumShape.members().find { enumMember ->
-                                    enumMember.getTrait<software.amazon.smithy.model.traits.EnumValueTrait>()?.stringValue?.orElse(
-                                        enumMember.memberName
-                                    ) == enumValue
-                                }
-                                val variantName =
-                                    enumMember?.let { codegenContext.symbolProvider.toMemberName(it) } ?: enumValue
-                                "crate::model::${enumSymbol.name}::$variantName"
-                            }
-
-                            node.isStringNode -> "\"${node.expectStringNode().value}\".to_string()"
-                            node.isBooleanNode -> node.expectBooleanNode().value.toString()
-                            node.isNumberNode -> node.expectNumberNode().value.toString()
-                            else -> "Default::default()"
-                        }
-                    } ?: "Default::default()"
-                "$memberName: $defaultValue,"
+                "$memberName: ${defaultFieldAssignment(member)}"
             }
 
             // Generate the correct shape module name for the custom validation exception
@@ -231,7 +206,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                     }
                 }
                 """,
-                *templateParams.toList().toTypedArray()
+                *templateParams.toList().toTypedArray(),
             )
         }
     }
@@ -241,7 +216,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
-            
+
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField} {
@@ -258,27 +233,48 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                     stringConstraintsInfo.forEach { stringTraitInfo ->
                         when (stringTraitInfo::class.simpleName) {
                             "Length" -> {
-                                val lengthTrait = stringTraitInfo::class.java.getDeclaredField("lengthTrait").apply { isAccessible = true }.get(stringTraitInfo) as LengthTrait
+                                val lengthTrait = stringTraitInfo::class.java.getDeclaredField("lengthTrait")
+                                    .apply { isAccessible = true }.get(stringTraitInfo) as LengthTrait
                                 rustTemplate(
                                     """
                                     Self::Length(length) => crate::model::#{CustomValidationExceptionField} {
                                         #{FieldAssignments:W}
                                     },
                                     """,
-                                    "CustomValidationExceptionField" to writable { rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name) },
-                                    "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${lengthTrait.validationErrorMessage()}\", length, &path)")
+                                    "CustomValidationExceptionField" to writable {
+                                        rust(
+                                            codegenContext.symbolProvider.toSymbol(
+                                                customValidationExceptionField,
+                                            ).name,
+                                        )
+                                    },
+                                    "FieldAssignments" to fieldAssignments(
+                                        "path.clone()",
+                                        "format!(\"${lengthTrait.validationErrorMessage()}\", length, &path)",
+                                    ),
                                 )
                             }
+
                             "Pattern" -> {
-                                val patternTrait = stringTraitInfo::class.java.getDeclaredField("patternTrait").apply { isAccessible = true }.get(stringTraitInfo) as PatternTrait
+                                val patternTrait = stringTraitInfo::class.java.getDeclaredField("patternTrait")
+                                    .apply { isAccessible = true }.get(stringTraitInfo) as PatternTrait
                                 rustTemplate(
                                     """
                                     Self::Pattern(_) => crate::model::#{CustomValidationExceptionField} {
                                         #{FieldAssignments:W}
                                     },
                                     """,
-                                    "CustomValidationExceptionField" to writable { rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name) },
-                                    "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}\", &path, \"${patternTrait.pattern}\")")
+                                    "CustomValidationExceptionField" to writable {
+                                        rust(
+                                            codegenContext.symbolProvider.toSymbol(
+                                                customValidationExceptionField,
+                                            ).name,
+                                        )
+                                    },
+                                    "FieldAssignments" to fieldAssignments(
+                                        "path.clone()",
+                                        "format!(\"Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}\", &path, \"${patternTrait.pattern}\")",
+                                    ),
                                 )
                             }
                         }
@@ -320,7 +316,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                             "CustomValidationExceptionField" to writable {
                                 rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name)
                             },
-                            "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${blobLength.lengthTrait.validationErrorMessage()}\", length, &path)")
+                            "FieldAssignments" to fieldAssignments(
+                                "path.clone()",
+                                "format!(\"${blobLength.lengthTrait.validationErrorMessage()}\", length, &path)",
+                            ),
                         )
                     }
                 },
@@ -339,7 +338,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
-            
+
             rustBlockTemplate(
                 "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField}",
                 "CustomValidationExceptionField" to writable {
@@ -357,7 +356,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                             "CustomValidationExceptionField" to writable {
                                 rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name)
                             },
-                            "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${it.validationErrorMessage()}\", length, &path)")
+                            "FieldAssignments" to fieldAssignments(
+                                "path.clone()",
+                                "format!(\"${it.validationErrorMessage()}\", length, &path)",
+                            ),
                         )
                     }
                     if (isKeyConstrained(keyShape, symbolProvider)) {
@@ -376,7 +378,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
             val message = enumTrait.validationErrorMessage()
-            
+
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField} {
@@ -389,7 +391,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 "CustomValidationExceptionField" to writable {
                     rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name)
                 },
-                "FieldAssignments" to fieldAssignments("path.clone()", "format!(r##\"$message\"##, &path)")
+                "FieldAssignments" to fieldAssignments("path.clone()", "format!(r##\"$message\"##, &path)"),
             )
         }
     }
@@ -398,7 +400,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         val customValidationExceptionField = customValidationField() ?: return writable { }
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
-            
+
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField} {
@@ -417,7 +419,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                         ).name,
                     )
                 },
-                "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${rangeInfo.rangeTrait.validationErrorMessage()}\", &path)")
+                "FieldAssignments" to fieldAssignments(
+                    "path.clone()",
+                    "format!(\"${rangeInfo.rangeTrait.validationErrorMessage()}\", &path)",
+                ),
             )
         }
     }
@@ -425,10 +430,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun builderConstraintViolationFn(constraintViolations: Collection<ConstraintViolation>): Writable {
         val customValidationExceptionField = customValidationField() ?: return writable { }
-        
+
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
-            
+
             rustBlockTemplate(
                 "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField}",
                 "CustomValidationExceptionField" to writable {
@@ -458,7 +463,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                                         ).name,
                                     )
                                 },
-                                "FieldAssignments" to fieldAssignments("path.clone() + \"/${it.forMember.memberName}\"", "format!(\"Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null\", path)")
+                                "FieldAssignments" to fieldAssignments(
+                                    "path.clone() + \"/${it.forMember.memberName}\"",
+                                    "format!(\"Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null\", path)",
+                                ),
                             )
                         }
                     }
@@ -474,7 +482,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         val customValidationExceptionField = customValidationField() ?: return writable { }
         return writable {
             val fieldAssignments = generateCustomValidationFieldAssignments(customValidationExceptionField)
-            
+
             rustTemplate(
                 """
             pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::#{CustomValidationExceptionField} {
@@ -504,9 +512,13 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                                     "CustomValidationExceptionField" to writable {
                                         rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name)
                                     },
-                                    "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${collectionTraitInfo.lengthTrait.validationErrorMessage()}\", length, &path)")
+                                    "FieldAssignments" to fieldAssignments(
+                                        "path.clone()",
+                                        "format!(\"${collectionTraitInfo.lengthTrait.validationErrorMessage()}\", length, &path)",
+                                    ),
                                 )
                             }
+
                             is CollectionTraitInfo.UniqueItems -> {
                                 rustTemplate(
                                     """
@@ -517,12 +529,15 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                                     "CustomValidationExceptionField" to writable {
                                         rust(codegenContext.symbolProvider.toSymbol(customValidationExceptionField).name)
                                     },
-                                    "FieldAssignments" to fieldAssignments("path.clone()", "format!(\"${collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()}\", &duplicate_indices, &path)")
+                                    "FieldAssignments" to fieldAssignments(
+                                        "path.clone()",
+                                        "format!(\"${collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()}\", &duplicate_indices, &path)",
+                                    ),
                                 )
                             }
                         }
                     }
-                    
+
                     if (isMemberConstrained) {
                         rust(
                             """Self::Member(index, member_constraint_violation) =>
@@ -570,36 +585,44 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                     customValidationExceptionField.members().joinToString(",\n                ") { member ->
                         val memberName = codegenContext.symbolProvider.toMemberName(member)
                         when {
-                            member.hasTrait(ValidationFieldNameTrait.ID) -> 
+                            member.hasTrait(ValidationFieldNameTrait.ID) ->
                                 "$memberName: $pathExpression"
-                            member.hasTrait(ValidationFieldMessageTrait.ID) -> 
+
+                            member.hasTrait(ValidationFieldMessageTrait.ID) ->
                                 "$memberName: $messageExpression"
+
                             else -> {
-                                val targetShape = member.targetOrSelf(codegenContext.model)
-                                val defaultValue = member.getTrait<software.amazon.smithy.model.traits.DefaultTrait>()?.toNode()?.let { node ->
-                                    when {
-                                        targetShape.isEnumShape && node.isStringNode -> {
-                                            val enumShape = targetShape.asEnumShape().get()
-                                            val enumSymbol = codegenContext.symbolProvider.toSymbol(targetShape)
-                                            val enumValue = node.expectStringNode().value
-                                            val enumMember = enumShape.members().find { enumMember ->
-                                                enumMember.getTrait<software.amazon.smithy.model.traits.EnumValueTrait>()?.stringValue?.orElse(enumMember.memberName) == enumValue
-                                            }
-                                            val variantName = enumMember?.let { codegenContext.symbolProvider.toMemberName(it) } ?: enumValue
-                                            "crate::model::${enumSymbol.name}::$variantName"
-                                        }
-                                        node.isStringNode -> "\"${node.expectStringNode().value}\".to_string()"
-                                        node.isBooleanNode -> node.expectBooleanNode().value.toString()
-                                        node.isNumberNode -> node.expectNumberNode().value.toString()
-                                        else -> "Default::default()"
-                                    }
-                                } ?: "Default::default()"
-                                "$memberName: $defaultValue"
+                                "$memberName: ${defaultFieldAssignment(member)}"
                             }
                         }
-                    }
+                    },
                 )
             }
         }
+    }
+
+    private fun defaultFieldAssignment(member: MemberShape): String {
+        val targetShape = member.targetOrSelf(codegenContext.model)
+        return member.getTrait<software.amazon.smithy.model.traits.DefaultTrait>()?.toNode()?.let { node ->
+            when {
+                targetShape.isEnumShape && node.isStringNode -> {
+                    val enumShape = targetShape.asEnumShape().get()
+                    val enumSymbol = codegenContext.symbolProvider.toSymbol(targetShape)
+                    val enumValue = node.expectStringNode().value
+                    val enumMember = enumShape.members().find { enumMember ->
+                        enumMember.getTrait<software.amazon.smithy.model.traits.EnumValueTrait>()?.stringValue?.orElse(
+                            enumMember.memberName,
+                        ) == enumValue
+                    }
+                    val variantName = enumMember?.let { codegenContext.symbolProvider.toMemberName(it) } ?: enumValue
+                    "crate::model::${enumSymbol.name}::$variantName"
+                }
+
+                node.isStringNode -> "\"${node.expectStringNode().value}\".to_string()"
+                node.isBooleanNode -> node.expectBooleanNode().value.toString()
+                node.isNumberNode -> node.expectNumberNode().value.toString()
+                else -> "Default::default()"
+            }
+        } ?: "Default::default()"
     }
 }
