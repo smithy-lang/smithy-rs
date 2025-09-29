@@ -95,6 +95,14 @@ impl DeserializeError {
     pub fn is_type_mismatch(&self) -> bool {
         self._inner.is_type_mismatch()
     }
+
+    pub fn is_end_of_input(&self) -> bool {
+        self._inner.is_end_of_input()
+    }
+
+    pub fn is_tag_mismatch(&self) -> bool {
+        self._inner.is_tag_mismatch()
+    }
 }
 
 /// Macro for delegating method calls to the decoder.
