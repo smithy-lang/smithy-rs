@@ -115,11 +115,25 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         return customValidationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
     }
 
+    fun customValidationAdditionalFields(): List<MemberShape> {
+        val customValidationException = customValidationException() ?: return emptyList()
+        val customValidationMessage = customValidationMessage()
+        val customValidationFieldList = customValidationFieldList()
+
+        return customValidationException.members().filter { member ->
+            member != customValidationMessage && 
+            member != customValidationFieldList &&
+            !member.hasTrait(ValidationMessageTrait.ID) &&
+            !member.hasTrait(ValidationFieldListTrait.ID)
+        }
+    }
+
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
         val customValidationException = customValidationException() ?: return writable { }
         val customValidationMessage = customValidationMessage() ?: return writable { }
         val customValidationFieldList = customValidationFieldList()
         val customValidationFieldMessage = customValidationFieldMessage()
+        val additionalFields = customValidationAdditionalFields()
 
         return writable {
             val messageFormat = when {
@@ -138,6 +152,54 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 else -> "let first_validation_exception_field = constraint_violation.as_validation_exception_field(\"\".to_owned());"
             }
 
+            val additionalFieldAssignments = additionalFields.joinToString("\n                            ") { member ->
+                val memberName = codegenContext.symbolProvider.toMemberName(member)
+                val targetShape = member.targetOrSelf(codegenContext.model)
+                val defaultValue = member.getTrait<software.amazon.smithy.model.traits.DefaultTrait>()?.toNode()?.let { node ->
+                    when {
+                        targetShape.isEnumShape && node.isStringNode -> {
+                            val enumShape = targetShape.asEnumShape().get()
+                            val enumSymbol = codegenContext.symbolProvider.toSymbol(targetShape)
+                            val enumValue = node.expectStringNode().value
+                            // Find enum member by its value, not by member name
+                            val enumMember = enumShape.members().find { enumMember ->
+                                enumMember.getTrait<software.amazon.smithy.model.traits.EnumValueTrait>()?.stringValue?.orElse(enumMember.memberName) == enumValue
+                            }
+                            val variantName = enumMember?.let { codegenContext.symbolProvider.toMemberName(it) } ?: enumValue
+                            "crate::model::${enumSymbol.name}::$variantName"
+                        }
+                        node.isStringNode -> "\"${node.expectStringNode().value}\".to_string()"
+                        node.isBooleanNode -> node.expectBooleanNode().value.toString()
+                        node.isNumberNode -> node.expectNumberNode().value.toString()
+                        else -> "Default::default()"
+                    }
+                } ?: "Default::default()"
+                "$memberName: $defaultValue,"
+            }
+
+            val templateParams = mutableMapOf<String, Any>(
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "CustomValidationException" to writable {
+                    rust(codegenContext.symbolProvider.toSymbol(customValidationException).name)
+                },
+                "CustomValidationMessage" to writable {
+                    rust(codegenContext.symbolProvider.toMemberName(customValidationMessage))
+                },
+                "From" to RuntimeType.From,
+            )
+
+            customValidationFieldList?.let {
+                templateParams["CustomValidationFieldList"] = writable {
+                    rust(codegenContext.symbolProvider.toMemberName(it))
+                }
+            }
+
+            customValidationFieldMessage?.let {
+                templateParams["CustomValidationFieldMessage"] = writable {
+                    rust(codegenContext.symbolProvider.toMemberName(it))
+                }
+            }
+
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -146,6 +208,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                         let validation_exception = crate::error::#{CustomValidationException} {
                             #{CustomValidationMessage}: $messageFormat,
                             $fieldListAssignment
+                            $additionalFieldAssignments
                         };
                         Self::ConstraintViolation(
                             crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
@@ -154,24 +217,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                     }
                 }
                 """,
-                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                "CustomValidationException" to writable {
-                    rust(codegenContext.symbolProvider.toSymbol(customValidationException).name)
-                },
-                "CustomValidationMessage" to writable {
-                    rust(codegenContext.symbolProvider.toMemberName(customValidationMessage))
-                },
-                *if (customValidationFieldList != null) arrayOf(
-                    "CustomValidationFieldList" to writable {
-                        rust(codegenContext.symbolProvider.toMemberName(customValidationFieldList))
-                    },
-                ) else emptyArray(),
-                *if (customValidationFieldMessage != null) arrayOf(
-                    "CustomValidationFieldMessage" to writable {
-                        rust(codegenContext.symbolProvider.toMemberName(customValidationFieldMessage))
-                    },
-                ) else emptyArray(),
-                "From" to RuntimeType.From,
+                *templateParams.toList().toTypedArray()
             )
         }
     }
