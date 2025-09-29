@@ -20,8 +20,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
@@ -177,6 +179,10 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 "$memberName: $defaultValue,"
             }
 
+            // Generate the correct shape module name for the custom validation exception
+            val shapeModuleName = codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, customValidationException)
+            val shapeFunctionName = customValidationException.id.name.toSnakeCase()
+
             val templateParams = mutableMapOf<String, Any>(
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "CustomValidationException" to writable {
@@ -211,7 +217,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                             $additionalFieldAssignments
                         };
                         Self::ConstraintViolation(
-                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                            crate::protocol_serde::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }
