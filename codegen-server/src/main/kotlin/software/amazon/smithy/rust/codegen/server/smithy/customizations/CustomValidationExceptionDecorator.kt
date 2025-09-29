@@ -139,16 +139,30 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         val additionalFields = customValidationAdditionalFields()
 
         return writable {
-            val messageFormat = when {
-                customValidationFieldList != null && customValidationFieldMessage != null ->
-                    "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage})"
+            var messageFormat = when {
+                customValidationFieldList != null && customValidationFieldMessage != null -> {
+                    if (customValidationFieldMessage.isOptional) {
+                        "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage}.clone().unwrap_or_default())"
+                    } else {
+                        "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage})"
+                    }
+                }
 
                 else -> "format!(\"1 validation error detected\")"
+            }
+            if (customValidationMessage.isOptional) {
+                messageFormat = "Some($messageFormat)"
             }
 
             val fieldListAssignment = when (customValidationFieldList) {
                 null -> ""
-                else -> "#{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),"
+                else -> {
+                    if (customValidationFieldList.isOptional) {
+                        "#{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),"
+                    } else {
+                        "#{CustomValidationFieldList}: vec![first_validation_exception_field],"
+                    }
+                }
             }
 
             val fieldCreation = when (customValidationFieldList) {
@@ -579,11 +593,15 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
      * Helper function to generate field assignments for custom validation exception fields
      */
     private fun generateCustomValidationFieldAssignments(customValidationExceptionField: StructureShape): (String, String) -> Writable {
-        return { pathExpression: String, messageExpression: String ->
+        return { rawPathExpression: String, rawMessageExpression: String ->
             writable {
                 rustTemplate(
                     customValidationExceptionField.members().joinToString(",\n                ") { member ->
                         val memberName = codegenContext.symbolProvider.toMemberName(member)
+                        val pathExpression =
+                            if (member.isOptional) "Some($rawPathExpression)" else rawPathExpression
+                        val messageExpression =
+                            if (member.isOptional) "Some($rawMessageExpression)" else rawMessageExpression
                         when {
                             member.hasTrait(ValidationFieldNameTrait.ID) ->
                                 "$memberName: $pathExpression"
