@@ -284,7 +284,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
             `@uniqueItems` trait attached.
             """.trimIndent().replace("\n", " ")
-        )
+            )
     }
 
     @Test
@@ -369,7 +369,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
             effect. All the constraint traits used in the model are well-supported, please remove this flag.
             """.trimIndent().replace("\n", " ")
-        )
+            )
     }
 
     @Test
@@ -410,7 +410,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
 
-        val validationResult = validateModelHasAtMostOneValidationException(model, SmithyValidationExceptionConversionGenerator.SHAPE_ID)
+        val validationResult = validateModelHasOneValidationException(model)
 
         validationResult.shouldAbort shouldBe true
         validationResult.messages shouldHaveSize 1
@@ -448,7 +448,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
 
-        val validationResult = validateModelHasAtMostOneValidationException(model, SmithyValidationExceptionConversionGenerator.SHAPE_ID)
+        val validationResult = validateModelHasOneValidationException(model)
 
         validationResult.shouldAbort shouldBe false
         validationResult.messages shouldHaveSize 0
