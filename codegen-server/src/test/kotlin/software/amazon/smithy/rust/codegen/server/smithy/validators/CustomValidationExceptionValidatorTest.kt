@@ -59,7 +59,7 @@ class CustomValidationExceptionValidatorTest {
     }
 
     @Test
-    fun `should error when validationException has multiple validationMessage fields`() {
+    fun `should error when validationException has multiple explicit validationMessage fields`() {
         val exception = shouldThrow<ValidatedResultException> {
             """
             namespace test
@@ -78,6 +78,30 @@ class CustomValidationExceptionValidatorTest {
         }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
         
+        events shouldHaveSize 1
+        events[0].shapeId.get() shouldBe ShapeId.from("test#ValidationError")
+        events[0].id shouldBe "CustomValidationException.MultipleMessageFields"
+    }
+
+    @Test
+    fun `should error when validationException has explicit validationMessage and implicit message fields`() {
+        val exception = shouldThrow<ValidatedResultException> {
+            """
+            namespace test
+            use smithy.rust.codegen.server.traits#validationException
+            use smithy.rust.codegen.server.traits#validationMessage
+
+            @validationException
+            @error("client")
+            structure ValidationError {
+                message: String,
+                @validationMessage
+                details: String,
+            }
+            """.asSmithyModel(smithyVersion = "2")
+        }
+        val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
+
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#ValidationError")
         events[0].id shouldBe "CustomValidationException.MultipleMessageFields"

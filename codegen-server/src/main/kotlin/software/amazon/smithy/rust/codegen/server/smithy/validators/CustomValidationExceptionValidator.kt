@@ -14,7 +14,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrainedForValidation
 import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 
 class CustomValidationExceptionValidator : AbstractValidator() {
     override fun validate(model: Model): List<ValidationEvent> {
@@ -32,14 +32,18 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                     )
                 }
 
-                // Validate exactly one @validationMessage field
-                val messageFields = shape.members().filter { it.hasTrait(ValidationMessageTrait.ID) }
+                // Validate exactly one member with @validationMessage trait (explicit) or named "message" (implicit)
+                val messageFields =
+                    shape.members().filter { it.isValidationMessage() }
 
                 when (messageFields.size) {
                     0 -> events.add(
                         ValidationEvent.builder().id("CustomValidationException.MissingMessageField")
                             .severity(Severity.ERROR).shape(shape)
-                            .message("@validationException requires exactly one @validationMessage field").build(),
+                            .message(
+                                "@validationException requires exactly one String member named " +
+                                    "\"message\" or with the @validationMessage ",
+                            ).build(),
                     )
 
                     1 -> {
@@ -56,7 +60,10 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                     else -> events.add(
                         ValidationEvent.builder().id("CustomValidationException.MultipleMessageFields")
                             .severity(Severity.ERROR).shape(shape)
-                            .message("@validationException can have only one @validationMessage field").build(),
+                            .message(
+                                "@validationException can have only one member explicitly marked with the" +
+                                    "@validationMessage trait or implicitly selected via the \"message\" field name convention.",
+                            ).build(),
                     )
                 }
 
