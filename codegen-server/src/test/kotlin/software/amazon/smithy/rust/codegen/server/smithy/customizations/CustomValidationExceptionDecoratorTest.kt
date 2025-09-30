@@ -8,7 +8,12 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.validation.ValidatedResultException
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
@@ -74,15 +79,18 @@ internal class CustomValidationExceptionDecoratorTest {
         }
         """.asSmithyModel(smithyVersion = "2.0")
 
+    private fun mockValidationException(model: Model): StructureShape {
+        val codegenContext = serverTestCodegenContext(model)
+        val decorator = CustomValidationExceptionDecorator()
+        return decorator.customValidationException(codegenContext)!!
+    }
+
     @Test
     fun `customValidationException returns correct shape`() {
-        val codegenContext = serverTestCodegenContext(modelWithCustomValidation)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
-
-        val result = generator.customValidationException()
+        val result = mockValidationException(modelWithCustomValidation)
 
         result shouldNotBe null
-        result!!.id shouldBe ShapeId.from("com.example#MyValidationException")
+        result.id shouldBe ShapeId.from("com.example#MyValidationException")
         result.hasTrait(ValidationExceptionTrait.ID) shouldBe true
     }
 
@@ -102,52 +110,31 @@ internal class CustomValidationExceptionDecoratorTest {
         """.asSmithyModel(smithyVersion = "2.0")
 
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val decorator = CustomValidationExceptionDecorator()
 
-        val result = generator.customValidationException()
+        val result = decorator.customValidationException(codegenContext)
 
         result shouldBe null
     }
 
     @Test
     fun `customValidationMessage returns correct member shape`() {
-        val codegenContext = serverTestCodegenContext(modelWithCustomValidation)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val model = modelWithCustomValidation
+        val codegenContext = serverTestCodegenContext(model)
+        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationMessage()
 
         result shouldNotBe null
-        result!!.memberName shouldBe "customMessage"
+        result.memberName shouldBe "customMessage"
         result.hasTrait(ValidationMessageTrait.ID) shouldBe true
     }
 
     @Test
-    fun `customValidationMessage returns null when no validation exception exists`() {
-        val model = """
-            namespace com.example
-            
-            use aws.protocols#restJson1
-            
-            @restJson1
-            service TestService {
-                version: "1.0.0"
-            }
-            
-            structure RegularException { message: String }
-        """.asSmithyModel(smithyVersion = "2.0")
-
-        val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
-
-        val result = generator.customValidationMessage()
-
-        result shouldBe null
-    }
-
-    @Test
     fun `customValidationFieldList returns correct member shape`() {
-        val codegenContext = serverTestCodegenContext(modelWithCustomValidation)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val model = modelWithCustomValidation
+        val codegenContext = serverTestCodegenContext(model)
+        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationFieldList()
 
@@ -158,8 +145,9 @@ internal class CustomValidationExceptionDecoratorTest {
 
     @Test
     fun `customValidationFieldList returns null when no field list exists`() {
-        val codegenContext = serverTestCodegenContext(modelWithoutFieldList)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val model = modelWithoutFieldList
+        val codegenContext = serverTestCodegenContext(model)
+        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationFieldList()
 
@@ -168,8 +156,9 @@ internal class CustomValidationExceptionDecoratorTest {
 
     @Test
     fun `customValidationExceptionField returns correct structure shape`() {
-        val codegenContext = serverTestCodegenContext(modelWithCustomValidation)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val model = modelWithCustomValidation
+        val codegenContext = serverTestCodegenContext(model)
+        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationField()
 
@@ -180,8 +169,9 @@ internal class CustomValidationExceptionDecoratorTest {
 
     @Test
     fun `customValidationExceptionField returns null when no field list exists`() {
-        val codegenContext = serverTestCodegenContext(modelWithoutFieldList)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext)
+        val model = modelWithoutFieldList
+        val codegenContext = serverTestCodegenContext(model)
+        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationField()
 
@@ -192,14 +182,14 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `decorator returns null when no custom validation exception exists`() {
         val model = """
             namespace com.example
-            
+
             use aws.protocols#restJson1
-            
+
             @restJson1
             service TestService {
                 version: "1.0.0"
             }
-            
+
             structure RegularException { message: String }
         """.asSmithyModel(smithyVersion = "2.0")
 
