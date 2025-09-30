@@ -66,21 +66,21 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    fun customValidationException(): StructureShape? {
+    internal fun customValidationException(): StructureShape? {
         return codegenContext.model.shapes(StructureShape::class.java)
             .filter { it.hasTrait(ValidationExceptionTrait.ID) }
             .findFirst()
             .orElse(null)
     }
 
-    fun customValidationMessage(): MemberShape? {
+    internal fun customValidationMessage(): MemberShape? {
         val validationExceptionTraitShape = customValidationException() ?: return null
 
         return validationExceptionTraitShape.members().firstOrNull { it.hasTrait(ValidationMessageTrait.ID) }
             ?: throw CodegenException("Expected $validationExceptionTraitShape to contain a member with ValidationMessageTrait")
     }
 
-    fun customValidationFieldList(): MemberShape? {
+    internal fun customValidationFieldList(): MemberShape? {
         val validationExceptionTraitShape = customValidationException() ?: return null
 
         return validationExceptionTraitShape
@@ -88,7 +88,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
             .firstOrNull { it.hasTrait(ValidationFieldListTrait.ID) }
     }
 
-    fun customValidationField(): StructureShape? {
+    internal fun customValidationField(): StructureShape? {
         val validationFieldListMember = customValidationFieldList() ?: return null
 
         // get target of member of the custom validation field list that represents the structure for the
@@ -110,13 +110,13 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
         return validationFieldShape
     }
 
-    fun customValidationFieldMessage(): MemberShape? {
+    internal fun customValidationFieldMessage(): MemberShape? {
         val customValidationField = customValidationField() ?: return null
 
         return customValidationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
     }
 
-    fun customValidationAdditionalFields(): List<MemberShape> {
+    internal fun customValidationAdditionalFields(): List<MemberShape> {
         val customValidationException = customValidationException() ?: return emptyList()
         val customValidationMessage = customValidationMessage()
         val customValidationFieldList = customValidationFieldList()
