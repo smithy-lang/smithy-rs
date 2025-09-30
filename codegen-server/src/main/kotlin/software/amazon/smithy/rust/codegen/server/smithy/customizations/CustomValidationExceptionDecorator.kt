@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldL
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldMessageTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldNameTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 
 class CustomValidationExceptionDecorator : ServerCodegenDecorator {
     override val name: String
@@ -76,7 +77,8 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
     internal fun customValidationMessage(): MemberShape? {
         val validationExceptionTraitShape = customValidationException() ?: return null
 
-        return validationExceptionTraitShape.members().firstOrNull { it.hasTrait(ValidationMessageTrait.ID) }
+        return validationExceptionTraitShape.members()
+            .firstOrNull { it.isValidationMessage() }
             ?: throw CodegenException("Expected $validationExceptionTraitShape to contain a member with ValidationMessageTrait")
     }
 
@@ -117,14 +119,14 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
     }
 
     internal fun customValidationAdditionalFields(): List<MemberShape> {
-        val customValidationException = customValidationException() ?: return emptyList()
-        val customValidationMessage = customValidationMessage()
-        val customValidationFieldList = customValidationFieldList()
+        val validationException = customValidationException() ?: return emptyList()
+        val validationMessage = customValidationMessage()
+        val validationFieldList = customValidationFieldList()
 
-        return customValidationException.members().filter { member ->
-            member != customValidationMessage &&
-                member != customValidationFieldList &&
-                !member.hasTrait(ValidationMessageTrait.ID) &&
+        return validationException.members().filter { member ->
+            member != validationMessage &&
+                member != validationFieldList &&
+                !member.isValidationMessage() &&
                 !member.hasTrait(ValidationFieldListTrait.ID)
         }
     }
