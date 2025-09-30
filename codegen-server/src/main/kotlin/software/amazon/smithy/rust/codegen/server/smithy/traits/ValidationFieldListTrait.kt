@@ -22,10 +22,6 @@ class ValidationFieldListTrait(sourceLocation: SourceLocation) : AbstractTrait(I
         override fun createTrait(
             target: ShapeId,
             value: Node,
-        ): Trait {
-            val result = ValidationFieldListTrait(value.sourceLocation)
-            result.setNodeCache(value)
-            return result
-        }
+        ): Trait = ValidationFieldListTrait(value.sourceLocation).also { it.setNodeCache(value) }
     }
 }
