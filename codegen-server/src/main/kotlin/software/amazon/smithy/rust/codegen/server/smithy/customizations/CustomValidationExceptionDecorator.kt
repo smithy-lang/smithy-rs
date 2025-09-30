@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerDecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldListTrait
@@ -44,11 +45,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldN
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 
+/**
+ * Decorator for custom validation exception codegen
+ *
+ * The order of this is less than that of [SmithyValidationExceptionDecorator] so it takes precedence regardless of the
+ * order decorators are passed into the plugin
+ */
 class CustomValidationExceptionDecorator : ServerCodegenDecorator {
     override val name: String
         get() = "CustomValidationExceptionDecorator"
     override val order: Byte
-        get() = 69
+        get() = 68
 
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
