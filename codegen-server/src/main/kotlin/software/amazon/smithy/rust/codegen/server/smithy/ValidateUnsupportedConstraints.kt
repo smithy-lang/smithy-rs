@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
 import java.util.logging.Level
 
 private sealed class UnsupportedConstraintMessageKind {

@@ -1,10 +1,8 @@
 package software.amazon.smithy.rust.codegen.server.smithy.validators
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeType
-import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -14,10 +12,9 @@ import software.amazon.smithy.model.validation.ValidationEvent
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShapeForValidation
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrainedForValidation
-import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
-import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
 
 class CustomValidationExceptionValidator : AbstractValidator() {
     override fun validate(model: Model): List<ValidationEvent> {
