@@ -8,9 +8,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
-import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.EnumValueTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.PatternTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -39,11 +37,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstra
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
-import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldListTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldMessageTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldListTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldNameTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
 
 class CustomValidationExceptionDecorator : ServerCodegenDecorator {
     override val name: String
