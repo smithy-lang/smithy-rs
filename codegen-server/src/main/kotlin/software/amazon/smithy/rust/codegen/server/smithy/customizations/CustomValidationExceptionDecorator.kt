@@ -130,16 +130,16 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
     }
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
-        val customValidationException = customValidationException() ?: return writable { }
-        val customValidationMessage = customValidationMessage() ?: return writable { }
-        val customValidationFieldList = customValidationFieldList()
-        val customValidationFieldMessage = customValidationFieldMessage()
+        val validationException = customValidationException() ?: return writable { }
+        val validationMessage = customValidationMessage() ?: return writable { }
+        val validationFieldList = customValidationFieldList()
+        val validationFieldMessage = customValidationFieldMessage()
         val additionalFields = customValidationAdditionalFields()
 
         return writable {
             var messageFormat = when {
-                customValidationFieldList != null && customValidationFieldMessage != null -> {
-                    if (customValidationFieldMessage.isOptional) {
+                validationFieldList != null && validationFieldMessage != null -> {
+                    if (validationFieldMessage.isOptional) {
                         "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage}.clone().unwrap_or_default())"
                     } else {
                         "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage})"
@@ -148,14 +148,14 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
                 else -> "format!(\"1 validation error detected\")"
             }
-            if (customValidationMessage.isOptional) {
+            if (validationMessage.isOptional) {
                 messageFormat = "Some($messageFormat)"
             }
 
-            val fieldListAssignment = when (customValidationFieldList) {
+            val fieldListAssignment = when (validationFieldList) {
                 null -> ""
                 else -> {
-                    if (customValidationFieldList.isOptional) {
+                    if (validationFieldList.isOptional) {
                         "#{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),"
                     } else {
                         "#{CustomValidationFieldList}: vec![first_validation_exception_field],"
@@ -163,7 +163,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 }
             }
 
-            val fieldCreation = when (customValidationFieldList) {
+            val fieldCreation = when (validationFieldList) {
                 null -> ""
                 else -> "let first_validation_exception_field = constraint_violation.as_validation_exception_field(\"\".to_owned());"
             }
@@ -175,27 +175,27 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
 
             // Generate the correct shape module name for the custom validation exception
             val shapeModuleName =
-                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, customValidationException)
-            val shapeFunctionName = customValidationException.id.name.toSnakeCase()
+                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationException)
+            val shapeFunctionName = validationException.id.name.toSnakeCase()
 
             val templateParams = mutableMapOf<String, Any>(
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
                 "CustomValidationException" to writable {
-                    rust(codegenContext.symbolProvider.toSymbol(customValidationException).name)
+                    rust(codegenContext.symbolProvider.toSymbol(validationException).name)
                 },
                 "CustomValidationMessage" to writable {
-                    rust(codegenContext.symbolProvider.toMemberName(customValidationMessage))
+                    rust(codegenContext.symbolProvider.toMemberName(validationMessage))
                 },
                 "From" to RuntimeType.From,
             )
 
-            customValidationFieldList?.let {
+            validationFieldList?.let {
                 templateParams["CustomValidationFieldList"] = writable {
                     rust(codegenContext.symbolProvider.toMemberName(it))
                 }
             }
 
-            customValidationFieldMessage?.let {
+            validationFieldMessage?.let {
                 templateParams["CustomValidationFieldMessage"] = writable {
                     rust(codegenContext.symbolProvider.toMemberName(it))
                 }
