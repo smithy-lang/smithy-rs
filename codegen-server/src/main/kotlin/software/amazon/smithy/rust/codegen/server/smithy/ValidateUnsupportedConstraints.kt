@@ -326,13 +326,7 @@ fun validateModelHasAtMostOneValidationException(model: Model, service: ServiceS
         .filterIsInstance<OperationShape>()
         .filter { it.errors.contains(defaultValidationExceptionId) }
 
-    val servicesWithDefault = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterIsInstance<ServiceShape>()
-        .filter { it.errors.contains(defaultValidationExceptionId) }
-
-    sequenceOf(operationsWithDefault, servicesWithDefault).flatten().forEach {
+    operationsWithDefault.forEach {
         messages.add(
             LogMessage(
                 Level.SEVERE,
