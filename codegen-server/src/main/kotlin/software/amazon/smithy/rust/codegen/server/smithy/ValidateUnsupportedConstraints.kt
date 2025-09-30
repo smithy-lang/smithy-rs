@@ -252,8 +252,8 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
 }
 
 /**
- * Validate that all constrained operations have exactly one of: [validationExceptionShapeId] or a shape with @validationException
- * attached to their errors.
+ * Validate that all constrained operations have exactly one of: the default smithy.framework#ValidationException or a
+ * custom validation exception (shape with @validationException) attached to their errors.
  */
 fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
     model: Model,
