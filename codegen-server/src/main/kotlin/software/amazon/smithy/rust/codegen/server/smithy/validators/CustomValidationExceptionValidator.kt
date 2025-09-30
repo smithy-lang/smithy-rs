@@ -69,6 +69,13 @@ class CustomValidationExceptionValidator : AbstractValidator() {
         return events
     }
 
+    /** Validate default constructibility of the shape
+     * When a validation exception occurs, the framework has to create a Rust type that represents
+     * the ValidationException structure, but if that structure has fields other than 'message' and
+     * 'field list', then it can't instantiate them if they don't have defaults. Later on, we will introduce
+     * a mechanism for service code to be able to participate in construction of a validation exception type.
+     * Until that time, we need to restrict this to default constructibility.
+     */
     private fun Shape.validateDefaultConstructibility(
         model: Model,
         events: MutableList<ValidationEvent>,
@@ -79,7 +86,8 @@ class CustomValidationExceptionValidator : AbstractValidator() {
             }
 
             ShapeType.MEMBER -> {
-                // We want to check if the member's target is constrained. If so, we want the default trait to be on the member
+                // We want to check if the member's target is constrained. If so, we want the default trait to be on the
+                // member.
                 if (this.targetOrSelf(model).isDirectlyConstrainedForValidation() && !this.hasTrait<DefaultTrait>()) {
                     events.add(
                         ValidationEvent.builder().id("CustomValidationException.MissingDefault")
