@@ -103,9 +103,14 @@ fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean =
     }
 
 /**
- * See [Shape.isDirectlyConstrained]
+ * Finds shapes that are directly constrained in validation phase, which means the shape is a:
+ * - [StructureShape] with a required member that does not have a non-null default
+ * - [EnumShape]
+ * - [IntEnumShape]
+ * - [MemberShape] that is required and does not have a non-null default
  *
- * We use this to check for constrained shapes in validation phase because the [SymbolProvider] has not yet been created
+ * We use this rather than [Shape.isDirectlyConstrained] to check for constrained shapes in validation phase because
+ * the [SymbolProvider] has not yet been created
  */
 fun Shape.isDirectlyConstrainedForValidation(): Boolean =
     when (this) {
@@ -160,9 +165,10 @@ fun Shape.canReachConstrainedShape(
     }
 
 /**
- * See [Shape.canReachConstrainedShape]
+ * Whether this shape (or the shape's target for [MemberShape]s) can reach constrained shapes for validations.
  *
- * We use this to check for constrained shapes in validation phase because the [SymbolProvider] has not yet been created
+ * We use this rather than [Shape.canReachConstrainedShape] to check for constrained shapes in validation phase because
+ * the [SymbolProvider] has not yet been created
  */
 fun Shape.canReachConstrainedShapeForValidation(model: Model): Boolean =
     if (this is MemberShape) {
