@@ -22,10 +22,6 @@ class ValidationExceptionTrait(sourceLocation: SourceLocation) : AbstractTrait(I
         override fun createTrait(
             target: ShapeId,
             value: Node,
-        ): Trait {
-            val result = ValidationExceptionTrait(value.sourceLocation)
-            result.setNodeCache(value)
-            return result
-        }
+        ): Trait = ValidationExceptionTrait(value.sourceLocation).also { it.setNodeCache(value) }
     }
 }

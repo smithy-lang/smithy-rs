@@ -22,10 +22,6 @@ class ValidationMessageTrait(sourceLocation: SourceLocation) : AbstractTrait(ID,
         override fun createTrait(
             target: ShapeId,
             value: Node,
-        ): Trait {
-            val result = ValidationMessageTrait(value.sourceLocation)
-            result.setNodeCache(value)
-            return result
-        }
+        ): Trait = ValidationMessageTrait(value.sourceLocation).also { it.setNodeCache(value) }
     }
 }

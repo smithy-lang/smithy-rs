@@ -60,9 +60,9 @@ class CustomValidationExceptionDecorator : ServerCodegenDecorator {
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
     ): ValidationExceptionConversionGenerator? {
-        val res = CustomValidationExceptionConversionGenerator(codegenContext)
-        res.customValidationException() ?: return null
-        return res
+        return CustomValidationExceptionConversionGenerator(codegenContext).takeIf {
+            it.customValidationException() != null
+        }
     }
 }
 
