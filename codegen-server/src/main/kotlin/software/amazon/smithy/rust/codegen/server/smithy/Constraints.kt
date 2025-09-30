@@ -120,7 +120,6 @@ fun Shape.isDirectlyConstrainedForValidation(): Boolean =
         // TODO: move to [isDirectlyConstrainerHelper] if they can be safely applied to [isDirectlyConstrained] without breaking implications
         is EnumShape -> true
         is IntEnumShape -> true
-        // constraint traits on members shapes is completed: https://github.com/smithy-lang/smithy-rs/issues/1969
         is MemberShape -> !this.isOptional && !this.hasNonNullDefault()
 
         else -> this.isDirectlyConstrainedHelper()
