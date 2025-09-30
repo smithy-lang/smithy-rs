@@ -11,10 +11,10 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldListTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.server.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldListTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldNameTrait
+import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
 
 internal class CustomValidationExceptionDecoratorTest {
     private val modelWithCustomValidation =

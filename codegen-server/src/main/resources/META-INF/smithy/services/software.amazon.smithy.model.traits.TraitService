@@ -1,0 +1,5 @@
+software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait$Provider
+software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait$Provider
+software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldListTrait$Provider
+software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldNameTrait$Provider
+software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldMessageTrait$Provider
