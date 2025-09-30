@@ -44,7 +44,7 @@ structure MyCustomValidationException {
 
     @required
     @default("testReason1")
-    reason: String
+    reason: ValidationExceptionReason
 
     @validationFieldList
     customFieldList: CustomValidationFieldList
