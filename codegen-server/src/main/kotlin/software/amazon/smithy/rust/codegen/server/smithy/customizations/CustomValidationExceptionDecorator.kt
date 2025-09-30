@@ -140,13 +140,13 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
             var messageFormat = when {
                 validationFieldList != null && validationFieldMessage != null -> {
                     if (validationFieldMessage.isOptional) {
-                        "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage}.clone().unwrap_or_default())"
+                        "format!(\"validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage}.clone().unwrap_or_default())"
                     } else {
-                        "format!(\"1 validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage})"
+                        "format!(\"validation error detected. {}\", &first_validation_exception_field.#{CustomValidationFieldMessage})"
                     }
                 }
 
-                else -> "format!(\"1 validation error detected\")"
+                else -> "format!(\"validation error detected\")"
             }
             if (validationMessage.isOptional) {
                 messageFormat = "Some($messageFormat)"
