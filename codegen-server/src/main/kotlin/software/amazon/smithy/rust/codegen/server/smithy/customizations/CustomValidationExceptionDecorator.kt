@@ -168,7 +168,7 @@ class CustomValidationExceptionConversionGenerator(private val codegenContext: S
                 else -> "let first_validation_exception_field = constraint_violation.as_validation_exception_field(\"\".to_owned());"
             }
 
-            val additionalFieldAssignments = additionalFields.joinToString("\n                            ") { member ->
+            val additionalFieldAssignments = additionalFields.joinToString { member ->
                 val memberName = codegenContext.symbolProvider.toMemberName(member)
                 "$memberName: ${defaultFieldAssignment(member)}"
             }
