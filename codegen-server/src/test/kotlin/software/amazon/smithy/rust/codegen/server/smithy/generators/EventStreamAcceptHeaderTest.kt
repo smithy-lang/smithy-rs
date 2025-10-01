@@ -6,8 +6,10 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
@@ -54,62 +56,73 @@ internal class EventStreamAcceptHeaderTest {
         """.asSmithyModel()
 
     @Test
-    fun worksWithEventStreamHeader() {
-        worksWithAcceptHeader("application/vnd.amazon.eventstream", false)
-    }
-
-    @Test
-    fun worksWithOldCborHeader() {
-        worksWithAcceptHeader("application/cbor", false)
-    }
-
-    @Test
-    fun rejectsInvalidAcceptsHeader() {
-        worksWithAcceptHeader("application/invalid", true)
-    }
-
-    private fun worksWithAcceptHeader(
-        acceptHeader: String,
-        shouldFail: Boolean,
-    ) {
+    fun acceptHeaderTests() {
         serverIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.testModule {
-                val sanitizedHeader = acceptHeader.replace("/", "_").replace(".", "_")
-                tokioTest("test_header_$sanitizedHeader") {
-                    rustTemplate(
-                        """
-                        use aws_smithy_http_server::body::Body;
-                        use aws_smithy_http_server::request::FromRequest;
-                        let cbor_empty_bytes = #{Bytes}::copy_from_slice(&#{decode_body_data}(
-                            "oA==".as_bytes(),
-                            #{MediaType}::from("application/cbor"),
-                        ));
+                generateAcceptHeaderTest(
+                    acceptHeader = "application/vnd.amazon.eventstream",
+                    shouldFail = false,
+                    codegenContext = codegenContext,
+                )
+                generateAcceptHeaderTest(
+                    acceptHeader = "application/cbor",
+                    shouldFail = false,
+                    codegenContext = codegenContext,
+                )
+                generateAcceptHeaderTest(
+                    acceptHeader = "application/invalid",
+                    shouldFail = true,
+                    codegenContext = codegenContext,
+                )
+                generateAcceptHeaderTest(
+                    acceptHeader = "application/json, application/cbor",
+                    shouldFail = false,
+                    codegenContext = codegenContext,
+                    testName = "combined_header",
+                )
+            }
+        }
+    }
 
-                        let http_request = ::http::Request::builder()
-                            .uri("/service/TestService/operation/StreamingOutputOperation")
-                            .method("POST")
-                            .header("Accept", ${acceptHeader.dq()})
-                            .header("Content-Type", "application/cbor")
-                            .header("smithy-protocol", "rpc-v2-cbor")
-                            .body(Body::from(cbor_empty_bytes))
-                        .unwrap();
-                        let parsed = crate::input::StreamingOutputOperationInput::from_request(http_request).await;
-                        """,
-                        "Bytes" to RuntimeType.Bytes,
-                        "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
-                        "decode_body_data" to
-                            RuntimeType.protocolTest(
-                                codegenContext.runtimeConfig,
-                                "decode_body_data",
-                            ),
-                    )
+    private fun RustWriter.generateAcceptHeaderTest(
+        acceptHeader: String,
+        shouldFail: Boolean,
+        codegenContext: CodegenContext,
+        testName: String = acceptHeader.replace("/", "_").replace(".", "_").replace(" ", "_").replace(",", "_"),
+    ) {
+        tokioTest("test_header_$testName") {
+            rustTemplate(
+                """
+                use aws_smithy_http_server::body::Body;
+                use aws_smithy_http_server::request::FromRequest;
+                let cbor_empty_bytes = #{Bytes}::copy_from_slice(&#{decode_body_data}(
+                    "oA==".as_bytes(),
+                    #{MediaType}::from("application/cbor"),
+                ));
 
-                    if (shouldFail) {
-                        rust("""parsed.expect_err("header should be rejected");""")
-                    } else {
-                        rust("""parsed.expect("header should be accepted");""")
-                    }
-                }
+                let http_request = ::http::Request::builder()
+                    .uri("/service/TestService/operation/StreamingOutputOperation")
+                    .method("POST")
+                    .header("Accept", ${acceptHeader.dq()})
+                    .header("Content-Type", "application/cbor")
+                    .header("smithy-protocol", "rpc-v2-cbor")
+                    .body(Body::from(cbor_empty_bytes))
+                .unwrap();
+                let parsed = crate::input::StreamingOutputOperationInput::from_request(http_request).await;
+                """,
+                "Bytes" to RuntimeType.Bytes,
+                "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
+                "decode_body_data" to
+                    RuntimeType.protocolTest(
+                        codegenContext.runtimeConfig,
+                        "decode_body_data",
+                    ),
+            )
+
+            if (shouldFail) {
+                rust("""parsed.expect_err("header should be rejected");""")
+            } else {
+                rust("""parsed.expect("header should be accepted");""")
             }
         }
     }
