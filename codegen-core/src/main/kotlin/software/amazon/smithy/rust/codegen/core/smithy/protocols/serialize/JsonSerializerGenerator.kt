@@ -555,21 +555,16 @@ class JsonSerializerGenerator(
                     }
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
-                            val memberShape = model.expectShape(member.target)
-                            val isEmptyStruct =
-                                memberShape.isStructureShape &&
-                                    memberShape.asStructureShape().get().allMembers.isEmpty()
+                            val targetShape = model.expectShape(member.target)
+                            val isEmptyStruct = targetShape is StructureShape && targetShape.members().isEmpty()
+                            val innerRef = if (isEmptyStruct) "_inner" else "inner"
                             val variantName =
                                 if (member.isTargetUnit()) {
                                     "${symbolProvider.toMemberName(member)}"
-                                } else if (isEmptyStruct) {
-                                    // Empty structures don't use the inner variable
-                                    "${symbolProvider.toMemberName(member)}(_inner)"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "${symbolProvider.toMemberName(member)}($innerRef)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
-                                val innerRef = if (isEmptyStruct) "_inner" else "inner"
                                 serializeMember(MemberContext.unionMember(context, innerRef, member, jsonName))
                             }
                         }

@@ -31,6 +31,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 
 class JsonSerializerGeneratorTest {
     private val baseModel =
@@ -346,83 +348,56 @@ class JsonSerializerGeneratorTest {
     }
 
     @Test
-    fun `union with unit struct doesn't cause unused variable warning`() {
+    fun `union with empty struct doesn't cause unused variable warning`() {
         // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
-        //
-        // This test validates the fix for unused variable warnings in union serialization.
-        // The test model contains an empty struct (NoneFilter) in a union, which without
-        // the fix would generate: `unused variable: inner` warnings.
-        //
-        // Test approach: The fix uses '_inner' (underscore prefix) for empty structs,
-        // telling Rust the variable is intentionally unused. This test verifies the
-        // generated code compiles successfully, proving the fix works.
-        //
-        // Note: compileAndTest() disables warnings via RUSTFLAGS="", but the fix
-        // prevents the warning from being generated in the first place.
-        val unionWithUnitStructModel =
-            """
-            namespace test
-
-            union EncryptionFilter {
-                none: NoneFilter,
-                aes: AesFilter
-            }
-
-            structure NoneFilter {}
-
-            structure AesFilter {
-                keyId: String
-            }
-
-            @http(uri: "/test", method: "POST")
-            operation TestOp {
-                input: TestOpInput
-            }
-
-            structure TestOpInput {
-                filter: EncryptionFilter
-            }
-            """.asSmithyModel()
-
-        val model = OperationNormalizer.transform(unionWithUnitStructModel)
-
+        val model = OperationNormalizer.transform(unionWithEmptyStructModel)
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
-        val project = TestWorkspace.testProject(symbolProvider)
-
-        // Generate the JSON serializer that will create the union serialization code
-        val jsonSerializer =
+        val parserSerializer =
             JsonSerializerGenerator(
                 codegenContext,
                 HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
                 ::restJsonFieldName,
             )
-        val operationGenerator = jsonSerializer.operationInputSerializer(model.lookup("test#TestOp"))
+        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup(UnionWithEmptyStructShapeIds.TEST_OPERATION))
 
-        // Render all necessary structures and unions
-        model.lookup<StructureShape>("test#NoneFilter").renderWithModelBuilder(model, symbolProvider, project)
-        model.lookup<StructureShape>("test#AesFilter").renderWithModelBuilder(model, symbolProvider, project)
-        model.lookup<OperationShape>("test#TestOp").inputShape(model).renderWithModelBuilder(model, symbolProvider, project)
-
-        project.moduleFor(model.lookup<UnionShape>("test#EncryptionFilter")) {
-            UnionGenerator(model, symbolProvider, this, model.lookup("test#EncryptionFilter")).render()
-        }
-
-        // Generate the actual protocol_serde module with union serialization
+        val project = TestWorkspace.testProject(symbolProvider)
         project.lib {
             unitTest(
-                "json_union_serialization",
+                "union_with_empty_struct_serialization",
                 """
-                use test_model::{EncryptionFilter, NoneFilter};
+                use test_model::{TestUnion, EmptyStruct};
 
-                // This test verifies the generated union serialization code compiles
-                // without unused variable warnings for empty structs
-                let _filter = EncryptionFilter::None(NoneFilter {});
+                let input = crate::test_input::TestOperationInput::builder()
+                    .union(TestUnion::EmptyStructMember(EmptyStruct::builder().build()))
+                    .build()
+                    .unwrap();
+                let _serialized = ${format(operationGenerator!!)}(&input).unwrap();
+
+                let input = crate::test_input::TestOperationInput::builder()
+                    .union(TestUnion::DataMember("test".to_string()))
+                    .build()
+                    .unwrap();
+                let _serialized = ${format(operationGenerator)}(&input).unwrap();
                 """,
             )
         }
 
-        // Test compiles successfully - the fix prevents unused variable warnings
+        model.lookup<StructureShape>(UnionWithEmptyStructShapeIds.EMPTY_STRUCT).also { emptyStruct ->
+            emptyStruct.renderWithModelBuilder(model, symbolProvider, project)
+        }
+
+        model.lookup<StructureShape>(UnionWithEmptyStructShapeIds.TEST_INPUT).also { testInput ->
+            testInput.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(testInput) {
+                UnionGenerator(model, symbolProvider, this, model.lookup(UnionWithEmptyStructShapeIds.TEST_UNION)).render()
+            }
+        }
+
+        model.lookup<OperationShape>(UnionWithEmptyStructShapeIds.TEST_OPERATION).inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+
         project.compileAndTest()
     }
 }

@@ -547,22 +547,16 @@ class CborSerializerGenerator(
 
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
-                            val memberShape = model.expectShape(member.target)
-                            val memberName = symbolProvider.toMemberName(member)
-                            val isEmptyStruct =
-                                memberShape.isStructureShape &&
-                                    memberShape.asStructureShape().get().allMembers.isEmpty()
+                            val targetShape = model.expectShape(member.target)
+                            val isEmptyStruct = targetShape is StructureShape && targetShape.members().isEmpty()
+                            val innerRef = if (isEmptyStruct) "_inner" else "inner"
                             val variantName =
                                 if (member.isTargetUnit()) {
-                                    memberName
-                                } else if (isEmptyStruct) {
-                                    // Empty structures don't use the inner variable
-                                    "$memberName(_inner)"
+                                    symbolProvider.toMemberName(member)
                                 } else {
-                                    "$memberName(inner)"
+                                    "${symbolProvider.toMemberName(member)}($innerRef)"
                                 }
                             rustBlock("#T::$variantName =>", unionSymbol) {
-                                val innerRef = if (isEmptyStruct) "_inner" else "inner"
                                 serializeMember(MemberContext.unionMember(innerRef, member))
                             }
                         }
