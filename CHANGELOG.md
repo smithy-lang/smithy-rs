@@ -1,4 +1,26 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 1st, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4299](https://github.com/smithy-lang/smithy-rs/issues/4299), @greenwoodcm) Added a new `then_compute_output` to `aws-smithy-mocks` rule builder that allows using the input type when computing a mocked response, e.g. 
+    ```rs
+    // Return a computed output based on the input
+    let compute_rule = mock!(Client::get_object)
+        .then_compute_output(|req| {
+            let key = req.key().unwrap_or("unknown");
+            GetObjectOutput::builder()
+                .body(ByteStream::from_static(format!("content for {}", key).as_bytes()))
+                .build()
+        });
+    ```
+- :bug: (client, [smithy-rs#4226](https://github.com/smithy-lang/smithy-rs/issues/4226), @haydenbaker) Fixed problematic assertion on HttpApiKeyAuthTrait `scheme`, which was causing client-codegen to fail when the correct settings for api-key based auth were set.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4299](https://github.com/smithy-lang/smithy-rs/issues/4299))
+- @haydenbaker ([smithy-rs#4226](https://github.com/smithy-lang/smithy-rs/issues/4226))
+
+
 September 10th, 2025
 ====================
 **New this release:**
