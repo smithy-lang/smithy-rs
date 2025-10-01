@@ -92,6 +92,18 @@ class RpcV2CborHttpBindingResolver(
      */
     override fun responseContentType(operationShape: OperationShape): String? =
         if (OperationNormalizer.hadUserModeledOperationOutput(operationShape, model)) {
+            if (operationShape.isOutputEventStream(model)) {
+                contentTypes.eventStreamContentType
+            } else {
+                contentTypes.responseDocument
+            }
+        } else {
+            null
+        }
+
+    override fun legacyBackwardsCompatContentType(operationShape: OperationShape): String? =
+        if (operationShape.isOutputEventStream(model)) {
+            // Return "application/cbor" for backwards compatibility
             contentTypes.responseDocument
         } else {
             null
