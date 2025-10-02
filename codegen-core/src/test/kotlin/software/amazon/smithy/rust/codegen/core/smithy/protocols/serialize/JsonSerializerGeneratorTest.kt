@@ -366,16 +366,16 @@ class JsonSerializerGeneratorTest {
             unitTest(
                 "union_with_empty_struct_serialization",
                 """
-                use test_model::{TestUnion, EmptyStruct};
+                use test_model::{ObjectEncryptionFilter, Sses3Filter};
 
                 let input = crate::test_input::TestOperationInput::builder()
-                    .union(TestUnion::EmptyStructMember(EmptyStruct::builder().build()))
+                    .filter(ObjectEncryptionFilter::Sses3(Sses3Filter::builder().build()))
                     .build()
                     .unwrap();
                 let _serialized = ${format(operationGenerator!!)}(&input).unwrap();
 
                 let input = crate::test_input::TestOperationInput::builder()
-                    .union(TestUnion::DataMember("test".to_string()))
+                    .filter(ObjectEncryptionFilter::Data("test".to_string()))
                     .build()
                     .unwrap();
                 let _serialized = ${format(operationGenerator)}(&input).unwrap();

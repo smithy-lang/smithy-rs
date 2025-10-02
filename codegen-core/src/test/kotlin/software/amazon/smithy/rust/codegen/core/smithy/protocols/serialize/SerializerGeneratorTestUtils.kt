@@ -13,8 +13,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
  */
 object SerializerGeneratorTestUtils {
     /**
-     * Test model with a union containing an empty struct member.
+     * Test model based on S3Control ObjectEncryptionFilter pattern.
      * Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
+     * 
+     * This model creates a union with an empty struct that should generate unused `inner` variables.
      */
     val unionWithEmptyStructModel =
         """
@@ -27,23 +29,23 @@ object SerializerGeneratorTestUtils {
             operations: [TestOperation]
         }
 
-        union TestUnion {
-            emptyStructMember: EmptyStruct,
-            dataMember: String
+        union ObjectEncryptionFilter {
+            sses3: SSES3Filter,
+            data: String
         }
 
-        structure EmptyStruct {
-            // NO MEMBERS
+        structure SSES3Filter {
+            // Empty structure - no members
         }
 
         @input
-        structure TestOperationInput {
-            union: TestUnion
+        structure TestInput {
+            filter: ObjectEncryptionFilter
         }
 
         @http(uri: "/test", method: "POST")
         operation TestOperation {
-            input: TestOperationInput,
+            input: TestInput,
         }
         """.asSmithyModel()
 
@@ -51,9 +53,9 @@ object SerializerGeneratorTestUtils {
      * Shape IDs for the union with empty struct model.
      */
     object UnionWithEmptyStructShapeIds {
-        const val TEST_UNION = "test#TestUnion" 
-        const val EMPTY_STRUCT = "test#EmptyStruct"
-        const val TEST_INPUT = "test#TestOperationInput"
+        const val TEST_UNION = "test#ObjectEncryptionFilter" 
+        const val EMPTY_STRUCT = "test#SSES3Filter"
+        const val TEST_INPUT = "test#TestInput"
         const val TEST_OPERATION = "test#TestOperation"
     }
 }
