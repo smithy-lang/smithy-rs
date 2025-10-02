@@ -1,4 +1,12 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 2nd, 2025
+=================
+**New this release:**
+- :bug: (server) Fix bug where servers rejected `application/vnd.amazon.evenstream` ACCEPT header for RPCv2Cbor
+
+    This change allows this header while also allowing `application/cbor` for backwards compatibility.
+
+
 October 1st, 2025
 =================
 **New this release:**
