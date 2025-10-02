@@ -155,26 +155,6 @@ use smithy.rules#endpointTests
       }
     },
     {
-      "documentation": "unicode characters always return `None`",
-      "params": {
-        "TestCaseId": "1",
-        "Input": "abcdef\uD83D\uDC31"
-      },
-      "expect": {
-        "error": "No tests matched"
-      }
-    },
-    {
-      "documentation": "non-ascii cause substring to always return `None`",
-      "params": {
-        "TestCaseId": "1",
-        "Input": "abcdef\u0080"
-      },
-      "expect": {
-        "error": "No tests matched"
-      }
-    },
-    {
       "documentation": "the full set of ascii is supported, including non-printable characters",
       "params": {
         "TestCaseId": "1",

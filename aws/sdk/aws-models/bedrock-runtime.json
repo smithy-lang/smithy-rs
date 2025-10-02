@@ -49,6 +49,9 @@
                 },
                 {
                     "target": "com.amazonaws.bedrockruntime#InferenceResource"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#TokenizerResource"
                 }
             ],
             "traits": {
@@ -586,17 +589,6 @@
                             }
                         },
                         {
-                            "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack enabled",
-                            "expect": {
-                                "error": "FIPS and DualStack are enabled, but this partition does not support one or both"
-                            },
-                            "params": {
-                                "Region": "us-iso-east-1",
-                                "UseFIPS": true,
-                                "UseDualStack": true
-                            }
-                        },
-                        {
                             "documentation": "For region us-iso-east-1 with FIPS enabled and DualStack disabled",
                             "expect": {
                                 "endpoint": {
@@ -607,17 +599,6 @@
                                 "Region": "us-iso-east-1",
                                 "UseFIPS": true,
                                 "UseDualStack": false
-                            }
-                        },
-                        {
-                            "documentation": "For region us-iso-east-1 with FIPS disabled and DualStack enabled",
-                            "expect": {
-                                "error": "DualStack is enabled but this partition does not support DualStack"
-                            },
-                            "params": {
-                                "Region": "us-iso-east-1",
-                                "UseFIPS": false,
-                                "UseDualStack": true
                             }
                         },
                         {
@@ -634,17 +615,6 @@
                             }
                         },
                         {
-                            "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack enabled",
-                            "expect": {
-                                "error": "FIPS and DualStack are enabled, but this partition does not support one or both"
-                            },
-                            "params": {
-                                "Region": "us-isob-east-1",
-                                "UseFIPS": true,
-                                "UseDualStack": true
-                            }
-                        },
-                        {
                             "documentation": "For region us-isob-east-1 with FIPS enabled and DualStack disabled",
                             "expect": {
                                 "endpoint": {
@@ -655,17 +625,6 @@
                                 "Region": "us-isob-east-1",
                                 "UseFIPS": true,
                                 "UseDualStack": false
-                            }
-                        },
-                        {
-                            "documentation": "For region us-isob-east-1 with FIPS disabled and DualStack enabled",
-                            "expect": {
-                                "error": "DualStack is enabled but this partition does not support DualStack"
-                            },
-                            "params": {
-                                "Region": "us-isob-east-1",
-                                "UseFIPS": false,
-                                "UseDualStack": true
                             }
                         },
                         {
@@ -770,6 +729,9 @@
                 },
                 {
                     "target": "com.amazonaws.bedrockruntime#ServiceQuotaExceededException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#ServiceUnavailableException"
                 },
                 {
                     "target": "com.amazonaws.bedrockruntime#ThrottlingException"
@@ -1073,6 +1035,15 @@
             "members": {},
             "traits": {
                 "smithy.api#documentation": "<p>The Model automatically decides if a tool should be called or whether to generate text instead. For example, <code>{\"auto\" : {}}</code>.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#AutomatedReasoningRuleIdentifier": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "max": 12
+                },
+                "smithy.api#pattern": "^[a-z0-9]{12}$"
             }
         },
         "com.amazonaws.bedrockruntime#BidirectionalInputPayloadPart": {
@@ -2030,6 +2001,26 @@
                 "smithy.api#documentation": "<p>The trace object in a response from <a href=\"https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_ConverseStream.html\">ConverseStream</a>. Currently, you can only trace guardrails.</p>"
             }
         },
+        "com.amazonaws.bedrockruntime#ConverseTokensRequest": {
+            "type": "structure",
+            "members": {
+                "messages": {
+                    "target": "com.amazonaws.bedrockruntime#Messages",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An array of messages to count tokens for.</p>"
+                    }
+                },
+                "system": {
+                    "target": "com.amazonaws.bedrockruntime#SystemContentBlocks",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The system content blocks to count tokens for. System content provides instructions or context to the model about how it should behave or respond. The token count will include any system content provided.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The inputs from a <code>Converse</code> API request for token counting.</p> <p>This structure mirrors the input format for the <code>Converse</code> operation, allowing you to count tokens for conversation-based inference requests.</p>"
+            }
+        },
         "com.amazonaws.bedrockruntime#ConverseTrace": {
             "type": "structure",
             "members": {
@@ -2048,6 +2039,102 @@
             },
             "traits": {
                 "smithy.api#documentation": "<p>The trace object in a response from <a href=\"https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html\">Converse</a>. Currently, you can only trace guardrails.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#CountTokens": {
+            "type": "operation",
+            "input": {
+                "target": "com.amazonaws.bedrockruntime#CountTokensRequest"
+            },
+            "output": {
+                "target": "com.amazonaws.bedrockruntime#CountTokensResponse"
+            },
+            "errors": [
+                {
+                    "target": "com.amazonaws.bedrockruntime#AccessDeniedException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#InternalServerException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#ResourceNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#ServiceUnavailableException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#ThrottlingException"
+                },
+                {
+                    "target": "com.amazonaws.bedrockruntime#ValidationException"
+                }
+            ],
+            "traits": {
+                "smithy.api#documentation": "<p>Returns the token count for a given inference request. This operation helps you estimate token usage before sending requests to foundation models by returning the token count that would be used if the same input were sent to the model in an inference request.</p> <p>Token counting is model-specific because different models use different tokenization strategies. The token count returned by this operation will match the token count that would be charged if the same input were sent to the model in an <code>InvokeModel</code> or <code>Converse</code> request.</p> <p>You can use this operation to:</p> <ul> <li> <p>Estimate costs before sending inference requests.</p> </li> <li> <p>Optimize prompts to fit within token limits.</p> </li> <li> <p>Plan for token usage in your applications.</p> </li> </ul> <p>This operation accepts the same input formats as <code>InvokeModel</code> and <code>Converse</code>, allowing you to count tokens for both raw text inputs and structured conversation formats.</p> <p>The following operations are related to <code>CountTokens</code>:</p> <ul> <li> <p> <a href=\"https://docs.aws.amazon.com/bedrock/latest/API/API_runtime_InvokeModel.html\">InvokeModel</a> - Sends inference requests to foundation models</p> </li> <li> <p> <a href=\"https://docs.aws.amazon.com/bedrock/latest/API/API_runtime_Converse.html\">Converse</a> - Sends conversation-based inference requests to foundation models</p> </li> </ul>",
+                "smithy.api#http": {
+                    "code": 200,
+                    "method": "POST",
+                    "uri": "/model/{modelId}/count-tokens"
+                },
+                "smithy.api#readonly": {}
+            }
+        },
+        "com.amazonaws.bedrockruntime#CountTokensInput": {
+            "type": "union",
+            "members": {
+                "invokeModel": {
+                    "target": "com.amazonaws.bedrockruntime#InvokeModelTokensRequest",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An <code>InvokeModel</code> request for which to count tokens. Use this field when you want to count tokens for a raw text input that would be sent to the <code>InvokeModel</code> operation.</p>"
+                    }
+                },
+                "converse": {
+                    "target": "com.amazonaws.bedrockruntime#ConverseTokensRequest",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A <code>Converse</code> request for which to count tokens. Use this field when you want to count tokens for a conversation-based input that would be sent to the <code>Converse</code> operation.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The input value for token counting. The value should be either an <code>InvokeModel</code> or <code>Converse</code> request body. </p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#CountTokensRequest": {
+            "type": "structure",
+            "members": {
+                "modelId": {
+                    "target": "com.amazonaws.bedrockruntime#FoundationModelVersionIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unique identifier or ARN of the foundation model to use for token counting. Each model processes tokens differently, so the token count is specific to the model you specify.</p>",
+                        "smithy.api#httpLabel": {},
+                        "smithy.api#required": {}
+                    }
+                },
+                "input": {
+                    "target": "com.amazonaws.bedrockruntime#CountTokensInput",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The input for which to count tokens. The structure of this parameter depends on whether you're counting tokens for an <code>InvokeModel</code> or <code>Converse</code> request:</p> <ul> <li> <p>For <code>InvokeModel</code> requests, provide the request body in the <code>invokeModel</code> field</p> </li> <li> <p>For <code>Converse</code> requests, provide the messages and system content in the <code>converse</code> field</p> </li> </ul> <p>The input format must be compatible with the model specified in the <code>modelId</code> parameter.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#input": {}
+            }
+        },
+        "com.amazonaws.bedrockruntime#CountTokensResponse": {
+            "type": "structure",
+            "members": {
+                "inputTokens": {
+                    "target": "smithy.api#Integer",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number of tokens in the provided input according to the specified model's tokenization rules. This count represents the number of input tokens that would be processed if the same input were sent to the model in an inference request. Use this value to estimate costs and ensure your inputs stay within model token limits.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#output": {}
             }
         },
         "com.amazonaws.bedrockruntime#DocumentBlock": {
@@ -2315,6 +2402,17 @@
                 "smithy.api#documentation": "<p>Contains the content of a document.</p>"
             }
         },
+        "com.amazonaws.bedrockruntime#FoundationModelVersionIdentifier": {
+            "type": "string",
+            "traits": {
+                "smithy.api#documentation": "ARN or ID of a Bedrock model",
+                "smithy.api#length": {
+                    "min": 1,
+                    "max": 256
+                },
+                "smithy.api#pattern": "^[a-zA-Z_\\.\\-/0-9:]+$"
+            }
+        },
         "com.amazonaws.bedrockruntime#GetAsyncInvoke": {
             "type": "operation",
             "input": {
@@ -2480,6 +2578,12 @@
                         "smithy.api#documentation": "<p>The contextual grounding policy used for the guardrail assessment.</p>"
                     }
                 },
+                "automatedReasoningPolicy": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyAssessment",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The automated reasoning policy assessment results, including logical validation findings for the input content.</p>"
+                    }
+                },
                 "invocationMetrics": {
                     "target": "com.amazonaws.bedrockruntime#GuardrailInvocationMetrics",
                     "traits": {
@@ -2513,6 +2617,477 @@
             },
             "value": {
                 "target": "com.amazonaws.bedrockruntime#GuardrailAssessment"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningDifferenceScenarioList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningScenario"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "max": 2
+                }
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningFinding": {
+            "type": "union",
+            "members": {
+                "valid": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningValidFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation determines that the claims in the input are logically valid and definitively true based on the provided premises and policy rules.</p>"
+                    }
+                },
+                "invalid": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInvalidFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation determines that the claims in the input are logically invalid and contradict the established premises or policy rules.</p>"
+                    }
+                },
+                "satisfiable": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningSatisfiableFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation determines that the claims in the input could be either true or false depending on additional assumptions not provided in the input context.</p>"
+                    }
+                },
+                "impossible": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningImpossibleFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation determines that no valid logical conclusions can be drawn due to contradictions in the premises or policy rules themselves.</p>"
+                    }
+                },
+                "translationAmbiguous": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationAmbiguousFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation detects that the input has multiple valid logical interpretations, requiring additional context or clarification to proceed with validation.</p>"
+                    }
+                },
+                "tooComplex": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTooComplexFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation cannot process the input due to its complexity or volume exceeding the system's processing capacity for logical analysis.</p>"
+                    }
+                },
+                "noTranslations": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningNoTranslationsFinding",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Contains the result when the automated reasoning evaluation cannot extract any relevant logical information from the input that can be validated against the policy rules.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Represents a logical validation result from automated reasoning policy evaluation. The finding indicates whether claims in the input are logically valid, invalid, satisfiable, impossible, or have other logical issues.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningFindingList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningFinding"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningImpossibleFinding": {
+            "type": "structure",
+            "members": {
+                "translation": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical translation of the input that this finding evaluates.</p>"
+                    }
+                },
+                "contradictingRules": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRuleList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The automated reasoning policy rules that contradict the claims and/or premises in the input.</p>"
+                    }
+                },
+                "logicWarning": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarning",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indication of a logic issue with the translation without needing to consider the automated reasoning policy rules.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that no valid claims can be made due to logical contradictions in the premises or rules.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInputTextReference": {
+            "type": "structure",
+            "members": {
+                "text": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementNaturalLanguageContent",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The specific text from the original input that this reference points to.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>References a portion of the original input text that corresponds to logical elements.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInputTextReferenceList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInputTextReference"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInvalidFinding": {
+            "type": "structure",
+            "members": {
+                "translation": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical translation of the input that this finding invalidates.</p>"
+                    }
+                },
+                "contradictingRules": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRuleList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The automated reasoning policy rules that contradict the claims in the input.</p>"
+                    }
+                },
+                "logicWarning": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarning",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indication of a logic issue with the translation without needing to consider the automated reasoning policy rules.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that the claims are logically false and contradictory to the established rules or premises.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarning": {
+            "type": "structure",
+            "members": {
+                "type": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarningType",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The category of the detected logical issue, such as statements that are always true or always false.</p>"
+                    }
+                },
+                "premises": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical statements that serve as premises under which the claims are validated.</p>"
+                    }
+                },
+                "claims": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical statements that are validated while assuming the policy and premises.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Identifies logical issues in the translated statements that exist independent of any policy rules, such as statements that are always true or always false.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarningType": {
+            "type": "enum",
+            "members": {
+                "ALWAYS_FALSE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "ALWAYS_FALSE"
+                    }
+                },
+                "ALWAYS_TRUE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "ALWAYS_TRUE"
+                    }
+                }
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningNoTranslationsFinding": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that no relevant logical information could be extracted from the input for validation.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPoliciesProcessed": {
+            "type": "integer"
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyAssessment": {
+            "type": "structure",
+            "members": {
+                "findings": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningFindingList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>List of logical validation results produced by evaluating the input content against automated reasoning policies.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Contains the results of automated reasoning policy evaluation, including logical findings about the validity of claims made in the input content.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyUnitsProcessed": {
+            "type": "integer"
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyVersionArn": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "max": 2048
+                },
+                "smithy.api#pattern": "^arn:aws(-[^:]+)?:bedrock:[a-z0-9-]{1,20}:[0-9]{12}:automated-reasoning-policy/[a-z0-9]{12}(:([1-9][0-9]{0,11}))?$"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRule": {
+            "type": "structure",
+            "members": {
+                "identifier": {
+                    "target": "com.amazonaws.bedrockruntime#AutomatedReasoningRuleIdentifier",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The unique identifier of the automated reasoning rule.</p>"
+                    }
+                },
+                "policyVersionArn": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyVersionArn",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The ARN of the automated reasoning policy version that contains this rule.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>References a specific automated reasoning policy rule that was applied during evaluation.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRuleList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRule"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningSatisfiableFinding": {
+            "type": "structure",
+            "members": {
+                "translation": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical translation of the input that this finding evaluates.</p>"
+                    }
+                },
+                "claimsTrueScenario": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningScenario",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An example scenario demonstrating how the claims could be logically true.</p>"
+                    }
+                },
+                "claimsFalseScenario": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningScenario",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An example scenario demonstrating how the claims could be logically false.</p>"
+                    }
+                },
+                "logicWarning": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarning",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indication of a logic issue with the translation without needing to consider the automated reasoning policy rules.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that the claims could be either true or false depending on additional assumptions not provided in the input.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningScenario": {
+            "type": "structure",
+            "members": {
+                "statements": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>List of logical assignments and statements that define this scenario.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Represents a logical scenario where claims can be evaluated as true or false, containing specific logical assignments.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatement": {
+            "type": "structure",
+            "members": {
+                "logic": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementLogicContent",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The formal logical representation of the statement.</p>"
+                    }
+                },
+                "naturalLanguage": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementNaturalLanguageContent",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The natural language explanation of the logical statement.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>A logical statement that includes both formal logic representation and natural language explanation.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatement"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementLogicContent": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "max": 1000
+                },
+                "smithy.api#sensitive": {}
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementNaturalLanguageContent": {
+            "type": "string",
+            "traits": {
+                "smithy.api#length": {
+                    "max": 1000
+                },
+                "smithy.api#sensitive": {}
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTooComplexFinding": {
+            "type": "structure",
+            "members": {},
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that the input exceeds the processing capacity due to the volume or complexity of the logical information.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation": {
+            "type": "structure",
+            "members": {
+                "premises": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical statements that serve as the foundation or assumptions for the claims.</p>"
+                    }
+                },
+                "claims": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningStatementList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical statements that are being validated against the premises and policy rules.</p>"
+                    }
+                },
+                "untranslatedPremises": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInputTextReferenceList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>References to portions of the original input text that correspond to the premises but could not be fully translated.</p>"
+                    }
+                },
+                "untranslatedClaims": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningInputTextReferenceList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>References to portions of the original input text that correspond to the claims but could not be fully translated.</p>"
+                    }
+                },
+                "confidence": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationConfidence",
+                    "traits": {
+                        "smithy.api#documentation": "<p>A confidence score between 0 and 1 indicating how certain the system is about the logical translation.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Contains the logical translation of natural language input into formal logical statements, including premises, claims, and confidence scores.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationAmbiguousFinding": {
+            "type": "structure",
+            "members": {
+                "options": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationOptionList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Different logical interpretations that were detected during translation of the input.</p>"
+                    }
+                },
+                "differenceScenarios": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningDifferenceScenarioList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Scenarios showing how the different translation options differ in meaning.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that the input has multiple valid logical interpretations, requiring additional context or clarification.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationConfidence": {
+            "type": "double",
+            "traits": {
+                "smithy.api#range": {
+                    "min": 0,
+                    "max": 1
+                }
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationOption": {
+            "type": "structure",
+            "members": {
+                "translations": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Example translations that provide this possible interpretation of the input.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Represents one possible logical interpretation of ambiguous input content.</p>"
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationOptionList": {
+            "type": "list",
+            "member": {
+                "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslationOption"
+            },
+            "traits": {
+                "smithy.api#length": {
+                    "max": 2
+                }
+            }
+        },
+        "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningValidFinding": {
+            "type": "structure",
+            "members": {
+                "translation": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningTranslation",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The logical translation of the input that this finding validates.</p>"
+                    }
+                },
+                "claimsTrueScenario": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningScenario",
+                    "traits": {
+                        "smithy.api#documentation": "<p>An example scenario demonstrating how the claims are logically true.</p>"
+                    }
+                },
+                "supportingRules": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningRuleList",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The automated reasoning policy rules that support why this result is considered valid.</p>"
+                    }
+                },
+                "logicWarning": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningLogicWarning",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Indication of a logic issue with the translation without needing to consider the automated reasoning policy rules.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Indicates that the claims are definitively true and logically implied by the premises, with no possible alternative interpretations.</p>"
             }
         },
         "com.amazonaws.bedrockruntime#GuardrailConfiguration": {
@@ -3919,6 +4494,18 @@
                     "traits": {
                         "smithy.api#documentation": "<p>The content policy image units processed by the guardrail.</p>"
                     }
+                },
+                "automatedReasoningPolicyUnits": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPolicyUnitsProcessed",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number of text units processed by the automated reasoning policy.</p>"
+                    }
+                },
+                "automatedReasoningPolicies": {
+                    "target": "com.amazonaws.bedrockruntime#GuardrailAutomatedReasoningPoliciesProcessed",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The number of automated reasoning policies that were processed during the guardrail evaluation.</p>"
+                    }
                 }
             },
             "traits": {
@@ -4090,7 +4677,7 @@
                     "traits": {
                         "smithy.api#documentation": "<p>A list of stop sequences. A stop sequence is a sequence of characters that causes the model to stop generating the response. </p>",
                         "smithy.api#length": {
-                            "max": 4
+                            "max": 2500
                         }
                     }
                 }
@@ -4296,6 +4883,21 @@
             },
             "traits": {
                 "smithy.api#output": {}
+            }
+        },
+        "com.amazonaws.bedrockruntime#InvokeModelTokensRequest": {
+            "type": "structure",
+            "members": {
+                "body": {
+                    "target": "com.amazonaws.bedrockruntime#Body",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The request body to count tokens for, formatted according to the model's expected input format. To learn about the input format for different models, see <a href=\"https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters.html\">Model inference parameters and responses</a>.</p>",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>The body of an <code>InvokeModel</code> API request for token counting. This structure mirrors the input format for the <code>InvokeModel</code> operation, allowing you to count tokens for raw text inference requests.</p>"
             }
         },
         "com.amazonaws.bedrockruntime#InvokeModelWithBidirectionalStream": {
@@ -5449,6 +6051,12 @@
                     "traits": {
                         "smithy.api#enumValue": "content_filtered"
                     }
+                },
+                "MODEL_CONTEXT_WINDOW_EXCEEDED": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "model_context_window_exceeded"
+                    }
                 }
             }
         },
@@ -5618,6 +6226,14 @@
             "traits": {
                 "smithy.api#documentation": "<p>The tokens used in a message API inference call. </p>"
             }
+        },
+        "com.amazonaws.bedrockruntime#TokenizerResource": {
+            "type": "resource",
+            "operations": [
+                {
+                    "target": "com.amazonaws.bedrockruntime#CountTokens"
+                }
+            ]
         },
         "com.amazonaws.bedrockruntime#Tool": {
             "type": "union",
