@@ -67,6 +67,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -374,8 +375,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      * Usage: In templates, #{MimeType}, "MimeType" to mimeType("yourDesiredType")
      */
     private fun mimeType(type: String): RuntimeType {
-        val mimeAsVariable = type.replace('/', '_').replace('.', '_').replace("*", "STAR").uppercase()
-        val typeName = "CONTENT_TYPE_$mimeAsVariable"
+        val variableName = type.toSnakeCase().uppercase()
+        val typeName = "CONTENT_TYPE_$variableName"
         return RuntimeType.forInlineFun(typeName, RustModule.private("mimes")) {
             rustTemplate(
                 """

@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class EventStreamAcceptHeaderTest {
@@ -88,7 +89,7 @@ internal class EventStreamAcceptHeaderTest {
         acceptHeader: String,
         shouldFail: Boolean,
         codegenContext: CodegenContext,
-        testName: String = acceptHeader.replace("/", "_").replace(".", "_").replace(" ", "_").replace(",", "_"),
+        testName: String = acceptHeader.toSnakeCase(),
     ) {
         tokioTest("test_header_$testName") {
             rustTemplate(
