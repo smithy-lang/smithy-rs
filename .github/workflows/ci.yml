@@ -99,7 +99,7 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-fuzzgen
           runner: ubuntu-latest
         - action: check-server-codegen-integration-tests
