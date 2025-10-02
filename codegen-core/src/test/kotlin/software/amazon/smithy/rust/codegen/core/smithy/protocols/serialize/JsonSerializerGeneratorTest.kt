@@ -12,7 +12,6 @@ import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
@@ -20,6 +19,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -31,8 +32,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 
 class JsonSerializerGeneratorTest {
     private val baseModel =

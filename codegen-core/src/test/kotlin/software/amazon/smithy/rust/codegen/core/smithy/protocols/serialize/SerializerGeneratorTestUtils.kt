@@ -15,7 +15,7 @@ object SerializerGeneratorTestUtils {
     /**
      * Test model based on S3Control ObjectEncryptionFilter pattern.
      * Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
-     * 
+     *
      * This model creates a union with an empty struct that should generate unused `inner` variables.
      */
     val unionWithEmptyStructModel =
@@ -53,7 +53,7 @@ object SerializerGeneratorTestUtils {
      * Shape IDs for the union with empty struct model.
      */
     object UnionWithEmptyStructShapeIds {
-        const val TEST_UNION = "test#ObjectEncryptionFilter" 
+        const val TEST_UNION = "test#ObjectEncryptionFilter"
         const val EMPTY_STRUCT = "test#SSES3Filter"
         const val TEST_INPUT = "test#TestInput"
         const val TEST_OPERATION = "test#TestOperation"

@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -17,11 +19,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 
 class QuerySerializerGeneratorTest {
-
     @Test
     fun `union with empty struct doesn't cause unused variable warning`() {
         // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308

@@ -11,6 +11,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -19,21 +21,19 @@ import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.UnionWithEmptyStructShapeIds
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerGeneratorTestUtils.unionWithEmptyStructModel
 
 class CborSerializerGeneratorTest {
-
     @Test
     fun `union with empty struct doesn't cause unused variable warning`() {
         // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4308
         val model = OperationNormalizer.transform(unionWithEmptyStructModel)
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = CborSerializerGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/cbor"))
-        )
+        val parserGenerator =
+            CborSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/cbor")),
+            )
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup(UnionWithEmptyStructShapeIds.TEST_OPERATION))
 
         val project = TestWorkspace.testProject(symbolProvider)
