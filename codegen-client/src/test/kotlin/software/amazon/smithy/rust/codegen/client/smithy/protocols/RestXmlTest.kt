@@ -20,67 +20,28 @@ internal class RestXmlTest {
         /// A REST XML service that sends XML requests and responses.
         @service(sdkId: "Rest XML UT")
         @restXml
-        service RestXmlExtras {
-            version: "2019-12-16",
-            operations: [Op]
+        service TestService {
+            version: "1.0",
+            operations: [TestOperation]
         }
 
-
-        @http(uri: "/top", method: "POST")
-        operation Op {
-            input: Top,
-            output: Top
-        }
-        union Choice {
-            @xmlFlattened
-            @xmlName("Hi")
-            flatMap: MyMap,
-
-            deepMap: MyMap,
-
-            @xmlFlattened
-            flatList: SomeList,
-
-            deepList: SomeList,
-
-            s: String,
-
-            enum: FooEnum,
-
-            date: Timestamp,
-
-            number: Double,
-
-            top: Top,
-
-            blob: Blob
+        union ObjectEncryptionFilter {
+            sses3: SSES3Filter,
         }
 
-        @enum([{name: "FOO", value: "FOO"}])
-        string FooEnum
-
-        map MyMap {
-            @xmlName("Name")
-            key: String,
-
-            @xmlName("Setting")
-            value: Choice,
+        structure SSES3Filter {
+            // Empty structure - no members
         }
 
-        list SomeList {
-            member: Choice
+        @input
+        structure TestInput {
+            filter: ObjectEncryptionFilter
         }
 
-        structure Top {
-            choice: Choice,
-
-            @xmlAttribute
-            extra: Long,
-
-            @xmlName("prefix:local")
-            renamedWithPrefix: String
+        @http(uri: "/test", method: "POST")
+        operation TestOperation {
+            input: TestInput,
         }
-
         """.asSmithyModel()
 
     @Test

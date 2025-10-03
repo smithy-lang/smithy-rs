@@ -18,19 +18,25 @@ class AwsQueryTest {
         @awsQuery
         @xmlNamespace(uri: "https://example.com/")
         service TestService {
-            version: "2019-12-16",
-            operations: [SomeOperation]
+            version: "1.0",
+            operations: [TestOperation]
         }
 
-        operation SomeOperation {
-            input: SomeOperationInputOutput,
-            output: SomeOperationInputOutput,
+        union ObjectEncryptionFilter {
+            sses3: SSES3Filter,
         }
 
-        structure SomeOperationInputOutput {
-            payload: String,
-            a: String,
-            b: Integer
+        structure SSES3Filter {
+            // Empty structure - no members
+        }
+
+        @input
+        structure TestInput {
+            filter: ObjectEncryptionFilter
+        }
+
+        operation TestOperation {
+            input: TestInput,
         }
         """.asSmithyModel()
 
