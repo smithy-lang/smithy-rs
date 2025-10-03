@@ -17,6 +17,7 @@ include(":codegen-server-test")
 // due to https://github.com/gradle/gradle/issues/847
 include(":codegen-server-test:codegen-server-test-python")
 include(":codegen-server-test:codegen-server-test-typescript")
+include(":codegen-traits")
 include(":rust-runtime")
 include(":aws:rust-runtime")
 // NOTE: we rename the aws/rust-runtime project so that it ends up with different GAV
