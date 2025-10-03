@@ -37,8 +37,12 @@ structure StreamingOperationInput {
 
 @streaming
 union Events {
-    A: Unit,
-    B: Unit
+    A: Event,
+    B: Event,
+    C: Event,
+}
+
+structure Event {
 }
 
 

@@ -13,6 +13,7 @@ plugins {
     java
     alias(libs.plugins.smithy.gradle.base)
     alias(libs.plugins.smithy.gradle.jar)
+    id("com.dorongold.task-tree") version "2.1.1"
 }
 
 val properties = PropertyRetriever(rootProject, project)
@@ -35,8 +36,16 @@ smithy {
 
 val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
-        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
-        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
+        CodegenTest(
+            "crate#Config",
+            "naming_test_ops",
+            imports = listOf("$commonModels/naming-obstacle-course-ops.smithy"),
+        ),
+        CodegenTest(
+            "casing#ACRONYMInside_Service",
+            "naming_test_casing",
+            imports = listOf("$commonModels/naming-obstacle-course-casing.smithy"),
+        ),
         CodegenTest(
             "naming_obs_structs#NamingObstacleCourseStructs",
             "naming_test_structs",
@@ -47,7 +56,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
-            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy")
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
@@ -105,11 +114,18 @@ project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTe
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].inputs.files(tasks["generateSmithyBuild"].outputs)
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
+tasks.register<Exec>("cargoTestIntegration") {
+    dependsOn("assemble")
+    workingDir(projectDir.resolve("integration-tests"))
+    commandLine("cargo", "test")
+}
+
+tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString }, "cargoTestIntegration")
 
 tasks["clean"].doFirst { delete("smithy-build.json") }

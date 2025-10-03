@@ -1,0 +1,9 @@
+[workspace]
+resolver = "3"
+members = ["eventstreams"]
+
+[workspace.dependencies]
+rpcv2cbor_extras = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras/rust-server-codegen" }
+aws-smithy-eventstream = { path = "../../rust-runtime/aws-smithy-eventstream", features = ["test-util"] }
+aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
