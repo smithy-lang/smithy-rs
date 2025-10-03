@@ -201,7 +201,7 @@ impl AssumeRoleProviderBuilder {
     }
 
     /// Set the session tags
-    /// 
+    ///
     /// A list of session tags that you want to pass. Each session tag consists of a key name and an associated value.
     /// For more information, see `[Tag]`.
     pub fn tags(mut self, tags: impl Into<Vec<Tag>>) -> Self {
