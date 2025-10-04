@@ -16,7 +16,7 @@ Protocol files: `codegen-{core,server}/.../protocols/`
 
 ```kotlin
 rustTemplate(
-    "let result: #{Result}<#{String}, Error> = #{Ok}(value);",
+    "let result: #{Result}<#{String}, #{Error}> = #{Ok}(value);",
     *preludeScope,  // Provides Result, String, Ok
     "Error" to myErrorType
 )
