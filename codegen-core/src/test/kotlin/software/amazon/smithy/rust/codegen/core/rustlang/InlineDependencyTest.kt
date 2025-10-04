@@ -26,7 +26,7 @@ internal class InlineDependencyTest {
     fun `equal dependencies should be equal`() {
         val depA = makeDep("func")
         val depB = makeDep("func")
-        depA.renderer shouldNotBe depB.renderer
+        depA.renderer shouldBe depB.renderer
         depA.key() shouldBe depB.key()
 
         depA.key() shouldNotBe makeDep("func2").key()
