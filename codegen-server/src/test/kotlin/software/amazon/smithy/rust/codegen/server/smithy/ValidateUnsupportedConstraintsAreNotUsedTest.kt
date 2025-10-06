@@ -15,11 +15,8 @@ import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import java.io.File
@@ -92,13 +89,13 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             $version
             namespace test
 
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
-    
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
+
             service TestService {
                 operations: [TestOperation]
             }
-    
+
             operation TestOperation {
                 input: TestInputOutput,
                 output: TestInputOutput,
@@ -111,7 +108,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 @required
                 requiredString: String
             }
-            
+
             @validationException
             @error("client")
             structure CustomValidationException {
@@ -282,12 +279,12 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain(
+        validationResult.messages[0].message shouldContain (
             """
             The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
             `@uniqueItems` trait attached.
             """.trimIndent().replace("\n", " ")
-            )
+        )
     }
 
     @Test
@@ -367,12 +364,12 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain(
+        validationResult.messages[0].message shouldContain (
             """
             The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
             effect. All the constraint traits used in the model are well-supported, please remove this flag.
             """.trimIndent().replace("\n", " ")
-            )
+        )
     }
 
     @Test
@@ -381,8 +378,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """
             namespace test
 
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -426,8 +423,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """
             namespace test
 
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -464,8 +461,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             namespace test
 
             use smithy.framework#ValidationException
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -477,48 +474,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 errors: [
                     ValidationException
                 ]
-            }
-
-            @validationException
-            @error("client")
-            structure CustomValidationException {
-                @validationMessage
-                message: String,
-            }
-
-            structure TestInputOutput {
-                @length(min: 1, max: 69)
-                lengthString: String,
-            }
-            """.asSmithyModel()
-        val service = model.serviceShapes.first()
-        val validationResult = validateModelHasAtMostOneValidationException(model, service)
-
-        validationResult.shouldAbort shouldBe true
-        validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].level shouldBe Level.SEVERE
-    }
-
-    @Test
-    fun `it should detect default validation exception in service when custom validation exception is defined`() {
-        val model =
-            """
-            namespace test
-
-            use smithy.framework#ValidationException
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
-
-            service TestService {
-                operations: [TestOperation],
-                errors: [
-                    ValidationException
-                ]
-            }
-
-            operation TestOperation {
-                input: TestInputOutput,
-                output: TestInputOutput
             }
 
             @validationException

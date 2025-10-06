@@ -122,7 +122,7 @@ fun Shape.isDirectlyConstrainedForValidation(): Boolean =
 
         // For alignment with
         // (https://github.com/smithy-lang/smithy-rs/blob/custom-validation-rfc/design/src/rfcs/rfc0047_custom_validation.md#terminology)
-        // TODO: move to [isDirectlyConstrainerHelper] if they can be safely applied to [isDirectlyConstrained] without breaking implications
+        // TODO(move to [isDirectlyConstrainerHelper] if they can be safely applied to [isDirectlyConstrained] without breaking implications)
         is EnumShape -> true
         is IntEnumShape -> true
         is MemberShape -> !this.isOptional && !this.hasNonNullDefault()

@@ -17,21 +17,22 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 class CustomValidationExceptionValidatorTest {
     @Test
     fun `should error when validationException lacks error trait`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
+                use smithy.rust.codegen.traits#validationException
+                use smithy.rust.codegen.traits#validationMessage
 
-            @validationException
-            structure ValidationError {
-                @validationMessage
-                message: String
+                @validationException
+                structure ValidationError {
+                    @validationMessage
+                    message: String
+                }
+                """.asSmithyModel(smithyVersion = "2")
             }
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
-        
+
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#ValidationError")
         events[0].id shouldBe "CustomValidationException.MissingErrorTrait"
@@ -39,20 +40,21 @@ class CustomValidationExceptionValidatorTest {
 
     @Test
     fun `should error when validationException has no validationMessage field`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
-            use smithy.rust.codegen.server.traits#validationException
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
+                use smithy.rust.codegen.traits#validationException
 
-            @validationException
-            @error("client")
-            structure ValidationError {
-                code: String
+                @validationException
+                @error("client")
+                structure ValidationError {
+                    code: String
+                }
+                """.asSmithyModel(smithyVersion = "2")
             }
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
-        
+
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#ValidationError")
         events[0].id shouldBe "CustomValidationException.MissingMessageField"
@@ -60,24 +62,25 @@ class CustomValidationExceptionValidatorTest {
 
     @Test
     fun `should error when validationException has multiple explicit validationMessage fields`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
+                use smithy.rust.codegen.traits#validationException
+                use smithy.rust.codegen.traits#validationMessage
 
-            @validationException
-            @error("client")
-            structure ValidationError {
-                @validationMessage
-                message: String,
-                @validationMessage
-                details: String
+                @validationException
+                @error("client")
+                structure ValidationError {
+                    @validationMessage
+                    message: String,
+                    @validationMessage
+                    details: String
+                }
+                """.asSmithyModel(smithyVersion = "2")
             }
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
-        
+
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#ValidationError")
         events[0].id shouldBe "CustomValidationException.MultipleMessageFields"
@@ -85,21 +88,22 @@ class CustomValidationExceptionValidatorTest {
 
     @Test
     fun `should error when validationException has explicit validationMessage and implicit message fields`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
+                use smithy.rust.codegen.traits#validationException
+                use smithy.rust.codegen.traits#validationMessage
 
-            @validationException
-            @error("client")
-            structure ValidationError {
-                message: String,
-                @validationMessage
-                details: String,
+                @validationException
+                @error("client")
+                structure ValidationError {
+                    message: String,
+                    @validationMessage
+                    details: String,
+                }
+                """.asSmithyModel(smithyVersion = "2")
             }
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
 
         events shouldHaveSize 1
@@ -109,26 +113,27 @@ class CustomValidationExceptionValidatorTest {
 
     @Test
     fun `should error when constrained shape lacks default trait`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
-            use smithy.rust.codegen.server.traits#validationException
-            use smithy.rust.codegen.server.traits#validationMessage
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
+                use smithy.rust.codegen.traits#validationException
+                use smithy.rust.codegen.traits#validationMessage
 
-            @validationException
-            @error("client")
-            structure ValidationError {
-                @validationMessage
-                message: String,
-                constrainedField: ConstrainedString
+                @validationException
+                @error("client")
+                structure ValidationError {
+                    @validationMessage
+                    message: String,
+                    constrainedField: ConstrainedString
+                }
+
+                @length(min: 1, max: 10)
+                string ConstrainedString
+                """.asSmithyModel(smithyVersion = "2")
             }
-
-            @length(min: 1, max: 10)
-            string ConstrainedString
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
-        
+
         events shouldHaveSize 1
         events[0].id shouldBe "CustomValidationException.MissingDefault"
     }
@@ -137,8 +142,8 @@ class CustomValidationExceptionValidatorTest {
     fun `should pass validation for properly configured validationException`() {
         """
         namespace test
-        use smithy.rust.codegen.server.traits#validationException
-        use smithy.rust.codegen.server.traits#validationMessage
+        use smithy.rust.codegen.traits#validationException
+        use smithy.rust.codegen.traits#validationMessage
 
         @validationException
         @error("client")
@@ -153,8 +158,8 @@ class CustomValidationExceptionValidatorTest {
     fun `should pass validation for validationException with constrained shape having default`() {
         """
         namespace test
-        use smithy.rust.codegen.server.traits#validationException
-        use smithy.rust.codegen.server.traits#validationMessage
+        use smithy.rust.codegen.traits#validationException
+        use smithy.rust.codegen.traits#validationMessage
 
         @validationException
         @error("client")
