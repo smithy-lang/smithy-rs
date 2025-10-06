@@ -255,6 +255,7 @@ class SerdeDecoratorTest {
             IntegrationTestParams(cargoCommand = "cargo test --all-features", service = "com.example#MyService")
         serverIntegrationTest(model, params = params) { _, crate ->
             crate.integrationTest("test_serde") {
+                rust("##![allow(unexpected_cfgs)]")
                 unitTest("fails_if_serde_feature_exists", additionalAttributes = listOf(Attribute(cfg(feature("serde"))))) {
                     rust("assert!(false);")
                 }
@@ -347,6 +348,7 @@ class SerdeDecoratorTest {
                             .build()
                             .unwrap();
                         let mut settings = SerializationSettings::default();
+                        settings.out_of_range_floats_as_strings = true;
                         let serialized = #{serde_json}::to_string(&input.serialize_ref(&settings)).expect("failed to serialize");
                         assert_eq!(serialized, ${expectedNoRedactions.dq()});
                         settings.redact_sensitive_fields = true;

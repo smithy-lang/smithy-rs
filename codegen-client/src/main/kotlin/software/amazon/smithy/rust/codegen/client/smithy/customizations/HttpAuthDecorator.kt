@@ -180,13 +180,7 @@ private class HttpAuthServiceRuntimePluginCustomization(
                         val trait = serviceShape.getTrait<HttpApiKeyAuthTrait>()!!
                         val location =
                             when (trait.`in`!!) {
-                                HttpApiKeyAuthTrait.Location.HEADER -> {
-                                    check(trait.scheme.isPresent) {
-                                        "A scheme is required for `@httpApiKey` when `in` is set to `header`"
-                                    }
-                                    "Header"
-                                }
-
+                                HttpApiKeyAuthTrait.Location.HEADER -> "Header"
                                 HttpApiKeyAuthTrait.Location.QUERY -> "Query"
                             }
 

@@ -381,7 +381,8 @@ impl StableCratesExposeStableCrates {
                 // support from aws-smithy-runtime. hyper_util is only exposed as part of test_util trait impl
                 .filter(|tpe| {
                     !(name == "aws-smithy-http-client"
-                        && ["tower_service", "serde", "hyper_util"].contains(&tpe.as_str()))
+                        && ["tower_service", "serde", "serde_core", "hyper_util"]
+                            .contains(&tpe.as_str()))
                 })
                 .map(|crte| {
                     LintError::new(format!(

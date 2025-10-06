@@ -6,93 +6,28 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
-    kotlin("jvm")
-    `maven-publish`
+    id("smithy-rs.kotlin-conventions")
+    id("smithy-rs.publishing-conventions")
 }
 
 description = "Generates Rust server-side code from Smithy models"
-
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Server"
-
 extra["moduleName"] = "software.amazon.smithy.rust.codegen.server"
-
-group = "software.amazon.smithy.rust.codegen.server.smithy"
-
-version = "0.1.0"
-
-val smithyVersion: String by project
 
 dependencies {
     implementation(project(":codegen-core"))
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-traits:$smithyVersion")
+    implementation(project(":codegen-traits"))
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.protocol.traits)
 
     // `smithy.framework#ValidationException` is defined here, which is used in `constraints.smithy`, which is used
     // in `CustomValidationExceptionWithReasonDecoratorTest`.
-    testImplementation("software.amazon.smithy:smithy-validation-model:$smithyVersion")
+    testImplementation(libs.smithy.validation.model)
 
     // It's handy to re-use protocol test suite models from Smithy in our Kotlin tests.
-    testImplementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
-}
+    testImplementation(libs.smithy.protocol.tests)
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
-
-tasks.compileKotlin { kotlinOptions.jvmTarget = "11" }
-
-// Reusable license copySpec
-val licenseSpec = copySpec {
-    from("${project.rootDir}/LICENSE")
-    from("${project.rootDir}/NOTICE")
-}
-
-// Configure jars to include license related info
-tasks.jar {
-    metaInf.with(licenseSpec)
-    inputs.property("moduleName", project.name)
-    manifest { attributes["Automatic-Module-Name"] = project.name }
-}
-
-val sourcesJar by tasks.creating(Jar::class) {
-    group = "publishing"
-    description = "Assembles Kotlin sources jar"
-    archiveClassifier.set("sources")
-    from(sourceSets.getByName("main").allSource)
-}
-
-val isTestingEnabled: String by project
-if (isTestingEnabled.toBoolean()) {
-    val kotestVersion: String by project
-
-    dependencies {
-        testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
-        testImplementation("io.kotest:kotest-assertions-core-jvm:$kotestVersion")
-    }
-
-    tasks.compileTestKotlin { kotlinOptions.jvmTarget = "11" }
-
-    tasks.test {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
-            exceptionFormat = TestExceptionFormat.FULL
-            showCauses = true
-            showExceptions = true
-            showStackTraces = true
-            showStandardStreams = true
-        }
-    }
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("default") {
-            from(components["java"])
-            artifact(sourcesJar)
-        }
-    }
-    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotest.assertions.core.jvm)
 }

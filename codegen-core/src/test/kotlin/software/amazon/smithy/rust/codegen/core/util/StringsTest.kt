@@ -33,6 +33,11 @@ internal class StringsTest {
     }
 
     @Test
+    fun handleDashes() {
+        "application/x-amzn-json-1.1".toSnakeCase() shouldBe "application_x_amzn_json_1_1"
+    }
+
+    @Test
     fun testAllNames() {
         // Set this to true to write a new test expectation file
         val publishUpdate = false

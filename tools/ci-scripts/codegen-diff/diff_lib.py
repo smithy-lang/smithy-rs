@@ -17,8 +17,8 @@ CDN_URL = "https://d2luzm2xt3nokh.cloudfront.net"
 
 target_codegen_client = 'codegen-client-test'
 target_codegen_server = 'codegen-server-test'
-target_codegen_server_python = 'codegen-server-test:python'
-target_codegen_server_typescript = 'codegen-server-test:typescript'
+target_codegen_server_python = 'codegen-server-test:codegen-server-test-python'
+target_codegen_server_typescript = 'codegen-server-test:codegen-server-test-typescript'
 target_aws_sdk = 'aws:sdk'
 
 
@@ -69,8 +69,8 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
             if target == target_codegen_server:
                 get_cmd_output(f"./gradlew --rerun-tasks {target_codegen_server_python}:stubs")
-                get_cmd_output(f"mv {target}/python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
-                get_cmd_output(f"mv {target}/typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/codegen-server-test-python/build/smithyprojections/{target}-python {OUTPUT_PATH}/")
+                get_cmd_output(f"mv {target}/codegen-server-test-typescript/build/smithyprojections/{target}-typescript {OUTPUT_PATH}/")
 
     # Clean up the SDK directory
     get_cmd_output(f"rm -f {OUTPUT_PATH}/aws-sdk/versions.toml")

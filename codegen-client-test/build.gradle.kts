@@ -3,18 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+plugins {
+    java
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
+}
+
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Test"
 extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 
-tasks["jar"].enabled = false
-
-plugins {
-    java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+tasks.jar.configure {
+    enabled = false
 }
 
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
@@ -25,10 +26,10 @@ val checkedInSmithyRuntimeLockfile = rootProject.projectDir.resolve("rust-runtim
 
 dependencies {
     implementation(project(":codegen-client"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
 }
 
 // Disabled because the formatter was remove formatting from our `body` sections.

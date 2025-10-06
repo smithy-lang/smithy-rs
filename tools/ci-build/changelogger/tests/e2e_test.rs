@@ -58,7 +58,6 @@ const SDK_MODEL_SOURCE_TOML: &str = r#"
 
 const VERSIONS_TOML: &str = r#"
     smithy_rs_revision = '41ca31b85b4ba8c0ad680fe62a230266cc52cc44'
-    aws_doc_sdk_examples_revision = '97a177aab8c3d2fef97416cb66e4b4d0da840138'
 
     [manual_interventions]
     crates_to_remove = []
@@ -383,7 +382,6 @@ fn render_aws_sdk() {
         &previous_versions_manifest_path,
         format!(
             "smithy_rs_revision = '{last_release_commit}'
-                 aws_doc_sdk_examples_revision = 'not-relevant'
                  [crates]",
         ),
     )

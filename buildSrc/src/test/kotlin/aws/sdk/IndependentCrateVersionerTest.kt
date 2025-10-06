@@ -32,7 +32,6 @@ class IndependentCrateVersionerTest {
             IndependentCrateVersioner(
                 VersionsManifest(
                     smithyRsRevision = "smithy-rs-1",
-                    awsDocSdkExamplesRevision = "dontcare",
                     crates =
                         mapOf(
                             "aws-sdk-dynamodb" to
@@ -93,7 +92,6 @@ class IndependentCrateVersionerTest {
             IndependentCrateVersioner(
                 VersionsManifest(
                     smithyRsRevision = "smithy-rs-1",
-                    awsDocSdkExamplesRevision = "dontcare",
                     crates =
                         mapOf(
                             "aws-sdk-dynamodb" to
@@ -161,7 +159,6 @@ class IndependentCrateVersionerTest {
             IndependentCrateVersioner(
                 VersionsManifest(
                     smithyRsRevision = "smithy-rs-1",
-                    awsDocSdkExamplesRevision = "dontcare",
                     crates =
                         mapOf(
                             "aws-sdk-dynamodb" to
@@ -211,7 +208,6 @@ class IndependentCrateVersionerTest {
             IndependentCrateVersioner(
                 VersionsManifest(
                     smithyRsRevision = "smithy-rs-1",
-                    awsDocSdkExamplesRevision = "dontcare",
                     crates =
                         mapOf(
                             "aws-sdk-dynamodb" to

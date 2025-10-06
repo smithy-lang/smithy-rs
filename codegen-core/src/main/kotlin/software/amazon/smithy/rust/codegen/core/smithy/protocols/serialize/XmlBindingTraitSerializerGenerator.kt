@@ -336,7 +336,8 @@ class XmlBindingTraitSerializerGenerator(
                         HttpLocation.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME, model,
                     )
-                val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
+                val timestampFormatType =
+                    RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
 
@@ -455,12 +456,21 @@ class XmlBindingTraitSerializerGenerator(
                     rust("let mut scope_writer = writer.finish();")
                     rustBlock("match input") {
                         val members = unionShape.members()
+
                         members.forEach { member ->
+                            val memberShape = model.expectShape(member.target)
+                            val memberName = symbolProvider.toMemberName(member)
                             val variantName =
                                 if (member.isTargetUnit()) {
-                                    "${symbolProvider.toMemberName(member)}"
+                                    "$memberName"
+                                } else if (memberShape.isStructureShape &&
+                                    memberShape.asStructureShape()
+                                        .get().allMembers.isEmpty()
+                                ) {
+                                    // Unit structs don't serialize inner, so it is never accessed
+                                    "$memberName(_inner)"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "$memberName(inner)"
                                 }
                             withBlock("#T::$variantName =>", ",", unionSymbol) {
                                 serializeMember(member, Ctx.Scope("scope_writer", "inner"))
