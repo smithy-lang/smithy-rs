@@ -357,11 +357,19 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
+
+        // Check if any union member uses the writer (non-empty structs)
+        val hasNonEmptyMember =
+            context.shape.members().any { member ->
+                !member.isTargetUnit() && !isEmptyStruct(model.expectShape(member.target))
+            }
+        val writerVarName = if (hasNonEmptyMember) "writer" else "_writer"
+
         val unionSerializer =
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 Attribute.AllowUnusedMut.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
+                    "pub fn $fnName(mut $writerVarName: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
                     "Input" to unionSymbol,
                     *codegenScope,
                 ) {
@@ -380,7 +388,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(
                                     MemberContext.unionMember(
-                                        context.copy(writerExpression = "writer"),
+                                        context.copy(writerExpression = writerVarName),
                                         innerVarName,
                                         member,
                                     ),
