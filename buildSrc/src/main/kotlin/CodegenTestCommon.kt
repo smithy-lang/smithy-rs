@@ -236,8 +236,13 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
-        // NOTE: This is not working.
-        allCodegenTests.flatMap { it.imports }.forEach { inputs.file(project.projectDir.resolve(it)) }
+        // Declare Smithy model files as inputs so task reruns when they change
+        allCodegenTests.flatMap { it.imports }.forEach {
+            val resolvedPath = project.projectDir.resolve(it)
+            if (resolvedPath.exists()) {
+                inputs.file(resolvedPath)
+            }
+        }
 
         doFirst {
             project.projectDir.resolve("smithy-build.json")
