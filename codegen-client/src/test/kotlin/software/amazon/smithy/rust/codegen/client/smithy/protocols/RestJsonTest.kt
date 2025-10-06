@@ -45,4 +45,55 @@ internal class RestJsonTest {
     fun `generate a rest json service that compiles`() {
         clientIntegrationTest(model) { _, _ -> }
     }
+
+    @Test
+    fun `union with empty struct always uses inner variable`() {
+        val modelWithEmptyStruct =
+            """
+            namespace test
+            use aws.protocols#restJson1
+            use aws.api#service
+
+            @service(sdkId: "Rest Json Empty Struct")
+            @restJson1
+            service RestJsonEmptyStruct {
+                version: "2019-12-16",
+                operations: [TestOp]
+            }
+
+            @http(uri: "/test", method: "POST")
+            operation TestOp {
+                input: TestInput,
+                output: TestOutput
+            }
+
+            structure TestInput {
+                testUnion: TestUnion
+            }
+
+            structure TestOutput {
+                testUnion: TestUnion
+            }
+
+            union TestUnion {
+                // Empty struct - RestJson ALWAYS uses inner variable, no warning
+                emptyStruct: EmptyStruct,
+
+                // Normal struct - RestJson uses inner variable
+                normalStruct: NormalStruct
+            }
+
+            structure EmptyStruct {}
+
+            structure NormalStruct {
+                value: String
+            }
+            """.asSmithyModel()
+
+        // This test documents that RestJson protocol is immune to unused variable issues.
+        // Unlike RestXml/AwsQuery, RestJson serializers always reference the inner variable
+        // even for empty structs, so no underscore prefix is needed.
+        // This test passes without any code changes, proving RestJson immunity.
+        clientIntegrationTest(modelWithEmptyStruct) { _, _ -> }
+    }
 }

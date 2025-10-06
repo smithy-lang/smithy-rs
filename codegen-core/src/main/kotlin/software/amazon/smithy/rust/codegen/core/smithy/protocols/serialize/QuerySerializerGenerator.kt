@@ -345,6 +345,16 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
+    /**
+     * Determines if a struct shape is empty (has no members).
+     * Empty structs result in unused variables in union match arms since the inner value is never referenced.
+     */
+    private fun isEmptyStruct(shape: Shape): Boolean =
+        when (shape) {
+            is StructureShape -> shape.members().isEmpty()
+            else -> false
+        }
+
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
         val unionSerializer =
@@ -357,17 +367,21 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 ) {
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
+                            val targetShape = model.expectShape(member.target)
+                            // Use underscore prefix for empty structs to avoid unused variable warnings
+                            val innerVarName = if (isEmptyStruct(targetShape)) "_inner" else "inner"
+
                             val variantName =
                                 if (member.isTargetUnit()) {
                                     "${symbolProvider.toMemberName(member)}"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "${symbolProvider.toMemberName(member)}($innerVarName)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(
                                     MemberContext.unionMember(
                                         context.copy(writerExpression = "writer"),
-                                        "inner",
+                                        innerVarName,
                                         member,
                                     ),
                                 )
