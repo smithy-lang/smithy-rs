@@ -204,15 +204,22 @@ impl AssumeRoleProviderBuilder {
     ///
     /// A list of session tags that you want to pass. Each session tag consists of a key name and an associated value.
     /// For more information, see `[Tag]`.
-    pub fn tags<K, V>(mut self, tags: impl IntoIterator<Item = (K, V)>) -> Self 
+    pub fn tags<K, V>(mut self, tags: impl IntoIterator<Item = (K, V)>) -> Self
     where
         K: Into<String>,
-        V: Into<String>{
+        V: Into<String>,
+    {
         self.tags = Some(
             tags.into_iter()
                 // Unwrap won't fail as both key and value are specified.
                 // Currently Tag does not have an infallible build method.
-                .map(|(k, v)| Tag::builder().key(k).value(v).build().expect("this is unreachable: both k and v are set"))
+                .map(|(k, v)| {
+                    Tag::builder()
+                        .key(k)
+                        .value(v)
+                        .build()
+                        .expect("this is unreachable: both k and v are set")
+                })
                 .collect::<Vec<_>>(),
         );
         self
