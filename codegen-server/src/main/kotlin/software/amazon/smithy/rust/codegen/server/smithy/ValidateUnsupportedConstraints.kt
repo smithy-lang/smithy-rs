@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
 import java.util.logging.Level
 
 private sealed class UnsupportedConstraintMessageKind {
@@ -215,11 +215,12 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
         operationShapesThatMustHaveValidationException(model, service)
             .filter {
-                !it.errors.contains(validationExceptionShapeId) && it.errors.none { error ->
-                    model
-                        .expectShape(error)
-                        .hasTrait(ValidationExceptionTrait.ID)
-                }
+                !it.errors.contains(validationExceptionShapeId) &&
+                    it.errors.none { error ->
+                        model
+                            .expectShape(error)
+                            .hasTrait(ValidationExceptionTrait.ID)
+                    }
             }
             .map { OperationWithConstrainedInputWithoutValidationException(it) }
             .toSet()
@@ -228,7 +229,7 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
         operationsWithConstrainedInputWithoutValidationExceptionSet.map {
             LogMessage(
                 Level.SEVERE,
-                // TODO: Add custom validation exception option to error message and link docs
+                // TODO(Add custom validation exception option to error message and link docs)
                 """
                 Operation ${it.shape.id} takes in input that is constrained
                 (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
@@ -290,10 +291,14 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
  * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom
  * validation exception is defined
  */
-fun validateModelHasAtMostOneValidationException(model: Model, service: ServiceShape): ValidationResult {
-    val customValidationExceptionShapes = model.shapes()
-        .filter { it.hasTrait(ValidationExceptionTrait.ID) }
-        .toList()
+fun validateModelHasAtMostOneValidationException(
+    model: Model,
+    service: ServiceShape,
+): ValidationResult {
+    val customValidationExceptionShapes =
+        model.shapes()
+            .filter { it.hasTrait(ValidationExceptionTrait.ID) }
+            .toList()
 
     val messages = mutableListOf<LogMessage>()
 
@@ -306,9 +311,9 @@ fun validateModelHasAtMostOneValidationException(model: Model, service: ServiceS
             LogMessage(
                 Level.SEVERE,
                 """
-                    Defining multiple custom validation exceptions is unsupported.
-                    Found ${customValidationExceptionShapes.size} validation exception shapes: 
-                    """.trimIndent() +
+                Defining multiple custom validation exceptions is unsupported.
+                Found ${customValidationExceptionShapes.size} validation exception shapes:
+                """.trimIndent() +
                     customValidationExceptionShapes.joinToString(", ") { it.id.toString() },
             ),
         )
@@ -320,20 +325,24 @@ fun validateModelHasAtMostOneValidationException(model: Model, service: ServiceS
 
     val defaultValidationExceptionId = ShapeId.from("smithy.framework#ValidationException")
 
-    val operationsWithDefault = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterIsInstance<OperationShape>()
-        .filter { it.errors.contains(defaultValidationExceptionId) }
+    val operationsWithDefault =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filterIsInstance<OperationShape>()
+            .filter { it.errors.contains(defaultValidationExceptionId) }
+
+    println("hello world")
+    println(operationsWithDefault.toList())
 
     operationsWithDefault.forEach {
         messages.add(
             LogMessage(
                 Level.SEVERE,
                 """
-                    Operation ${it.id} uses the default ValidationException, but a custom validation exception is defined.
-                    Remove ValidationException from the operation's errors and use the custom validation exception instead.
-                    """.trimIndent(),
+                Operation ${it.id} uses the default ValidationException, but a custom validation exception is defined.
+                Remove ValidationException from the operation's errors and use the custom validation exception instead.
+                """.trimIndent(),
             ),
         )
     }
@@ -428,7 +437,7 @@ fun validateUnsupportedConstraints(
                 mapShapeReachableFromUniqueItemsListShapeSet.map {
                     it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
                 }
-            ).toMutableList()
+        ).toMutableList()
 
     if (messages.isEmpty() && codegenConfig.ignoreUnsupportedConstraints) {
         messages +=
