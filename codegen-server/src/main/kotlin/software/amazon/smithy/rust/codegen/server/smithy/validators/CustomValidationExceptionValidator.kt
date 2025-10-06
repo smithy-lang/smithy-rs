@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package software.amazon.smithy.rust.codegen.server.smithy.validators
 
 import software.amazon.smithy.model.Model
@@ -10,11 +15,11 @@ import software.amazon.smithy.model.validation.AbstractValidator
 import software.amazon.smithy.model.validation.Severity
 import software.amazon.smithy.model.validation.ValidationEvent
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShapeForValidation
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrainedForValidation
-import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
+import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
 
 class CustomValidationExceptionValidator : AbstractValidator() {
     override fun validate(model: Model): List<ValidationEvent> {
@@ -37,14 +42,15 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                     shape.members().filter { it.isValidationMessage() }
 
                 when (messageFields.size) {
-                    0 -> events.add(
-                        ValidationEvent.builder().id("CustomValidationException.MissingMessageField")
-                            .severity(Severity.ERROR).shape(shape)
-                            .message(
-                                "@validationException requires exactly one String member named " +
-                                    "\"message\" or with the @validationMessage ",
-                            ).build(),
-                    )
+                    0 ->
+                        events.add(
+                            ValidationEvent.builder().id("CustomValidationException.MissingMessageField")
+                                .severity(Severity.ERROR).shape(shape)
+                                .message(
+                                    "@validationException requires exactly one String member named " +
+                                        "\"message\" or with the @validationMessage ",
+                                ).build(),
+                        )
 
                     1 -> {
                         val validationMessageField = messageFields.first()
@@ -57,14 +63,15 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                         }
                     }
 
-                    else -> events.add(
-                        ValidationEvent.builder().id("CustomValidationException.MultipleMessageFields")
-                            .severity(Severity.ERROR).shape(shape)
-                            .message(
-                                "@validationException can have only one member explicitly marked with the" +
-                                    "@validationMessage trait or implicitly selected via the \"message\" field name convention.",
-                            ).build(),
-                    )
+                    else ->
+                        events.add(
+                            ValidationEvent.builder().id("CustomValidationException.MultipleMessageFields")
+                                .severity(Severity.ERROR).shape(shape)
+                                .message(
+                                    "@validationException can have only one member explicitly marked with the" +
+                                        "@validationMessage trait or implicitly selected via the \"message\" field name convention.",
+                                ).build(),
+                        )
                 }
 
                 // Validate default constructibility if it contains constrained shapes

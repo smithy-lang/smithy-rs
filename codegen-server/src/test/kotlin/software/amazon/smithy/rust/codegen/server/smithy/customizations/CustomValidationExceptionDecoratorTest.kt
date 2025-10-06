@@ -8,18 +8,15 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.validation.ValidatedResultException
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldListTrait
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.server.smithy.traits.ValidationMessageTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 internal class CustomValidationExceptionDecoratorTest {
     private val modelWithCustomValidation =
@@ -27,10 +24,10 @@ internal class CustomValidationExceptionDecoratorTest {
         namespace com.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.server.traits#validationException
-        use smithy.rust.codegen.server.traits#validationMessage
-        use smithy.rust.codegen.server.traits#validationFieldList
-        use smithy.rust.codegen.server.traits#validationFieldName
+        use smithy.rust.codegen.traits#validationException
+        use smithy.rust.codegen.traits#validationMessage
+        use smithy.rust.codegen.traits#validationFieldList
+        use smithy.rust.codegen.traits#validationFieldName
 
         @restJson1
         service TestService {
@@ -42,7 +39,7 @@ internal class CustomValidationExceptionDecoratorTest {
         structure MyValidationException {
             @validationMessage
             customMessage: String
-            
+
             @validationFieldList
             customFieldList: ValidationExceptionFieldList
         }
@@ -63,8 +60,8 @@ internal class CustomValidationExceptionDecoratorTest {
         namespace com.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.server.traits#validationException
-        use smithy.rust.codegen.server.traits#validationMessage
+        use smithy.rust.codegen.traits#validationException
+        use smithy.rust.codegen.traits#validationMessage
 
         @restJson1
         service TestService {
@@ -96,18 +93,19 @@ internal class CustomValidationExceptionDecoratorTest {
 
     @Test
     fun `customValidationException returns null when no validation exception exists`() {
-        val model = """
+        val model =
+            """
             namespace com.example
-            
+
             use aws.protocols#restJson1
-            
+
             @restJson1
             service TestService {
                 version: "1.0.0"
             }
-            
+
             structure RegularException { message: String }
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
 
         val codegenContext = serverTestCodegenContext(model)
         val decorator = CustomValidationExceptionDecorator()
@@ -180,7 +178,8 @@ internal class CustomValidationExceptionDecoratorTest {
 
     @Test
     fun `decorator returns null when no custom validation exception exists`() {
-        val model = """
+        val model =
+            """
             namespace com.example
 
             use aws.protocols#restJson1
@@ -191,7 +190,7 @@ internal class CustomValidationExceptionDecoratorTest {
             }
 
             structure RegularException { message: String }
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
 
         val codegenContext = serverTestCodegenContext(model)
         val decorator = CustomValidationExceptionDecorator()
