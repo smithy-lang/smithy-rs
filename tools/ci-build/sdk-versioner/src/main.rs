@@ -306,7 +306,7 @@ mod tests {
     fn versions_toml_for(crates: &[(&str, &str)]) -> VersionsManifest {
         VersionsManifest {
             smithy_rs_revision: "doesntmatter".into(),
-            aws_doc_sdk_examples_revision: "doesntmatter".into(),
+            aws_doc_sdk_examples_revision: None,
             manual_interventions: Default::default(),
             crates: crates
                 .iter()

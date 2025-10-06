@@ -103,6 +103,13 @@ interface HttpBindingResolver {
     fun responseContentType(operationShape: OperationShape): String?
 
     /**
+     * Due to an initial implementation bug, were accepting `application/cbor` when we should have been accepting
+     * an event stream header. This allows configuring an optional fallback header to support backwards compatibility
+     * in these cases.
+     */
+    fun legacyBackwardsCompatContentType(operationShape: OperationShape): String? = null
+
+    /**
      * Determines the value of the event stream `:content-type` header based on union member
      */
     fun eventStreamMessageContentType(memberShape: MemberShape): String?
@@ -203,7 +210,11 @@ open class HttpTraitHttpBindingResolver(
         ).orNull()
 
     override fun eventStreamMessageContentType(memberShape: MemberShape): String? =
-        ProtocolContentTypes.eventStreamMemberContentType(model, memberShape, contentTypes.eventStreamMessageContentType)
+        ProtocolContentTypes.eventStreamMemberContentType(
+            model,
+            memberShape,
+            contentTypes.eventStreamMessageContentType,
+        )
 
     // Sort the members after extracting them from the map to have a consistent order
     private fun mappedBindings(bindings: Map<String, HttpBinding>): List<HttpBindingDescriptor> =

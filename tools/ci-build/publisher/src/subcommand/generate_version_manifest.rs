@@ -24,9 +24,11 @@ pub struct GenerateVersionManifestArgs {
     /// Path to `smithy-build.json`
     #[clap(long)]
     smithy_build: PathBuf,
+    // TODO(examples removal post cleanup): Remove this field once examples revision is removed
+    // from `versions.toml` in the main branch of `aws-sdk-rust` repository.
     /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
     #[clap(long)]
-    examples_revision: String,
+    examples_revision: Option<String>,
     /// Same as `input_location` but kept for backwards compatibility
     #[clap(long, required_unless_present = "input-location")]
     location: Option<PathBuf>,
@@ -109,7 +111,7 @@ pub async fn subcommand_generate_version_manifest(
     info!("Discovered and hashed {} crates", crates.len());
     let mut versions_manifest = VersionsManifest {
         smithy_rs_revision: smithy_rs_revision.to_string(),
-        aws_doc_sdk_examples_revision: examples_revision.to_string(),
+        aws_doc_sdk_examples_revision: examples_revision.as_ref().map(String::to_string),
         manual_interventions: Default::default(),
         crates,
         release: None,
@@ -162,6 +164,21 @@ fn find_released_versions(
     unrecent_versions: &VersionsManifest,
     recent_versions: &VersionsManifest,
 ) -> Result<BTreeMap<String, String>> {
+    // TODO(deprecated crates removal post cleanup): Remove this variable once deprecated runtime crates
+    // are removed from `versions.toml` in the main branch of `aws-sdk-rust` repository.
+    // Not planning to implement a generic solution to teach publisher about deprecated runtime crates,
+    // since deprecation occurs so infrequently.
+    let allowed_missing_crates = [
+        "aws-endpoint",
+        "aws-http",
+        "aws-hyper",
+        "aws-sig-auth",
+        "aws-smithy-client",
+        "aws-smithy-http-auth",
+        "aws-smithy-http-tower",
+        "aws-smithy-mocks-experimental",
+    ];
+
     let mut released_versions = BTreeMap::new();
     for (crate_name, recent_version) in &recent_versions.crates {
         let recent_version = parse_version(crate_name, &recent_version.version)?;
@@ -182,6 +199,7 @@ fn find_released_versions(
     for unrecent_crate_name in unrecent_versions.crates.keys() {
         if !recent_versions.crates.contains_key(unrecent_crate_name)
             && !crates_to_remove.contains(unrecent_crate_name)
+            && !allowed_missing_crates.contains(&unrecent_crate_name.as_str())
         {
             bail!(
                 "Crate `{}` was included in the previous release's `versions.toml`, \
@@ -260,7 +278,7 @@ mod tests {
     ) -> VersionsManifest {
         VersionsManifest {
             smithy_rs_revision: "dontcare".into(),
-            aws_doc_sdk_examples_revision: "dontcare".into(),
+            aws_doc_sdk_examples_revision: None,
             manual_interventions: manual_interventions.unwrap_or_default(),
             crates: crates
                 .iter()

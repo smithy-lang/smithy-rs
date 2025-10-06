@@ -4,7 +4,7 @@
  */
 
 /* Automatically managed default lints */
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 /* End of automatically managed default lints */
 //! Collection of modules that get conditionally included directly into the code generated
 //! SDK service crates. For example, when generating S3, the `s3_errors` module will get copied
@@ -21,6 +21,10 @@
     rust_2018_idioms,
     unreachable_pub
 )]
+
+/// Supporting code for the account based endpoints.
+#[allow(dead_code)]
+pub mod account_id_endpoint;
 
 /// Supporting code to determine auth scheme options based on the `authSchemes` endpoint list property.
 #[allow(dead_code)]

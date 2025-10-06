@@ -55,7 +55,7 @@ class LibRsGenerator(
             if (requireDocs) {
                 rust("##![warn(missing_docs)]")
             }
-            rawRust("#![cfg_attr(docsrs, feature(doc_auto_cfg))]")
+            rawRust("#![cfg_attr(docsrs, feature(doc_cfg))]")
 
             // Allow for overriding the default service docs via customization
             val defaultServiceDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value

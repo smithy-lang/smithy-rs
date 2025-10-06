@@ -1,4 +1,48 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 2nd, 2025
+=================
+**New this release:**
+- :bug: (server) Fix bug where servers rejected `application/vnd.amazon.evenstream` ACCEPT header for RPCv2Cbor
+
+    This change allows this header while also allowing `application/cbor` for backwards compatibility.
+
+
+October 1st, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4299](https://github.com/smithy-lang/smithy-rs/issues/4299), @greenwoodcm) Added a new `then_compute_output` to `aws-smithy-mocks` rule builder that allows using the input type when computing a mocked response, e.g. 
+    ```rs
+    // Return a computed output based on the input
+    let compute_rule = mock!(Client::get_object)
+        .then_compute_output(|req| {
+            let key = req.key().unwrap_or("unknown");
+            GetObjectOutput::builder()
+                .body(ByteStream::from_static(format!("content for {}", key).as_bytes()))
+                .build()
+        });
+    ```
+- :bug: (client, [smithy-rs#4226](https://github.com/smithy-lang/smithy-rs/issues/4226), @haydenbaker) Fixed problematic assertion on HttpApiKeyAuthTrait `scheme`, which was causing client-codegen to fail when the correct settings for api-key based auth were set.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4299](https://github.com/smithy-lang/smithy-rs/issues/4299))
+- @haydenbaker ([smithy-rs#4226](https://github.com/smithy-lang/smithy-rs/issues/4226))
+
+
+September 10th, 2025
+====================
+**New this release:**
+- :bug: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) The `HickoryDnsResolver` and `TokioDnsResolver` were not `Clone` making it impossible to use them in the http_client builder's `build_with_resolver` method.
+
+
+August 28th, 2025
+=================
+**New this release:**
+- :tada: (client, [smithy-rs#4274](https://github.com/smithy-lang/smithy-rs/issues/4274)) Add a new crate, `aws-smithy-dns` that contains a `HickoryDnsResolver`. This wraps a `hickory_resolver::Resolver` and provides some minimal configuration options (timeouts, retries, etc.) Instructions for overriding the DNS resolver on your HTTP client can be found in our documentation at https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#overrideDns
+- :bug: (client, [smithy-rs#4282](https://github.com/smithy-lang/smithy-rs/issues/4282)) Set the `pool_timer` for the default Hyper client. This is required to allow the `pool_idle_timeout` to work. Now idle connections will be released by the pool after 90 seconds.
+- (client, [smithy-rs#4263](https://github.com/smithy-lang/smithy-rs/issues/4263)) Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).
+
+
 August 18th, 2025
 =================
 **New this release:**

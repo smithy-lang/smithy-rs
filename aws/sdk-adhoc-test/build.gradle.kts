@@ -10,16 +10,10 @@ tasks["jar"].enabled = false
 
 plugins {
     java
-    id("software.amazon.smithy.gradle.smithy-base")
-    id("software.amazon.smithy.gradle.smithy-jar")
+    alias(libs.plugins.smithy.gradle.base)
+    alias(libs.plugins.smithy.gradle.jar)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_11
-}
-
-val smithyVersion: String by project
 val properties = PropertyRetriever(rootProject, project)
 
 val pluginName = "rust-client-codegen"
@@ -32,11 +26,11 @@ configure<software.amazon.smithy.gradle.SmithyExtension> {
 val checkedInSdkLockfile = rootProject.projectDir.resolve("aws/sdk/Cargo.lock")
 
 dependencies {
-    implementation(project(":aws:sdk-codegen"))
-    implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-    implementation("software.amazon.smithy:smithy-model:$smithyVersion")
+    implementation(project(":aws:codegen-aws-sdk"))
+    implementation(libs.smithy.aws.protocol.tests)
+    implementation(libs.smithy.protocol.test.traits)
+    implementation(libs.smithy.aws.traits)
+    implementation(libs.smithy.model)
 }
 
 fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"

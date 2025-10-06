@@ -133,7 +133,7 @@ object SupportStructures {
                 """
                 pub(crate) struct Sensitive<T>(pub(crate) T);
 
-                impl<'a, T> #{serde}::Serialize for ConfigurableSerdeRef<'a, Sensitive<T>>
+                impl<T> #{serde}::Serialize for ConfigurableSerdeRef<'_, Sensitive<T>>
                 where
                 T: #{serde}::Serialize,
                 {
@@ -175,7 +175,7 @@ object SupportStructures {
                         .serialize(serializer)
                     }
                 }
-                impl<'a, T> #{serde}::Serialize for #{ConfigurableSerdeRef}<'a, Option<T>>
+                impl<T> #{serde}::Serialize for #{ConfigurableSerdeRef}<'_, Option<T>>
                 where
                     T: #{SerializeConfigured},
                 {
@@ -235,7 +235,7 @@ object SupportStructures {
                     ///
                     /// Note: This may alter the type of the serialized output and make it impossible to deserialize as
                     /// numerical fields will be replaced with strings.
-                    pub const fn redact_sensitive_fields() -> Self { Self { redact_sensitive_fields: true, out_of_range_floats_as_strings: false } }
+                    pub const fn redact_sensitive_fields() -> Self { Self { redact_sensitive_fields: true, out_of_range_floats_as_strings: true } }
 
                     /// Preserve the contents of sensitive fields during serializing
                     pub const fn leak_sensitive_fields() -> Self { Self { redact_sensitive_fields: false, out_of_range_floats_as_strings: false } }

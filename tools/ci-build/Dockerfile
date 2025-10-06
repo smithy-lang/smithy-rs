@@ -60,7 +60,7 @@ RUN yum -y install --allowerasing \
         gcc \
         gcc-c++ \
         git \
-        java-17-amazon-corretto-headless \
+        java-17-amazon-corretto-devel \
         make \
         openssl-devel \
         perl \
@@ -99,7 +99,7 @@ RUN set -eux; \
     git init smithy-rs && cd smithy-rs; \
     git remote add origin https://github.com/smithy-lang/smithy-rs.git; \
     git sparse-checkout init --cone; \
-    git sparse-checkout set gradlew gradle/wrapper gradle.properties; \
+    git sparse-checkout set gradlew gradle/wrapper gradle.properties buildSrc; \
     git fetch --depth=1 origin ${smithy_rs_commit_hash}; \
     git checkout FETCH_HEAD; \
     # Run the gradle wrapper with no args to download the gradle binary and cache it in the image
@@ -200,7 +200,7 @@ RUN set -eux; \
         git \
         glibc-langpack-en \
         go \
-        java-17-amazon-corretto-headless \
+        java-17-amazon-corretto-devel \
         jq \
         make \
         openssl-devel \
