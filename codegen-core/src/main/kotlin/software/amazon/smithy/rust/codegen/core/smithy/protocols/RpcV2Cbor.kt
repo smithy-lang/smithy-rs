@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
@@ -46,7 +45,7 @@ class RpcV2CborHttpBindingResolver(
         if (todoHandlingInitialMessages && members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
-                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
+                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/4325",
             )
         }
 
@@ -156,7 +155,7 @@ open class RpcV2Cbor(
                 eventStreamMessageContentType = "application/cbor",
             ),
             codegenContext.serviceShape,
-            codegenContext.target == CodegenTarget.SERVER,
+            false,
         )
 
     // Note that [CborParserGenerator] and [CborSerializerGenerator] automatically (de)serialize timestamps
