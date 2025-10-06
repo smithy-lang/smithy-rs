@@ -17,6 +17,7 @@ service RpcV2CborService {
         SingleMemberStructOperation
         RecursiveUnionOperation,
         StreamingOperation
+        StreamingOperationWithInitialData
     ]
 }
 
@@ -31,6 +32,22 @@ structure StreamingOperationOutput {
 }
 
 structure StreamingOperationInput {
+    events: Events
+}
+
+operation StreamingOperationWithInitialData {
+    input: StreamingOperationWithInitialDataInput,
+    output: StreamingOperationWithInitialDataOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationWithInitialDataInput {
+    @required
+    initialData: String
+    events: Events
+}
+
+structure StreamingOperationWithInitialDataOutput {
     events: Events
 }
 
