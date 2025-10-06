@@ -212,7 +212,7 @@ impl AssumeRoleProviderBuilder {
             tags.into_iter()
                 // Unwrap won't fail as both key and value are specified.
                 // Currently Tag does not have an infallible build method.
-                .map(|(k, v)| Tag::builder().key(k).value(v).build().unwrap())
+                .map(|(k, v)| Tag::builder().key(k).value(v).build().expect("this is unreachable: both k and v are set"))
                 .collect::<Vec<_>>(),
         );
         self
