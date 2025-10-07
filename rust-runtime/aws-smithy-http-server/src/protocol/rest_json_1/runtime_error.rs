@@ -33,10 +33,10 @@ use super::rejection::RequestRejection;
 use super::rejection::ResponseRejection;
 use super::RestJson1;
 use crate::extension::RuntimeErrorExtension;
+use crate::http::StatusCode;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE;
-use http::StatusCode;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeError {
@@ -89,14 +89,14 @@ impl RuntimeError {
 }
 
 impl IntoResponse<RestJson1> for InternalFailureException {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
         IntoResponse::<RestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<RestJson1> for RuntimeError {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+        let res = crate::http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/json")
             .header("X-Amzn-Errortype", self.name())
