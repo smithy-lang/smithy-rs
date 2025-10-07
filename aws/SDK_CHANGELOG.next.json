@@ -6,44 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add support for proxy environment variables (`HTTP_PROXY, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`). Service clients will now automatically respect these proxy environment variables on the latest `BehaviorVersion`. Older behavior versions do not automatically detect these environment variables and will require manually building a `aws_smithy_http_client::Connector` with a proxy config explicitly set to use this feature.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "aajtodd",
-      "references": [
-        "aws-sdk-rust#169"
-      ],
-      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
-      "age": 5
-    },
-    {
-      "message": "Enable rustls post-quantum by default.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "WillChilds-Klein",
-      "references": [],
-      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
-      "age": 5
-    },
-    {
-      "message": "fix `aws-smithy-eventstream` feature `derive-arbitrary` on `arbitrary` >= 1.4.2\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "aajtodd",
-      "references": [],
-      "since-commit": "520d073c2d739e95d112842be13c924097155d47",
-      "age": 5
-    },
-    {
       "message": "Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).\n",
       "meta": {
         "bug": false,
@@ -55,7 +17,7 @@
         "smithy-rs#4263"
       ],
       "since-commit": "f18c70d36c40fa0f40860547394c134566704e69",
-      "age": 4
+      "age": 5
     }
   ],
   "aws-sdk-model": []
