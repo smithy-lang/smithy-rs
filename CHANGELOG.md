@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 6th, 2025
+=================
+**New this release:**
+- :tada: (server, [smithy-rs#4321](https://github.com/smithy-lang/smithy-rs/issues/4321), @jasgin) Adds the custom traits `@validationException`, `@validationMessage`, `@validationFieldList`, `@validationFieldName`, and `@validationFieldMessage`
+    for defining custom validation exceptions.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jasgin ([smithy-rs#4321](https://github.com/smithy-lang/smithy-rs/issues/4321))
+
+
 October 2nd, 2025
 =================
 **New this release:**

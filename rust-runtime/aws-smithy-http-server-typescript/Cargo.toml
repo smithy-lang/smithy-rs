@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-typescript"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"

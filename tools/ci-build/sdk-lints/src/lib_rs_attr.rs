@@ -24,11 +24,11 @@ impl Lint for StandardizedRuntimeCrateLibRsAttributes {
     }
 }
 
-const DOCS_AUTO_CFG: &str = "#![cfg_attr(docsrs, feature(doc_auto_cfg))]";
+const DOCS_CFG: &str = "#![cfg_attr(docsrs, feature(doc_cfg))]";
 
 fn check_for_auto_cfg(path: impl AsRef<Path>) -> anyhow::Result<Vec<LintError>> {
     let contents = std::fs::read_to_string(path)?;
-    if !contents.contains(DOCS_AUTO_CFG) {
+    if !contents.contains(DOCS_CFG) {
         return Ok(vec![LintError::new("missing docsrs header")]);
     }
     Ok(vec![])
@@ -38,7 +38,7 @@ impl Fix for StandardizedRuntimeCrateLibRsAttributes {
     fn fix(&self, path: impl AsRef<Path>) -> anyhow::Result<(Vec<LintError>, String)> {
         let contents = std::fs::read_to_string(&path)?;
         // ensure there is only one in the crate
-        let mut contents = contents.replace(DOCS_AUTO_CFG, "");
+        let mut contents = contents.replace(DOCS_CFG, "");
         let anchor_start = "/* Automatically managed default lints */\n";
         let anchor_end = "\n/* End of automatically managed default lints */";
         // Find the end of the license header
@@ -51,7 +51,7 @@ impl Fix for StandardizedRuntimeCrateLibRsAttributes {
             replace_anchor(
                 &mut contents,
                 &(anchor_start, anchor_end),
-                DOCS_AUTO_CFG,
+                DOCS_CFG,
                 Some(newline),
             )?;
         };
