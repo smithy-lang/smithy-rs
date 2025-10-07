@@ -86,7 +86,7 @@ pub enum ResponseRejection {
     /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
     /// errors in RestJson1).
     #[error("error building HTTP response: {0}")]
-    HttpBuild(#[from] http::Error),
+    HttpBuild(#[from] crate::http::Error),
 }
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
@@ -205,7 +205,17 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
 // need this converter for when we convert the body into bytes in the framework, since protocol
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
-convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+#[cfg(not(feature = "http-1x"))]
+#[cfg_attr(docsrs, doc(cfg(not(feature = "http-1x"))))]
+convert_to_request_rejection!(hyper_014::Error, BufferHttpBodyBytes);
+
+// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
+// need this converter for when we convert the body into bytes in the framework, since protocol
+// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
+// everyone will run a Hyper-based server in their services).
+#[cfg(feature = "http-1x")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http-1x")))]
+convert_to_request_rejection!(hyper_1x::Error, BufferHttpBodyBytes);
 
 // Useful in general, but it also required in order to accept Lambda HTTP requests using
 // `Router<lambda_http::Body>` since `lambda_http::Error` is a type alias for `Box<dyn Error + ..>`.

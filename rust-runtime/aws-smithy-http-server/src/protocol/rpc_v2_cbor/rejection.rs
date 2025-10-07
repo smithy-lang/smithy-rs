@@ -16,7 +16,7 @@ pub enum ResponseRejection {
     #[error("error serializing CBOR-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
-    HttpBuild(#[from] http::Error),
+    HttpBuild(#[from] crate::http::Error),
 }
 
 #[derive(Debug, Error)]
@@ -45,5 +45,9 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+#[cfg(not(feature = "http-1x"))]
+convert_to_request_rejection!(hyper_014::Error, BufferHttpBodyBytes);
+#[cfg(feature = "http-1x")]
+convert_to_request_rejection!(hyper_1x::Error, BufferHttpBodyBytes);
+
 convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);

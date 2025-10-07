@@ -55,3 +55,46 @@ where
 {
     boxed(Body::from(body))
 }
+
+// ============================================================================
+// Body Reading Functions
+// ============================================================================
+
+/// Collect all bytes from a body.
+///
+/// This provides a version-agnostic way to read body contents.
+/// In HTTP 0.x, this uses `hyper::body::to_bytes()`.
+/// In HTTP 1.x, this uses `BodyExt::collect()`.
+#[cfg(not(feature = "http-1x"))]
+pub async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
+where
+    B: HttpBody,
+    B::Error: Into<BoxError>,
+{
+    hyper_014::body::to_bytes(body).await.map_err(|e| Error::new(e))
+}
+
+#[cfg(feature = "http-1x")]
+pub async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
+where
+    B: HttpBody,
+    B::Error: Into<BoxError>,
+{
+    use http_body_util::BodyExt;
+
+    let collected = body.collect().await.map_err(|e| Error::new(e))?;
+
+    Ok(collected.to_bytes())
+}
+
+/// Create a body from bytes.
+#[cfg(not(feature = "http-1x"))]
+pub fn from_bytes(bytes: Bytes) -> BoxBody {
+    boxed(imports::HyperBody::from(bytes))
+}
+
+#[cfg(feature = "http-1x")]
+pub fn from_bytes(bytes: Bytes) -> BoxBody {
+    use imports::Full;
+    boxed(Full::new(bytes))
+}

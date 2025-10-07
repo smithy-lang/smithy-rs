@@ -53,7 +53,7 @@ impl<S> RestRouter<S> {
     /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> RestRouter<Route<B>>
     where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
+        S: Service<crate::http::Request<B>, Response = crate::http::Response<BoxBody>, Error = Infallible>,
         S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
@@ -70,7 +70,7 @@ where
     type Service = S;
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+    fn match_route(&self, request: &crate::http::Request<B>) -> Result<S, Self::Error> {
         let mut method_allowed = true;
 
         for (request_spec, route) in &self.routes {
@@ -111,7 +111,7 @@ mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
-    use http::Method;
+    use crate::http::Method;
 
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
