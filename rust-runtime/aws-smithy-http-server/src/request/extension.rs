@@ -75,14 +75,14 @@ impl<T> Deref for Extension<T> {
     }
 }
 
-/// The extension has not been added to the [`Request`](http::Request) or has been previously removed.
+/// The extension has not been added to the [`Request`](crate::http::Request) or has been previously removed.
 #[non_exhaustive]
 #[derive(Debug, Error)]
-#[error("the `Extension` is not present in the `http::Request`")]
+#[error("the `Extension` is not present in the `crate::http::Request`")]
 pub struct MissingExtension;
 
 impl<Protocol> IntoResponse<Protocol> for MissingExtension {
-    fn into_response(self) -> http::Response<BoxBody> {
+    fn into_response(self) -> crate::http::Response<BoxBody> {
         internal_server_error()
     }
 }
@@ -93,7 +93,7 @@ where
 {
     type Rejection = MissingExtension;
 
-    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+    fn from_parts(parts: &mut crate::http::request::Parts) -> Result<Self, Self::Rejection> {
         parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
     }
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http::uri;
+use crate::http::uri;
 use lambda_http::{Request, RequestExt};
 use std::{
     fmt::Debug,
@@ -11,7 +11,7 @@ use std::{
 };
 use tower::Service;
 
-type HyperRequest = http::Request<hyper::Body>;
+type HyperRequest = crate::http::Request<hyper::Body>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
 /// it to `http::Request<hyper::Body>`.
@@ -93,7 +93,7 @@ fn convert_event(request: Request) -> HyperRequest {
         lambda_http::Body::Binary(v) => hyper::Body::from(v),
     };
 
-    http::Request::from_parts(parts, body)
+    crate::http::Request::from_parts(parts, body)
 }
 
 #[cfg(test)]
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn raw_http_path() {
         // lambda_http::Request doesn't have a fn `builder`
-        let event = http::Request::builder()
+        let event = crate::http::Request::builder()
             .uri("https://id.execute-api.us-east-1.amazonaws.com/prod/resources/1")
             .body(())
             .expect("unable to build Request");
