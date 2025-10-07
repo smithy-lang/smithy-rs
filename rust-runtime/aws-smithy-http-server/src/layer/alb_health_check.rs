@@ -31,11 +31,7 @@ use futures_util::{Future, FutureExt};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
-#[cfg(feature = "http-1x")]
 use crate::body::Body;
-#[cfg(not(feature = "http-1x"))]
-use hyper::Body;
-
 use crate::body::BoxBody;
 
 use crate::plugin::either::Either;

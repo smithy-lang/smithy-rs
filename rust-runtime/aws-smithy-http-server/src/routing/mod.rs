@@ -29,13 +29,13 @@ use std::{
     task::{Context, Poll},
 };
 
+use crate::body::HttpBody;
+use crate::http::Response;
 use bytes::Bytes;
 use futures_util::{
     future::{Either, MapOk},
     TryFutureExt,
 };
-use http::Response;
-use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
 
 use crate::{
@@ -58,9 +58,9 @@ pub use self::{
 pub(crate) const UNKNOWN_OPERATION_EXCEPTION: &str = "UnknownOperationException";
 
 /// Constructs common response to method disallowed.
-pub(crate) fn method_disallowed() -> http::Response<BoxBody> {
-    let mut responses = http::Response::default();
-    *responses.status_mut() = http::StatusCode::METHOD_NOT_ALLOWED;
+pub(crate) fn method_disallowed() -> crate::http::Response<BoxBody> {
+    let mut responses = crate::http::Response::default();
+    *responses.status_mut() = crate::http::StatusCode::METHOD_NOT_ALLOWED;
     responses
 }
 
@@ -70,7 +70,7 @@ pub trait Router<B> {
     type Error;
 
     /// Matches a [`http::Request`] to a target [`Service`].
-    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error>;
+    fn match_route(&self, request: &crate::http::Request<B>) -> Result<Self::Service, Self::Error>;
 }
 
 /// A [`Service`] using the [`Router`] `R` to redirect messages to specific routes.
@@ -127,12 +127,15 @@ impl<R, P> RoutingService<R, P> {
 }
 
 type EitherOneshotReady<S, B> = Either<
-    MapOk<Oneshot<S, http::Request<B>>, fn(<S as Service<http::Request<B>>>::Response) -> http::Response<BoxBody>>,
-    Ready<Result<http::Response<BoxBody>, <S as Service<http::Request<B>>>::Error>>,
+    MapOk<
+        Oneshot<S, crate::http::Request<B>>,
+        fn(<S as Service<crate::http::Request<B>>>::Response) -> crate::http::Response<BoxBody>,
+    >,
+    Ready<Result<crate::http::Response<BoxBody>, <S as Service<crate::http::Request<B>>>::Error>>,
 >;
 
 pin_project_lite::pin_project! {
-    pub struct RoutingFuture<S, B> where S: Service<http::Request<B>> {
+    pub struct RoutingFuture<S, B> where S: Service<crate::http::Request<B>> {
         #[pin]
         inner: EitherOneshotReady<S, B>
     }
@@ -140,12 +143,12 @@ pin_project_lite::pin_project! {
 
 impl<S, B> RoutingFuture<S, B>
 where
-    S: Service<http::Request<B>>,
+    S: Service<crate::http::Request<B>>,
 {
     /// Creates a [`RoutingFuture`] from [`ServiceExt::oneshot`].
-    pub(super) fn from_oneshot<RespB>(future: Oneshot<S, http::Request<B>>) -> Self
+    pub(super) fn from_oneshot<RespB>(future: Oneshot<S, crate::http::Request<B>>) -> Self
     where
-        S: Service<http::Request<B>, Response = http::Response<RespB>>,
+        S: Service<crate::http::Request<B>, Response = crate::http::Response<RespB>>,
         RespB: HttpBody<Data = Bytes> + Send + 'static,
         RespB::Error: Into<BoxError>,
     {
@@ -155,7 +158,7 @@ where
     }
 
     /// Creates a [`RoutingFuture`] from [`Service::Response`].
-    pub(super) fn from_response(response: http::Response<BoxBody>) -> Self {
+    pub(super) fn from_response(response: crate::http::Response<BoxBody>) -> Self {
         Self {
             inner: Either::Right(ready(Ok(response))),
         }
@@ -164,32 +167,32 @@ where
 
 impl<S, B> Future for RoutingFuture<S, B>
 where
-    S: Service<http::Request<B>>,
+    S: Service<crate::http::Request<B>>,
 {
-    type Output = Result<http::Response<BoxBody>, S::Error>;
+    type Output = Result<crate::http::Response<BoxBody>, S::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         self.project().inner.poll(cx)
     }
 }
 
-impl<R, P, B, RespB> Service<http::Request<B>> for RoutingService<R, P>
+impl<R, P, B, RespB> Service<crate::http::Request<B>> for RoutingService<R, P>
 where
     R: Router<B>,
-    R::Service: Service<http::Request<B>, Response = http::Response<RespB>> + Clone,
+    R::Service: Service<crate::http::Request<B>, Response = crate::http::Response<RespB>> + Clone,
     R::Error: IntoResponse<P> + Error,
     RespB: HttpBody<Data = Bytes> + Send + 'static,
     RespB::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
-    type Error = <R::Service as Service<http::Request<B>>>::Error;
+    type Error = <R::Service as Service<crate::http::Request<B>>>::Error;
     type Future = RoutingFuture<R::Service, B>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+    fn call(&mut self, req: crate::http::Request<B>) -> Self::Future {
         tracing::debug!("inside routing service call");
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.

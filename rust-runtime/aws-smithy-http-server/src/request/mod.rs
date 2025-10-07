@@ -50,11 +50,11 @@ use std::{
     future::{ready, Future, Ready},
 };
 
+use crate::http::{request::Parts, Request, StatusCode};
 use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
     TryFutureExt,
 };
-use http::{request::Parts, Request, StatusCode};
 
 use crate::{
     body::{empty, BoxBody},
@@ -71,8 +71,8 @@ pub mod lambda;
 #[cfg_attr(docsrs, doc(cfg(feature = "request-id")))]
 pub mod request_id;
 
-fn internal_server_error() -> http::Response<BoxBody> {
-    let mut response = http::Response::new(empty());
+fn internal_server_error() -> crate::http::Response<BoxBody> {
+    let mut response = crate::http::Response::new(empty());
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
     response
 }
