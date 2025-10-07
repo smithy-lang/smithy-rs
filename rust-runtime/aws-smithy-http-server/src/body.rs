@@ -18,16 +18,6 @@ pub use http_body_1x::Body as HttpBody;
 #[cfg(not(feature = "http-1x"))]
 pub use hyper_014::body::Body;
 
-#[cfg(not(feature = "http-1x"))]
-mod imports {
-    pub use hyper_014::body::Body as HyperBody;
-}
-
-#[cfg(feature = "http-1x")]
-mod imports {
-    pub use http_body_util::{BodyExt, Empty, Full};
-}
-
 // For http-1x, hyper::Body doesn't exist. We export hyper::body::Incoming as Body to make it easier
 // port middleware that uses `Request<Body>`.
 #[cfg(feature = "http-1x")]
@@ -67,7 +57,7 @@ where
     B: http_body_1x::Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxError>,
 {
-    use imports::BodyExt;
+    use http_body_util::BodyExt;
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
 
@@ -99,6 +89,7 @@ pub fn empty() -> BoxBody {
 /// Convert anything that can be converted into a [`hyper::body::Body`] into a [`BoxBody`].
 /// This simplifies codegen a little bit.
 #[doc(hidden)]
+#[cfg(not(feature = "http-1x"))]
 pub fn to_boxed<B>(body: B) -> BoxBody
 where
     Body: From<B>,
@@ -154,7 +145,7 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 
 #[cfg(feature = "http-1x")]
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
-    boxed(hyper_body_util::Full::new(bytes))
+    boxed(http_body_util::Full::new(bytes))
 }
 
 #[cfg(test)]

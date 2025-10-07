@@ -15,7 +15,7 @@ mod response;
 mod sensitive;
 pub mod uri;
 
-use http::{HeaderMap, StatusCode, Uri};
+use crate::http::{HeaderMap, StatusCode, Uri};
 pub use request::*;
 pub use response::*;
 pub use sensitive::*;
@@ -25,8 +25,8 @@ use super::{MakeDebug, MakeDisplay};
 /// The string placeholder for redacted data.
 pub const REDACTED: &str = "{redacted}";
 
-/// An interface for providing [`MakeDebug`] and [`MakeDisplay`] for [`Request`](http::Request) and
-/// [`Response`](http::Response).
+/// An interface for providing [`MakeDebug`] and [`MakeDisplay`] for [`Request`](crate::http::Request) and
+/// [`Response`](crate::http::Response).
 pub trait Sensitivity {
     /// The [`MakeDebug`] and [`MakeDisplay`] for the request [`HeaderMap`] and [`Uri`].
     type RequestFmt: for<'a> MakeDebug<&'a HeaderMap> + for<'a> MakeDisplay<&'a Uri>;

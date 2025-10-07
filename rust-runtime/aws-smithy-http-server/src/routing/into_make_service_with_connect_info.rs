@@ -39,12 +39,13 @@ use std::{
     fmt,
     future::ready,
     marker::PhantomData,
-    net::SocketAddr,
     task::{Context, Poll},
 };
 
 #[cfg(not(feature = "http-1x"))]
 use hyper_014::server::conn::AddrStream;
+#[cfg(not(feature = "http-1x"))]
+use std::net::SocketAddr;
 use tower::{Layer, Service};
 use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
