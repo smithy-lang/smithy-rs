@@ -40,6 +40,46 @@ class AwsQueryTest {
         }
         """.asSmithyModel()
 
+    private val modelWithEmptyStruct =
+        """
+        namespace test
+        use aws.protocols#awsQuery
+
+        @awsQuery
+        @xmlNamespace(uri: "https://example.com/")
+        service TestService {
+            version: "2019-12-16",
+            operations: [TestOp]
+        }
+
+        operation TestOp {
+            input: TestInput,
+            output: TestOutput
+        }
+
+        structure TestInput {
+            testUnion: TestUnion
+        }
+
+        structure TestOutput {
+            testUnion: TestUnion
+        }
+
+        union TestUnion {
+            // Empty struct - should generate _inner to avoid unused variable warning
+            emptyStruct: EmptyStruct,
+
+            // Normal struct - should generate inner (without underscore)
+            normalStruct: NormalStruct
+        }
+
+        structure EmptyStruct {}
+
+        structure NormalStruct {
+            value: String
+        }
+        """.asSmithyModel()
+
     @Test
     fun `generate an aws query service that compiles`() {
         clientIntegrationTest(model) { _, _ -> }
@@ -47,46 +87,6 @@ class AwsQueryTest {
 
     @Test
     fun `union with empty struct generates warning-free code`() {
-        val modelWithEmptyStruct =
-            """
-            namespace test
-            use aws.protocols#awsQuery
-
-            @awsQuery
-            @xmlNamespace(uri: "https://example.com/")
-            service TestService {
-                version: "2019-12-16",
-                operations: [TestOp]
-            }
-
-            operation TestOp {
-                input: TestInput,
-                output: TestOutput
-            }
-
-            structure TestInput {
-                testUnion: TestUnion
-            }
-
-            structure TestOutput {
-                testUnion: TestUnion
-            }
-
-            union TestUnion {
-                // Empty struct - should generate _inner to avoid unused variable warning
-                emptyStruct: EmptyStruct,
-
-                // Normal struct - should generate inner (without underscore)
-                normalStruct: NormalStruct
-            }
-
-            structure EmptyStruct {}
-
-            structure NormalStruct {
-                value: String
-            }
-            """.asSmithyModel()
-
         // This test will fail with unused variable warnings if the fix is not applied
         // clientIntegrationTest enforces -D warnings via codegenIntegrationTest
         clientIntegrationTest(modelWithEmptyStruct) { _, _ -> }
