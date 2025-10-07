@@ -10,7 +10,7 @@ mod query;
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use http::Uri;
+use crate::http::Uri;
 
 pub use label::*;
 pub use query::*;
@@ -114,14 +114,14 @@ impl<P, Q> Debug for MakeUri<P, Q> {
     }
 }
 
-impl<'a, P, Q> MakeFmt<&'a http::Uri> for MakeUri<P, Q>
+impl<'a, P, Q> MakeFmt<&'a crate::http::Uri> for MakeUri<P, Q>
 where
     Q: Clone,
     P: Clone,
 {
     type Target = SensitiveUri<'a, P, Q>;
 
-    fn make(&self, source: &'a http::Uri) -> Self::Target {
+    fn make(&self, source: &'a crate::http::Uri) -> Self::Target {
         SensitiveUri::new(source)
             .make_query(self.make_query.clone())
             .make_path(self.make_path.clone())
@@ -139,12 +139,12 @@ impl Default for MakeUri<MakeIdentity, MakeIdentity> {
 
 #[cfg(test)]
 mod tests {
-    use http::Uri;
+    use crate::http::Uri;
 
     use super::{QueryMarker, SensitiveUri};
 
     // https://www.w3.org/2004/04/uri-rel-test.html
-    // NOTE: http::Uri's `Display` implementation trims the fragment, we mirror this behavior
+    // NOTE: crate::http::Uri's `Display` implementation trims the fragment, we mirror this behavior
     pub const EXAMPLES: [&str; 19] = [
         "g:h",
         "http://a/b/c/g",

@@ -10,7 +10,7 @@
 //!
 //! ```no_run
 //! use aws_smithy_http_server::layer::alb_health_check::AlbHealthCheckLayer;
-//! use hyper::StatusCode;
+//! use aws_smithy_http_server::http::StatusCode;
 //! use tower::Layer;
 //!
 //! // Handle all `/ping` health check requests by returning a `200 OK`.

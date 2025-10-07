@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! A builder whose methods allow for configuration of [`MakeFmt`] implementations over parts of [`http::Request`].
+//! A builder whose methods allow for configuration of [`MakeFmt`] implementations over parts of [`crate::http::Request`].
 
 use std::fmt::{Debug, Error, Formatter};
 
-use http::{header::HeaderName, HeaderMap};
+use crate::http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::{MakeFmt, MakeIdentity};
 
@@ -19,7 +19,7 @@ use super::{
 /// Allows the modification the requests URIs [`Display`](std::fmt::Display) and headers
 /// [`Debug`] to accommodate sensitivity.
 ///
-/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](http::Uri).
+/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](crate::http::Uri).
 #[derive(Clone)]
 pub struct RequestFmt<Headers, Uri> {
     headers: Headers,
@@ -118,13 +118,13 @@ where
     }
 }
 
-impl<'a, Headers, Uri> MakeFmt<&'a http::Uri> for RequestFmt<Headers, Uri>
+impl<'a, Headers, Uri> MakeFmt<&'a crate::http::Uri> for RequestFmt<Headers, Uri>
 where
-    Uri: MakeFmt<&'a http::Uri>,
+    Uri: MakeFmt<&'a crate::http::Uri>,
 {
     type Target = Uri::Target;
 
-    fn make(&self, source: &'a http::Uri) -> Self::Target {
+    fn make(&self, source: &'a crate::http::Uri) -> Self::Target {
         self.uri.make(source)
     }
 }

@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! A builder whose methods allow for configuration of [`MakeFmt`] implementations over parts of [`http::Response`].
+//! A builder whose methods allow for configuration of [`MakeFmt`] implementations over parts of [`crate::http::Response`].
 
 use std::fmt::{Debug, Error, Formatter};
 
-use http::{header::HeaderName, HeaderMap};
+use crate::http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::{MakeFmt, MakeIdentity};
 
@@ -19,7 +19,7 @@ use super::{
 /// Allows the modification the responses status code [`Display`](std::fmt::Display) and headers
 /// [`Debug`] to accommodate sensitivity.
 ///
-/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
+/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](crate::http::StatusCode).
 #[derive(Clone)]
 pub struct ResponseFmt<Headers, StatusCode> {
     headers: Headers,
@@ -85,13 +85,13 @@ where
     }
 }
 
-impl<Headers, StatusCode> MakeFmt<http::StatusCode> for ResponseFmt<Headers, StatusCode>
+impl<Headers, StatusCode> MakeFmt<crate::http::StatusCode> for ResponseFmt<Headers, StatusCode>
 where
-    StatusCode: MakeFmt<http::StatusCode>,
+    StatusCode: MakeFmt<crate::http::StatusCode>,
 {
     type Target = StatusCode::Target;
 
-    fn make(&self, source: http::StatusCode) -> Self::Target {
+    fn make(&self, source: crate::http::StatusCode) -> Self::Target {
         self.status_code.make(source)
     }
 }
