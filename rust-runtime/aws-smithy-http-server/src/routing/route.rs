@@ -33,7 +33,7 @@
  */
 
 use crate::body::{Body, BoxBody};
-use http::{Request, Response};
+use crate::http::{Request, Response};
 use std::{
     convert::Infallible,
     fmt,

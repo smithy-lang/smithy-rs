@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use http::Request;
+use crate::http::Request;
 use regex::Regex;
 
 #[derive(Debug, Clone)]
@@ -79,7 +79,7 @@ impl UriSpec {
 
 #[derive(Debug, Clone)]
 pub struct RequestSpec {
-    method: http::Method,
+    method: crate::http::Method,
     uri_spec: UriSpec,
     uri_path_regex: Regex,
 }
@@ -120,7 +120,7 @@ impl From<&PathSpec> for Regex {
 }
 
 impl RequestSpec {
-    pub fn new(method: http::Method, uri_spec: UriSpec) -> Self {
+    pub fn new(method: crate::http::Method, uri_spec: UriSpec) -> Self {
         let uri_path_regex = (&uri_spec.path_and_query.path_segments).into();
         RequestSpec {
             method,
@@ -230,7 +230,7 @@ impl RequestSpec {
     // Helper function to build a `RequestSpec`.
     #[cfg(test)]
     pub fn from_parts(
-        method: http::Method,
+        method: crate::http::Method,
         path_segments: Vec<PathSegment>,
         query_segments: Vec<QuerySegment>,
     ) -> Self {
@@ -252,7 +252,7 @@ mod tests {
     use super::*;
     use crate::protocol::test_helpers::req;
 
-    use http::Method;
+    use crate::http::Method;
 
     #[test]
     fn path_spec_into_regex() {

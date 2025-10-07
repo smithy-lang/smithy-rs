@@ -122,7 +122,7 @@ where
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
 {
-    type Output = Result<http::Response<crate::body::BoxBody>, Infallible>;
+    type Output = Result<crate::http::Response<crate::body::BoxBody>, Infallible>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         loop {
@@ -162,7 +162,7 @@ where
     }
 }
 
-impl<P, Input, B, S> Service<http::Request<B>> for Upgrade<P, Input, S>
+impl<P, Input, B, S> Service<crate::http::Request<B>> for Upgrade<P, Input, S>
 where
     Input: FromRequest<P, B>,
     <Input as FromRequest<P, B>>::Rejection: std::fmt::Display,
@@ -170,7 +170,7 @@ where
     S::Response: IntoResponse<P>,
     S::Error: IntoResponse<P>,
 {
-    type Response = http::Response<crate::body::BoxBody>;
+    type Response = crate::http::Response<crate::body::BoxBody>;
     type Error = Infallible;
     type Future = UpgradeFuture<P, Input, B, S>;
 
@@ -180,7 +180,7 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+    fn call(&mut self, req: crate::http::Request<B>) -> Self::Future {
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
         UpgradeFuture {
@@ -214,7 +214,7 @@ impl<R, P> Service<R> for MissingFailure<P>
 where
     InternalFailureException: IntoResponse<P>,
 {
-    type Response = http::Response<BoxBody>;
+    type Response = crate::http::Response<BoxBody>;
     type Error = Infallible;
     type Future = Ready<Result<Self::Response, Self::Error>>;
 

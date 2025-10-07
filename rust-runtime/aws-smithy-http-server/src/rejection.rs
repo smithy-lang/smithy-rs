@@ -42,7 +42,7 @@ pub mod any_rejections {
                 $($var: IntoResponse<P>,)*
             {
                 #[allow(non_snake_case)]
-                fn into_response(self) -> http::Response<crate::body::BoxBody> {
+                fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
                     match self {
                         $($name::$var ($var) => $var.into_response(),)*
                     }

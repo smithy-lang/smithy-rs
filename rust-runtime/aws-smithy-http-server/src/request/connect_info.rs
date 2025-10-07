@@ -3,40 +3,40 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! The [`ConnectInfo`] struct is included in [`http::Request`]s when
+//! The [`ConnectInfo`] struct is included in [`crate::http::Request`]s when
 //! [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) is used. [`ConnectInfo`]'s
-//! [`FromParts`] implementation allows it to be extracted from the [`http::Request`].
+//! [`FromParts`] implementation allows it to be extracted from the [`crate::http::Request`].
 //!
 //! The [`example service`](https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/main.rs)
 //! illustrates the use of [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 //! and [`ConnectInfo`] with a service builder.
 
-use http::request::Parts;
+use crate::http::request::Parts;
 use thiserror::Error;
 
 use crate::{body::BoxBody, response::IntoResponse};
 
 use super::{internal_server_error, FromParts};
 
-/// The [`ConnectInfo`] was not found in the [`http::Request`] extensions.
+/// The [`ConnectInfo`] was not found in the [`crate::http::Request`] extensions.
 ///
 /// Use [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) to ensure it's present.
 #[non_exhaustive]
 #[derive(Debug, Error)]
 #[error(
-    "`ConnectInfo` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo`"
+    "`ConnectInfo` is not present in the `crate::http::Request` extensions - consider using `aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo`"
 )]
 pub struct MissingConnectInfo;
 
 impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
-    fn into_response(self) -> http::Response<BoxBody> {
+    fn into_response(self) -> crate::http::Response<BoxBody> {
         internal_server_error()
     }
 }
 
 /// Extractor for getting connection information produced by a [`Connected`](crate::routing::Connected).
 ///
-/// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`http::Extensions`]. This is
+/// Note this extractor requires the existence of [`ConnectInfo<T>`] in the [`crate::http::Extensions`]. This is
 /// automatically inserted by the [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 /// middleware, which can be applied using the `into_make_service_with_connect_info` method on your generated service.
 #[derive(Clone, Debug)]

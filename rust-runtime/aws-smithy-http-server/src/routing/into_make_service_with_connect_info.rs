@@ -43,7 +43,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use hyper::server::conn::AddrStream;
+#[cfg(not(feature = "http-1x"))]
+use hyper_014::server::conn::AddrStream;
 use tower::{Layer, Service};
 use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
@@ -101,6 +102,7 @@ pub trait Connected<T>: Clone {
     fn connect_info(target: T) -> Self;
 }
 
+#[cfg(not(feature = "http-1x"))]
 impl Connected<&AddrStream> for SocketAddr {
     fn connect_info(target: &AddrStream) -> Self {
         target.remote_addr()
