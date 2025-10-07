@@ -13,6 +13,7 @@ Server runtime for Smithy Rust Server Framework.
 publish = true
 
 [features]
+default = ["dep:aws-smithy-http"]
 aws-lambda = ["dep:lambda_http"]
 unredacted-logging = []
 request-id = ["dep:uuid"]
@@ -29,7 +30,7 @@ http-1x = [
 
 [dependencies]
 # For HTTP 0.x: use aws-smithy-http 0.62.3 from crates.io (supports HTTP 0.2)
-aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-http = { version = "0.62.3", features = ["rt-tokio"], optional = true }
 
 # For HTTP 1.x: use aws-smithy-http from the repository.
 aws-smithy-http-1x = { package = "aws-smithy-http", path = "../aws-smithy-http", features = ["rt-tokio"], optional = true }
