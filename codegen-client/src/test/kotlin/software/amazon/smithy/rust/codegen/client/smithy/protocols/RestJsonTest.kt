@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 internal class RestJsonTest {
     val model =
-            """
+        """
         namespace test
         use aws.protocols#restJson1
         use aws.api#service
@@ -42,7 +42,7 @@ internal class RestJsonTest {
         """.asSmithyModel()
 
     private val modelWithEmptyStruct =
-            """
+        """
         namespace test
         use aws.protocols#restJson1
         use aws.api#service
