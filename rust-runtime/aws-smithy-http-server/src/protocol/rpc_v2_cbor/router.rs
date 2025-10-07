@@ -7,8 +7,8 @@ use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use http::header::ToStrError;
-use http::HeaderMap;
+use crate::http::header::ToStrError;
+use crate::http::HeaderMap;
 use regex::Regex;
 use thiserror::Error;
 use tower::Layer;
@@ -103,7 +103,7 @@ impl<S> RpcV2CborRouter<S> {
 
     pub fn boxed<B>(self) -> RpcV2CborRouter<Route<B>>
     where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
+        S: Service<crate::http::Request<B>, Response = crate::http::Response<BoxBody>, Error = Infallible>,
         S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
@@ -130,12 +130,12 @@ impl<S> RpcV2CborRouter<S> {
 // TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
 // we have no tests to pin our implemenation against!
 impl IntoResponse<RpcV2Cbor> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
+    fn into_response(self) -> crate::http::Response<BoxBody> {
         match self {
             Error::MethodNotAllowed => method_disallowed(),
-            _ => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/cbor")
+            _ => crate::http::Response::builder()
+                .status(crate::http::StatusCode::NOT_FOUND)
+                .header(crate::http::header::CONTENT_TYPE, "application/cbor")
                 .extension(RuntimeErrorExtension::new(
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
@@ -206,9 +206,9 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
 
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<Self::Service, Self::Error> {
+    fn match_route(&self, request: &crate::http::Request<B>) -> Result<Self::Service, Self::Error> {
         // Only `Method::POST` is allowed.
-        if request.method() != http::Method::POST {
+        if request.method() != crate::http::Method::POST {
             return Err(Error::MethodNotAllowed);
         }
 
@@ -252,7 +252,7 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
 
 #[cfg(test)]
 mod tests {
-    use http::{HeaderMap, HeaderValue, Method};
+    use crate::http::{HeaderMap, HeaderValue, Method};
     use regex::Regex;
 
     use crate::protocol::test_helpers::req;

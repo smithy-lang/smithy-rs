@@ -11,14 +11,14 @@ pub mod rest_json_1;
 pub mod rest_xml;
 pub mod rpc_v2_cbor;
 
+use crate::http::header::CONTENT_TYPE;
+use crate::http::HeaderMap;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
-use http::header::CONTENT_TYPE;
-use http::HeaderMap;
 
 #[cfg(test)]
 pub mod test_helpers {
-    use http::{HeaderMap, Method, Request};
+    use crate::http::{HeaderMap, Method, Request};
 
     /// Helper function to build a `Request`. Used in other test modules.
     pub fn req(method: &Method, uri: &str, headers: Option<HeaderMap>) -> Request<()> {
@@ -30,12 +30,24 @@ pub mod test_helpers {
     }
 
     // Returns a `Response`'s body as a `String`, without consuming the response.
+    #[cfg(not(feature = "http-1x"))]
     pub async fn get_body_as_string<B>(body: B) -> String
     where
-        B: http_body::Body + std::marker::Unpin,
+        B: http_body_04x::Body + std::marker::Unpin,
         B::Error: std::fmt::Debug,
     {
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        let body_bytes = hyper_014::body::to_bytes(body).await.unwrap();
+        String::from(std::str::from_utf8(&body_bytes).unwrap())
+    }
+
+    #[cfg(feature = "http-1x")]
+    pub async fn get_body_as_string<B>(body: B) -> String
+    where
+        B: http_body_1x::Body + std::marker::Unpin,
+        B::Error: std::fmt::Debug,
+    {
+        use http_body_util::BodyExt;
+        let body_bytes = body.collect().await.unwrap().to_bytes();
         String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 }
@@ -107,11 +119,11 @@ fn content_type_header_classifier(
 }
 
 pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) -> bool {
-    if !headers.contains_key(http::header::ACCEPT) {
+    if !headers.contains_key(crate::http::header::ACCEPT) {
         return true;
     }
     headers
-        .get_all(http::header::ACCEPT)
+        .get_all(crate::http::header::ACCEPT)
         .into_iter()
         .flat_map(|header| {
             header
@@ -143,7 +155,7 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
+    use crate::http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
     fn req_content_type_smithy(content_type: &'static str) -> SmithyHeaders {
         let mut headers = SmithyHeaders::new();

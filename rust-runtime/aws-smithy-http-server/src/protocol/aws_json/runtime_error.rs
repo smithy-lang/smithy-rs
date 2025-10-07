@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::http::StatusCode;
 use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::aws_json_10::AwsJson1_0};
-use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 
@@ -53,20 +53,20 @@ impl RuntimeError {
 }
 
 impl IntoResponse<AwsJson1_0> for InternalFailureException {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_0>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<AwsJson1_1> for InternalFailureException {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
         IntoResponse::<AwsJson1_1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<AwsJson1_0> for RuntimeError {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+        let res = crate::http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/x-amz-json-1.0")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));
@@ -83,8 +83,8 @@ impl IntoResponse<AwsJson1_0> for RuntimeError {
 }
 
 impl IntoResponse<AwsJson1_1> for RuntimeError {
-    fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        let res = http::Response::builder()
+    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+        let res = crate::http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/x-amz-json-1.1")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));

@@ -16,11 +16,11 @@ pub use crate::protocol::rest::router::*;
 // TODO(https://github.com/smithy-lang/smithy/issues/2348): We're probably non-compliant here, but
 // we have no tests to pin our implemenation against!
 impl IntoResponse<RestXml> for Error {
-    fn into_response(self) -> http::Response<BoxBody> {
+    fn into_response(self) -> crate::http::Response<BoxBody> {
         match self {
-            Error::NotFound => http::Response::builder()
-                .status(http::StatusCode::NOT_FOUND)
-                .header(http::header::CONTENT_TYPE, "application/xml")
+            Error::NotFound => crate::http::Response::builder()
+                .status(crate::http::StatusCode::NOT_FOUND)
+                .header(crate::http::header::CONTENT_TYPE, "application/xml")
                 .extension(RuntimeErrorExtension::new(
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))

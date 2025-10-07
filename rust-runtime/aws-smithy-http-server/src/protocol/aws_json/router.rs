@@ -13,7 +13,7 @@ use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
 use crate::routing::Router;
 
-use http::header::ToStrError;
+use crate::http::header::ToStrError;
 use thiserror::Error;
 
 /// An AWS JSON routing error.
@@ -68,7 +68,7 @@ impl<S> AwsJsonRouter<S> {
     /// Applies type erasure to the inner route using [`Route::new`].
     pub fn boxed<B>(self) -> AwsJsonRouter<Route<B>>
     where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
+        S: Service<crate::http::Request<B>, Response = crate::http::Response<BoxBody>, Error = Infallible>,
         S: Send + Clone + 'static,
         S::Future: Send + 'static,
     {
@@ -85,14 +85,14 @@ where
     type Service = S;
     type Error = Error;
 
-    fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+    fn match_route(&self, request: &crate::http::Request<B>) -> Result<S, Self::Error> {
         // The URI must be root,
         if request.uri() != "/" {
             return Err(Error::NotRootUrl);
         }
 
         // Only `Method::POST` is allowed.
-        if request.method() != http::Method::POST {
+        if request.method() != crate::http::Method::POST {
             return Err(Error::MethodNotAllowed);
         }
 
@@ -120,7 +120,7 @@ mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::Router};
 
-    use http::{HeaderMap, HeaderValue, Method};
+    use crate::http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
 
     #[tokio::test]

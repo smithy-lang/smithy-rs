@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.65.6"
+version = "0.66.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -16,9 +16,24 @@ publish = true
 aws-lambda = ["dep:lambda_http"]
 unredacted-logging = []
 request-id = ["dep:uuid"]
+http-1x = [
+    "dep:aws-smithy-http-1x",
+    "dep:http-1x",
+    "dep:http-body-1x",
+    "dep:hyper-1x",
+    "dep:hyper-util",
+    "dep:http-body-util",
+    "aws-smithy-types/http-body-1-x",
+    "aws-smithy-runtime-api/http-1x"
+]
 
 [dependencies]
+# For HTTP 0.x: use aws-smithy-http 0.62.3 from crates.io (supports HTTP 0.2)
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
+
+# For HTTP 1.x: use aws-smithy-http from the repository.
+aws-smithy-http-1x = { package = "aws-smithy-http", path = "../aws-smithy-http", features = ["rt-tokio"], optional = true }
+
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
@@ -26,9 +41,19 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
-http = "0.2.12"
-http-body = "0.4.6"
-hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+
+# HTTP 0.x dependencies (always available for backward compatibility)
+http-02x = { package = "http", version = "0.2.12" }
+http-body-04x = { package = "http-body", version = "0.4.6" }
+hyper-014 = { package = "hyper", version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+
+# HTTP 1.x dependencies (optional, enabled by http-1x feature)
+http-1x = { package = "http", version = "1", optional = true }
+http-body-1x = { package = "http-body", version = "1.0", optional = true }
+hyper-1x = { package = "hyper", version = "1", optional = true, features = ["server", "http1"] }
+hyper-util = { version = "0.1", optional = true, features = ["tokio", "server", "server-auto"] }
+http-body-util = { version = "0.1", optional = true }
+
 lambda_http = { version = "0.8.3", optional = true }
 mime = "0.3.17"
 nom = "7.1.3"

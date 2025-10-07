@@ -44,3 +44,9 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
 mod test_helpers;
+
+#[cfg(not(feature = "http-1x"))]
+pub(crate) use http_02x as http;
+
+#[cfg(feature = "http-1x")]
+pub(crate) use http_1x as http;
