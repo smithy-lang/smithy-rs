@@ -195,10 +195,6 @@ class CustomValidationExceptionConversionGenerator(
             val templateParams =
                 mutableMapOf<String, Any>(
                     "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                    "CustomValidationException" to
-                        writable {
-                            rust(codegenContext.symbolProvider.toSymbol(validationException).name)
-                        },
                     "CustomValidationMessage" to
                         writable {
                             rust(codegenContext.symbolProvider.toMemberName(validationMessage))
@@ -225,7 +221,7 @@ class CustomValidationExceptionConversionGenerator(
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
                     fn from(constraint_violation: ConstraintViolation) -> Self {
                         $fieldCreation
-                        let validation_exception = crate::error::#{CustomValidationException} {
+                        let validation_exception = #{CustomValidationException} {
                             #{CustomValidationMessage}: $messageFormat,
                             $fieldListAssignment
                             $additionalFieldAssignments
@@ -238,6 +234,7 @@ class CustomValidationExceptionConversionGenerator(
                 }
                 """,
                 *templateParams.toList().toTypedArray(),
+                "CustomValidationException" to codegenContext.symbolProvider.toSymbol(validationException)
             )
         }
     }

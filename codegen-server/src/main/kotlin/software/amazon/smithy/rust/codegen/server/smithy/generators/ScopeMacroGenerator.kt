@@ -20,9 +20,10 @@ class ScopeMacroGenerator(
     private val index = TopDownIndex.of(codegenContext.model)
     private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
-    private fun macro(): Writable =
-        writable {
-            val firstOperationName = codegenContext.symbolProvider.toSymbol(operations.first()).name.toPascalCase()
+    private fun macro(): Writable {
+        val firstOperation = operations.firstOrNull() ?: return writable {  }
+        return writable {
+            val firstOperationName = codegenContext.symbolProvider.toSymbol(firstOperation).name.toPascalCase()
             val operationNames =
                 operations.joinToString(" ") {
                     codegenContext.symbolProvider.toSymbol(it).name.toPascalCase()
@@ -45,15 +46,15 @@ class ScopeMacroGenerator(
                 operations
                     .map { codegenContext.symbolProvider.toSymbol(it).name.toPascalCase() }.joinToString("") {
                         """
-                        // $it match found, pop from both `member` and `not_member`
-                        (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
-                            scope! { @ $ name, $ contains ($($ member)*) ($($ temp)*) ($($ not_member)*) }
-                        };
-                        // $it match not found, pop from `not_member` into `temp` stack
-                        (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($ other: ident $($ not_member: ident)*)) => {
-                            scope! { @ $ name, $ contains ($it $($ member)*) ($ other $($ temp)*) ($($ not_member)*) }
-                        };
-                        """
+                            // $it match found, pop from both `member` and `not_member`
+                            (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($it $($ not_member: ident)*)) => {
+                                scope! { @ $ name, $ contains ($($ member)*) ($($ temp)*) ($($ not_member)*) }
+                            };
+                            // $it match not found, pop from `not_member` into `temp` stack
+                            (@ $ name: ident, $ contains: ident ($it $($ member: ident)*) ($($ temp: ident)*) ($ other: ident $($ not_member: ident)*)) => {
+                                scope! { @ $ name, $ contains ($it $($ member)*) ($ other $($ temp)*) ($($ not_member)*) }
+                            };
+                            """
                     }
             val crateName = codegenContext.moduleUseName()
 
@@ -67,11 +68,11 @@ class ScopeMacroGenerator(
                     writable {
                         rustTemplate(
                             """
-                            /// ## let a = Plugin::<(), $otherOperationName, u64>::apply(&scoped_a, 6);
-                            /// ## let b = Plugin::<(), $otherOperationName, u64>::apply(&scoped_b, 6);
-                            /// ## assert_eq!(a, 6_u64);
-                            /// ## assert_eq!(b, 3_u32);
-                            """,
+                                /// ## let a = Plugin::<(), $otherOperationName, u64>::apply(&scoped_a, 6);
+                                /// ## let b = Plugin::<(), $otherOperationName, u64>::apply(&scoped_b, 6);
+                                /// ## assert_eq!(a, 6_u64);
+                                /// ## assert_eq!(b, 3_u32);
+                                """,
                         )
                     }
                 } else {
@@ -80,97 +81,98 @@ class ScopeMacroGenerator(
 
             rustTemplate(
                 """
-                /// A macro to help with scoping [plugins](crate::server::plugin) to a subset of all operations.
-                ///
-                /// In contrast to [`crate::server::scope`](crate::server::scope), this macro has knowledge
-                /// of the service and any operations _not_ specified will be placed in the opposing group.
-                ///
-                /// ## Example
-                ///
-                /// ```rust
-                /// scope! {
-                ///     /// Includes [`$firstOperationName`], excluding all other operations.
-                ///     struct ScopeA {
-                ///         includes: [$firstOperationName]
-                ///     }
-                /// }
-                ///
-                /// scope! {
-                ///     /// Excludes [`$firstOperationName`], excluding all other operations.
-                ///     struct ScopeB {
-                ///         excludes: [$firstOperationName]
-                ///     }
-                /// }
-                ///
-                /// ## use $crateName::server::plugin::{Plugin, Scoped};
-                /// ## use $crateName::scope;
-                /// ## struct MockPlugin;
-                /// ## impl<S, Op, T> Plugin<S, Op, T> for MockPlugin { type Output = u32; fn apply(&self, input: T) -> u32 { 3 } }
-                /// ## let scoped_a = Scoped::new::<ScopeA>(MockPlugin);
-                /// ## let scoped_b = Scoped::new::<ScopeB>(MockPlugin);
-                /// ## let a = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_a, 6);
-                /// ## let b = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_b, 6);
-                /// ## assert_eq!(a, 3_u32);
-                /// ## assert_eq!(b, 6_u64);
-                /// ```
-                ##[macro_export]
-                macro_rules! scope {
-                    // Completed, render impls
-                    (@ $ name: ident, $ contains: ident () ($($ temp: ident)*) ($($ not_member: ident)*)) => {
-                        $(
-                            impl $ crate::server::plugin::scoped::Membership<$ temp> for $ name {
-                                type Contains = $ crate::server::plugin::scoped::$ contains;
+                    /// A macro to help with scoping [plugins](crate::server::plugin) to a subset of all operations.
+                    ///
+                    /// In contrast to [`crate::server::scope`](crate::server::scope), this macro has knowledge
+                    /// of the service and any operations _not_ specified will be placed in the opposing group.
+                    ///
+                    /// ## Example
+                    ///
+                    /// ```rust
+                    /// scope! {
+                    ///     /// Includes [`$firstOperationName`], excluding all other operations.
+                    ///     struct ScopeA {
+                    ///         includes: [$firstOperationName]
+                    ///     }
+                    /// }
+                    ///
+                    /// scope! {
+                    ///     /// Excludes [`$firstOperationName`], excluding all other operations.
+                    ///     struct ScopeB {
+                    ///         excludes: [$firstOperationName]
+                    ///     }
+                    /// }
+                    ///
+                    /// ## use $crateName::server::plugin::{Plugin, Scoped};
+                    /// ## use $crateName::scope;
+                    /// ## struct MockPlugin;
+                    /// ## impl<S, Op, T> Plugin<S, Op, T> for MockPlugin { type Output = u32; fn apply(&self, input: T) -> u32 { 3 } }
+                    /// ## let scoped_a = Scoped::new::<ScopeA>(MockPlugin);
+                    /// ## let scoped_b = Scoped::new::<ScopeB>(MockPlugin);
+                    /// ## let a = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_a, 6);
+                    /// ## let b = Plugin::<(), $crateName::operation_shape::$firstOperationName, u64>::apply(&scoped_b, 6);
+                    /// ## assert_eq!(a, 3_u32);
+                    /// ## assert_eq!(b, 6_u64);
+                    /// ```
+                    ##[macro_export]
+                    macro_rules! scope {
+                        // Completed, render impls
+                        (@ $ name: ident, $ contains: ident () ($($ temp: ident)*) ($($ not_member: ident)*)) => {
+                            $(
+                                impl $ crate::server::plugin::scoped::Membership<$ temp> for $ name {
+                                    type Contains = $ crate::server::plugin::scoped::$ contains;
+                                }
+                            )*
+                            $(
+                                impl $ crate::server::plugin::scoped::Membership<$ not_member> for $ name {
+                                    type Contains = $ crate::server::plugin::scoped::$ contains;
+                                }
+                            )*
+                        };
+                        // All `not_member`s exhausted, move `temp` into `not_member`
+                        (@ $ name: ident, $ contains: ident ($($ member: ident)*) ($($ temp: ident)*) ()) => {
+                            scope! { @ $ name, $ contains ($($ member)*) () ($($ temp)*) }
+                        };
+                        $operationBranches
+                        (
+                            $(##[$ attrs:meta])*
+                            $ vis:vis struct $ name:ident {
+                                includes: [$($ include:ident),*]
                             }
-                        )*
-                        $(
-                            impl $ crate::server::plugin::scoped::Membership<$ not_member> for $ name {
-                                type Contains = $ crate::server::plugin::scoped::$ contains;
+                        ) => {
+                            use $ crate::operation_shape::*;
+                            $ crate::server::scope! {
+                                $(##[$ attrs])*
+                                $ vis struct $ name {
+                                    includes: [$($ include),*],
+                                    excludes: []
+                                }
                             }
-                        )*
-                    };
-                    // All `not_member`s exhausted, move `temp` into `not_member`
-                    (@ $ name: ident, $ contains: ident ($($ member: ident)*) ($($ temp: ident)*) ()) => {
-                        scope! { @ $ name, $ contains ($($ member)*) () ($($ temp)*) }
-                    };
-                    $operationBranches
-                    (
-                        $(##[$ attrs:meta])*
-                        $ vis:vis struct $ name:ident {
-                            includes: [$($ include:ident),*]
-                        }
-                    ) => {
-                        use $ crate::operation_shape::*;
-                        $ crate::server::scope! {
-                            $(##[$ attrs])*
-                            $ vis struct $ name {
-                                includes: [$($ include),*],
-                                excludes: []
+                            scope! { @ $ name, False ($($ include)*) () ($operationNames) }
+                        };
+                        (
+                            $(##[$ attrs:meta])*
+                            $ vis:vis struct $ name:ident {
+                                excludes: [$($ exclude:ident),*]
                             }
-                        }
-                        scope! { @ $ name, False ($($ include)*) () ($operationNames) }
-                    };
-                    (
-                        $(##[$ attrs:meta])*
-                        $ vis:vis struct $ name:ident {
-                            excludes: [$($ exclude:ident),*]
-                        }
-                    ) => {
-                        use $ crate::operation_shape::*;
-
-                        $ crate::server::scope! {
-                            $(##[$ attrs])*
-                            $ vis struct $ name {
-                                includes: [],
-                                excludes: [$($ exclude),*]
+                        ) => {
+                            use $ crate::operation_shape::*;
+    
+                            $ crate::server::scope! {
+                                $(##[$ attrs])*
+                                $ vis struct $ name {
+                                    includes: [],
+                                    excludes: [$($ exclude),*]
+                                }
                             }
-                        }
-                        scope! { @ $ name, True ($($ exclude)*) () ($operationNames) }
-                    };
-                }
-                """,
+                            scope! { @ $ name, True ($($ exclude)*) () ($operationNames) }
+                        };
+                    }
+                    """,
                 "FurtherTests" to furtherTests,
             )
         }
+    }
 
     fun render(writer: RustWriter) {
         macro()(writer)

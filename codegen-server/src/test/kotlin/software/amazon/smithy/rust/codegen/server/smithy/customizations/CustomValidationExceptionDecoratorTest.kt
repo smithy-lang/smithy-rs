@@ -12,6 +12,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
@@ -19,6 +20,77 @@ import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 internal class CustomValidationExceptionDecoratorTest {
+    private val completeTestModel = """
+        namespace com.aws.example
+
+        use aws.protocols#restJson1
+        use smithy.rust.codegen.traits#validationException
+        use smithy.rust.codegen.traits#validationFieldList
+        use smithy.rust.codegen.traits#validationFieldMessage
+        use smithy.rust.codegen.traits#validationFieldName
+        use smithy.rust.codegen.traits#validationMessage
+
+        @restJson1
+        service CustomValidationExample {
+            version: "1.0.0"
+            operations: [
+                TestOperation
+            ]
+            errors: [
+                MyCustomValidationException
+            ]
+        }
+
+        @http(method: "POST", uri: "/test")
+        operation TestOperation {
+            input: TestInput
+        }
+
+        structure TestInput {
+            @required
+            @length(min: 1, max: 10)
+            name: String
+
+            @range(min: 1, max: 100)
+            age: Integer
+        }
+
+        @error("client")
+        @httpError(400)
+        @validationException
+        structure MyCustomValidationException {
+            @required
+            @validationMessage
+            customMessage: String
+
+            @required
+            @default("testReason1")
+            reason: ValidationExceptionReason
+
+            @validationFieldList
+            customFieldList: CustomValidationFieldList
+        }
+
+        enum ValidationExceptionReason {
+            TEST_REASON_0 = "testReason0"
+            TEST_REASON_1 = "testReason1"
+        }
+
+        structure CustomValidationField {
+            @required
+            @validationFieldName
+            customFieldName: String
+
+            @required
+            @validationFieldMessage
+            customFieldMessage: String
+        }
+
+        list CustomValidationFieldList {
+            member: CustomValidationField
+        }
+    """.asSmithyModel(smithyVersion = "2.0")
+
     private val modelWithCustomValidation =
         """
         namespace com.example
@@ -89,6 +161,13 @@ internal class CustomValidationExceptionDecoratorTest {
         result shouldNotBe null
         result.id shouldBe ShapeId.from("com.example#MyValidationException")
         result.hasTrait(ValidationExceptionTrait.ID) shouldBe true
+    }
+
+    @Test
+    fun `code compiles with custom validation exception`() {
+        serverIntegrationTest(completeTestModel) { _, _ ->
+
+        }
     }
 
     @Test
