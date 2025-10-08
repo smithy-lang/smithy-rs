@@ -76,6 +76,14 @@ data class HttpDependencies(
      * For HTTP 1.x: references `http` crate version 1.x
      */
     fun httpModule(): RuntimeType = http.toType()
+
+    /**
+     * Returns the http-body crate as a RuntimeType.
+     *
+     * For HTTP 0.x: references `http-body` crate version 0.4.x
+     * For HTTP 1.x: references `http-body` crate version 1.x
+     */
+    fun httpBodyModule(): RuntimeType = httpBody.toType()
 }
 
 /**

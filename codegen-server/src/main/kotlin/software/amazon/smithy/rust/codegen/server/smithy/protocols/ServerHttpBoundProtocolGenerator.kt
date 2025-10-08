@@ -189,7 +189,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "DateTime" to RuntimeType.dateTime(runtimeConfig),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
             "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
-            "HttpBody" to RuntimeType.HttpBody,
+            "HttpBody" to httpDeps.httpBodyModule(),
             "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
             "Hyper" to RuntimeType.Hyper,
             "LazyStatic" to RuntimeType.LazyStatic,

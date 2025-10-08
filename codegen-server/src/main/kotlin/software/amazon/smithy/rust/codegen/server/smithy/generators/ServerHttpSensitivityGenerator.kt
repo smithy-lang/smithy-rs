@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -131,11 +132,12 @@ sealed class HeaderSensitivity(
     /** The values of the sensitive `httpHeaders`. */
     val headerKeys: List<String>,
     runtimeConfig: RuntimeConfig,
+    httpRuntimeType: RuntimeType = RuntimeType.Http,
 ) {
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-            "Http" to CargoDependency.Http.toType(),
+            "Http" to httpRuntimeType,
         )
 
     /** The case where `prefixHeaders` value is not sensitive. */
@@ -144,7 +146,8 @@ sealed class HeaderSensitivity(
         /** The value of `prefixHeaders`, null if it's not sensitive. */
         val prefixHeader: String?,
         runtimeConfig: RuntimeConfig,
-    ) : HeaderSensitivity(headerKeys, runtimeConfig)
+        httpRuntimeType: RuntimeType = RuntimeType.Http,
+    ) : HeaderSensitivity(headerKeys, runtimeConfig, httpRuntimeType)
 
     /** The case where `prefixHeaders` value is sensitive. */
     class SensitiveMapValue(
@@ -154,7 +157,8 @@ sealed class HeaderSensitivity(
         /** The value of `prefixHeaders`. */
         val prefixHeader: String,
         runtimeConfig: RuntimeConfig,
-    ) : HeaderSensitivity(headerKeys, runtimeConfig)
+        httpRuntimeType: RuntimeType = RuntimeType.Http,
+    ) : HeaderSensitivity(headerKeys, runtimeConfig, httpRuntimeType)
 
     /** Is there anything to redact? */
     internal fun hasRedactions(): Boolean =
@@ -344,11 +348,12 @@ class ServerHttpSensitivityGenerator(
     private val model: Model,
     private val operation: OperationShape,
     private val runtimeConfig: RuntimeConfig,
+    private val httpRuntimeType: RuntimeType = RuntimeType.Http,
 ) {
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-            "Http" to CargoDependency.Http.toType(),
+            "Http" to httpRuntimeType,
         )
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */
@@ -380,7 +385,7 @@ class ServerHttpSensitivityGenerator(
             if (prefixHeader != null) {
                 return HeaderSensitivity.SensitiveMapValue(
                     headerKeys.map { it.second }, true,
-                    prefixHeader.second, runtimeConfig,
+                    prefixHeader.second, runtimeConfig, httpRuntimeType,
                 )
             }
         }
@@ -400,14 +405,14 @@ class ServerHttpSensitivityGenerator(
             val isValueSensitive = prefixHeaderMap?.value?.getMemberTrait(model, SensitiveTrait::class.java)?.orNull() != null
 
             if (isValueSensitive) {
-                HeaderSensitivity.SensitiveMapValue(sensitiveHeaders, isKeySensitive, prefixHeader.second, runtimeConfig)
+                HeaderSensitivity.SensitiveMapValue(sensitiveHeaders, isKeySensitive, prefixHeader.second, runtimeConfig, httpRuntimeType)
             } else if (isKeySensitive) {
-                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, prefixHeader.second, runtimeConfig)
+                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, prefixHeader.second, runtimeConfig, httpRuntimeType)
             } else {
-                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig)
+                HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig, httpRuntimeType)
             }
         } else {
-            HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig)
+            HeaderSensitivity.NotSensitiveMapValue(sensitiveHeaders, null, runtimeConfig, httpRuntimeType)
         }
     }
 
