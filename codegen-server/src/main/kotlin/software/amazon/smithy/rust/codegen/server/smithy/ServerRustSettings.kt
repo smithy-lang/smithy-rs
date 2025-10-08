@@ -83,6 +83,7 @@ data class ServerRustSettings(
 /**
  * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
  * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
+ * [http1x]: Enable HTTP 1.x support (hyper 1.x and http 1.x types)
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -98,6 +99,7 @@ data class ServerCodegenConfig(
     val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
     val addValidationExceptionToConstrainedOperations: Boolean = DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
+    val http1x: Boolean = DEFAULT_HTTP_1X,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -107,6 +109,7 @@ data class ServerCodegenConfig(
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
         private const val DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS = false
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
+        private const val DEFAULT_HTTP_1X = false
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -138,6 +141,11 @@ data class ServerCodegenConfig(
                     node.get().getBooleanMemberOrDefault(
                         "alwaysSendEventStreamInitialResponse",
                         DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
+                    ),
+               http1x = 
+                    node.get().getBooleanMemberOrDefault(
+                        "http-1x", 
+                        DEFAULT_HTTP_1X,
                     ),
             )
         } else {
