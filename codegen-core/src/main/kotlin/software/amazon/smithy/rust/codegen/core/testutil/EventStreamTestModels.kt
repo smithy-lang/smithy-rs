@@ -23,6 +23,7 @@ private fun fillInBaseModel(
     nonEventStreamMembers: String = "",
 ): String =
     """
+    ${"\$version: \"2\""}
     namespace test
 
     use smithy.framework#ValidationException
@@ -42,6 +43,17 @@ private fun fillInBaseModel(
         Message: String,
     }
 
+    enum TheEnum {
+        FOO
+        BAR
+    }
+
+    intEnum FaceCard {
+        JACK = 1
+        QUEEN = 2
+        KING = 3
+    }
+
     structure MessageWithBlob { @eventPayload data: Blob }
     structure MessageWithString { @eventPayload data: String }
     structure MessageWithStruct { @eventPayload someStruct: TestStruct }
@@ -55,6 +67,8 @@ private fun fillInBaseModel(
         @eventHeader short: Short,
         @eventHeader string: String,
         @eventHeader timestamp: Timestamp,
+        @eventHeader enum: TheEnum,
+        @eventHeader intEnum: FaceCard,
     }
     structure MessageWithHeaderAndPayload {
         @eventHeader header: String,
