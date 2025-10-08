@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http"
-version = "0.62.4"
+version = "0.62.5"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -31,6 +31,7 @@ tracing = "0.1.40"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
 futures-core = "0.3.31"
+futures-util = { version = "0.3.29", default-features = false }
 
 [dev-dependencies]
 async-stream = "0.3"
