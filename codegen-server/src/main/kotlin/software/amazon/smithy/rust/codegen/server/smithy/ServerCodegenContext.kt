@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
@@ -113,9 +114,9 @@ data class ServerCodegenContext(
     fun httpDependencies(): HttpDependencies =
         if (settings.codegenConfig.http1x) {
             HttpDependencies(
-                http = CargoDependency.Http1x,
-                httpBody = CargoDependency.HttpBody1x,
-                httpBodyUtil = CargoDependency.HttpBodyUtil01x,
+                http = CargoDependency("http", CratesIo("1")),
+                httpBody = CargoDependency("http-body", CratesIo("1")),
+                httpBodyUtil = CargoDependency("http-body-util", CratesIo("0.1.3")),
                 smithyHttpServer = ServerCargoDependency.smithyHttpServerHttp1x(runtimeConfig),
             )
         } else {

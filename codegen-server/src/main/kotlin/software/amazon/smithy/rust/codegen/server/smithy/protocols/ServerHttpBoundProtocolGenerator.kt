@@ -180,6 +180,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
+    // Get HTTP dependencies once based on http-1x configuration
+    private val httpDeps = codegenContext.httpDependencies()
+
     private val codegenScope =
         arrayOf(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
@@ -195,14 +198,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "Nom" to ServerCargoDependency.Nom.toType(),
             "PercentEncoding" to RuntimeType.PercentEncoding,
             "Regex" to RuntimeType.Regex,
-            "SmithyHttpServer" to
-                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
             "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
             "RuntimeError" to protocol.runtimeError(runtimeConfig),
             "RequestRejection" to protocol.requestRejection(runtimeConfig),
             "ResponseRejection" to protocol.responseRejection(runtimeConfig),
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
-            "http" to RuntimeType.Http,
+            "http" to httpDeps.httpModule(),
             "Tracing" to RuntimeType.Tracing,
         )
 
