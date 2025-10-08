@@ -237,6 +237,9 @@ class ServerRestJsonProtocol(
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
+    // Get HTTP dependencies once based on http-1x configuration
+    private val httpDeps = serverCodegenContext.httpDependencies()
+
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
@@ -259,7 +262,7 @@ class ServerRestJsonProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")
@@ -278,9 +281,13 @@ class ServerRestJsonProtocol(
 }
 
 class ServerRestXmlProtocol(
-    codegenContext: CodegenContext,
-) : RestXml(codegenContext), ServerProtocol {
+    serverCodegenContext: ServerCodegenContext,
+) : RestXml(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+
+    // Get HTTP dependencies once based on http-1x configuration
+    private val httpDeps = serverCodegenContext.httpDependencies()
+
     override val protocolModulePath = "rest_xml"
 
     override fun markerStruct() = ServerRuntimeType.protocol("RestXml", protocolModulePath, runtimeConfig)
@@ -292,7 +299,7 @@ class ServerRestXmlProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")

@@ -127,8 +127,9 @@ internal class ServerHttp1xConfigTest {
         ) { codegenContext, _ ->
             val httpDeps = codegenContext.httpDependencies()
 
-            assertEquals("http-1x", httpDeps.http.name)
-            assertEquals("http-body-1x", httpDeps.httpBody.name)
+            // Both modes use "http" as the dependency name, but with different versions
+            assertEquals("http", httpDeps.http.name)
+            assertEquals("http-body", httpDeps.httpBody.name)
             assertNotNull(httpDeps.httpBodyUtil)
             assertEquals("http-body-util", httpDeps.httpBodyUtil?.name)
             assertTrue(httpDeps.smithyHttpServer.name.contains("smithy-http-server"))
@@ -152,5 +153,90 @@ internal class ServerHttp1xConfigTest {
             assertEquals("Method", httpDeps.httpMethod().name)
             assertEquals("HeaderMap", httpDeps.httpHeaderMap().name)
         }
+    }
+
+    @Test
+    fun `generated Cargo toml has http 0x dependencies by default`() {
+        val testDir =
+            serverIntegrationTest(
+                baseModel,
+                IntegrationTestParams(command = {}), // Skip cargo compilation
+            )
+
+        val cargoToml = testDir.resolve("Cargo.toml").toFile()
+        assertTrue(cargoToml.exists(), "Cargo.toml should exist")
+
+        val cargoTomlContent = cargoToml.readText()
+
+        // Should have [dependencies.http] with version = "0.2.x"
+        assertTrue(
+            cargoTomlContent.contains(Regex("""\[dependencies\.http\]\s+version\s*=\s*"0\.2""", RegexOption.MULTILINE)),
+            "Cargo.toml should contain [dependencies.http] followed by version = \"0.2.x\"",
+        )
+
+        // Should NOT have http-body-util (only needed for HTTP 1.x)
+        assertFalse(
+            cargoTomlContent.contains("http-body-util"),
+            "Cargo.toml should NOT contain http-body-util for HTTP 0.x",
+        )
+
+        // Should NOT have http version 1.x
+        assertFalse(
+            cargoTomlContent.contains(Regex("""\[dependencies\.http\]\s+version\s*=\s*"1"""", RegexOption.MULTILINE)),
+            "Cargo.toml should NOT contain [dependencies.http] with version 1",
+        )
+    }
+
+    @Test
+    fun `generated Cargo toml has http 1x dependencies when enabled`() {
+        val testDir =
+            serverIntegrationTest(
+                baseModel,
+                IntegrationTestParams(
+                    additionalSettings =
+                        Node.objectNodeBuilder()
+                            .withMember(
+                                "codegen",
+                                Node.objectNodeBuilder()
+                                    .withMember("http-1x", true)
+                                    .build(),
+                            ).build(),
+                    command = {}, // Skip cargo compilation
+                ),
+            )
+
+        val cargoToml = testDir.resolve("Cargo.toml").toFile()
+        assertTrue(cargoToml.exists(), "Cargo.toml should exist")
+
+        val cargoTomlContent = cargoToml.readText()
+
+        // Debug: print content to see actual format
+        println("=== Cargo.toml content (HTTP 1.x) ===")
+        println(cargoTomlContent)
+        println("=== End Cargo.toml ===")
+
+        // Should have [dependencies.http] with version = "1"
+        assertTrue(
+            cargoTomlContent.contains(Regex("""\[dependencies\.http\]\s+version\s*=\s*"1"""", RegexOption.MULTILINE)),
+            "Cargo.toml should contain [dependencies.http] with version = \"1\". Actual:\n$cargoTomlContent",
+        )
+
+        // Should have http-body-util
+        assertTrue(
+            cargoTomlContent.contains("http-body-util"),
+            "Cargo.toml should contain http-body-util",
+        )
+
+        // Should have aws-smithy-http-server with http-1x feature
+        assertTrue(
+            cargoTomlContent.contains(Regex("""\[dependencies\.aws-smithy-http-server\].*features\s*=\s*\[.*"http-1x".*\]""", setOf(RegexOption.MULTILINE, RegexOption.DOT_MATCHES_ALL))),
+            "Cargo.toml should have aws-smithy-http-server with http-1x feature",
+        )
+
+        // Should NOT have http 0.2.x
+        assertFalse(
+            cargoTomlContent.contains(Regex("""\[dependencies\.http\]\s+version\s*=\s*"0\.2""", RegexOption.MULTILINE)),
+            "Cargo.toml should NOT contain [dependencies.http] with version 0.2.x",
+        )
     }
 }
