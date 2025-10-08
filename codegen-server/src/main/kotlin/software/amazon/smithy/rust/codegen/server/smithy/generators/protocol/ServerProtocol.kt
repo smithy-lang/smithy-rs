@@ -152,6 +152,7 @@ class ServerAwsJsonProtocol(
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val httpDeps = serverCodegenContext.httpDependencies()
 
     override val protocolModulePath: String
         get() =
@@ -173,13 +174,13 @@ class ServerAwsJsonProtocol(
 
     override fun markerStruct(): RuntimeType {
         return when (version) {
-            is AwsJsonVersion.Json10 -> ServerRuntimeType.protocol("AwsJson1_0", protocolModulePath, runtimeConfig)
-            is AwsJsonVersion.Json11 -> ServerRuntimeType.protocol("AwsJson1_1", protocolModulePath, runtimeConfig)
+            is AwsJsonVersion.Json10 -> httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::AwsJson1_0")
+            is AwsJsonVersion.Json11 -> httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::AwsJson1_1")
         }
     }
 
     override fun routerType() =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        httpDeps.smithyHttpServer.toType()
             .resolve("protocol::aws_json::router::AwsJsonRouter")
 
     /**
@@ -203,15 +204,15 @@ class ServerAwsJsonProtocol(
         }
 
     override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+        httpDeps.smithyHttpServer
             .toType().resolve("protocol::aws_json::rejection::RequestRejection")
 
     override fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+        httpDeps.smithyHttpServer
             .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
 
     override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig)
+        httpDeps.smithyHttpServer
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
 
     /*
@@ -226,10 +227,6 @@ class ServerAwsJsonProtocol(
             RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError"),
         )
 }
-
-private fun restRouterType(runtimeConfig: RuntimeConfig) =
-    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("protocol::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
@@ -253,9 +250,9 @@ class ServerRestJsonProtocol(
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    override fun markerStruct() = ServerRuntimeType.protocol("RestJson1", protocolModulePath, runtimeConfig)
+    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::RestJson1")
 
-    override fun routerType() = restRouterType(runtimeConfig)
+    override fun routerType() = httpDeps.smithyHttpServer.toType().resolve("protocol::rest::router::RestRouter")
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -290,9 +287,9 @@ class ServerRestXmlProtocol(
 
     override val protocolModulePath = "rest_xml"
 
-    override fun markerStruct() = ServerRuntimeType.protocol("RestXml", protocolModulePath, runtimeConfig)
+    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::RestXml")
 
-    override fun routerType() = restRouterType(runtimeConfig)
+    override fun routerType() = httpDeps.smithyHttpServer.toType().resolve("protocol::rest::router::RestRouter")
 
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
@@ -321,6 +318,7 @@ class ServerRpcV2CborProtocol(
     private val serverCodegenContext: ServerCodegenContext,
 ) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+    private val httpDeps = serverCodegenContext.httpDependencies()
 
     override val protocolModulePath = "rpc_v2_cbor"
 
@@ -362,10 +360,10 @@ class ServerRpcV2CborProtocol(
         )
     }
 
-    override fun markerStruct() = ServerRuntimeType.protocol("RpcV2Cbor", "rpc_v2_cbor", runtimeConfig)
+    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::rpc_v2_cbor::RpcV2Cbor")
 
     override fun routerType() =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+        httpDeps.smithyHttpServer.toType()
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
     override fun serverRouterRequestSpec(

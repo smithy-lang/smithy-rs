@@ -76,6 +76,7 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
             val firstOperation = operations.first() ?: return@writable
             val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
+            val httpDeps = codegenContext.httpDependencies()
             rustTemplate(
                 """
                 /// A collection of types representing each operation defined in the service closure.
@@ -86,8 +87,7 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
                 /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape), can be used to provide
                 /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
                 """.trimIndent(),
-                "SmithyHttpServer" to
-                    ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+                "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
                 "Tower" to ServerCargoDependency.Tower.toType(),
                 "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///").docSignature(),
                 "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
