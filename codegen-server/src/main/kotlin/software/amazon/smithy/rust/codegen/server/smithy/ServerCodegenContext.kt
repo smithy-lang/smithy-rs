@@ -20,6 +20,61 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.returnSymbolToParseFn
 
 /**
+ * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
+ * from the `rust-codegen-server` subproject.
+ *
+ * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
+ *
+ * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
+ * and server (like [JsonParserGenerator]).
+ */
+data class ServerCodegenContext(
+    override val model: Model,
+    override val symbolProvider: RustSymbolProvider,
+    override val moduleDocProvider: ModuleDocProvider?,
+    override val serviceShape: ServiceShape,
+    override val protocol: ShapeId,
+    override val settings: ServerRustSettings,
+    val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
+    val constrainedShapeSymbolProvider: RustSymbolProvider,
+    val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
+    val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
+) : CodegenContext(
+        model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
+    ) {
+    override fun builderInstantiator(): BuilderInstantiator {
+        return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
+    }
+
+    /**
+     * Returns the appropriate HTTP dependencies based on the http-1x configuration.
+     *
+     * This is the single source of truth for HTTP dependency selection. When http-1x
+     * is enabled, all HTTP dependencies are upgraded together to maintain compatibility.
+     */
+    fun httpDependencies(): HttpDependencies =
+        if (settings.codegenConfig.http1x) {
+            HttpDependencies(
+                http = CargoDependency("http", CratesIo("1")),
+                httpBody = CargoDependency("http-body", CratesIo("1")),
+                httpBodyUtil = CargoDependency("http-body-util", CratesIo("0.1.3")),
+                smithyHttpServer = ServerCargoDependency.smithyHttpServerHttp1x(runtimeConfig),
+                smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-1x"),
+                smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
+            )
+        } else {
+            HttpDependencies(
+                http = CargoDependency.Http,
+                httpBody = CargoDependency.HttpBody,
+                httpBodyUtil = null,
+                smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
+                smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig),
+                smithyTypes = CargoDependency.smithyTypes(runtimeConfig),
+            )
+        }
+}
+
+/**
  * Represents the set of HTTP-related dependencies used for code generation.
  *
  * This data class ensures that all HTTP dependencies (http, http-body, etc.) are selected
@@ -30,6 +85,8 @@ data class HttpDependencies(
     val httpBody: CargoDependency,
     val httpBodyUtil: CargoDependency?,
     val smithyHttpServer: CargoDependency,
+    val smithyRuntimeApi: CargoDependency,
+    val smithyTypes: CargoDependency,
 ) {
     /**
      * Returns the http crate as a RuntimeType.
@@ -84,55 +141,21 @@ data class HttpDependencies(
      * For HTTP 1.x: references `http-body` crate version 1.x
      */
     fun httpBodyModule(): RuntimeType = httpBody.toType()
-}
-
-/**
- * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
- * from the `rust-codegen-server` subproject.
- *
- * It inherits from [CodegenContext], which contains code-generation context that is common to _all_ smithy-rs plugins.
- *
- * This class has to live in the `codegen` subproject because it is referenced in common generators to both client
- * and server (like [JsonParserGenerator]).
- */
-data class ServerCodegenContext(
-    override val model: Model,
-    override val symbolProvider: RustSymbolProvider,
-    override val moduleDocProvider: ModuleDocProvider?,
-    override val serviceShape: ServiceShape,
-    override val protocol: ShapeId,
-    override val settings: ServerRustSettings,
-    val unconstrainedShapeSymbolProvider: UnconstrainedShapeSymbolProvider,
-    val constrainedShapeSymbolProvider: RustSymbolProvider,
-    val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
-    val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
-) : CodegenContext(
-        model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
-    ) {
-    override fun builderInstantiator(): BuilderInstantiator {
-        return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
-    }
 
     /**
-     * Returns the appropriate HTTP dependencies based on the http-1x configuration.
+     * Returns the aws-smithy-runtime-api crate as a RuntimeType.
      *
-     * This is the single source of truth for HTTP dependency selection. When http-1x
-     * is enabled, all HTTP dependencies are upgraded together to maintain compatibility.
+     * For HTTP 0.x: no special features
+     * For HTTP 1.x: includes the "http-1x" feature
      */
-    fun httpDependencies(): HttpDependencies =
-        if (settings.codegenConfig.http1x) {
-            HttpDependencies(
-                http = CargoDependency("http", CratesIo("1")),
-                httpBody = CargoDependency("http-body", CratesIo("1")),
-                httpBodyUtil = CargoDependency("http-body-util", CratesIo("0.1.3")),
-                smithyHttpServer = ServerCargoDependency.smithyHttpServerHttp1x(runtimeConfig),
-            )
-        } else {
-            HttpDependencies(
-                http = CargoDependency.Http,
-                httpBody = CargoDependency.HttpBody,
-                httpBodyUtil = null,
-                smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
-            )
-        }
+    fun smithyRuntimeApiModule(): RuntimeType = smithyRuntimeApi.toType()
+
+    /**
+     * Returns the aws-smithy-types crate as a RuntimeType.
+     *
+     * For HTTP 0.x: no special features
+     * For HTTP 1.x: includes the "http-body-1-x" feature
+     */
+    fun smithyTypesModule(): RuntimeType = smithyTypes.toType()
 }
+
