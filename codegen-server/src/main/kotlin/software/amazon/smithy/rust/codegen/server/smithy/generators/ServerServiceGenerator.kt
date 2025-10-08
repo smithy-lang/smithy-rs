@@ -36,11 +36,15 @@ class ServerServiceGenerator(
     private val isConfigBuilderFallible: Boolean,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+
+    // Get HTTP dependencies once based on http-1x configuration
+    private val httpDeps = codegenContext.httpDependencies()
+
+    private val smithyHttpServer = httpDeps.smithyHttpServer.toType()
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,
-            "Http" to RuntimeType.Http,
+            "Http" to httpDeps.httpModule(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "HttpBody" to RuntimeType.HttpBody,
             "SmithyHttpServer" to smithyHttpServer,
