@@ -46,7 +46,7 @@ class ServerServiceGenerator(
             "Bytes" to RuntimeType.Bytes,
             "Http" to httpDeps.httpModule(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
-            "HttpBody" to RuntimeType.HttpBody,
+            "HttpBody" to httpDeps.httpBodyModule(),
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
             *RuntimeType.preludeScope,
