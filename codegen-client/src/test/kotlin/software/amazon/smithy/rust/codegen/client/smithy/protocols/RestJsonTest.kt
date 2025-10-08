@@ -15,29 +15,27 @@ internal class RestJsonTest {
         namespace test
         use aws.protocols#restJson1
         use aws.api#service
+        use smithy.test#httpRequestTests
+        use smithy.test#httpResponseTests
 
+        /// A REST JSON service that sends JSON requests and responses.
+        @service(sdkId: "Rest Json Protocol")
         @restJson1
-        service TestService {
-            version: "1.0",
-            operations: [TestOperation]
+        service RestJsonExtras {
+            version: "2019-12-16",
+            operations: [StringPayload]
         }
 
-        union ObjectEncryptionFilter {
-            sses3: SSES3Filter,
+        @http(uri: "/StringPayload", method: "POST")
+        operation StringPayload {
+            input: StringPayloadInput,
+            output: StringPayloadInput
         }
 
-        structure SSES3Filter {
-            // Empty structure - no members
-        }
-
-        @input
-        structure TestInput {
-            filter: ObjectEncryptionFilter
-        }
-
-        @http(uri: "/test", method: "POST")
-        operation TestOperation {
-            input: TestInput,
+        structure StringPayloadInput {
+            payload: String,
+            a: String,
+            b: Integer
         }
         """.asSmithyModel()
 

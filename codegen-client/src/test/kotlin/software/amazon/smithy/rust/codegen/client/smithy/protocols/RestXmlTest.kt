@@ -20,28 +20,67 @@ internal class RestXmlTest {
         /// A REST XML service that sends XML requests and responses.
         @service(sdkId: "Rest XML UT")
         @restXml
-        service TestService {
-            version: "1.0",
-            operations: [TestOperation]
+        service RestXmlExtras {
+            version: "2019-12-16",
+            operations: [Op]
         }
 
-        union ObjectEncryptionFilter {
-            sses3: SSES3Filter,
+
+        @http(uri: "/top", method: "POST")
+        operation Op {
+            input: Top,
+            output: Top
+        }
+        union Choice {
+            @xmlFlattened
+            @xmlName("Hi")
+            flatMap: MyMap,
+
+            deepMap: MyMap,
+
+            @xmlFlattened
+            flatList: SomeList,
+
+            deepList: SomeList,
+
+            s: String,
+
+            enum: FooEnum,
+
+            date: Timestamp,
+
+            number: Double,
+
+            top: Top,
+
+            blob: Blob
         }
 
-        structure SSES3Filter {
-            // Empty structure - no members
+        @enum([{name: "FOO", value: "FOO"}])
+        string FooEnum
+
+        map MyMap {
+            @xmlName("Name")
+            key: String,
+
+            @xmlName("Setting")
+            value: Choice,
         }
 
-        @input
-        structure TestInput {
-            filter: ObjectEncryptionFilter
+        list SomeList {
+            member: Choice
         }
 
-        @http(uri: "/test", method: "POST")
-        operation TestOperation {
-            input: TestInput,
+        structure Top {
+            choice: Choice,
+
+            @xmlAttribute
+            extra: Long,
+
+            @xmlName("prefix:local")
+            renamedWithPrefix: String
         }
+
         """.asSmithyModel()
 
     private val modelWithEmptyStruct =
@@ -74,7 +113,6 @@ internal class RestXmlTest {
         union TestUnion {
             // Empty struct - should generate _inner to avoid unused variable warning
             emptyStruct: EmptyStruct,
-
             // Normal struct - should generate inner (without underscore)
             normalStruct: NormalStruct
         }
