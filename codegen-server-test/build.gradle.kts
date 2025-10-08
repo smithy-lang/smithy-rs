@@ -13,7 +13,6 @@ plugins {
     java
     alias(libs.plugins.smithy.gradle.base)
     alias(libs.plugins.smithy.gradle.jar)
-    id("com.dorongold.task-tree") version "2.1.1"
 }
 
 val properties = PropertyRetriever(rootProject, project)
@@ -114,7 +113,6 @@ project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTe
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuild"].dependsOn("generateSmithyBuild")
-tasks["smithyBuild"].inputs.files(tasks["generateSmithyBuild"].outputs)
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
