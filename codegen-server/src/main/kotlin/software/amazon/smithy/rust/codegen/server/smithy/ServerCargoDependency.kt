@@ -34,5 +34,8 @@ object ServerCargoDependency {
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
 
+    fun smithyHttpServerHttp1x(runtimeConfig: RuntimeConfig) =
+        smithyHttpServer(runtimeConfig).withFeature("http-1x")
+
     fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
 }
