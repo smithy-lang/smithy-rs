@@ -66,12 +66,13 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
 
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
+            val httpDeps = codegenContext.httpDependencies()
             rustTemplate(
                 """
                 pub use #{DisplayErrorContext};
                 """,
                 "Response" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
-                "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
+                "DisplayErrorContext" to httpDeps.smithyTypesModule().resolve("error::display::DisplayErrorContext"),
             )
         }
 

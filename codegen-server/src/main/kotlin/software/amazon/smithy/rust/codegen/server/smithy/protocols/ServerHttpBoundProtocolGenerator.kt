@@ -197,7 +197,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "PercentEncoding" to RuntimeType.PercentEncoding,
             "Regex" to RuntimeType.Regex,
             "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
-            "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
+            "SmithyTypes" to httpDeps.smithyTypesModule(),
             "RuntimeError" to protocol.runtimeError(runtimeConfig),
             "RequestRejection" to protocol.requestRejection(runtimeConfig),
             "ResponseRejection" to protocol.responseRejection(runtimeConfig),
@@ -742,9 +742,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             """,
             *preludeScope,
             "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
-            "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
-            "RequestParts" to
-                RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
+            "Request" to httpDeps.smithyRuntimeApiModule().resolve("http::Request"),
+            "RequestParts" to httpDeps.smithyRuntimeApiModule().resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
 
@@ -1199,7 +1198,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     """
                                     let v = <_ as #T>::parse_smithy_primitive(&v)?;
                                     """.trimIndent(),
-                                    RuntimeType.smithyTypes(runtimeConfig)
+                                    httpDeps.smithyTypesModule()
                                         .resolve("primitive::Parse"),
                                 )
                             }
@@ -1397,7 +1396,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             let value = <_ as #{PrimitiveParse}>::parse_smithy_primitive(value)?;
                             """,
                             "PrimitiveParse" to
-                                RuntimeType.smithyTypes(runtimeConfig)
+                                httpDeps.smithyTypesModule()
                                     .resolve("primitive::Parse"),
                         )
                     }
