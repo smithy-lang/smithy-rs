@@ -61,6 +61,7 @@ data class ServerCodegenContext(
                 smithyHttpServer = ServerCargoDependency.smithyHttpServerHttp1x(runtimeConfig),
                 smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-1x"),
                 smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
+                smithyHttp = CargoDependency.smithyHttp(runtimeConfig),
             )
         } else {
             HttpDependencies(
@@ -70,6 +71,8 @@ data class ServerCodegenContext(
                 smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
                 smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig),
                 smithyTypes = CargoDependency.smithyTypes(runtimeConfig),
+                // Pin to 0.62.x - last version supporting http@0
+                smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(location = CratesIo("0.62")),
             )
         }
 }
@@ -87,6 +90,7 @@ data class HttpDependencies(
     val smithyHttpServer: CargoDependency,
     val smithyRuntimeApi: CargoDependency,
     val smithyTypes: CargoDependency,
+    val smithyHttp: CargoDependency,
 ) {
     /**
      * Returns the http crate as a RuntimeType.
@@ -157,5 +161,13 @@ data class HttpDependencies(
      * For HTTP 1.x: includes the "http-body-1-x" feature
      */
     fun smithyTypesModule(): RuntimeType = smithyTypes.toType()
+
+    /**
+     * Returns the aws-smithy-http crate as a RuntimeType.
+     *
+     * For HTTP 0.x: pinned to version 0.62.x (last version supporting http@0)
+     * For HTTP 1.x: uses the default version from RuntimeConfig
+     */
+    fun smithyHttpModule(): RuntimeType = smithyHttp.toType()
 }
 

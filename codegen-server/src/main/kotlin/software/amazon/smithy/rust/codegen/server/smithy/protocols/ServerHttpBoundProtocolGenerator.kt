@@ -148,8 +148,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
                         adapter
                     }
                     """,
-                    "aws_smithy_http" to
-                        RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+                    "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
                     "NoOpSigner" to
                         RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                             .resolve("frame::NoOpSigner"),
@@ -189,7 +188,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
             "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
             "HttpBody" to httpDeps.httpBodyModule(),
-            "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
+            "header_util" to httpDeps.smithyHttpModule().resolve("header"),
             "Hyper" to RuntimeType.Hyper,
             "LazyStatic" to RuntimeType.LazyStatic,
             "Mime" to ServerCargoDependency.Mime.toType(),
@@ -741,7 +740,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             let #{RequestParts} { uri, headers, body, .. } = #{Request}::try_from(request)?.into_parts();
             """,
             *preludeScope,
-            "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
+            "ParseError" to httpDeps.smithyHttpModule().resolve("header::ParseError"),
             "Request" to httpDeps.smithyRuntimeApiModule().resolve("http::Request"),
             "RequestParts" to httpDeps.smithyRuntimeApiModule().resolve("http::RequestParts"),
         )

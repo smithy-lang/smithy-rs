@@ -71,7 +71,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
                 """
                 pub use #{DisplayErrorContext};
                 """,
-                "Response" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
+                "Response" to httpDeps.smithyHttpModule().resolve("operation::Response"),
                 "DisplayErrorContext" to httpDeps.smithyTypesModule().resolve("error::display::DisplayErrorContext"),
             )
         }
