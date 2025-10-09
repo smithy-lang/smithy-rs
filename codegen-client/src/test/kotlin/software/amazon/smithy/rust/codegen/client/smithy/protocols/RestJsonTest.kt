@@ -39,7 +39,7 @@ internal class RestJsonTest {
         }
         """.asSmithyModel()
 
-    private val modelWithEmptyStruct =
+    private val inputUnionWithEmptyStructure =
         """
         namespace test
         use aws.protocols#restJson1
@@ -54,15 +54,10 @@ internal class RestJsonTest {
 
         @http(uri: "/test", method: "POST")
         operation TestOp {
-            input: TestInput,
-            output: TestOutput
+            input: TestInput
         }
 
         structure TestInput {
-            testUnion: TestUnion
-        }
-
-        structure TestOutput {
             testUnion: TestUnion
         }
 
@@ -92,6 +87,6 @@ internal class RestJsonTest {
         // Unlike RestXml/AwsQuery, RestJson serializers always reference the inner variable
         // even for empty structs, so no underscore prefix is needed.
         // This test passes without any code changes, proving RestJson immunity.
-        clientIntegrationTest(modelWithEmptyStruct) { _, _ -> }
+        clientIntegrationTest(inputUnionWithEmptyStructure) { _, _ -> }
     }
 }

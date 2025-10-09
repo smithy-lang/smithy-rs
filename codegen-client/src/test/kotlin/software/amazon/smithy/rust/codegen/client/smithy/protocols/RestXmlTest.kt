@@ -83,7 +83,7 @@ internal class RestXmlTest {
 
         """.asSmithyModel()
 
-    private val modelWithEmptyStruct =
+    private val inputUnionWithEmptyStructure =
         """
         namespace test
         use aws.protocols#restXml
@@ -98,15 +98,10 @@ internal class RestXmlTest {
 
         @http(uri: "/test", method: "POST")
         operation TestOp {
-            input: TestInput,
-            output: TestOutput
+            input: TestInput
         }
 
         structure TestInput {
-            testUnion: TestUnion
-        }
-
-        structure TestOutput {
             testUnion: TestUnion
         }
 
@@ -133,6 +128,6 @@ internal class RestXmlTest {
     fun `union with empty struct generates warning-free code`() {
         // This test will fail with unused variable warnings if the fix is not applied
         // clientIntegrationTest enforces -D warnings via codegenIntegrationTest
-        clientIntegrationTest(modelWithEmptyStruct) { _, _ -> }
+        clientIntegrationTest(inputUnionWithEmptyStructure) { _, _ -> }
     }
 }
