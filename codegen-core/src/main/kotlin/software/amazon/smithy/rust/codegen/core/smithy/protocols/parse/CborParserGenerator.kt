@@ -268,7 +268,7 @@ class CborParserGenerator(
                     rustBlock("${member.memberName.dq()} =>") {
                         val callBuilderSetMemberFieldWritable =
                             writable {
-                                withBlock("builder.${member.setterName()}(", ")") {
+                                withBlock("builder.${member.setterName(symbolProvider)}(", ")") {
                                     conditionalBlock("Some(", ")", shouldWrapBuilderMemberSetterInputWithOption(member)) {
                                         val symbol = symbolProvider.toSymbol(member)
                                         if (symbol.isRustBoxed()) {

@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 
 /**
  * A Default instantiator that uses `builder.build()` in all cases. This exists to support tests in codegen-core
@@ -25,6 +26,10 @@ class DefaultBuilderInstantiator(private val checkFallibleBuilder: Boolean, priv
         field: MemberShape,
     ): Writable {
         return setFieldWithSetter(builder, value, field)
+    }
+
+    override fun setterProvider(field: MemberShape): String {
+        return field.setterName(symbolProvider)
     }
 
     override fun finalizeBuilder(
