@@ -332,9 +332,6 @@ fun validateModelHasAtMostOneValidationException(
             .filterIsInstance<OperationShape>()
             .filter { it.errors.contains(defaultValidationExceptionId) }
 
-    println("hello world")
-    println(operationsWithDefault.toList())
-
     operationsWithDefault.forEach {
         messages.add(
             LogMessage(
