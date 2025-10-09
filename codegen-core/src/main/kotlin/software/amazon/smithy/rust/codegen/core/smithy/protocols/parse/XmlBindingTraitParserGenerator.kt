@@ -294,7 +294,7 @@ class XmlBindingTraitParserGenerator(
                         Ctx(tag = decoder, accum = "$builder.${symbolProvider.toMemberName(member)}.take()"),
                     )
                 }
-                rust("$builder = $builder.${member.setterName()}($temp);")
+                rust("$builder = $builder.${member.setterName(symbolProvider)}($temp);")
             }
             rustTemplate(
                 "_ => return Err(#{XmlDecodeError}::custom(\"expected ${member.xmlName()} tag\"))",
@@ -333,7 +333,7 @@ class XmlBindingTraitParserGenerator(
                             forceOptional = true,
                         )
                     }
-                    rust("$builder = $builder.${member.setterName()}($temp);")
+                    rust("$builder = $builder.${member.setterName(symbolProvider)}($temp);")
                 }
             }
         }
