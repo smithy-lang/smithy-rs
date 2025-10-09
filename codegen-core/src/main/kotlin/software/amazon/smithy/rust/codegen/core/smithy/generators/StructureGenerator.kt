@@ -198,6 +198,7 @@ open class StructureGenerator(
         writer.deprecatedShape(shape)
         containerMeta.render(writer)
 
+        writer.rust("//FAHD")
         writer.rustBlock("struct $name ${shape.lifetimeDeclaration(symbolProvider)}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
