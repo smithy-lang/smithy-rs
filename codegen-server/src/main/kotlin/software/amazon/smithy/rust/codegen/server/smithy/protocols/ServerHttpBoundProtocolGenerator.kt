@@ -870,7 +870,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     if let Some(value) = #{ParsedValue:W} {
-                        input = input.${member.setterName()}($valueToSet)
+                        input = input.${member.setterName(symbolProvider)}($valueToSet)
                     }
                     """,
                     "ParsedValue" to parsedValue,
@@ -1170,7 +1170,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     val deserializer = generateParseStrFn(binding, true)
                     rustTemplate(
                         """
-                        input = input.${binding.member.setterName()}(
+                        input = input.${binding.member.setterName(symbolProvider)}(
                             #{deserializer}(m$index)?
                         );
                         """,
@@ -1271,7 +1271,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     rustTemplate(
                         """
                         if !${memberName}_seen && k == "${it.locationName}" {
-                            input = input.${it.member.setterName()}(
+                            input = input.${it.member.setterName(symbolProvider)}(
                                 #{deserializer}(&v)?
                             );
                             ${memberName}_seen = true;
@@ -1385,7 +1385,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     unconstrainedShapeSymbolProvider
                         .toSymbol(queryParamsBinding.member)
                         .isOptional()
-                withBlock("input = input.${queryParamsBinding.member.setterName()}(", ");") {
+                withBlock("input = input.${queryParamsBinding.member.setterName(symbolProvider)}(", ");") {
                     conditionalBlock("Some(", ")", conditional = isOptional) {
                         write("query_params")
                     }
@@ -1403,7 +1403,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustBlock("if !$memberName.is_empty()") {
                     withBlock(
                         "input = input.${
-                            binding.member.setterName()
+                            binding.member.setterName(symbolProvider)
                         }(",
                         ");",
                     ) {

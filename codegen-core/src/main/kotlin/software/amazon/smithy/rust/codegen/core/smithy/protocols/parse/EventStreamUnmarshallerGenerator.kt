@@ -273,7 +273,7 @@ class EventStreamUnmarshallerGenerator(
     }
 
     private fun RustWriter.renderUnmarshallEventHeader(member: MemberShape) {
-        withBlock("builder = builder.${member.setterName()}(", ");") {
+        withBlock("builder = builder.${member.setterName(symbolProvider)}(", ");") {
             conditionalBlock("Some(", ")", member.isOptional) {
                 when (val target = model.expectShape(member.target)) {
                     is BooleanShape -> rustTemplate("#{expect_fns}::expect_bool(header)?", *codegenScope)
@@ -306,7 +306,7 @@ class EventStreamUnmarshallerGenerator(
                 *codegenScope,
             )
         }
-        withBlock("builder = builder.${member.setterName()}(", ");") {
+        withBlock("builder = builder.${member.setterName(symbolProvider)}(", ");") {
             conditionalBlock("Some(", ")", member.isOptional) {
                 when (target) {
                     is BlobShape -> {

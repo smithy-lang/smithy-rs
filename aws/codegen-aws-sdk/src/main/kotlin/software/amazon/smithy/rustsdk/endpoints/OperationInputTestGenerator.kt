@@ -186,7 +186,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
             testOperationInput.operationParams.members.forEach { (key, value) ->
                 val member = operationInput.expectMember(key.value)
                 rustTemplate(
-                    ".${member.setterName()}(#{value})",
+                    ".${member.setterName(symbolProvider)}(#{value})",
                     "value" to instantiator.generate(member, value),
                 )
             }
