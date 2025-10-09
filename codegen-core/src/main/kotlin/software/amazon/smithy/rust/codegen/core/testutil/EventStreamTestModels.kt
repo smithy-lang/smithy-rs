@@ -21,6 +21,8 @@ private fun fillInBaseModel(
     namespacedProtocolName: String,
     extraServiceAnnotations: String = "",
     nonEventStreamMembers: String = "",
+    extraEventHeaderMembers: String = "",
+    extraShapes: String = "",
 ): String =
     """
     ${"\$version: \"2\""}
@@ -43,16 +45,7 @@ private fun fillInBaseModel(
         Message: String,
     }
 
-    enum TheEnum {
-        FOO
-        BAR
-    }
-
-    intEnum FaceCard {
-        JACK = 1
-        QUEEN = 2
-        KING = 3
-    }
+    $extraShapes
 
     structure MessageWithBlob { @eventPayload data: Blob }
     structure MessageWithString { @eventPayload data: String }
@@ -67,8 +60,7 @@ private fun fillInBaseModel(
         @eventHeader short: Short,
         @eventHeader string: String,
         @eventHeader timestamp: Timestamp,
-        @eventHeader enum: TheEnum,
-        @eventHeader intEnum: FaceCard,
+        $extraEventHeaderMembers
     }
     structure MessageWithHeaderAndPayload {
         @eventHeader header: String,
@@ -143,6 +135,26 @@ object EventStreamTestModels {
 
         fun withNonEventStreamMembers(nonEventStreamMembers: String): TestCase =
             this.copy(model = fillInBaseModel(this.protocolShapeId, "", nonEventStreamMembers).asSmithyModel())
+
+        // Server doesn't support enum members in event streams, so this util allows Clients to test with those shapes
+        fun withEnumMembers(): TestCase =
+            this.copy(
+                model =
+                    fillInBaseModel(
+                        this.protocolShapeId,
+                        extraEventHeaderMembers = "@eventHeader enum: TheEnum,\n@eventHeader intEnum: FaceCard,",
+                        extraShapes = """    enum TheEnum {
+                            FOO
+                            BAR
+                            }
+
+                            intEnum FaceCard {
+                            JACK = 1
+                            QUEEN = 2
+                            KING = 3
+                                            }""",
+                    ).asSmithyModel(),
+            )
     }
 
     private fun base64Encode(input: ByteArray): String {
