@@ -281,12 +281,15 @@ class ServerProtocolTestGenerator(
 
     private val instantiator = ServerInstantiator(codegenContext, withinTest = true)
 
+    private val serverCodegenContext = codegenContext as software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+    private val httpDeps = serverCodegenContext.httpDependencies()
+
     private val codegenScope =
         arrayOf(
             "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
             "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
-            "Hyper" to RuntimeType.Hyper,
+            "Hyper" to httpDeps.hyperModule(),
             "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
@@ -677,12 +680,28 @@ class ServerProtocolTestGenerator(
         body: String,
         mediaType: String?,
     ) {
-        rustWriter.rustTemplate(
-            """
-            let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-            """,
-            *codegenScope,
-        )
+        // Generate different body collection code based on HTTP version
+        if (serverCodegenContext.settings.codegenConfig.http1x) {
+            // For HTTP 1.x: use http-body-util's BodyExt trait
+            rustWriter.rustTemplate(
+                """
+                let body = {
+                    use #{HttpBodyUtil}::BodyExt;
+                    http_response.into_body().collect().await.expect("unable to collect body").to_bytes()
+                };
+                """,
+                *codegenScope,
+                "HttpBodyUtil" to httpDeps.httpBodyUtil!!.toType(),
+            )
+        } else {
+            // For HTTP 0.x: use hyper's to_bytes
+            rustWriter.rustTemplate(
+                """
+                let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
+                """,
+                *codegenScope,
+            )
+        }
         if (body == "") {
             rustWriter.rustTemplate(
                 """

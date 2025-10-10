@@ -6,12 +6,16 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.knowledge.TopDownIndex
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -91,10 +95,44 @@ open class ServerRootGenerator(
             //! ##     ${serviceName}Config::builder()
             //! ##         .build()$unwrapConfigBuilder
             //! ## ).build_unchecked();
+            ${if (codegenContext.settings.codegenConfig.http1x) {
+                """
+            //! use #{HyperUtil}::rt::TokioIo;
+            //! use #{HyperUtil}::service::TowerToHyperService;
+            //! use #{Tokio}::net::TcpListener;
+            //! use #{Tower}::Service;
+            //!
+            //! let app = app.into_make_service();
+            //! let bind: SocketAddr = "127.0.0.1:6969".parse()
+            //!     .expect("unable to parse the server bind address and port");
+            //! let listener = TcpListener::bind(bind).await.expect("failed to bind");
+            //!
+            //! loop {
+            //!     let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
+            //!     let io = TokioIo::new(stream);
+            //!     let mut app = app.clone();
+            //!
+            //!     #{Tokio}::task::spawn(async move {
+            //!         let service = app.call(remote_addr).await.expect("failed to create service");
+            //!         let hyper_service = TowerToHyperService::new(service);
+            //!
+            //!         if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
+            //!             .serve_connection(io, hyper_service)
+            //!             .await
+            //!         {
+            //!             eprintln!("Error serving connection: {:?}", err);
+            //!         }
+            //!     });
+            //! }
+                """.trimIndent()
+            } else {
+                """
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
             //! #{Hyper}::Server::bind(&bind).serve(server).await.unwrap();
+                """.trimIndent()
+            }}
             //! ## }
             //! ```
             //!
@@ -127,15 +165,15 @@ open class ServerRootGenerator(
             //! ```rust,no_run
             //! ## use $crateName::server::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use $crateName::server::plugin::IdentityPlugin as MetricsPlugin;
-            //! ## use #{Hyper}::Body;
+            ${if (codegenContext.settings.codegenConfig.http1x) "//! use $crateName::server::body::BoxBody;" else "//! ## use #{Hyper}::Body;"}
             //! use $crateName::server::plugin::HttpPlugins;
-            //! use $crateName::{$serviceName, ${serviceName}Config, $builderName};
+            ${if (codegenContext.settings.codegenConfig.http1x) "//! use $crateName::{$serviceName, ${serviceName}Config};" else "//! use $crateName::{$serviceName, ${serviceName}Config, $builderName};"}
             //!
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
-            //! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);
+            //! let config = ${serviceName}Config::builder().http_plugin(http_plugins).build()$unwrapConfigBuilder;
+            ${if (codegenContext.settings.codegenConfig.http1x) "//! let _app = $serviceName::builder::<BoxBody, _, _, _>(config).build_unchecked();" else "//! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);"}
             //! ```
             //!
             //! Check out [`crate::server::plugin`] to learn more about plugins.
@@ -211,6 +249,38 @@ open class ServerRootGenerator(
             //!        .build()
             //!        .expect("failed to build an instance of $serviceName");
             //!
+            ${if (codegenContext.settings.codegenConfig.http1x) {
+                """
+            //!    use #{HyperUtil}::rt::TokioIo;
+            //!    use #{HyperUtil}::service::TowerToHyperService;
+            //!    use #{Tokio}::net::TcpListener;
+            //!    use #{Tower}::Service;
+            //!
+            //!    let app = app.into_make_service();
+            //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
+            //!        .expect("unable to parse the server bind address and port");
+            //!    let listener = TcpListener::bind(bind).await.expect("failed to bind");
+            //!
+            //!    loop {
+            //!        let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
+            //!        let io = TokioIo::new(stream);
+            //!        let mut app = app.clone();
+            //!
+            //!        #{Tokio}::task::spawn(async move {
+            //!            let service = app.call(remote_addr).await.expect("failed to create service");
+            //!            let hyper_service = TowerToHyperService::new(service);
+            //!
+            //!            if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
+            //!                .serve_connection(io, hyper_service)
+            //!                .await
+            //!            {
+            //!                eprintln!("Error serving connection: {:?}", err);
+            //!            }
+            //!        });
+            //!    }
+                """.trimIndent()
+            } else {
+                """
             //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!        .expect("unable to parse the server bind address and port");
             //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
@@ -220,6 +290,8 @@ open class ServerRootGenerator(
             //!    if let Err(err) = server.await {
             //!        eprintln!("server error: {:?}", err);
             //!    }
+                """.trimIndent()
+            }}
             //! }
             //!
             #{HandlerImports:W}
@@ -238,7 +310,8 @@ open class ServerRootGenerator(
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
             "Handlers" to handlers,
             "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
-            "Hyper" to ServerCargoDependency.HyperDev.toType(),
+            "Hyper" to codegenContext.httpDependencies().hyperDevModule(),
+            "HyperUtil" to RuntimeType("hyper_util", CargoDependency("hyper-util", CratesIo("0.1"), scope = DependencyScope.Dev, features = setOf("service"))),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
         )
