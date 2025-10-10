@@ -179,6 +179,9 @@ data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
     Throwable(message = messages.joinToString("\n") { it.message })
 
+private const val validationExceptionDocsErrorMessage =
+    "For documentation, see https://smithy-lang.github.io/smithy-rs/design/server/validation_exceptions.html"
+
 /*
  * Returns the set of operation shapes that must have a supported validation exception shape
  * in their associated errors list.
@@ -229,11 +232,12 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
         operationsWithConstrainedInputWithoutValidationExceptionSet.map {
             LogMessage(
                 Level.SEVERE,
-                // TODO(Add custom validation exception option to error message and link docs)
                 """
                 Operation ${it.shape.id} takes in input that is constrained
                 (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
-                validation exception. You must model this behavior in the operation shape in your model file.
+                validation exception. You must model this behavior in the operation shape in your model file using
+                the default validation exception shown below, or by defining a custom validation exception.
+                $validationExceptionDocsErrorMessage
                 """.trimIndent().replace("\n", " ") +
                     """
 
@@ -280,6 +284,7 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
                 Cannot have multiple validation exceptions defined for a constrained operation.
                 Operation ${it.shape.id} takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html),
                 and as such can fail with a validation exception. This must be modeled with a single validation exception.
+                $validationExceptionDocsErrorMessage
                 """.trimIndent(),
             )
         }
@@ -313,8 +318,9 @@ fun validateModelHasAtMostOneValidationException(
                 """
                 Defining multiple custom validation exceptions is unsupported.
                 Found ${customValidationExceptionShapes.size} validation exception shapes:
-                """.trimIndent() +
-                    customValidationExceptionShapes.joinToString(", ") { it.id.toString() },
+                ${customValidationExceptionShapes.joinToString(", ") { it.id.toString() }}
+                $validationExceptionDocsErrorMessage
+                """.trimIndent(),
             ),
         )
         return ValidationResult(shouldAbort = true, messages)
@@ -339,6 +345,7 @@ fun validateModelHasAtMostOneValidationException(
                 """
                 Operation ${it.id} uses the default ValidationException, but a custom validation exception is defined.
                 Remove ValidationException from the operation's errors and use the custom validation exception instead.
+                $validationExceptionDocsErrorMessage
                 """.trimIndent(),
             ),
         )

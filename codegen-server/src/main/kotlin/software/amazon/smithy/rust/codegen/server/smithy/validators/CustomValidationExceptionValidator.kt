@@ -48,7 +48,7 @@ class CustomValidationExceptionValidator : AbstractValidator() {
                                 .severity(Severity.ERROR).shape(shape)
                                 .message(
                                     "@validationException requires exactly one String member named " +
-                                        "\"message\" or with the @validationMessage ",
+                                        "\"message\" or with the @validationMessage trait",
                                 ).build(),
                         )
 
