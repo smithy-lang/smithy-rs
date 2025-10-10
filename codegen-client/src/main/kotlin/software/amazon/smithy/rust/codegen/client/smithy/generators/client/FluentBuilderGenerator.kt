@@ -367,11 +367,11 @@ class FluentBuilderGenerator(
                     else -> renderInputHelper(member, memberName, coreType)
                 }
                 // pure setter
-                val setterName = member.setterName()
+                val setterName = member.setterName(symbolProvider)
                 val optionalInputType = outerType.asOptional()
                 renderInputHelper(member, setterName, optionalInputType)
 
-                val getterName = member.getterName()
+                val getterName = member.getterName(symbolProvider)
                 renderGetterHelper(member, getterName, optionalInputType)
             }
         }
@@ -437,7 +437,7 @@ class FluentBuilderGenerator(
             """
             Appends an item to `${member.memberName}`.
 
-            To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).
+            To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${member.setterName(symbolProvider)}).
             """,
         )
         documentShape(member, model)
@@ -467,7 +467,7 @@ class FluentBuilderGenerator(
             """
             Adds a key-value pair to `${member.memberName}`.
 
-            To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).
+            To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${member.setterName(symbolProvider)}).
             """,
         )
         documentShape(member, model)
