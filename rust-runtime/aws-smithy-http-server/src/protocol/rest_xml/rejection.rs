@@ -12,6 +12,12 @@ use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
@@ -21,7 +27,7 @@ pub enum ResponseRejection {
     #[error("error serializing XML-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
-    HttpBuild(#[from] crate::http::Error),
+    HttpBuild(#[from] http::Error),
 }
 
 #[derive(Debug, Error)]
@@ -68,6 +74,13 @@ pub enum RequestRejection {
 impl From<std::convert::Infallible> for RequestRejection {
     fn from(_err: std::convert::Infallible) -> Self {
         match _err {}
+    }
+}
+
+// Enable conversion from crate::Error for body::collect_bytes() error handling
+impl From<crate::Error> for RequestRejection {
+    fn from(err: crate::Error) -> Self {
+        Self::BufferHttpBodyBytes(err)
     }
 }
 

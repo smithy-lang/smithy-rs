@@ -6,6 +6,20 @@
 //! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`](crate::routing::LambdaHandler) is
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
+// HTTP 0.x imports
+#[cfg(not(feature = "http-1x"))]
+use {
+    http_02x as http,
+    lambda_http_02x as lambda_http,
+};
+
+// HTTP 1.x imports
+#[cfg(feature = "http-1x")]
+use {
+    http_1x as http,
+    lambda_http_1x as lambda_http,
+};
+
 use lambda_http::request::RequestContext;
 #[doc(inline)]
 pub use lambda_http::{
@@ -26,7 +40,7 @@ use crate::{body::BoxBody, response::IntoResponse};
 pub struct MissingContext;
 
 impl<Protocol> IntoResponse<Protocol> for MissingContext {
-    fn into_response(self) -> crate::http::Response<BoxBody> {
+    fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
@@ -34,7 +48,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingContext {
 impl<P> FromParts<P> for Context {
     type Rejection = MissingContext;
 
-    fn from_parts(parts: &mut crate::http::request::Parts) -> Result<Self, Self::Rejection> {
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
         parts.extensions.remove().ok_or(MissingContext)
     }
 }
@@ -57,7 +71,7 @@ pub struct MissingGatewayContextV1 {
 }
 
 impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV1 {
-    fn into_response(self) -> crate::http::Response<BoxBody> {
+    fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
@@ -65,7 +79,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV1 {
 impl<P> FromParts<P> for ApiGatewayProxyRequestContext {
     type Rejection = MissingGatewayContextV1;
 
-    fn from_parts(parts: &mut crate::http::request::Parts) -> Result<Self, Self::Rejection> {
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
         let context = parts.extensions.remove().ok_or(MissingGatewayContextV1 {
             inner: MissingGatewayContextTypeV1::MissingRequestContext,
         })?;
@@ -97,7 +111,7 @@ pub struct MissingGatewayContextV2 {
 }
 
 impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV2 {
-    fn into_response(self) -> crate::http::Response<BoxBody> {
+    fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
@@ -105,7 +119,7 @@ impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV2 {
 impl<P> FromParts<P> for ApiGatewayV2httpRequestContext {
     type Rejection = MissingGatewayContextV2;
 
-    fn from_parts(parts: &mut crate::http::request::Parts) -> Result<Self, Self::Rejection> {
+    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
         let context = parts.extensions.remove().ok_or(MissingGatewayContextV2 {
             inner: MissingGatewayContextTypeV2::MissingRequestContext,
         })?;

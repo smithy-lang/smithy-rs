@@ -4,6 +4,28 @@
  */
 
 //! HTTP body utilities.
+//!
+//! This module provides a stable API for body handling regardless of the
+//! underlying HTTP version. The implementation uses conditional compilation
+//! to select the appropriate types and functions based on the `http-1x` feature.
+
+use bytes::Bytes;
+
+use crate::error::{BoxError, Error};
+
+// ============================================================================
+// Version-Specific Imports
+// ============================================================================
+
+#[cfg(not(feature = "http-1x"))]
+mod imports {
+    pub use hyper_014::body::Body as HyperBody;
+}
+
+#[cfg(feature = "http-1x")]
+mod imports {
+    pub use http_body_util::{Full, Empty, BodyExt};
+}
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -18,21 +40,27 @@ pub use http_body_1x::Body as HttpBody;
 #[cfg(not(feature = "http-1x"))]
 pub use hyper_014::body::Body;
 
-// For http-1x, hyper::Body doesn't exist. We export hyper::body::Incoming as Body to make it easier
-// port middleware that uses `Request<Body>`.
+// For http-1x, hyper::Body doesn't exist. We use hyper::body::Incoming as the default body type.
 #[cfg(feature = "http-1x")]
 pub use hyper_1x::body::Incoming as Body;
 
-use bytes::Bytes;
-
-use crate::error::{BoxError, Error};
+// ============================================================================
+// BoxBody - Type-Erased Body
+// ============================================================================
 
 /// The primary [`Body`] returned by the generated `smithy-rs` service.
+///
+/// This provides a stable public API regardless of HTTP version.
+/// Internally it uses `UnsyncBoxBody` from the appropriate http-body version.
 #[cfg(not(feature = "http-1x"))]
 pub type BoxBody = http_body_04x::combinators::UnsyncBoxBody<Bytes, Error>;
 
 #[cfg(feature = "http-1x")]
 pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
+
+// ============================================================================
+// Body Construction Functions
+// ============================================================================
 
 // `boxed` is used in the codegen of the implementation of the operation `Handler` trait.
 /// Convert an HTTP body implementing [`http_body::Body`](http_body_04x::Body) into a [`BoxBody`].
@@ -57,8 +85,10 @@ where
     B: http_body_1x::Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxError>,
 {
-    use http_body_util::BodyExt;
-    try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
+    use imports::BodyExt;
+    try_downcast(body).unwrap_or_else(|body| {
+        body.map_err(Error::new).boxed_unsync()
+    })
 }
 
 #[doc(hidden)]
@@ -83,7 +113,8 @@ pub fn empty() -> BoxBody {
 
 #[cfg(feature = "http-1x")]
 pub fn empty() -> BoxBody {
-    boxed(http_body_util::Empty::<Bytes>::new())
+    use imports::Empty;
+    boxed(Empty::<Bytes>::new())
 }
 
 /// Convert anything that can be converted into a [`hyper::body::Body`] into a [`BoxBody`].
@@ -92,9 +123,9 @@ pub fn empty() -> BoxBody {
 #[cfg(not(feature = "http-1x"))]
 pub fn to_boxed<B>(body: B) -> BoxBody
 where
-    Body: From<B>,
+    imports::HyperBody: From<B>,
 {
-    boxed(Body::from(body))
+    boxed(imports::HyperBody::from(body))
 }
 
 /// Convert bytes or similar types into a [`BoxBody`] for HTTP 1.x.
@@ -104,7 +135,8 @@ pub fn to_boxed<B>(body: B) -> BoxBody
 where
     B: Into<Bytes>,
 {
-    boxed(http_body_util::Full::new(body.into()))
+    use imports::Full;
+    boxed(Full::new(body.into()))
 }
 
 // ============================================================================
@@ -122,30 +154,37 @@ where
     B: HttpBody,
     B::Error: Into<BoxError>,
 {
-    hyper_014::body::to_bytes(body).await.map_err(|e| Error::new(e))
+    hyper_014::body::to_bytes(body)
+        .await
+        .map_err(|e| Error::new(e))
 }
 
 #[cfg(feature = "http-1x")]
 pub async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
 where
-    // TODO-HTTP1x: do we need to allow anything that can be converted into HttpBody?
     B: HttpBody,
     B::Error: Into<BoxError>,
 {
     use http_body_util::BodyExt;
-    let collected = body.collect().await.map_err(|e| Error::new(e))?;
+
+    let collected = body
+        .collect()
+        .await
+        .map_err(|e| Error::new(e))?;
+
     Ok(collected.to_bytes())
 }
 
 /// Create a body from bytes.
 #[cfg(not(feature = "http-1x"))]
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
-    boxed(hyper_014::body::Body::from(bytes))
+    boxed(imports::HyperBody::from(bytes))
 }
 
 #[cfg(feature = "http-1x")]
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
-    boxed(http_body_util::Full::new(bytes))
+    use imports::Full;
+    boxed(Full::new(bytes))
 }
 
 #[cfg(test)]
@@ -161,7 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_bytes() {
-        let data = Bytes::from("Sample body");
+        let data = Bytes::from("hello world");
         let body = from_bytes(data.clone());
         let collected = collect_bytes(body).await.unwrap();
         assert_eq!(collected, data);
@@ -169,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_to_boxed_string() {
-        let s = "Sample body";
+        let s = "hello world";
         let body = to_boxed(s);
         let collected = collect_bytes(body).await.unwrap();
         assert_eq!(collected, Bytes::from(s));

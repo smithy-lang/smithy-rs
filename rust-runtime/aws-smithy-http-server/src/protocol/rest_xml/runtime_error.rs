@@ -3,11 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::http::StatusCode;
 use crate::protocol::rest_xml::RestXml;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
+
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 
@@ -53,14 +60,14 @@ impl RuntimeError {
 }
 
 impl IntoResponse<RestXml> for InternalFailureException {
-    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<RestXml> for RuntimeError {
-    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
-        let res = crate::http::Response::builder()
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/xml")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));

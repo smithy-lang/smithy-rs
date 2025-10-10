@@ -34,16 +34,22 @@
 
 use crate::body::BoxBody;
 
-pub type Response<T = BoxBody> = crate::http::Response<T>;
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
 
-/// A protocol aware function taking `self` to [`crate::http::Response`].
+pub type Response<T = BoxBody> = http::Response<T>;
+
+/// A protocol aware function taking `self` to [`http::Response`].
 pub trait IntoResponse<Protocol> {
-    /// Performs a conversion into a [`crate::http::Response`].
-    fn into_response(self) -> crate::http::Response<BoxBody>;
+    /// Performs a conversion into a [`http::Response`].
+    fn into_response(self) -> http::Response<BoxBody>;
 }
 
 impl<P> IntoResponse<P> for std::convert::Infallible {
-    fn into_response(self) -> crate::http::Response<BoxBody> {
+    fn into_response(self) -> http::Response<BoxBody> {
         match self {}
     }
 }

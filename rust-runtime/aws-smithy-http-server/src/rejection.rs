@@ -6,6 +6,14 @@
 use crate::response::IntoResponse;
 use thiserror::Error;
 
+// Import version-appropriate HTTP types (currently unused, kept for macro expansions)
+#[cfg(not(feature = "http-1x"))]
+#[allow(unused_imports)]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+#[allow(unused_imports)]
+use http_1x as http;
+
 // This is used across different protocol-specific `rejection` modules.
 #[derive(Debug, Error)]
 pub enum MissingContentTypeReason {
@@ -27,6 +35,12 @@ pub mod any_rejections {
     use super::IntoResponse;
     use thiserror::Error;
 
+    // Import version-appropriate HTTP types
+    #[cfg(not(feature = "http-1x"))]
+    use http_02x as http;
+    #[cfg(feature = "http-1x")]
+    use http_1x as http;
+
     macro_rules! any_rejection {
         ($name:ident, $($var:ident),+) => (
             #[derive(Debug, Error)]
@@ -42,7 +56,7 @@ pub mod any_rejections {
                 $($var: IntoResponse<P>,)*
             {
                 #[allow(non_snake_case)]
-                fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+                fn into_response(self) -> http::Response<crate::body::BoxBody> {
                     match self {
                         $($name::$var ($var) => $var.into_response(),)*
                     }

@@ -11,10 +11,17 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::http::{HeaderMap, Request, Response, StatusCode, Uri};
 use futures_util::{ready, TryFuture};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
+
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::{HeaderMap, Request, Response, StatusCode, Uri};
 
 use crate::shape_id::ShapeId;
 
@@ -90,8 +97,8 @@ where
 /// ```
 /// # use aws_smithy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
 /// # use aws_smithy_http_server::shape_id::ShapeId;
-/// # use aws_smithy_http_server::http::{Request, Response};
 /// # use tower::{Service, service_fn};
+/// # use aws_smithy_http_server::http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }
 /// # let mut svc = service_fn(f);
 /// # const ID: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");

@@ -27,6 +27,12 @@ use futures_util::TryFuture;
 use thiserror::Error;
 use tower::Service;
 
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
 use crate::operation::OperationShape;
 use crate::plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack};
 use crate::shape_id::ShapeId;
@@ -50,7 +56,7 @@ pub enum ParseError {
 
 pin_project_lite::pin_project! {
     /// The [`Service::Future`] of [`OperationExtensionService`] - inserts an [`OperationExtension`] into the
-    /// [`crate::http::Response]`.
+    /// [`http::Response]`.
     pub struct OperationExtensionFuture<Fut> {
         #[pin]
         inner: Fut,
@@ -60,9 +66,9 @@ pin_project_lite::pin_project! {
 
 impl<Fut, RespB> Future for OperationExtensionFuture<Fut>
 where
-    Fut: TryFuture<Ok = crate::http::Response<RespB>>,
+    Fut: TryFuture<Ok = http::Response<RespB>>,
 {
-    type Output = Result<crate::http::Response<RespB>, Fut::Error>;
+    type Output = Result<http::Response<RespB>, Fut::Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
@@ -78,18 +84,18 @@ where
     }
 }
 
-/// Inserts a [`OperationExtension`] into the extensions of the [`crate::http::Response`].
+/// Inserts a [`OperationExtension`] into the extensions of the [`http::Response`].
 #[derive(Debug, Clone)]
 pub struct OperationExtensionService<S> {
     inner: S,
     operation_extension: OperationExtension,
 }
 
-impl<S, B, RespBody> Service<crate::http::Request<B>> for OperationExtensionService<S>
+impl<S, B, RespBody> Service<http::Request<B>> for OperationExtensionService<S>
 where
-    S: Service<crate::http::Request<B>, Response = crate::http::Response<RespBody>>,
+    S: Service<http::Request<B>, Response = http::Response<RespBody>>,
 {
-    type Response = crate::http::Response<RespBody>;
+    type Response = http::Response<RespBody>;
     type Error = S::Error;
     type Future = OperationExtensionFuture<S::Future>;
 
@@ -97,7 +103,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: crate::http::Request<B>) -> Self::Future {
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
         OperationExtensionFuture {
             inner: self.inner.call(req),
             operation_extension: Some(self.operation_extension.clone()),
@@ -134,7 +140,7 @@ impl HttpMarker for OperationExtensionPlugin {}
 ///
 /// See [`module`](crate::extension) documentation for more info.
 pub trait OperationExtensionExt<CurrentPlugin> {
-    /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`crate::http::Response`].
+    /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`http::Response`].
     fn insert_operation_extension(self) -> HttpPlugins<PluginStack<OperationExtensionPlugin, CurrentPlugin>>;
 }
 
@@ -227,11 +233,11 @@ mod tests {
 
         // Apply `Plugin`s `Layer`.
         let layer = PluginLayer::new::<RestJson1, DummyOp>(plugins);
-        let svc = service_fn(|_: crate::http::Request<()>| async { Ok::<_, ()>(crate::http::Response::new(())) });
+        let svc = service_fn(|_: http::Request<()>| async { Ok::<_, ()>(http::Response::new(())) });
         let svc = layer.layer(svc);
 
         // Check for `OperationExtension`.
-        let response = svc.oneshot(crate::http::Request::new(())).await.unwrap();
+        let response = svc.oneshot(http::Request::new(())).await.unwrap();
         let expected = DummyOp::ID;
         let actual = response.extensions().get::<OperationExtension>().unwrap();
         assert_eq!(actual.0, expected);

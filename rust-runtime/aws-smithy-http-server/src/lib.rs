@@ -55,3 +55,10 @@ pub(crate) use aws_smithy_http;
 
 #[cfg(feature = "http-1x")]
 pub(crate) use aws_smithy_http_1x as aws_smithy_http;
+
+// Re-export the appropriate version of aws-smithy-json
+#[cfg(not(feature = "http-1x"))]
+pub(crate) use aws_smithy_json_02x as aws_smithy_json;
+
+#[cfg(feature = "http-1x")]
+pub(crate) use aws_smithy_json_1x as aws_smithy_json;
