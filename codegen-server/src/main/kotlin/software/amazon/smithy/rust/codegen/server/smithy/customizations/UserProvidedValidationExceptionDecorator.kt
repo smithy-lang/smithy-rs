@@ -252,7 +252,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{CustomValidationExceptionField} {
                     match self {
-                        #{ValidationExceptionFields:W}
+                        #{ValidationExceptionFields}
                     }
                 }
                 """,
@@ -269,7 +269,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         Self::Length(length) => #{CustomValidationExceptionField} {
-                                            #{FieldAssignments:W}
+                                            #{FieldAssignments}
                                         },
                                         """,
                                         "CustomValidationExceptionField" to validationField.writable,
@@ -288,7 +288,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         Self::Pattern(_) => #{CustomValidationExceptionField} {
-                                            #{FieldAssignments:W}
+                                            #{FieldAssignments}
                                         },
                                         """,
                                         "CustomValidationExceptionField" to validationField.writable,
@@ -314,7 +314,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{CustomValidationExceptionField} {
                     match self {
-                        #{ValidationExceptionFields:W}
+                        #{ValidationExceptionFields}
                     }
                 }
                 """,
@@ -327,7 +327,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             rustTemplate(
                                 """
                                 Self::Length(length) => #{CustomValidationExceptionField} {
-                                    #{FieldAssignments:W}
+                                    #{FieldAssignments}
                                 },
                                 """,
                                 "CustomValidationExceptionField" to validationField.writable,
@@ -365,7 +365,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                         rustTemplate(
                             """
                             Self::Length(length) => #{CustomValidationExceptionField} {
-                                #{FieldAssignments:W}
+                                #{FieldAssignments}
                             },""",
                             "CustomValidationExceptionField" to validationField.writable,
                             "FieldAssignments" to
@@ -397,7 +397,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{CustomValidationExceptionField} {
                     #{CustomValidationExceptionField} {
-                        #{FieldAssignments:W}
+                        #{FieldAssignments}
                     }
                 }
                 """,
@@ -419,7 +419,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{CustomValidationExceptionField} {
                     match self {
                         Self::Range(_) => #{CustomValidationExceptionField} {
-                            #{FieldAssignments:W}
+                            #{FieldAssignments}
                         },
                     }
                 }
@@ -454,7 +454,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             rustTemplate(
                                 """
                                 ConstraintViolation::${it.name()} => #{CustomValidationExceptionField} {
-                                    #{FieldAssignments:W}
+                                    #{FieldAssignments}
                                 },
                                 """.trimIndent(),
                                 "CustomValidationExceptionField" to validationField.writable,
@@ -484,7 +484,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{CustomValidationExceptionField} {
                     match self {
-                        #{ValidationExceptionFields:W}
+                        #{ValidationExceptionFields}
                     }
                 }
                 """,
@@ -498,7 +498,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         Self::Length(length) => #{CustomValidationExceptionField} {
-                                            #{FieldAssignments:W}
+                                            #{FieldAssignments}
                                         },
                                         """,
                                         "CustomValidationExceptionField" to validationField.writable,
@@ -514,7 +514,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         Self::UniqueItems { duplicate_indices, .. } => #{CustomValidationExceptionField} {
-                                            #{FieldAssignments:W}
+                                            #{FieldAssignments}
                                         },
                                         """,
                                         "CustomValidationExceptionField" to validationField.writable,
