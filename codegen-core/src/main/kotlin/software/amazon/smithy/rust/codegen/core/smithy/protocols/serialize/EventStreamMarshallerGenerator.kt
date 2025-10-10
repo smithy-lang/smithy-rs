@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -243,6 +244,7 @@ open class EventStreamMarshallerGenerator(
             is IntegerShape -> "Int32($inputName)"
             is LongShape -> "Int64($inputName)"
             is BlobShape -> "ByteArray($inputName.into_inner().into())"
+            is EnumShape -> "String($inputName.to_string().into())"
             is StringShape -> "String($inputName.into())"
             is TimestampShape -> "Timestamp($inputName)"
             else -> throw IllegalStateException("unsupported event stream header shape type: $target")

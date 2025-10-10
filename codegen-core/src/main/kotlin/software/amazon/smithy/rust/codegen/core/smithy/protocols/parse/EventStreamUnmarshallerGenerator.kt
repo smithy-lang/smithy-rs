@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -261,6 +262,7 @@ class EventStreamUnmarshallerGenerator(
                     is IntegerShape -> rustTemplate("#{expect_fns}::expect_int32(header)?", *codegenScope)
                     is LongShape -> rustTemplate("#{expect_fns}::expect_int64(header)?", *codegenScope)
                     is BlobShape -> rustTemplate("#{expect_fns}::expect_byte_array(header)?", *codegenScope)
+                    is EnumShape -> rustTemplate("#{expect_fns}::expect_string(header)?.as_str().into()", *codegenScope)
                     is StringShape -> rustTemplate("#{expect_fns}::expect_string(header)?", *codegenScope)
                     is TimestampShape -> rustTemplate("#{expect_fns}::expect_timestamp(header)?", *codegenScope)
                     else -> throw IllegalStateException("unsupported event stream header shape type: $target")
@@ -383,7 +385,8 @@ class EventStreamUnmarshallerGenerator(
                                             "builder", target,
                                             mapErr = {
                                                 rustTemplate(
-                                                    """|err|#{Error}::unmarshalling(format!("{}", err))""", *codegenScope,
+                                                    """|err|#{Error}::unmarshalling(format!("{}", err))""",
+                                                    *codegenScope,
                                                 )
                                             },
                                         ),

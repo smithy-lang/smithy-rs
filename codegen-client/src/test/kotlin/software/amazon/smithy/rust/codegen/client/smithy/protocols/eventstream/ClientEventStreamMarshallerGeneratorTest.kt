@@ -155,7 +155,11 @@ class ClientEventStreamMarshallerGeneratorTest {
                                             .is_some());
                                         assert_eq!(
                                             msg.payload(),
-                                            &bytes::Bytes::from_static(${testCase.generateRustPayloadInitializer(rpcEventStreamTestCase.expectedInInitialRequest)})
+                                            &bytes::Bytes::from_static(${
+                                            testCase.generateRustPayloadInitializer(
+                                                rpcEventStreamTestCase.expectedInInitialRequest,
+                                            )
+                                        })
                                         );
                                         """,
                                     )
@@ -178,7 +182,7 @@ class ClientEventStreamMarshallerGeneratorTest {
 
 class TestCasesProvider : ArgumentsProvider {
     override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
-        EventStreamTestModels.TEST_CASES.map { Arguments.of(it) }.stream()
+        EventStreamTestModels.TEST_CASES.map { Arguments.of(it.withEnumMembers()) }.stream()
 }
 
 /**
