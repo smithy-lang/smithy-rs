@@ -206,6 +206,14 @@ class PythonServerEventStreamWrapperGenerator(
                     let inner = #{Arc}::new(#{AsyncMutex}::new(inner));
                     $name { inner }
                 }
+
+                pub async fn try_recv_initial(
+                    &self,
+                    message_type: #{SmithyHttp}::event_stream::InitialMessageType,
+                ) -> Result<#{Option}<#{SmithyHttp}::event_stream::Message>, #{SdkError}<#{Error}, #{SmithyHttp}::event_stream::RawMessage>> {
+                    let mut inner = self.inner.lock().await;
+                    inner.try_recv_initial(message_type).await
+                }
                 """,
                 *codegenScope,
                 "Wrapped" to wrappedT,
