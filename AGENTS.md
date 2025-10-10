@@ -10,6 +10,55 @@
 
 Protocol files: `codegen-{core,server}/.../protocols/`
 
+## Protocol Tests
+
+Protocol tests validate that generated code correctly implements Smithy protocols (like restJson1, awsJson1_1, etc.).
+
+### Adding Protocol Tests
+
+Protocol tests are defined in Smithy model files using `@httpRequestTests` and `@httpResponseTests` traits:
+
+```smithy
+@http(uri: "/my-operation", method: "GET")
+@httpRequestTests([
+    {
+        id: "MyOperationRequest",
+        documentation: "Test description",
+        protocol: "aws.protocols#restJson1",
+        method: "GET",
+        uri: "/my-operation",
+        queryParams: ["param1=value1", "param2=value2"],
+        params: {
+            queryMap: {
+                "param1": "value1",
+                "param2": "value2"
+            }
+        },
+        appliesTo: "client",
+    }
+])
+operation MyOperation {
+    input: MyOperationInput,
+}
+```
+
+### Key Protocol Test Locations
+
+- **`codegen-core/common-test-models/rest-json-extras.smithy`** - restJson1 protocol tests
+- **`codegen-core/common-test-models/constraints.smithy`** - Constraint validation tests with restJson1
+- **`codegen-client-test/model/main.smithy`** - awsJson1_1 protocol tests
+
+### httpQueryParams Bug Investigation
+
+When investigating the `@httpQueryParams` bug (where query parameters weren't appearing in requests), the issue was in `RequestBindingGenerator.kt` line 173. The bug occurred when:
+
+1. An operation had ONLY `@httpQueryParams` (no regular `@httpQuery` parameters)
+2. The condition `if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty())` would skip generating the `uri_query` function
+
+The fix was to ensure `mapParams.isEmpty()` was included in the condition check. The current implementation correctly generates query parameters for `@httpQueryParams` even when no other query parameters exist.
+
+**Testing httpQueryParams**: Create operations with only `@httpQueryParams` to ensure they generate proper query strings in requests.
+
 ## preludeScope: Rust Prelude Types
 
 **Always use `preludeScope` for Rust prelude types:**

@@ -170,7 +170,7 @@ class RequestBindingGenerator(
         val dynamicParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY)
         val mapParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY_PARAMS)
         val literalParams = httpTrait.uri.queryLiterals
-        if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
+        if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty()) {
             return false
         }
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }
