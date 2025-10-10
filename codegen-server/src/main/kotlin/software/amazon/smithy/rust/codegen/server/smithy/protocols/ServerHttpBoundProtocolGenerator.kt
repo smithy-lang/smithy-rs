@@ -917,7 +917,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         .try_recv_initial(#{InitialMessageType}::Request)
                                         .await
                                         .map_err(
-                                            |ev_error| #{RequestRejection}::ConstraintViolation(format!("{ev_error}").into())
+                                            |ev_error| #{RequestRejection}::ConstraintViolation(format!("{ev_error}"))
                                         )? {
                                         #{parseInitialRequest}
                                     }
