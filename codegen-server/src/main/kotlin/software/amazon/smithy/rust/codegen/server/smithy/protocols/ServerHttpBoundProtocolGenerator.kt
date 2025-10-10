@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -67,7 +66,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -191,7 +189,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
             "HttpBody" to httpDeps.httpBodyModule(),
             "header_util" to httpDeps.smithyHttpModule().resolve("header"),
-            "Hyper" to RuntimeType.Hyper,
+            "Hyper" to httpDeps.hyperModule(),
             "LazyStatic" to RuntimeType.LazyStatic,
             "Mime" to ServerCargoDependency.Mime.toType(),
             "Nom" to ServerCargoDependency.Nom.toType(),
@@ -231,34 +229,43 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         outputSymbol: Symbol,
         operationShape: OperationShape,
     ) {
+        val operationName = symbolProvider.toSymbol(operationShape).name
+        val staticContentType = "CONTENT_TYPE_${operationName.uppercase()}"
         val verifyAcceptHeader =
             writable {
                 httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
-                    val legacyContentType = httpBindingResolver.legacyBackwardsCompatContentType(operationShape)
-                    if (legacyContentType != null) {
-                        // For operations with legacy backwards compatibility, accept both content types
-                        rustTemplate(
-                            """
-                            if !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &#{ContentType}) &&
-                               !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &#{FallbackContentType}) {
-                                return Err(#{RequestRejection}::NotAcceptable);
-                            }
-                            """,
-                            "ContentType" to mimeType(contentType),
-                            "FallbackContentType" to mimeType(legacyContentType),
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            if !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &#{ContentType}) {
-                                return Err(#{RequestRejection}::NotAcceptable);
-                            }
-                            """,
-                            "ContentType" to mimeType(contentType),
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        if !#{SmithyHttpServer}::protocol::accept_header_classifier(request.headers(), &$staticContentType) {
+                            return Err(#{RequestRejection}::NotAcceptable);
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        val verifyAcceptHeaderStaticContentTypeInit =
+            writable {
+                httpBindingResolver.responseContentType(operationShape)?.also { contentType ->
+                    val init =
+                        when (contentType) {
+                            "application/json" ->
+                                "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_JSON;"
+
+                            "application/octet-stream" ->
+                                "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_OCTET_STREAM;"
+
+                            "application/x-www-form-urlencoded" ->
+                                "const $staticContentType: #{Mime}::Mime = #{Mime}::APPLICATION_WWW_FORM_URLENCODED;"
+
+                            else ->
+                                """
+                                static $staticContentType: std::sync::LazyLock<#{Mime}::Mime> = std::sync::LazyLock::new(|| {
+                                    ${contentType.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
+                                });
+                                """
+                        }
+                    rustTemplate(init, *codegenScope)
                 }
             }
 
@@ -267,6 +274,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
+            #{verifyAcceptHeaderStaticContentTypeInit:W}
             #{PinProjectLite}::pin_project! {
                 /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
                 /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
@@ -317,6 +325,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
+            "verifyAcceptHeaderStaticContentTypeInit" to
+                verifyAcceptHeaderStaticContentTypeInit,
         )
 
         // Implement `into_response` for output types.
@@ -366,26 +376,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 "E" to errorSymbol,
                 "Marker" to protocol.markerStruct(),
                 "serialize_error" to serverSerializeError(operationShape),
-            )
-        }
-    }
-
-    /**
-     * Generates `pub(crate) static CONTENT_TYPE_<MIME_TYPE> = ....
-     *
-     * Usage: In templates, #{MimeType}, "MimeType" to mimeType("yourDesiredType")
-     */
-    private fun mimeType(type: String): RuntimeType {
-        val variableName = type.toSnakeCase().uppercase()
-        val typeName = "CONTENT_TYPE_$variableName"
-        return RuntimeType.forInlineFun(typeName, RustModule.private("mimes")) {
-            rustTemplate(
-                """
-                pub(crate) static $typeName: std::sync::LazyLock<#{Mime}::Mime> = std::sync::LazyLock::new(|| {
-                    ${type.dq()}.parse::<#{Mime}::Mime>().expect("BUG: MIME parsing failed, content_type is not valid")
-                });
-                """,
-                *codegenScope,
             )
         }
     }
@@ -761,7 +751,24 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType =
                 httpBindingResolver.requestContentType(operationShape)!!
-            rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+
+            // Generate different body collection code based on HTTP version
+            if (codegenContext.settings.codegenConfig.http1x) {
+                // For HTTP 1.x: use http-body-util's BodyExt trait
+                rustTemplate(
+                    """
+                    let bytes = {
+                        use #{HttpBodyUtil}::BodyExt;
+                        body.collect().await?.to_bytes()
+                    };
+                    """,
+                    *codegenScope,
+                    "HttpBodyUtil" to httpDeps.httpBodyUtil!!.toType(),
+                )
+            } else {
+                // For HTTP 0.x: use hyper's to_bytes
+                rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            }
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
             // operation input; we simply parse it as empty operation input.
             // This behavior applies to all protocols. This might seem like a bug, but it isn't. There's protocol tests
@@ -926,18 +933,40 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         }
                                     }
                             }
-                        rustTemplate(
-                            """
-                            {
-                                let bytes = #{Hyper}::body::to_bytes(body).await?;
-                                #{VerifyRequestContentTypeHeader:W}
-                                #{Deserializer}(&bytes)?
-                            }
-                            """,
-                            "Deserializer" to deserializer,
-                            "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                            *codegenScope,
-                        )
+                        // Generate different body collection code based on HTTP version
+                        if (codegenContext.settings.codegenConfig.http1x) {
+                            // For HTTP 1.x: use http-body-util's BodyExt trait
+                            rustTemplate(
+                                """
+                                {
+                                    let bytes = {
+                                        use #{HttpBodyUtil}::BodyExt;
+                                        body.collect().await?.to_bytes()
+                                    };
+                                    #{VerifyRequestContentTypeHeader:W}
+                                    #{Deserializer}(&bytes)?
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                                *codegenScope,
+                                "HttpBodyUtil" to httpDeps.httpBodyUtil!!.toType(),
+                            )
+                        } else {
+                            // For HTTP 0.x: use hyper's to_bytes
+                            rustTemplate(
+                                """
+                                {
+                                    let bytes = #{Hyper}::body::to_bytes(body).await?;
+                                    #{VerifyRequestContentTypeHeader:W}
+                                    #{Deserializer}(&bytes)?
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                                *codegenScope,
+                            )
+                        }
                     }
                 }
             }
