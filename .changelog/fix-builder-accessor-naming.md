@@ -1,5 +1,5 @@
 ---
-applies_to: ["client"]
+applies_to: ["client", "server"]
 authors: ["haydenbaker", "nated0g"]
 references: ["smithy-rs#4338"]
 breaking: false
