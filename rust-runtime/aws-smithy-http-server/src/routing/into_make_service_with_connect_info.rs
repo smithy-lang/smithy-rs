@@ -42,16 +42,27 @@ use std::{
     task::{Context, Poll},
 };
 
+// SocketAddr only used in HTTP 0.x for AddrStream
 #[cfg(not(feature = "http-1x"))]
-use hyper_014::server::conn::AddrStream;
-#[cfg(not(feature = "http-1x"))]
+#[allow(unused_imports)]
 use std::net::SocketAddr;
+
+// Import version-appropriate hyper types (currently unused, kept for future use)
+#[cfg(not(feature = "http-1x"))]
+#[allow(unused_imports)]
+use hyper_014 as hyper;
+#[cfg(feature = "http-1x")]
+#[allow(unused_imports)]
+use hyper_1x as hyper;
+
+#[cfg(not(feature = "http-1x"))]
+use hyper::server::conn::AddrStream;
 use tower::{Layer, Service};
 use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 use crate::request::connect_info::ConnectInfo;
 
-/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`http::Request`]s.
+/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`Request`](crate::http::Request)s.
 ///
 /// The `T` must be derivable from the underlying IO resource using the [`Connected`] trait.
 ///
@@ -103,6 +114,7 @@ pub trait Connected<T>: Clone {
     fn connect_info(target: T) -> Self;
 }
 
+// AddrStream only exists in hyper 0.x
 #[cfg(not(feature = "http-1x"))]
 impl Connected<&AddrStream> for SocketAddr {
     fn connect_info(target: &AddrStream) -> Self {

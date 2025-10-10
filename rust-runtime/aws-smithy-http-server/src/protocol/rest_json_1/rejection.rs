@@ -52,6 +52,12 @@ use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
 #[derive(Debug, Error)]
@@ -86,7 +92,7 @@ pub enum ResponseRejection {
     /// header, or for additional protocol-specific headers (like `X-Amzn-Errortype` to signal
     /// errors in RestJson1).
     #[error("error building HTTP response: {0}")]
-    HttpBuild(#[from] crate::http::Error),
+    HttpBuild(#[from] http::Error),
 }
 
 /// Errors that can occur when deserializing an HTTP request into an _operation input_, the input
@@ -189,6 +195,13 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
+// Enable conversion from crate::Error for body::collect_bytes() error handling
+impl From<crate::Error> for RequestRejection {
+    fn from(err: crate::Error) -> Self {
+        Self::BufferHttpBodyBytes(err)
+    }
+}
+
 // These converters are solely to make code-generation simpler. They convert from a specific error
 // type (from a runtime/third-party crate or the standard library) into a variant of the
 // [`crate::rejection::RequestRejection`] enum holding the type-erased boxed [`crate::Error`]
@@ -206,15 +219,8 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
 // tests use `[crate::body::Body]` as their body type when constructing requests (and almost
 // everyone will run a Hyper-based server in their services).
 #[cfg(not(feature = "http-1x"))]
-#[cfg_attr(docsrs, doc(cfg(not(feature = "http-1x"))))]
 convert_to_request_rejection!(hyper_014::Error, BufferHttpBodyBytes);
-
-// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
-// need this converter for when we convert the body into bytes in the framework, since protocol
-// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
-// everyone will run a Hyper-based server in their services).
 #[cfg(feature = "http-1x")]
-#[cfg_attr(docsrs, doc(cfg(feature = "http-1x")))]
 convert_to_request_rejection!(hyper_1x::Error, BufferHttpBodyBytes);
 
 // Useful in general, but it also required in order to accept Lambda HTTP requests using

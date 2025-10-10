@@ -3,11 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::http::StatusCode;
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2_cbor::RpcV2Cbor};
 use bytes::Bytes;
+
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 
@@ -55,14 +62,14 @@ impl RuntimeError {
 }
 
 impl IntoResponse<RpcV2Cbor> for InternalFailureException {
-    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
         IntoResponse::<RpcV2Cbor>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
 impl IntoResponse<RpcV2Cbor> for RuntimeError {
-    fn into_response(self) -> crate::http::Response<crate::body::BoxBody> {
-        let res = crate::http::Response::builder()
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        let res = http::Response::builder()
             .status(self.status_code())
             .header("Content-Type", "application/cbor")
             .extension(RuntimeErrorExtension::new(self.name().to_string()));

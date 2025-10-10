@@ -11,14 +11,28 @@ pub mod rest_json_1;
 pub mod rest_xml;
 pub mod rpc_v2_cbor;
 
-use crate::http::header::CONTENT_TYPE;
-use crate::http::HeaderMap;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::header::CONTENT_TYPE;
+use http::HeaderMap;
+
 #[cfg(test)]
 pub mod test_helpers {
-    use crate::http::{HeaderMap, Method, Request};
+    #[cfg(not(feature = "http-1x"))]
+    use http_02x as http;
+
+    #[cfg(feature = "http-1x")]
+    use http_1x as http;
+
+    use http::{HeaderMap, Method, Request};
 
     /// Helper function to build a `Request`. Used in other test modules.
     pub fn req(method: &Method, uri: &str, headers: Option<HeaderMap>) -> Request<()> {
@@ -119,11 +133,11 @@ fn content_type_header_classifier(
 }
 
 pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) -> bool {
-    if !headers.contains_key(crate::http::header::ACCEPT) {
+    if !headers.contains_key(http::header::ACCEPT) {
         return true;
     }
     headers
-        .get_all(crate::http::header::ACCEPT)
+        .get_all(http::header::ACCEPT)
         .into_iter()
         .flat_map(|header| {
             header
@@ -155,7 +169,7 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
+    use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
     fn req_content_type_smithy(content_type: &'static str) -> SmithyHeaders {
         let mut headers = SmithyHeaders::new();

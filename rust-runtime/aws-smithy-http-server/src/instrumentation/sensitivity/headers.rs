@@ -7,7 +7,13 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::http::{header::HeaderName, HeaderMap};
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::MakeFmt;
 
@@ -155,7 +161,7 @@ where
 }
 #[cfg(test)]
 mod tests {
-    use crate::http::{header::HeaderName, HeaderMap, HeaderValue};
+    use http::{header::HeaderName, HeaderMap, HeaderValue};
 
     use super::*;
 

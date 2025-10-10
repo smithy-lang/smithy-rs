@@ -50,11 +50,18 @@ use std::{
     future::{ready, Future, Ready},
 };
 
-use crate::http::{request::Parts, Request, StatusCode};
 use futures_util::{
     future::{try_join, MapErr, MapOk, TryJoin},
     TryFutureExt,
 };
+
+// Import version-appropriate HTTP types
+#[cfg(not(feature = "http-1x"))]
+use http_02x as http;
+#[cfg(feature = "http-1x")]
+use http_1x as http;
+
+use http::{request::Parts, Request, StatusCode};
 
 use crate::{
     body::{empty, BoxBody},
@@ -64,15 +71,15 @@ use crate::{
 
 pub mod connect_info;
 pub mod extension;
-#[cfg(feature = "aws-lambda")]
-#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
+#[cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))))]
 pub mod lambda;
 #[cfg(feature = "request-id")]
 #[cfg_attr(docsrs, doc(cfg(feature = "request-id")))]
 pub mod request_id;
 
-fn internal_server_error() -> crate::http::Response<BoxBody> {
-    let mut response = crate::http::Response::new(empty());
+fn internal_server_error() -> http::Response<BoxBody> {
+    let mut response = http::Response::new(empty());
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
     response
 }
