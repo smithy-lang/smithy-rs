@@ -124,7 +124,7 @@ pub enum RequestRejection {
     /// Used when failing to deserialize the HTTP body's bytes into a JSON document conforming to
     /// the modeled input it should represent.
     #[error("error deserializing request HTTP body as JSON: {0}")]
-    JsonDeserialize(#[from] aws_smithy_json::deserialize::error::DeserializeError),
+    JsonDeserialize(#[from] crate::aws_smithy_json::deserialize::error::DeserializeError),
 
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.

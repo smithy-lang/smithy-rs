@@ -24,7 +24,7 @@ pub enum RequestRejection {
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
     #[error("error deserializing request HTTP body as JSON: {0}")]
-    JsonDeserialize(#[from] aws_smithy_json::deserialize::error::DeserializeError),
+    JsonDeserialize(#[from] crate::aws_smithy_json::deserialize::error::DeserializeError),
     #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
 
