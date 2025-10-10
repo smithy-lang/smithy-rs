@@ -82,6 +82,56 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
     }
 
     @Test
+    fun `it should work when an operation with constrained input has a custom validation exception attached in errors`() {
+        val version = "\$version: \"2\""
+        val model =
+            """
+            $version
+            namespace test
+
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+                errors: [
+                    CustomValidationException
+                ]
+            }
+
+            structure TestInputOutput {
+                @required
+                requiredString: String
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                @default("Validation Failed")
+                @required
+                message: String,
+
+                errorCode: String,
+            }
+            """.asSmithyModel()
+        val service = model.lookup<ServiceShape>("test#TestService")
+        val validationResult =
+            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                model,
+                service,
+                SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+            )
+
+        validationResult.messages shouldHaveSize 0
+    }
+
+    @Test
     fun `should detect when event streams are used, even without constraints, as the event member is required`() {
         val model =
             """
@@ -229,7 +279,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain(
+        validationResult.messages[0].message shouldContain (
             """
             The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
             `@uniqueItems` trait attached.
@@ -314,11 +364,135 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
-        validationResult.messages[0].message shouldContain(
+        validationResult.messages[0].message shouldContain (
             """
             The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
             effect. All the constraint traits used in the model are well-supported, please remove this flag.
             """.trimIndent().replace("\n", " ")
         )
+    }
+
+    @Test
+    fun `it should detect multiple validation exceptions in model`() {
+        val model =
+            """
+            namespace test
+
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            @validationException
+            @error("client")
+            structure AnotherValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String,
+            }
+            """.asSmithyModel()
+        val service = model.serviceShapes.first()
+        val validationResult = validateModelHasAtMostOneValidationException(model, service)
+
+        validationResult.shouldAbort shouldBe true
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].level shouldBe Level.SEVERE
+    }
+
+    @Test
+    fun `it should allow single validation exception in model`() {
+        val model =
+            """
+            namespace test
+
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String,
+            }
+            """.asSmithyModel()
+        val service = model.serviceShapes.first()
+        val validationResult = validateModelHasAtMostOneValidationException(model, service)
+
+        validationResult.shouldAbort shouldBe false
+        validationResult.messages shouldHaveSize 0
+    }
+
+    @Test
+    fun `it should detect default validation exception in operation when custom validation exception is defined`() {
+        val model =
+            """
+            namespace test
+
+            use smithy.framework#ValidationException
+            use smithy.rust.codegen.traits#validationException
+            use smithy.rust.codegen.traits#validationMessage
+
+            service TestService {
+                operations: [TestOperation]
+            }
+
+            operation TestOperation {
+                input: TestInputOutput,
+                output: TestInputOutput,
+                errors: [
+                    ValidationException
+                ]
+            }
+
+            @validationException
+            @error("client")
+            structure CustomValidationException {
+                @validationMessage
+                message: String,
+            }
+
+            structure TestInputOutput {
+                @length(min: 1, max: 69)
+                lengthString: String,
+            }
+            """.asSmithyModel()
+        val service = model.serviceShapes.first()
+        val validationResult = validateModelHasAtMostOneValidationException(model, service)
+
+        validationResult.shouldAbort shouldBe true
+        validationResult.messages shouldHaveSize 1
+        validationResult.messages[0].level shouldBe Level.SEVERE
     }
 }

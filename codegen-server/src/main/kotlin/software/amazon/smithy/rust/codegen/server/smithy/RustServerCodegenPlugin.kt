@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
@@ -50,6 +51,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
             CombinedServerCodegenDecorator.fromClasspath(
                 context,
                 ServerRequiredCustomizations(),
+                CustomValidationExceptionDecorator(),
                 SmithyValidationExceptionDecorator(),
                 CustomValidationExceptionWithReasonDecorator(),
                 *decorator,
