@@ -264,7 +264,7 @@ class ProtocolParserGenerator(
             val member = binding.member
             val parsedValue = renderBindingParser(binding, operationShape, httpBindingGenerator, structuredDataParser)
             if (parsedValue != null) {
-                withBlock("output = output.${member.setterName()}(", ");") {
+                withBlock("output = output.${member.setterName(symbolProvider)}(", ");") {
                     parsedValue(this)
                 }
             }

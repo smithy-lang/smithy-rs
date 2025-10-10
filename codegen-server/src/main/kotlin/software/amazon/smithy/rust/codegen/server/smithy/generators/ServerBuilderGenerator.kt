@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -408,8 +409,7 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // Setter names will never hit a reserved word and therefore never need escaping.
-        writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
+        writer.rustBlock("pub(crate) fn ${member.setterName(symbolProvider)}(mut self, input: $inputType) -> Self") {
             rust(
                 """
                 self.$memberName = ${
