@@ -54,7 +54,7 @@ import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
  * The order of this is less than that of [SmithyValidationExceptionDecorator] so it takes precedence regardless of the
  * order decorators are passed into the plugin
  */
-class CustomValidationExceptionDecorator : ServerCodegenDecorator {
+class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     override val name: String
         get() = "CustomValidationExceptionDecorator"
     override val order: Byte
@@ -72,11 +72,11 @@ class CustomValidationExceptionDecorator : ServerCodegenDecorator {
     ): ValidationExceptionConversionGenerator? {
         val validationException = customValidationException(codegenContext) ?: return null
 
-        return CustomValidationExceptionConversionGenerator(codegenContext, validationException)
+        return UserProvidedValidationExceptionConversionGenerator(codegenContext, validationException)
     }
 }
 
-class CustomValidationExceptionConversionGenerator(
+class UserProvidedValidationExceptionConversionGenerator(
     private val codegenContext: ServerCodegenContext,
     private val validationException: StructureShape,
 ) : ValidationExceptionConversionGenerator {

@@ -78,7 +78,7 @@ internal class CustomValidationExceptionDecoratorTest {
 
     private fun mockValidationException(model: Model): StructureShape {
         val codegenContext = serverTestCodegenContext(model)
-        val decorator = CustomValidationExceptionDecorator()
+        val decorator = UserProvidedValidationExceptionDecorator()
         return decorator.customValidationException(codegenContext)!!
     }
 
@@ -108,7 +108,7 @@ internal class CustomValidationExceptionDecoratorTest {
             """.asSmithyModel(smithyVersion = "2.0")
 
         val codegenContext = serverTestCodegenContext(model)
-        val decorator = CustomValidationExceptionDecorator()
+        val decorator = UserProvidedValidationExceptionDecorator()
 
         val result = decorator.customValidationException(codegenContext)
 
@@ -119,7 +119,8 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `customValidationMessage returns correct member shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val generator =
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationMessage()
 
@@ -132,7 +133,8 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `customValidationFieldList returns correct member shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val generator =
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationFieldList()
 
@@ -145,7 +147,8 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `customValidationFieldList returns null when no field list exists`() {
         val model = modelWithoutFieldList
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val generator =
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationFieldList()
 
@@ -156,7 +159,8 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `customValidationExceptionField returns correct structure shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val generator =
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationField()
 
@@ -169,7 +173,8 @@ internal class CustomValidationExceptionDecoratorTest {
     fun `customValidationExceptionField returns null when no field list exists`() {
         val model = modelWithoutFieldList
         val codegenContext = serverTestCodegenContext(model)
-        val generator = CustomValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val generator =
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
         val result = generator.customValidationField()
 
@@ -193,7 +198,7 @@ internal class CustomValidationExceptionDecoratorTest {
             """.asSmithyModel(smithyVersion = "2.0")
 
         val codegenContext = serverTestCodegenContext(model)
-        val decorator = CustomValidationExceptionDecorator()
+        val decorator = UserProvidedValidationExceptionDecorator()
 
         val generator = decorator.validationExceptionConversion(codegenContext)
 
