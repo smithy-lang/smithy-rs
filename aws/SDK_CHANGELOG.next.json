@@ -6,18 +6,18 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).\n",
+      "message": "Add tags to `AssumeRoleProviderBuilder`\n",
       "meta": {
         "bug": false,
         "breaking": false,
-        "tada": false
+        "tada": true
       },
-      "author": "ysaito1001",
+      "author": "c-thiel",
       "references": [
-        "smithy-rs#4263"
+        "aws-sdk-rust#1366"
       ],
-      "since-commit": "f18c70d36c40fa0f40860547394c134566704e69",
-      "age": 5
+      "since-commit": "d4c11dd7dab04de7db713525a32863a67753218f",
+      "age": 1
     }
   ],
   "aws-sdk-model": []
