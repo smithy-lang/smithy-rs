@@ -152,7 +152,7 @@ data class HttpDependencies(
     fun dependenciesToPin(): Map<String, CargoDependency> =
         mapOf(
             "aws-smithy-json" to smithyJson,
-            "aws-smithy-types" to smithyTypes,
+            "aws-smithy-http" to smithyHttp,
         )
 }
 
