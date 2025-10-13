@@ -23,6 +23,7 @@ struct StreamingOperationState {
 struct StreamingOperationWithInitialDataState {
     initial_data: Option<String>,
     events: Vec<Events>,
+    #[allow(dead_code)]
     num_calls: usize,
 }
 
