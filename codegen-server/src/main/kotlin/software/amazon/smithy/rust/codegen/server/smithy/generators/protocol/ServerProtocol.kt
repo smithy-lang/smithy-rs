@@ -224,7 +224,7 @@ class ServerAwsJsonProtocol(
             codegenContext,
             binding,
             requestRejection(runtimeConfig),
-            RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError"),
+            (codegenContext as ServerCodegenContext).httpDependencies().smithyJsonModule().resolve("deserialize::error::DeserializeError"),
         )
 }
 
@@ -273,7 +273,7 @@ class ServerRestJsonProtocol(
             codegenContext,
             binding,
             requestRejection(runtimeConfig),
-            RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError"),
+            (codegenContext as ServerCodegenContext).httpDependencies().smithyJsonModule().resolve("deserialize::error::DeserializeError"),
         )
 }
 

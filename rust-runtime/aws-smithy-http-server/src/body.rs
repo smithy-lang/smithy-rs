@@ -24,7 +24,7 @@ mod imports {
 
 #[cfg(feature = "http-1x")]
 mod imports {
-    pub use http_body_util::{Full, Empty, BodyExt};
+    pub use http_body_util::{BodyExt, Empty, Full};
 }
 
 // Used in the codegen in trait bounds.
@@ -86,9 +86,7 @@ where
     B::Error: Into<BoxError>,
 {
     use imports::BodyExt;
-    try_downcast(body).unwrap_or_else(|body| {
-        body.map_err(Error::new).boxed_unsync()
-    })
+    try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
 
 #[doc(hidden)]
@@ -154,9 +152,7 @@ where
     B: HttpBody,
     B::Error: Into<BoxError>,
 {
-    hyper_014::body::to_bytes(body)
-        .await
-        .map_err(|e| Error::new(e))
+    hyper_014::body::to_bytes(body).await.map_err(|e| Error::new(e))
 }
 
 #[cfg(feature = "http-1x")]
@@ -167,11 +163,7 @@ where
 {
     use http_body_util::BodyExt;
 
-    let collected = body
-        .collect()
-        .await
-        .map_err(|e| Error::new(e))?;
-
+    let collected = body.collect().await.map_err(|e| Error::new(e))?;
     Ok(collected.to_bytes())
 }
 
@@ -185,6 +177,37 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
     use imports::Full;
     boxed(Full::new(bytes))
+}
+
+// ============================================================================
+// Stream Wrapping for Event Streaming
+// ============================================================================
+
+/// Wrap a stream of byte chunks into a BoxBody for HTTP 1.x.
+///
+/// This is used for event streaming support. The stream should produce `Result<O, E>`
+/// where `O` can be converted into `Bytes` and `E` can be converted into an error.
+///
+/// For HTTP 0.x, this is not needed since `Body::wrap_stream` exists on hyper::Body.
+/// For HTTP 1.x, we provide this as a module-level function since `Body` is just a type alias
+/// for `hyper::body::Incoming` which doesn't have a `wrap_stream` method.
+#[cfg(feature = "http-1x")]
+pub fn wrap_stream<S, O, E>(stream: S) -> BoxBody
+where
+    S: futures_util::Stream<Item = Result<O, E>> + Send + 'static,
+    O: Into<Bytes> + 'static,
+    E: Into<BoxError> + 'static,
+{
+    use futures_util::TryStreamExt;
+    use http_body_util::StreamBody;
+
+    // Convert the stream of Result<O, E> into a stream of Result<Frame<Bytes>, Error>
+    let frame_stream = stream
+        .map_ok(|chunk| http_body_1x::Frame::data(chunk.into()))
+        .map_err(|e| Error::new(e.into()));
+
+    // Wrap in StreamBody and then box it
+    boxed(StreamBody::new(frame_stream))
 }
 
 #[cfg(test)]
