@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
@@ -60,6 +61,13 @@ class S3Decorator : ClientCodegenDecorator {
             ShapeId.from("com.amazonaws.s3#ListDirectoryBucketsOutput"),
         )
 
+    // GetBucketLocation is deprecated because AWS recommends using HeadBucket instead
+    // to determine a bucket's region
+    private val deprecatedOperations =
+        setOf(
+            ShapeId.from("com.amazonaws.s3#GetBucketLocation"),
+        )
+
     override fun protocols(
         serviceId: ShapeId,
         currentProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>,
@@ -81,6 +89,9 @@ class S3Decorator : ClientCodegenDecorator {
             shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
+            }.letIf(isDeprecatedOperation(shape)) {
+                logger.info("Adding DeprecatedTrait to $it")
+                (it as OperationShape).toBuilder().addTrait(createDeprecatedTrait()).build()
             }
         }
             // the model has the bucket in the path
@@ -181,6 +192,24 @@ class S3Decorator : ClientCodegenDecorator {
 
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
+    }
+
+    /**
+     * Checks if the given shape is an operation that should be marked as deprecated.
+     */
+    private fun isDeprecatedOperation(shape: Shape): Boolean {
+        return shape.isOperationShape && deprecatedOperations.contains(shape.id)
+    }
+
+    /**
+     * Creates a DeprecatedTrait with a message recommending HeadBucket as the preferred alternative.
+     * GetBucketLocation is deprecated because HeadBucket is more reliable and less prone to misuse
+     * when determining a bucket's region.
+     */
+    private fun createDeprecatedTrait(): DeprecatedTrait {
+        return DeprecatedTrait.builder()
+            .message("Use HeadBucket operation instead to determine the bucket's region. For more information, see https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html")
+            .build()
     }
 }
 
