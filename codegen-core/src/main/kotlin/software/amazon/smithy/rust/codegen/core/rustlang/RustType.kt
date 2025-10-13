@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.serde
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -516,6 +517,11 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     constructor(str: String) : this(writable(str))
     constructor(str: String, isDeriveHelper: Boolean) : this(writable(str), isDeriveHelper)
     constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
+
+    fun writable(attributeKind: AttributeKind = AttributeKind.Outer) =
+        writable {
+            render(this, attributeKind)
+        }
 
     fun render(
         writer: RustWriter,

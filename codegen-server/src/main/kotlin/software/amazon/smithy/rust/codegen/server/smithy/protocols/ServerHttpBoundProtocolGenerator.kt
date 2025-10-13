@@ -65,6 +65,7 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -756,7 +757,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
 
-        if (parser != null) {
+        // Skip body parsing if this operation has an event stream with initial request data
+        // In that case, the non-event-stream members will be parsed from the initial-request message
+        val hasEventStreamWithInitialRequest = httpBindingResolver.handlesEventStreamInitialRequest(operationShape)
+
+        if (parser != null && !hasEventStreamWithInitialRequest) {
             // `null` is only returned by Smithy when there are no members, but we know there's at least one, since
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType =
@@ -882,15 +887,65 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     )
                 return writable {
                     if (binding.member.isStreaming(model)) {
-                        rustTemplate(
-                            """
-                            {
-                                Some(#{Deserializer}(&mut body.into().into_inner())?)
-                            }
-                            """,
-                            "Deserializer" to deserializer,
-                            *codegenScope,
-                        )
+                        if (binding.member.isEventStream(model)) {
+                            val parser = structuredDataParser.serverInputParser(operationShape)
+                            val parseInitialRequest =
+                                if (parser != null &&
+                                    httpBindingResolver.handlesEventStreamInitialRequest(
+                                        operationShape,
+                                    )
+                                ) {
+                                    writable {
+                                        rustTemplate(
+                                            """
+                                            input = #{parser}(_initial_event.payload(), input)?;
+                                            """,
+                                            "parser" to parser,
+                                        )
+                                    }
+                                } else {
+                                    writable { }
+                                }
+                            // TODO(https://github.com/smithy-lang/smithy-rs/issues/4343): The error
+                            //   returned below is not actually accessible to the caller because it has
+                            //   already started reading from the event stream at the time the error was sent.
+                            rustTemplate(
+                                """
+                                {
+                                    let mut receiver = #{Deserializer}(&mut body.into().into_inner())?;
+                                    if let Some(_initial_event) = receiver
+                                        .try_recv_initial(#{InitialMessageType}::Request)
+                                        .await
+                                        .map_err(
+                                            |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                #{AllowUselessConversion}
+                                                format!("{ev_error}").into()
+                                            )
+                                        )? {
+                                        #{parseInitialRequest}
+                                    }
+                                    Some(receiver)
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "InitialMessageType" to
+                                    RuntimeType.smithyHttp(runtimeConfig)
+                                        .resolve("event_stream::InitialMessageType"),
+                                "parseInitialRequest" to parseInitialRequest,
+                                "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                *codegenScope,
+                            )
+                        } else {
+                            rustTemplate(
+                                """
+                                {
+                                    Some(#{Deserializer}(&mut body.into().into_inner())?)
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                *codegenScope,
+                            )
+                        }
                     } else {
                         // This checks for the expected `Content-Type` header if the `@httpPayload` trait is present, as dictated by
                         // the core Smithy library, which _does not_ require deserializing the payload.

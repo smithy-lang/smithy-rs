@@ -5,6 +5,8 @@
 
 //! Manual event stream client for testing purposes.
 
+use crate::RecvError::InvalidEventStreamFrame;
+use aws_smithy_eventstream::error::Error;
 use aws_smithy_eventstream::frame::{
     write_message_to, DecodedFrame, MessageFrameDecoder, SignMessage,
 };
@@ -16,13 +18,21 @@ use hyper::{
 };
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use std::net::SocketAddr;
+use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 use tokio_stream::wrappers::ReceiverStream;
+
+#[derive(Debug)]
+pub enum RecvError {
+    InvalidEventStreamFrame(Error),
+    InvalidHttpFrame(hyper::Error),
+}
 
 /// A manual event stream client that connects to a real service.
 pub struct ManualEventStreamClient {
     message_sender: mpsc::Sender<Message>,
-    response_receiver: mpsc::Receiver<Result<Message, String>>,
+    response_receiver: mpsc::Receiver<Result<Message, RecvError>>,
     _handle: tokio::task::JoinHandle<()>,
 }
 
@@ -60,67 +70,51 @@ impl ManualEventStreamClient {
             .map(|s| (s.0.to_string(), s.1.to_string()))
             .collect::<Vec<_>>();
 
+        let uri: Uri = uri.parse().expect("invalid URI");
+        let mut req = Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("content-type", "application/vnd.amazon.eventstream");
+
+        for (key, value) in &headers {
+            req = req.header(key.to_string(), value.to_string());
+        }
+        let stream = ReceiverStream::new(frame_receiver);
+        let body = StreamBody::new(stream);
+
+        let request = req.body(body).expect("failed to construct request");
         let handle = tokio::spawn(async move {
-            let stream = ReceiverStream::new(frame_receiver);
-            let body = StreamBody::new(stream);
+            let response = timeout(Duration::from_secs(1), client.request(request))
+                .await
+                .expect("timeout making initial request")
+                .expect("failed to make initial contact with server");
+            let mut body = response.into_body();
+            let mut decoder = MessageFrameDecoder::new();
 
-            let uri: Uri = dbg!(uri).parse().expect("invalid URI");
-            let mut req = Request::builder()
-                .method("POST")
-                .uri(uri)
-                .header("content-type", "application/vnd.amazon.eventstream");
-
-            for (key, value) in &headers {
-                req = req.header(key.to_string(), value.to_string());
-            }
-
-            let request = match req.body(body) {
-                Ok(req) => req,
-                Err(e) => {
-                    let _ = response_sender
-                        .send(Err(format!("Failed to build request: {e}")))
-                        .await;
-                    return;
-                }
-            };
-
-            match client.request(request).await {
-                Ok(response) => {
-                    let mut body = response.into_body();
-                    let mut decoder = MessageFrameDecoder::new();
-
-                    while let Some(frame_result) = body.frame().await {
-                        match frame_result {
-                            Ok(frame) => {
-                                if let Some(data) = frame.data_ref() {
-                                    let mut data_slice = data.as_ref();
-                                    match decoder.decode_frame(&mut data_slice) {
-                                        Ok(DecodedFrame::Complete(msg)) => {
-                                            let _ = response_sender.send(Ok(msg)).await;
-                                        }
-                                        Ok(DecodedFrame::Incomplete) => continue,
-                                        Err(e) => {
-                                            let _ = response_sender
-                                                .send(Err(format!("Decode error: {}", e)))
-                                                .await;
-                                            break;
-                                        }
-                                    }
+            while let Some(frame_result) = body.frame().await {
+                match frame_result {
+                    Ok(frame) => {
+                        if let Some(data) = frame.data_ref() {
+                            let mut data_slice = data.as_ref();
+                            match decoder.decode_frame(&mut data_slice) {
+                                Ok(DecodedFrame::Complete(msg)) => {
+                                    let _ = response_sender.send(Ok(msg)).await;
                                 }
-                            }
-                            Err(e) => {
-                                let _ = response_sender
-                                    .send(Err(format!("Frame error: {}", e)))
-                                    .await;
-                                break;
+                                Ok(DecodedFrame::Incomplete) => continue,
+                                Err(e) => {
+                                    let _ =
+                                        response_sender.send(Err(InvalidEventStreamFrame(e))).await;
+                                    break;
+                                }
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    let _ = response_sender
-                        .send(Err(format!("Request failed: {}", e)))
-                        .await;
+                    Err(e) => {
+                        let _ = response_sender
+                            .send(Err(RecvError::InvalidHttpFrame(e)))
+                            .await;
+                        break;
+                    }
                 }
             }
         });
@@ -141,7 +135,7 @@ impl ManualEventStreamClient {
     }
 
     /// Receives the next response message.
-    pub async fn recv(&mut self) -> Option<Result<Message, String>> {
+    pub async fn recv(&mut self) -> Option<Result<Message, RecvError>> {
         self.response_receiver.recv().await
     }
 }
