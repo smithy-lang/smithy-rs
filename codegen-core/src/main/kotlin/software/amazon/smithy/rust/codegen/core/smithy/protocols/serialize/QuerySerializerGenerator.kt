@@ -345,29 +345,51 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
+    /**
+     * Determines if a struct shape is empty (has no members).
+     * Empty structs result in unused variables in union match arms since the inner value is never referenced.
+     */
+    private fun isEmptyStruct(shape: Shape): Boolean =
+        when (shape) {
+            is StructureShape -> shape.members().isEmpty()
+            else -> false
+        }
+
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
+
+        // Check if any union member uses the writer (non-empty structs)
+        val hasNonEmptyMember =
+            context.shape.members().any { member ->
+                !member.isTargetUnit() && !isEmptyStruct(model.expectShape(member.target))
+            }
+        val writerVarName = if (hasNonEmptyMember) "writer" else "_writer"
+
         val unionSerializer =
             protocolFunctions.serializeFn(context.shape) { fnName ->
                 Attribute.AllowUnusedMut.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
+                    "pub fn $fnName(mut $writerVarName: #{QueryValueWriter}, input: &#{Input}) -> #{Result}<(), #{Error}>",
                     "Input" to unionSymbol,
                     *codegenScope,
                 ) {
                     rustBlock("match input") {
                         for (member in context.shape.members()) {
+                            val targetShape = model.expectShape(member.target)
+                            // Use underscore prefix for empty structs to avoid unused variable warnings
+                            val innerVarName = if (isEmptyStruct(targetShape)) "_inner" else "inner"
+
                             val variantName =
                                 if (member.isTargetUnit()) {
                                     "${symbolProvider.toMemberName(member)}"
                                 } else {
-                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                    "${symbolProvider.toMemberName(member)}($innerVarName)"
                                 }
                             withBlock("#T::$variantName => {", "},", unionSymbol) {
                                 serializeMember(
                                     MemberContext.unionMember(
-                                        context.copy(writerExpression = "writer"),
-                                        "inner",
+                                        context.copy(writerExpression = writerVarName),
+                                        innerVarName,
                                         member,
                                     ),
                                 )
