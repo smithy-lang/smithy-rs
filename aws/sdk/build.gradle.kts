@@ -441,7 +441,6 @@ fun Project.registerDowngradeFor(
                     "minicbor" to "0.24.2",
                     "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
                     "crc-fast" to "1.3.0", // TODO(https://github.com/awesomized/crc-fast-rust/issues/14)
-                    "generic-array" to "0.14.7", // generic_array 0.14.8+ deprecates several APIs used by digest crate (used by sha1/2 checksum crates)
                 )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->
