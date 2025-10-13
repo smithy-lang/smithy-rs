@@ -15,6 +15,15 @@ publishing {
             from(components["java"])
             artifact(javadocJar)
 
+            versionMapping {
+                usage("java-api") {
+                    fromResolutionOf("runtimeClasspath")
+                }
+                usage("java-runtime") {
+                    fromResolutionResult()
+                }
+            }
+
             afterEvaluate {
                 pom {
                     name.set(project.ext["displayName"].toString())

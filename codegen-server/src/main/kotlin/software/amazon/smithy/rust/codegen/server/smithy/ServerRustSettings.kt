@@ -109,18 +109,38 @@ data class ServerCodegenConfig(
         private const val DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS = false
         private const val DEFAULT_HTTP_1X = false
 
+        private val KNOWN_CONFIG_KEYS = setOf(
+            "formatTimeoutSeconds",
+            "debugMode",
+            "publicConstrainedTypes",
+            "ignoreUnsupportedConstraints",
+            "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
+            "addValidationExceptionToConstrainedOperations",
+            "http-1x",
+        )
+
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
             node: Optional<ObjectNode>,
         ) = if (node.isPresent) {
+            // Validate that all config keys are known
+            val configNode = node.get()
+            val unknownKeys = configNode.members.keys.map { it.toString() }.filter { it !in KNOWN_CONFIG_KEYS }
+            if (unknownKeys.isNotEmpty()) {
+                throw IllegalArgumentException(
+                    "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
+                    "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. "
+                )
+            }
+
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                 debugMode = coreCodegenConfig.debugMode,
-                publicConstrainedTypes = node.get().getBooleanMemberOrDefault("publicConstrainedTypes", DEFAULT_PUBLIC_CONSTRAINED_TYPES),
-                ignoreUnsupportedConstraints = node.get().getBooleanMemberOrDefault("ignoreUnsupportedConstraints", DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
-                experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = node.get().getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
-                addValidationExceptionToConstrainedOperations = node.get().getBooleanMemberOrDefault("addValidationExceptionToConstrainedOperations", DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS),
-                http1x = node.get().getBooleanMemberOrDefault("http-1x", DEFAULT_HTTP_1X),
+                publicConstrainedTypes = configNode.getBooleanMemberOrDefault("publicConstrainedTypes", DEFAULT_PUBLIC_CONSTRAINED_TYPES),
+                ignoreUnsupportedConstraints = configNode.getBooleanMemberOrDefault("ignoreUnsupportedConstraints", DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
+                experimentalCustomValidationExceptionWithReasonPleaseDoNotUse = configNode.getStringMemberOrDefault("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse),
+                addValidationExceptionToConstrainedOperations = configNode.getBooleanMemberOrDefault("addValidationExceptionToConstrainedOperations", DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS),
+                http1x = configNode.getBooleanMemberOrDefault("http-1x", DEFAULT_HTTP_1X),
             )
         } else {
             ServerCodegenConfig(
