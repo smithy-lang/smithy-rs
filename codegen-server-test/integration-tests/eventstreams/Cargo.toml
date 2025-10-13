@@ -8,6 +8,7 @@ rpcv2cbor_extras = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 aws-smithy-eventstream = { workspace = true }
 aws-smithy-http = { workspace = true }
+aws-smithy-cbor = { workspace = true }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 hyper = { version = "1", features = ["http2", "server"] }
 hyper0 = { package = "hyper", version = "0.14", features = ["http2", "server"] }
