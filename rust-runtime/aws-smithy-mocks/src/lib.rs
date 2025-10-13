@@ -145,7 +145,7 @@ macro_rules! mock_client {
         $aws_crate::client::Client::from_conf(
             coerce($additional_configuration)(
                 $aws_crate::config::Config::builder()
-                    .with_test_defaults()
+                    .with_test_defaults_v2()
                     .http_client(mock_http_client)
                     .interceptor(mock_response_interceptor),
             )

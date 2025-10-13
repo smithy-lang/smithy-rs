@@ -205,7 +205,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                         *codegenScope,
                     )
                 }
-                is ServiceConfig.DefaultForTests -> {
+                is ServiceConfig.DefaultForTestsV2 -> {
                     // this was added later, for backwards compat we only set a default if a region hasn't already been set by user
                     rustTemplate(
                         """

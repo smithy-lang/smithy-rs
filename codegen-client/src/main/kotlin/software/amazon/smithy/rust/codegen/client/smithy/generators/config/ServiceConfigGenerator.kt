@@ -116,6 +116,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
      * The set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
      */
     data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
+
+    /**
+     * Set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
+     *
+     * NOTE: V2 was added for backwards compatibility
+     */
+    data class DefaultForTestsV2(val configBuilderRef: String) : ServiceConfig("DefaultForTestsV2")
 }
 
 data class ConfigParam(
@@ -560,6 +567,22 @@ class ServiceConfigGenerator(
             docs("Apply test defaults to the builder")
             rustBlock("pub fn with_test_defaults(mut self) -> Self") {
                 rust("self.apply_test_defaults(); self")
+            }
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn apply_test_defaults_v2(&mut self) -> &mut Self") {
+                rust("self.apply_test_defaults();")
+                customizations.forEach { it.section(ServiceConfig.DefaultForTestsV2("self"))(this) }
+                rust("self")
+            }
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder")
+            rustBlock("pub fn with_test_defaults_v2(mut self) -> Self") {
+                rust("self.apply_test_defaults_v2(); self")
             }
 
             docs("Builds a [`Config`].")
