@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -60,12 +61,12 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     override val order: Byte
         get() = 68
 
-    internal fun customValidationException(codegenContext: ServerCodegenContext): StructureShape? {
-        return codegenContext.model.shapes(StructureShape::class.java)
+    internal fun customValidationException(codegenContext: ServerCodegenContext): StructureShape? =
+        codegenContext.model
+            .shapes(StructureShape::class.java)
             .filter { it.hasTrait(ValidationExceptionTrait.ID) }
             .findFirst()
             .orElse(null)
-    }
 
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
@@ -91,17 +92,16 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    internal fun customValidationMessage(): MemberShape {
-        return validationException.members()
+    internal fun customValidationMessage(): MemberShape =
+        validationException
+            .members()
             .firstOrNull { it.isValidationMessage() }
             ?: throw CodegenException("Expected $validationException to contain a member with ValidationMessageTrait")
-    }
 
-    internal fun customValidationFieldList(): MemberShape? {
-        return validationException
+    internal fun customValidationFieldList(): MemberShape? =
+        validationException
             .members()
             .firstOrNull { it.hasTrait(ValidationFieldListTrait.ID) }
-    }
 
     internal fun customValidationField(): StructureShape? {
         val validationFieldListMember = customValidationFieldList() ?: return null
@@ -119,7 +119,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                 ?: return null
 
         // It is required that a member of the custom validation field structure has @validationFieldName
-        if (validationFieldShape.members()
+        if (validationFieldShape
+                .members()
                 .none { it.hasTrait(ValidationFieldNameTrait.ID) }
         ) {
             throw CodegenException("Expected $validationFieldShape to contain a member with ValidationFieldNameTrait")
@@ -134,11 +135,10 @@ class UserProvidedValidationExceptionConversionGenerator(
         return validationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
     }
 
-    internal fun customValidationAdditionalFields(): List<MemberShape> {
-        return validationException.members().filter { member ->
+    internal fun customValidationAdditionalFields(): List<MemberShape> =
+        validationException.members().filter { member ->
             !member.isValidationMessage() && !member.hasTrait(ValidationFieldListTrait.ID)
         }
-    }
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
         val validationMessage = customValidationMessage()
@@ -147,88 +147,21 @@ class UserProvidedValidationExceptionConversionGenerator(
         val additionalFields = customValidationAdditionalFields()
 
         return writable {
-            var messageFormat =
-                when {
-                    validationFieldList != null && validationFieldMessage != null -> {
-                        if (validationFieldMessage.isOptional) {
-                            """format!("validation error detected. {}", &first_validation_exception_field.#{CustomValidationFieldMessage}.clone().unwrap_or_default())"""
-                        } else {
-                            """format!("validation error detected. {}", &first_validation_exception_field.#{CustomValidationFieldMessage})"""
-                        }
-                    }
-
-                    else -> """format!("validation error detected")"""
-                }
-            if (validationMessage.isOptional) {
-                messageFormat = "Some($messageFormat)"
-            }
-
-            val fieldListAssignment =
-                when (validationFieldList) {
-                    null -> ""
-                    else -> {
-                        if (validationFieldList.isOptional) {
-                            "#{CustomValidationFieldList}: Some(vec![first_validation_exception_field]),"
-                        } else {
-                            "#{CustomValidationFieldList}: vec![first_validation_exception_field],"
-                        }
-                    }
-                }
-
-            val fieldCreation =
-                when (validationFieldList) {
-                    null -> ""
-                    else -> """let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());"""
-                }
-
-            val additionalFieldAssignments =
-                additionalFields.joinToString { member ->
-                    val memberName = codegenContext.symbolProvider.toMemberName(member)
-                    "$memberName: ${defaultFieldAssignment(member)}"
-                }
-
+            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessage)!!
             // Generate the correct shape module name for the custom validation exception
             val shapeModuleName =
                 codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationException)
             val shapeFunctionName = validationException.id.name.toSnakeCase()
 
-            val templateParams =
-                mutableMapOf<String, Any>(
-                    "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                    "CustomValidationException" to
-                        writable {
-                            rust(codegenContext.symbolProvider.toSymbol(validationException).name)
-                        },
-                    "CustomValidationMessage" to
-                        writable {
-                            rust(codegenContext.symbolProvider.toMemberName(validationMessage))
-                        },
-                    "From" to RuntimeType.From,
-                )
-
-            validationFieldList?.let {
-                templateParams["CustomValidationFieldList"] =
-                    writable {
-                        rust(codegenContext.symbolProvider.toMemberName(it))
-                    }
-            }
-
-            validationFieldMessage?.let {
-                templateParams["CustomValidationFieldMessage"] =
-                    writable {
-                        rust(codegenContext.symbolProvider.toMemberName(it))
-                    }
-            }
-
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
                     fn from(constraint_violation: ConstraintViolation) -> Self {
-                        $fieldCreation
-                        let validation_exception = crate::error::#{CustomValidationException} {
-                            #{CustomValidationMessage}: $messageFormat,
-                            $fieldListAssignment
-                            $additionalFieldAssignments
+                        #{FieldCreation}
+                        let validation_exception = #{CustomValidationException} {
+                            $validationMessageName: #{ValidationMessage},
+                            #{FieldListAssignment}
+                            #{AdditionalFieldAssignments}
                         };
                         Self::ConstraintViolation(
                             crate::protocol_serde::$shapeModuleName::ser_${shapeFunctionName}_error(&validation_exception)
@@ -237,7 +170,56 @@ class UserProvidedValidationExceptionConversionGenerator(
                     }
                 }
                 """,
-                *templateParams.toList().toTypedArray(),
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "CustomValidationException" to codegenContext.symbolProvider.toSymbol(validationException),
+                "FieldCreation" to
+                    writable {
+                        if (validationFieldList != null) {
+                            rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
+                        }
+                    },
+                "ValidationMessage" to
+                    writable {
+                        val message =
+                            if (validationFieldList != null && validationFieldMessage != null) {
+                                val validationFieldMessageName =
+                                    codegenContext.symbolProvider.toMemberName(validationFieldMessage)!!
+                                if (validationFieldMessage.isOptional) {
+                                    """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName.clone().unwrap_or_default())"""
+                                } else {
+                                    """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName)"""
+                                }
+                            } else {
+                                """format!("validation error detected")"""
+                            }
+                        if (validationMessage.isOptional) {
+                            rust("Some($message)")
+                        } else {
+                            rust(message)
+                        }
+                    },
+                "FieldListAssignment" to
+                    writable {
+                        if (validationFieldList != null) {
+                            val fieldName = codegenContext.symbolProvider.toMemberName(validationFieldList)!!
+                            val value = "vec![first_validation_exception_field]"
+                            if (validationFieldList.isOptional) {
+                                rust("$fieldName: Some($value),")
+                            } else {
+                                rust("$fieldName: $value,")
+                            }
+                        }
+                    },
+                "AdditionalFieldAssignments" to
+                    writable {
+                        rust(
+                            additionalFields.joinToString { member ->
+                                val memberName = codegenContext.symbolProvider.toMemberName(member)!!
+                                "$memberName: ${defaultFieldAssignment(member)}"
+                            },
+                        )
+                    },
+                "From" to RuntimeType.From,
             )
         }
     }
@@ -264,8 +246,10 @@ class UserProvidedValidationExceptionConversionGenerator(
                             when (stringTraitInfo::class.simpleName) {
                                 "Length" -> {
                                     val lengthTrait =
-                                        stringTraitInfo::class.java.getDeclaredField("lengthTrait")
-                                            .apply { isAccessible = true }.get(stringTraitInfo) as LengthTrait
+                                        stringTraitInfo::class.java
+                                            .getDeclaredField("lengthTrait")
+                                            .apply { isAccessible = true }
+                                            .get(stringTraitInfo) as LengthTrait
                                     rustTemplate(
                                         """
                                         Self::Length(length) => #{CustomValidationExceptionField} {
@@ -276,15 +260,19 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!("${lengthTrait.validationErrorMessage()}", length, &path)""",
+                                                """format!(${
+                                                    lengthTrait.validationErrorMessage().dq()
+                                                }, length, &path)""",
                                             ),
                                     )
                                 }
 
                                 "Pattern" -> {
                                     val patternTrait =
-                                        stringTraitInfo::class.java.getDeclaredField("patternTrait")
-                                            .apply { isAccessible = true }.get(stringTraitInfo) as PatternTrait
+                                        stringTraitInfo::class.java
+                                            .getDeclaredField("patternTrait")
+                                            .apply { isAccessible = true }
+                                            .get(stringTraitInfo) as PatternTrait
                                     rustTemplate(
                                         """
                                         Self::Pattern(_) => #{CustomValidationExceptionField} {
@@ -295,7 +283,9 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, "${patternTrait.pattern}")""",
+                                                """format!(${
+                                                    patternTrait.validationErrorMessage().dq()
+                                                }, &path, ${patternTrait.pattern.toString().dq()})""",
                                             ),
                                     )
                                 }
@@ -334,7 +324,9 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         "path.clone()",
-                                        """format!("${blobLength.lengthTrait.validationErrorMessage()}", length, &path)""",
+                                        """format!(${
+                                            blobLength.lengthTrait.validationErrorMessage().dq()
+                                        }, length, &path)""",
                                     ),
                             )
                         }
@@ -371,7 +363,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             "FieldAssignments" to
                                 fieldAssignments(
                                     "path.clone()",
-                                    """format!("${it.validationErrorMessage()}", length, &path)""",
+                                    """format!(${it.validationErrorMessage().dq()}, length, &path)""",
                                 ),
                         )
                     }
@@ -429,7 +421,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "FieldAssignments" to
                     fieldAssignments(
                         "path.clone()",
-                        """format!("${rangeInfo.rangeTrait.validationErrorMessage()}", &path)""",
+                        """format!(${rangeInfo.rangeTrait.validationErrorMessage().dq()}, &path)""",
                     ),
             )
         }
@@ -505,7 +497,10 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!("${collectionTraitInfo.lengthTrait.validationErrorMessage()}", length, &path)""",
+                                                """format!(${
+                                                    collectionTraitInfo.lengthTrait.validationErrorMessage()
+                                                        .dq()
+                                                }, length, &path)""",
                                             ),
                                     )
                                 }
@@ -521,7 +516,10 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!("${collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path)""",
+                                                """format!(${
+                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
+                                                        .dq()
+                                                }, &duplicate_indices, &path)""",
                                             ),
                                     )
                                 }
@@ -565,8 +563,8 @@ class UserProvidedValidationExceptionConversionGenerator(
      */
     private fun generateCustomValidationFieldAssignments(
         customValidationExceptionField: StructureShape,
-    ): (String, String) -> Writable {
-        return { rawPathExpression: String, rawMessageExpression: String ->
+    ): (String, String) -> Writable =
+        { rawPathExpression: String, rawMessageExpression: String ->
             writable {
                 rustTemplate(
                     customValidationExceptionField.members().joinToString(",") { member ->
@@ -590,7 +588,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                 )
             }
         }
-    }
 
     private fun defaultFieldAssignment(member: MemberShape): String {
         val targetShape = member.targetOrSelf(codegenContext.model)
@@ -607,7 +604,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             ) == enumValue
                         }
                     val variantName = enumMember?.let { codegenContext.symbolProvider.toMemberName(it) } ?: enumValue
-                    "crate::model::${enumSymbol.name}::$variantName"
+                    "$enumSymbol::$variantName"
                 }
 
                 node.isStringNode -> """"${node.expectStringNode().value}".to_string()"""
