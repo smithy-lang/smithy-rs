@@ -36,6 +36,7 @@ data class HttpDependencies(
     val smithyRuntimeApi: CargoDependency,
     val smithyTypes: CargoDependency,
     val smithyHttp: CargoDependency,
+    val smithyJson: CargoDependency,
 ) {
     /**
      * Returns the http crate as a RuntimeType.
@@ -130,6 +131,29 @@ data class HttpDependencies(
      * For HTTP 1.x: uses the default version from RuntimeConfig
      */
     fun smithyHttpModule(): RuntimeType = smithyHttp.toType()
+
+    /**
+     * Returns the aws-smithy-json crate as a RuntimeType.
+     *
+     * For HTTP 0.x: pinned to version 0.61.x (last version supporting http@0)
+     * For HTTP 1.x: uses the default version from RuntimeConfig
+     */
+    fun smithyJsonModule(): RuntimeType = smithyJson.toType()
+
+    /**
+     * Returns a map of dependency names to CargoDependency objects that need pinning.
+     *
+     * This is used by decorators to apply manifest customizations for HTTP 0.x dependencies
+     * that require specific versions or features.
+     *
+     * Returns a map containing only dependencies that have customizations to apply
+     * (version pinning or feature flags).
+     */
+    fun dependenciesToPin(): Map<String, CargoDependency> =
+        mapOf(
+            "aws-smithy-json" to smithyJson,
+            "aws-smithy-types" to smithyTypes,
+        )
 }
 
 /**
@@ -165,8 +189,10 @@ data class ServerCodegenContext(
      * This is the single source of truth for HTTP dependency selection. When http-1x
      * is enabled, all HTTP dependencies are upgraded together to maintain compatibility.
      */
-    fun httpDependencies(): HttpDependencies =
-        if (settings.codegenConfig.http1x) {
+    fun httpDependencies(): HttpDependencies {
+        println("[ServerCodegenContext.httpDependencies] http1x = ${settings.codegenConfig.http1x}")
+        return if (settings.codegenConfig.http1x) {
+            println("[ServerCodegenContext.httpDependencies] Returning HTTP 1.x dependencies")
             HttpDependencies(
                 http = CargoDependency("http", CratesIo("1")),
                 httpBody = CargoDependency("http-body", CratesIo("1")),
@@ -177,8 +203,10 @@ data class ServerCodegenContext(
                 smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-1x"),
                 smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
                 smithyHttp = CargoDependency.smithyHttp(runtimeConfig),
+                smithyJson = CargoDependency.smithyJson(runtimeConfig),
             )
         } else {
+            println("[ServerCodegenContext.httpDependencies] Returning HTTP 0.x dependencies")
             HttpDependencies(
                 http = CargoDependency.Http,
                 httpBody = CargoDependency.HttpBody,
@@ -186,10 +214,13 @@ data class ServerCodegenContext(
                 hyper = CargoDependency.Hyper,
                 hyperDev = ServerCargoDependency.HyperDev,
                 smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
-                smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig),
-                smithyTypes = CargoDependency.smithyTypes(runtimeConfig),
+                smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-02x"),
+                smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
                 // Pin to 0.62.x - last version supporting http@0
                 smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(location = CratesIo("0.62")),
+                // Pin to 0.61.x - last version supporting http@0
+                smithyJson = CargoDependency.smithyJson(runtimeConfig).copy(location = CratesIo("0.61")),
             )
         }
+    }
 }

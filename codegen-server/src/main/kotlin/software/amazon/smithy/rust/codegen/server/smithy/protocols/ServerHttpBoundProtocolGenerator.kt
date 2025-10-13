@@ -545,8 +545,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
+
+            // For HTTP 1.x, use the wrap_stream function instead of Body::wrap_stream method
+            // since Body is just a type alias for hyper::body::Incoming
+            val wrapStreamCall = if (codegenContext.settings.codegenConfig.http1x) {
+                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
+            } else {
+                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
+            }
+
             withBlockTemplate(
-                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(",
+                wrapStreamCall,
                 "));",
                 *codegenScope,
             ) {
