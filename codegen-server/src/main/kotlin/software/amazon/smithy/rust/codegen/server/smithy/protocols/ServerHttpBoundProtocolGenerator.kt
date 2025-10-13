@@ -917,7 +917,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         .try_recv_initial(#{InitialMessageType}::Request)
                                         .await
                                         .map_err(
-                                            |ev_error| #{RequestRejection}::ConstraintViolation(format!("{ev_error}").into())
+                                            |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                #{AllowUselessConversion}
+                                                format!("{ev_error}").into()
+                                            )
                                         )? {
                                         #{parseInitialRequest}
                                     }
@@ -929,6 +932,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     RuntimeType.smithyHttp(runtimeConfig)
                                         .resolve("event_stream::InitialMessageType"),
                                 "parseInitialRequest" to parseInitialRequest,
+                                "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                 *codegenScope,
                             )
                         } else {

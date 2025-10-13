@@ -81,10 +81,17 @@ class PythonServerEventStreamWrapperGenerator(
             "Option" to RuntimeType.Option,
             "Arc" to RuntimeType.Arc,
             "Body" to RuntimeType.sdkBody(runtimeConfig),
+            "Message" to RuntimeType.smithyTypes(runtimeConfig).resolve("event_stream::Message"),
+            "RawMessage" to RuntimeType.smithyTypes(runtimeConfig).resolve("event_stream::RawMessage"),
             "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
             "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
             "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
-            "MessageStreamAdapter" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamAdapter"),
+            "MessageStreamAdapter" to
+                RuntimeType.smithyHttp(runtimeConfig)
+                    .resolve("event_stream::MessageStreamAdapter"),
+            "InitialMessageType" to
+                RuntimeType.smithyHttp(runtimeConfig)
+                    .resolve("event_stream::InitialMessageType"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
@@ -208,9 +215,9 @@ class PythonServerEventStreamWrapperGenerator(
                 }
 
                 pub async fn try_recv_initial(
-                    &self,
-                    message_type: #{SmithyHttp}::event_stream::InitialMessageType,
-                ) -> Result<#{Option}<#{SmithyHttp}::event_stream::Message>, #{SdkError}<#{Error}, #{SmithyHttp}::event_stream::RawMessage>> {
+                    &mut self,
+                    message_type: #{InitialMessageType},
+                ) -> Result<#{Option}<#{Message}>, #{SdkError}<#{Error}, #{RawMessage}>> {
                     let mut inner = self.inner.lock().await;
                     inner.try_recv_initial(message_type).await
                 }
