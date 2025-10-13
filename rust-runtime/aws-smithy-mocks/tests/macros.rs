@@ -32,7 +32,7 @@ mod fake_crate {
             pub fn build(self) -> Config {
                 Config {}
             }
-            pub fn with_test_defaults(self) -> Self {
+            pub fn with_test_defaults_v2(self) -> Self {
                 Self {}
             }
             pub fn http_client(self, _http_client: SharedHttpClient) -> Self {
