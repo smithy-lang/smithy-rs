@@ -136,11 +136,12 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 
 fun MemberShape.setterName(symbolProvider: SymbolProvider): String {
     val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
-    return "set_${unescaped}"
+    return "set_$unescaped"
 }
+
 fun MemberShape.getterName(symbolProvider: SymbolProvider): String {
     val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
-    return "get_${unescaped}"
+    return "get_$unescaped"
 }
 
 class BuilderGenerator(
@@ -412,7 +413,13 @@ class BuilderGenerator(
     ) {
         docs("Appends an item to `$memberName`.")
         rust("///")
-        docs("To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${member.setterName(symbolProvider)}).")
+        docs(
+            "To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${
+                member.setterName(
+                    symbolProvider,
+                )
+            }).",
+        )
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
         deprecatedShape(member)
@@ -438,7 +445,13 @@ class BuilderGenerator(
     ) {
         docs("Adds a key-value pair to `$memberName`.")
         rust("///")
-        docs("To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${member.setterName(symbolProvider)}).")
+        docs(
+            "To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${
+                member.setterName(
+                    symbolProvider,
+                )
+            }).",
+        )
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
         deprecatedShape(member)

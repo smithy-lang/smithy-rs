@@ -33,7 +33,7 @@ interface BuilderInstantiator {
         mapErr: Writable? = null,
     ): Writable
 
-    fun setterProvider(field: MemberShape): String;
+    fun setterProvider(field: MemberShape): String
 
     /** Set a field on a builder using the `$setterName` method. $value will be passed directly. */
     fun setFieldWithSetter(
