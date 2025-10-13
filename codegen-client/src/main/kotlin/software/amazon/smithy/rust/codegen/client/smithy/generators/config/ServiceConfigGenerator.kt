@@ -552,7 +552,7 @@ class ServiceConfigGenerator(
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. NOTE: Consider migrating to use `apply_test_defaults_v2` instead.")
             rustBlock("pub fn apply_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
                 rustTemplate(
@@ -564,14 +564,14 @@ class ServiceConfigGenerator(
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. NOTE: Consider migrating to use `with_test_defaults_v2` instead.")
             rustBlock("pub fn with_test_defaults(mut self) -> Self") {
                 rust("self.apply_test_defaults(); self")
             }
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. V2 of this function sets additional test defaults such as region configuration (if applicable).")
             rustBlock("pub fn apply_test_defaults_v2(&mut self) -> &mut Self") {
                 rust("self.apply_test_defaults();")
                 customizations.forEach { it.section(ServiceConfig.DefaultForTestsV2("self"))(this) }
@@ -580,7 +580,7 @@ class ServiceConfigGenerator(
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. V2 of this function sets additional test defaults such as region configuration (if applicable).")
             rustBlock("pub fn with_test_defaults_v2(mut self) -> Self") {
                 rust("self.apply_test_defaults_v2(); self")
             }
