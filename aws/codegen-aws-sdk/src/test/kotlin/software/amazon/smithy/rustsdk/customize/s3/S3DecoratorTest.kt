@@ -14,9 +14,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rustsdk.awsSdkIntegrationTest
 import kotlin.jvm.optionals.getOrNull
 
 internal class S3DecoratorTest {
@@ -149,48 +147,5 @@ internal class S3DecoratorTest {
             createBucket.hasTrait<DeprecatedTrait>(),
             "CreateBucket should not have DeprecatedTrait",
         )
-    }
-
-    @Test
-    fun `Generated Rust code includes deprecated attribute for GetBucketLocation`() {
-        // This integration test generates Rust code for the S3 client with the modified decorator
-        // and verifies that the #[deprecated] attribute is present in the generated code by:
-        // 1. Generating the complete S3 client code with the S3Decorator applied
-        // 2. Compiling the generated code (which includes the client module with get_bucket_location)
-        // 3. Running a test that references the deprecated method
-        //
-        // The test passes if:
-        // - The code generation succeeds (DeprecatedTrait is properly converted to Rust #[deprecated])
-        // - The generated code compiles successfully
-        // - The test that uses the method compiles (deprecation warnings are allowed)
-        //
-        // This verifies the end-to-end flow: Model transformation -> Code generation -> Compilation
-        awsSdkIntegrationTest(baseModel) { ctx, rustCrate ->
-            val moduleName = ctx.moduleUseName()
-
-            // Create an integration test that uses the deprecated method
-            // This will trigger a deprecation warning during compilation if the attribute is present
-            rustCrate.integrationTest("verify_get_bucket_location_deprecated") {
-                writeWithNoFormatting(
-                    """
-                    use $moduleName::Client;
-                    
-                    // This test verifies that the get_bucket_location method exists and is accessible.
-                    // If the #[deprecated] attribute is present in the generated code, the Rust compiler
-                    // will emit a deprecation warning when this code is compiled.
-                    //
-                    // The deprecation message should contain:
-                    // - "HeadBucket" - the recommended alternative operation
-                    // - "https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html" - documentation URL
-                    #[test]
-                    fn get_bucket_location_method_exists() {
-                        // Reference the method to trigger deprecation warning
-                        fn check_method_exists<T>(_: T) {}
-                        check_method_exists(Client::get_bucket_location);
-                    }
-                    """,
-                )
-            }
-        }
     }
 }

@@ -64,8 +64,9 @@ class S3Decorator : ClientCodegenDecorator {
     // GetBucketLocation is deprecated because AWS recommends using HeadBucket instead
     // to determine a bucket's region
     private val deprecatedOperations =
-        setOf(
-            ShapeId.from("com.amazonaws.s3#GetBucketLocation"),
+        mapOf(
+            ShapeId.from("com.amazonaws.s3#GetBucketLocation") to
+                "Use HeadBucket operation instead to determine the bucket's region. For more information, see https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html",
         )
 
     override fun protocols(
@@ -91,7 +92,8 @@ class S3Decorator : ClientCodegenDecorator {
                 (it as StructureShape).toBuilder().addTrait(AllowInvalidXmlRoot()).build()
             }.letIf(isDeprecatedOperation(shape)) {
                 logger.info("Adding DeprecatedTrait to $it")
-                (it as OperationShape).toBuilder().addTrait(createDeprecatedTrait()).build()
+                val message = deprecatedOperations[shape.id]!!
+                (it as OperationShape).toBuilder().addTrait(createDeprecatedTrait(message)).build()
             }
         }
             // the model has the bucket in the path
@@ -198,17 +200,15 @@ class S3Decorator : ClientCodegenDecorator {
      * Checks if the given shape is an operation that should be marked as deprecated.
      */
     private fun isDeprecatedOperation(shape: Shape): Boolean {
-        return shape.isOperationShape && deprecatedOperations.contains(shape.id)
+        return shape.isOperationShape && deprecatedOperations.containsKey(shape.id)
     }
 
     /**
-     * Creates a DeprecatedTrait with a message recommending HeadBucket as the preferred alternative.
-     * GetBucketLocation is deprecated because HeadBucket is more reliable and less prone to misuse
-     * when determining a bucket's region.
+     * Creates a DeprecatedTrait with the specified deprecation message.
      */
-    private fun createDeprecatedTrait(): DeprecatedTrait {
+    private fun createDeprecatedTrait(message: String): DeprecatedTrait {
         return DeprecatedTrait.builder()
-            .message("Use HeadBucket operation instead to determine the bucket's region. For more information, see https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html")
+            .message(message)
             .build()
     }
 }
