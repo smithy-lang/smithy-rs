@@ -9,19 +9,8 @@ use std::{
 };
 use tower::Service;
 
-// HTTP 0.x imports
-#[cfg(not(feature = "http-1x"))]
-use {
-    http_02x as http,
-    lambda_http_02x as lambda_http,
-};
-
-// HTTP 1.x imports
-#[cfg(feature = "http-1x")]
-use {
-    http_1x as http,
-    lambda_http_1x as lambda_http,
-};
+use http;
+use lambda_http_1x as lambda_http;
 
 use lambda_http::{Request, RequestExt};
 

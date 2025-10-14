@@ -16,11 +16,7 @@ use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use crate::{
     body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,

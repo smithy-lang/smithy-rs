@@ -14,24 +14,14 @@ pub mod rpc_v2_cbor;
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::header::CONTENT_TYPE;
 use http::HeaderMap;
 
 #[cfg(test)]
 pub mod test_helpers {
-    #[cfg(not(feature = "http-1x"))]
-    use http_02x as http;
-
-    #[cfg(feature = "http-1x")]
-    use http_1x as http;
-
+    use http;
     use http::{HeaderMap, Method, Request};
 
     /// Helper function to build a `Request`. Used in other test modules.
@@ -44,20 +34,9 @@ pub mod test_helpers {
     }
 
     // Returns a `Response`'s body as a `String`, without consuming the response.
-    #[cfg(not(feature = "http-1x"))]
     pub async fn get_body_as_string<B>(body: B) -> String
     where
-        B: http_body_04x::Body + std::marker::Unpin,
-        B::Error: std::fmt::Debug,
-    {
-        let body_bytes = hyper_014::body::to_bytes(body).await.unwrap();
-        String::from(std::str::from_utf8(&body_bytes).unwrap())
-    }
-
-    #[cfg(feature = "http-1x")]
-    pub async fn get_body_as_string<B>(body: B) -> String
-    where
-        B: http_body_1x::Body + std::marker::Unpin,
+        B: http_body::Body + std::marker::Unpin,
         B::Error: std::fmt::Debug,
     {
         use http_body_util::BodyExt;

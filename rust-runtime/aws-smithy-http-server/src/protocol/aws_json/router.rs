@@ -13,11 +13,7 @@ use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
 use crate::routing::Router;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::header::ToStrError;
 use thiserror::Error;

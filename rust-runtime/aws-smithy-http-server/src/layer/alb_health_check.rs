@@ -30,22 +30,10 @@ use futures_util::{Future, FutureExt};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
-
-#[cfg(not(feature = "http-1x"))]
-use hyper_014 as hyper;
-#[cfg(feature = "http-1x")]
-use hyper_1x as hyper;
+use http;
+use hyper;
 
 use http::StatusCode;
-
-#[cfg(not(feature = "http-1x"))]
-use hyper::Body;
-#[cfg(feature = "http-1x")]
 use crate::body::Body;
 
 use hyper::{Request, Response};

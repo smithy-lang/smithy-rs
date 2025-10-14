@@ -34,11 +34,7 @@
 
 use crate::body::BoxBody;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 pub type Response<T = BoxBody> = http::Response<T>;
 

@@ -44,21 +44,8 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 #[cfg(test)]
 mod test_helpers;
 
-#[cfg(not(feature = "http-1x"))]
-pub use http_02x as http;
+pub use http;
 
-#[cfg(feature = "http-1x")]
-pub use http_1x as http;
-
-#[cfg(not(feature = "http-1x"))]
-pub(crate) use aws_smithy_http;
-
-#[cfg(feature = "http-1x")]
 pub(crate) use aws_smithy_http_1x as aws_smithy_http;
 
-// Re-export the appropriate version of aws-smithy-json
-#[cfg(not(feature = "http-1x"))]
-pub(crate) use aws_smithy_json_02x as aws_smithy_json;
-
-#[cfg(feature = "http-1x")]
 pub(crate) use aws_smithy_json_1x as aws_smithy_json;

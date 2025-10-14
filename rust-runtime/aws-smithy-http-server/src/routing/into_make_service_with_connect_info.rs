@@ -42,21 +42,6 @@ use std::{
     task::{Context, Poll},
 };
 
-// SocketAddr only used in HTTP 0.x for AddrStream
-#[cfg(not(feature = "http-1x"))]
-#[allow(unused_imports)]
-use std::net::SocketAddr;
-
-// Import version-appropriate hyper types (currently unused, kept for future use)
-#[cfg(not(feature = "http-1x"))]
-#[allow(unused_imports)]
-use hyper_014 as hyper;
-#[cfg(feature = "http-1x")]
-#[allow(unused_imports)]
-use hyper_1x as hyper;
-
-#[cfg(not(feature = "http-1x"))]
-use hyper::server::conn::AddrStream;
 use tower::{Layer, Service};
 use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
@@ -112,14 +97,6 @@ where
 pub trait Connected<T>: Clone {
     /// Create type holding information about the connection.
     fn connect_info(target: T) -> Self;
-}
-
-// AddrStream only exists in hyper 0.x
-#[cfg(not(feature = "http-1x"))]
-impl Connected<&AddrStream> for SocketAddr {
-    fn connect_info(target: &AddrStream) -> Self {
-        target.remote_addr()
-    }
 }
 
 impl<S, C, T> Service<T> for IntoMakeServiceWithConnectInfo<S, C>

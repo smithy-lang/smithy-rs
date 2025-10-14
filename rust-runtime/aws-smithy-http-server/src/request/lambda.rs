@@ -6,19 +6,8 @@
 //! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`](crate::routing::LambdaHandler) is
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
-// HTTP 0.x imports
-#[cfg(not(feature = "http-1x"))]
-use {
-    http_02x as http,
-    lambda_http_02x as lambda_http,
-};
-
-// HTTP 1.x imports
-#[cfg(feature = "http-1x")]
-use {
-    http_1x as http,
-    lambda_http_1x as lambda_http,
-};
+use http;
+use lambda_http_1x as lambda_http;
 
 use lambda_http::request::RequestContext;
 #[doc(inline)]
